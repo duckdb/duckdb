@@ -118,8 +118,8 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, Constraint &cons
 	return std::move(bound_constraint);
 }
 
-unique_ptr<BoundConstraint> BindUniqueConstraint(Constraint &constraint, const string &table,
-                                                 const ColumnList &columns) {
+unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(Constraint &constraint, const string &table,
+                                                         const ColumnList &columns) {
 	auto &unique = constraint.Cast<UniqueConstraint>();
 
 	// Resolve the columns.

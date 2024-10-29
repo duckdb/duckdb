@@ -145,10 +145,10 @@ namespace duckdb {
 
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AccessMode::UNDEFINED), "UNDEFINED" },
-	    { static_cast<uint32_t>(AccessMode::AUTOMATIC), "AUTOMATIC" },
-	    { static_cast<uint32_t>(AccessMode::READ_ONLY), "READ_ONLY" },
-	    { static_cast<uint32_t>(AccessMode::READ_WRITE), "READ_WRITE" }
+		{ static_cast<uint32_t>(AccessMode::UNDEFINED), "UNDEFINED" },
+		{ static_cast<uint32_t>(AccessMode::AUTOMATIC), "AUTOMATIC" },
+		{ static_cast<uint32_t>(AccessMode::READ_ONLY), "READ_ONLY" },
+		{ static_cast<uint32_t>(AccessMode::READ_WRITE), "READ_WRITE" }
 	};
 	return values;
 }
@@ -165,8 +165,8 @@ AccessMode EnumUtil::FromString<AccessMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetAggregateCombineTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AggregateCombineType::PRESERVE_INPUT), "PRESERVE_INPUT" },
-	    { static_cast<uint32_t>(AggregateCombineType::ALLOW_DESTRUCTIVE), "ALLOW_DESTRUCTIVE" }
+		{ static_cast<uint32_t>(AggregateCombineType::PRESERVE_INPUT), "PRESERVE_INPUT" },
+		{ static_cast<uint32_t>(AggregateCombineType::ALLOW_DESTRUCTIVE), "ALLOW_DESTRUCTIVE" }
 	};
 	return values;
 }
@@ -183,9 +183,9 @@ AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *valu
 
 const StringUtil::EnumStringLiteral *GetAggregateHandlingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AggregateHandling::STANDARD_HANDLING), "STANDARD_HANDLING" },
-	    { static_cast<uint32_t>(AggregateHandling::NO_AGGREGATES_ALLOWED), "NO_AGGREGATES_ALLOWED" },
-	    { static_cast<uint32_t>(AggregateHandling::FORCE_AGGREGATES), "FORCE_AGGREGATES" }
+		{ static_cast<uint32_t>(AggregateHandling::STANDARD_HANDLING), "STANDARD_HANDLING" },
+		{ static_cast<uint32_t>(AggregateHandling::NO_AGGREGATES_ALLOWED), "NO_AGGREGATES_ALLOWED" },
+		{ static_cast<uint32_t>(AggregateHandling::FORCE_AGGREGATES), "FORCE_AGGREGATES" }
 	};
 	return values;
 }
@@ -202,8 +202,8 @@ AggregateHandling EnumUtil::FromString<AggregateHandling>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetAggregateOrderDependentValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AggregateOrderDependent::ORDER_DEPENDENT), "ORDER_DEPENDENT" },
-	    { static_cast<uint32_t>(AggregateOrderDependent::NOT_ORDER_DEPENDENT), "NOT_ORDER_DEPENDENT" }
+		{ static_cast<uint32_t>(AggregateOrderDependent::ORDER_DEPENDENT), "ORDER_DEPENDENT" },
+		{ static_cast<uint32_t>(AggregateOrderDependent::NOT_ORDER_DEPENDENT), "NOT_ORDER_DEPENDENT" }
 	};
 	return values;
 }
@@ -220,8 +220,8 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 
 const StringUtil::EnumStringLiteral *GetAggregateTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AggregateType::NON_DISTINCT), "NON_DISTINCT" },
-	    { static_cast<uint32_t>(AggregateType::DISTINCT), "DISTINCT" }
+		{ static_cast<uint32_t>(AggregateType::NON_DISTINCT), "NON_DISTINCT" },
+		{ static_cast<uint32_t>(AggregateType::DISTINCT), "DISTINCT" }
 	};
 	return values;
 }
@@ -238,8 +238,8 @@ AggregateType EnumUtil::FromString<AggregateType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetAlterForeignKeyTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AlterForeignKeyType::AFT_ADD), "AFT_ADD" },
-	    { static_cast<uint32_t>(AlterForeignKeyType::AFT_DELETE), "AFT_DELETE" }
+		{ static_cast<uint32_t>(AlterForeignKeyType::AFT_ADD), "AFT_ADD" },
+		{ static_cast<uint32_t>(AlterForeignKeyType::AFT_DELETE), "AFT_DELETE" }
 	};
 	return values;
 }
@@ -256,8 +256,8 @@ AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetAlterScalarFunctionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AlterScalarFunctionType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS), "ADD_FUNCTION_OVERLOADS" }
+		{ static_cast<uint32_t>(AlterScalarFunctionType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS), "ADD_FUNCTION_OVERLOADS" }
 	};
 	return values;
 }
@@ -274,8 +274,8 @@ AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char
 
 const StringUtil::EnumStringLiteral *GetAlterTableFunctionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AlterTableFunctionType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(AlterTableFunctionType::ADD_FUNCTION_OVERLOADS), "ADD_FUNCTION_OVERLOADS" }
+		{ static_cast<uint32_t>(AlterTableFunctionType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(AlterTableFunctionType::ADD_FUNCTION_OVERLOADS), "ADD_FUNCTION_OVERLOADS" }
 	};
 	return values;
 }
@@ -292,42 +292,43 @@ AlterTableFunctionType EnumUtil::FromString<AlterTableFunctionType>(const char *
 
 const StringUtil::EnumStringLiteral *GetAlterTableTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AlterTableType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(AlterTableType::RENAME_COLUMN), "RENAME_COLUMN" },
-	    { static_cast<uint32_t>(AlterTableType::RENAME_TABLE), "RENAME_TABLE" },
-	    { static_cast<uint32_t>(AlterTableType::ADD_COLUMN), "ADD_COLUMN" },
-	    { static_cast<uint32_t>(AlterTableType::REMOVE_COLUMN), "REMOVE_COLUMN" },
-	    { static_cast<uint32_t>(AlterTableType::ALTER_COLUMN_TYPE), "ALTER_COLUMN_TYPE" },
-	    { static_cast<uint32_t>(AlterTableType::SET_DEFAULT), "SET_DEFAULT" },
-	    { static_cast<uint32_t>(AlterTableType::FOREIGN_KEY_CONSTRAINT), "FOREIGN_KEY_CONSTRAINT" },
-	    { static_cast<uint32_t>(AlterTableType::SET_NOT_NULL), "SET_NOT_NULL" },
-	    { static_cast<uint32_t>(AlterTableType::DROP_NOT_NULL), "DROP_NOT_NULL" },
-	    { static_cast<uint32_t>(AlterTableType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" }
+		{ static_cast<uint32_t>(AlterTableType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(AlterTableType::RENAME_COLUMN), "RENAME_COLUMN" },
+		{ static_cast<uint32_t>(AlterTableType::RENAME_TABLE), "RENAME_TABLE" },
+		{ static_cast<uint32_t>(AlterTableType::ADD_COLUMN), "ADD_COLUMN" },
+		{ static_cast<uint32_t>(AlterTableType::REMOVE_COLUMN), "REMOVE_COLUMN" },
+		{ static_cast<uint32_t>(AlterTableType::ALTER_COLUMN_TYPE), "ALTER_COLUMN_TYPE" },
+		{ static_cast<uint32_t>(AlterTableType::SET_DEFAULT), "SET_DEFAULT" },
+		{ static_cast<uint32_t>(AlterTableType::FOREIGN_KEY_CONSTRAINT), "FOREIGN_KEY_CONSTRAINT" },
+		{ static_cast<uint32_t>(AlterTableType::SET_NOT_NULL), "SET_NOT_NULL" },
+		{ static_cast<uint32_t>(AlterTableType::DROP_NOT_NULL), "DROP_NOT_NULL" },
+		{ static_cast<uint32_t>(AlterTableType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" },
+		{ static_cast<uint32_t>(AlterTableType::ADD_CONSTRAINT), "ADD_CONSTRAINT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
-	return StringUtil::EnumToString(GetAlterTableTypeValues(), 11, "AlterTableType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterTableTypeValues(), 12, "AlterTableType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
-	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 11, "AlterTableType", value));
+	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 12, "AlterTableType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AlterType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(AlterType::ALTER_TABLE), "ALTER_TABLE" },
-	    { static_cast<uint32_t>(AlterType::ALTER_VIEW), "ALTER_VIEW" },
-	    { static_cast<uint32_t>(AlterType::ALTER_SEQUENCE), "ALTER_SEQUENCE" },
-	    { static_cast<uint32_t>(AlterType::CHANGE_OWNERSHIP), "CHANGE_OWNERSHIP" },
-	    { static_cast<uint32_t>(AlterType::ALTER_SCALAR_FUNCTION), "ALTER_SCALAR_FUNCTION" },
-	    { static_cast<uint32_t>(AlterType::ALTER_TABLE_FUNCTION), "ALTER_TABLE_FUNCTION" },
-	    { static_cast<uint32_t>(AlterType::SET_COMMENT), "SET_COMMENT" },
-	    { static_cast<uint32_t>(AlterType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" }
+		{ static_cast<uint32_t>(AlterType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(AlterType::ALTER_TABLE), "ALTER_TABLE" },
+		{ static_cast<uint32_t>(AlterType::ALTER_VIEW), "ALTER_VIEW" },
+		{ static_cast<uint32_t>(AlterType::ALTER_SEQUENCE), "ALTER_SEQUENCE" },
+		{ static_cast<uint32_t>(AlterType::CHANGE_OWNERSHIP), "CHANGE_OWNERSHIP" },
+		{ static_cast<uint32_t>(AlterType::ALTER_SCALAR_FUNCTION), "ALTER_SCALAR_FUNCTION" },
+		{ static_cast<uint32_t>(AlterType::ALTER_TABLE_FUNCTION), "ALTER_TABLE_FUNCTION" },
+		{ static_cast<uint32_t>(AlterType::SET_COMMENT), "SET_COMMENT" },
+		{ static_cast<uint32_t>(AlterType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" }
 	};
 	return values;
 }
@@ -344,8 +345,8 @@ AlterType EnumUtil::FromString<AlterType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetAlterViewTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AlterViewType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(AlterViewType::RENAME_VIEW), "RENAME_VIEW" }
+		{ static_cast<uint32_t>(AlterViewType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(AlterViewType::RENAME_VIEW), "RENAME_VIEW" }
 	};
 	return values;
 }
@@ -362,8 +363,8 @@ AlterViewType EnumUtil::FromString<AlterViewType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetAppenderTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(AppenderType::LOGICAL), "LOGICAL" },
-	    { static_cast<uint32_t>(AppenderType::PHYSICAL), "PHYSICAL" }
+		{ static_cast<uint32_t>(AppenderType::LOGICAL), "LOGICAL" },
+		{ static_cast<uint32_t>(AppenderType::PHYSICAL), "PHYSICAL" }
 	};
 	return values;
 }
@@ -380,13 +381,13 @@ AppenderType EnumUtil::FromString<AppenderType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetArrowDateTimeTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ArrowDateTimeType::MILLISECONDS), "MILLISECONDS" },
-	    { static_cast<uint32_t>(ArrowDateTimeType::MICROSECONDS), "MICROSECONDS" },
-	    { static_cast<uint32_t>(ArrowDateTimeType::NANOSECONDS), "NANOSECONDS" },
-	    { static_cast<uint32_t>(ArrowDateTimeType::SECONDS), "SECONDS" },
-	    { static_cast<uint32_t>(ArrowDateTimeType::DAYS), "DAYS" },
-	    { static_cast<uint32_t>(ArrowDateTimeType::MONTHS), "MONTHS" },
-	    { static_cast<uint32_t>(ArrowDateTimeType::MONTH_DAY_NANO), "MONTH_DAY_NANO" }
+		{ static_cast<uint32_t>(ArrowDateTimeType::MILLISECONDS), "MILLISECONDS" },
+		{ static_cast<uint32_t>(ArrowDateTimeType::MICROSECONDS), "MICROSECONDS" },
+		{ static_cast<uint32_t>(ArrowDateTimeType::NANOSECONDS), "NANOSECONDS" },
+		{ static_cast<uint32_t>(ArrowDateTimeType::SECONDS), "SECONDS" },
+		{ static_cast<uint32_t>(ArrowDateTimeType::DAYS), "DAYS" },
+		{ static_cast<uint32_t>(ArrowDateTimeType::MONTHS), "MONTHS" },
+		{ static_cast<uint32_t>(ArrowDateTimeType::MONTH_DAY_NANO), "MONTH_DAY_NANO" }
 	};
 	return values;
 }
@@ -403,8 +404,8 @@ ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetArrowOffsetSizeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ArrowOffsetSize::REGULAR), "REGULAR" },
-	    { static_cast<uint32_t>(ArrowOffsetSize::LARGE), "LARGE" }
+		{ static_cast<uint32_t>(ArrowOffsetSize::REGULAR), "REGULAR" },
+		{ static_cast<uint32_t>(ArrowOffsetSize::LARGE), "LARGE" }
 	};
 	return values;
 }
@@ -421,11 +422,11 @@ ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetArrowTypeInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ArrowTypeInfoType::LIST), "LIST" },
-	    { static_cast<uint32_t>(ArrowTypeInfoType::STRUCT), "STRUCT" },
-	    { static_cast<uint32_t>(ArrowTypeInfoType::DATE_TIME), "DATE_TIME" },
-	    { static_cast<uint32_t>(ArrowTypeInfoType::STRING), "STRING" },
-	    { static_cast<uint32_t>(ArrowTypeInfoType::ARRAY), "ARRAY" }
+		{ static_cast<uint32_t>(ArrowTypeInfoType::LIST), "LIST" },
+		{ static_cast<uint32_t>(ArrowTypeInfoType::STRUCT), "STRUCT" },
+		{ static_cast<uint32_t>(ArrowTypeInfoType::DATE_TIME), "DATE_TIME" },
+		{ static_cast<uint32_t>(ArrowTypeInfoType::STRING), "STRING" },
+		{ static_cast<uint32_t>(ArrowTypeInfoType::ARRAY), "ARRAY" }
 	};
 	return values;
 }
@@ -442,10 +443,10 @@ ArrowTypeInfoType EnumUtil::FromString<ArrowTypeInfoType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetArrowVariableSizeTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ArrowVariableSizeType::NORMAL), "NORMAL" },
-	    { static_cast<uint32_t>(ArrowVariableSizeType::FIXED_SIZE), "FIXED_SIZE" },
-	    { static_cast<uint32_t>(ArrowVariableSizeType::SUPER_SIZE), "SUPER_SIZE" },
-	    { static_cast<uint32_t>(ArrowVariableSizeType::VIEW), "VIEW" }
+		{ static_cast<uint32_t>(ArrowVariableSizeType::NORMAL), "NORMAL" },
+		{ static_cast<uint32_t>(ArrowVariableSizeType::FIXED_SIZE), "FIXED_SIZE" },
+		{ static_cast<uint32_t>(ArrowVariableSizeType::SUPER_SIZE), "SUPER_SIZE" },
+		{ static_cast<uint32_t>(ArrowVariableSizeType::VIEW), "VIEW" }
 	};
 	return values;
 }
@@ -462,8 +463,8 @@ ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *va
 
 const StringUtil::EnumStringLiteral *GetBinderTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(BinderType::REGULAR_BINDER), "REGULAR_BINDER" },
-	    { static_cast<uint32_t>(BinderType::VIEW_BINDER), "VIEW_BINDER" }
+		{ static_cast<uint32_t>(BinderType::REGULAR_BINDER), "REGULAR_BINDER" },
+		{ static_cast<uint32_t>(BinderType::VIEW_BINDER), "VIEW_BINDER" }
 	};
 	return values;
 }
@@ -480,9 +481,9 @@ BinderType EnumUtil::FromString<BinderType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetBindingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(BindingMode::STANDARD_BINDING), "STANDARD_BINDING" },
-	    { static_cast<uint32_t>(BindingMode::EXTRACT_NAMES), "EXTRACT_NAMES" },
-	    { static_cast<uint32_t>(BindingMode::EXTRACT_REPLACEMENT_SCANS), "EXTRACT_REPLACEMENT_SCANS" }
+		{ static_cast<uint32_t>(BindingMode::STANDARD_BINDING), "STANDARD_BINDING" },
+		{ static_cast<uint32_t>(BindingMode::EXTRACT_NAMES), "EXTRACT_NAMES" },
+		{ static_cast<uint32_t>(BindingMode::EXTRACT_REPLACEMENT_SCANS), "EXTRACT_REPLACEMENT_SCANS" }
 	};
 	return values;
 }
@@ -499,12 +500,12 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetBitpackingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(BitpackingMode::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(BitpackingMode::AUTO), "AUTO" },
-	    { static_cast<uint32_t>(BitpackingMode::CONSTANT), "CONSTANT" },
-	    { static_cast<uint32_t>(BitpackingMode::CONSTANT_DELTA), "CONSTANT_DELTA" },
-	    { static_cast<uint32_t>(BitpackingMode::DELTA_FOR), "DELTA_FOR" },
-	    { static_cast<uint32_t>(BitpackingMode::FOR), "FOR" }
+		{ static_cast<uint32_t>(BitpackingMode::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(BitpackingMode::AUTO), "AUTO" },
+		{ static_cast<uint32_t>(BitpackingMode::CONSTANT), "CONSTANT" },
+		{ static_cast<uint32_t>(BitpackingMode::CONSTANT_DELTA), "CONSTANT_DELTA" },
+		{ static_cast<uint32_t>(BitpackingMode::DELTA_FOR), "DELTA_FOR" },
+		{ static_cast<uint32_t>(BitpackingMode::FOR), "FOR" }
 	};
 	return values;
 }
@@ -521,8 +522,8 @@ BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetBlockStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(BlockState::BLOCK_UNLOADED), "BLOCK_UNLOADED" },
-	    { static_cast<uint32_t>(BlockState::BLOCK_LOADED), "BLOCK_LOADED" }
+		{ static_cast<uint32_t>(BlockState::BLOCK_UNLOADED), "BLOCK_UNLOADED" },
+		{ static_cast<uint32_t>(BlockState::BLOCK_LOADED), "BLOCK_LOADED" }
 	};
 	return values;
 }
@@ -539,10 +540,10 @@ BlockState EnumUtil::FromString<BlockState>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetCAPIResultSetTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CAPIResultSetType::CAPI_RESULT_TYPE_NONE), "CAPI_RESULT_TYPE_NONE" },
-	    { static_cast<uint32_t>(CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED), "CAPI_RESULT_TYPE_MATERIALIZED" },
-	    { static_cast<uint32_t>(CAPIResultSetType::CAPI_RESULT_TYPE_STREAMING), "CAPI_RESULT_TYPE_STREAMING" },
-	    { static_cast<uint32_t>(CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED), "CAPI_RESULT_TYPE_DEPRECATED" }
+		{ static_cast<uint32_t>(CAPIResultSetType::CAPI_RESULT_TYPE_NONE), "CAPI_RESULT_TYPE_NONE" },
+		{ static_cast<uint32_t>(CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED), "CAPI_RESULT_TYPE_MATERIALIZED" },
+		{ static_cast<uint32_t>(CAPIResultSetType::CAPI_RESULT_TYPE_STREAMING), "CAPI_RESULT_TYPE_STREAMING" },
+		{ static_cast<uint32_t>(CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED), "CAPI_RESULT_TYPE_DEPRECATED" }
 	};
 	return values;
 }
@@ -559,19 +560,19 @@ CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CSVState::STANDARD), "STANDARD" },
-	    { static_cast<uint32_t>(CSVState::DELIMITER), "DELIMITER" },
-	    { static_cast<uint32_t>(CSVState::RECORD_SEPARATOR), "RECORD_SEPARATOR" },
-	    { static_cast<uint32_t>(CSVState::CARRIAGE_RETURN), "CARRIAGE_RETURN" },
-	    { static_cast<uint32_t>(CSVState::QUOTED), "QUOTED" },
-	    { static_cast<uint32_t>(CSVState::UNQUOTED), "UNQUOTED" },
-	    { static_cast<uint32_t>(CSVState::ESCAPE), "ESCAPE" },
-	    { static_cast<uint32_t>(CSVState::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(CSVState::NOT_SET), "NOT_SET" },
-	    { static_cast<uint32_t>(CSVState::QUOTED_NEW_LINE), "QUOTED_NEW_LINE" },
-	    { static_cast<uint32_t>(CSVState::EMPTY_SPACE), "EMPTY_SPACE" },
-	    { static_cast<uint32_t>(CSVState::COMMENT), "COMMENT" },
-	    { static_cast<uint32_t>(CSVState::STANDARD_NEWLINE), "STANDARD_NEWLINE" }
+		{ static_cast<uint32_t>(CSVState::STANDARD), "STANDARD" },
+		{ static_cast<uint32_t>(CSVState::DELIMITER), "DELIMITER" },
+		{ static_cast<uint32_t>(CSVState::RECORD_SEPARATOR), "RECORD_SEPARATOR" },
+		{ static_cast<uint32_t>(CSVState::CARRIAGE_RETURN), "CARRIAGE_RETURN" },
+		{ static_cast<uint32_t>(CSVState::QUOTED), "QUOTED" },
+		{ static_cast<uint32_t>(CSVState::UNQUOTED), "UNQUOTED" },
+		{ static_cast<uint32_t>(CSVState::ESCAPE), "ESCAPE" },
+		{ static_cast<uint32_t>(CSVState::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(CSVState::NOT_SET), "NOT_SET" },
+		{ static_cast<uint32_t>(CSVState::QUOTED_NEW_LINE), "QUOTED_NEW_LINE" },
+		{ static_cast<uint32_t>(CSVState::EMPTY_SPACE), "EMPTY_SPACE" },
+		{ static_cast<uint32_t>(CSVState::COMMENT), "COMMENT" },
+		{ static_cast<uint32_t>(CSVState::STANDARD_NEWLINE), "STANDARD_NEWLINE" }
 	};
 	return values;
 }
@@ -588,9 +589,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetCTEMaterializeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CTEMaterialize::CTE_MATERIALIZE_DEFAULT), "CTE_MATERIALIZE_DEFAULT" },
-	    { static_cast<uint32_t>(CTEMaterialize::CTE_MATERIALIZE_ALWAYS), "CTE_MATERIALIZE_ALWAYS" },
-	    { static_cast<uint32_t>(CTEMaterialize::CTE_MATERIALIZE_NEVER), "CTE_MATERIALIZE_NEVER" }
+		{ static_cast<uint32_t>(CTEMaterialize::CTE_MATERIALIZE_DEFAULT), "CTE_MATERIALIZE_DEFAULT" },
+		{ static_cast<uint32_t>(CTEMaterialize::CTE_MATERIALIZE_ALWAYS), "CTE_MATERIALIZE_ALWAYS" },
+		{ static_cast<uint32_t>(CTEMaterialize::CTE_MATERIALIZE_NEVER), "CTE_MATERIALIZE_NEVER" }
 	};
 	return values;
 }
@@ -607,9 +608,9 @@ CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetCatalogLookupBehaviorValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CatalogLookupBehavior::STANDARD), "STANDARD" },
-	    { static_cast<uint32_t>(CatalogLookupBehavior::LOWER_PRIORITY), "LOWER_PRIORITY" },
-	    { static_cast<uint32_t>(CatalogLookupBehavior::NEVER_LOOKUP), "NEVER_LOOKUP" }
+		{ static_cast<uint32_t>(CatalogLookupBehavior::STANDARD), "STANDARD" },
+		{ static_cast<uint32_t>(CatalogLookupBehavior::LOWER_PRIORITY), "LOWER_PRIORITY" },
+		{ static_cast<uint32_t>(CatalogLookupBehavior::NEVER_LOOKUP), "NEVER_LOOKUP" }
 	};
 	return values;
 }
@@ -626,29 +627,29 @@ CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *va
 
 const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CatalogType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(CatalogType::TABLE_ENTRY), "TABLE_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::SCHEMA_ENTRY), "SCHEMA_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::VIEW_ENTRY), "VIEW_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::INDEX_ENTRY), "INDEX_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::PREPARED_STATEMENT), "PREPARED_STATEMENT" },
-	    { static_cast<uint32_t>(CatalogType::SEQUENCE_ENTRY), "SEQUENCE_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::COLLATION_ENTRY), "COLLATION_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::TYPE_ENTRY), "TYPE_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::DATABASE_ENTRY), "DATABASE_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::TABLE_FUNCTION_ENTRY), "TABLE_FUNCTION_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::SCALAR_FUNCTION_ENTRY), "SCALAR_FUNCTION_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::AGGREGATE_FUNCTION_ENTRY), "AGGREGATE_FUNCTION_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::PRAGMA_FUNCTION_ENTRY), "PRAGMA_FUNCTION_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::COPY_FUNCTION_ENTRY), "COPY_FUNCTION_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::MACRO_ENTRY), "MACRO_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::TABLE_MACRO_ENTRY), "TABLE_MACRO_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::DELETED_ENTRY), "DELETED_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::RENAMED_ENTRY), "RENAMED_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::SECRET_ENTRY), "SECRET_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::SECRET_TYPE_ENTRY), "SECRET_TYPE_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::SECRET_FUNCTION_ENTRY), "SECRET_FUNCTION_ENTRY" },
-	    { static_cast<uint32_t>(CatalogType::DEPENDENCY_ENTRY), "DEPENDENCY_ENTRY" }
+		{ static_cast<uint32_t>(CatalogType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(CatalogType::TABLE_ENTRY), "TABLE_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::SCHEMA_ENTRY), "SCHEMA_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::VIEW_ENTRY), "VIEW_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::INDEX_ENTRY), "INDEX_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::PREPARED_STATEMENT), "PREPARED_STATEMENT" },
+		{ static_cast<uint32_t>(CatalogType::SEQUENCE_ENTRY), "SEQUENCE_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::COLLATION_ENTRY), "COLLATION_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::TYPE_ENTRY), "TYPE_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::DATABASE_ENTRY), "DATABASE_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::TABLE_FUNCTION_ENTRY), "TABLE_FUNCTION_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::SCALAR_FUNCTION_ENTRY), "SCALAR_FUNCTION_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::AGGREGATE_FUNCTION_ENTRY), "AGGREGATE_FUNCTION_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::PRAGMA_FUNCTION_ENTRY), "PRAGMA_FUNCTION_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::COPY_FUNCTION_ENTRY), "COPY_FUNCTION_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::MACRO_ENTRY), "MACRO_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::TABLE_MACRO_ENTRY), "TABLE_MACRO_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::DELETED_ENTRY), "DELETED_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::RENAMED_ENTRY), "RENAMED_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::SECRET_ENTRY), "SECRET_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::SECRET_TYPE_ENTRY), "SECRET_TYPE_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::SECRET_FUNCTION_ENTRY), "SECRET_FUNCTION_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::DEPENDENCY_ENTRY), "DEPENDENCY_ENTRY" }
 	};
 	return values;
 }
@@ -665,10 +666,10 @@ CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetCheckpointAbortValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CheckpointAbort::NO_ABORT), "NONE" },
-	    { static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE), "BEFORE_TRUNCATE" },
-	    { static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER), "BEFORE_HEADER" },
-	    { static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE), "AFTER_FREE_LIST_WRITE" }
+		{ static_cast<uint32_t>(CheckpointAbort::NO_ABORT), "NONE" },
+		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE), "BEFORE_TRUNCATE" },
+		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER), "BEFORE_HEADER" },
+		{ static_cast<uint32_t>(CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE), "AFTER_FREE_LIST_WRITE" }
 	};
 	return values;
 }
@@ -685,9 +686,9 @@ CheckpointAbort EnumUtil::FromString<CheckpointAbort>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetChunkInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ChunkInfoType::CONSTANT_INFO), "CONSTANT_INFO" },
-	    { static_cast<uint32_t>(ChunkInfoType::VECTOR_INFO), "VECTOR_INFO" },
-	    { static_cast<uint32_t>(ChunkInfoType::EMPTY_INFO), "EMPTY_INFO" }
+		{ static_cast<uint32_t>(ChunkInfoType::CONSTANT_INFO), "CONSTANT_INFO" },
+		{ static_cast<uint32_t>(ChunkInfoType::VECTOR_INFO), "VECTOR_INFO" },
+		{ static_cast<uint32_t>(ChunkInfoType::EMPTY_INFO), "EMPTY_INFO" }
 	};
 	return values;
 }
@@ -704,9 +705,9 @@ ChunkInfoType EnumUtil::FromString<ChunkInfoType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetColumnDataAllocatorTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), "BUFFER_MANAGER_ALLOCATOR" },
-	    { static_cast<uint32_t>(ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR), "IN_MEMORY_ALLOCATOR" },
-	    { static_cast<uint32_t>(ColumnDataAllocatorType::HYBRID), "HYBRID" }
+		{ static_cast<uint32_t>(ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), "BUFFER_MANAGER_ALLOCATOR" },
+		{ static_cast<uint32_t>(ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR), "IN_MEMORY_ALLOCATOR" },
+		{ static_cast<uint32_t>(ColumnDataAllocatorType::HYBRID), "HYBRID" }
 	};
 	return values;
 }
@@ -723,9 +724,9 @@ ColumnDataAllocatorType EnumUtil::FromString<ColumnDataAllocatorType>(const char
 
 const StringUtil::EnumStringLiteral *GetColumnDataScanPropertiesValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ColumnDataScanProperties::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(ColumnDataScanProperties::ALLOW_ZERO_COPY), "ALLOW_ZERO_COPY" },
-	    { static_cast<uint32_t>(ColumnDataScanProperties::DISALLOW_ZERO_COPY), "DISALLOW_ZERO_COPY" }
+		{ static_cast<uint32_t>(ColumnDataScanProperties::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(ColumnDataScanProperties::ALLOW_ZERO_COPY), "ALLOW_ZERO_COPY" },
+		{ static_cast<uint32_t>(ColumnDataScanProperties::DISALLOW_ZERO_COPY), "DISALLOW_ZERO_COPY" }
 	};
 	return values;
 }
@@ -742,8 +743,8 @@ ColumnDataScanProperties EnumUtil::FromString<ColumnDataScanProperties>(const ch
 
 const StringUtil::EnumStringLiteral *GetColumnSegmentTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ColumnSegmentType::TRANSIENT), "TRANSIENT" },
-	    { static_cast<uint32_t>(ColumnSegmentType::PERSISTENT), "PERSISTENT" }
+		{ static_cast<uint32_t>(ColumnSegmentType::TRANSIENT), "TRANSIENT" },
+		{ static_cast<uint32_t>(ColumnSegmentType::PERSISTENT), "PERSISTENT" }
 	};
 	return values;
 }
@@ -760,9 +761,9 @@ ColumnSegmentType EnumUtil::FromString<ColumnSegmentType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetCompressedMaterializationDirectionValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CompressedMaterializationDirection::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(CompressedMaterializationDirection::COMPRESS), "COMPRESS" },
-	    { static_cast<uint32_t>(CompressedMaterializationDirection::DECOMPRESS), "DECOMPRESS" }
+		{ static_cast<uint32_t>(CompressedMaterializationDirection::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(CompressedMaterializationDirection::COMPRESS), "COMPRESS" },
+		{ static_cast<uint32_t>(CompressedMaterializationDirection::DECOMPRESS), "DECOMPRESS" }
 	};
 	return values;
 }
@@ -779,19 +780,19 @@ CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializatio
 
 const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_AUTO), "COMPRESSION_AUTO" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_UNCOMPRESSED), "COMPRESSION_UNCOMPRESSED" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_CONSTANT), "COMPRESSION_CONSTANT" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_RLE), "COMPRESSION_RLE" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_DICTIONARY), "COMPRESSION_DICTIONARY" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_PFOR_DELTA), "COMPRESSION_PFOR_DELTA" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_BITPACKING), "COMPRESSION_BITPACKING" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_FSST), "COMPRESSION_FSST" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_CHIMP), "COMPRESSION_CHIMP" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_PATAS), "COMPRESSION_PATAS" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_ALP), "COMPRESSION_ALP" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_ALPRD), "COMPRESSION_ALPRD" },
-	    { static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_AUTO), "COMPRESSION_AUTO" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_UNCOMPRESSED), "COMPRESSION_UNCOMPRESSED" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CONSTANT), "COMPRESSION_CONSTANT" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_RLE), "COMPRESSION_RLE" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICTIONARY), "COMPRESSION_DICTIONARY" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PFOR_DELTA), "COMPRESSION_PFOR_DELTA" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_BITPACKING), "COMPRESSION_BITPACKING" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_FSST), "COMPRESSION_FSST" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_CHIMP), "COMPRESSION_CHIMP" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PATAS), "COMPRESSION_PATAS" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALP), "COMPRESSION_ALP" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALPRD), "COMPRESSION_ALPRD" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
 	};
 	return values;
 }
@@ -808,8 +809,8 @@ CompressionType EnumUtil::FromString<CompressionType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetConflictManagerModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ConflictManagerMode::SCAN), "SCAN" },
-	    { static_cast<uint32_t>(ConflictManagerMode::THROW), "THROW" }
+		{ static_cast<uint32_t>(ConflictManagerMode::SCAN), "SCAN" },
+		{ static_cast<uint32_t>(ConflictManagerMode::THROW), "THROW" }
 	};
 	return values;
 }
@@ -826,11 +827,11 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ConstraintType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(ConstraintType::NOT_NULL), "NOT_NULL" },
-	    { static_cast<uint32_t>(ConstraintType::CHECK), "CHECK" },
-	    { static_cast<uint32_t>(ConstraintType::UNIQUE), "UNIQUE" },
-	    { static_cast<uint32_t>(ConstraintType::FOREIGN_KEY), "FOREIGN_KEY" }
+		{ static_cast<uint32_t>(ConstraintType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(ConstraintType::NOT_NULL), "NOT_NULL" },
+		{ static_cast<uint32_t>(ConstraintType::CHECK), "CHECK" },
+		{ static_cast<uint32_t>(ConstraintType::UNIQUE), "UNIQUE" },
+		{ static_cast<uint32_t>(ConstraintType::FOREIGN_KEY), "FOREIGN_KEY" }
 	};
 	return values;
 }
@@ -847,8 +848,8 @@ ConstraintType EnumUtil::FromString<ConstraintType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetCopyFunctionReturnTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS), "CHANGED_ROWS" },
-	    { static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST), "CHANGED_ROWS_AND_FILE_LIST" }
+		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS), "CHANGED_ROWS" },
+		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST), "CHANGED_ROWS_AND_FILE_LIST" }
 	};
 	return values;
 }
@@ -865,10 +866,10 @@ CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *
 
 const StringUtil::EnumStringLiteral *GetCopyOverwriteModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CopyOverwriteMode::COPY_ERROR_ON_CONFLICT), "COPY_ERROR_ON_CONFLICT" },
-	    { static_cast<uint32_t>(CopyOverwriteMode::COPY_OVERWRITE), "COPY_OVERWRITE" },
-	    { static_cast<uint32_t>(CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE), "COPY_OVERWRITE_OR_IGNORE" },
-	    { static_cast<uint32_t>(CopyOverwriteMode::COPY_APPEND), "COPY_APPEND" }
+		{ static_cast<uint32_t>(CopyOverwriteMode::COPY_ERROR_ON_CONFLICT), "COPY_ERROR_ON_CONFLICT" },
+		{ static_cast<uint32_t>(CopyOverwriteMode::COPY_OVERWRITE), "COPY_OVERWRITE" },
+		{ static_cast<uint32_t>(CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE), "COPY_OVERWRITE_OR_IGNORE" },
+		{ static_cast<uint32_t>(CopyOverwriteMode::COPY_APPEND), "COPY_APPEND" }
 	};
 	return values;
 }
@@ -885,8 +886,8 @@ CopyOverwriteMode EnumUtil::FromString<CopyOverwriteMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetCopyToTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(CopyToType::COPY_TO_FILE), "COPY_TO_FILE" },
-	    { static_cast<uint32_t>(CopyToType::EXPORT_DATABASE), "EXPORT_DATABASE" }
+		{ static_cast<uint32_t>(CopyToType::COPY_TO_FILE), "COPY_TO_FILE" },
+		{ static_cast<uint32_t>(CopyToType::EXPORT_DATABASE), "EXPORT_DATABASE" }
 	};
 	return values;
 }
@@ -903,10 +904,10 @@ CopyToType EnumUtil::FromString<CopyToType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetDataFileTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(DataFileType::FILE_DOES_NOT_EXIST), "FILE_DOES_NOT_EXIST" },
-	    { static_cast<uint32_t>(DataFileType::DUCKDB_FILE), "DUCKDB_FILE" },
-	    { static_cast<uint32_t>(DataFileType::SQLITE_FILE), "SQLITE_FILE" },
-	    { static_cast<uint32_t>(DataFileType::PARQUET_FILE), "PARQUET_FILE" }
+		{ static_cast<uint32_t>(DataFileType::FILE_DOES_NOT_EXIST), "FILE_DOES_NOT_EXIST" },
+		{ static_cast<uint32_t>(DataFileType::DUCKDB_FILE), "DUCKDB_FILE" },
+		{ static_cast<uint32_t>(DataFileType::SQLITE_FILE), "SQLITE_FILE" },
+		{ static_cast<uint32_t>(DataFileType::PARQUET_FILE), "PARQUET_FILE" }
 	};
 	return values;
 }
@@ -923,31 +924,31 @@ DataFileType EnumUtil::FromString<DataFileType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetDatePartSpecifierValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(DatePartSpecifier::YEAR), "YEAR" },
-	    { static_cast<uint32_t>(DatePartSpecifier::MONTH), "MONTH" },
-	    { static_cast<uint32_t>(DatePartSpecifier::DAY), "DAY" },
-	    { static_cast<uint32_t>(DatePartSpecifier::DECADE), "DECADE" },
-	    { static_cast<uint32_t>(DatePartSpecifier::CENTURY), "CENTURY" },
-	    { static_cast<uint32_t>(DatePartSpecifier::MILLENNIUM), "MILLENNIUM" },
-	    { static_cast<uint32_t>(DatePartSpecifier::MICROSECONDS), "MICROSECONDS" },
-	    { static_cast<uint32_t>(DatePartSpecifier::MILLISECONDS), "MILLISECONDS" },
-	    { static_cast<uint32_t>(DatePartSpecifier::SECOND), "SECOND" },
-	    { static_cast<uint32_t>(DatePartSpecifier::MINUTE), "MINUTE" },
-	    { static_cast<uint32_t>(DatePartSpecifier::HOUR), "HOUR" },
-	    { static_cast<uint32_t>(DatePartSpecifier::DOW), "DOW" },
-	    { static_cast<uint32_t>(DatePartSpecifier::ISODOW), "ISODOW" },
-	    { static_cast<uint32_t>(DatePartSpecifier::WEEK), "WEEK" },
-	    { static_cast<uint32_t>(DatePartSpecifier::ISOYEAR), "ISOYEAR" },
-	    { static_cast<uint32_t>(DatePartSpecifier::QUARTER), "QUARTER" },
-	    { static_cast<uint32_t>(DatePartSpecifier::DOY), "DOY" },
-	    { static_cast<uint32_t>(DatePartSpecifier::YEARWEEK), "YEARWEEK" },
-	    { static_cast<uint32_t>(DatePartSpecifier::ERA), "ERA" },
-	    { static_cast<uint32_t>(DatePartSpecifier::TIMEZONE), "TIMEZONE" },
-	    { static_cast<uint32_t>(DatePartSpecifier::TIMEZONE_HOUR), "TIMEZONE_HOUR" },
-	    { static_cast<uint32_t>(DatePartSpecifier::TIMEZONE_MINUTE), "TIMEZONE_MINUTE" },
-	    { static_cast<uint32_t>(DatePartSpecifier::EPOCH), "EPOCH" },
-	    { static_cast<uint32_t>(DatePartSpecifier::JULIAN_DAY), "JULIAN_DAY" },
-	    { static_cast<uint32_t>(DatePartSpecifier::INVALID), "INVALID" }
+		{ static_cast<uint32_t>(DatePartSpecifier::YEAR), "YEAR" },
+		{ static_cast<uint32_t>(DatePartSpecifier::MONTH), "MONTH" },
+		{ static_cast<uint32_t>(DatePartSpecifier::DAY), "DAY" },
+		{ static_cast<uint32_t>(DatePartSpecifier::DECADE), "DECADE" },
+		{ static_cast<uint32_t>(DatePartSpecifier::CENTURY), "CENTURY" },
+		{ static_cast<uint32_t>(DatePartSpecifier::MILLENNIUM), "MILLENNIUM" },
+		{ static_cast<uint32_t>(DatePartSpecifier::MICROSECONDS), "MICROSECONDS" },
+		{ static_cast<uint32_t>(DatePartSpecifier::MILLISECONDS), "MILLISECONDS" },
+		{ static_cast<uint32_t>(DatePartSpecifier::SECOND), "SECOND" },
+		{ static_cast<uint32_t>(DatePartSpecifier::MINUTE), "MINUTE" },
+		{ static_cast<uint32_t>(DatePartSpecifier::HOUR), "HOUR" },
+		{ static_cast<uint32_t>(DatePartSpecifier::DOW), "DOW" },
+		{ static_cast<uint32_t>(DatePartSpecifier::ISODOW), "ISODOW" },
+		{ static_cast<uint32_t>(DatePartSpecifier::WEEK), "WEEK" },
+		{ static_cast<uint32_t>(DatePartSpecifier::ISOYEAR), "ISOYEAR" },
+		{ static_cast<uint32_t>(DatePartSpecifier::QUARTER), "QUARTER" },
+		{ static_cast<uint32_t>(DatePartSpecifier::DOY), "DOY" },
+		{ static_cast<uint32_t>(DatePartSpecifier::YEARWEEK), "YEARWEEK" },
+		{ static_cast<uint32_t>(DatePartSpecifier::ERA), "ERA" },
+		{ static_cast<uint32_t>(DatePartSpecifier::TIMEZONE), "TIMEZONE" },
+		{ static_cast<uint32_t>(DatePartSpecifier::TIMEZONE_HOUR), "TIMEZONE_HOUR" },
+		{ static_cast<uint32_t>(DatePartSpecifier::TIMEZONE_MINUTE), "TIMEZONE_MINUTE" },
+		{ static_cast<uint32_t>(DatePartSpecifier::EPOCH), "EPOCH" },
+		{ static_cast<uint32_t>(DatePartSpecifier::JULIAN_DAY), "JULIAN_DAY" },
+		{ static_cast<uint32_t>(DatePartSpecifier::INVALID), "INVALID" }
 	};
 	return values;
 }
@@ -964,9 +965,9 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetDebugInitializeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(DebugInitialize::NO_INITIALIZE), "NO_INITIALIZE" },
-	    { static_cast<uint32_t>(DebugInitialize::DEBUG_ZERO_INITIALIZE), "DEBUG_ZERO_INITIALIZE" },
-	    { static_cast<uint32_t>(DebugInitialize::DEBUG_ONE_INITIALIZE), "DEBUG_ONE_INITIALIZE" }
+		{ static_cast<uint32_t>(DebugInitialize::NO_INITIALIZE), "NO_INITIALIZE" },
+		{ static_cast<uint32_t>(DebugInitialize::DEBUG_ZERO_INITIALIZE), "DEBUG_ZERO_INITIALIZE" },
+		{ static_cast<uint32_t>(DebugInitialize::DEBUG_ONE_INITIALIZE), "DEBUG_ONE_INITIALIZE" }
 	};
 	return values;
 }
@@ -983,11 +984,11 @@ DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetDefaultOrderByNullTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(DefaultOrderByNullType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(DefaultOrderByNullType::NULLS_FIRST), "NULLS_FIRST" },
-	    { static_cast<uint32_t>(DefaultOrderByNullType::NULLS_LAST), "NULLS_LAST" },
-	    { static_cast<uint32_t>(DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC), "NULLS_FIRST_ON_ASC_LAST_ON_DESC" },
-	    { static_cast<uint32_t>(DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC), "NULLS_LAST_ON_ASC_FIRST_ON_DESC" }
+		{ static_cast<uint32_t>(DefaultOrderByNullType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(DefaultOrderByNullType::NULLS_FIRST), "NULLS_FIRST" },
+		{ static_cast<uint32_t>(DefaultOrderByNullType::NULLS_LAST), "NULLS_LAST" },
+		{ static_cast<uint32_t>(DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC), "NULLS_FIRST_ON_ASC_LAST_ON_DESC" },
+		{ static_cast<uint32_t>(DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC), "NULLS_LAST_ON_ASC_FIRST_ON_DESC" }
 	};
 	return values;
 }
@@ -1004,8 +1005,8 @@ DefaultOrderByNullType EnumUtil::FromString<DefaultOrderByNullType>(const char *
 
 const StringUtil::EnumStringLiteral *GetDependencyEntryTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(DependencyEntryType::SUBJECT), "SUBJECT" },
-	    { static_cast<uint32_t>(DependencyEntryType::DEPENDENT), "DEPENDENT" }
+		{ static_cast<uint32_t>(DependencyEntryType::SUBJECT), "SUBJECT" },
+		{ static_cast<uint32_t>(DependencyEntryType::DEPENDENT), "DEPENDENT" }
 	};
 	return values;
 }
@@ -1022,9 +1023,9 @@ DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetDeprecatedIndexTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(DeprecatedIndexType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(DeprecatedIndexType::ART), "ART" },
-	    { static_cast<uint32_t>(DeprecatedIndexType::EXTENSION), "EXTENSION" }
+		{ static_cast<uint32_t>(DeprecatedIndexType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(DeprecatedIndexType::ART), "ART" },
+		{ static_cast<uint32_t>(DeprecatedIndexType::EXTENSION), "EXTENSION" }
 	};
 	return values;
 }
@@ -1041,9 +1042,9 @@ DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetDestroyBufferUponValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(DestroyBufferUpon::BLOCK), "BLOCK" },
-	    { static_cast<uint32_t>(DestroyBufferUpon::EVICTION), "EVICTION" },
-	    { static_cast<uint32_t>(DestroyBufferUpon::UNPIN), "UNPIN" }
+		{ static_cast<uint32_t>(DestroyBufferUpon::BLOCK), "BLOCK" },
+		{ static_cast<uint32_t>(DestroyBufferUpon::EVICTION), "EVICTION" },
+		{ static_cast<uint32_t>(DestroyBufferUpon::UNPIN), "UNPIN" }
 	};
 	return values;
 }
@@ -1060,8 +1061,8 @@ DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetDistinctTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(DistinctType::DISTINCT), "DISTINCT" },
-	    { static_cast<uint32_t>(DistinctType::DISTINCT_ON), "DISTINCT_ON" }
+		{ static_cast<uint32_t>(DistinctType::DISTINCT), "DISTINCT" },
+		{ static_cast<uint32_t>(DistinctType::DISTINCT_ON), "DISTINCT_ON" }
 	};
 	return values;
 }
@@ -1078,11 +1079,11 @@ DistinctType EnumUtil::FromString<DistinctType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetErrorTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ErrorType::UNSIGNED_EXTENSION), "UNSIGNED_EXTENSION" },
-	    { static_cast<uint32_t>(ErrorType::INVALIDATED_TRANSACTION), "INVALIDATED_TRANSACTION" },
-	    { static_cast<uint32_t>(ErrorType::INVALIDATED_DATABASE), "INVALIDATED_DATABASE" },
-	    { static_cast<uint32_t>(ErrorType::ERROR_COUNT), "ERROR_COUNT" },
-	    { static_cast<uint32_t>(ErrorType::INVALID), "INVALID" }
+		{ static_cast<uint32_t>(ErrorType::UNSIGNED_EXTENSION), "UNSIGNED_EXTENSION" },
+		{ static_cast<uint32_t>(ErrorType::INVALIDATED_TRANSACTION), "INVALIDATED_TRANSACTION" },
+		{ static_cast<uint32_t>(ErrorType::INVALIDATED_DATABASE), "INVALIDATED_DATABASE" },
+		{ static_cast<uint32_t>(ErrorType::ERROR_COUNT), "ERROR_COUNT" },
+		{ static_cast<uint32_t>(ErrorType::INVALID), "INVALID" }
 	};
 	return values;
 }
@@ -1099,9 +1100,9 @@ ErrorType EnumUtil::FromString<ErrorType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExceptionFormatValueTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), "FORMAT_VALUE_TYPE_DOUBLE" },
-	    { static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), "FORMAT_VALUE_TYPE_INTEGER" },
-	    { static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), "FORMAT_VALUE_TYPE_STRING" }
+		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), "FORMAT_VALUE_TYPE_DOUBLE" },
+		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), "FORMAT_VALUE_TYPE_INTEGER" },
+		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), "FORMAT_VALUE_TYPE_STRING" }
 	};
 	return values;
 }
@@ -1118,49 +1119,49 @@ ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const ch
 
 const StringUtil::EnumStringLiteral *GetExceptionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExceptionType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(ExceptionType::OUT_OF_RANGE), "OUT_OF_RANGE" },
-	    { static_cast<uint32_t>(ExceptionType::CONVERSION), "CONVERSION" },
-	    { static_cast<uint32_t>(ExceptionType::UNKNOWN_TYPE), "UNKNOWN_TYPE" },
-	    { static_cast<uint32_t>(ExceptionType::DECIMAL), "DECIMAL" },
-	    { static_cast<uint32_t>(ExceptionType::MISMATCH_TYPE), "MISMATCH_TYPE" },
-	    { static_cast<uint32_t>(ExceptionType::DIVIDE_BY_ZERO), "DIVIDE_BY_ZERO" },
-	    { static_cast<uint32_t>(ExceptionType::OBJECT_SIZE), "OBJECT_SIZE" },
-	    { static_cast<uint32_t>(ExceptionType::INVALID_TYPE), "INVALID_TYPE" },
-	    { static_cast<uint32_t>(ExceptionType::SERIALIZATION), "SERIALIZATION" },
-	    { static_cast<uint32_t>(ExceptionType::TRANSACTION), "TRANSACTION" },
-	    { static_cast<uint32_t>(ExceptionType::NOT_IMPLEMENTED), "NOT_IMPLEMENTED" },
-	    { static_cast<uint32_t>(ExceptionType::EXPRESSION), "EXPRESSION" },
-	    { static_cast<uint32_t>(ExceptionType::CATALOG), "CATALOG" },
-	    { static_cast<uint32_t>(ExceptionType::PARSER), "PARSER" },
-	    { static_cast<uint32_t>(ExceptionType::PLANNER), "PLANNER" },
-	    { static_cast<uint32_t>(ExceptionType::SCHEDULER), "SCHEDULER" },
-	    { static_cast<uint32_t>(ExceptionType::EXECUTOR), "EXECUTOR" },
-	    { static_cast<uint32_t>(ExceptionType::CONSTRAINT), "CONSTRAINT" },
-	    { static_cast<uint32_t>(ExceptionType::INDEX), "INDEX" },
-	    { static_cast<uint32_t>(ExceptionType::STAT), "STAT" },
-	    { static_cast<uint32_t>(ExceptionType::CONNECTION), "CONNECTION" },
-	    { static_cast<uint32_t>(ExceptionType::SYNTAX), "SYNTAX" },
-	    { static_cast<uint32_t>(ExceptionType::SETTINGS), "SETTINGS" },
-	    { static_cast<uint32_t>(ExceptionType::BINDER), "BINDER" },
-	    { static_cast<uint32_t>(ExceptionType::NETWORK), "NETWORK" },
-	    { static_cast<uint32_t>(ExceptionType::OPTIMIZER), "OPTIMIZER" },
-	    { static_cast<uint32_t>(ExceptionType::NULL_POINTER), "NULL_POINTER" },
-	    { static_cast<uint32_t>(ExceptionType::IO), "IO" },
-	    { static_cast<uint32_t>(ExceptionType::INTERRUPT), "INTERRUPT" },
-	    { static_cast<uint32_t>(ExceptionType::FATAL), "FATAL" },
-	    { static_cast<uint32_t>(ExceptionType::INTERNAL), "INTERNAL" },
-	    { static_cast<uint32_t>(ExceptionType::INVALID_INPUT), "INVALID_INPUT" },
-	    { static_cast<uint32_t>(ExceptionType::OUT_OF_MEMORY), "OUT_OF_MEMORY" },
-	    { static_cast<uint32_t>(ExceptionType::PERMISSION), "PERMISSION" },
-	    { static_cast<uint32_t>(ExceptionType::PARAMETER_NOT_RESOLVED), "PARAMETER_NOT_RESOLVED" },
-	    { static_cast<uint32_t>(ExceptionType::PARAMETER_NOT_ALLOWED), "PARAMETER_NOT_ALLOWED" },
-	    { static_cast<uint32_t>(ExceptionType::DEPENDENCY), "DEPENDENCY" },
-	    { static_cast<uint32_t>(ExceptionType::HTTP), "HTTP" },
-	    { static_cast<uint32_t>(ExceptionType::MISSING_EXTENSION), "MISSING_EXTENSION" },
-	    { static_cast<uint32_t>(ExceptionType::AUTOLOAD), "AUTOLOAD" },
-	    { static_cast<uint32_t>(ExceptionType::SEQUENCE), "SEQUENCE" },
-	    { static_cast<uint32_t>(ExceptionType::INVALID_CONFIGURATION), "INVALID_CONFIGURATION" }
+		{ static_cast<uint32_t>(ExceptionType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(ExceptionType::OUT_OF_RANGE), "OUT_OF_RANGE" },
+		{ static_cast<uint32_t>(ExceptionType::CONVERSION), "CONVERSION" },
+		{ static_cast<uint32_t>(ExceptionType::UNKNOWN_TYPE), "UNKNOWN_TYPE" },
+		{ static_cast<uint32_t>(ExceptionType::DECIMAL), "DECIMAL" },
+		{ static_cast<uint32_t>(ExceptionType::MISMATCH_TYPE), "MISMATCH_TYPE" },
+		{ static_cast<uint32_t>(ExceptionType::DIVIDE_BY_ZERO), "DIVIDE_BY_ZERO" },
+		{ static_cast<uint32_t>(ExceptionType::OBJECT_SIZE), "OBJECT_SIZE" },
+		{ static_cast<uint32_t>(ExceptionType::INVALID_TYPE), "INVALID_TYPE" },
+		{ static_cast<uint32_t>(ExceptionType::SERIALIZATION), "SERIALIZATION" },
+		{ static_cast<uint32_t>(ExceptionType::TRANSACTION), "TRANSACTION" },
+		{ static_cast<uint32_t>(ExceptionType::NOT_IMPLEMENTED), "NOT_IMPLEMENTED" },
+		{ static_cast<uint32_t>(ExceptionType::EXPRESSION), "EXPRESSION" },
+		{ static_cast<uint32_t>(ExceptionType::CATALOG), "CATALOG" },
+		{ static_cast<uint32_t>(ExceptionType::PARSER), "PARSER" },
+		{ static_cast<uint32_t>(ExceptionType::PLANNER), "PLANNER" },
+		{ static_cast<uint32_t>(ExceptionType::SCHEDULER), "SCHEDULER" },
+		{ static_cast<uint32_t>(ExceptionType::EXECUTOR), "EXECUTOR" },
+		{ static_cast<uint32_t>(ExceptionType::CONSTRAINT), "CONSTRAINT" },
+		{ static_cast<uint32_t>(ExceptionType::INDEX), "INDEX" },
+		{ static_cast<uint32_t>(ExceptionType::STAT), "STAT" },
+		{ static_cast<uint32_t>(ExceptionType::CONNECTION), "CONNECTION" },
+		{ static_cast<uint32_t>(ExceptionType::SYNTAX), "SYNTAX" },
+		{ static_cast<uint32_t>(ExceptionType::SETTINGS), "SETTINGS" },
+		{ static_cast<uint32_t>(ExceptionType::BINDER), "BINDER" },
+		{ static_cast<uint32_t>(ExceptionType::NETWORK), "NETWORK" },
+		{ static_cast<uint32_t>(ExceptionType::OPTIMIZER), "OPTIMIZER" },
+		{ static_cast<uint32_t>(ExceptionType::NULL_POINTER), "NULL_POINTER" },
+		{ static_cast<uint32_t>(ExceptionType::IO), "IO" },
+		{ static_cast<uint32_t>(ExceptionType::INTERRUPT), "INTERRUPT" },
+		{ static_cast<uint32_t>(ExceptionType::FATAL), "FATAL" },
+		{ static_cast<uint32_t>(ExceptionType::INTERNAL), "INTERNAL" },
+		{ static_cast<uint32_t>(ExceptionType::INVALID_INPUT), "INVALID_INPUT" },
+		{ static_cast<uint32_t>(ExceptionType::OUT_OF_MEMORY), "OUT_OF_MEMORY" },
+		{ static_cast<uint32_t>(ExceptionType::PERMISSION), "PERMISSION" },
+		{ static_cast<uint32_t>(ExceptionType::PARAMETER_NOT_RESOLVED), "PARAMETER_NOT_RESOLVED" },
+		{ static_cast<uint32_t>(ExceptionType::PARAMETER_NOT_ALLOWED), "PARAMETER_NOT_ALLOWED" },
+		{ static_cast<uint32_t>(ExceptionType::DEPENDENCY), "DEPENDENCY" },
+		{ static_cast<uint32_t>(ExceptionType::HTTP), "HTTP" },
+		{ static_cast<uint32_t>(ExceptionType::MISSING_EXTENSION), "MISSING_EXTENSION" },
+		{ static_cast<uint32_t>(ExceptionType::AUTOLOAD), "AUTOLOAD" },
+		{ static_cast<uint32_t>(ExceptionType::SEQUENCE), "SEQUENCE" },
+		{ static_cast<uint32_t>(ExceptionType::INVALID_CONFIGURATION), "INVALID_CONFIGURATION" }
 	};
 	return values;
 }
@@ -1177,11 +1178,11 @@ ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExplainFormatValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExplainFormat::DEFAULT), "DEFAULT" },
-	    { static_cast<uint32_t>(ExplainFormat::TEXT), "TEXT" },
-	    { static_cast<uint32_t>(ExplainFormat::JSON), "JSON" },
-	    { static_cast<uint32_t>(ExplainFormat::HTML), "HTML" },
-	    { static_cast<uint32_t>(ExplainFormat::GRAPHVIZ), "GRAPHVIZ" }
+		{ static_cast<uint32_t>(ExplainFormat::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ExplainFormat::TEXT), "TEXT" },
+		{ static_cast<uint32_t>(ExplainFormat::JSON), "JSON" },
+		{ static_cast<uint32_t>(ExplainFormat::HTML), "HTML" },
+		{ static_cast<uint32_t>(ExplainFormat::GRAPHVIZ), "GRAPHVIZ" }
 	};
 	return values;
 }
@@ -1198,9 +1199,9 @@ ExplainFormat EnumUtil::FromString<ExplainFormat>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExplainOutputTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExplainOutputType::ALL), "ALL" },
-	    { static_cast<uint32_t>(ExplainOutputType::OPTIMIZED_ONLY), "OPTIMIZED_ONLY" },
-	    { static_cast<uint32_t>(ExplainOutputType::PHYSICAL_ONLY), "PHYSICAL_ONLY" }
+		{ static_cast<uint32_t>(ExplainOutputType::ALL), "ALL" },
+		{ static_cast<uint32_t>(ExplainOutputType::OPTIMIZED_ONLY), "OPTIMIZED_ONLY" },
+		{ static_cast<uint32_t>(ExplainOutputType::PHYSICAL_ONLY), "PHYSICAL_ONLY" }
 	};
 	return values;
 }
@@ -1217,8 +1218,8 @@ ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExplainTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExplainType::EXPLAIN_STANDARD), "EXPLAIN_STANDARD" },
-	    { static_cast<uint32_t>(ExplainType::EXPLAIN_ANALYZE), "EXPLAIN_ANALYZE" }
+		{ static_cast<uint32_t>(ExplainType::EXPLAIN_STANDARD), "EXPLAIN_STANDARD" },
+		{ static_cast<uint32_t>(ExplainType::EXPLAIN_ANALYZE), "EXPLAIN_ANALYZE" }
 	};
 	return values;
 }
@@ -1235,9 +1236,9 @@ ExplainType EnumUtil::FromString<ExplainType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExponentTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExponentType::NONE), "NONE" },
-	    { static_cast<uint32_t>(ExponentType::POSITIVE), "POSITIVE" },
-	    { static_cast<uint32_t>(ExponentType::NEGATIVE), "NEGATIVE" }
+		{ static_cast<uint32_t>(ExponentType::NONE), "NONE" },
+		{ static_cast<uint32_t>(ExponentType::POSITIVE), "POSITIVE" },
+		{ static_cast<uint32_t>(ExponentType::NEGATIVE), "NEGATIVE" }
 	};
 	return values;
 }
@@ -1254,46 +1255,46 @@ ExponentType EnumUtil::FromString<ExponentType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExpressionClassValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExpressionClass::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(ExpressionClass::AGGREGATE), "AGGREGATE" },
-	    { static_cast<uint32_t>(ExpressionClass::CASE), "CASE" },
-	    { static_cast<uint32_t>(ExpressionClass::CAST), "CAST" },
-	    { static_cast<uint32_t>(ExpressionClass::COLUMN_REF), "COLUMN_REF" },
-	    { static_cast<uint32_t>(ExpressionClass::COMPARISON), "COMPARISON" },
-	    { static_cast<uint32_t>(ExpressionClass::CONJUNCTION), "CONJUNCTION" },
-	    { static_cast<uint32_t>(ExpressionClass::CONSTANT), "CONSTANT" },
-	    { static_cast<uint32_t>(ExpressionClass::DEFAULT), "DEFAULT" },
-	    { static_cast<uint32_t>(ExpressionClass::FUNCTION), "FUNCTION" },
-	    { static_cast<uint32_t>(ExpressionClass::OPERATOR), "OPERATOR" },
-	    { static_cast<uint32_t>(ExpressionClass::STAR), "STAR" },
-	    { static_cast<uint32_t>(ExpressionClass::SUBQUERY), "SUBQUERY" },
-	    { static_cast<uint32_t>(ExpressionClass::WINDOW), "WINDOW" },
-	    { static_cast<uint32_t>(ExpressionClass::PARAMETER), "PARAMETER" },
-	    { static_cast<uint32_t>(ExpressionClass::COLLATE), "COLLATE" },
-	    { static_cast<uint32_t>(ExpressionClass::LAMBDA), "LAMBDA" },
-	    { static_cast<uint32_t>(ExpressionClass::POSITIONAL_REFERENCE), "POSITIONAL_REFERENCE" },
-	    { static_cast<uint32_t>(ExpressionClass::BETWEEN), "BETWEEN" },
-	    { static_cast<uint32_t>(ExpressionClass::LAMBDA_REF), "LAMBDA_REF" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_AGGREGATE), "BOUND_AGGREGATE" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_CASE), "BOUND_CASE" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_CAST), "BOUND_CAST" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_COLUMN_REF), "BOUND_COLUMN_REF" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_COMPARISON), "BOUND_COMPARISON" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_CONJUNCTION), "BOUND_CONJUNCTION" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_CONSTANT), "BOUND_CONSTANT" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_DEFAULT), "BOUND_DEFAULT" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_FUNCTION), "BOUND_FUNCTION" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_OPERATOR), "BOUND_OPERATOR" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_PARAMETER), "BOUND_PARAMETER" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_REF), "BOUND_REF" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_SUBQUERY), "BOUND_SUBQUERY" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_WINDOW), "BOUND_WINDOW" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_BETWEEN), "BOUND_BETWEEN" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_UNNEST), "BOUND_UNNEST" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_LAMBDA), "BOUND_LAMBDA" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_LAMBDA_REF), "BOUND_LAMBDA_REF" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_EXPRESSION), "BOUND_EXPRESSION" },
-	    { static_cast<uint32_t>(ExpressionClass::BOUND_EXPANDED), "BOUND_EXPANDED" }
+		{ static_cast<uint32_t>(ExpressionClass::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(ExpressionClass::AGGREGATE), "AGGREGATE" },
+		{ static_cast<uint32_t>(ExpressionClass::CASE), "CASE" },
+		{ static_cast<uint32_t>(ExpressionClass::CAST), "CAST" },
+		{ static_cast<uint32_t>(ExpressionClass::COLUMN_REF), "COLUMN_REF" },
+		{ static_cast<uint32_t>(ExpressionClass::COMPARISON), "COMPARISON" },
+		{ static_cast<uint32_t>(ExpressionClass::CONJUNCTION), "CONJUNCTION" },
+		{ static_cast<uint32_t>(ExpressionClass::CONSTANT), "CONSTANT" },
+		{ static_cast<uint32_t>(ExpressionClass::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ExpressionClass::FUNCTION), "FUNCTION" },
+		{ static_cast<uint32_t>(ExpressionClass::OPERATOR), "OPERATOR" },
+		{ static_cast<uint32_t>(ExpressionClass::STAR), "STAR" },
+		{ static_cast<uint32_t>(ExpressionClass::SUBQUERY), "SUBQUERY" },
+		{ static_cast<uint32_t>(ExpressionClass::WINDOW), "WINDOW" },
+		{ static_cast<uint32_t>(ExpressionClass::PARAMETER), "PARAMETER" },
+		{ static_cast<uint32_t>(ExpressionClass::COLLATE), "COLLATE" },
+		{ static_cast<uint32_t>(ExpressionClass::LAMBDA), "LAMBDA" },
+		{ static_cast<uint32_t>(ExpressionClass::POSITIONAL_REFERENCE), "POSITIONAL_REFERENCE" },
+		{ static_cast<uint32_t>(ExpressionClass::BETWEEN), "BETWEEN" },
+		{ static_cast<uint32_t>(ExpressionClass::LAMBDA_REF), "LAMBDA_REF" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_AGGREGATE), "BOUND_AGGREGATE" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_CASE), "BOUND_CASE" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_CAST), "BOUND_CAST" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_COLUMN_REF), "BOUND_COLUMN_REF" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_COMPARISON), "BOUND_COMPARISON" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_CONJUNCTION), "BOUND_CONJUNCTION" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_CONSTANT), "BOUND_CONSTANT" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_DEFAULT), "BOUND_DEFAULT" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_FUNCTION), "BOUND_FUNCTION" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_OPERATOR), "BOUND_OPERATOR" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_PARAMETER), "BOUND_PARAMETER" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_REF), "BOUND_REF" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_SUBQUERY), "BOUND_SUBQUERY" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_WINDOW), "BOUND_WINDOW" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_BETWEEN), "BOUND_BETWEEN" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_UNNEST), "BOUND_UNNEST" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_LAMBDA), "BOUND_LAMBDA" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_LAMBDA_REF), "BOUND_LAMBDA_REF" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_EXPRESSION), "BOUND_EXPRESSION" },
+		{ static_cast<uint32_t>(ExpressionClass::BOUND_EXPANDED), "BOUND_EXPANDED" }
 	};
 	return values;
 }
@@ -1310,75 +1311,75 @@ ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExpressionType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(ExpressionType::OPERATOR_CAST), "OPERATOR_CAST" },
-	    { static_cast<uint32_t>(ExpressionType::OPERATOR_NOT), "OPERATOR_NOT" },
-	    { static_cast<uint32_t>(ExpressionType::OPERATOR_IS_NULL), "OPERATOR_IS_NULL" },
-	    { static_cast<uint32_t>(ExpressionType::OPERATOR_IS_NOT_NULL), "OPERATOR_IS_NOT_NULL" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_EQUAL), "COMPARE_EQUAL" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_NOTEQUAL), "COMPARE_NOTEQUAL" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_LESSTHAN), "COMPARE_LESSTHAN" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_GREATERTHAN), "COMPARE_GREATERTHAN" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_LESSTHANOREQUALTO), "COMPARE_LESSTHANOREQUALTO" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_GREATERTHANOREQUALTO), "COMPARE_GREATERTHANOREQUALTO" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_IN), "COMPARE_IN" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_NOT_IN), "COMPARE_NOT_IN" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_DISTINCT_FROM), "COMPARE_DISTINCT_FROM" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_BETWEEN), "COMPARE_BETWEEN" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_NOT_BETWEEN), "COMPARE_NOT_BETWEEN" },
-	    { static_cast<uint32_t>(ExpressionType::COMPARE_NOT_DISTINCT_FROM), "COMPARE_NOT_DISTINCT_FROM" },
-	    { static_cast<uint32_t>(ExpressionType::CONJUNCTION_AND), "CONJUNCTION_AND" },
-	    { static_cast<uint32_t>(ExpressionType::CONJUNCTION_OR), "CONJUNCTION_OR" },
-	    { static_cast<uint32_t>(ExpressionType::VALUE_CONSTANT), "VALUE_CONSTANT" },
-	    { static_cast<uint32_t>(ExpressionType::VALUE_PARAMETER), "VALUE_PARAMETER" },
-	    { static_cast<uint32_t>(ExpressionType::VALUE_TUPLE), "VALUE_TUPLE" },
-	    { static_cast<uint32_t>(ExpressionType::VALUE_TUPLE_ADDRESS), "VALUE_TUPLE_ADDRESS" },
-	    { static_cast<uint32_t>(ExpressionType::VALUE_NULL), "VALUE_NULL" },
-	    { static_cast<uint32_t>(ExpressionType::VALUE_VECTOR), "VALUE_VECTOR" },
-	    { static_cast<uint32_t>(ExpressionType::VALUE_SCALAR), "VALUE_SCALAR" },
-	    { static_cast<uint32_t>(ExpressionType::VALUE_DEFAULT), "VALUE_DEFAULT" },
-	    { static_cast<uint32_t>(ExpressionType::AGGREGATE), "AGGREGATE" },
-	    { static_cast<uint32_t>(ExpressionType::BOUND_AGGREGATE), "BOUND_AGGREGATE" },
-	    { static_cast<uint32_t>(ExpressionType::GROUPING_FUNCTION), "GROUPING_FUNCTION" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_AGGREGATE), "WINDOW_AGGREGATE" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_RANK), "WINDOW_RANK" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_RANK_DENSE), "WINDOW_RANK_DENSE" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_NTILE), "WINDOW_NTILE" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_PERCENT_RANK), "WINDOW_PERCENT_RANK" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_CUME_DIST), "WINDOW_CUME_DIST" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_ROW_NUMBER), "WINDOW_ROW_NUMBER" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_FIRST_VALUE), "WINDOW_FIRST_VALUE" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_LAST_VALUE), "WINDOW_LAST_VALUE" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_LEAD), "WINDOW_LEAD" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_LAG), "WINDOW_LAG" },
-	    { static_cast<uint32_t>(ExpressionType::WINDOW_NTH_VALUE), "WINDOW_NTH_VALUE" },
-	    { static_cast<uint32_t>(ExpressionType::FUNCTION), "FUNCTION" },
-	    { static_cast<uint32_t>(ExpressionType::BOUND_FUNCTION), "BOUND_FUNCTION" },
-	    { static_cast<uint32_t>(ExpressionType::CASE_EXPR), "CASE_EXPR" },
-	    { static_cast<uint32_t>(ExpressionType::OPERATOR_NULLIF), "OPERATOR_NULLIF" },
-	    { static_cast<uint32_t>(ExpressionType::OPERATOR_COALESCE), "OPERATOR_COALESCE" },
-	    { static_cast<uint32_t>(ExpressionType::ARRAY_EXTRACT), "ARRAY_EXTRACT" },
-	    { static_cast<uint32_t>(ExpressionType::ARRAY_SLICE), "ARRAY_SLICE" },
-	    { static_cast<uint32_t>(ExpressionType::STRUCT_EXTRACT), "STRUCT_EXTRACT" },
-	    { static_cast<uint32_t>(ExpressionType::ARRAY_CONSTRUCTOR), "ARRAY_CONSTRUCTOR" },
-	    { static_cast<uint32_t>(ExpressionType::ARROW), "ARROW" },
-	    { static_cast<uint32_t>(ExpressionType::SUBQUERY), "SUBQUERY" },
-	    { static_cast<uint32_t>(ExpressionType::STAR), "STAR" },
-	    { static_cast<uint32_t>(ExpressionType::TABLE_STAR), "TABLE_STAR" },
-	    { static_cast<uint32_t>(ExpressionType::PLACEHOLDER), "PLACEHOLDER" },
-	    { static_cast<uint32_t>(ExpressionType::COLUMN_REF), "COLUMN_REF" },
-	    { static_cast<uint32_t>(ExpressionType::FUNCTION_REF), "FUNCTION_REF" },
-	    { static_cast<uint32_t>(ExpressionType::TABLE_REF), "TABLE_REF" },
-	    { static_cast<uint32_t>(ExpressionType::LAMBDA_REF), "LAMBDA_REF" },
-	    { static_cast<uint32_t>(ExpressionType::CAST), "CAST" },
-	    { static_cast<uint32_t>(ExpressionType::BOUND_REF), "BOUND_REF" },
-	    { static_cast<uint32_t>(ExpressionType::BOUND_COLUMN_REF), "BOUND_COLUMN_REF" },
-	    { static_cast<uint32_t>(ExpressionType::BOUND_UNNEST), "BOUND_UNNEST" },
-	    { static_cast<uint32_t>(ExpressionType::COLLATE), "COLLATE" },
-	    { static_cast<uint32_t>(ExpressionType::LAMBDA), "LAMBDA" },
-	    { static_cast<uint32_t>(ExpressionType::POSITIONAL_REFERENCE), "POSITIONAL_REFERENCE" },
-	    { static_cast<uint32_t>(ExpressionType::BOUND_LAMBDA_REF), "BOUND_LAMBDA_REF" },
-	    { static_cast<uint32_t>(ExpressionType::BOUND_EXPANDED), "BOUND_EXPANDED" }
+		{ static_cast<uint32_t>(ExpressionType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(ExpressionType::OPERATOR_CAST), "OPERATOR_CAST" },
+		{ static_cast<uint32_t>(ExpressionType::OPERATOR_NOT), "OPERATOR_NOT" },
+		{ static_cast<uint32_t>(ExpressionType::OPERATOR_IS_NULL), "OPERATOR_IS_NULL" },
+		{ static_cast<uint32_t>(ExpressionType::OPERATOR_IS_NOT_NULL), "OPERATOR_IS_NOT_NULL" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_EQUAL), "COMPARE_EQUAL" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_NOTEQUAL), "COMPARE_NOTEQUAL" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_LESSTHAN), "COMPARE_LESSTHAN" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_GREATERTHAN), "COMPARE_GREATERTHAN" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_LESSTHANOREQUALTO), "COMPARE_LESSTHANOREQUALTO" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_GREATERTHANOREQUALTO), "COMPARE_GREATERTHANOREQUALTO" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_IN), "COMPARE_IN" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_NOT_IN), "COMPARE_NOT_IN" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_DISTINCT_FROM), "COMPARE_DISTINCT_FROM" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_BETWEEN), "COMPARE_BETWEEN" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_NOT_BETWEEN), "COMPARE_NOT_BETWEEN" },
+		{ static_cast<uint32_t>(ExpressionType::COMPARE_NOT_DISTINCT_FROM), "COMPARE_NOT_DISTINCT_FROM" },
+		{ static_cast<uint32_t>(ExpressionType::CONJUNCTION_AND), "CONJUNCTION_AND" },
+		{ static_cast<uint32_t>(ExpressionType::CONJUNCTION_OR), "CONJUNCTION_OR" },
+		{ static_cast<uint32_t>(ExpressionType::VALUE_CONSTANT), "VALUE_CONSTANT" },
+		{ static_cast<uint32_t>(ExpressionType::VALUE_PARAMETER), "VALUE_PARAMETER" },
+		{ static_cast<uint32_t>(ExpressionType::VALUE_TUPLE), "VALUE_TUPLE" },
+		{ static_cast<uint32_t>(ExpressionType::VALUE_TUPLE_ADDRESS), "VALUE_TUPLE_ADDRESS" },
+		{ static_cast<uint32_t>(ExpressionType::VALUE_NULL), "VALUE_NULL" },
+		{ static_cast<uint32_t>(ExpressionType::VALUE_VECTOR), "VALUE_VECTOR" },
+		{ static_cast<uint32_t>(ExpressionType::VALUE_SCALAR), "VALUE_SCALAR" },
+		{ static_cast<uint32_t>(ExpressionType::VALUE_DEFAULT), "VALUE_DEFAULT" },
+		{ static_cast<uint32_t>(ExpressionType::AGGREGATE), "AGGREGATE" },
+		{ static_cast<uint32_t>(ExpressionType::BOUND_AGGREGATE), "BOUND_AGGREGATE" },
+		{ static_cast<uint32_t>(ExpressionType::GROUPING_FUNCTION), "GROUPING_FUNCTION" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_AGGREGATE), "WINDOW_AGGREGATE" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_RANK), "WINDOW_RANK" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_RANK_DENSE), "WINDOW_RANK_DENSE" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_NTILE), "WINDOW_NTILE" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_PERCENT_RANK), "WINDOW_PERCENT_RANK" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_CUME_DIST), "WINDOW_CUME_DIST" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_ROW_NUMBER), "WINDOW_ROW_NUMBER" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_FIRST_VALUE), "WINDOW_FIRST_VALUE" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_LAST_VALUE), "WINDOW_LAST_VALUE" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_LEAD), "WINDOW_LEAD" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_LAG), "WINDOW_LAG" },
+		{ static_cast<uint32_t>(ExpressionType::WINDOW_NTH_VALUE), "WINDOW_NTH_VALUE" },
+		{ static_cast<uint32_t>(ExpressionType::FUNCTION), "FUNCTION" },
+		{ static_cast<uint32_t>(ExpressionType::BOUND_FUNCTION), "BOUND_FUNCTION" },
+		{ static_cast<uint32_t>(ExpressionType::CASE_EXPR), "CASE_EXPR" },
+		{ static_cast<uint32_t>(ExpressionType::OPERATOR_NULLIF), "OPERATOR_NULLIF" },
+		{ static_cast<uint32_t>(ExpressionType::OPERATOR_COALESCE), "OPERATOR_COALESCE" },
+		{ static_cast<uint32_t>(ExpressionType::ARRAY_EXTRACT), "ARRAY_EXTRACT" },
+		{ static_cast<uint32_t>(ExpressionType::ARRAY_SLICE), "ARRAY_SLICE" },
+		{ static_cast<uint32_t>(ExpressionType::STRUCT_EXTRACT), "STRUCT_EXTRACT" },
+		{ static_cast<uint32_t>(ExpressionType::ARRAY_CONSTRUCTOR), "ARRAY_CONSTRUCTOR" },
+		{ static_cast<uint32_t>(ExpressionType::ARROW), "ARROW" },
+		{ static_cast<uint32_t>(ExpressionType::SUBQUERY), "SUBQUERY" },
+		{ static_cast<uint32_t>(ExpressionType::STAR), "STAR" },
+		{ static_cast<uint32_t>(ExpressionType::TABLE_STAR), "TABLE_STAR" },
+		{ static_cast<uint32_t>(ExpressionType::PLACEHOLDER), "PLACEHOLDER" },
+		{ static_cast<uint32_t>(ExpressionType::COLUMN_REF), "COLUMN_REF" },
+		{ static_cast<uint32_t>(ExpressionType::FUNCTION_REF), "FUNCTION_REF" },
+		{ static_cast<uint32_t>(ExpressionType::TABLE_REF), "TABLE_REF" },
+		{ static_cast<uint32_t>(ExpressionType::LAMBDA_REF), "LAMBDA_REF" },
+		{ static_cast<uint32_t>(ExpressionType::CAST), "CAST" },
+		{ static_cast<uint32_t>(ExpressionType::BOUND_REF), "BOUND_REF" },
+		{ static_cast<uint32_t>(ExpressionType::BOUND_COLUMN_REF), "BOUND_COLUMN_REF" },
+		{ static_cast<uint32_t>(ExpressionType::BOUND_UNNEST), "BOUND_UNNEST" },
+		{ static_cast<uint32_t>(ExpressionType::COLLATE), "COLLATE" },
+		{ static_cast<uint32_t>(ExpressionType::LAMBDA), "LAMBDA" },
+		{ static_cast<uint32_t>(ExpressionType::POSITIONAL_REFERENCE), "POSITIONAL_REFERENCE" },
+		{ static_cast<uint32_t>(ExpressionType::BOUND_LAMBDA_REF), "BOUND_LAMBDA_REF" },
+		{ static_cast<uint32_t>(ExpressionType::BOUND_EXPANDED), "BOUND_EXPANDED" }
 	};
 	return values;
 }
@@ -1395,9 +1396,9 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExtensionABITypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExtensionABIType::UNKNOWN), "UNKNOWN" },
-	    { static_cast<uint32_t>(ExtensionABIType::CPP), "CPP" },
-	    { static_cast<uint32_t>(ExtensionABIType::C_STRUCT), "C_STRUCT" }
+		{ static_cast<uint32_t>(ExtensionABIType::UNKNOWN), "UNKNOWN" },
+		{ static_cast<uint32_t>(ExtensionABIType::CPP), "CPP" },
+		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT), "C_STRUCT" }
 	};
 	return values;
 }
@@ -1414,11 +1415,11 @@ ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExtensionInstallModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExtensionInstallMode::UNKNOWN), "UNKNOWN" },
-	    { static_cast<uint32_t>(ExtensionInstallMode::REPOSITORY), "REPOSITORY" },
-	    { static_cast<uint32_t>(ExtensionInstallMode::CUSTOM_PATH), "CUSTOM_PATH" },
-	    { static_cast<uint32_t>(ExtensionInstallMode::STATICALLY_LINKED), "STATICALLY_LINKED" },
-	    { static_cast<uint32_t>(ExtensionInstallMode::NOT_INSTALLED), "NOT_INSTALLED" }
+		{ static_cast<uint32_t>(ExtensionInstallMode::UNKNOWN), "UNKNOWN" },
+		{ static_cast<uint32_t>(ExtensionInstallMode::REPOSITORY), "REPOSITORY" },
+		{ static_cast<uint32_t>(ExtensionInstallMode::CUSTOM_PATH), "CUSTOM_PATH" },
+		{ static_cast<uint32_t>(ExtensionInstallMode::STATICALLY_LINKED), "STATICALLY_LINKED" },
+		{ static_cast<uint32_t>(ExtensionInstallMode::NOT_INSTALLED), "NOT_INSTALLED" }
 	};
 	return values;
 }
@@ -1435,9 +1436,9 @@ ExtensionInstallMode EnumUtil::FromString<ExtensionInstallMode>(const char *valu
 
 const StringUtil::EnumStringLiteral *GetExtensionLoadResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExtensionLoadResult::LOADED_EXTENSION), "LOADED_EXTENSION" },
-	    { static_cast<uint32_t>(ExtensionLoadResult::EXTENSION_UNKNOWN), "EXTENSION_UNKNOWN" },
-	    { static_cast<uint32_t>(ExtensionLoadResult::NOT_LOADED), "NOT_LOADED" }
+		{ static_cast<uint32_t>(ExtensionLoadResult::LOADED_EXTENSION), "LOADED_EXTENSION" },
+		{ static_cast<uint32_t>(ExtensionLoadResult::EXTENSION_UNKNOWN), "EXTENSION_UNKNOWN" },
+		{ static_cast<uint32_t>(ExtensionLoadResult::NOT_LOADED), "NOT_LOADED" }
 	};
 	return values;
 }
@@ -1454,14 +1455,14 @@ ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetExtensionUpdateResultTagValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExtensionUpdateResultTag::UNKNOWN), "UNKNOWN" },
-	    { static_cast<uint32_t>(ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE), "NO_UPDATE_AVAILABLE" },
-	    { static_cast<uint32_t>(ExtensionUpdateResultTag::NOT_A_REPOSITORY), "NOT_A_REPOSITORY" },
-	    { static_cast<uint32_t>(ExtensionUpdateResultTag::NOT_INSTALLED), "NOT_INSTALLED" },
-	    { static_cast<uint32_t>(ExtensionUpdateResultTag::STATICALLY_LOADED), "STATICALLY_LOADED" },
-	    { static_cast<uint32_t>(ExtensionUpdateResultTag::MISSING_INSTALL_INFO), "MISSING_INSTALL_INFO" },
-	    { static_cast<uint32_t>(ExtensionUpdateResultTag::REDOWNLOADED), "REDOWNLOADED" },
-	    { static_cast<uint32_t>(ExtensionUpdateResultTag::UPDATED), "UPDATED" }
+		{ static_cast<uint32_t>(ExtensionUpdateResultTag::UNKNOWN), "UNKNOWN" },
+		{ static_cast<uint32_t>(ExtensionUpdateResultTag::NO_UPDATE_AVAILABLE), "NO_UPDATE_AVAILABLE" },
+		{ static_cast<uint32_t>(ExtensionUpdateResultTag::NOT_A_REPOSITORY), "NOT_A_REPOSITORY" },
+		{ static_cast<uint32_t>(ExtensionUpdateResultTag::NOT_INSTALLED), "NOT_INSTALLED" },
+		{ static_cast<uint32_t>(ExtensionUpdateResultTag::STATICALLY_LOADED), "STATICALLY_LOADED" },
+		{ static_cast<uint32_t>(ExtensionUpdateResultTag::MISSING_INSTALL_INFO), "MISSING_INSTALL_INFO" },
+		{ static_cast<uint32_t>(ExtensionUpdateResultTag::REDOWNLOADED), "REDOWNLOADED" },
+		{ static_cast<uint32_t>(ExtensionUpdateResultTag::UPDATED), "UPDATED" }
 	};
 	return values;
 }
@@ -1478,8 +1479,8 @@ ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const ch
 
 const StringUtil::EnumStringLiteral *GetExtraDropInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExtraDropInfoType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(ExtraDropInfoType::SECRET_INFO), "SECRET_INFO" }
+		{ static_cast<uint32_t>(ExtraDropInfoType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(ExtraDropInfoType::SECRET_INFO), "SECRET_INFO" }
 	};
 	return values;
 }
@@ -1496,18 +1497,18 @@ ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetExtraTypeInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ExtraTypeInfoType::INVALID_TYPE_INFO), "INVALID_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::GENERIC_TYPE_INFO), "GENERIC_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::DECIMAL_TYPE_INFO), "DECIMAL_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::STRING_TYPE_INFO), "STRING_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::LIST_TYPE_INFO), "LIST_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::STRUCT_TYPE_INFO), "STRUCT_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::ENUM_TYPE_INFO), "ENUM_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::USER_TYPE_INFO), "USER_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), "AGGREGATE_STATE_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::ARRAY_TYPE_INFO), "ARRAY_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::ANY_TYPE_INFO), "ANY_TYPE_INFO" },
-	    { static_cast<uint32_t>(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), "INTEGER_LITERAL_TYPE_INFO" }
+		{ static_cast<uint32_t>(ExtraTypeInfoType::INVALID_TYPE_INFO), "INVALID_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::GENERIC_TYPE_INFO), "GENERIC_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::DECIMAL_TYPE_INFO), "DECIMAL_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::STRING_TYPE_INFO), "STRING_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::LIST_TYPE_INFO), "LIST_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::STRUCT_TYPE_INFO), "STRUCT_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::ENUM_TYPE_INFO), "ENUM_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::USER_TYPE_INFO), "USER_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), "AGGREGATE_STATE_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::ARRAY_TYPE_INFO), "ARRAY_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::ANY_TYPE_INFO), "ANY_TYPE_INFO" },
+		{ static_cast<uint32_t>(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), "INTEGER_LITERAL_TYPE_INFO" }
 	};
 	return values;
 }
@@ -1524,9 +1525,9 @@ ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetFileBufferTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(FileBufferType::BLOCK), "BLOCK" },
-	    { static_cast<uint32_t>(FileBufferType::MANAGED_BUFFER), "MANAGED_BUFFER" },
-	    { static_cast<uint32_t>(FileBufferType::TINY_BUFFER), "TINY_BUFFER" }
+		{ static_cast<uint32_t>(FileBufferType::BLOCK), "BLOCK" },
+		{ static_cast<uint32_t>(FileBufferType::MANAGED_BUFFER), "MANAGED_BUFFER" },
+		{ static_cast<uint32_t>(FileBufferType::TINY_BUFFER), "TINY_BUFFER" }
 	};
 	return values;
 }
@@ -1543,10 +1544,10 @@ FileBufferType EnumUtil::FromString<FileBufferType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetFileCompressionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(FileCompressionType::AUTO_DETECT), "AUTO_DETECT" },
-	    { static_cast<uint32_t>(FileCompressionType::UNCOMPRESSED), "UNCOMPRESSED" },
-	    { static_cast<uint32_t>(FileCompressionType::GZIP), "GZIP" },
-	    { static_cast<uint32_t>(FileCompressionType::ZSTD), "ZSTD" }
+		{ static_cast<uint32_t>(FileCompressionType::AUTO_DETECT), "AUTO_DETECT" },
+		{ static_cast<uint32_t>(FileCompressionType::UNCOMPRESSED), "UNCOMPRESSED" },
+		{ static_cast<uint32_t>(FileCompressionType::GZIP), "GZIP" },
+		{ static_cast<uint32_t>(FileCompressionType::ZSTD), "ZSTD" }
 	};
 	return values;
 }
@@ -1563,9 +1564,9 @@ FileCompressionType EnumUtil::FromString<FileCompressionType>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetFileExpandResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(FileExpandResult::NO_FILES), "NO_FILES" },
-	    { static_cast<uint32_t>(FileExpandResult::SINGLE_FILE), "SINGLE_FILE" },
-	    { static_cast<uint32_t>(FileExpandResult::MULTIPLE_FILES), "MULTIPLE_FILES" }
+		{ static_cast<uint32_t>(FileExpandResult::NO_FILES), "NO_FILES" },
+		{ static_cast<uint32_t>(FileExpandResult::SINGLE_FILE), "SINGLE_FILE" },
+		{ static_cast<uint32_t>(FileExpandResult::MULTIPLE_FILES), "MULTIPLE_FILES" }
 	};
 	return values;
 }
@@ -1582,8 +1583,8 @@ FileExpandResult EnumUtil::FromString<FileExpandResult>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetFileGlobOptionsValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(FileGlobOptions::DISALLOW_EMPTY), "DISALLOW_EMPTY" },
-	    { static_cast<uint32_t>(FileGlobOptions::ALLOW_EMPTY), "ALLOW_EMPTY" }
+		{ static_cast<uint32_t>(FileGlobOptions::DISALLOW_EMPTY), "DISALLOW_EMPTY" },
+		{ static_cast<uint32_t>(FileGlobOptions::ALLOW_EMPTY), "ALLOW_EMPTY" }
 	};
 	return values;
 }
@@ -1600,9 +1601,9 @@ FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetFileLockTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(FileLockType::NO_LOCK), "NO_LOCK" },
-	    { static_cast<uint32_t>(FileLockType::READ_LOCK), "READ_LOCK" },
-	    { static_cast<uint32_t>(FileLockType::WRITE_LOCK), "WRITE_LOCK" }
+		{ static_cast<uint32_t>(FileLockType::NO_LOCK), "NO_LOCK" },
+		{ static_cast<uint32_t>(FileLockType::READ_LOCK), "READ_LOCK" },
+		{ static_cast<uint32_t>(FileLockType::WRITE_LOCK), "WRITE_LOCK" }
 	};
 	return values;
 }
@@ -1619,11 +1620,11 @@ FileLockType EnumUtil::FromString<FileLockType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetFilterPropagateResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(FilterPropagateResult::NO_PRUNING_POSSIBLE), "NO_PRUNING_POSSIBLE" },
-	    { static_cast<uint32_t>(FilterPropagateResult::FILTER_ALWAYS_TRUE), "FILTER_ALWAYS_TRUE" },
-	    { static_cast<uint32_t>(FilterPropagateResult::FILTER_ALWAYS_FALSE), "FILTER_ALWAYS_FALSE" },
-	    { static_cast<uint32_t>(FilterPropagateResult::FILTER_TRUE_OR_NULL), "FILTER_TRUE_OR_NULL" },
-	    { static_cast<uint32_t>(FilterPropagateResult::FILTER_FALSE_OR_NULL), "FILTER_FALSE_OR_NULL" }
+		{ static_cast<uint32_t>(FilterPropagateResult::NO_PRUNING_POSSIBLE), "NO_PRUNING_POSSIBLE" },
+		{ static_cast<uint32_t>(FilterPropagateResult::FILTER_ALWAYS_TRUE), "FILTER_ALWAYS_TRUE" },
+		{ static_cast<uint32_t>(FilterPropagateResult::FILTER_ALWAYS_FALSE), "FILTER_ALWAYS_FALSE" },
+		{ static_cast<uint32_t>(FilterPropagateResult::FILTER_TRUE_OR_NULL), "FILTER_TRUE_OR_NULL" },
+		{ static_cast<uint32_t>(FilterPropagateResult::FILTER_FALSE_OR_NULL), "FILTER_FALSE_OR_NULL" }
 	};
 	return values;
 }
@@ -1640,9 +1641,9 @@ FilterPropagateResult EnumUtil::FromString<FilterPropagateResult>(const char *va
 
 const StringUtil::EnumStringLiteral *GetForeignKeyTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE), "FK_TYPE_PRIMARY_KEY_TABLE" },
-	    { static_cast<uint32_t>(ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE), "FK_TYPE_FOREIGN_KEY_TABLE" },
-	    { static_cast<uint32_t>(ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE), "FK_TYPE_SELF_REFERENCE_TABLE" }
+		{ static_cast<uint32_t>(ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE), "FK_TYPE_PRIMARY_KEY_TABLE" },
+		{ static_cast<uint32_t>(ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE), "FK_TYPE_FOREIGN_KEY_TABLE" },
+		{ static_cast<uint32_t>(ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE), "FK_TYPE_SELF_REFERENCE_TABLE" }
 	};
 	return values;
 }
@@ -1659,8 +1660,8 @@ ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetFunctionNullHandlingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(FunctionNullHandling::DEFAULT_NULL_HANDLING), "DEFAULT_NULL_HANDLING" },
-	    { static_cast<uint32_t>(FunctionNullHandling::SPECIAL_HANDLING), "SPECIAL_HANDLING" }
+		{ static_cast<uint32_t>(FunctionNullHandling::DEFAULT_NULL_HANDLING), "DEFAULT_NULL_HANDLING" },
+		{ static_cast<uint32_t>(FunctionNullHandling::SPECIAL_HANDLING), "SPECIAL_HANDLING" }
 	};
 	return values;
 }
@@ -1677,9 +1678,9 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 
 const StringUtil::EnumStringLiteral *GetFunctionStabilityValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(FunctionStability::CONSISTENT), "CONSISTENT" },
-	    { static_cast<uint32_t>(FunctionStability::VOLATILE), "VOLATILE" },
-	    { static_cast<uint32_t>(FunctionStability::CONSISTENT_WITHIN_QUERY), "CONSISTENT_WITHIN_QUERY" }
+		{ static_cast<uint32_t>(FunctionStability::CONSISTENT), "CONSISTENT" },
+		{ static_cast<uint32_t>(FunctionStability::VOLATILE), "VOLATILE" },
+		{ static_cast<uint32_t>(FunctionStability::CONSISTENT_WITHIN_QUERY), "CONSISTENT_WITHIN_QUERY" }
 	};
 	return values;
 }
@@ -1696,8 +1697,8 @@ FunctionStability EnumUtil::FromString<FunctionStability>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetGateStatusValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(GateStatus::GATE_NOT_SET), "GATE_NOT_SET" },
-	    { static_cast<uint32_t>(GateStatus::GATE_SET), "GATE_SET" }
+		{ static_cast<uint32_t>(GateStatus::GATE_NOT_SET), "GATE_NOT_SET" },
+		{ static_cast<uint32_t>(GateStatus::GATE_SET), "GATE_SET" }
 	};
 	return values;
 }
@@ -1714,8 +1715,8 @@ GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetHLLStorageTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(HLLStorageType::HLL_V1), "HLL_V1" },
-	    { static_cast<uint32_t>(HLLStorageType::HLL_V2), "HLL_V2" }
+		{ static_cast<uint32_t>(HLLStorageType::HLL_V1), "HLL_V1" },
+		{ static_cast<uint32_t>(HLLStorageType::HLL_V2), "HLL_V2" }
 	};
 	return values;
 }
@@ -1732,10 +1733,10 @@ HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetIndexConstraintTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(IndexConstraintType::NONE), "NONE" },
-	    { static_cast<uint32_t>(IndexConstraintType::UNIQUE), "UNIQUE" },
-	    { static_cast<uint32_t>(IndexConstraintType::PRIMARY), "PRIMARY" },
-	    { static_cast<uint32_t>(IndexConstraintType::FOREIGN), "FOREIGN" }
+		{ static_cast<uint32_t>(IndexConstraintType::NONE), "NONE" },
+		{ static_cast<uint32_t>(IndexConstraintType::UNIQUE), "UNIQUE" },
+		{ static_cast<uint32_t>(IndexConstraintType::PRIMARY), "PRIMARY" },
+		{ static_cast<uint32_t>(IndexConstraintType::FOREIGN), "FOREIGN" }
 	};
 	return values;
 }
@@ -1752,8 +1753,8 @@ IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetInsertColumnOrderValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(InsertColumnOrder::INSERT_BY_POSITION), "INSERT_BY_POSITION" },
-	    { static_cast<uint32_t>(InsertColumnOrder::INSERT_BY_NAME), "INSERT_BY_NAME" }
+		{ static_cast<uint32_t>(InsertColumnOrder::INSERT_BY_POSITION), "INSERT_BY_POSITION" },
+		{ static_cast<uint32_t>(InsertColumnOrder::INSERT_BY_NAME), "INSERT_BY_NAME" }
 	};
 	return values;
 }
@@ -1770,9 +1771,9 @@ InsertColumnOrder EnumUtil::FromString<InsertColumnOrder>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetInterruptModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(InterruptMode::NO_INTERRUPTS), "NO_INTERRUPTS" },
-	    { static_cast<uint32_t>(InterruptMode::TASK), "TASK" },
-	    { static_cast<uint32_t>(InterruptMode::BLOCKING), "BLOCKING" }
+		{ static_cast<uint32_t>(InterruptMode::NO_INTERRUPTS), "NO_INTERRUPTS" },
+		{ static_cast<uint32_t>(InterruptMode::TASK), "TASK" },
+		{ static_cast<uint32_t>(InterruptMode::BLOCKING), "BLOCKING" }
 	};
 	return values;
 }
@@ -1789,12 +1790,12 @@ InterruptMode EnumUtil::FromString<InterruptMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetJoinRefTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(JoinRefType::REGULAR), "REGULAR" },
-	    { static_cast<uint32_t>(JoinRefType::NATURAL), "NATURAL" },
-	    { static_cast<uint32_t>(JoinRefType::CROSS), "CROSS" },
-	    { static_cast<uint32_t>(JoinRefType::POSITIONAL), "POSITIONAL" },
-	    { static_cast<uint32_t>(JoinRefType::ASOF), "ASOF" },
-	    { static_cast<uint32_t>(JoinRefType::DEPENDENT), "DEPENDENT" }
+		{ static_cast<uint32_t>(JoinRefType::REGULAR), "REGULAR" },
+		{ static_cast<uint32_t>(JoinRefType::NATURAL), "NATURAL" },
+		{ static_cast<uint32_t>(JoinRefType::CROSS), "CROSS" },
+		{ static_cast<uint32_t>(JoinRefType::POSITIONAL), "POSITIONAL" },
+		{ static_cast<uint32_t>(JoinRefType::ASOF), "ASOF" },
+		{ static_cast<uint32_t>(JoinRefType::DEPENDENT), "DEPENDENT" }
 	};
 	return values;
 }
@@ -1811,17 +1812,17 @@ JoinRefType EnumUtil::FromString<JoinRefType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetJoinTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(JoinType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(JoinType::LEFT), "LEFT" },
-	    { static_cast<uint32_t>(JoinType::RIGHT), "RIGHT" },
-	    { static_cast<uint32_t>(JoinType::INNER), "INNER" },
-	    { static_cast<uint32_t>(JoinType::OUTER), "FULL" },
-	    { static_cast<uint32_t>(JoinType::SEMI), "SEMI" },
-	    { static_cast<uint32_t>(JoinType::ANTI), "ANTI" },
-	    { static_cast<uint32_t>(JoinType::MARK), "MARK" },
-	    { static_cast<uint32_t>(JoinType::SINGLE), "SINGLE" },
-	    { static_cast<uint32_t>(JoinType::RIGHT_SEMI), "RIGHT_SEMI" },
-	    { static_cast<uint32_t>(JoinType::RIGHT_ANTI), "RIGHT_ANTI" }
+		{ static_cast<uint32_t>(JoinType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(JoinType::LEFT), "LEFT" },
+		{ static_cast<uint32_t>(JoinType::RIGHT), "RIGHT" },
+		{ static_cast<uint32_t>(JoinType::INNER), "INNER" },
+		{ static_cast<uint32_t>(JoinType::OUTER), "FULL" },
+		{ static_cast<uint32_t>(JoinType::SEMI), "SEMI" },
+		{ static_cast<uint32_t>(JoinType::ANTI), "ANTI" },
+		{ static_cast<uint32_t>(JoinType::MARK), "MARK" },
+		{ static_cast<uint32_t>(JoinType::SINGLE), "SINGLE" },
+		{ static_cast<uint32_t>(JoinType::RIGHT_SEMI), "RIGHT_SEMI" },
+		{ static_cast<uint32_t>(JoinType::RIGHT_ANTI), "RIGHT_ANTI" }
 	};
 	return values;
 }
@@ -1838,11 +1839,11 @@ JoinType EnumUtil::FromString<JoinType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetKeywordCategoryValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(KeywordCategory::KEYWORD_RESERVED), "KEYWORD_RESERVED" },
-	    { static_cast<uint32_t>(KeywordCategory::KEYWORD_UNRESERVED), "KEYWORD_UNRESERVED" },
-	    { static_cast<uint32_t>(KeywordCategory::KEYWORD_TYPE_FUNC), "KEYWORD_TYPE_FUNC" },
-	    { static_cast<uint32_t>(KeywordCategory::KEYWORD_COL_NAME), "KEYWORD_COL_NAME" },
-	    { static_cast<uint32_t>(KeywordCategory::KEYWORD_NONE), "KEYWORD_NONE" }
+		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_RESERVED), "KEYWORD_RESERVED" },
+		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_UNRESERVED), "KEYWORD_UNRESERVED" },
+		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_TYPE_FUNC), "KEYWORD_TYPE_FUNC" },
+		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_COL_NAME), "KEYWORD_COL_NAME" },
+		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_NONE), "KEYWORD_NONE" }
 	};
 	return values;
 }
@@ -1859,11 +1860,11 @@ KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetLimitNodeTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(LimitNodeType::UNSET), "UNSET" },
-	    { static_cast<uint32_t>(LimitNodeType::CONSTANT_VALUE), "CONSTANT_VALUE" },
-	    { static_cast<uint32_t>(LimitNodeType::CONSTANT_PERCENTAGE), "CONSTANT_PERCENTAGE" },
-	    { static_cast<uint32_t>(LimitNodeType::EXPRESSION_VALUE), "EXPRESSION_VALUE" },
-	    { static_cast<uint32_t>(LimitNodeType::EXPRESSION_PERCENTAGE), "EXPRESSION_PERCENTAGE" }
+		{ static_cast<uint32_t>(LimitNodeType::UNSET), "UNSET" },
+		{ static_cast<uint32_t>(LimitNodeType::CONSTANT_VALUE), "CONSTANT_VALUE" },
+		{ static_cast<uint32_t>(LimitNodeType::CONSTANT_PERCENTAGE), "CONSTANT_PERCENTAGE" },
+		{ static_cast<uint32_t>(LimitNodeType::EXPRESSION_VALUE), "EXPRESSION_VALUE" },
+		{ static_cast<uint32_t>(LimitNodeType::EXPRESSION_PERCENTAGE), "EXPRESSION_PERCENTAGE" }
 	};
 	return values;
 }
@@ -1880,9 +1881,9 @@ LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetLoadTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(LoadType::LOAD), "LOAD" },
-	    { static_cast<uint32_t>(LoadType::INSTALL), "INSTALL" },
-	    { static_cast<uint32_t>(LoadType::FORCE_INSTALL), "FORCE_INSTALL" }
+		{ static_cast<uint32_t>(LoadType::LOAD), "LOAD" },
+		{ static_cast<uint32_t>(LoadType::INSTALL), "INSTALL" },
+		{ static_cast<uint32_t>(LoadType::FORCE_INSTALL), "FORCE_INSTALL" }
 	};
 	return values;
 }
@@ -1899,67 +1900,67 @@ LoadType EnumUtil::FromString<LoadType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_INVALID), "LOGICAL_INVALID" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PROJECTION), "LOGICAL_PROJECTION" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_FILTER), "LOGICAL_FILTER" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY), "LOGICAL_AGGREGATE_AND_GROUP_BY" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_WINDOW), "LOGICAL_WINDOW" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UNNEST), "LOGICAL_UNNEST" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_LIMIT), "LOGICAL_LIMIT" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ORDER_BY), "LOGICAL_ORDER_BY" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_TOP_N), "LOGICAL_TOP_N" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_COPY_TO_FILE), "LOGICAL_COPY_TO_FILE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DISTINCT), "LOGICAL_DISTINCT" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_SAMPLE), "LOGICAL_SAMPLE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PIVOT), "LOGICAL_PIVOT" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_COPY_DATABASE), "LOGICAL_COPY_DATABASE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_GET), "LOGICAL_GET" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CHUNK_GET), "LOGICAL_CHUNK_GET" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DELIM_GET), "LOGICAL_DELIM_GET" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXPRESSION_GET), "LOGICAL_EXPRESSION_GET" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DUMMY_SCAN), "LOGICAL_DUMMY_SCAN" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EMPTY_RESULT), "LOGICAL_EMPTY_RESULT" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CTE_REF), "LOGICAL_CTE_REF" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_JOIN), "LOGICAL_JOIN" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DELIM_JOIN), "LOGICAL_DELIM_JOIN" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_COMPARISON_JOIN), "LOGICAL_COMPARISON_JOIN" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ANY_JOIN), "LOGICAL_ANY_JOIN" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CROSS_PRODUCT), "LOGICAL_CROSS_PRODUCT" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_POSITIONAL_JOIN), "LOGICAL_POSITIONAL_JOIN" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ASOF_JOIN), "LOGICAL_ASOF_JOIN" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DEPENDENT_JOIN), "LOGICAL_DEPENDENT_JOIN" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UNION), "LOGICAL_UNION" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXCEPT), "LOGICAL_EXCEPT" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_INTERSECT), "LOGICAL_INTERSECT" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), "LOGICAL_RECURSIVE_CTE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_MATERIALIZED_CTE), "LOGICAL_MATERIALIZED_CTE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_INSERT), "LOGICAL_INSERT" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DELETE), "LOGICAL_DELETE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UPDATE), "LOGICAL_UPDATE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ALTER), "LOGICAL_ALTER" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_TABLE), "LOGICAL_CREATE_TABLE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_INDEX), "LOGICAL_CREATE_INDEX" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE), "LOGICAL_CREATE_SEQUENCE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_VIEW), "LOGICAL_CREATE_VIEW" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA), "LOGICAL_CREATE_SCHEMA" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_MACRO), "LOGICAL_CREATE_MACRO" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DROP), "LOGICAL_DROP" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PRAGMA), "LOGICAL_PRAGMA" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_TRANSACTION), "LOGICAL_TRANSACTION" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_TYPE), "LOGICAL_CREATE_TYPE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ATTACH), "LOGICAL_ATTACH" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DETACH), "LOGICAL_DETACH" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXPLAIN), "LOGICAL_EXPLAIN" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PREPARE), "LOGICAL_PREPARE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXECUTE), "LOGICAL_EXECUTE" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXPORT), "LOGICAL_EXPORT" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_VACUUM), "LOGICAL_VACUUM" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_SET), "LOGICAL_SET" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_LOAD), "LOGICAL_LOAD" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_RESET), "LOGICAL_RESET" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS), "LOGICAL_UPDATE_EXTENSIONS" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_SECRET), "LOGICAL_CREATE_SECRET" },
-	    { static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR), "LOGICAL_EXTENSION_OPERATOR" }
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_INVALID), "LOGICAL_INVALID" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PROJECTION), "LOGICAL_PROJECTION" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_FILTER), "LOGICAL_FILTER" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY), "LOGICAL_AGGREGATE_AND_GROUP_BY" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_WINDOW), "LOGICAL_WINDOW" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UNNEST), "LOGICAL_UNNEST" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_LIMIT), "LOGICAL_LIMIT" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ORDER_BY), "LOGICAL_ORDER_BY" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_TOP_N), "LOGICAL_TOP_N" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_COPY_TO_FILE), "LOGICAL_COPY_TO_FILE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DISTINCT), "LOGICAL_DISTINCT" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_SAMPLE), "LOGICAL_SAMPLE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PIVOT), "LOGICAL_PIVOT" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_COPY_DATABASE), "LOGICAL_COPY_DATABASE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_GET), "LOGICAL_GET" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CHUNK_GET), "LOGICAL_CHUNK_GET" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DELIM_GET), "LOGICAL_DELIM_GET" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXPRESSION_GET), "LOGICAL_EXPRESSION_GET" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DUMMY_SCAN), "LOGICAL_DUMMY_SCAN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EMPTY_RESULT), "LOGICAL_EMPTY_RESULT" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CTE_REF), "LOGICAL_CTE_REF" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_JOIN), "LOGICAL_JOIN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DELIM_JOIN), "LOGICAL_DELIM_JOIN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_COMPARISON_JOIN), "LOGICAL_COMPARISON_JOIN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ANY_JOIN), "LOGICAL_ANY_JOIN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CROSS_PRODUCT), "LOGICAL_CROSS_PRODUCT" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_POSITIONAL_JOIN), "LOGICAL_POSITIONAL_JOIN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ASOF_JOIN), "LOGICAL_ASOF_JOIN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DEPENDENT_JOIN), "LOGICAL_DEPENDENT_JOIN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UNION), "LOGICAL_UNION" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXCEPT), "LOGICAL_EXCEPT" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_INTERSECT), "LOGICAL_INTERSECT" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), "LOGICAL_RECURSIVE_CTE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_MATERIALIZED_CTE), "LOGICAL_MATERIALIZED_CTE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_INSERT), "LOGICAL_INSERT" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DELETE), "LOGICAL_DELETE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UPDATE), "LOGICAL_UPDATE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ALTER), "LOGICAL_ALTER" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_TABLE), "LOGICAL_CREATE_TABLE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_INDEX), "LOGICAL_CREATE_INDEX" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE), "LOGICAL_CREATE_SEQUENCE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_VIEW), "LOGICAL_CREATE_VIEW" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA), "LOGICAL_CREATE_SCHEMA" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_MACRO), "LOGICAL_CREATE_MACRO" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DROP), "LOGICAL_DROP" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PRAGMA), "LOGICAL_PRAGMA" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_TRANSACTION), "LOGICAL_TRANSACTION" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_TYPE), "LOGICAL_CREATE_TYPE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_ATTACH), "LOGICAL_ATTACH" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_DETACH), "LOGICAL_DETACH" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXPLAIN), "LOGICAL_EXPLAIN" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_PREPARE), "LOGICAL_PREPARE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXECUTE), "LOGICAL_EXECUTE" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXPORT), "LOGICAL_EXPORT" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_VACUUM), "LOGICAL_VACUUM" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_SET), "LOGICAL_SET" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_LOAD), "LOGICAL_LOAD" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_RESET), "LOGICAL_RESET" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS), "LOGICAL_UPDATE_EXTENSIONS" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_SECRET), "LOGICAL_CREATE_SECRET" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR), "LOGICAL_EXTENSION_OPERATOR" }
 	};
 	return values;
 }
@@ -1976,53 +1977,53 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(LogicalTypeId::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(LogicalTypeId::SQLNULL), "NULL" },
-	    { static_cast<uint32_t>(LogicalTypeId::UNKNOWN), "UNKNOWN" },
-	    { static_cast<uint32_t>(LogicalTypeId::ANY), "ANY" },
-	    { static_cast<uint32_t>(LogicalTypeId::USER), "USER" },
-	    { static_cast<uint32_t>(LogicalTypeId::BOOLEAN), "BOOLEAN" },
-	    { static_cast<uint32_t>(LogicalTypeId::TINYINT), "TINYINT" },
-	    { static_cast<uint32_t>(LogicalTypeId::SMALLINT), "SMALLINT" },
-	    { static_cast<uint32_t>(LogicalTypeId::INTEGER), "INTEGER" },
-	    { static_cast<uint32_t>(LogicalTypeId::BIGINT), "BIGINT" },
-	    { static_cast<uint32_t>(LogicalTypeId::DATE), "DATE" },
-	    { static_cast<uint32_t>(LogicalTypeId::TIME), "TIME" },
-	    { static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_SEC), "TIMESTAMP_S" },
-	    { static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_MS), "TIMESTAMP_MS" },
-	    { static_cast<uint32_t>(LogicalTypeId::TIMESTAMP), "TIMESTAMP" },
-	    { static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_NS), "TIMESTAMP_NS" },
-	    { static_cast<uint32_t>(LogicalTypeId::DECIMAL), "DECIMAL" },
-	    { static_cast<uint32_t>(LogicalTypeId::FLOAT), "FLOAT" },
-	    { static_cast<uint32_t>(LogicalTypeId::DOUBLE), "DOUBLE" },
-	    { static_cast<uint32_t>(LogicalTypeId::CHAR), "CHAR" },
-	    { static_cast<uint32_t>(LogicalTypeId::VARCHAR), "VARCHAR" },
-	    { static_cast<uint32_t>(LogicalTypeId::BLOB), "BLOB" },
-	    { static_cast<uint32_t>(LogicalTypeId::INTERVAL), "INTERVAL" },
-	    { static_cast<uint32_t>(LogicalTypeId::UTINYINT), "UTINYINT" },
-	    { static_cast<uint32_t>(LogicalTypeId::USMALLINT), "USMALLINT" },
-	    { static_cast<uint32_t>(LogicalTypeId::UINTEGER), "UINTEGER" },
-	    { static_cast<uint32_t>(LogicalTypeId::UBIGINT), "UBIGINT" },
-	    { static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_TZ), "TIMESTAMP WITH TIME ZONE" },
-	    { static_cast<uint32_t>(LogicalTypeId::TIME_TZ), "TIME WITH TIME ZONE" },
-	    { static_cast<uint32_t>(LogicalTypeId::BIT), "BIT" },
-	    { static_cast<uint32_t>(LogicalTypeId::STRING_LITERAL), "STRING_LITERAL" },
-	    { static_cast<uint32_t>(LogicalTypeId::INTEGER_LITERAL), "INTEGER_LITERAL" },
-	    { static_cast<uint32_t>(LogicalTypeId::VARINT), "VARINT" },
-	    { static_cast<uint32_t>(LogicalTypeId::UHUGEINT), "UHUGEINT" },
-	    { static_cast<uint32_t>(LogicalTypeId::HUGEINT), "HUGEINT" },
-	    { static_cast<uint32_t>(LogicalTypeId::POINTER), "POINTER" },
-	    { static_cast<uint32_t>(LogicalTypeId::VALIDITY), "VALIDITY" },
-	    { static_cast<uint32_t>(LogicalTypeId::UUID), "UUID" },
-	    { static_cast<uint32_t>(LogicalTypeId::STRUCT), "STRUCT" },
-	    { static_cast<uint32_t>(LogicalTypeId::LIST), "LIST" },
-	    { static_cast<uint32_t>(LogicalTypeId::MAP), "MAP" },
-	    { static_cast<uint32_t>(LogicalTypeId::TABLE), "TABLE" },
-	    { static_cast<uint32_t>(LogicalTypeId::ENUM), "ENUM" },
-	    { static_cast<uint32_t>(LogicalTypeId::AGGREGATE_STATE), "AGGREGATE_STATE" },
-	    { static_cast<uint32_t>(LogicalTypeId::LAMBDA), "LAMBDA" },
-	    { static_cast<uint32_t>(LogicalTypeId::UNION), "UNION" },
-	    { static_cast<uint32_t>(LogicalTypeId::ARRAY), "ARRAY" }
+		{ static_cast<uint32_t>(LogicalTypeId::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(LogicalTypeId::SQLNULL), "NULL" },
+		{ static_cast<uint32_t>(LogicalTypeId::UNKNOWN), "UNKNOWN" },
+		{ static_cast<uint32_t>(LogicalTypeId::ANY), "ANY" },
+		{ static_cast<uint32_t>(LogicalTypeId::USER), "USER" },
+		{ static_cast<uint32_t>(LogicalTypeId::BOOLEAN), "BOOLEAN" },
+		{ static_cast<uint32_t>(LogicalTypeId::TINYINT), "TINYINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::SMALLINT), "SMALLINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::INTEGER), "INTEGER" },
+		{ static_cast<uint32_t>(LogicalTypeId::BIGINT), "BIGINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::DATE), "DATE" },
+		{ static_cast<uint32_t>(LogicalTypeId::TIME), "TIME" },
+		{ static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_SEC), "TIMESTAMP_S" },
+		{ static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_MS), "TIMESTAMP_MS" },
+		{ static_cast<uint32_t>(LogicalTypeId::TIMESTAMP), "TIMESTAMP" },
+		{ static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_NS), "TIMESTAMP_NS" },
+		{ static_cast<uint32_t>(LogicalTypeId::DECIMAL), "DECIMAL" },
+		{ static_cast<uint32_t>(LogicalTypeId::FLOAT), "FLOAT" },
+		{ static_cast<uint32_t>(LogicalTypeId::DOUBLE), "DOUBLE" },
+		{ static_cast<uint32_t>(LogicalTypeId::CHAR), "CHAR" },
+		{ static_cast<uint32_t>(LogicalTypeId::VARCHAR), "VARCHAR" },
+		{ static_cast<uint32_t>(LogicalTypeId::BLOB), "BLOB" },
+		{ static_cast<uint32_t>(LogicalTypeId::INTERVAL), "INTERVAL" },
+		{ static_cast<uint32_t>(LogicalTypeId::UTINYINT), "UTINYINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::USMALLINT), "USMALLINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::UINTEGER), "UINTEGER" },
+		{ static_cast<uint32_t>(LogicalTypeId::UBIGINT), "UBIGINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_TZ), "TIMESTAMP WITH TIME ZONE" },
+		{ static_cast<uint32_t>(LogicalTypeId::TIME_TZ), "TIME WITH TIME ZONE" },
+		{ static_cast<uint32_t>(LogicalTypeId::BIT), "BIT" },
+		{ static_cast<uint32_t>(LogicalTypeId::STRING_LITERAL), "STRING_LITERAL" },
+		{ static_cast<uint32_t>(LogicalTypeId::INTEGER_LITERAL), "INTEGER_LITERAL" },
+		{ static_cast<uint32_t>(LogicalTypeId::VARINT), "VARINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::UHUGEINT), "UHUGEINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::HUGEINT), "HUGEINT" },
+		{ static_cast<uint32_t>(LogicalTypeId::POINTER), "POINTER" },
+		{ static_cast<uint32_t>(LogicalTypeId::VALIDITY), "VALIDITY" },
+		{ static_cast<uint32_t>(LogicalTypeId::UUID), "UUID" },
+		{ static_cast<uint32_t>(LogicalTypeId::STRUCT), "STRUCT" },
+		{ static_cast<uint32_t>(LogicalTypeId::LIST), "LIST" },
+		{ static_cast<uint32_t>(LogicalTypeId::MAP), "MAP" },
+		{ static_cast<uint32_t>(LogicalTypeId::TABLE), "TABLE" },
+		{ static_cast<uint32_t>(LogicalTypeId::ENUM), "ENUM" },
+		{ static_cast<uint32_t>(LogicalTypeId::AGGREGATE_STATE), "AGGREGATE_STATE" },
+		{ static_cast<uint32_t>(LogicalTypeId::LAMBDA), "LAMBDA" },
+		{ static_cast<uint32_t>(LogicalTypeId::UNION), "UNION" },
+		{ static_cast<uint32_t>(LogicalTypeId::ARRAY), "ARRAY" }
 	};
 	return values;
 }
@@ -2039,9 +2040,9 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetLookupResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(LookupResultType::LOOKUP_MISS), "LOOKUP_MISS" },
-	    { static_cast<uint32_t>(LookupResultType::LOOKUP_HIT), "LOOKUP_HIT" },
-	    { static_cast<uint32_t>(LookupResultType::LOOKUP_NULL), "LOOKUP_NULL" }
+		{ static_cast<uint32_t>(LookupResultType::LOOKUP_MISS), "LOOKUP_MISS" },
+		{ static_cast<uint32_t>(LookupResultType::LOOKUP_HIT), "LOOKUP_HIT" },
+		{ static_cast<uint32_t>(LookupResultType::LOOKUP_NULL), "LOOKUP_NULL" }
 	};
 	return values;
 }
@@ -2058,9 +2059,9 @@ LookupResultType EnumUtil::FromString<LookupResultType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetMacroTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(MacroType::VOID_MACRO), "VOID_MACRO" },
-	    { static_cast<uint32_t>(MacroType::TABLE_MACRO), "TABLE_MACRO" },
-	    { static_cast<uint32_t>(MacroType::SCALAR_MACRO), "SCALAR_MACRO" }
+		{ static_cast<uint32_t>(MacroType::VOID_MACRO), "VOID_MACRO" },
+		{ static_cast<uint32_t>(MacroType::TABLE_MACRO), "TABLE_MACRO" },
+		{ static_cast<uint32_t>(MacroType::SCALAR_MACRO), "SCALAR_MACRO" }
 	};
 	return values;
 }
@@ -2077,11 +2078,11 @@ MacroType EnumUtil::FromString<MacroType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetMapInvalidReasonValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(MapInvalidReason::VALID), "VALID" },
-	    { static_cast<uint32_t>(MapInvalidReason::NULL_KEY), "NULL_KEY" },
-	    { static_cast<uint32_t>(MapInvalidReason::DUPLICATE_KEY), "DUPLICATE_KEY" },
-	    { static_cast<uint32_t>(MapInvalidReason::NOT_ALIGNED), "NOT_ALIGNED" },
-	    { static_cast<uint32_t>(MapInvalidReason::INVALID_PARAMS), "INVALID_PARAMS" }
+		{ static_cast<uint32_t>(MapInvalidReason::VALID), "VALID" },
+		{ static_cast<uint32_t>(MapInvalidReason::NULL_KEY), "NULL_KEY" },
+		{ static_cast<uint32_t>(MapInvalidReason::DUPLICATE_KEY), "DUPLICATE_KEY" },
+		{ static_cast<uint32_t>(MapInvalidReason::NOT_ALIGNED), "NOT_ALIGNED" },
+		{ static_cast<uint32_t>(MapInvalidReason::INVALID_PARAMS), "INVALID_PARAMS" }
 	};
 	return values;
 }
@@ -2098,19 +2099,19 @@ MapInvalidReason EnumUtil::FromString<MapInvalidReason>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetMemoryTagValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(MemoryTag::BASE_TABLE), "BASE_TABLE" },
-	    { static_cast<uint32_t>(MemoryTag::HASH_TABLE), "HASH_TABLE" },
-	    { static_cast<uint32_t>(MemoryTag::PARQUET_READER), "PARQUET_READER" },
-	    { static_cast<uint32_t>(MemoryTag::CSV_READER), "CSV_READER" },
-	    { static_cast<uint32_t>(MemoryTag::ORDER_BY), "ORDER_BY" },
-	    { static_cast<uint32_t>(MemoryTag::ART_INDEX), "ART_INDEX" },
-	    { static_cast<uint32_t>(MemoryTag::COLUMN_DATA), "COLUMN_DATA" },
-	    { static_cast<uint32_t>(MemoryTag::METADATA), "METADATA" },
-	    { static_cast<uint32_t>(MemoryTag::OVERFLOW_STRINGS), "OVERFLOW_STRINGS" },
-	    { static_cast<uint32_t>(MemoryTag::IN_MEMORY_TABLE), "IN_MEMORY_TABLE" },
-	    { static_cast<uint32_t>(MemoryTag::ALLOCATOR), "ALLOCATOR" },
-	    { static_cast<uint32_t>(MemoryTag::EXTENSION), "EXTENSION" },
-	    { static_cast<uint32_t>(MemoryTag::TRANSACTION), "TRANSACTION" }
+		{ static_cast<uint32_t>(MemoryTag::BASE_TABLE), "BASE_TABLE" },
+		{ static_cast<uint32_t>(MemoryTag::HASH_TABLE), "HASH_TABLE" },
+		{ static_cast<uint32_t>(MemoryTag::PARQUET_READER), "PARQUET_READER" },
+		{ static_cast<uint32_t>(MemoryTag::CSV_READER), "CSV_READER" },
+		{ static_cast<uint32_t>(MemoryTag::ORDER_BY), "ORDER_BY" },
+		{ static_cast<uint32_t>(MemoryTag::ART_INDEX), "ART_INDEX" },
+		{ static_cast<uint32_t>(MemoryTag::COLUMN_DATA), "COLUMN_DATA" },
+		{ static_cast<uint32_t>(MemoryTag::METADATA), "METADATA" },
+		{ static_cast<uint32_t>(MemoryTag::OVERFLOW_STRINGS), "OVERFLOW_STRINGS" },
+		{ static_cast<uint32_t>(MemoryTag::IN_MEMORY_TABLE), "IN_MEMORY_TABLE" },
+		{ static_cast<uint32_t>(MemoryTag::ALLOCATOR), "ALLOCATOR" },
+		{ static_cast<uint32_t>(MemoryTag::EXTENSION), "EXTENSION" },
+		{ static_cast<uint32_t>(MemoryTag::TRANSACTION), "TRANSACTION" }
 	};
 	return values;
 }
@@ -2127,8 +2128,8 @@ MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetMetaPipelineTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(MetaPipelineType::REGULAR), "REGULAR" },
-	    { static_cast<uint32_t>(MetaPipelineType::JOIN_BUILD), "JOIN_BUILD" }
+		{ static_cast<uint32_t>(MetaPipelineType::REGULAR), "REGULAR" },
+		{ static_cast<uint32_t>(MetaPipelineType::JOIN_BUILD), "JOIN_BUILD" }
 	};
 	return values;
 }
@@ -2145,52 +2146,52 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(MetricsType::QUERY_NAME), "QUERY_NAME" },
-	    { static_cast<uint32_t>(MetricsType::BLOCKED_THREAD_TIME), "BLOCKED_THREAD_TIME" },
-	    { static_cast<uint32_t>(MetricsType::CPU_TIME), "CPU_TIME" },
-	    { static_cast<uint32_t>(MetricsType::EXTRA_INFO), "EXTRA_INFO" },
-	    { static_cast<uint32_t>(MetricsType::CUMULATIVE_CARDINALITY), "CUMULATIVE_CARDINALITY" },
-	    { static_cast<uint32_t>(MetricsType::OPERATOR_TYPE), "OPERATOR_TYPE" },
-	    { static_cast<uint32_t>(MetricsType::OPERATOR_CARDINALITY), "OPERATOR_CARDINALITY" },
-	    { static_cast<uint32_t>(MetricsType::CUMULATIVE_ROWS_SCANNED), "CUMULATIVE_ROWS_SCANNED" },
-	    { static_cast<uint32_t>(MetricsType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
-	    { static_cast<uint32_t>(MetricsType::OPERATOR_TIMING), "OPERATOR_TIMING" },
-	    { static_cast<uint32_t>(MetricsType::LATENCY), "LATENCY" },
-	    { static_cast<uint32_t>(MetricsType::ROWS_RETURNED), "ROWS_RETURNED" },
-	    { static_cast<uint32_t>(MetricsType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
-	    { static_cast<uint32_t>(MetricsType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
-	    { static_cast<uint32_t>(MetricsType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
-	    { static_cast<uint32_t>(MetricsType::PLANNER), "PLANNER" },
-	    { static_cast<uint32_t>(MetricsType::PLANNER_BINDING), "PLANNER_BINDING" },
-	    { static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
-	    { static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING), "PHYSICAL_PLANNER_COLUMN_BINDING" },
-	    { static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES), "PHYSICAL_PLANNER_RESOLVE_TYPES" },
-	    { static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN), "PHYSICAL_PLANNER_CREATE_PLAN" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_EXPRESSION_REWRITER), "OPTIMIZER_EXPRESSION_REWRITER" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_FILTER_PULLUP), "OPTIMIZER_FILTER_PULLUP" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_FILTER_PUSHDOWN), "OPTIMIZER_FILTER_PUSHDOWN" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_CTE_FILTER_PUSHER), "OPTIMIZER_CTE_FILTER_PUSHER" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_REGEX_RANGE), "OPTIMIZER_REGEX_RANGE" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_IN_CLAUSE), "OPTIMIZER_IN_CLAUSE" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_JOIN_ORDER), "OPTIMIZER_JOIN_ORDER" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_DELIMINATOR), "OPTIMIZER_DELIMINATOR" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_UNNEST_REWRITER), "OPTIMIZER_UNNEST_REWRITER" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_UNUSED_COLUMNS), "OPTIMIZER_UNUSED_COLUMNS" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_STATISTICS_PROPAGATION), "OPTIMIZER_STATISTICS_PROPAGATION" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS), "OPTIMIZER_COMMON_SUBEXPRESSIONS" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_COMMON_AGGREGATE), "OPTIMIZER_COMMON_AGGREGATE" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_COLUMN_LIFETIME), "OPTIMIZER_COLUMN_LIFETIME" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE), "OPTIMIZER_BUILD_SIDE_PROBE_SIDE" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_LIMIT_PUSHDOWN), "OPTIMIZER_LIMIT_PUSHDOWN" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN), "OPTIMIZER_SAMPLING_PUSHDOWN" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_TOP_N), "OPTIMIZER_TOP_N" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION), "OPTIMIZER_COMPRESSED_MATERIALIZATION" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_DUPLICATE_GROUPS), "OPTIMIZER_DUPLICATE_GROUPS" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_REORDER_FILTER), "OPTIMIZER_REORDER_FILTER" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN), "OPTIMIZER_JOIN_FILTER_PUSHDOWN" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_EXTENSION), "OPTIMIZER_EXTENSION" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_MATERIALIZED_CTE), "OPTIMIZER_MATERIALIZED_CTE" },
-	    { static_cast<uint32_t>(MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP), "OPTIMIZER_EMPTY_RESULT_PULLUP" }
+		{ static_cast<uint32_t>(MetricsType::QUERY_NAME), "QUERY_NAME" },
+		{ static_cast<uint32_t>(MetricsType::BLOCKED_THREAD_TIME), "BLOCKED_THREAD_TIME" },
+		{ static_cast<uint32_t>(MetricsType::CPU_TIME), "CPU_TIME" },
+		{ static_cast<uint32_t>(MetricsType::EXTRA_INFO), "EXTRA_INFO" },
+		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_CARDINALITY), "CUMULATIVE_CARDINALITY" },
+		{ static_cast<uint32_t>(MetricsType::OPERATOR_TYPE), "OPERATOR_TYPE" },
+		{ static_cast<uint32_t>(MetricsType::OPERATOR_CARDINALITY), "OPERATOR_CARDINALITY" },
+		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_ROWS_SCANNED), "CUMULATIVE_ROWS_SCANNED" },
+		{ static_cast<uint32_t>(MetricsType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
+		{ static_cast<uint32_t>(MetricsType::OPERATOR_TIMING), "OPERATOR_TIMING" },
+		{ static_cast<uint32_t>(MetricsType::LATENCY), "LATENCY" },
+		{ static_cast<uint32_t>(MetricsType::ROWS_RETURNED), "ROWS_RETURNED" },
+		{ static_cast<uint32_t>(MetricsType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
+		{ static_cast<uint32_t>(MetricsType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
+		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
+		{ static_cast<uint32_t>(MetricsType::PLANNER), "PLANNER" },
+		{ static_cast<uint32_t>(MetricsType::PLANNER_BINDING), "PLANNER_BINDING" },
+		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
+		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING), "PHYSICAL_PLANNER_COLUMN_BINDING" },
+		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES), "PHYSICAL_PLANNER_RESOLVE_TYPES" },
+		{ static_cast<uint32_t>(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN), "PHYSICAL_PLANNER_CREATE_PLAN" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_EXPRESSION_REWRITER), "OPTIMIZER_EXPRESSION_REWRITER" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_FILTER_PULLUP), "OPTIMIZER_FILTER_PULLUP" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_FILTER_PUSHDOWN), "OPTIMIZER_FILTER_PUSHDOWN" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_CTE_FILTER_PUSHER), "OPTIMIZER_CTE_FILTER_PUSHER" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_REGEX_RANGE), "OPTIMIZER_REGEX_RANGE" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_IN_CLAUSE), "OPTIMIZER_IN_CLAUSE" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_JOIN_ORDER), "OPTIMIZER_JOIN_ORDER" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_DELIMINATOR), "OPTIMIZER_DELIMINATOR" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_UNNEST_REWRITER), "OPTIMIZER_UNNEST_REWRITER" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_UNUSED_COLUMNS), "OPTIMIZER_UNUSED_COLUMNS" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_STATISTICS_PROPAGATION), "OPTIMIZER_STATISTICS_PROPAGATION" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_COMMON_SUBEXPRESSIONS), "OPTIMIZER_COMMON_SUBEXPRESSIONS" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_COMMON_AGGREGATE), "OPTIMIZER_COMMON_AGGREGATE" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_COLUMN_LIFETIME), "OPTIMIZER_COLUMN_LIFETIME" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE), "OPTIMIZER_BUILD_SIDE_PROBE_SIDE" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_LIMIT_PUSHDOWN), "OPTIMIZER_LIMIT_PUSHDOWN" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN), "OPTIMIZER_SAMPLING_PUSHDOWN" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_TOP_N), "OPTIMIZER_TOP_N" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION), "OPTIMIZER_COMPRESSED_MATERIALIZATION" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_DUPLICATE_GROUPS), "OPTIMIZER_DUPLICATE_GROUPS" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_REORDER_FILTER), "OPTIMIZER_REORDER_FILTER" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN), "OPTIMIZER_JOIN_FILTER_PUSHDOWN" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_EXTENSION), "OPTIMIZER_EXTENSION" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_MATERIALIZED_CTE), "OPTIMIZER_MATERIALIZED_CTE" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP), "OPTIMIZER_EMPTY_RESULT_PULLUP" }
 	};
 	return values;
 }
@@ -2207,16 +2208,16 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(NType::PREFIX), "PREFIX" },
-	    { static_cast<uint32_t>(NType::LEAF), "LEAF" },
-	    { static_cast<uint32_t>(NType::NODE_4), "NODE_4" },
-	    { static_cast<uint32_t>(NType::NODE_16), "NODE_16" },
-	    { static_cast<uint32_t>(NType::NODE_48), "NODE_48" },
-	    { static_cast<uint32_t>(NType::NODE_256), "NODE_256" },
-	    { static_cast<uint32_t>(NType::LEAF_INLINED), "LEAF_INLINED" },
-	    { static_cast<uint32_t>(NType::NODE_7_LEAF), "NODE_7_LEAF" },
-	    { static_cast<uint32_t>(NType::NODE_15_LEAF), "NODE_15_LEAF" },
-	    { static_cast<uint32_t>(NType::NODE_256_LEAF), "NODE_256_LEAF" }
+		{ static_cast<uint32_t>(NType::PREFIX), "PREFIX" },
+		{ static_cast<uint32_t>(NType::LEAF), "LEAF" },
+		{ static_cast<uint32_t>(NType::NODE_4), "NODE_4" },
+		{ static_cast<uint32_t>(NType::NODE_16), "NODE_16" },
+		{ static_cast<uint32_t>(NType::NODE_48), "NODE_48" },
+		{ static_cast<uint32_t>(NType::NODE_256), "NODE_256" },
+		{ static_cast<uint32_t>(NType::LEAF_INLINED), "LEAF_INLINED" },
+		{ static_cast<uint32_t>(NType::NODE_7_LEAF), "NODE_7_LEAF" },
+		{ static_cast<uint32_t>(NType::NODE_15_LEAF), "NODE_15_LEAF" },
+		{ static_cast<uint32_t>(NType::NODE_256_LEAF), "NODE_256_LEAF" }
 	};
 	return values;
 }
@@ -2233,10 +2234,10 @@ NType EnumUtil::FromString<NType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetNewLineIdentifierValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(NewLineIdentifier::SINGLE_N), "SINGLE_N" },
-	    { static_cast<uint32_t>(NewLineIdentifier::CARRY_ON), "CARRY_ON" },
-	    { static_cast<uint32_t>(NewLineIdentifier::NOT_SET), "NOT_SET" },
-	    { static_cast<uint32_t>(NewLineIdentifier::SINGLE_R), "SINGLE_R" }
+		{ static_cast<uint32_t>(NewLineIdentifier::SINGLE_N), "SINGLE_N" },
+		{ static_cast<uint32_t>(NewLineIdentifier::CARRY_ON), "CARRY_ON" },
+		{ static_cast<uint32_t>(NewLineIdentifier::NOT_SET), "NOT_SET" },
+		{ static_cast<uint32_t>(NewLineIdentifier::SINGLE_R), "SINGLE_R" }
 	};
 	return values;
 }
@@ -2253,10 +2254,10 @@ NewLineIdentifier EnumUtil::FromString<NewLineIdentifier>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetOnConflictActionValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OnConflictAction::THROW), "THROW" },
-	    { static_cast<uint32_t>(OnConflictAction::NOTHING), "NOTHING" },
-	    { static_cast<uint32_t>(OnConflictAction::UPDATE), "UPDATE" },
-	    { static_cast<uint32_t>(OnConflictAction::REPLACE), "REPLACE" }
+		{ static_cast<uint32_t>(OnConflictAction::THROW), "THROW" },
+		{ static_cast<uint32_t>(OnConflictAction::NOTHING), "NOTHING" },
+		{ static_cast<uint32_t>(OnConflictAction::UPDATE), "UPDATE" },
+		{ static_cast<uint32_t>(OnConflictAction::REPLACE), "REPLACE" }
 	};
 	return values;
 }
@@ -2273,10 +2274,10 @@ OnConflictAction EnumUtil::FromString<OnConflictAction>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetOnCreateConflictValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OnCreateConflict::ERROR_ON_CONFLICT), "ERROR_ON_CONFLICT" },
-	    { static_cast<uint32_t>(OnCreateConflict::IGNORE_ON_CONFLICT), "IGNORE_ON_CONFLICT" },
-	    { static_cast<uint32_t>(OnCreateConflict::REPLACE_ON_CONFLICT), "REPLACE_ON_CONFLICT" },
-	    { static_cast<uint32_t>(OnCreateConflict::ALTER_ON_CONFLICT), "ALTER_ON_CONFLICT" }
+		{ static_cast<uint32_t>(OnCreateConflict::ERROR_ON_CONFLICT), "ERROR_ON_CONFLICT" },
+		{ static_cast<uint32_t>(OnCreateConflict::IGNORE_ON_CONFLICT), "IGNORE_ON_CONFLICT" },
+		{ static_cast<uint32_t>(OnCreateConflict::REPLACE_ON_CONFLICT), "REPLACE_ON_CONFLICT" },
+		{ static_cast<uint32_t>(OnCreateConflict::ALTER_ON_CONFLICT), "ALTER_ON_CONFLICT" }
 	};
 	return values;
 }
@@ -2293,8 +2294,8 @@ OnCreateConflict EnumUtil::FromString<OnCreateConflict>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetOnEntryNotFoundValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OnEntryNotFound::THROW_EXCEPTION), "THROW_EXCEPTION" },
-	    { static_cast<uint32_t>(OnEntryNotFound::RETURN_NULL), "RETURN_NULL" }
+		{ static_cast<uint32_t>(OnEntryNotFound::THROW_EXCEPTION), "THROW_EXCEPTION" },
+		{ static_cast<uint32_t>(OnEntryNotFound::RETURN_NULL), "RETURN_NULL" }
 	};
 	return values;
 }
@@ -2311,8 +2312,8 @@ OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetOperatorFinalizeResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OperatorFinalizeResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
-	    { static_cast<uint32_t>(OperatorFinalizeResultType::FINISHED), "FINISHED" }
+		{ static_cast<uint32_t>(OperatorFinalizeResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
+		{ static_cast<uint32_t>(OperatorFinalizeResultType::FINISHED), "FINISHED" }
 	};
 	return values;
 }
@@ -2329,10 +2330,10 @@ OperatorFinalizeResultType EnumUtil::FromString<OperatorFinalizeResultType>(cons
 
 const StringUtil::EnumStringLiteral *GetOperatorResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OperatorResultType::NEED_MORE_INPUT), "NEED_MORE_INPUT" },
-	    { static_cast<uint32_t>(OperatorResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
-	    { static_cast<uint32_t>(OperatorResultType::FINISHED), "FINISHED" },
-	    { static_cast<uint32_t>(OperatorResultType::BLOCKED), "BLOCKED" }
+		{ static_cast<uint32_t>(OperatorResultType::NEED_MORE_INPUT), "NEED_MORE_INPUT" },
+		{ static_cast<uint32_t>(OperatorResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
+		{ static_cast<uint32_t>(OperatorResultType::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(OperatorResultType::BLOCKED), "BLOCKED" }
 	};
 	return values;
 }
@@ -2349,32 +2350,32 @@ OperatorResultType EnumUtil::FromString<OperatorResultType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OptimizerType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(OptimizerType::EXPRESSION_REWRITER), "EXPRESSION_REWRITER" },
-	    { static_cast<uint32_t>(OptimizerType::FILTER_PULLUP), "FILTER_PULLUP" },
-	    { static_cast<uint32_t>(OptimizerType::FILTER_PUSHDOWN), "FILTER_PUSHDOWN" },
-	    { static_cast<uint32_t>(OptimizerType::EMPTY_RESULT_PULLUP), "EMPTY_RESULT_PULLUP" },
-	    { static_cast<uint32_t>(OptimizerType::CTE_FILTER_PUSHER), "CTE_FILTER_PUSHER" },
-	    { static_cast<uint32_t>(OptimizerType::REGEX_RANGE), "REGEX_RANGE" },
-	    { static_cast<uint32_t>(OptimizerType::IN_CLAUSE), "IN_CLAUSE" },
-	    { static_cast<uint32_t>(OptimizerType::JOIN_ORDER), "JOIN_ORDER" },
-	    { static_cast<uint32_t>(OptimizerType::DELIMINATOR), "DELIMINATOR" },
-	    { static_cast<uint32_t>(OptimizerType::UNNEST_REWRITER), "UNNEST_REWRITER" },
-	    { static_cast<uint32_t>(OptimizerType::UNUSED_COLUMNS), "UNUSED_COLUMNS" },
-	    { static_cast<uint32_t>(OptimizerType::STATISTICS_PROPAGATION), "STATISTICS_PROPAGATION" },
-	    { static_cast<uint32_t>(OptimizerType::COMMON_SUBEXPRESSIONS), "COMMON_SUBEXPRESSIONS" },
-	    { static_cast<uint32_t>(OptimizerType::COMMON_AGGREGATE), "COMMON_AGGREGATE" },
-	    { static_cast<uint32_t>(OptimizerType::COLUMN_LIFETIME), "COLUMN_LIFETIME" },
-	    { static_cast<uint32_t>(OptimizerType::BUILD_SIDE_PROBE_SIDE), "BUILD_SIDE_PROBE_SIDE" },
-	    { static_cast<uint32_t>(OptimizerType::LIMIT_PUSHDOWN), "LIMIT_PUSHDOWN" },
-	    { static_cast<uint32_t>(OptimizerType::TOP_N), "TOP_N" },
-	    { static_cast<uint32_t>(OptimizerType::COMPRESSED_MATERIALIZATION), "COMPRESSED_MATERIALIZATION" },
-	    { static_cast<uint32_t>(OptimizerType::DUPLICATE_GROUPS), "DUPLICATE_GROUPS" },
-	    { static_cast<uint32_t>(OptimizerType::REORDER_FILTER), "REORDER_FILTER" },
-	    { static_cast<uint32_t>(OptimizerType::SAMPLING_PUSHDOWN), "SAMPLING_PUSHDOWN" },
-	    { static_cast<uint32_t>(OptimizerType::JOIN_FILTER_PUSHDOWN), "JOIN_FILTER_PUSHDOWN" },
-	    { static_cast<uint32_t>(OptimizerType::EXTENSION), "EXTENSION" },
-	    { static_cast<uint32_t>(OptimizerType::MATERIALIZED_CTE), "MATERIALIZED_CTE" }
+		{ static_cast<uint32_t>(OptimizerType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(OptimizerType::EXPRESSION_REWRITER), "EXPRESSION_REWRITER" },
+		{ static_cast<uint32_t>(OptimizerType::FILTER_PULLUP), "FILTER_PULLUP" },
+		{ static_cast<uint32_t>(OptimizerType::FILTER_PUSHDOWN), "FILTER_PUSHDOWN" },
+		{ static_cast<uint32_t>(OptimizerType::EMPTY_RESULT_PULLUP), "EMPTY_RESULT_PULLUP" },
+		{ static_cast<uint32_t>(OptimizerType::CTE_FILTER_PUSHER), "CTE_FILTER_PUSHER" },
+		{ static_cast<uint32_t>(OptimizerType::REGEX_RANGE), "REGEX_RANGE" },
+		{ static_cast<uint32_t>(OptimizerType::IN_CLAUSE), "IN_CLAUSE" },
+		{ static_cast<uint32_t>(OptimizerType::JOIN_ORDER), "JOIN_ORDER" },
+		{ static_cast<uint32_t>(OptimizerType::DELIMINATOR), "DELIMINATOR" },
+		{ static_cast<uint32_t>(OptimizerType::UNNEST_REWRITER), "UNNEST_REWRITER" },
+		{ static_cast<uint32_t>(OptimizerType::UNUSED_COLUMNS), "UNUSED_COLUMNS" },
+		{ static_cast<uint32_t>(OptimizerType::STATISTICS_PROPAGATION), "STATISTICS_PROPAGATION" },
+		{ static_cast<uint32_t>(OptimizerType::COMMON_SUBEXPRESSIONS), "COMMON_SUBEXPRESSIONS" },
+		{ static_cast<uint32_t>(OptimizerType::COMMON_AGGREGATE), "COMMON_AGGREGATE" },
+		{ static_cast<uint32_t>(OptimizerType::COLUMN_LIFETIME), "COLUMN_LIFETIME" },
+		{ static_cast<uint32_t>(OptimizerType::BUILD_SIDE_PROBE_SIDE), "BUILD_SIDE_PROBE_SIDE" },
+		{ static_cast<uint32_t>(OptimizerType::LIMIT_PUSHDOWN), "LIMIT_PUSHDOWN" },
+		{ static_cast<uint32_t>(OptimizerType::TOP_N), "TOP_N" },
+		{ static_cast<uint32_t>(OptimizerType::COMPRESSED_MATERIALIZATION), "COMPRESSED_MATERIALIZATION" },
+		{ static_cast<uint32_t>(OptimizerType::DUPLICATE_GROUPS), "DUPLICATE_GROUPS" },
+		{ static_cast<uint32_t>(OptimizerType::REORDER_FILTER), "REORDER_FILTER" },
+		{ static_cast<uint32_t>(OptimizerType::SAMPLING_PUSHDOWN), "SAMPLING_PUSHDOWN" },
+		{ static_cast<uint32_t>(OptimizerType::JOIN_FILTER_PUSHDOWN), "JOIN_FILTER_PUSHDOWN" },
+		{ static_cast<uint32_t>(OptimizerType::EXTENSION), "EXTENSION" },
+		{ static_cast<uint32_t>(OptimizerType::MATERIALIZED_CTE), "MATERIALIZED_CTE" }
 	};
 	return values;
 }
@@ -2391,13 +2392,13 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetOrderByNullTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OrderByNullType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(OrderByNullType::ORDER_DEFAULT), "ORDER_DEFAULT" },
-	    { static_cast<uint32_t>(OrderByNullType::ORDER_DEFAULT), "DEFAULT" },
-	    { static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS_FIRST" },
-	    { static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS FIRST" },
-	    { static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS_LAST" },
-	    { static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS LAST" }
+		{ static_cast<uint32_t>(OrderByNullType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(OrderByNullType::ORDER_DEFAULT), "ORDER_DEFAULT" },
+		{ static_cast<uint32_t>(OrderByNullType::ORDER_DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS_FIRST" },
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_FIRST), "NULLS FIRST" },
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS_LAST" },
+		{ static_cast<uint32_t>(OrderByNullType::NULLS_LAST), "NULLS LAST" }
 	};
 	return values;
 }
@@ -2414,9 +2415,9 @@ OrderByNullType EnumUtil::FromString<OrderByNullType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetOrderPreservationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OrderPreservationType::NO_ORDER), "NO_ORDER" },
-	    { static_cast<uint32_t>(OrderPreservationType::INSERTION_ORDER), "INSERTION_ORDER" },
-	    { static_cast<uint32_t>(OrderPreservationType::FIXED_ORDER), "FIXED_ORDER" }
+		{ static_cast<uint32_t>(OrderPreservationType::NO_ORDER), "NO_ORDER" },
+		{ static_cast<uint32_t>(OrderPreservationType::INSERTION_ORDER), "INSERTION_ORDER" },
+		{ static_cast<uint32_t>(OrderPreservationType::FIXED_ORDER), "FIXED_ORDER" }
 	};
 	return values;
 }
@@ -2433,13 +2434,13 @@ OrderPreservationType EnumUtil::FromString<OrderPreservationType>(const char *va
 
 const StringUtil::EnumStringLiteral *GetOrderTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OrderType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(OrderType::ORDER_DEFAULT), "ORDER_DEFAULT" },
-	    { static_cast<uint32_t>(OrderType::ORDER_DEFAULT), "DEFAULT" },
-	    { static_cast<uint32_t>(OrderType::ASCENDING), "ASCENDING" },
-	    { static_cast<uint32_t>(OrderType::ASCENDING), "ASC" },
-	    { static_cast<uint32_t>(OrderType::DESCENDING), "DESCENDING" },
-	    { static_cast<uint32_t>(OrderType::DESCENDING), "DESC" }
+		{ static_cast<uint32_t>(OrderType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(OrderType::ORDER_DEFAULT), "ORDER_DEFAULT" },
+		{ static_cast<uint32_t>(OrderType::ORDER_DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(OrderType::ASCENDING), "ASCENDING" },
+		{ static_cast<uint32_t>(OrderType::ASCENDING), "ASC" },
+		{ static_cast<uint32_t>(OrderType::DESCENDING), "DESCENDING" },
+		{ static_cast<uint32_t>(OrderType::DESCENDING), "DESC" }
 	};
 	return values;
 }
@@ -2456,8 +2457,8 @@ OrderType EnumUtil::FromString<OrderType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetOutputStreamValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(OutputStream::STREAM_STDOUT), "STREAM_STDOUT" },
-	    { static_cast<uint32_t>(OutputStream::STREAM_STDERR), "STREAM_STDERR" }
+		{ static_cast<uint32_t>(OutputStream::STREAM_STDOUT), "STREAM_STDOUT" },
+		{ static_cast<uint32_t>(OutputStream::STREAM_STDERR), "STREAM_STDERR" }
 	};
 	return values;
 }
@@ -2474,23 +2475,23 @@ OutputStream EnumUtil::FromString<OutputStream>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetParseInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ParseInfoType::ALTER_INFO), "ALTER_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::ATTACH_INFO), "ATTACH_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::COPY_INFO), "COPY_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::CREATE_INFO), "CREATE_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::CREATE_SECRET_INFO), "CREATE_SECRET_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::DETACH_INFO), "DETACH_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::DROP_INFO), "DROP_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::BOUND_EXPORT_DATA), "BOUND_EXPORT_DATA" },
-	    { static_cast<uint32_t>(ParseInfoType::LOAD_INFO), "LOAD_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::PRAGMA_INFO), "PRAGMA_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::SHOW_SELECT_INFO), "SHOW_SELECT_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::TRANSACTION_INFO), "TRANSACTION_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::VACUUM_INFO), "VACUUM_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::COMMENT_ON_INFO), "COMMENT_ON_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::COMMENT_ON_COLUMN_INFO), "COMMENT_ON_COLUMN_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::COPY_DATABASE_INFO), "COPY_DATABASE_INFO" },
-	    { static_cast<uint32_t>(ParseInfoType::UPDATE_EXTENSIONS_INFO), "UPDATE_EXTENSIONS_INFO" }
+		{ static_cast<uint32_t>(ParseInfoType::ALTER_INFO), "ALTER_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::ATTACH_INFO), "ATTACH_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::COPY_INFO), "COPY_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::CREATE_INFO), "CREATE_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::CREATE_SECRET_INFO), "CREATE_SECRET_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::DETACH_INFO), "DETACH_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::DROP_INFO), "DROP_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::BOUND_EXPORT_DATA), "BOUND_EXPORT_DATA" },
+		{ static_cast<uint32_t>(ParseInfoType::LOAD_INFO), "LOAD_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::PRAGMA_INFO), "PRAGMA_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::SHOW_SELECT_INFO), "SHOW_SELECT_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::TRANSACTION_INFO), "TRANSACTION_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::VACUUM_INFO), "VACUUM_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::COMMENT_ON_INFO), "COMMENT_ON_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::COMMENT_ON_COLUMN_INFO), "COMMENT_ON_COLUMN_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::COPY_DATABASE_INFO), "COPY_DATABASE_INFO" },
+		{ static_cast<uint32_t>(ParseInfoType::UPDATE_EXTENSIONS_INFO), "UPDATE_EXTENSIONS_INFO" }
 	};
 	return values;
 }
@@ -2507,9 +2508,9 @@ ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetParserExtensionResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ParserExtensionResultType::PARSE_SUCCESSFUL), "PARSE_SUCCESSFUL" },
-	    { static_cast<uint32_t>(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR), "DISPLAY_ORIGINAL_ERROR" },
-	    { static_cast<uint32_t>(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), "DISPLAY_EXTENSION_ERROR" }
+		{ static_cast<uint32_t>(ParserExtensionResultType::PARSE_SUCCESSFUL), "PARSE_SUCCESSFUL" },
+		{ static_cast<uint32_t>(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR), "DISPLAY_ORIGINAL_ERROR" },
+		{ static_cast<uint32_t>(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), "DISPLAY_EXTENSION_ERROR" }
 	};
 	return values;
 }
@@ -2526,12 +2527,12 @@ ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const 
 
 const StringUtil::EnumStringLiteral *GetPartitionSortStageValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(PartitionSortStage::INIT), "INIT" },
-	    { static_cast<uint32_t>(PartitionSortStage::SCAN), "SCAN" },
-	    { static_cast<uint32_t>(PartitionSortStage::PREPARE), "PREPARE" },
-	    { static_cast<uint32_t>(PartitionSortStage::MERGE), "MERGE" },
-	    { static_cast<uint32_t>(PartitionSortStage::SORTED), "SORTED" },
-	    { static_cast<uint32_t>(PartitionSortStage::FINISHED), "FINISHED" }
+		{ static_cast<uint32_t>(PartitionSortStage::INIT), "INIT" },
+		{ static_cast<uint32_t>(PartitionSortStage::SCAN), "SCAN" },
+		{ static_cast<uint32_t>(PartitionSortStage::PREPARE), "PREPARE" },
+		{ static_cast<uint32_t>(PartitionSortStage::MERGE), "MERGE" },
+		{ static_cast<uint32_t>(PartitionSortStage::SORTED), "SORTED" },
+		{ static_cast<uint32_t>(PartitionSortStage::FINISHED), "FINISHED" }
 	};
 	return values;
 }
@@ -2548,9 +2549,9 @@ PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetPartitionedColumnDataTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(PartitionedColumnDataType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(PartitionedColumnDataType::RADIX), "RADIX" },
-	    { static_cast<uint32_t>(PartitionedColumnDataType::HIVE), "HIVE" }
+		{ static_cast<uint32_t>(PartitionedColumnDataType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(PartitionedColumnDataType::RADIX), "RADIX" },
+		{ static_cast<uint32_t>(PartitionedColumnDataType::HIVE), "HIVE" }
 	};
 	return values;
 }
@@ -2567,8 +2568,8 @@ PartitionedColumnDataType EnumUtil::FromString<PartitionedColumnDataType>(const 
 
 const StringUtil::EnumStringLiteral *GetPartitionedTupleDataTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(PartitionedTupleDataType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(PartitionedTupleDataType::RADIX), "RADIX" }
+		{ static_cast<uint32_t>(PartitionedTupleDataType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(PartitionedTupleDataType::RADIX), "RADIX" }
 	};
 	return values;
 }
@@ -2585,12 +2586,12 @@ PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const ch
 
 const StringUtil::EnumStringLiteral *GetPendingExecutionResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(PendingExecutionResult::RESULT_READY), "RESULT_READY" },
-	    { static_cast<uint32_t>(PendingExecutionResult::RESULT_NOT_READY), "RESULT_NOT_READY" },
-	    { static_cast<uint32_t>(PendingExecutionResult::EXECUTION_ERROR), "EXECUTION_ERROR" },
-	    { static_cast<uint32_t>(PendingExecutionResult::BLOCKED), "BLOCKED" },
-	    { static_cast<uint32_t>(PendingExecutionResult::NO_TASKS_AVAILABLE), "NO_TASKS_AVAILABLE" },
-	    { static_cast<uint32_t>(PendingExecutionResult::EXECUTION_FINISHED), "EXECUTION_FINISHED" }
+		{ static_cast<uint32_t>(PendingExecutionResult::RESULT_READY), "RESULT_READY" },
+		{ static_cast<uint32_t>(PendingExecutionResult::RESULT_NOT_READY), "RESULT_NOT_READY" },
+		{ static_cast<uint32_t>(PendingExecutionResult::EXECUTION_ERROR), "EXECUTION_ERROR" },
+		{ static_cast<uint32_t>(PendingExecutionResult::BLOCKED), "BLOCKED" },
+		{ static_cast<uint32_t>(PendingExecutionResult::NO_TASKS_AVAILABLE), "NO_TASKS_AVAILABLE" },
+		{ static_cast<uint32_t>(PendingExecutionResult::EXECUTION_FINISHED), "EXECUTION_FINISHED" }
 	};
 	return values;
 }
@@ -2607,85 +2608,85 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 
 const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(PhysicalOperatorType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::ORDER_BY), "ORDER_BY" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::LIMIT), "LIMIT" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::STREAMING_LIMIT), "STREAMING_LIMIT" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::LIMIT_PERCENT), "LIMIT_PERCENT" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::TOP_N), "TOP_N" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::WINDOW), "WINDOW" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::UNNEST), "UNNEST" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::UNGROUPED_AGGREGATE), "UNGROUPED_AGGREGATE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::HASH_GROUP_BY), "HASH_GROUP_BY" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::PERFECT_HASH_GROUP_BY), "PERFECT_HASH_GROUP_BY" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::PARTITIONED_AGGREGATE), "PARTITIONED_AGGREGATE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::FILTER), "FILTER" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::PROJECTION), "PROJECTION" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::COPY_TO_FILE), "COPY_TO_FILE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::BATCH_COPY_TO_FILE), "BATCH_COPY_TO_FILE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::RESERVOIR_SAMPLE), "RESERVOIR_SAMPLE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::STREAMING_SAMPLE), "STREAMING_SAMPLE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::STREAMING_WINDOW), "STREAMING_WINDOW" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::PIVOT), "PIVOT" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::COPY_DATABASE), "COPY_DATABASE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::TABLE_SCAN), "TABLE_SCAN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::DUMMY_SCAN), "DUMMY_SCAN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::COLUMN_DATA_SCAN), "COLUMN_DATA_SCAN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CHUNK_SCAN), "CHUNK_SCAN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_CTE_SCAN), "RECURSIVE_CTE_SCAN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CTE_SCAN), "CTE_SCAN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::DELIM_SCAN), "DELIM_SCAN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::EXPRESSION_SCAN), "EXPRESSION_SCAN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::POSITIONAL_SCAN), "POSITIONAL_SCAN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::BLOCKWISE_NL_JOIN), "BLOCKWISE_NL_JOIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::NESTED_LOOP_JOIN), "NESTED_LOOP_JOIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::HASH_JOIN), "HASH_JOIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CROSS_PRODUCT), "CROSS_PRODUCT" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::PIECEWISE_MERGE_JOIN), "PIECEWISE_MERGE_JOIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::IE_JOIN), "IE_JOIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::LEFT_DELIM_JOIN), "LEFT_DELIM_JOIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::RIGHT_DELIM_JOIN), "RIGHT_DELIM_JOIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::POSITIONAL_JOIN), "POSITIONAL_JOIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::ASOF_JOIN), "ASOF_JOIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::UNION), "UNION" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_CTE), "RECURSIVE_CTE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CTE), "CTE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::INSERT), "INSERT" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::BATCH_INSERT), "BATCH_INSERT" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::DELETE_OPERATOR), "DELETE_OPERATOR" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::UPDATE), "UPDATE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CREATE_TABLE), "CREATE_TABLE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CREATE_TABLE_AS), "CREATE_TABLE_AS" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::BATCH_CREATE_TABLE_AS), "BATCH_CREATE_TABLE_AS" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CREATE_INDEX), "CREATE_INDEX" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::ALTER), "ALTER" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CREATE_SEQUENCE), "CREATE_SEQUENCE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CREATE_VIEW), "CREATE_VIEW" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CREATE_SCHEMA), "CREATE_SCHEMA" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CREATE_MACRO), "CREATE_MACRO" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::DROP), "DROP" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::PRAGMA), "PRAGMA" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::TRANSACTION), "TRANSACTION" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CREATE_TYPE), "CREATE_TYPE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::ATTACH), "ATTACH" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::DETACH), "DETACH" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::EXPLAIN), "EXPLAIN" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::EXPLAIN_ANALYZE), "EXPLAIN_ANALYZE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::EMPTY_RESULT), "EMPTY_RESULT" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::EXECUTE), "EXECUTE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::PREPARE), "PREPARE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::VACUUM), "VACUUM" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::EXPORT), "EXPORT" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::SET), "SET" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::SET_VARIABLE), "SET_VARIABLE" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::LOAD), "LOAD" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::INOUT_FUNCTION), "INOUT_FUNCTION" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::RESULT_COLLECTOR), "RESULT_COLLECTOR" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::RESET), "RESET" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::EXTENSION), "EXTENSION" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::VERIFY_VECTOR), "VERIFY_VECTOR" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::UPDATE_EXTENSIONS), "UPDATE_EXTENSIONS" },
-	    { static_cast<uint32_t>(PhysicalOperatorType::CREATE_SECRET), "CREATE_SECRET" }
+		{ static_cast<uint32_t>(PhysicalOperatorType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::ORDER_BY), "ORDER_BY" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::LIMIT), "LIMIT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::STREAMING_LIMIT), "STREAMING_LIMIT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::LIMIT_PERCENT), "LIMIT_PERCENT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::TOP_N), "TOP_N" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::WINDOW), "WINDOW" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::UNNEST), "UNNEST" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::UNGROUPED_AGGREGATE), "UNGROUPED_AGGREGATE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::HASH_GROUP_BY), "HASH_GROUP_BY" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::PERFECT_HASH_GROUP_BY), "PERFECT_HASH_GROUP_BY" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::PARTITIONED_AGGREGATE), "PARTITIONED_AGGREGATE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::FILTER), "FILTER" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::PROJECTION), "PROJECTION" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::COPY_TO_FILE), "COPY_TO_FILE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::BATCH_COPY_TO_FILE), "BATCH_COPY_TO_FILE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RESERVOIR_SAMPLE), "RESERVOIR_SAMPLE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::STREAMING_SAMPLE), "STREAMING_SAMPLE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::STREAMING_WINDOW), "STREAMING_WINDOW" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::PIVOT), "PIVOT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::COPY_DATABASE), "COPY_DATABASE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::TABLE_SCAN), "TABLE_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::DUMMY_SCAN), "DUMMY_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::COLUMN_DATA_SCAN), "COLUMN_DATA_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CHUNK_SCAN), "CHUNK_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_CTE_SCAN), "RECURSIVE_CTE_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CTE_SCAN), "CTE_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::DELIM_SCAN), "DELIM_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::EXPRESSION_SCAN), "EXPRESSION_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::POSITIONAL_SCAN), "POSITIONAL_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::BLOCKWISE_NL_JOIN), "BLOCKWISE_NL_JOIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::NESTED_LOOP_JOIN), "NESTED_LOOP_JOIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::HASH_JOIN), "HASH_JOIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CROSS_PRODUCT), "CROSS_PRODUCT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::PIECEWISE_MERGE_JOIN), "PIECEWISE_MERGE_JOIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::IE_JOIN), "IE_JOIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::LEFT_DELIM_JOIN), "LEFT_DELIM_JOIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RIGHT_DELIM_JOIN), "RIGHT_DELIM_JOIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::POSITIONAL_JOIN), "POSITIONAL_JOIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::ASOF_JOIN), "ASOF_JOIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::UNION), "UNION" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_CTE), "RECURSIVE_CTE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CTE), "CTE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::INSERT), "INSERT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::BATCH_INSERT), "BATCH_INSERT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::DELETE_OPERATOR), "DELETE_OPERATOR" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::UPDATE), "UPDATE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_TABLE), "CREATE_TABLE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_TABLE_AS), "CREATE_TABLE_AS" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::BATCH_CREATE_TABLE_AS), "BATCH_CREATE_TABLE_AS" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_INDEX), "CREATE_INDEX" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::ALTER), "ALTER" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_SEQUENCE), "CREATE_SEQUENCE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_VIEW), "CREATE_VIEW" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_SCHEMA), "CREATE_SCHEMA" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_MACRO), "CREATE_MACRO" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::DROP), "DROP" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::PRAGMA), "PRAGMA" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::TRANSACTION), "TRANSACTION" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_TYPE), "CREATE_TYPE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::ATTACH), "ATTACH" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::DETACH), "DETACH" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::EXPLAIN), "EXPLAIN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::EXPLAIN_ANALYZE), "EXPLAIN_ANALYZE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::EMPTY_RESULT), "EMPTY_RESULT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::EXECUTE), "EXECUTE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::PREPARE), "PREPARE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::VACUUM), "VACUUM" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::EXPORT), "EXPORT" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::SET), "SET" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::SET_VARIABLE), "SET_VARIABLE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::LOAD), "LOAD" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::INOUT_FUNCTION), "INOUT_FUNCTION" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RESULT_COLLECTOR), "RESULT_COLLECTOR" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RESET), "RESET" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::EXTENSION), "EXTENSION" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::VERIFY_VECTOR), "VERIFY_VECTOR" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::UPDATE_EXTENSIONS), "UPDATE_EXTENSIONS" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_SECRET), "CREATE_SECRET" }
 	};
 	return values;
 }
@@ -2702,27 +2703,27 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 
 const StringUtil::EnumStringLiteral *GetPhysicalTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(PhysicalType::BOOL), "BOOL" },
-	    { static_cast<uint32_t>(PhysicalType::UINT8), "UINT8" },
-	    { static_cast<uint32_t>(PhysicalType::INT8), "INT8" },
-	    { static_cast<uint32_t>(PhysicalType::UINT16), "UINT16" },
-	    { static_cast<uint32_t>(PhysicalType::INT16), "INT16" },
-	    { static_cast<uint32_t>(PhysicalType::UINT32), "UINT32" },
-	    { static_cast<uint32_t>(PhysicalType::INT32), "INT32" },
-	    { static_cast<uint32_t>(PhysicalType::UINT64), "UINT64" },
-	    { static_cast<uint32_t>(PhysicalType::INT64), "INT64" },
-	    { static_cast<uint32_t>(PhysicalType::FLOAT), "FLOAT" },
-	    { static_cast<uint32_t>(PhysicalType::DOUBLE), "DOUBLE" },
-	    { static_cast<uint32_t>(PhysicalType::INTERVAL), "INTERVAL" },
-	    { static_cast<uint32_t>(PhysicalType::LIST), "LIST" },
-	    { static_cast<uint32_t>(PhysicalType::STRUCT), "STRUCT" },
-	    { static_cast<uint32_t>(PhysicalType::ARRAY), "ARRAY" },
-	    { static_cast<uint32_t>(PhysicalType::VARCHAR), "VARCHAR" },
-	    { static_cast<uint32_t>(PhysicalType::UINT128), "UINT128" },
-	    { static_cast<uint32_t>(PhysicalType::INT128), "INT128" },
-	    { static_cast<uint32_t>(PhysicalType::UNKNOWN), "UNKNOWN" },
-	    { static_cast<uint32_t>(PhysicalType::BIT), "BIT" },
-	    { static_cast<uint32_t>(PhysicalType::INVALID), "INVALID" }
+		{ static_cast<uint32_t>(PhysicalType::BOOL), "BOOL" },
+		{ static_cast<uint32_t>(PhysicalType::UINT8), "UINT8" },
+		{ static_cast<uint32_t>(PhysicalType::INT8), "INT8" },
+		{ static_cast<uint32_t>(PhysicalType::UINT16), "UINT16" },
+		{ static_cast<uint32_t>(PhysicalType::INT16), "INT16" },
+		{ static_cast<uint32_t>(PhysicalType::UINT32), "UINT32" },
+		{ static_cast<uint32_t>(PhysicalType::INT32), "INT32" },
+		{ static_cast<uint32_t>(PhysicalType::UINT64), "UINT64" },
+		{ static_cast<uint32_t>(PhysicalType::INT64), "INT64" },
+		{ static_cast<uint32_t>(PhysicalType::FLOAT), "FLOAT" },
+		{ static_cast<uint32_t>(PhysicalType::DOUBLE), "DOUBLE" },
+		{ static_cast<uint32_t>(PhysicalType::INTERVAL), "INTERVAL" },
+		{ static_cast<uint32_t>(PhysicalType::LIST), "LIST" },
+		{ static_cast<uint32_t>(PhysicalType::STRUCT), "STRUCT" },
+		{ static_cast<uint32_t>(PhysicalType::ARRAY), "ARRAY" },
+		{ static_cast<uint32_t>(PhysicalType::VARCHAR), "VARCHAR" },
+		{ static_cast<uint32_t>(PhysicalType::UINT128), "UINT128" },
+		{ static_cast<uint32_t>(PhysicalType::INT128), "INT128" },
+		{ static_cast<uint32_t>(PhysicalType::UNKNOWN), "UNKNOWN" },
+		{ static_cast<uint32_t>(PhysicalType::BIT), "BIT" },
+		{ static_cast<uint32_t>(PhysicalType::INVALID), "INVALID" }
 	};
 	return values;
 }
@@ -2739,8 +2740,8 @@ PhysicalType EnumUtil::FromString<PhysicalType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetPragmaTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(PragmaType::PRAGMA_STATEMENT), "PRAGMA_STATEMENT" },
-	    { static_cast<uint32_t>(PragmaType::PRAGMA_CALL), "PRAGMA_CALL" }
+		{ static_cast<uint32_t>(PragmaType::PRAGMA_STATEMENT), "PRAGMA_STATEMENT" },
+		{ static_cast<uint32_t>(PragmaType::PRAGMA_CALL), "PRAGMA_CALL" }
 	};
 	return values;
 }
@@ -2757,10 +2758,10 @@ PragmaType EnumUtil::FromString<PragmaType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetPreparedParamTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(PreparedParamType::AUTO_INCREMENT), "AUTO_INCREMENT" },
-	    { static_cast<uint32_t>(PreparedParamType::POSITIONAL), "POSITIONAL" },
-	    { static_cast<uint32_t>(PreparedParamType::NAMED), "NAMED" },
-	    { static_cast<uint32_t>(PreparedParamType::INVALID), "INVALID" }
+		{ static_cast<uint32_t>(PreparedParamType::AUTO_INCREMENT), "AUTO_INCREMENT" },
+		{ static_cast<uint32_t>(PreparedParamType::POSITIONAL), "POSITIONAL" },
+		{ static_cast<uint32_t>(PreparedParamType::NAMED), "NAMED" },
+		{ static_cast<uint32_t>(PreparedParamType::INVALID), "INVALID" }
 	};
 	return values;
 }
@@ -2777,8 +2778,8 @@ PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetPreparedStatementModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(PreparedStatementMode::PREPARE_ONLY), "PREPARE_ONLY" },
-	    { static_cast<uint32_t>(PreparedStatementMode::PREPARE_AND_EXECUTE), "PREPARE_AND_EXECUTE" }
+		{ static_cast<uint32_t>(PreparedStatementMode::PREPARE_ONLY), "PREPARE_ONLY" },
+		{ static_cast<uint32_t>(PreparedStatementMode::PREPARE_AND_EXECUTE), "PREPARE_AND_EXECUTE" }
 	};
 	return values;
 }
@@ -2795,12 +2796,12 @@ PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *va
 
 const StringUtil::EnumStringLiteral *GetProfilerPrintFormatValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ProfilerPrintFormat::QUERY_TREE), "QUERY_TREE" },
-	    { static_cast<uint32_t>(ProfilerPrintFormat::JSON), "JSON" },
-	    { static_cast<uint32_t>(ProfilerPrintFormat::QUERY_TREE_OPTIMIZER), "QUERY_TREE_OPTIMIZER" },
-	    { static_cast<uint32_t>(ProfilerPrintFormat::NO_OUTPUT), "NO_OUTPUT" },
-	    { static_cast<uint32_t>(ProfilerPrintFormat::HTML), "HTML" },
-	    { static_cast<uint32_t>(ProfilerPrintFormat::GRAPHVIZ), "GRAPHVIZ" }
+		{ static_cast<uint32_t>(ProfilerPrintFormat::QUERY_TREE), "QUERY_TREE" },
+		{ static_cast<uint32_t>(ProfilerPrintFormat::JSON), "JSON" },
+		{ static_cast<uint32_t>(ProfilerPrintFormat::QUERY_TREE_OPTIMIZER), "QUERY_TREE_OPTIMIZER" },
+		{ static_cast<uint32_t>(ProfilerPrintFormat::NO_OUTPUT), "NO_OUTPUT" },
+		{ static_cast<uint32_t>(ProfilerPrintFormat::HTML), "HTML" },
+		{ static_cast<uint32_t>(ProfilerPrintFormat::GRAPHVIZ), "GRAPHVIZ" }
 	};
 	return values;
 }
@@ -2817,11 +2818,11 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetQuantileSerializationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(QuantileSerializationType::NON_DECIMAL), "NON_DECIMAL" },
-	    { static_cast<uint32_t>(QuantileSerializationType::DECIMAL_DISCRETE), "DECIMAL_DISCRETE" },
-	    { static_cast<uint32_t>(QuantileSerializationType::DECIMAL_DISCRETE_LIST), "DECIMAL_DISCRETE_LIST" },
-	    { static_cast<uint32_t>(QuantileSerializationType::DECIMAL_CONTINUOUS), "DECIMAL_CONTINUOUS" },
-	    { static_cast<uint32_t>(QuantileSerializationType::DECIMAL_CONTINUOUS_LIST), "DECIMAL_CONTINUOUS_LIST" }
+		{ static_cast<uint32_t>(QuantileSerializationType::NON_DECIMAL), "NON_DECIMAL" },
+		{ static_cast<uint32_t>(QuantileSerializationType::DECIMAL_DISCRETE), "DECIMAL_DISCRETE" },
+		{ static_cast<uint32_t>(QuantileSerializationType::DECIMAL_DISCRETE_LIST), "DECIMAL_DISCRETE_LIST" },
+		{ static_cast<uint32_t>(QuantileSerializationType::DECIMAL_CONTINUOUS), "DECIMAL_CONTINUOUS" },
+		{ static_cast<uint32_t>(QuantileSerializationType::DECIMAL_CONTINUOUS_LIST), "DECIMAL_CONTINUOUS_LIST" }
 	};
 	return values;
 }
@@ -2838,11 +2839,11 @@ QuantileSerializationType EnumUtil::FromString<QuantileSerializationType>(const 
 
 const StringUtil::EnumStringLiteral *GetQueryNodeTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(QueryNodeType::SELECT_NODE), "SELECT_NODE" },
-	    { static_cast<uint32_t>(QueryNodeType::SET_OPERATION_NODE), "SET_OPERATION_NODE" },
-	    { static_cast<uint32_t>(QueryNodeType::BOUND_SUBQUERY_NODE), "BOUND_SUBQUERY_NODE" },
-	    { static_cast<uint32_t>(QueryNodeType::RECURSIVE_CTE_NODE), "RECURSIVE_CTE_NODE" },
-	    { static_cast<uint32_t>(QueryNodeType::CTE_NODE), "CTE_NODE" }
+		{ static_cast<uint32_t>(QueryNodeType::SELECT_NODE), "SELECT_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::SET_OPERATION_NODE), "SET_OPERATION_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::BOUND_SUBQUERY_NODE), "BOUND_SUBQUERY_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::RECURSIVE_CTE_NODE), "RECURSIVE_CTE_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::CTE_NODE), "CTE_NODE" }
 	};
 	return values;
 }
@@ -2859,10 +2860,10 @@ QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetQueryResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(QueryResultType::MATERIALIZED_RESULT), "MATERIALIZED_RESULT" },
-	    { static_cast<uint32_t>(QueryResultType::STREAM_RESULT), "STREAM_RESULT" },
-	    { static_cast<uint32_t>(QueryResultType::PENDING_RESULT), "PENDING_RESULT" },
-	    { static_cast<uint32_t>(QueryResultType::ARROW_RESULT), "ARROW_RESULT" }
+		{ static_cast<uint32_t>(QueryResultType::MATERIALIZED_RESULT), "MATERIALIZED_RESULT" },
+		{ static_cast<uint32_t>(QueryResultType::STREAM_RESULT), "STREAM_RESULT" },
+		{ static_cast<uint32_t>(QueryResultType::PENDING_RESULT), "PENDING_RESULT" },
+		{ static_cast<uint32_t>(QueryResultType::ARROW_RESULT), "ARROW_RESULT" }
 	};
 	return values;
 }
@@ -2879,9 +2880,9 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetQuoteRuleValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(QuoteRule::QUOTES_RFC), "QUOTES_RFC" },
-	    { static_cast<uint32_t>(QuoteRule::QUOTES_OTHER), "QUOTES_OTHER" },
-	    { static_cast<uint32_t>(QuoteRule::NO_QUOTES), "NO_QUOTES" }
+		{ static_cast<uint32_t>(QuoteRule::QUOTES_RFC), "QUOTES_RFC" },
+		{ static_cast<uint32_t>(QuoteRule::QUOTES_OTHER), "QUOTES_OTHER" },
+		{ static_cast<uint32_t>(QuoteRule::NO_QUOTES), "NO_QUOTES" }
 	};
 	return values;
 }
@@ -2898,34 +2899,34 @@ QuoteRule EnumUtil::FromString<QuoteRule>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetRelationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(RelationType::INVALID_RELATION), "INVALID_RELATION" },
-	    { static_cast<uint32_t>(RelationType::TABLE_RELATION), "TABLE_RELATION" },
-	    { static_cast<uint32_t>(RelationType::PROJECTION_RELATION), "PROJECTION_RELATION" },
-	    { static_cast<uint32_t>(RelationType::FILTER_RELATION), "FILTER_RELATION" },
-	    { static_cast<uint32_t>(RelationType::EXPLAIN_RELATION), "EXPLAIN_RELATION" },
-	    { static_cast<uint32_t>(RelationType::CROSS_PRODUCT_RELATION), "CROSS_PRODUCT_RELATION" },
-	    { static_cast<uint32_t>(RelationType::JOIN_RELATION), "JOIN_RELATION" },
-	    { static_cast<uint32_t>(RelationType::AGGREGATE_RELATION), "AGGREGATE_RELATION" },
-	    { static_cast<uint32_t>(RelationType::SET_OPERATION_RELATION), "SET_OPERATION_RELATION" },
-	    { static_cast<uint32_t>(RelationType::DISTINCT_RELATION), "DISTINCT_RELATION" },
-	    { static_cast<uint32_t>(RelationType::LIMIT_RELATION), "LIMIT_RELATION" },
-	    { static_cast<uint32_t>(RelationType::ORDER_RELATION), "ORDER_RELATION" },
-	    { static_cast<uint32_t>(RelationType::CREATE_VIEW_RELATION), "CREATE_VIEW_RELATION" },
-	    { static_cast<uint32_t>(RelationType::CREATE_TABLE_RELATION), "CREATE_TABLE_RELATION" },
-	    { static_cast<uint32_t>(RelationType::INSERT_RELATION), "INSERT_RELATION" },
-	    { static_cast<uint32_t>(RelationType::VALUE_LIST_RELATION), "VALUE_LIST_RELATION" },
-	    { static_cast<uint32_t>(RelationType::MATERIALIZED_RELATION), "MATERIALIZED_RELATION" },
-	    { static_cast<uint32_t>(RelationType::DELETE_RELATION), "DELETE_RELATION" },
-	    { static_cast<uint32_t>(RelationType::UPDATE_RELATION), "UPDATE_RELATION" },
-	    { static_cast<uint32_t>(RelationType::WRITE_CSV_RELATION), "WRITE_CSV_RELATION" },
-	    { static_cast<uint32_t>(RelationType::WRITE_PARQUET_RELATION), "WRITE_PARQUET_RELATION" },
-	    { static_cast<uint32_t>(RelationType::READ_CSV_RELATION), "READ_CSV_RELATION" },
-	    { static_cast<uint32_t>(RelationType::SUBQUERY_RELATION), "SUBQUERY_RELATION" },
-	    { static_cast<uint32_t>(RelationType::TABLE_FUNCTION_RELATION), "TABLE_FUNCTION_RELATION" },
-	    { static_cast<uint32_t>(RelationType::VIEW_RELATION), "VIEW_RELATION" },
-	    { static_cast<uint32_t>(RelationType::QUERY_RELATION), "QUERY_RELATION" },
-	    { static_cast<uint32_t>(RelationType::DELIM_JOIN_RELATION), "DELIM_JOIN_RELATION" },
-	    { static_cast<uint32_t>(RelationType::DELIM_GET_RELATION), "DELIM_GET_RELATION" }
+		{ static_cast<uint32_t>(RelationType::INVALID_RELATION), "INVALID_RELATION" },
+		{ static_cast<uint32_t>(RelationType::TABLE_RELATION), "TABLE_RELATION" },
+		{ static_cast<uint32_t>(RelationType::PROJECTION_RELATION), "PROJECTION_RELATION" },
+		{ static_cast<uint32_t>(RelationType::FILTER_RELATION), "FILTER_RELATION" },
+		{ static_cast<uint32_t>(RelationType::EXPLAIN_RELATION), "EXPLAIN_RELATION" },
+		{ static_cast<uint32_t>(RelationType::CROSS_PRODUCT_RELATION), "CROSS_PRODUCT_RELATION" },
+		{ static_cast<uint32_t>(RelationType::JOIN_RELATION), "JOIN_RELATION" },
+		{ static_cast<uint32_t>(RelationType::AGGREGATE_RELATION), "AGGREGATE_RELATION" },
+		{ static_cast<uint32_t>(RelationType::SET_OPERATION_RELATION), "SET_OPERATION_RELATION" },
+		{ static_cast<uint32_t>(RelationType::DISTINCT_RELATION), "DISTINCT_RELATION" },
+		{ static_cast<uint32_t>(RelationType::LIMIT_RELATION), "LIMIT_RELATION" },
+		{ static_cast<uint32_t>(RelationType::ORDER_RELATION), "ORDER_RELATION" },
+		{ static_cast<uint32_t>(RelationType::CREATE_VIEW_RELATION), "CREATE_VIEW_RELATION" },
+		{ static_cast<uint32_t>(RelationType::CREATE_TABLE_RELATION), "CREATE_TABLE_RELATION" },
+		{ static_cast<uint32_t>(RelationType::INSERT_RELATION), "INSERT_RELATION" },
+		{ static_cast<uint32_t>(RelationType::VALUE_LIST_RELATION), "VALUE_LIST_RELATION" },
+		{ static_cast<uint32_t>(RelationType::MATERIALIZED_RELATION), "MATERIALIZED_RELATION" },
+		{ static_cast<uint32_t>(RelationType::DELETE_RELATION), "DELETE_RELATION" },
+		{ static_cast<uint32_t>(RelationType::UPDATE_RELATION), "UPDATE_RELATION" },
+		{ static_cast<uint32_t>(RelationType::WRITE_CSV_RELATION), "WRITE_CSV_RELATION" },
+		{ static_cast<uint32_t>(RelationType::WRITE_PARQUET_RELATION), "WRITE_PARQUET_RELATION" },
+		{ static_cast<uint32_t>(RelationType::READ_CSV_RELATION), "READ_CSV_RELATION" },
+		{ static_cast<uint32_t>(RelationType::SUBQUERY_RELATION), "SUBQUERY_RELATION" },
+		{ static_cast<uint32_t>(RelationType::TABLE_FUNCTION_RELATION), "TABLE_FUNCTION_RELATION" },
+		{ static_cast<uint32_t>(RelationType::VIEW_RELATION), "VIEW_RELATION" },
+		{ static_cast<uint32_t>(RelationType::QUERY_RELATION), "QUERY_RELATION" },
+		{ static_cast<uint32_t>(RelationType::DELIM_JOIN_RELATION), "DELIM_JOIN_RELATION" },
+		{ static_cast<uint32_t>(RelationType::DELIM_GET_RELATION), "DELIM_GET_RELATION" }
 	};
 	return values;
 }
@@ -2942,8 +2943,8 @@ RelationType EnumUtil::FromString<RelationType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetRenderModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(RenderMode::ROWS), "ROWS" },
-	    { static_cast<uint32_t>(RenderMode::COLUMNS), "COLUMNS" }
+		{ static_cast<uint32_t>(RenderMode::ROWS), "ROWS" },
+		{ static_cast<uint32_t>(RenderMode::COLUMNS), "COLUMNS" }
 	};
 	return values;
 }
@@ -2960,10 +2961,10 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetResultModifierTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ResultModifierType::LIMIT_MODIFIER), "LIMIT_MODIFIER" },
-	    { static_cast<uint32_t>(ResultModifierType::ORDER_MODIFIER), "ORDER_MODIFIER" },
-	    { static_cast<uint32_t>(ResultModifierType::DISTINCT_MODIFIER), "DISTINCT_MODIFIER" },
-	    { static_cast<uint32_t>(ResultModifierType::LIMIT_PERCENT_MODIFIER), "LIMIT_PERCENT_MODIFIER" }
+		{ static_cast<uint32_t>(ResultModifierType::LIMIT_MODIFIER), "LIMIT_MODIFIER" },
+		{ static_cast<uint32_t>(ResultModifierType::ORDER_MODIFIER), "ORDER_MODIFIER" },
+		{ static_cast<uint32_t>(ResultModifierType::DISTINCT_MODIFIER), "DISTINCT_MODIFIER" },
+		{ static_cast<uint32_t>(ResultModifierType::LIMIT_PERCENT_MODIFIER), "LIMIT_PERCENT_MODIFIER" }
 	};
 	return values;
 }
@@ -2980,9 +2981,9 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSampleMethodValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SampleMethod::SYSTEM_SAMPLE), "System" },
-	    { static_cast<uint32_t>(SampleMethod::BERNOULLI_SAMPLE), "Bernoulli" },
-	    { static_cast<uint32_t>(SampleMethod::RESERVOIR_SAMPLE), "Reservoir" }
+		{ static_cast<uint32_t>(SampleMethod::SYSTEM_SAMPLE), "System" },
+		{ static_cast<uint32_t>(SampleMethod::BERNOULLI_SAMPLE), "Bernoulli" },
+		{ static_cast<uint32_t>(SampleMethod::RESERVOIR_SAMPLE), "Reservoir" }
 	};
 	return values;
 }
@@ -2999,9 +3000,9 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSampleTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SampleType::BLOCKING_SAMPLE), "BLOCKING_SAMPLE" },
-	    { static_cast<uint32_t>(SampleType::RESERVOIR_SAMPLE), "RESERVOIR_SAMPLE" },
-	    { static_cast<uint32_t>(SampleType::RESERVOIR_PERCENTAGE_SAMPLE), "RESERVOIR_PERCENTAGE_SAMPLE" }
+		{ static_cast<uint32_t>(SampleType::BLOCKING_SAMPLE), "BLOCKING_SAMPLE" },
+		{ static_cast<uint32_t>(SampleType::RESERVOIR_SAMPLE), "RESERVOIR_SAMPLE" },
+		{ static_cast<uint32_t>(SampleType::RESERVOIR_PERCENTAGE_SAMPLE), "RESERVOIR_PERCENTAGE_SAMPLE" }
 	};
 	return values;
 }
@@ -3018,9 +3019,9 @@ SampleType EnumUtil::FromString<SampleType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ScanType::TABLE), "TABLE" },
-	    { static_cast<uint32_t>(ScanType::PARQUET), "PARQUET" },
-	    { static_cast<uint32_t>(ScanType::EXTERNAL), "EXTERNAL" }
+		{ static_cast<uint32_t>(ScanType::TABLE), "TABLE" },
+		{ static_cast<uint32_t>(ScanType::PARQUET), "PARQUET" },
+		{ static_cast<uint32_t>(ScanType::EXTERNAL), "EXTERNAL" }
 	};
 	return values;
 }
@@ -3037,8 +3038,8 @@ ScanType EnumUtil::FromString<ScanType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSecretDisplayTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SecretDisplayType::REDACTED), "REDACTED" },
-	    { static_cast<uint32_t>(SecretDisplayType::UNREDACTED), "UNREDACTED" }
+		{ static_cast<uint32_t>(SecretDisplayType::REDACTED), "REDACTED" },
+		{ static_cast<uint32_t>(SecretDisplayType::UNREDACTED), "UNREDACTED" }
 	};
 	return values;
 }
@@ -3055,9 +3056,9 @@ SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSecretPersistTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SecretPersistType::DEFAULT), "DEFAULT" },
-	    { static_cast<uint32_t>(SecretPersistType::TEMPORARY), "TEMPORARY" },
-	    { static_cast<uint32_t>(SecretPersistType::PERSISTENT), "PERSISTENT" }
+		{ static_cast<uint32_t>(SecretPersistType::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(SecretPersistType::TEMPORARY), "TEMPORARY" },
+		{ static_cast<uint32_t>(SecretPersistType::PERSISTENT), "PERSISTENT" }
 	};
 	return values;
 }
@@ -3074,12 +3075,12 @@ SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSequenceInfoValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SequenceInfo::SEQ_START), "SEQ_START" },
-	    { static_cast<uint32_t>(SequenceInfo::SEQ_INC), "SEQ_INC" },
-	    { static_cast<uint32_t>(SequenceInfo::SEQ_MIN), "SEQ_MIN" },
-	    { static_cast<uint32_t>(SequenceInfo::SEQ_MAX), "SEQ_MAX" },
-	    { static_cast<uint32_t>(SequenceInfo::SEQ_CYCLE), "SEQ_CYCLE" },
-	    { static_cast<uint32_t>(SequenceInfo::SEQ_OWN), "SEQ_OWN" }
+		{ static_cast<uint32_t>(SequenceInfo::SEQ_START), "SEQ_START" },
+		{ static_cast<uint32_t>(SequenceInfo::SEQ_INC), "SEQ_INC" },
+		{ static_cast<uint32_t>(SequenceInfo::SEQ_MIN), "SEQ_MIN" },
+		{ static_cast<uint32_t>(SequenceInfo::SEQ_MAX), "SEQ_MAX" },
+		{ static_cast<uint32_t>(SequenceInfo::SEQ_CYCLE), "SEQ_CYCLE" },
+		{ static_cast<uint32_t>(SequenceInfo::SEQ_OWN), "SEQ_OWN" }
 	};
 	return values;
 }
@@ -3096,11 +3097,11 @@ SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSetOperationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SetOperationType::NONE), "NONE" },
-	    { static_cast<uint32_t>(SetOperationType::UNION), "UNION" },
-	    { static_cast<uint32_t>(SetOperationType::EXCEPT), "EXCEPT" },
-	    { static_cast<uint32_t>(SetOperationType::INTERSECT), "INTERSECT" },
-	    { static_cast<uint32_t>(SetOperationType::UNION_BY_NAME), "UNION_BY_NAME" }
+		{ static_cast<uint32_t>(SetOperationType::NONE), "NONE" },
+		{ static_cast<uint32_t>(SetOperationType::UNION), "UNION" },
+		{ static_cast<uint32_t>(SetOperationType::EXCEPT), "EXCEPT" },
+		{ static_cast<uint32_t>(SetOperationType::INTERSECT), "INTERSECT" },
+		{ static_cast<uint32_t>(SetOperationType::UNION_BY_NAME), "UNION_BY_NAME" }
 	};
 	return values;
 }
@@ -3117,11 +3118,11 @@ SetOperationType EnumUtil::FromString<SetOperationType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSetScopeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SetScope::AUTOMATIC), "AUTOMATIC" },
-	    { static_cast<uint32_t>(SetScope::LOCAL), "LOCAL" },
-	    { static_cast<uint32_t>(SetScope::SESSION), "SESSION" },
-	    { static_cast<uint32_t>(SetScope::GLOBAL), "GLOBAL" },
-	    { static_cast<uint32_t>(SetScope::VARIABLE), "VARIABLE" }
+		{ static_cast<uint32_t>(SetScope::AUTOMATIC), "AUTOMATIC" },
+		{ static_cast<uint32_t>(SetScope::LOCAL), "LOCAL" },
+		{ static_cast<uint32_t>(SetScope::SESSION), "SESSION" },
+		{ static_cast<uint32_t>(SetScope::GLOBAL), "GLOBAL" },
+		{ static_cast<uint32_t>(SetScope::VARIABLE), "VARIABLE" }
 	};
 	return values;
 }
@@ -3138,8 +3139,8 @@ SetScope EnumUtil::FromString<SetScope>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSetTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SetType::SET), "SET" },
-	    { static_cast<uint32_t>(SetType::RESET), "RESET" }
+		{ static_cast<uint32_t>(SetType::SET), "SET" },
+		{ static_cast<uint32_t>(SetType::RESET), "RESET" }
 	};
 	return values;
 }
@@ -3156,10 +3157,10 @@ SetType EnumUtil::FromString<SetType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSettingScopeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SettingScope::GLOBAL), "GLOBAL" },
-	    { static_cast<uint32_t>(SettingScope::LOCAL), "LOCAL" },
-	    { static_cast<uint32_t>(SettingScope::SECRET), "SECRET" },
-	    { static_cast<uint32_t>(SettingScope::INVALID), "INVALID" }
+		{ static_cast<uint32_t>(SettingScope::GLOBAL), "GLOBAL" },
+		{ static_cast<uint32_t>(SettingScope::LOCAL), "LOCAL" },
+		{ static_cast<uint32_t>(SettingScope::SECRET), "SECRET" },
+		{ static_cast<uint32_t>(SettingScope::INVALID), "INVALID" }
 	};
 	return values;
 }
@@ -3176,8 +3177,8 @@ SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetShowTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(ShowType::SUMMARY), "SUMMARY" },
-	    { static_cast<uint32_t>(ShowType::DESCRIBE), "DESCRIBE" }
+		{ static_cast<uint32_t>(ShowType::SUMMARY), "SUMMARY" },
+		{ static_cast<uint32_t>(ShowType::DESCRIBE), "DESCRIBE" }
 	};
 	return values;
 }
@@ -3194,12 +3195,12 @@ ShowType EnumUtil::FromString<ShowType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSimplifiedTokenTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER), "SIMPLIFIED_TOKEN_IDENTIFIER" },
-	    { static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT), "SIMPLIFIED_TOKEN_NUMERIC_CONSTANT" },
-	    { static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT), "SIMPLIFIED_TOKEN_STRING_CONSTANT" },
-	    { static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR), "SIMPLIFIED_TOKEN_OPERATOR" },
-	    { static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD), "SIMPLIFIED_TOKEN_KEYWORD" },
-	    { static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT), "SIMPLIFIED_TOKEN_COMMENT" }
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER), "SIMPLIFIED_TOKEN_IDENTIFIER" },
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT), "SIMPLIFIED_TOKEN_NUMERIC_CONSTANT" },
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT), "SIMPLIFIED_TOKEN_STRING_CONSTANT" },
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR), "SIMPLIFIED_TOKEN_OPERATOR" },
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD), "SIMPLIFIED_TOKEN_KEYWORD" },
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT), "SIMPLIFIED_TOKEN_COMMENT" }
 	};
 	return values;
 }
@@ -3216,8 +3217,8 @@ SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetSinkCombineResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SinkCombineResultType::FINISHED), "FINISHED" },
-	    { static_cast<uint32_t>(SinkCombineResultType::BLOCKED), "BLOCKED" }
+		{ static_cast<uint32_t>(SinkCombineResultType::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(SinkCombineResultType::BLOCKED), "BLOCKED" }
 	};
 	return values;
 }
@@ -3234,9 +3235,9 @@ SinkCombineResultType EnumUtil::FromString<SinkCombineResultType>(const char *va
 
 const StringUtil::EnumStringLiteral *GetSinkFinalizeTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SinkFinalizeType::READY), "READY" },
-	    { static_cast<uint32_t>(SinkFinalizeType::NO_OUTPUT_POSSIBLE), "NO_OUTPUT_POSSIBLE" },
-	    { static_cast<uint32_t>(SinkFinalizeType::BLOCKED), "BLOCKED" }
+		{ static_cast<uint32_t>(SinkFinalizeType::READY), "READY" },
+		{ static_cast<uint32_t>(SinkFinalizeType::NO_OUTPUT_POSSIBLE), "NO_OUTPUT_POSSIBLE" },
+		{ static_cast<uint32_t>(SinkFinalizeType::BLOCKED), "BLOCKED" }
 	};
 	return values;
 }
@@ -3253,8 +3254,8 @@ SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSinkNextBatchTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SinkNextBatchType::READY), "READY" },
-	    { static_cast<uint32_t>(SinkNextBatchType::BLOCKED), "BLOCKED" }
+		{ static_cast<uint32_t>(SinkNextBatchType::READY), "READY" },
+		{ static_cast<uint32_t>(SinkNextBatchType::BLOCKED), "BLOCKED" }
 	};
 	return values;
 }
@@ -3271,9 +3272,9 @@ SinkNextBatchType EnumUtil::FromString<SinkNextBatchType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSinkResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SinkResultType::NEED_MORE_INPUT), "NEED_MORE_INPUT" },
-	    { static_cast<uint32_t>(SinkResultType::FINISHED), "FINISHED" },
-	    { static_cast<uint32_t>(SinkResultType::BLOCKED), "BLOCKED" }
+		{ static_cast<uint32_t>(SinkResultType::NEED_MORE_INPUT), "NEED_MORE_INPUT" },
+		{ static_cast<uint32_t>(SinkResultType::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(SinkResultType::BLOCKED), "BLOCKED" }
 	};
 	return values;
 }
@@ -3290,9 +3291,9 @@ SinkResultType EnumUtil::FromString<SinkResultType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSourceResultTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SourceResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
-	    { static_cast<uint32_t>(SourceResultType::FINISHED), "FINISHED" },
-	    { static_cast<uint32_t>(SourceResultType::BLOCKED), "BLOCKED" }
+		{ static_cast<uint32_t>(SourceResultType::HAVE_MORE_OUTPUT), "HAVE_MORE_OUTPUT" },
+		{ static_cast<uint32_t>(SourceResultType::FINISHED), "FINISHED" },
+		{ static_cast<uint32_t>(SourceResultType::BLOCKED), "BLOCKED" }
 	};
 	return values;
 }
@@ -3309,9 +3310,9 @@ SourceResultType EnumUtil::FromString<SourceResultType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetStatementReturnTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(StatementReturnType::QUERY_RESULT), "QUERY_RESULT" },
-	    { static_cast<uint32_t>(StatementReturnType::CHANGED_ROWS), "CHANGED_ROWS" },
-	    { static_cast<uint32_t>(StatementReturnType::NOTHING), "NOTHING" }
+		{ static_cast<uint32_t>(StatementReturnType::QUERY_RESULT), "QUERY_RESULT" },
+		{ static_cast<uint32_t>(StatementReturnType::CHANGED_ROWS), "CHANGED_ROWS" },
+		{ static_cast<uint32_t>(StatementReturnType::NOTHING), "NOTHING" }
 	};
 	return values;
 }
@@ -3328,36 +3329,36 @@ StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetStatementTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(StatementType::INVALID_STATEMENT), "INVALID_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::SELECT_STATEMENT), "SELECT_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::INSERT_STATEMENT), "INSERT_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::UPDATE_STATEMENT), "UPDATE_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::CREATE_STATEMENT), "CREATE_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::DELETE_STATEMENT), "DELETE_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::PREPARE_STATEMENT), "PREPARE_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::EXECUTE_STATEMENT), "EXECUTE_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::ALTER_STATEMENT), "ALTER_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::TRANSACTION_STATEMENT), "TRANSACTION_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::COPY_STATEMENT), "COPY_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::ANALYZE_STATEMENT), "ANALYZE_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::VARIABLE_SET_STATEMENT), "VARIABLE_SET_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::CREATE_FUNC_STATEMENT), "CREATE_FUNC_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::EXPLAIN_STATEMENT), "EXPLAIN_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::DROP_STATEMENT), "DROP_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::EXPORT_STATEMENT), "EXPORT_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::PRAGMA_STATEMENT), "PRAGMA_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::VACUUM_STATEMENT), "VACUUM_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::CALL_STATEMENT), "CALL_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::SET_STATEMENT), "SET_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::LOAD_STATEMENT), "LOAD_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::RELATION_STATEMENT), "RELATION_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::EXTENSION_STATEMENT), "EXTENSION_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::LOGICAL_PLAN_STATEMENT), "LOGICAL_PLAN_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::ATTACH_STATEMENT), "ATTACH_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::DETACH_STATEMENT), "DETACH_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::MULTI_STATEMENT), "MULTI_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::COPY_DATABASE_STATEMENT), "COPY_DATABASE_STATEMENT" },
-	    { static_cast<uint32_t>(StatementType::UPDATE_EXTENSIONS_STATEMENT), "UPDATE_EXTENSIONS_STATEMENT" }
+		{ static_cast<uint32_t>(StatementType::INVALID_STATEMENT), "INVALID_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::SELECT_STATEMENT), "SELECT_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::INSERT_STATEMENT), "INSERT_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::UPDATE_STATEMENT), "UPDATE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::CREATE_STATEMENT), "CREATE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::DELETE_STATEMENT), "DELETE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::PREPARE_STATEMENT), "PREPARE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::EXECUTE_STATEMENT), "EXECUTE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::ALTER_STATEMENT), "ALTER_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::TRANSACTION_STATEMENT), "TRANSACTION_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::COPY_STATEMENT), "COPY_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::ANALYZE_STATEMENT), "ANALYZE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::VARIABLE_SET_STATEMENT), "VARIABLE_SET_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::CREATE_FUNC_STATEMENT), "CREATE_FUNC_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::EXPLAIN_STATEMENT), "EXPLAIN_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::DROP_STATEMENT), "DROP_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::EXPORT_STATEMENT), "EXPORT_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::PRAGMA_STATEMENT), "PRAGMA_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::VACUUM_STATEMENT), "VACUUM_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::CALL_STATEMENT), "CALL_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::SET_STATEMENT), "SET_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::LOAD_STATEMENT), "LOAD_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::RELATION_STATEMENT), "RELATION_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::EXTENSION_STATEMENT), "EXTENSION_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::LOGICAL_PLAN_STATEMENT), "LOGICAL_PLAN_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::ATTACH_STATEMENT), "ATTACH_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::DETACH_STATEMENT), "DETACH_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::MULTI_STATEMENT), "MULTI_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::COPY_DATABASE_STATEMENT), "COPY_DATABASE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::UPDATE_EXTENSIONS_STATEMENT), "UPDATE_EXTENSIONS_STATEMENT" }
 	};
 	return values;
 }
@@ -3374,12 +3375,12 @@ StatementType EnumUtil::FromString<StatementType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetStatisticsTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(StatisticsType::NUMERIC_STATS), "NUMERIC_STATS" },
-	    { static_cast<uint32_t>(StatisticsType::STRING_STATS), "STRING_STATS" },
-	    { static_cast<uint32_t>(StatisticsType::LIST_STATS), "LIST_STATS" },
-	    { static_cast<uint32_t>(StatisticsType::STRUCT_STATS), "STRUCT_STATS" },
-	    { static_cast<uint32_t>(StatisticsType::BASE_STATS), "BASE_STATS" },
-	    { static_cast<uint32_t>(StatisticsType::ARRAY_STATS), "ARRAY_STATS" }
+		{ static_cast<uint32_t>(StatisticsType::NUMERIC_STATS), "NUMERIC_STATS" },
+		{ static_cast<uint32_t>(StatisticsType::STRING_STATS), "STRING_STATS" },
+		{ static_cast<uint32_t>(StatisticsType::LIST_STATS), "LIST_STATS" },
+		{ static_cast<uint32_t>(StatisticsType::STRUCT_STATS), "STRUCT_STATS" },
+		{ static_cast<uint32_t>(StatisticsType::BASE_STATS), "BASE_STATS" },
+		{ static_cast<uint32_t>(StatisticsType::ARRAY_STATS), "ARRAY_STATS" }
 	};
 	return values;
 }
@@ -3396,11 +3397,11 @@ StatisticsType EnumUtil::FromString<StatisticsType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetStatsInfoValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(StatsInfo::CAN_HAVE_NULL_VALUES), "CAN_HAVE_NULL_VALUES" },
-	    { static_cast<uint32_t>(StatsInfo::CANNOT_HAVE_NULL_VALUES), "CANNOT_HAVE_NULL_VALUES" },
-	    { static_cast<uint32_t>(StatsInfo::CAN_HAVE_VALID_VALUES), "CAN_HAVE_VALID_VALUES" },
-	    { static_cast<uint32_t>(StatsInfo::CANNOT_HAVE_VALID_VALUES), "CANNOT_HAVE_VALID_VALUES" },
-	    { static_cast<uint32_t>(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES), "CAN_HAVE_NULL_AND_VALID_VALUES" }
+		{ static_cast<uint32_t>(StatsInfo::CAN_HAVE_NULL_VALUES), "CAN_HAVE_NULL_VALUES" },
+		{ static_cast<uint32_t>(StatsInfo::CANNOT_HAVE_NULL_VALUES), "CANNOT_HAVE_NULL_VALUES" },
+		{ static_cast<uint32_t>(StatsInfo::CAN_HAVE_VALID_VALUES), "CAN_HAVE_VALID_VALUES" },
+		{ static_cast<uint32_t>(StatsInfo::CANNOT_HAVE_VALID_VALUES), "CANNOT_HAVE_VALID_VALUES" },
+		{ static_cast<uint32_t>(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES), "CAN_HAVE_NULL_AND_VALID_VALUES" }
 	};
 	return values;
 }
@@ -3417,42 +3418,42 @@ StatsInfo EnumUtil::FromString<StatsInfo>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetStrTimeSpecifierValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME), "ABBREVIATED_WEEKDAY_NAME" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::FULL_WEEKDAY_NAME), "FULL_WEEKDAY_NAME" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::WEEKDAY_DECIMAL), "WEEKDAY_DECIMAL" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::DAY_OF_MONTH_PADDED), "DAY_OF_MONTH_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::DAY_OF_MONTH), "DAY_OF_MONTH" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::ABBREVIATED_MONTH_NAME), "ABBREVIATED_MONTH_NAME" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::FULL_MONTH_NAME), "FULL_MONTH_NAME" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::MONTH_DECIMAL_PADDED), "MONTH_DECIMAL_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::MONTH_DECIMAL), "MONTH_DECIMAL" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED), "YEAR_WITHOUT_CENTURY_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::YEAR_WITHOUT_CENTURY), "YEAR_WITHOUT_CENTURY" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::YEAR_DECIMAL), "YEAR_DECIMAL" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::HOUR_24_PADDED), "HOUR_24_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::HOUR_24_DECIMAL), "HOUR_24_DECIMAL" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::HOUR_12_PADDED), "HOUR_12_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::HOUR_12_DECIMAL), "HOUR_12_DECIMAL" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::AM_PM), "AM_PM" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::MINUTE_PADDED), "MINUTE_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::MINUTE_DECIMAL), "MINUTE_DECIMAL" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::SECOND_PADDED), "SECOND_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::SECOND_DECIMAL), "SECOND_DECIMAL" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::MICROSECOND_PADDED), "MICROSECOND_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::MILLISECOND_PADDED), "MILLISECOND_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::UTC_OFFSET), "UTC_OFFSET" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::TZ_NAME), "TZ_NAME" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::DAY_OF_YEAR_PADDED), "DAY_OF_YEAR_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::DAY_OF_YEAR_DECIMAL), "DAY_OF_YEAR_DECIMAL" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST), "WEEK_NUMBER_PADDED_SUN_FIRST" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST), "WEEK_NUMBER_PADDED_MON_FIRST" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::LOCALE_APPROPRIATE_DATE_AND_TIME), "LOCALE_APPROPRIATE_DATE_AND_TIME" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::LOCALE_APPROPRIATE_DATE), "LOCALE_APPROPRIATE_DATE" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::LOCALE_APPROPRIATE_TIME), "LOCALE_APPROPRIATE_TIME" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::NANOSECOND_PADDED), "NANOSECOND_PADDED" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::YEAR_ISO), "YEAR_ISO" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::WEEKDAY_ISO), "WEEKDAY_ISO" },
-	    { static_cast<uint32_t>(StrTimeSpecifier::WEEK_NUMBER_ISO), "WEEK_NUMBER_ISO" }
+		{ static_cast<uint32_t>(StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME), "ABBREVIATED_WEEKDAY_NAME" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::FULL_WEEKDAY_NAME), "FULL_WEEKDAY_NAME" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::WEEKDAY_DECIMAL), "WEEKDAY_DECIMAL" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::DAY_OF_MONTH_PADDED), "DAY_OF_MONTH_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::DAY_OF_MONTH), "DAY_OF_MONTH" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::ABBREVIATED_MONTH_NAME), "ABBREVIATED_MONTH_NAME" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::FULL_MONTH_NAME), "FULL_MONTH_NAME" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::MONTH_DECIMAL_PADDED), "MONTH_DECIMAL_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::MONTH_DECIMAL), "MONTH_DECIMAL" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED), "YEAR_WITHOUT_CENTURY_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::YEAR_WITHOUT_CENTURY), "YEAR_WITHOUT_CENTURY" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::YEAR_DECIMAL), "YEAR_DECIMAL" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::HOUR_24_PADDED), "HOUR_24_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::HOUR_24_DECIMAL), "HOUR_24_DECIMAL" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::HOUR_12_PADDED), "HOUR_12_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::HOUR_12_DECIMAL), "HOUR_12_DECIMAL" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::AM_PM), "AM_PM" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::MINUTE_PADDED), "MINUTE_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::MINUTE_DECIMAL), "MINUTE_DECIMAL" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::SECOND_PADDED), "SECOND_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::SECOND_DECIMAL), "SECOND_DECIMAL" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::MICROSECOND_PADDED), "MICROSECOND_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::MILLISECOND_PADDED), "MILLISECOND_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::UTC_OFFSET), "UTC_OFFSET" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::TZ_NAME), "TZ_NAME" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::DAY_OF_YEAR_PADDED), "DAY_OF_YEAR_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::DAY_OF_YEAR_DECIMAL), "DAY_OF_YEAR_DECIMAL" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST), "WEEK_NUMBER_PADDED_SUN_FIRST" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST), "WEEK_NUMBER_PADDED_MON_FIRST" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::LOCALE_APPROPRIATE_DATE_AND_TIME), "LOCALE_APPROPRIATE_DATE_AND_TIME" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::LOCALE_APPROPRIATE_DATE), "LOCALE_APPROPRIATE_DATE" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::LOCALE_APPROPRIATE_TIME), "LOCALE_APPROPRIATE_TIME" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::NANOSECOND_PADDED), "NANOSECOND_PADDED" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::YEAR_ISO), "YEAR_ISO" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::WEEKDAY_ISO), "WEEKDAY_ISO" },
+		{ static_cast<uint32_t>(StrTimeSpecifier::WEEK_NUMBER_ISO), "WEEK_NUMBER_ISO" }
 	};
 	return values;
 }
@@ -3469,13 +3470,13 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetStreamExecutionResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(StreamExecutionResult::CHUNK_READY), "CHUNK_READY" },
-	    { static_cast<uint32_t>(StreamExecutionResult::CHUNK_NOT_READY), "CHUNK_NOT_READY" },
-	    { static_cast<uint32_t>(StreamExecutionResult::EXECUTION_ERROR), "EXECUTION_ERROR" },
-	    { static_cast<uint32_t>(StreamExecutionResult::EXECUTION_CANCELLED), "EXECUTION_CANCELLED" },
-	    { static_cast<uint32_t>(StreamExecutionResult::BLOCKED), "BLOCKED" },
-	    { static_cast<uint32_t>(StreamExecutionResult::NO_TASKS_AVAILABLE), "NO_TASKS_AVAILABLE" },
-	    { static_cast<uint32_t>(StreamExecutionResult::EXECUTION_FINISHED), "EXECUTION_FINISHED" }
+		{ static_cast<uint32_t>(StreamExecutionResult::CHUNK_READY), "CHUNK_READY" },
+		{ static_cast<uint32_t>(StreamExecutionResult::CHUNK_NOT_READY), "CHUNK_NOT_READY" },
+		{ static_cast<uint32_t>(StreamExecutionResult::EXECUTION_ERROR), "EXECUTION_ERROR" },
+		{ static_cast<uint32_t>(StreamExecutionResult::EXECUTION_CANCELLED), "EXECUTION_CANCELLED" },
+		{ static_cast<uint32_t>(StreamExecutionResult::BLOCKED), "BLOCKED" },
+		{ static_cast<uint32_t>(StreamExecutionResult::NO_TASKS_AVAILABLE), "NO_TASKS_AVAILABLE" },
+		{ static_cast<uint32_t>(StreamExecutionResult::EXECUTION_FINISHED), "EXECUTION_FINISHED" }
 	};
 	return values;
 }
@@ -3492,11 +3493,11 @@ StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *va
 
 const StringUtil::EnumStringLiteral *GetSubqueryTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(SubqueryType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(SubqueryType::SCALAR), "SCALAR" },
-	    { static_cast<uint32_t>(SubqueryType::EXISTS), "EXISTS" },
-	    { static_cast<uint32_t>(SubqueryType::NOT_EXISTS), "NOT_EXISTS" },
-	    { static_cast<uint32_t>(SubqueryType::ANY), "ANY" }
+		{ static_cast<uint32_t>(SubqueryType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(SubqueryType::SCALAR), "SCALAR" },
+		{ static_cast<uint32_t>(SubqueryType::EXISTS), "EXISTS" },
+		{ static_cast<uint32_t>(SubqueryType::NOT_EXISTS), "NOT_EXISTS" },
+		{ static_cast<uint32_t>(SubqueryType::ANY), "ANY" }
 	};
 	return values;
 }
@@ -3513,8 +3514,8 @@ SubqueryType EnumUtil::FromString<SubqueryType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTableColumnTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TableColumnType::STANDARD), "STANDARD" },
-	    { static_cast<uint32_t>(TableColumnType::GENERATED), "GENERATED" }
+		{ static_cast<uint32_t>(TableColumnType::STANDARD), "STANDARD" },
+		{ static_cast<uint32_t>(TableColumnType::GENERATED), "GENERATED" }
 	};
 	return values;
 }
@@ -3531,13 +3532,13 @@ TableColumnType EnumUtil::FromString<TableColumnType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TableFilterType::CONSTANT_COMPARISON), "CONSTANT_COMPARISON" },
-	    { static_cast<uint32_t>(TableFilterType::IS_NULL), "IS_NULL" },
-	    { static_cast<uint32_t>(TableFilterType::IS_NOT_NULL), "IS_NOT_NULL" },
-	    { static_cast<uint32_t>(TableFilterType::CONJUNCTION_OR), "CONJUNCTION_OR" },
-	    { static_cast<uint32_t>(TableFilterType::CONJUNCTION_AND), "CONJUNCTION_AND" },
-	    { static_cast<uint32_t>(TableFilterType::STRUCT_EXTRACT), "STRUCT_EXTRACT" },
-	    { static_cast<uint32_t>(TableFilterType::OPTIONAL_FILTER), "OPTIONAL_FILTER" }
+		{ static_cast<uint32_t>(TableFilterType::CONSTANT_COMPARISON), "CONSTANT_COMPARISON" },
+		{ static_cast<uint32_t>(TableFilterType::IS_NULL), "IS_NULL" },
+		{ static_cast<uint32_t>(TableFilterType::IS_NOT_NULL), "IS_NOT_NULL" },
+		{ static_cast<uint32_t>(TableFilterType::CONJUNCTION_OR), "CONJUNCTION_OR" },
+		{ static_cast<uint32_t>(TableFilterType::CONJUNCTION_AND), "CONJUNCTION_AND" },
+		{ static_cast<uint32_t>(TableFilterType::STRUCT_EXTRACT), "STRUCT_EXTRACT" },
+		{ static_cast<uint32_t>(TableFilterType::OPTIONAL_FILTER), "OPTIONAL_FILTER" }
 	};
 	return values;
 }
@@ -3554,10 +3555,10 @@ TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TablePartitionInfo::NOT_PARTITIONED), "NOT_PARTITIONED" },
-	    { static_cast<uint32_t>(TablePartitionInfo::SINGLE_VALUE_PARTITIONS), "SINGLE_VALUE_PARTITIONS" },
-	    { static_cast<uint32_t>(TablePartitionInfo::OVERLAPPING_PARTITIONS), "OVERLAPPING_PARTITIONS" },
-	    { static_cast<uint32_t>(TablePartitionInfo::DISJOINT_PARTITIONS), "DISJOINT_PARTITIONS" }
+		{ static_cast<uint32_t>(TablePartitionInfo::NOT_PARTITIONED), "NOT_PARTITIONED" },
+		{ static_cast<uint32_t>(TablePartitionInfo::SINGLE_VALUE_PARTITIONS), "SINGLE_VALUE_PARTITIONS" },
+		{ static_cast<uint32_t>(TablePartitionInfo::OVERLAPPING_PARTITIONS), "OVERLAPPING_PARTITIONS" },
+		{ static_cast<uint32_t>(TablePartitionInfo::DISJOINT_PARTITIONS), "DISJOINT_PARTITIONS" }
 	};
 	return values;
 }
@@ -3574,18 +3575,18 @@ TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTableReferenceTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TableReferenceType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(TableReferenceType::BASE_TABLE), "BASE_TABLE" },
-	    { static_cast<uint32_t>(TableReferenceType::SUBQUERY), "SUBQUERY" },
-	    { static_cast<uint32_t>(TableReferenceType::JOIN), "JOIN" },
-	    { static_cast<uint32_t>(TableReferenceType::TABLE_FUNCTION), "TABLE_FUNCTION" },
-	    { static_cast<uint32_t>(TableReferenceType::EXPRESSION_LIST), "EXPRESSION_LIST" },
-	    { static_cast<uint32_t>(TableReferenceType::CTE), "CTE" },
-	    { static_cast<uint32_t>(TableReferenceType::EMPTY_FROM), "EMPTY" },
-	    { static_cast<uint32_t>(TableReferenceType::PIVOT), "PIVOT" },
-	    { static_cast<uint32_t>(TableReferenceType::SHOW_REF), "SHOW_REF" },
-	    { static_cast<uint32_t>(TableReferenceType::COLUMN_DATA), "COLUMN_DATA" },
-	    { static_cast<uint32_t>(TableReferenceType::DELIM_GET), "DELIM_GET" }
+		{ static_cast<uint32_t>(TableReferenceType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(TableReferenceType::BASE_TABLE), "BASE_TABLE" },
+		{ static_cast<uint32_t>(TableReferenceType::SUBQUERY), "SUBQUERY" },
+		{ static_cast<uint32_t>(TableReferenceType::JOIN), "JOIN" },
+		{ static_cast<uint32_t>(TableReferenceType::TABLE_FUNCTION), "TABLE_FUNCTION" },
+		{ static_cast<uint32_t>(TableReferenceType::EXPRESSION_LIST), "EXPRESSION_LIST" },
+		{ static_cast<uint32_t>(TableReferenceType::CTE), "CTE" },
+		{ static_cast<uint32_t>(TableReferenceType::EMPTY_FROM), "EMPTY" },
+		{ static_cast<uint32_t>(TableReferenceType::PIVOT), "PIVOT" },
+		{ static_cast<uint32_t>(TableReferenceType::SHOW_REF), "SHOW_REF" },
+		{ static_cast<uint32_t>(TableReferenceType::COLUMN_DATA), "COLUMN_DATA" },
+		{ static_cast<uint32_t>(TableReferenceType::DELIM_GET), "DELIM_GET" }
 	};
 	return values;
 }
@@ -3602,11 +3603,11 @@ TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTableScanTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TableScanType::TABLE_SCAN_REGULAR), "TABLE_SCAN_REGULAR" },
-	    { static_cast<uint32_t>(TableScanType::TABLE_SCAN_COMMITTED_ROWS), "TABLE_SCAN_COMMITTED_ROWS" },
-	    { static_cast<uint32_t>(TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES), "TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES" },
-	    { static_cast<uint32_t>(TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED), "TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED" },
-	    { static_cast<uint32_t>(TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS), "TABLE_SCAN_LATEST_COMMITTED_ROWS" }
+		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_REGULAR), "TABLE_SCAN_REGULAR" },
+		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_COMMITTED_ROWS), "TABLE_SCAN_COMMITTED_ROWS" },
+		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES), "TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES" },
+		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED), "TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED" },
+		{ static_cast<uint32_t>(TableScanType::TABLE_SCAN_LATEST_COMMITTED_ROWS), "TABLE_SCAN_LATEST_COMMITTED_ROWS" }
 	};
 	return values;
 }
@@ -3623,8 +3624,8 @@ TableScanType EnumUtil::FromString<TableScanType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTaskExecutionModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TaskExecutionMode::PROCESS_ALL), "PROCESS_ALL" },
-	    { static_cast<uint32_t>(TaskExecutionMode::PROCESS_PARTIAL), "PROCESS_PARTIAL" }
+		{ static_cast<uint32_t>(TaskExecutionMode::PROCESS_ALL), "PROCESS_ALL" },
+		{ static_cast<uint32_t>(TaskExecutionMode::PROCESS_PARTIAL), "PROCESS_PARTIAL" }
 	};
 	return values;
 }
@@ -3641,10 +3642,10 @@ TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTaskExecutionResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TaskExecutionResult::TASK_FINISHED), "TASK_FINISHED" },
-	    { static_cast<uint32_t>(TaskExecutionResult::TASK_NOT_FINISHED), "TASK_NOT_FINISHED" },
-	    { static_cast<uint32_t>(TaskExecutionResult::TASK_ERROR), "TASK_ERROR" },
-	    { static_cast<uint32_t>(TaskExecutionResult::TASK_BLOCKED), "TASK_BLOCKED" }
+		{ static_cast<uint32_t>(TaskExecutionResult::TASK_FINISHED), "TASK_FINISHED" },
+		{ static_cast<uint32_t>(TaskExecutionResult::TASK_NOT_FINISHED), "TASK_NOT_FINISHED" },
+		{ static_cast<uint32_t>(TaskExecutionResult::TASK_ERROR), "TASK_ERROR" },
+		{ static_cast<uint32_t>(TaskExecutionResult::TASK_BLOCKED), "TASK_BLOCKED" }
 	};
 	return values;
 }
@@ -3661,9 +3662,9 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetTimestampCastResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TimestampCastResult::SUCCESS), "SUCCESS" },
-	    { static_cast<uint32_t>(TimestampCastResult::ERROR_INCORRECT_FORMAT), "ERROR_INCORRECT_FORMAT" },
-	    { static_cast<uint32_t>(TimestampCastResult::ERROR_NON_UTC_TIMEZONE), "ERROR_NON_UTC_TIMEZONE" }
+		{ static_cast<uint32_t>(TimestampCastResult::SUCCESS), "SUCCESS" },
+		{ static_cast<uint32_t>(TimestampCastResult::ERROR_INCORRECT_FORMAT), "ERROR_INCORRECT_FORMAT" },
+		{ static_cast<uint32_t>(TimestampCastResult::ERROR_NON_UTC_TIMEZONE), "ERROR_NON_UTC_TIMEZONE" }
 	};
 	return values;
 }
@@ -3680,9 +3681,9 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER), "TRANSACTION_DEFAULT_MODIFIER" },
-	    { static_cast<uint32_t>(TransactionModifierType::TRANSACTION_READ_ONLY), "TRANSACTION_READ_ONLY" },
-	    { static_cast<uint32_t>(TransactionModifierType::TRANSACTION_READ_WRITE), "TRANSACTION_READ_WRITE" }
+		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER), "TRANSACTION_DEFAULT_MODIFIER" },
+		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_READ_ONLY), "TRANSACTION_READ_ONLY" },
+		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_READ_WRITE), "TRANSACTION_READ_WRITE" }
 	};
 	return values;
 }
@@ -3699,10 +3700,10 @@ TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char
 
 const StringUtil::EnumStringLiteral *GetTransactionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TransactionType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(TransactionType::BEGIN_TRANSACTION), "BEGIN_TRANSACTION" },
-	    { static_cast<uint32_t>(TransactionType::COMMIT), "COMMIT" },
-	    { static_cast<uint32_t>(TransactionType::ROLLBACK), "ROLLBACK" }
+		{ static_cast<uint32_t>(TransactionType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(TransactionType::BEGIN_TRANSACTION), "BEGIN_TRANSACTION" },
+		{ static_cast<uint32_t>(TransactionType::COMMIT), "COMMIT" },
+		{ static_cast<uint32_t>(TransactionType::ROLLBACK), "ROLLBACK" }
 	};
 	return values;
 }
@@ -3719,11 +3720,11 @@ TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTupleDataPinPropertiesValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(TupleDataPinProperties::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(TupleDataPinProperties::KEEP_EVERYTHING_PINNED), "KEEP_EVERYTHING_PINNED" },
-	    { static_cast<uint32_t>(TupleDataPinProperties::UNPIN_AFTER_DONE), "UNPIN_AFTER_DONE" },
-	    { static_cast<uint32_t>(TupleDataPinProperties::DESTROY_AFTER_DONE), "DESTROY_AFTER_DONE" },
-	    { static_cast<uint32_t>(TupleDataPinProperties::ALREADY_PINNED), "ALREADY_PINNED" }
+		{ static_cast<uint32_t>(TupleDataPinProperties::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(TupleDataPinProperties::KEEP_EVERYTHING_PINNED), "KEEP_EVERYTHING_PINNED" },
+		{ static_cast<uint32_t>(TupleDataPinProperties::UNPIN_AFTER_DONE), "UNPIN_AFTER_DONE" },
+		{ static_cast<uint32_t>(TupleDataPinProperties::DESTROY_AFTER_DONE), "DESTROY_AFTER_DONE" },
+		{ static_cast<uint32_t>(TupleDataPinProperties::ALREADY_PINNED), "ALREADY_PINNED" }
 	};
 	return values;
 }
@@ -3740,12 +3741,12 @@ TupleDataPinProperties EnumUtil::FromString<TupleDataPinProperties>(const char *
 
 const StringUtil::EnumStringLiteral *GetUndoFlagsValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(UndoFlags::EMPTY_ENTRY), "EMPTY_ENTRY" },
-	    { static_cast<uint32_t>(UndoFlags::CATALOG_ENTRY), "CATALOG_ENTRY" },
-	    { static_cast<uint32_t>(UndoFlags::INSERT_TUPLE), "INSERT_TUPLE" },
-	    { static_cast<uint32_t>(UndoFlags::DELETE_TUPLE), "DELETE_TUPLE" },
-	    { static_cast<uint32_t>(UndoFlags::UPDATE_TUPLE), "UPDATE_TUPLE" },
-	    { static_cast<uint32_t>(UndoFlags::SEQUENCE_VALUE), "SEQUENCE_VALUE" }
+		{ static_cast<uint32_t>(UndoFlags::EMPTY_ENTRY), "EMPTY_ENTRY" },
+		{ static_cast<uint32_t>(UndoFlags::CATALOG_ENTRY), "CATALOG_ENTRY" },
+		{ static_cast<uint32_t>(UndoFlags::INSERT_TUPLE), "INSERT_TUPLE" },
+		{ static_cast<uint32_t>(UndoFlags::DELETE_TUPLE), "DELETE_TUPLE" },
+		{ static_cast<uint32_t>(UndoFlags::UPDATE_TUPLE), "UPDATE_TUPLE" },
+		{ static_cast<uint32_t>(UndoFlags::SEQUENCE_VALUE), "SEQUENCE_VALUE" }
 	};
 	return values;
 }
@@ -3762,12 +3763,12 @@ UndoFlags EnumUtil::FromString<UndoFlags>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetUnionInvalidReasonValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(UnionInvalidReason::VALID), "VALID" },
-	    { static_cast<uint32_t>(UnionInvalidReason::TAG_OUT_OF_RANGE), "TAG_OUT_OF_RANGE" },
-	    { static_cast<uint32_t>(UnionInvalidReason::NO_MEMBERS), "NO_MEMBERS" },
-	    { static_cast<uint32_t>(UnionInvalidReason::VALIDITY_OVERLAP), "VALIDITY_OVERLAP" },
-	    { static_cast<uint32_t>(UnionInvalidReason::TAG_MISMATCH), "TAG_MISMATCH" },
-	    { static_cast<uint32_t>(UnionInvalidReason::NULL_TAG), "NULL_TAG" }
+		{ static_cast<uint32_t>(UnionInvalidReason::VALID), "VALID" },
+		{ static_cast<uint32_t>(UnionInvalidReason::TAG_OUT_OF_RANGE), "TAG_OUT_OF_RANGE" },
+		{ static_cast<uint32_t>(UnionInvalidReason::NO_MEMBERS), "NO_MEMBERS" },
+		{ static_cast<uint32_t>(UnionInvalidReason::VALIDITY_OVERLAP), "VALIDITY_OVERLAP" },
+		{ static_cast<uint32_t>(UnionInvalidReason::TAG_MISMATCH), "TAG_MISMATCH" },
+		{ static_cast<uint32_t>(UnionInvalidReason::NULL_TAG), "NULL_TAG" }
 	};
 	return values;
 }
@@ -3784,7 +3785,7 @@ UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetVectorAuxiliaryDataTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(VectorAuxiliaryDataType::ARROW_AUXILIARY), "ARROW_AUXILIARY" }
+		{ static_cast<uint32_t>(VectorAuxiliaryDataType::ARROW_AUXILIARY), "ARROW_AUXILIARY" }
 	};
 	return values;
 }
@@ -3801,16 +3802,16 @@ VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char
 
 const StringUtil::EnumStringLiteral *GetVectorBufferTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(VectorBufferType::STANDARD_BUFFER), "STANDARD_BUFFER" },
-	    { static_cast<uint32_t>(VectorBufferType::DICTIONARY_BUFFER), "DICTIONARY_BUFFER" },
-	    { static_cast<uint32_t>(VectorBufferType::VECTOR_CHILD_BUFFER), "VECTOR_CHILD_BUFFER" },
-	    { static_cast<uint32_t>(VectorBufferType::STRING_BUFFER), "STRING_BUFFER" },
-	    { static_cast<uint32_t>(VectorBufferType::FSST_BUFFER), "FSST_BUFFER" },
-	    { static_cast<uint32_t>(VectorBufferType::STRUCT_BUFFER), "STRUCT_BUFFER" },
-	    { static_cast<uint32_t>(VectorBufferType::LIST_BUFFER), "LIST_BUFFER" },
-	    { static_cast<uint32_t>(VectorBufferType::MANAGED_BUFFER), "MANAGED_BUFFER" },
-	    { static_cast<uint32_t>(VectorBufferType::OPAQUE_BUFFER), "OPAQUE_BUFFER" },
-	    { static_cast<uint32_t>(VectorBufferType::ARRAY_BUFFER), "ARRAY_BUFFER" }
+		{ static_cast<uint32_t>(VectorBufferType::STANDARD_BUFFER), "STANDARD_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::DICTIONARY_BUFFER), "DICTIONARY_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::VECTOR_CHILD_BUFFER), "VECTOR_CHILD_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::STRING_BUFFER), "STRING_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::FSST_BUFFER), "FSST_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::STRUCT_BUFFER), "STRUCT_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::LIST_BUFFER), "LIST_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::MANAGED_BUFFER), "MANAGED_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::OPAQUE_BUFFER), "OPAQUE_BUFFER" },
+		{ static_cast<uint32_t>(VectorBufferType::ARRAY_BUFFER), "ARRAY_BUFFER" }
 	};
 	return values;
 }
@@ -3827,11 +3828,11 @@ VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetVectorTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(VectorType::FLAT_VECTOR), "FLAT_VECTOR" },
-	    { static_cast<uint32_t>(VectorType::FSST_VECTOR), "FSST_VECTOR" },
-	    { static_cast<uint32_t>(VectorType::CONSTANT_VECTOR), "CONSTANT_VECTOR" },
-	    { static_cast<uint32_t>(VectorType::DICTIONARY_VECTOR), "DICTIONARY_VECTOR" },
-	    { static_cast<uint32_t>(VectorType::SEQUENCE_VECTOR), "SEQUENCE_VECTOR" }
+		{ static_cast<uint32_t>(VectorType::FLAT_VECTOR), "FLAT_VECTOR" },
+		{ static_cast<uint32_t>(VectorType::FSST_VECTOR), "FSST_VECTOR" },
+		{ static_cast<uint32_t>(VectorType::CONSTANT_VECTOR), "CONSTANT_VECTOR" },
+		{ static_cast<uint32_t>(VectorType::DICTIONARY_VECTOR), "DICTIONARY_VECTOR" },
+		{ static_cast<uint32_t>(VectorType::SEQUENCE_VECTOR), "SEQUENCE_VECTOR" }
 	};
 	return values;
 }
@@ -3848,16 +3849,16 @@ VectorType EnumUtil::FromString<VectorType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetVerificationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(VerificationType::ORIGINAL), "ORIGINAL" },
-	    { static_cast<uint32_t>(VerificationType::COPIED), "COPIED" },
-	    { static_cast<uint32_t>(VerificationType::DESERIALIZED), "DESERIALIZED" },
-	    { static_cast<uint32_t>(VerificationType::PARSED), "PARSED" },
-	    { static_cast<uint32_t>(VerificationType::UNOPTIMIZED), "UNOPTIMIZED" },
-	    { static_cast<uint32_t>(VerificationType::NO_OPERATOR_CACHING), "NO_OPERATOR_CACHING" },
-	    { static_cast<uint32_t>(VerificationType::PREPARED), "PREPARED" },
-	    { static_cast<uint32_t>(VerificationType::EXTERNAL), "EXTERNAL" },
-	    { static_cast<uint32_t>(VerificationType::FETCH_ROW_AS_SCAN), "FETCH_ROW_AS_SCAN" },
-	    { static_cast<uint32_t>(VerificationType::INVALID), "INVALID" }
+		{ static_cast<uint32_t>(VerificationType::ORIGINAL), "ORIGINAL" },
+		{ static_cast<uint32_t>(VerificationType::COPIED), "COPIED" },
+		{ static_cast<uint32_t>(VerificationType::DESERIALIZED), "DESERIALIZED" },
+		{ static_cast<uint32_t>(VerificationType::PARSED), "PARSED" },
+		{ static_cast<uint32_t>(VerificationType::UNOPTIMIZED), "UNOPTIMIZED" },
+		{ static_cast<uint32_t>(VerificationType::NO_OPERATOR_CACHING), "NO_OPERATOR_CACHING" },
+		{ static_cast<uint32_t>(VerificationType::PREPARED), "PREPARED" },
+		{ static_cast<uint32_t>(VerificationType::EXTERNAL), "EXTERNAL" },
+		{ static_cast<uint32_t>(VerificationType::FETCH_ROW_AS_SCAN), "FETCH_ROW_AS_SCAN" },
+		{ static_cast<uint32_t>(VerificationType::INVALID), "INVALID" }
 	};
 	return values;
 }
@@ -3874,9 +3875,9 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetVerifyExistenceTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(VerifyExistenceType::APPEND), "APPEND" },
-	    { static_cast<uint32_t>(VerifyExistenceType::APPEND_FK), "APPEND_FK" },
-	    { static_cast<uint32_t>(VerifyExistenceType::DELETE_FK), "DELETE_FK" }
+		{ static_cast<uint32_t>(VerifyExistenceType::APPEND), "APPEND" },
+		{ static_cast<uint32_t>(VerifyExistenceType::APPEND_FK), "APPEND_FK" },
+		{ static_cast<uint32_t>(VerifyExistenceType::DELETE_FK), "DELETE_FK" }
 	};
 	return values;
 }
@@ -3893,33 +3894,33 @@ VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetWALTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(WALType::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(WALType::CREATE_TABLE), "CREATE_TABLE" },
-	    { static_cast<uint32_t>(WALType::DROP_TABLE), "DROP_TABLE" },
-	    { static_cast<uint32_t>(WALType::CREATE_SCHEMA), "CREATE_SCHEMA" },
-	    { static_cast<uint32_t>(WALType::DROP_SCHEMA), "DROP_SCHEMA" },
-	    { static_cast<uint32_t>(WALType::CREATE_VIEW), "CREATE_VIEW" },
-	    { static_cast<uint32_t>(WALType::DROP_VIEW), "DROP_VIEW" },
-	    { static_cast<uint32_t>(WALType::CREATE_SEQUENCE), "CREATE_SEQUENCE" },
-	    { static_cast<uint32_t>(WALType::DROP_SEQUENCE), "DROP_SEQUENCE" },
-	    { static_cast<uint32_t>(WALType::SEQUENCE_VALUE), "SEQUENCE_VALUE" },
-	    { static_cast<uint32_t>(WALType::CREATE_MACRO), "CREATE_MACRO" },
-	    { static_cast<uint32_t>(WALType::DROP_MACRO), "DROP_MACRO" },
-	    { static_cast<uint32_t>(WALType::CREATE_TYPE), "CREATE_TYPE" },
-	    { static_cast<uint32_t>(WALType::DROP_TYPE), "DROP_TYPE" },
-	    { static_cast<uint32_t>(WALType::ALTER_INFO), "ALTER_INFO" },
-	    { static_cast<uint32_t>(WALType::CREATE_TABLE_MACRO), "CREATE_TABLE_MACRO" },
-	    { static_cast<uint32_t>(WALType::DROP_TABLE_MACRO), "DROP_TABLE_MACRO" },
-	    { static_cast<uint32_t>(WALType::CREATE_INDEX), "CREATE_INDEX" },
-	    { static_cast<uint32_t>(WALType::DROP_INDEX), "DROP_INDEX" },
-	    { static_cast<uint32_t>(WALType::USE_TABLE), "USE_TABLE" },
-	    { static_cast<uint32_t>(WALType::INSERT_TUPLE), "INSERT_TUPLE" },
-	    { static_cast<uint32_t>(WALType::DELETE_TUPLE), "DELETE_TUPLE" },
-	    { static_cast<uint32_t>(WALType::UPDATE_TUPLE), "UPDATE_TUPLE" },
-	    { static_cast<uint32_t>(WALType::ROW_GROUP_DATA), "ROW_GROUP_DATA" },
-	    { static_cast<uint32_t>(WALType::WAL_VERSION), "WAL_VERSION" },
-	    { static_cast<uint32_t>(WALType::CHECKPOINT), "CHECKPOINT" },
-	    { static_cast<uint32_t>(WALType::WAL_FLUSH), "WAL_FLUSH" }
+		{ static_cast<uint32_t>(WALType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(WALType::CREATE_TABLE), "CREATE_TABLE" },
+		{ static_cast<uint32_t>(WALType::DROP_TABLE), "DROP_TABLE" },
+		{ static_cast<uint32_t>(WALType::CREATE_SCHEMA), "CREATE_SCHEMA" },
+		{ static_cast<uint32_t>(WALType::DROP_SCHEMA), "DROP_SCHEMA" },
+		{ static_cast<uint32_t>(WALType::CREATE_VIEW), "CREATE_VIEW" },
+		{ static_cast<uint32_t>(WALType::DROP_VIEW), "DROP_VIEW" },
+		{ static_cast<uint32_t>(WALType::CREATE_SEQUENCE), "CREATE_SEQUENCE" },
+		{ static_cast<uint32_t>(WALType::DROP_SEQUENCE), "DROP_SEQUENCE" },
+		{ static_cast<uint32_t>(WALType::SEQUENCE_VALUE), "SEQUENCE_VALUE" },
+		{ static_cast<uint32_t>(WALType::CREATE_MACRO), "CREATE_MACRO" },
+		{ static_cast<uint32_t>(WALType::DROP_MACRO), "DROP_MACRO" },
+		{ static_cast<uint32_t>(WALType::CREATE_TYPE), "CREATE_TYPE" },
+		{ static_cast<uint32_t>(WALType::DROP_TYPE), "DROP_TYPE" },
+		{ static_cast<uint32_t>(WALType::ALTER_INFO), "ALTER_INFO" },
+		{ static_cast<uint32_t>(WALType::CREATE_TABLE_MACRO), "CREATE_TABLE_MACRO" },
+		{ static_cast<uint32_t>(WALType::DROP_TABLE_MACRO), "DROP_TABLE_MACRO" },
+		{ static_cast<uint32_t>(WALType::CREATE_INDEX), "CREATE_INDEX" },
+		{ static_cast<uint32_t>(WALType::DROP_INDEX), "DROP_INDEX" },
+		{ static_cast<uint32_t>(WALType::USE_TABLE), "USE_TABLE" },
+		{ static_cast<uint32_t>(WALType::INSERT_TUPLE), "INSERT_TUPLE" },
+		{ static_cast<uint32_t>(WALType::DELETE_TUPLE), "DELETE_TUPLE" },
+		{ static_cast<uint32_t>(WALType::UPDATE_TUPLE), "UPDATE_TUPLE" },
+		{ static_cast<uint32_t>(WALType::ROW_GROUP_DATA), "ROW_GROUP_DATA" },
+		{ static_cast<uint32_t>(WALType::WAL_VERSION), "WAL_VERSION" },
+		{ static_cast<uint32_t>(WALType::CHECKPOINT), "CHECKPOINT" },
+		{ static_cast<uint32_t>(WALType::WAL_FLUSH), "WAL_FLUSH" }
 	};
 	return values;
 }
@@ -3936,9 +3937,9 @@ WALType EnumUtil::FromString<WALType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetWindowAggregationModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(WindowAggregationMode::WINDOW), "WINDOW" },
-	    { static_cast<uint32_t>(WindowAggregationMode::COMBINE), "COMBINE" },
-	    { static_cast<uint32_t>(WindowAggregationMode::SEPARATE), "SEPARATE" }
+		{ static_cast<uint32_t>(WindowAggregationMode::WINDOW), "WINDOW" },
+		{ static_cast<uint32_t>(WindowAggregationMode::COMBINE), "COMBINE" },
+		{ static_cast<uint32_t>(WindowAggregationMode::SEPARATE), "SEPARATE" }
 	};
 	return values;
 }
@@ -3955,15 +3956,15 @@ WindowAggregationMode EnumUtil::FromString<WindowAggregationMode>(const char *va
 
 const StringUtil::EnumStringLiteral *GetWindowBoundaryValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(WindowBoundary::INVALID), "INVALID" },
-	    { static_cast<uint32_t>(WindowBoundary::UNBOUNDED_PRECEDING), "UNBOUNDED_PRECEDING" },
-	    { static_cast<uint32_t>(WindowBoundary::UNBOUNDED_FOLLOWING), "UNBOUNDED_FOLLOWING" },
-	    { static_cast<uint32_t>(WindowBoundary::CURRENT_ROW_RANGE), "CURRENT_ROW_RANGE" },
-	    { static_cast<uint32_t>(WindowBoundary::CURRENT_ROW_ROWS), "CURRENT_ROW_ROWS" },
-	    { static_cast<uint32_t>(WindowBoundary::EXPR_PRECEDING_ROWS), "EXPR_PRECEDING_ROWS" },
-	    { static_cast<uint32_t>(WindowBoundary::EXPR_FOLLOWING_ROWS), "EXPR_FOLLOWING_ROWS" },
-	    { static_cast<uint32_t>(WindowBoundary::EXPR_PRECEDING_RANGE), "EXPR_PRECEDING_RANGE" },
-	    { static_cast<uint32_t>(WindowBoundary::EXPR_FOLLOWING_RANGE), "EXPR_FOLLOWING_RANGE" }
+		{ static_cast<uint32_t>(WindowBoundary::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(WindowBoundary::UNBOUNDED_PRECEDING), "UNBOUNDED_PRECEDING" },
+		{ static_cast<uint32_t>(WindowBoundary::UNBOUNDED_FOLLOWING), "UNBOUNDED_FOLLOWING" },
+		{ static_cast<uint32_t>(WindowBoundary::CURRENT_ROW_RANGE), "CURRENT_ROW_RANGE" },
+		{ static_cast<uint32_t>(WindowBoundary::CURRENT_ROW_ROWS), "CURRENT_ROW_ROWS" },
+		{ static_cast<uint32_t>(WindowBoundary::EXPR_PRECEDING_ROWS), "EXPR_PRECEDING_ROWS" },
+		{ static_cast<uint32_t>(WindowBoundary::EXPR_FOLLOWING_ROWS), "EXPR_FOLLOWING_ROWS" },
+		{ static_cast<uint32_t>(WindowBoundary::EXPR_PRECEDING_RANGE), "EXPR_PRECEDING_RANGE" },
+		{ static_cast<uint32_t>(WindowBoundary::EXPR_FOLLOWING_RANGE), "EXPR_FOLLOWING_RANGE" }
 	};
 	return values;
 }
@@ -3980,10 +3981,10 @@ WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetWindowExcludeModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-	    { static_cast<uint32_t>(WindowExcludeMode::NO_OTHER), "NO_OTHER" },
-	    { static_cast<uint32_t>(WindowExcludeMode::CURRENT_ROW), "CURRENT_ROW" },
-	    { static_cast<uint32_t>(WindowExcludeMode::GROUP), "GROUP" },
-	    { static_cast<uint32_t>(WindowExcludeMode::TIES), "TIES" }
+		{ static_cast<uint32_t>(WindowExcludeMode::NO_OTHER), "NO_OTHER" },
+		{ static_cast<uint32_t>(WindowExcludeMode::CURRENT_ROW), "CURRENT_ROW" },
+		{ static_cast<uint32_t>(WindowExcludeMode::GROUP), "GROUP" },
+		{ static_cast<uint32_t>(WindowExcludeMode::TIES), "TIES" }
 	};
 	return values;
 }

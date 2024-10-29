@@ -136,6 +136,8 @@ public:
 	                                                       const string &table_name, const ColumnList &columns);
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
 	unique_ptr<BoundConstraint> BindConstraint(Constraint &constraint, const string &table, const ColumnList &columns);
+	unique_ptr<BoundConstraint> BindUniqueConstraint(Constraint &constraint, const string &table,
+	                                                 const ColumnList &columns);
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
