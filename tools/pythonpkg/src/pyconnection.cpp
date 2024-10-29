@@ -1229,9 +1229,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 		bool auto_detect_as_bool = py::isinstance<py::bool_>(auto_detect);
 		bool auto_detect_value;
 		if (auto_detect_as_bool) {
-			auto_detect_value = py::bool_(header);
+			auto_detect_value = py::bool_(auto_detect);
 		} else if (auto_detect_as_int) {
-			if ((int)py::int_(header) != 0) {
+			if ((int)py::int_(auto_detect) != 0) {
 				throw InvalidInputException("read_csv only accepts 0 if 'auto_detect' is given as an integer");
 			}
 			auto_detect_value = true;
