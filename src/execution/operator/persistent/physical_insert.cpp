@@ -34,7 +34,7 @@ PhysicalInsert::PhysicalInsert(
       return_chunk(return_chunk), parallel(parallel), action_type(action_type),
       set_expressions(std::move(set_expressions)), set_columns(std::move(set_columns)), set_types(std::move(set_types)),
       on_conflict_condition(std::move(on_conflict_condition_p)), do_update_condition(std::move(do_update_condition_p)),
-      conflict_target(std::move(conflict_target_p)), columns_to_fetch(std::move(columns_to_fetch_p)) {
+      conflict_target(std::move(conflict_target_p)){
 
 	if (action_type == OnConflictAction::THROW) {
 		return;
@@ -44,11 +44,12 @@ PhysicalInsert::PhysicalInsert(
 
 	// One or more columns are referenced from the existing table,
 	// we use the 'insert_types' to figure out which types these columns have
-	types_to_fetch = vector<LogicalType>(columns_to_fetch.size(), LogicalType::SQLNULL);
-	for (idx_t i = 0; i < columns_to_fetch.size(); i++) {
-		auto &id = columns_to_fetch[i];
+	types_to_fetch = vector<LogicalType>(columns_to_fetch_p.size(), LogicalType::SQLNULL);
+	for (idx_t i = 0; i < columns_to_fetch_p.size(); i++) {
+		auto &id = columns_to_fetch_p[i];
 		D_ASSERT(id < insert_types.size());
 		types_to_fetch[i] = insert_types[id];
+		columns_to_fetch.emplace_back(id);
 	}
 }
 

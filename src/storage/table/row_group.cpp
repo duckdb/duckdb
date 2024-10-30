@@ -99,6 +99,10 @@ idx_t RowGroup::GetRowGroupSize() const {
 	return collection.get().GetRowGroupSize();
 }
 
+ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
+	return GetColumn(c.GetPrimaryIndex());
+}
+
 ColumnData &RowGroup::GetColumn(storage_t c) {
 	D_ASSERT(c < columns.size());
 	if (!is_loaded) {
@@ -186,10 +190,11 @@ void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
 	column_scans = make_unsafe_uniq_array<ColumnScanState>(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
+		if (column_ids[i].IsRowIdColumn()) {
 			continue;
 		}
-		column_scans[i].Initialize(types[column_ids[i]], &GetOptions());
+		auto col_id = column_ids[i].GetPrimaryIndex();
+		column_scans[i].Initialize(types[col_id], &GetOptions());
 	}
 }
 
@@ -212,7 +217,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
-		if (column != COLUMN_IDENTIFIER_ROW_ID) {
+		if (!column.IsRowIdColumn()) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
 			state.column_scans[i].scan_options = &state.GetOptions();
@@ -239,7 +244,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state) {
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
-		if (column != COLUMN_IDENTIFIER_ROW_ID) {
+		if (!column.IsRowIdColumn()) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScan(state.column_scans[i]);
 			state.column_scans[i].scan_options = &state.GetOptions();
@@ -368,10 +373,9 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
-		if (column == COLUMN_IDENTIFIER_ROW_ID) {
+		if (column.IsRowIdColumn()) {
 			continue;
 		}
-		D_ASSERT(column < columns.size());
 		GetColumn(column).Skip(state.column_scans[i]);
 	}
 }
@@ -536,7 +540,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			PrefetchState prefetch_state;
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
-				if (column != COLUMN_IDENTIFIER_ROW_ID) {
+				if (!column.IsRowIdColumn()) {
 					GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
 				}
 			}
@@ -549,7 +553,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			// scan all vectors completely: full scan without deletions or table filters
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
-				if (column == COLUMN_IDENTIFIER_ROW_ID) {
+				if (column.IsRowIdColumn()) {
 					// scan row id
 					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
 					result.data[i].Sequence(UnsafeNumericCast<int64_t>(this->start + current_row), 1, count);
@@ -604,8 +608,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				result.Reset();
 				// skip this vector in all the scans that were not scanned yet
 				for (idx_t i = 0; i < column_ids.size(); i++) {
-					auto col_idx = column_ids[i];
-					if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+					auto &col_idx = column_ids[i];
+					if (col_idx.IsRowIdColumn()) {
 						continue;
 					}
 					if (has_filters && filter_info.ColumnHasFilters(i)) {
@@ -623,8 +627,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					// column has already been scanned as part of the filtering process
 					continue;
 				}
-				auto column = column_ids[i];
-				if (column == COLUMN_IDENTIFIER_ROW_ID) {
+				auto &column = column_ids[i];
+				if (column.IsRowIdColumn()) {
 					D_ASSERT(result.data[i].GetType().InternalType() == PhysicalType::INT64);
 					result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
 					auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
@@ -765,14 +769,14 @@ bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
 	return vinfo->Fetch(transaction, row);
 }
 
-void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<column_t> &column_ids,
+void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
                         row_t row_id, DataChunk &result, idx_t result_idx) {
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		auto column = column_ids[col_idx];
+		auto &column = column_ids[col_idx];
 		auto &result_vector = result.data[col_idx];
 		D_ASSERT(result_vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		D_ASSERT(!FlatVector::IsNull(result_vector, result_idx));
-		if (column == COLUMN_IDENTIFIER_ROW_ID) {
+		if (column.IsRowIdColumn()) {
 			// row id column: fill in the row ids
 			D_ASSERT(result_vector.GetType().InternalType() == PhysicalType::INT64);
 			result_vector.SetVectorType(VectorType::FLAT_VECTOR);

@@ -65,9 +65,9 @@ public:
 			DataChunk scan_chunk;
 			scan_chunk.Initialize(context, types);
 
-			vector<column_t> column_ids;
+			vector<StorageIndex> column_ids;
 			for (idx_t i = 0; i < types.size(); i++) {
-				column_ids.push_back(i);
+				column_ids.emplace_back(i);
 			}
 			for (auto &collection : current_collections) {
 				if (!collection) {

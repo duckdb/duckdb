@@ -711,12 +711,12 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
 
-	vector<column_t> storage_oids;
+	vector<StorageIndex> storage_oids;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
-		storage_oids.push_back(columns.LogicalToPhysical(bound_columns[i]).index);
+		storage_oids.emplace_back(columns.LogicalToPhysical(bound_columns[i]).index);
 	}
 	if (storage_oids.empty()) {
-		storage_oids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+		storage_oids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 
 	auto new_storage =

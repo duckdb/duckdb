@@ -12,6 +12,7 @@
 #include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 
@@ -58,20 +59,20 @@ public:
 	RowGroup *GetRowGroup(int64_t index);
 	void Verify();
 
-	void InitializeScan(CollectionScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters);
+	void InitializeScan(CollectionScanState &state, const vector<StorageIndex> &column_ids, TableFilterSet *table_filters);
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
-	void InitializeScanWithOffset(CollectionScanState &state, const vector<column_t> &column_ids, idx_t start_row,
+	void InitializeScanWithOffset(CollectionScanState &state, const vector<StorageIndex> &column_ids, idx_t start_row,
 	                              idx_t end_row);
 	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroupCollection &collection,
 	                                     RowGroup &row_group, idx_t vector_index, idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
-	bool Scan(DuckTransaction &transaction, const vector<column_t> &column_ids,
+	bool Scan(DuckTransaction &transaction, const vector<StorageIndex> &column_ids,
 	          const std::function<bool(DataChunk &chunk)> &fun);
 	bool Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun);
 
-	void Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
+	void Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
 
 	//! Initialize an append of a variable number of rows. FinalizeAppend must be called after appending is done.
@@ -116,7 +117,7 @@ public:
 	                                         ExpressionExecutor &default_executor);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
-	                                         vector<column_t> bound_columns, Expression &cast_expr);
+	                                         vector<StorageIndex> bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 	void CopyStats(TableStatistics &stats);
