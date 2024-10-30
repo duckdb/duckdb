@@ -3660,6 +3660,54 @@ TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value)
 	return static_cast<TaskExecutionResult>(StringUtil::StringToEnum(GetTaskExecutionResultValues(), 4, "TaskExecutionResult", value));
 }
 
+const StringUtil::EnumStringLiteral *GetTemporaryBufferSizeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TemporaryBufferSize::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S32K), "S32K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S64K), "S64K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S96K), "S96K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S128K), "S128K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S160K), "S160K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S192K), "S192K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S224K), "S224K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::DEFAULT), "DEFAULT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value) {
+	return StringUtil::EnumToString(GetTemporaryBufferSizeValues(), 9, "TemporaryBufferSize", static_cast<uint32_t>(value));
+}
+
+template<>
+TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value) {
+	return static_cast<TemporaryBufferSize>(StringUtil::StringToEnum(GetTemporaryBufferSizeValues(), 9, "TemporaryBufferSize", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTemporaryCompressionLevelValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_MINUS_FIVE), "ZSTD_MINUS_FIVE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_MINUS_THREE), "ZSTD_MINUS_THREE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_MINUS_ONE), "ZSTD_MINUS_ONE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::UNCOMPRESSED), "UNCOMPRESSED" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_ONE), "ZSTD_ONE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_THREE), "ZSTD_THREE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_FIVE), "ZSTD_FIVE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TemporaryCompressionLevel>(TemporaryCompressionLevel value) {
+	return StringUtil::EnumToString(GetTemporaryCompressionLevelValues(), 7, "TemporaryCompressionLevel", static_cast<uint32_t>(value));
+}
+
+template<>
+TemporaryCompressionLevel EnumUtil::FromString<TemporaryCompressionLevel>(const char *value) {
+	return static_cast<TemporaryCompressionLevel>(StringUtil::StringToEnum(GetTemporaryCompressionLevelValues(), 7, "TemporaryCompressionLevel", value));
+}
+
 const StringUtil::EnumStringLiteral *GetTimestampCastResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TimestampCastResult::SUCCESS), "SUCCESS" },
@@ -3667,112 +3715,6 @@ const StringUtil::EnumStringLiteral *GetTimestampCastResultValues() {
 		{ static_cast<uint32_t>(TimestampCastResult::ERROR_NON_UTC_TIMEZONE), "ERROR_NON_UTC_TIMEZONE" }
 	};
 	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value) {
-	switch(value) {
-	case TemporaryBufferSize::INVALID:
-		return "INVALID";
-	case TemporaryBufferSize::S32K:
-		return "S32K";
-	case TemporaryBufferSize::S64K:
-		return "S64K";
-	case TemporaryBufferSize::S96K:
-		return "S96K";
-	case TemporaryBufferSize::S128K:
-		return "S128K";
-	case TemporaryBufferSize::S160K:
-		return "S160K";
-	case TemporaryBufferSize::S192K:
-		return "S192K";
-	case TemporaryBufferSize::S224K:
-		return "S224K";
-	case TemporaryBufferSize::DEFAULT:
-		return "DEFAULT";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TemporaryBufferSize>", value));
-	}
-}
-
-template<>
-TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value) {
-	if (StringUtil::Equals(value, "INVALID")) {
-		return TemporaryBufferSize::INVALID;
-	}
-	if (StringUtil::Equals(value, "S32K")) {
-		return TemporaryBufferSize::S32K;
-	}
-	if (StringUtil::Equals(value, "S64K")) {
-		return TemporaryBufferSize::S64K;
-	}
-	if (StringUtil::Equals(value, "S96K")) {
-		return TemporaryBufferSize::S96K;
-	}
-	if (StringUtil::Equals(value, "S128K")) {
-		return TemporaryBufferSize::S128K;
-	}
-	if (StringUtil::Equals(value, "S160K")) {
-		return TemporaryBufferSize::S160K;
-	}
-	if (StringUtil::Equals(value, "S192K")) {
-		return TemporaryBufferSize::S192K;
-	}
-	if (StringUtil::Equals(value, "S224K")) {
-		return TemporaryBufferSize::S224K;
-	}
-	if (StringUtil::Equals(value, "DEFAULT")) {
-		return TemporaryBufferSize::DEFAULT;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TemporaryBufferSize>", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<TemporaryCompressionLevel>(TemporaryCompressionLevel value) {
-	switch(value) {
-	case TemporaryCompressionLevel::ZSTD_MINUS_FIVE:
-		return "ZSTD_MINUS_FIVE";
-	case TemporaryCompressionLevel::ZSTD_MINUS_THREE:
-		return "ZSTD_MINUS_THREE";
-	case TemporaryCompressionLevel::ZSTD_MINUS_ONE:
-		return "ZSTD_MINUS_ONE";
-	case TemporaryCompressionLevel::UNCOMPRESSED:
-		return "UNCOMPRESSED";
-	case TemporaryCompressionLevel::ZSTD_ONE:
-		return "ZSTD_ONE";
-	case TemporaryCompressionLevel::ZSTD_THREE:
-		return "ZSTD_THREE";
-	case TemporaryCompressionLevel::ZSTD_FIVE:
-		return "ZSTD_FIVE";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<TemporaryCompressionLevel>", value));
-	}
-}
-
-template<>
-TemporaryCompressionLevel EnumUtil::FromString<TemporaryCompressionLevel>(const char *value) {
-	if (StringUtil::Equals(value, "ZSTD_MINUS_FIVE")) {
-		return TemporaryCompressionLevel::ZSTD_MINUS_FIVE;
-	}
-	if (StringUtil::Equals(value, "ZSTD_MINUS_THREE")) {
-		return TemporaryCompressionLevel::ZSTD_MINUS_THREE;
-	}
-	if (StringUtil::Equals(value, "ZSTD_MINUS_ONE")) {
-		return TemporaryCompressionLevel::ZSTD_MINUS_ONE;
-	}
-	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
-		return TemporaryCompressionLevel::UNCOMPRESSED;
-	}
-	if (StringUtil::Equals(value, "ZSTD_ONE")) {
-		return TemporaryCompressionLevel::ZSTD_ONE;
-	}
-	if (StringUtil::Equals(value, "ZSTD_THREE")) {
-		return TemporaryCompressionLevel::ZSTD_THREE;
-	}
-	if (StringUtil::Equals(value, "ZSTD_FIVE")) {
-		return TemporaryCompressionLevel::ZSTD_FIVE;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<TemporaryCompressionLevel>", value));
 }
 
 template<>
