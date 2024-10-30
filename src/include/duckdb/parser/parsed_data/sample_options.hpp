@@ -23,7 +23,7 @@ string SampleMethodToString(SampleMethod method);
 class SampleOptions {
 
 public:
-	explicit SampleOptions(int64_t seed = -1);
+	explicit SampleOptions(int64_t seed_ = -1);
 
 	Value sample_size;
 	bool is_percentage;

@@ -9,7 +9,10 @@ string SampleMethodToString(SampleMethod method) {
 	return EnumUtil::ToString(method);
 }
 
-SampleOptions::SampleOptions(int64_t seed) : seed(static_cast<idx_t>(seed)) {
+SampleOptions::SampleOptions(int64_t seed_) {
+	if (seed_ >= 0) {
+		seed = static_cast<idx_t>(seed_);
+	}
 	sample_size = 0;
 	is_percentage = false;
 	method = SampleMethod::INVALID;
