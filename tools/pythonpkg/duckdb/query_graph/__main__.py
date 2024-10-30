@@ -41,9 +41,37 @@ qgraph_css = """
 }
 .tf-nc {
 	position: relative;
-	width: 250px;
+	width: 180px;
 	text-align: center;
 	background-color: #fff100;
+}
+.custom-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip-text {
+  visibility: hidden;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  padding: 0px;
+  border-radius: 1px;
+  
+  /* Positioning */
+  position: absolute;
+  z-index: 1;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  
+  /* Tooltip Arrow */
+  width: 400px;
+}
+
+.custom-tooltip:hover .tooltip-text {
+  visibility: visible;
 }
 """
 
@@ -121,18 +149,19 @@ def get_pink_shade_hex(fraction: float):
     # Return as hexadecimal color code
     return f"#{r:02x}{g:02x}{b:02x}"
 
-def get_node_body(name: str, result: str, cpu_time: float, cardinality: float, extra_info: str) -> str:
+def get_node_body(name: str, result: str, cpu_time: float, card: int, est: int, width: int, extra_info: str) -> str:
     node_style = f"background-color: {get_pink_shade_hex(float(result)/cpu_time)};"
 
-    body = f"<span class=\"tf-nc\" style=\"{node_style}\">"
+    body = f"<span class=\"tf-nc custom-tooltip\" style=\"{node_style}\">"
     body += "<div class=\"node-body\">"
-    new_name = name.replace("_", " ")
+    new_name = "BRIDGE" if (name == "INVALID") else name.replace("_", " ")
     formatted_num = f"{float(result):.4f}"
-    body += f"<p> <b>{new_name} ({formatted_num}s) </b></p>"
-    body += f"<p> ---------------- </p>"
-    body += f"<p> {extra_info} </p>"
-    body += f"<p> ---------------- </p>"
-    body += f"<p> cardinality = {cardinality} </p>"
+    body += f"<p><b>{new_name}</b> </p><p>time: {formatted_num} seconds</p>"
+    body += f"<span class=\"tooltip-text\"> {extra_info} </span>"
+    if (width > 0):
+        body += f"<p>cardinality: {card}</p>"
+        body += f"<p>estimate: {est}</p>"
+        body += f"<p>width: {width} bytes</p>"
     # TODO: Expand on timing. Usually available from a detailed profiling
     body += "</div>"
     body += "</span>"
@@ -144,8 +173,15 @@ def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:
     node_suffix_html = "</li>"
 
     extra_info = ""
+    estimate = 0
     for key in json_graph['extra_info']:
-        extra_info += f"{key}: {json_graph['extra_info'][key]} <br>"
+        value = json_graph['extra_info'][key]
+        if (key == "Estimated Cardinality"):
+            estimate = int(value)
+        else:
+            extra_info += f"{key}: {value} <br>"
+    cardinality = json_graph["operator_cardinality"]
+    width = int(json_graph["result_set_size"]/max(1,cardinality))
 
     # get rid of some typically long names
     extra_info = re.sub(r"__internal_\s*", "__", extra_info)
@@ -153,8 +189,7 @@ def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:
 
     node_body = get_node_body(json_graph["operator_type"],
                               json_graph["operator_timing"], 
-                              cpu_time,
-                              json_graph["operator_cardinality"],
+                              cpu_time, cardinality, estimate, width,
                               re.sub(r",\s*", ", ", extra_info))
 
     children_html = ""
