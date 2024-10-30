@@ -405,38 +405,20 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	WriteAheadLogSerializer serializer(*this, WALType::ALTER_INFO);
 	serializer.WriteProperty(101, "info", &info);
 
-	if (info.type != AlterType::ALTER_TABLE) {
+	if (!info.IsAddPrimaryKey()) {
 		return serializer.End();
 	}
 
 	auto &table_info = info.Cast<AlterTableInfo>();
-	if (table_info.alter_table_type != AlterTableType::ADD_CONSTRAINT) {
-		return serializer.End();
-	}
-
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	if (constraint_info.constraint->type != ConstraintType::UNIQUE) {
-		return serializer.End();
-	}
-
-	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
-	if (!unique_info.IsPrimaryKey()) {
-		return serializer.End();
-	}
+	auto &unique = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	auto &table_entry = entry.Cast<DuckTableEntry>();
 	auto &parent = table_entry.Parent().Cast<DuckTableEntry>();
 	auto &parent_info = parent.GetStorage().GetDataTableInfo();
 	auto &list = parent_info->GetIndexes();
 
-	// TODO.
-	auto name = EnumUtil::ToString(IndexConstraintType::PRIMARY);
-	string column_names;
-	for (const auto &col : unique_info.GetColumnNames()) {
-		column_names += "_" + col;
-	}
-	name = name + "_" + parent.name + column_names;
-
+	auto name = unique.GetName(parent.name);
 	SerializeIndex(database, serializer, list, name);
 	serializer.End();
 }

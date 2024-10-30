@@ -426,8 +426,6 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
-	// FIXME: Unify this code with ReplayCreateIndex.
-
 	auto &table =
 	    catalog.GetEntry<TableCatalogEntry>(context, table_info.schema, table_info.name).Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
@@ -463,6 +461,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
 	auto index_instance = index_type->create_instance(input);
 	storage.AddIndex(std::move(index_instance));
+
 	catalog.Alter(context, alter_info);
 }
 
@@ -664,7 +663,6 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 	// Bind the parsed expressions to create unbound expressions.
 	vector<unique_ptr<Expression>> unbound_expressions;
-	unbound_expressions.reserve(index.parsed_expressions.size());
 	for (auto &expr : index.parsed_expressions) {
 		auto copy = expr->Copy();
 		unbound_expressions.push_back(idx_binder.Bind(copy));
@@ -673,7 +671,6 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto &storage = table.GetStorage();
 	CreateIndexInput input(TableIOManager::Get(storage), storage.db, info.constraint_type, info.index_name,
 	                       info.column_ids, unbound_expressions, index_info, info.options);
-
 	auto index_instance = index_type->create_instance(input);
 	storage.AddIndex(std::move(index_instance));
 }
