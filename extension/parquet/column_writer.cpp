@@ -1073,8 +1073,9 @@ class StandardWriterPageState : public ColumnWriterPageState {
 public:
 	explicit StandardWriterPageState(const idx_t total_value_count, Encoding::type encoding_p,
 	                                 const unordered_map<T, uint32_t> &dictionary_p)
-	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count),  dictionary(dictionary_p), dict_written_value(false),
-	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(dict_bit_width) {
+	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dictionary(dictionary_p),
+	      dict_written_value(false), dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())),
+	      dict_encoder(dict_bit_width) {
 	}
 	duckdb_parquet::Encoding::type encoding;
 
@@ -1085,7 +1086,6 @@ public:
 	bool dict_written_value;
 	uint32_t dict_bit_width;
 	RleBpEncoder dict_encoder;
-
 };
 
 namespace dbp_encoder {
@@ -1176,7 +1176,7 @@ public:
 			page_state.dbp_encoder.FinishWrite(temp_writer);
 			break;
 		case Encoding::RLE_DICTIONARY:
-			D_ASSERT (page_state.dict_bit_width != 0);
+			D_ASSERT(page_state.dict_bit_width != 0);
 			if (!page_state.dict_written_value) {
 				// all values are null
 				// just write the bit width
