@@ -412,23 +412,7 @@ void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, Ind
 void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
-
-	if (alter_info.type != AlterType::ALTER_TABLE) {
-		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
-	}
-
-	auto &table_info = alter_info.Cast<AlterTableInfo>();
-	if (table_info.alter_table_type != AlterTableType::ADD_CONSTRAINT) {
-		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
-	}
-
-	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	if (constraint_info.constraint->type != ConstraintType::UNIQUE) {
-		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
-	}
-
-	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
-	if (!unique_info.IsPrimaryKey()) {
+	if (!alter_info.IsAddPrimaryKey()) {
 		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
 	}
 
@@ -437,6 +421,10 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	if (DeserializeOnly()) {
 		return;
 	}
+
+	auto &table_info = alter_info.Cast<AlterTableInfo>();
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	// FIXME: Unify this code with ReplayCreateIndex.
 

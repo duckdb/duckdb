@@ -455,8 +455,8 @@ AddConstraintInfo::AddConstraintInfo() : AlterTableInfo(AlterTableType::ADD_CONS
 
 AddConstraintInfo::AddConstraintInfo(AlterEntryData data, unique_ptr<Constraint> constraint_p)
     : AlterTableInfo(AlterTableType::ADD_CONSTRAINT, std::move(data)), constraint(std::move(constraint_p)) {
-	D_ASSERT(1);
 }
+
 AddConstraintInfo::~AddConstraintInfo() {
 }
 

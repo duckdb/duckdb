@@ -27,7 +27,8 @@ public:
 public:
 	PhysicalCreateARTIndex(LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
 	                       unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
-	                       idx_t estimated_cardinality, const bool sorted, unique_ptr<AlterInfo> alter_info = nullptr);
+	                       idx_t estimated_cardinality, const bool sorted,
+	                       unique_ptr<AlterTableInfo> alter_table_info = nullptr);
 
 	//! The table to create the index for.
 	DuckTableEntry &table;
@@ -35,13 +36,12 @@ public:
 	vector<column_t> storage_ids;
 	//! Index creation information.
 	unique_ptr<CreateIndexInfo> info;
-	//! Unbound expressions to be used in the optimizer.
-	//! FIXME: Do we need these?
+	//! Unbound expressions of the indexed columns.
 	vector<unique_ptr<Expression>> unbound_expressions;
 	//! True, if the pipeline sorts the index data prior to index creation.
 	const bool sorted;
 	//! Alter table information for adding indexes.
-	unique_ptr<AlterInfo> alter_info;
+	unique_ptr<AlterTableInfo> alter_table_info;
 
 public:
 	//! Source interface, NOP for this operator

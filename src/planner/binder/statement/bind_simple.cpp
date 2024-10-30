@@ -6,7 +6,6 @@
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
@@ -17,34 +16,9 @@
 
 namespace duckdb {
 
-bool UseLogicalCreateIndex(AlterInfo &alter_info) {
-	if (alter_info.type != AlterType::ALTER_TABLE) {
-		return false;
-	}
-
-	auto &table_info = alter_info.Cast<AlterTableInfo>();
-	if (table_info.alter_table_type != AlterTableType::ADD_CONSTRAINT) {
-		return false;
-	}
-
-	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	if (constraint_info.constraint->type != ConstraintType::UNIQUE) {
-		return false;
-	}
-
-	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
-	if (!unique_info.IsPrimaryKey()) {
-		return false;
-	}
-
-	return true;
-}
-
 BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry,
                                          unique_ptr<AlterInfo> alter_info) {
-	// FIXME: This function overlaps with Bind(CreateStatement &stmt), CatalogType::INDEX_ENTRY.
 	auto &table_info = alter_info->Cast<AlterTableInfo>();
-
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 	auto &table = entry.Cast<DuckTableEntry>();
 	auto &column_list = table.GetColumns();
@@ -71,50 +45,20 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	D_ASSERT(!create_index_info->index_name.empty());
 
 	// Plan the table scan.
-	auto table_ref = make_uniq<BaseTableRef>();
-	table_ref->catalog_name = table_info.catalog;
-	table_ref->schema_name = table_info.schema;
-	table_ref->table_name = table_info.name;
-
+	TableDescription table_description(table_info.catalog, table_info.schema, table_info.name);
+	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("can only add an index to a base table");
 	}
 	auto plan = CreatePlan(*bound_table);
 	auto &get = plan->Cast<LogicalGet>();
+	get.names = column_list.GetColumnNames();
 
 	IndexBinder index_binder(*this, context);
-	auto &dependencies = create_index_info->dependencies;
-	auto &catalog = Catalog::GetCatalog(context, create_index_info->catalog);
-	index_binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-		if (&catalog != &entry.ParentCatalog()) {
-			return;
-		}
-		dependencies.AddDependency(entry);
-	});
-
-	vector<unique_ptr<Expression>> expressions;
-	for (auto &expr : create_index_info->expressions) {
-		expressions.push_back(index_binder.Bind(expr));
-	}
-
-	auto &column_ids = get.GetColumnIds();
-	for (auto &column_id : column_ids) {
-		create_index_info->scan_types.push_back(get.returned_types[column_id]);
-	}
-
-	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
-	create_index_info->names = column_list.GetColumnNames();
-	create_index_info->column_ids = column_ids;
-	create_index_info->schema = table.schema.name;
-
-	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
-	bind_data.is_create_index = true;
-	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
-
-	result.plan = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table,
-	                                            unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info)));
-	result.plan->children.push_back(std::move(plan));
+	auto op = index_binder.BindCreateIndex(context, std::move(create_index_info), table, std::move(plan),
+	                                       unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info)));
+	result.plan = std::move(op);
 	return std::move(result);
 }
 
@@ -122,7 +66,6 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 
 	optional_ptr<CatalogEntry> entry;
@@ -156,7 +99,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	stmt.info->catalog = catalog.GetName();
 	stmt.info->schema = entry->ParentSchema().name;
 
-	if (!UseLogicalCreateIndex(*stmt.info)) {
+	if (!stmt.info->IsAddPrimaryKey()) {
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 		return result;
 	}

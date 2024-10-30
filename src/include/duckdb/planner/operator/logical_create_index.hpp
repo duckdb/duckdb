@@ -28,8 +28,7 @@ public:
 	TableCatalogEntry &table;
 	// Alter table information.
 	unique_ptr<AlterTableInfo> alter_table_info;
-	//! Unbound expressions to be used in the optimizer.
-	//! FIXME: Do we need these?
+	//! Unbound expressions of the indexed columns.
 	vector<unique_ptr<Expression>> unbound_expressions;
 
 public:
