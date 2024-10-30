@@ -239,31 +239,37 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			return;
 		}
 	}
-	for (idx_t i = 0; i < null_str_count; i++) {
-		if (size == null_str_size[i]) {
-			if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
-				if (IsValueNull(null_str_ptr[i], value_ptr, size)) {
-					bool empty = false;
-					if (chunk_col_id < state_machine.options.force_not_null.size()) {
-						empty = state_machine.options.force_not_null[chunk_col_id];
-					}
-					if (empty) {
-						if (parse_types[chunk_col_id].type_id != LogicalTypeId::VARCHAR) {
-							// If it is not a varchar, empty values are not accepted, we must error.
-							current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
-						}
-						static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
-					} else {
-						if (chunk_col_id == number_of_columns) {
-							// We check for a weird case, where we ignore an extra value, if it is a null value
-							return;
-						}
-						validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
-					}
-					cur_col_id++;
-					chunk_col_id++;
-					return;
+
+	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
+		for (idx_t i = 0; i < null_str_count; i++) {
+			bool isNull = false;
+			if (quoted && size == null_str_size[i]) {
+				isNull = IsValueNull(null_str_ptr[i], value_ptr, size);
+			} else if (escaped && !quoted && size == 1 && null_str_size[i] == 2) {
+				isNull = null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue() &&
+					null_str_ptr[i][1] == value_ptr[0];
+			}
+			if (isNull) {
+				bool empty = false;
+				if (chunk_col_id < state_machine.options.force_not_null.size()) {
+					empty = state_machine.options.force_not_null[chunk_col_id];
 				}
+				if (empty) {
+					if (parse_types[chunk_col_id].type_id != LogicalTypeId::VARCHAR) {
+						// If it is not a varchar, empty values are not accepted, we must error.
+						current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
+					}
+					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
+				} else {
+					if (chunk_col_id == number_of_columns) {
+						// We check for a weird case, where we ignore an extra value, if it is a null value
+						return;
+					}
+					validity_mask[chunk_col_id]->SetInvalid(static_cast<idx_t>(number_of_rows));
+				}
+				cur_col_id++;
+				chunk_col_id++;
+				return;
 			}
 		}
 	}
