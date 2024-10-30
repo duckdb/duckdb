@@ -31,6 +31,7 @@ struct SampleOptions {
 	static bool Equals(SampleOptions *a, SampleOptions *b);
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<SampleOptions> Deserialize(Deserializer &deserializer);
+	int64_t GetSeed() const;
 };
 
 } // namespace duckdb
