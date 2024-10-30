@@ -811,7 +811,7 @@
       ,
       {"id": 139,
         "name": "encoding",
-        "type": "CSVEncoding"
+        "type": "string"
       }
     ],
     "pointer_type": "none"

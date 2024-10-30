@@ -7,10 +7,10 @@
 
 namespace duckdb {
 
-CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
-                             const string &path_p, const CSVReaderOptions &options)
+CSVFileHandle::CSVFileHandle(DBConfig &config, unique_ptr<FileHandle> file_handle_p, const string &path_p,
+                             const CSVReaderOptions &options)
     : compression_type(options.compression), file_handle(std::move(file_handle_p)),
-      decoder(options.encoding, options.buffer_size), path(path_p) {
+      decoder(config, options.encoding, options.buffer_size), path(path_p) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
@@ -27,10 +27,10 @@ unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &
 	return file_handle;
 }
 
-unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
-                                                  const CSVReaderOptions &options) {
+unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(DBConfig &config, FileSystem &fs, Allocator &allocator,
+                                                  const string &path, const CSVReaderOptions &options) {
 	auto file_handle = OpenFileHandle(fs, allocator, path, options.compression);
-	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, options);
+	return make_uniq<CSVFileHandle>(config, std::move(file_handle), path, options);
 }
 
 double CSVFileHandle::GetProgress() const {
@@ -77,12 +77,11 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	requested_bytes += nr_bytes;
 	// if this is a plain file source OR we can seek we are not caching anything
 	idx_t bytes_read = 0;
-	if (decoder.IsUTF8()) {
+	if (decoder.encoding_name == "utf-8") {
 		bytes_read = static_cast<idx_t>(file_handle->Read(buffer, nr_bytes));
 	} else {
 		bytes_read = decoder.Decode(*file_handle, static_cast<char *>(buffer), nr_bytes);
 	}
-
 	if (!finished) {
 		finished = bytes_read == 0;
 	}

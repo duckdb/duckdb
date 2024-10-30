@@ -175,25 +175,6 @@ bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
 
-void CSVReaderOptions::SetEncoding(const string &encoding_value) {
-	auto encoding_string = StringUtil::Lower(encoding_value);
-	if (encoding_value == "utf-8" || encoding_value == "utf8") {
-		encoding = CSVEncoding::UTF_8;
-	} else if (encoding_value == "utf-16" || encoding_value == "utf16") {
-		encoding = CSVEncoding::UTF_16;
-	} else if (encoding_value == "latin-1" || encoding_value == "latin1") {
-		encoding = CSVEncoding::LATIN_1;
-	} else {
-		std::ostringstream error;
-		error << "The CSV Reader does not support the encoding: \"" << encoding_value << "\"\n";
-		error << "The currently supported encodings are: " << '\n';
-		error << "* utf-8 " << '\n';
-		error << "* utf-16 " << '\n';
-		error << "* latin-1 " << '\n';
-		throw InvalidInputException(error.str());
-	}
-}
-
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
@@ -292,8 +273,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		}
 		rejects_limit = NumericCast<idx_t>(limit);
 	} else if (loption == "encoding") {
-		string encoding = ParseString(value, loption);
-		SetEncoding(encoding);
+		encoding = ParseString(value, loption);
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}

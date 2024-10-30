@@ -74,8 +74,6 @@ enum class BlockState : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
 
-enum class CSVEncoding : uint8_t;
-
 enum class CSVState : uint8_t;
 
 enum class CTEMaterialize : uint8_t;
@@ -425,9 +423,6 @@ const char* EnumUtil::ToChars<BlockState>(BlockState value);
 
 template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
-
-template<>
-const char* EnumUtil::ToChars<CSVEncoding>(CSVEncoding value);
 
 template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value);
@@ -921,9 +916,6 @@ BlockState EnumUtil::FromString<BlockState>(const char *value);
 
 template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
-
-template<>
-CSVEncoding EnumUtil::FromString<CSVEncoding>(const char *value);
 
 template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value);

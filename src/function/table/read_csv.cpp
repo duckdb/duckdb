@@ -33,7 +33,8 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, const CSVRea
                                            ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto &allocator = BufferAllocator::Get(context);
-	return CSVFileHandle::OpenFile(fs, allocator, file_path, options);
+	auto &db_config = DBConfig::GetConfig(context);
+	return CSVFileHandle::OpenFile(db_config, fs, allocator, file_path, options);
 }
 
 ReadCSVData::ReadCSVData() {

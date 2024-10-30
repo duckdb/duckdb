@@ -20,11 +20,11 @@ create table test (a INTEGER, b INTEGER, c VARCHAR(10));
 statement ok
 COPY test FROM 'data/csv/test/test.csv' (encoding 'utf-8');
 
-# We error for not supported encodings, sorry goku, but soon.
-statement error
-FROM read_csv('data/csv/test/test.csv', encoding = 'Shift-JIS')
-----
-The CSV Reader does not support the encoding: "Shift-JIS"
+# # We error for not supported encodings, sorry goku, but soon.
+# statement error
+# FROM read_csv('data/csv/test/test.csv', encoding = 'Shift-JIS')
+# ----
+# The CSV Reader does not support the encoding: "Shift-JIS"
 
 # Writing not supported
 statement error

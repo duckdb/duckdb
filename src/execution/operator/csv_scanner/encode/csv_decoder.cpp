@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/encode/csv_decoder.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -34,138 +35,40 @@ void CSVEncoderBuffer::Reset() {
 	actual_encoded_buffer_size = 0;
 }
 
-CSVDecoder::CSVDecoder(const CSVEncoding encoding_p, idx_t buffer_size) : encoding(encoding_p) {
+// void CSVReaderOptions::SetEncoding(const string &encoding_value) {
+// 	auto encoding_string = StringUtil::Lower(encoding_value);
+// 	if (encoding_value == "utf-8" || encoding_value == "utf8") {
+// 		encoding = CSVEncoding::UTF_8;
+// 	} else if (encoding_value == "utf-16" || encoding_value == "utf16") {
+// 		encoding = CSVEncoding::UTF_16;
+// 	} else if (encoding_value == "latin-1" || encoding_value == "latin1") {
+// 		encoding = CSVEncoding::LATIN_1;
+// 	} else {
+// 		std::ostringstream error;
+// 		error << "The CSV Reader does not support the encoding: \"" << encoding_value << "\"\n";
+// 		error << "The currently supported encodings are: " << '\n';
+// 		error << "* utf-8 " << '\n';
+// 		error << "* utf-16 " << '\n';
+// 		error << "* latin-1 " << '\n';
+// 		throw InvalidInputException(error.str());
+// 	}
+// }
+
+CSVDecoder::CSVDecoder(DBConfig &config, const string &enconding_name_p, idx_t buffer_size) {
+	encoding_name = StringUtil::Lower(enconding_name_p);
+	auto function = config.GetDecodeFunction(encoding_name);
+	if (!function) {
+		throw std::runtime_error("CSVDecoder: Could not find decode function");
+	}
 	// Let's enforce that the encoded buffer size is divisible by 2, makes life easier.
-	idx_t encoded_buffer_size = buffer_size / GetRatio();
+	idx_t encoded_buffer_size = buffer_size / function->ratio;
 	if (encoded_buffer_size % 2 != 0) {
 		encoded_buffer_size = encoded_buffer_size - 1;
 	}
 	encoded_buffer.Initialize(encoded_buffer_size);
-	remaining_bytes_buffer.Initialize(MaxDecodedBytesPerIteration());
+	remaining_bytes_buffer.Initialize(function->bytes_per_iteration);
+	decoding_function = function;
 	D_ASSERT(encoded_buffer_size > 0);
-}
-
-bool CSVDecoder::IsUTF8() const {
-	return encoding == CSVEncoding::UTF_8;
-}
-
-idx_t CSVDecoder::GetRatio() const {
-	switch (encoding) {
-	case CSVEncoding::UTF_8:
-		return 1;
-	case CSVEncoding::UTF_16:
-	case CSVEncoding::LATIN_1:
-		return 2;
-	default:
-		throw NotImplementedException("GetRatio() is not implemented for given CSVEncoding type");
-	}
-}
-
-idx_t CSVDecoder::MaxDecodedBytesPerIteration() const {
-	switch (encoding) {
-	case CSVEncoding::UTF_8:
-		return 0;
-	case CSVEncoding::LATIN_1:
-		return 1;
-	case CSVEncoding::UTF_16:
-		return 2;
-	default:
-		throw NotImplementedException("MaxDecodedBytesPerIteration() is not implemented for given CSVEncoding type");
-	}
-}
-
-void CSVDecoder::DecodeUTF16(char *decoded_buffer, idx_t &decoded_buffer_start, const idx_t decoded_buffer_size) {
-	const auto encoded_buffer_ptr = encoded_buffer.Ptr();
-
-	for (; encoded_buffer.cur_pos < encoded_buffer.GetSize(); encoded_buffer.cur_pos += 2) {
-		if (decoded_buffer_start == decoded_buffer_size) {
-			// We are done
-			return;
-		}
-		const uint16_t ch =
-		    static_cast<uint16_t>(static_cast<unsigned char>(encoded_buffer_ptr[encoded_buffer.cur_pos]) |
-		                          (static_cast<unsigned char>(encoded_buffer_ptr[encoded_buffer.cur_pos + 1]) << 8));
-		if (ch >= 0xD800 && ch <= 0xDFFF) {
-			throw InvalidInputException("CSV File is not utf-16 encoded");
-		}
-		if (ch <= 0x007F) {
-			// 1-byte UTF-8 for ASCII characters
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(ch & 0x7F);
-		} else if (ch <= 0x07FF) {
-			// 2-byte UTF-8
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0xC0 | (ch >> 6));
-			if (decoded_buffer_start == decoded_buffer_size) {
-				// We are done, but we have to store one byte for the next chunk!
-				encoded_buffer.cur_pos += 2;
-				remaining_bytes_buffer.Ptr()[0] = static_cast<char>(0x80 | (ch & 0x3F));
-				remaining_bytes_buffer.SetSize(1);
-				return;
-			}
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0x80 | (ch & 0x3F));
-		} else {
-			// 3-byte UTF-8
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0xE0 | (ch >> 12));
-			if (decoded_buffer_start == decoded_buffer_size) {
-				// We are done, but we have to store two bytes for the next chunk!
-				encoded_buffer.cur_pos += 2;
-				remaining_bytes_buffer.Ptr()[0] = static_cast<char>(0x80 | ((ch >> 6) & 0x3F));
-				remaining_bytes_buffer.Ptr()[1] = static_cast<char>(0x80 | (ch & 0x3F));
-				remaining_bytes_buffer.SetSize(2);
-				return;
-			}
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0x80 | ((ch >> 6) & 0x3F));
-			if (decoded_buffer_start == decoded_buffer_size) {
-				// We are done, but we have to store one byte for the next chunk!
-				encoded_buffer.cur_pos += 2;
-				remaining_bytes_buffer.Ptr()[0] = static_cast<char>(0x80 | (ch & 0x3F));
-				remaining_bytes_buffer.SetSize(1);
-				return;
-			}
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0x80 | (ch & 0x3F));
-		}
-	}
-}
-
-void CSVDecoder::DecodeLatin1(char *decoded_buffer, idx_t &decoded_buffer_start, const idx_t decoded_buffer_size) {
-	const auto encoded_buffer_ptr = encoded_buffer.Ptr();
-	for (; encoded_buffer.cur_pos < encoded_buffer.GetSize(); encoded_buffer.cur_pos++) {
-		if (decoded_buffer_start == decoded_buffer_size) {
-			// We are done
-			return;
-		}
-		const unsigned char ch = static_cast<unsigned char>(encoded_buffer_ptr[encoded_buffer.cur_pos]);
-		if (ch > 0x7F && ch <= 0x9F) {
-			throw InvalidInputException("CSV File is not latin-1 encoded");
-		}
-		if (ch <= 0x7F) {
-			// ASCII: 1 byte in UTF-8
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(ch);
-		} else {
-			// Non-ASCII: 2 bytes in UTF-8
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>(0xc2 + (ch > 0xbf));
-			if (decoded_buffer_start == decoded_buffer_size) {
-				// We are done, but we have to store one byte for the next chunk!
-				encoded_buffer.cur_pos++;
-				remaining_bytes_buffer.Ptr()[0] = static_cast<char>((ch & 0x3f) + 0x80);
-				remaining_bytes_buffer.SetSize(1);
-				return;
-			}
-			decoded_buffer[decoded_buffer_start++] = static_cast<char>((ch & 0x3f) + 0x80);
-		}
-	}
-}
-
-void CSVDecoder::DecodeInternal(char *decoded_buffer, idx_t &decoded_buffer_start, const idx_t decoded_buffer_size) {
-	switch (encoding) {
-	case CSVEncoding::UTF_8:
-		throw InternalException("DecodeInternal() should not be called with UTF-8");
-	case CSVEncoding::UTF_16:
-		return DecodeUTF16(decoded_buffer, decoded_buffer_start, decoded_buffer_size);
-	case CSVEncoding::LATIN_1:
-		return DecodeLatin1(decoded_buffer, decoded_buffer_start, decoded_buffer_size);
-	default:
-		throw NotImplementedException("DecodeInternal() is not implemented for given CSVEncoding type");
-	}
 }
 
 idx_t CSVDecoder::Decode(FileHandle &file_handle_input, char *output_buffer, const idx_t nr_bytes_to_read) {
@@ -182,7 +85,9 @@ idx_t CSVDecoder::Decode(FileHandle &file_handle_input, char *output_buffer, con
 	}
 	// 2. remaining encoded buffer
 	if (encoded_buffer.HasDataToRead()) {
-		DecodeInternal(output_buffer, output_buffer_pos, nr_bytes_to_read);
+		decoding_function->decode_function(
+		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
+		    nr_bytes_to_read, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
 	}
 	// Otherwise we read a new encoded buffer from the file
 	while (output_buffer_pos < nr_bytes_to_read) {
@@ -191,7 +96,9 @@ idx_t CSVDecoder::Decode(FileHandle &file_handle_input, char *output_buffer, con
 		auto actual_encoded_bytes =
 		    static_cast<idx_t>(file_handle_input.Read(encoded_buffer.Ptr(), encoded_buffer.GetCapacity()));
 		encoded_buffer.SetSize(actual_encoded_bytes);
-		DecodeInternal(output_buffer, output_buffer_pos, nr_bytes_to_read);
+		decoding_function->decode_function(
+		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
+		    nr_bytes_to_read, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
 		if (output_buffer_pos == current_decoded_buffer_start) {
 			return output_buffer_pos;
 		}

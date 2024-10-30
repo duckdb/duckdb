@@ -82,7 +82,6 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
-#include "duckdb/execution/operator/csv_scanner/encode/csv_encoding.hpp"
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
@@ -805,34 +804,6 @@ CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value) {
 		return CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CAPIResultSetType>", value));
-}
-
-template<>
-const char* EnumUtil::ToChars<CSVEncoding>(CSVEncoding value) {
-	switch(value) {
-	case CSVEncoding::UTF_8:
-		return "UTF_8";
-	case CSVEncoding::UTF_16:
-		return "UTF_16";
-	case CSVEncoding::LATIN_1:
-		return "LATIN_1";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<CSVEncoding>", value));
-	}
-}
-
-template<>
-CSVEncoding EnumUtil::FromString<CSVEncoding>(const char *value) {
-	if (StringUtil::Equals(value, "UTF_8")) {
-		return CSVEncoding::UTF_8;
-	}
-	if (StringUtil::Equals(value, "UTF_16")) {
-		return CSVEncoding::UTF_16;
-	}
-	if (StringUtil::Equals(value, "LATIN_1")) {
-		return CSVEncoding::LATIN_1;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<CSVEncoding>", value));
 }
 
 template<>
