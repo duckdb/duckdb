@@ -9,6 +9,12 @@ string SampleMethodToString(SampleMethod method) {
 	return EnumUtil::ToString(method);
 }
 
+SampleOptions::SampleOptions(int64_t seed) : seed(static_cast<idx_t>(seed)) {
+	sample_size = 0;
+	is_percentage = false;
+	method = SampleMethod::INVALID;
+}
+
 unique_ptr<SampleOptions> SampleOptions::Copy() {
 	auto result = make_uniq<SampleOptions>();
 	result->sample_size = sample_size;

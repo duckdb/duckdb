@@ -201,7 +201,8 @@
         "type": "int64_t",
         "serialize_property": "GetSeed()"
       }
-    ]
+    ],
+    "constructor": ["seed"]
   },
   {
     "class": "BaseReservoirSampling",

@@ -15,12 +15,16 @@
 
 namespace duckdb {
 
-enum class SampleMethod : uint8_t { SYSTEM_SAMPLE = 0, BERNOULLI_SAMPLE = 1, RESERVOIR_SAMPLE = 2 };
+enum class SampleMethod : uint8_t { INVALID = 0, SYSTEM_SAMPLE = 1, BERNOULLI_SAMPLE = 2, RESERVOIR_SAMPLE = 3 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.
 string SampleMethodToString(SampleMethod method);
 
-struct SampleOptions {
+class SampleOptions {
+
+public:
+	explicit SampleOptions(int64_t seed = -1);
+
 	Value sample_size;
 	bool is_percentage;
 	SampleMethod method;
