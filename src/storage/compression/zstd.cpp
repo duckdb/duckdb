@@ -184,6 +184,22 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 	return make_uniq<ZSTDAnalyzeState>(info, config);
 }
 
+static bool NotEnoughRoom(ZSTDAnalyzeState &state) {
+	idx_t block_size = state.info.GetBlockSize();
+	auto room = block_size - sizeof(block_id_t);
+
+	idx_t room_needed = 0;
+	room_needed += state.GetVectorMetadataSize();
+	room_needed += ZDICT_DICTSIZE_MIN;
+
+	if (room_needed > room) {
+		// FIXME: We currently require all vector metadata to fit on the first page
+		// a new segment would need to be created at this point
+		return true;
+	}
+	return false;
+}
+
 bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 	UnifiedVectorFormat vdata;
@@ -200,6 +216,12 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 		state.total_size += string_size;
 	}
 	state.count += count;
+	if (NotEnoughRoom(state)) {
+		// FIXME: support creating multiple segments
+		// this would require precomputing multiple dictionaries
+		// and switching to a new segment at predefined cut off points
+		return false;
+	}
 	return true;
 }
 
@@ -308,7 +330,7 @@ public:
 	    : CompressionState(analyze_state_p->info), analyze_state(std::move(analyze_state_p)),
 	      checkpointer(checkpointer), partial_block_manager(checkpointer.GetCheckpointState().GetPartialBlockManager()),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)) {
-		CreateSegment(checkpointer.GetRowGroup().start);
+		CreateEmptySegment(checkpointer.GetRowGroup().start);
 		SetCurrentBuffer(segment_handle);
 		vector_count = 0;
 		tuple_count = 0;
@@ -582,7 +604,7 @@ public:
 		return res;
 	}
 
-	void CreateSegment(idx_t row_start) {
+	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 		auto compressed_segment =

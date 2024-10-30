@@ -1,0 +1,27 @@
+# name: test/sql/storage/compression/zstd/test_giant_lists.test_slow
+# group: [zstd]
+
+load __TEST_DIR__/zstd_vector_skipping.db
+
+statement ok
+pragma force_compression='zstd';
+
+statement ok
+pragma checkpoint_threshold='1gb';
+
+statement ok
+create table tbl as
+select repeat('a', 30_000_000).split('') lst
+
+statement ok
+force checkpoint;
+
+query III
+select len(lst), lst[1], lst[-1] from tbl;
+----
+30_000_000	a	a
+
+# Uncompressed storage is used because the segment is too large to store with ZSTD (currently)
+query I
+SELECT compression FROM pragma_storage_info('tbl') WHERE segment_type != 'VALIDITY' AND compression != 'Uncompressed';
+----
