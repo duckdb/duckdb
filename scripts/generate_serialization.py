@@ -771,7 +771,12 @@ for entry in file_list:
 
     for entry in json_data:
         if 'includes' in entry:
-            include_list += entry['includes']
+            if type(entry['includes']) != type([]):
+                print(f"Include list must be a list, found {type(entry['includes'])} (in {str(entry)})")
+                exit(1)
+            for include_entry in entry['includes']:
+                if include_entry not in include_list:
+                    include_list.append(include_entry)
         new_class = SerializableClass(entry)
         if new_class.is_base_class:
             # this class is a base class itself - construct the base class list

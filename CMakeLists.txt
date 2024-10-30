@@ -320,7 +320,7 @@ endif()
 
 string(LENGTH "${GIT_COMMIT_HASH}" LENGTH_GIT_COMMIT_HASH)
 if (NOT ${LENGTH_GIT_COMMIT_HASH} EQUAL 10)
-   message(STATUS "GIT_COMMIT_HASH has lenght ${LENGTH_GIT_COMMIT_HASH} different than the expected 10")
+   message(STATUS "GIT_COMMIT_HASH has length ${LENGTH_GIT_COMMIT_HASH} different than the expected 10")
 endif()
 
 string(SUBSTRING "${GIT_COMMIT_HASH}" 0 10 GIT_COMMIT_HASH)

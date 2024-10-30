@@ -100,17 +100,17 @@
     },
     {
         "name": "jaro_similarity",
-        "parameters": "str1,str2",
+        "parameters": "str1,str2,score_cutoff",
         "description": "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
-        "example": "jaro_similarity('duck','duckdb')",
-        "type": "scalar_function"
+        "example": "jaro_similarity('duck', 'duckdb', 0.5)",
+        "type": "scalar_function_set"
     },
     {
         "name": "jaro_winkler_similarity",
-        "parameters": "str1,str2",
+        "parameters": "str1,str2,score_cutoff",
         "description": "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
-        "example": "jaro_winkler_similarity('duck','duckdb')",
-        "type": "scalar_function"
+        "example": "jaro_winkler_similarity('duck', 'duckdb', 0.5)",
+        "type": "scalar_function_set"
     },
     {
         "name": "left",

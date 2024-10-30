@@ -324,7 +324,11 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 			throw IOException("Unexpected response when uploading part to S3");
 		}
 
-	} catch (IOException &ex) {
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (error.Type() != ExceptionType::IO && error.Type() != ExceptionType::HTTP) {
+			throw;
+		}
 		// Ensure only one thread sets the exception
 		bool f = false;
 		auto exchanged = file_handle.uploader_has_error.compare_exchange_strong(f, true);
@@ -333,7 +337,6 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 		}
 
 		NotifyUploadsInProgress(file_handle);
-
 		return;
 	}
 
