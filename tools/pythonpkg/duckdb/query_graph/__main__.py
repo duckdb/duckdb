@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import re
 import webbrowser
 from functools import reduce
 import argparse
@@ -105,32 +106,29 @@ def get_child_timings(top_node: object, query_timings: object) -> str:
         get_child_timings(child, query_timings)
 
 
-color_map = {
-    "HASH_JOIN": "#ffffba",
-    "PROJECTION": "#ffb3ba",
-    "SEQ_SCAN": "#baffc9",
-    "UNGROUPED_AGGREGATE": "#ffdfba",
-    "FILTER": "#bae1ff",
-    "ORDER_BY": "#facd60",
-    "PERFECT_HASH_GROUP_BY": "#ffffba",
-    "HASH_GROUP_BY": "#ffffba",
-    "NESTED_LOOP_JOIN": "#ffffba",
-    "STREAMING_LIMIT": "#facd60",
-    "COLUMN_DATA_SCAN": "#1ac0c6",
-    "TOP_N": "#ffdfba"
-}
+def get_pink_shade_hex(fraction: float):
+    fraction = max(0, min(1, fraction))
+    
+    # Define the RGB values for very light pink (almost white) and dark pink
+    light_pink = (255, 250, 250)  # Very light pink
+    dark_pink = (255, 20, 147)    # Dark pink
+    
+    # Calculate the RGB values for the given fraction
+    r = int(light_pink[0] + (dark_pink[0] - light_pink[0]) * fraction)
+    g = int(light_pink[1] + (dark_pink[1] - light_pink[1]) * fraction)
+    b = int(light_pink[2] + (dark_pink[2] - light_pink[2]) * fraction)
+    
+    # Return as hexadecimal color code
+    return f"#{r:02x}{g:02x}{b:02x}"
 
-
-def get_node_body(name: str, result: str, cardinality: float, extra_info: str) -> str:
-    node_style = ""
-    stripped_name = name.strip()
-    if stripped_name in color_map:
-        node_style = f"background-color: {color_map[stripped_name]};"
+def get_node_body(name: str, result: str, cpu_time: float, cardinality: float, extra_info: str) -> str:
+    node_style = f"background-color: {get_pink_shade_hex(float(result)/cpu_time)};"
 
     body = f"<span class=\"tf-nc\" style=\"{node_style}\">"
     body += "<div class=\"node-body\">"
     new_name = name.replace("_", " ")
-    body += f"<p> <b>{new_name} ({result}s) </b></p>"
+    formatted_num = f"{float(result):.4f}"
+    body += f"<p> <b>{new_name} ({formatted_num}s) </b></p>"
     body += f"<p> ---------------- </p>"
     body += f"<p> {extra_info} </p>"
     body += f"<p> ---------------- </p>"
@@ -141,7 +139,7 @@ def get_node_body(name: str, result: str, cardinality: float, extra_info: str) -
     return body
 
 
-def generate_tree_recursive(json_graph: object) -> str:
+def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:
     node_prefix_html = "<li>"
     node_suffix_html = "</li>"
 
@@ -149,16 +147,21 @@ def generate_tree_recursive(json_graph: object) -> str:
     for key in json_graph['extra_info']:
         extra_info += f"{key}: {json_graph['extra_info'][key]} <br>"
 
+    # get rid of some typically long names
+    extra_info = re.sub(r"__internal_\s*", "__", extra_info)
+    extra_info = re.sub(r"compress_integral\s*", "compress", extra_info)
+
     node_body = get_node_body(json_graph["operator_type"],
-                              json_graph["operator_timing"],
+                              json_graph["operator_timing"], 
+                              cpu_time,
                               json_graph["operator_cardinality"],
-                              extra_info)
+                              re.sub(r",\s*", ", ", extra_info))
 
     children_html = ""
     if len(json_graph['children']) >= 1:
         children_html += "<ul>"
         for child in json_graph["children"]:
-            children_html += generate_tree_recursive(child)
+            children_html += generate_tree_recursive(child, cpu_time)
         children_html += "</ul>"
     return node_prefix_html + node_body + children_html + node_suffix_html
 
@@ -195,7 +198,7 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:
 	<tr>
 			<td>{phase_column}</td>
             <td>{summarized_phase.time}</td>
-            <td>{round(summarized_phase.percentage*100,4)}%</td>
+            <td>{str(summarized_phase.percentage * 100)[:6]}%</td>
     </tr>
 """
     table_body += table_end
@@ -204,11 +207,12 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:
 
 def generate_tree_html(graph_json: object) -> str:
     json_graph = json.loads(graph_json)
-    tree_prefix = "<div class=\"tf-tree tf-gap-lg\"> \n <ul>"
+    cpu_time = float(json_graph['cpu_time'])
+    tree_prefix = "<div class=\"tf-tree tf-gap-sm\"> \n <ul>"
     tree_suffix = "</ul> </div>"
     # first level of json is general overview
     # FIXME: make sure json output first level always has only 1 level
-    tree_body = generate_tree_recursive(json_graph['children'][0])
+    tree_body = generate_tree_recursive(json_graph['children'][0], cpu_time)
     return tree_prefix + tree_body + tree_suffix
 
 
