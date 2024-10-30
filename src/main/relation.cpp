@@ -328,7 +328,9 @@ unique_ptr<QueryResult> Relation::Query(const string &sql) {
 }
 
 unique_ptr<QueryResult> Relation::Query(const string &name, const string &sql) {
-	CreateView(name);
+	bool replace = true;
+	bool temp = IsReadOnly();
+	CreateView(name, replace, temp);
 	return Query(sql);
 }
 
