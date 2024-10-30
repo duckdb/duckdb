@@ -2980,6 +2980,7 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSampleMethodValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SampleMethod::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(SampleMethod::SYSTEM_SAMPLE), "System" },
 		{ static_cast<uint32_t>(SampleMethod::BERNOULLI_SAMPLE), "Bernoulli" },
 		{ static_cast<uint32_t>(SampleMethod::RESERVOIR_SAMPLE), "Reservoir" }
@@ -2989,12 +2990,12 @@ const StringUtil::EnumStringLiteral *GetSampleMethodValues() {
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value) {
-	return StringUtil::EnumToString(GetSampleMethodValues(), 3, "SampleMethod", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSampleMethodValues(), 4, "SampleMethod", static_cast<uint32_t>(value));
 }
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
-	return static_cast<SampleMethod>(StringUtil::StringToEnum(GetSampleMethodValues(), 3, "SampleMethod", value));
+	return static_cast<SampleMethod>(StringUtil::StringToEnum(GetSampleMethodValues(), 4, "SampleMethod", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSampleTypeValues() {
