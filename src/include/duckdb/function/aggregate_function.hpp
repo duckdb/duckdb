@@ -255,9 +255,9 @@ public:
 	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static void StateInitialize(const AggregateFunction &, data_ptr_t state) {
 		// FIXME: we should remove the "destructor_type" option in the future
-		static_assert(std::is_trivially_destructible<STATE>::value ||
+		static_assert(std::is_trivially_move_constructible<STATE>::value ||
 		                  destructor_type == AggregateDestructorType::LEGACY,
-		              "Aggregate state must be trivially destructible");
+		              "Aggregate state must be trivially move constructible");
 		OP::Initialize(*reinterpret_cast<STATE *>(state));
 	}
 
