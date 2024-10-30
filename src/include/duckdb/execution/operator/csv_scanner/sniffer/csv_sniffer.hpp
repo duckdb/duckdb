@@ -30,7 +30,7 @@ struct DialectCandidates {
 	explicit DialectCandidates(const CSVStateMachineOptions &options);
 
 	//! Static functions to get defaults of the search space
-	static vector<char> GetDefaultDelimiter();
+	static vector<string> GetDefaultDelimiter();
 
 	static vector<vector<char>> GetDefaultQuote();
 

@@ -107,9 +107,6 @@ string CSVReaderOptions::GetDelimiter() const {
 
 void CSVReaderOptions::SetDelimiter(const string &input) {
 	auto delim_str = StringUtil::Replace(input, "\\t", "\t");
-	if (delim_str.size() > 1) {
-		throw InvalidInputException("The delimiter option cannot exceed a size of 1 byte.");
-	}
 	if (input.empty()) {
 		delim_str = string("\0", 1);
 	}

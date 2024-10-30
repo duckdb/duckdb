@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 
 namespace duckdb {
@@ -15,11 +17,13 @@ namespace duckdb {
 //! Basically which char, quote and escape were used to generate it.
 struct CSVStateMachineOptions {
 	CSVStateMachineOptions() {};
-	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p, char comment_p, NewLineIdentifier new_line_p)
-	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p) {};
+	CSVStateMachineOptions(string delimiter_p, char quote_p, char escape_p, char comment_p,
+	                       NewLineIdentifier new_line_p)
+	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p),
+	      new_line(new_line_p) {};
 
 	//! Delimiter to separate columns within each line
-	CSVOption<char> delimiter = ',';
+	CSVOption<string> delimiter {","};
 	//! Quote used for columns that contain reserved characters, e.g '
 	CSVOption<char> quote = '\"';
 	//! Escape character to escape quote character
