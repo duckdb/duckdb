@@ -38,19 +38,6 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 	return index_info;
 }
 
-vector<LogicalIndex> GetConstraintIndexes(const ColumnList &cols, const UniqueConstraint &constraint) {
-	if (constraint.HasIndex()) {
-		return {constraint.GetIndex()};
-	}
-
-	vector<LogicalIndex> logical_columns;
-	for (auto name : constraint.GetColumnNames()) {
-		auto idx = cols.GetColumnIndex(name);
-		logical_columns.push_back(idx);
-	}
-	return logical_columns;
-}
-
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                shared_ptr<DataTable> inherited_storage)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
@@ -84,7 +71,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				constraint_type = IndexConstraintType::PRIMARY;
 			}
 
-			auto column_indexes = GetConstraintIndexes(columns, unique);
+			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
 				storage->AddIndex(columns, column_indexes, constraint_type, index_info);
@@ -806,7 +793,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		}
 		const auto &unique = constraint->Cast<UniqueConstraint>();
 		if (unique.is_primary_key) {
-			auto index_name = unique.GetName(prev_table.name, prev_table.GetColumns());
+			auto index_name = unique.GetName(prev_table.name);
 			names.insert(index_name);
 		}
 	}
@@ -819,7 +806,7 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 		if (!unique.IsPrimaryKey()) {
 			continue;
 		}
-		auto index_name = unique.GetName(table.name, table.GetColumns());
+		auto index_name = unique.GetName(table.name);
 		if (names.find(index_name) == names.end()) {
 			prev_indexes.RemoveIndex(index_name);
 		}

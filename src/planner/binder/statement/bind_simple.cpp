@@ -66,7 +66,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	}
 
 	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
-	auto index_name = unique_constraint.GetName(table_info.name, column_list);
+	auto index_name = unique_constraint.GetName(table_info.name);
 	create_index_info->index_name = index_name;
 	D_ASSERT(!create_index_info->index_name.empty());
 

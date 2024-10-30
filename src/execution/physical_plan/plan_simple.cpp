@@ -1,18 +1,16 @@
 #include "duckdb/execution/operator/helper/physical_load.hpp"
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
-#include "duckdb/execution/operator/helper/physical_vacuum.hpp"
 #include "duckdb/execution/operator/helper/physical_update_extensions.hpp"
+#include "duckdb/execution/operator/helper/physical_vacuum.hpp"
 #include "duckdb/execution/operator/schema/physical_alter.hpp"
 #include "duckdb/execution/operator/schema/physical_attach.hpp"
 #include "duckdb/execution/operator/schema/physical_create_schema.hpp"
-#include "duckdb/execution/operator/schema/physical_create_sequence.hpp"
 #include "duckdb/execution/operator/schema/physical_create_view.hpp"
 #include "duckdb/execution/operator/schema/physical_detach.hpp"
 #include "duckdb/execution/operator/schema/physical_drop.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 

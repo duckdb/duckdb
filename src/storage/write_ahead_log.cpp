@@ -429,9 +429,10 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	auto &parent_info = parent.GetStorage().GetDataTableInfo();
 	auto &list = parent_info->GetIndexes();
 
+	// TODO.
 	auto name = EnumUtil::ToString(IndexConstraintType::PRIMARY);
 	string column_names;
-	for (const auto &col : unique_info.columns) {
+	for (const auto &col : unique_info.GetColumnNames()) {
 		column_names += "_" + col;
 	}
 	name = name + "_" + parent.name + column_names;

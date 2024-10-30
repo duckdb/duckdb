@@ -178,9 +178,9 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 	auto &schema = table.schema;
 	info->column_ids = storage_ids;
 
+	// FIXME: We should check for catalog exceptions prior to index creation, and later double-check.
 	if (!alter_info) {
 		// Ensure that the index does not yet exist in the catalog.
-		// FIXME: We should early-out prior to creating the index.
 		auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->index_name);
 		if (entry) {
 			if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
