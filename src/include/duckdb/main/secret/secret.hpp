@@ -185,9 +185,6 @@ public:
 		Value secret_map_value;
 		deserializer.ReadProperty(201, "secret_map", secret_map_value);
 
-		// TODO: upgrade to serialization error?
-		D_ASSERT(secret_map_value.type() == LogicalType::MAP(LogicalType::VARCHAR, LogicalType::ANY));
-
 		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
 			auto kv_struct = StructValue::GetChildren(entry);
 			result->secret_map[kv_struct[0].ToString()] = kv_struct[1];
