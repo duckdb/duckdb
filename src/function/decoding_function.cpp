@@ -23,7 +23,7 @@ void DecodeUTF16(char *encoded_buffer, idx_t &encoded_buffer_current_position, c
 		    static_cast<unsigned char>(encoded_buffer[encoded_buffer_current_position]) |
 		    (static_cast<unsigned char>(encoded_buffer[encoded_buffer_current_position + 1]) << 8));
 		if (ch >= 0xD800 && ch <= 0xDFFF) {
-			throw InvalidInputException("CSV File is not utf-16 encoded");
+			throw InvalidInputException("File is not utf-16 encoded");
 		}
 		if (ch <= 0x007F) {
 			// 1-byte UTF-8 for ASCII characters
@@ -73,7 +73,7 @@ void DecodeLatin1(char *encoded_buffer, idx_t &encoded_buffer_current_position, 
 		}
 		const unsigned char ch = static_cast<unsigned char>(encoded_buffer[encoded_buffer_current_position]);
 		if (ch > 0x7F && ch <= 0x9F) {
-			throw InvalidInputException("CSV File is not latin-1 encoded");
+			throw InvalidInputException("File is not latin-1 encoded");
 		}
 		if (ch <= 0x7F) {
 			// ASCII: 1 byte in UTF-8
@@ -96,6 +96,7 @@ void DecodeLatin1(char *encoded_buffer, idx_t &encoded_buffer_current_position, 
 void DecodeUTF8(char *encoded_buffer, idx_t &encoded_buffer_current_position, const idx_t encoded_buffer_size,
                 char *decoded_buffer, idx_t &decoded_buffer_current_position, const idx_t decoded_buffer_size,
                 char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
+	// This function just copies.
 	for (; encoded_buffer_current_position < encoded_buffer_size; encoded_buffer_current_position++) {
 		if (decoded_buffer_current_position == decoded_buffer_size) {
 			// We are done
@@ -116,12 +117,20 @@ DecodingFunctionSet::DecodingFunctionSet() {
 
 optional_ptr<DecodingFunction> DBConfig::GetDecodeFunction(string name) const {
 	lock_guard<mutex> l(decoding_functions->lock);
-
 	name = StringUtil::Lower(name);
 	// Check if the function is already loaded into the global compression functions.
 	if (decoding_functions->functions.find(name) != decoding_functions->functions.end()) {
 		return &decoding_functions->functions[name];
 	}
 	return nullptr;
+}
+
+vector<string> DBConfig::GetLoadedDecodeFunctionNames() const {
+	lock_guard<mutex> l(decoding_functions->lock);
+	vector<string> result;
+	for (auto &function : decoding_functions->functions) {
+		result.push_back(function.first);
+	}
+	return result;
 }
 } // namespace duckdb

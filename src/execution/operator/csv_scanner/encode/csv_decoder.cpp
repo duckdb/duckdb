@@ -35,30 +35,18 @@ void CSVEncoderBuffer::Reset() {
 	actual_encoded_buffer_size = 0;
 }
 
-// void CSVReaderOptions::SetEncoding(const string &encoding_value) {
-// 	auto encoding_string = StringUtil::Lower(encoding_value);
-// 	if (encoding_value == "utf-8" || encoding_value == "utf8") {
-// 		encoding = CSVEncoding::UTF_8;
-// 	} else if (encoding_value == "utf-16" || encoding_value == "utf16") {
-// 		encoding = CSVEncoding::UTF_16;
-// 	} else if (encoding_value == "latin-1" || encoding_value == "latin1") {
-// 		encoding = CSVEncoding::LATIN_1;
-// 	} else {
-// 		std::ostringstream error;
-// 		error << "The CSV Reader does not support the encoding: \"" << encoding_value << "\"\n";
-// 		error << "The currently supported encodings are: " << '\n';
-// 		error << "* utf-8 " << '\n';
-// 		error << "* utf-16 " << '\n';
-// 		error << "* latin-1 " << '\n';
-// 		throw InvalidInputException(error.str());
-// 	}
-// }
-
 CSVDecoder::CSVDecoder(DBConfig &config, const string &enconding_name_p, idx_t buffer_size) {
 	encoding_name = StringUtil::Lower(enconding_name_p);
 	auto function = config.GetDecodeFunction(encoding_name);
 	if (!function) {
-		throw std::runtime_error("CSVDecoder: Could not find decode function");
+		auto loaded_encodings = config.GetLoadedDecodeFunctionNames();
+		std::ostringstream error;
+		error << "The CSV Reader does not support the encoding: \"" << enconding_name_p << "\"\n";
+		error << "The currently supported encodings are: " << '\n';
+		for (auto &encoding_name : loaded_encodings) {
+			error << "*  " << encoding_name << '\n';
+		}
+		throw InvalidInputException(error.str());
 	}
 	// Let's enforce that the encoded buffer size is divisible by 2, makes life easier.
 	idx_t encoded_buffer_size = buffer_size / function->ratio;
