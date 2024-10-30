@@ -633,6 +633,9 @@ void BasicColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 }
 
 void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state, duckdb_parquet::ColumnChunk &column_chunk) {
+	if (!state.stats_state) {
+		return;
+	}
 	if (max_repeat == 0) {
 		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
 		column_chunk.meta_data.statistics.__isset.null_count = true;
@@ -1070,19 +1073,19 @@ class StandardWriterPageState : public ColumnWriterPageState {
 public:
 	explicit StandardWriterPageState(const idx_t total_value_count, Encoding::type encoding_p,
 	                                 const unordered_map<T, uint32_t> &dictionary_p)
-	    : dbp_encoder(total_value_count), encoding(encoding_p), dictionary(dictionary_p), written_value(false),
-	      bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(bit_width), initialized(false) {
+	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count),  dictionary(dictionary_p), dict_written_value(false),
+	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(dict_bit_width) {
 	}
+	duckdb_parquet::Encoding::type encoding;
+
+	bool dbp_initialized;
 	DbpEncoder dbp_encoder;
 
-	duckdb_parquet::Encoding::type encoding;
 	const unordered_map<T, uint32_t> &dictionary;
-	bool written_value;
-
-	uint32_t bit_width;
+	bool dict_written_value;
+	uint32_t dict_bit_width;
 	RleBpEncoder dict_encoder;
 
-	bool initialized;
 };
 
 namespace dbp_encoder {
@@ -1098,7 +1101,17 @@ void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const int64_t &first_v
 
 template <>
 void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const int32_t &first_value) {
-	BeginWrite(encoder, writer, int64_t(first_value));
+	BeginWrite(encoder, writer, UnsafeNumericCast<int64_t>(first_value));
+}
+
+template <>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const uint64_t &first_value) {
+	encoder.BeginWrite(writer, UnsafeNumericCast<int64_t>(first_value));
+}
+
+template <>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const uint32_t &first_value) {
+	BeginWrite(encoder, writer, UnsafeNumericCast<int64_t>(first_value));
 }
 
 template <class T>
@@ -1113,8 +1126,19 @@ void WriteValue(DbpEncoder &encoder, WriteStream &writer, const int64_t &value) 
 
 template <>
 void WriteValue(DbpEncoder &encoder, WriteStream &writer, const int32_t &value) {
-	WriteValue(encoder, writer, int64_t(value));
+	WriteValue(encoder, writer, UnsafeNumericCast<int64_t>(value));
 }
+
+template <>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const uint64_t &value) {
+	encoder.WriteValue(writer, UnsafeNumericCast<int64_t>(value));
+}
+
+template <>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const uint32_t &value) {
+	WriteValue(encoder, writer, UnsafeNumericCast<int64_t>(value));
+}
+
 } // namespace dbp_encoder
 
 template <class SRC, class TGT, class OP = ParquetCastOperator>
@@ -1146,22 +1170,21 @@ public:
 		auto &page_state = state_p->Cast<StandardWriterPageState<SRC>>();
 		switch (page_state.encoding) {
 		case Encoding::DELTA_BINARY_PACKED:
-			if (!page_state.initialized) {
+			if (!page_state.dbp_initialized) {
 				dbp_encoder::BeginWrite<int64_t>(page_state.dbp_encoder, temp_writer, 0);
 			}
 			page_state.dbp_encoder.FinishWrite(temp_writer);
 			break;
 		case Encoding::RLE_DICTIONARY:
-			if (page_state.bit_width == 0) {
-				// TODO does this ever happen? Only NULLs?
-				return;
-			}
-			if (!page_state.written_value) {
-				// all values are null, just write the bit width
-				temp_writer.Write<uint8_t>(page_state.bit_width);
+			D_ASSERT (page_state.dict_bit_width != 0);
+			if (!page_state.dict_written_value) {
+				// all values are null
+				// just write the bit width
+				temp_writer.Write<uint8_t>(page_state.dict_bit_width);
 				return;
 			}
 			page_state.dict_encoder.FinishWrite(temp_writer);
+
 			break;
 		case Encoding::PLAIN:
 			break;
@@ -1254,13 +1277,13 @@ public:
 				}
 				auto &src_val = data_ptr[r];
 				auto value_index = page_state.dictionary.at(src_val);
-				if (!page_state.written_value) {
+				if (!page_state.dict_written_value) {
 					// first value
 					// write the bit-width as a one-byte entry
-					temp_writer.Write<uint8_t>(page_state.bit_width);
+					temp_writer.Write<uint8_t>(page_state.dict_bit_width);
 					// now begin writing the actual value
 					page_state.dict_encoder.BeginWrite(temp_writer, value_index);
-					page_state.written_value = true;
+					page_state.dict_written_value = true;
 				} else {
 					page_state.dict_encoder.WriteValue(temp_writer, value_index);
 				}
@@ -1269,9 +1292,8 @@ public:
 		}
 
 		case Encoding::DELTA_BINARY_PACKED: {
-			// TODO make sure we're only writing 32 and 64 bit ints here
 			idx_t r = chunk_start;
-			if (!page_state.initialized) {
+			if (!page_state.dbp_initialized) {
 				// find first non-null value
 				for (; r < chunk_end; r++) {
 					if (!mask.RowIsValid(r)) {
@@ -1280,7 +1302,7 @@ public:
 					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 					OP::template HandleStats<SRC, TGT>(stats, target_value);
 					dbp_encoder::BeginWrite(page_state.dbp_encoder, temp_writer, target_value);
-					page_state.initialized = true;
+					page_state.dbp_initialized = true;
 					r++; // skip over
 					break;
 				}
@@ -1335,7 +1357,6 @@ public:
 		}
 		// flush the dictionary page and add it to the to-be-written pages
 		WriteDictionary(state, std::move(temp_writer), values.size());
-
 		// bloom filter will be queued for writing in ParquetWriter::BufferBloomFilter one level up
 	}
 
