@@ -108,15 +108,7 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 		    "Attempted to deserialize secret type '%s' which does not have a deserialization method", type);
 	}
 
-	auto function_entry = LookupFunctionInternal(type, provider);
-	if (!function_entry) {
-		throw IOException("Attempted to deserialize secret (type: '%s', provider: '%s', path: '%s') which does not "
-		                  "have any functions registered",
-		                  type, provider, secret_path);
-	}
-
-	return deserialized_type.deserializer(deserializer, {scope, type, provider, name},
-	                                      function_entry->named_parameters);
+	return deserialized_type.deserializer(deserializer, {scope, type, provider, name});
 }
 
 void SecretManager::RegisterSecretType(SecretType &type) {
