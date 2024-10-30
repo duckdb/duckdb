@@ -127,6 +127,10 @@ void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<Sch
                                     ExportEntries &result) {
 	for (auto &schema_p : schema_list) {
 		auto &schema = schema_p.get();
+		auto &catalog = schema.ParentCatalog();
+		if (catalog.IsSystemCatalog() || catalog.IsTemporaryCatalog()) {
+			continue;
+		}
 		if (!schema.internal) {
 			result.schemas.push_back(schema);
 		}
