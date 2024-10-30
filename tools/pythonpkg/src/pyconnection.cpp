@@ -1224,7 +1224,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	}
 
 	if (!py::none().is(auto_detect)) {
-
 		bool auto_detect_as_int = py::isinstance<py::int_>(auto_detect);
 		bool auto_detect_as_bool = py::isinstance<py::bool_>(auto_detect);
 		bool auto_detect_value;
