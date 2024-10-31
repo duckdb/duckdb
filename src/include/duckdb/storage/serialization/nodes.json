@@ -810,7 +810,7 @@
       },
       {"id": 139,
         "name": "dialect_options.state_machine_options.rfc_4180",
-        "type": "bool"
+        "type": "CSVOption<bool>"
       }
     ],
     "pointer_type": "none"
