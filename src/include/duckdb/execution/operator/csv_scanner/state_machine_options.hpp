@@ -15,10 +15,10 @@ namespace duckdb {
 //! Basically which char, quote and escape were used to generate it.
 struct CSVStateMachineOptions {
 	CSVStateMachineOptions() {};
-	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p,
-						   char comment_p, NewLineIdentifier new_line_p, bool rfc_4180_p)
-	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p),
-		  comment(comment_p), new_line(new_line_p), rfc_4180(rfc_4180_p) {};
+	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p, char comment_p, NewLineIdentifier new_line_p,
+	                       bool rfc_4180_p)
+	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
+	      rfc_4180(rfc_4180_p) {};
 
 	//! Delimiter to separate columns within each line
 	CSVOption<char> delimiter = ',';

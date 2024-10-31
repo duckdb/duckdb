@@ -49,8 +49,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	auto new_line_id = state_machine_options.new_line.GetValue();
 
-	bool enable_unquoted_escape = state_machine_options.rfc_4180.GetValue() == false
-		&& state_machine_options.quote != state_machine_options.escape;
+	bool enable_unquoted_escape = state_machine_options.rfc_4180.GetValue() == false &&
+	                              state_machine_options.quote != state_machine_options.escape;
 
 	// Now set values depending on configuration
 	// 1) Standard/Invalid State
@@ -220,14 +220,16 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
 		transition_array[escape][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
 		transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
-		transition_array[static_cast<uint8_t>('\0')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
-		transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
+		transition_array[static_cast<uint8_t>('\0')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
+		    CSVState::STANDARD;
+		transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
+		    CSVState::STANDARD;
 		if (new_line_id == NewLineIdentifier::CARRY_ON) {
 			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
-				CSVState::ESCAPED_RETURN;
+			    CSVState::ESCAPED_RETURN;
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
-				CSVState::STANDARD;
+			    CSVState::STANDARD;
 		}
 	}
 
