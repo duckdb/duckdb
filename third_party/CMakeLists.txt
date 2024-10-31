@@ -14,6 +14,7 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(fsst)
   add_subdirectory(zstd)
   add_subdirectory(yyjson)
+  add_subdirectory(zstd)
 endif()
 
 if(NOT WIN32

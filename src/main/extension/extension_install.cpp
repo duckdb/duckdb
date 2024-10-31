@@ -358,7 +358,15 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	{
 		auto fs = FileSystem::CreateLocal();
 		if (fs->FileExists(local_extension_path + ".info")) {
-			install_info = ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
+			try {
+				install_info =
+				    ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
+			} catch (...) {
+				if (!options.force_install) {
+					// We are going to rewrite the file anyhow, so this is fine
+					throw;
+				}
+			}
 		}
 	}
 

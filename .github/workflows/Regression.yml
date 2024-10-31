@@ -43,12 +43,8 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_BENCHMARK: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_HTTPFS: 1
       BUILD_JEMALLOC: 1
-      BUILD_JSON: 1
-      CORE_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "json;tpch;tpcds;httpfs;inet"
 
     steps:
       - uses: actions/checkout@v4
@@ -87,49 +83,49 @@ jobs:
         if: always()
         shell: bash
         run: |
-          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --verbose --threads 2
 
       - name: Regression Test Ingestion Perf
         if: always()
         shell: bash
         run: |
-          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/ingestion.csv --verbose --threads=2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/ingestion.csv --verbose --threads 2
 
       - name: Regression Test TPCH
         if: always()
         shell: bash
         run: |
-          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --verbose --threads=2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --verbose --threads 2
 
       - name: Regression Test TPCH-PARQUET
         if: always()
         shell: bash
         run: |
-          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_parquet.csv --verbose --threads=2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --verbose --threads 2
 
       - name: Regression Test TPCDS
         if: always()
         shell: bash
         run: |
-          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --verbose --threads=2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --verbose --threads 2
 
       - name: Regression Test H2OAI
         if: always()
         shell: bash
         run: |
-          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --verbose --threads=2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --verbose --threads 2
 
       - name: Regression Test IMDB
         if: always()
         shell: bash
         run: |
-          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --verbose --threads=2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
       - name: Regression Test CSV
         if: always()
         shell: bash
         run: |
-          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/csv.csv --verbose --threads=2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/csv.csv --verbose --threads 2
 
       - name: Regression Test RealNest 
         if: always()
@@ -139,7 +135,7 @@ jobs:
           mkdir -p duckdb/duckdb_benchmark_data
           wget https://duckdb-blobs.s3.amazonaws.com/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
           cp duckdb_benchmark_data/real_nest.duckdb duckdb/duckdb_benchmark_data/real_nest.duckdb
-          python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/realnest.csv --verbose --threads=2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/realnest.csv --verbose --threads 2
          
   regression-test-storage:
     name: Storage Size Regression Test
@@ -148,8 +144,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
+      CORE_EXTENSIONS: "tpch;tpcds"
 
     steps:
       - uses: actions/checkout@v4
@@ -182,7 +177,7 @@ jobs:
       - name: Regression Test
         shell: bash
         run: |
-          python scripts/regression_test_storage_size.py --old=duckdb/build/release/duckdb --new=build/release/duckdb
+          python scripts/regression_test_storage_size.py --old duckdb/build/release/duckdb --new build/release/duckdb
 
       - name: Test for incompatibility
         shell: bash
@@ -229,10 +224,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_JSON: 1
-      BUILD_PARQUET: 1
+      CORE_EXTENSIONS: "tpch;tpcds;json;parquet"
       EXTENSION_STATIC_BUILD: 1
     steps:
       - uses: actions/checkout@v4
@@ -274,8 +266,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_TPCH: 1
-      BUILD_HTTPFS: 1
+      CORE_EXTENSIONS: "tpch;httpfs"
 
     steps:
       - uses: actions/checkout@v4
@@ -314,12 +305,12 @@ jobs:
         if: always()
         shell: bash
         run: |
-          python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/imdb_plan_cost
+          python scripts/plan_cost_runner.py --old duckdb/build/release/duckdb --new build/release/duckdb --dir=benchmark/imdb_plan_cost
 
       - name: Regression Test TPCH
         if: always()
         shell: bash
         run: |
-          python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/tpch_plan_cost
+          python scripts/plan_cost_runner.py --old duckdb/build/release/duckdb --new build/release/duckdb --dir=benchmark/tpch_plan_cost
 
 

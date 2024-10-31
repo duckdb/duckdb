@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
@@ -215,6 +216,17 @@ unique_ptr<Expression> BoundCastExpression::Copy() const {
 	auto copy = make_uniq<BoundCastExpression>(child->Copy(), return_type, bound_cast.Copy(), try_cast);
 	copy->CopyProperties(*this);
 	return std::move(copy);
+}
+
+bool BoundCastExpression::CanThrow() const {
+	const auto child_type = child->return_type;
+	if (return_type.id() != child_type.id() &&
+	    LogicalType::ForceMaxLogicalType(return_type, child_type) == child_type.id()) {
+		return true;
+	}
+	bool changes_type = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { changes_type |= child.CanThrow(); });
+	return changes_type;
 }
 
 } // namespace duckdb

@@ -2,7 +2,8 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.experimental.spark.sql.types import (
+from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,8 +15,19 @@ from duckdb.experimental.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
-from duckdb.experimental.spark.sql.functions import sum, avg, max, min, mean, count, any_value, approx_count_distinct
+from spark_namespace.sql.functions import col, struct, when, lit, array_contains
+from spark_namespace.sql.functions import (
+    sum,
+    avg,
+    max,
+    min,
+    mean,
+    count,
+    any_value,
+    approx_count_distinct,
+    covar_pop,
+    covar_samp,
+)
 
 
 class TestDataFrameGroupBy(object):
@@ -70,10 +82,10 @@ class TestDataFrameGroupBy(object):
 
         df2 = df.groupBy("department").mean("salary").sort("department")
         res = df2.collect()
-        assert (
-            str(res)
-            == "[Row(department='Finance', mean(salary)=87750.0), Row(department='Marketing', mean(salary)=85500.0), Row(department='Sales', mean(salary)=85666.66666666667)]"
-        )
+        expected_res_str = "[Row(department='Finance', mean(salary)=87750.0), Row(department='Marketing', mean(salary)=85500.0), Row(department='Sales', mean(salary)=85666.66666666667)]"
+        if USE_ACTUAL_SPARK:
+            expected_res_str = expected_res_str.replace("mean(", "avg(")
+        assert str(res) == expected_res_str
 
         df2 = df.groupBy("department", "state").sum("salary", "bonus").sort("department", "state")
         res = df2.collect()
@@ -118,6 +130,22 @@ class TestDataFrameGroupBy(object):
             str(res)
             == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000, any_state='CA'), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000, any_state='NY')]"
         )
+
+        df = spark.createDataFrame(
+            [
+                (1, 1, "a"),
+                (2, 2, "a"),
+                (2, 3, "a"),
+                (5, 4, "a"),
+            ],
+            schema=["age", "other_variable", "group"],
+        )
+        df2 = df.groupBy("group").agg(
+            covar_pop("age", "other_variable").alias("covar_pop"),
+            covar_samp("age", "other_variable").alias("covar_samp"),
+        )
+        res = df2.collect()
+        assert str(res) == "[Row(group='a', covar_pop=1.5, covar_samp=2.0)]"
 
     def test_group_by_empty(self, spark):
         df = spark.createDataFrame(

@@ -94,13 +94,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterTableFunctions();
 	RegisterArrowFunctions();
 
-	RegisterDistributiveAggregates();
-
-	RegisterCompressedMaterializationFunctions();
-	RegisterOperators();
-	RegisterSequenceFunctions();
-	RegisterNestedFunctions();
-
 	RegisterPragmaFunctions();
 
 	// initialize collations

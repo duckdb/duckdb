@@ -70,7 +70,7 @@ typedef Value (*get_setting_function_t)(const ClientContext &context);
 struct ConfigurationOption {
 	const char *name;
 	const char *description;
-	LogicalTypeId parameter_type;
+	const char *parameter_type;
 	set_global_function_t set_global;
 	set_local_function_t set_local;
 	reset_global_function_t reset_global;
@@ -274,6 +274,10 @@ struct DBConfigOptions {
 	bool debug_skip_checkpoint_on_commit = false;
 	//! The maximum amount of vacuum tasks to schedule during a checkpoint
 	idx_t max_vacuum_tasks = 100;
+	//! Paths that are explicitly allowed, even if enable_external_access is false
+	unordered_set<string> allowed_paths;
+	//! Directories that are explicitly allowed, even if enable_external_access is false
+	set<string> allowed_directories;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -348,6 +352,7 @@ public:
 	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);
+	static LogicalType ParseLogicalType(const string &type);
 
 	DUCKDB_API void CheckLock(const string &name);
 
@@ -386,6 +391,11 @@ public:
 		std::lock_guard<mutex> lock(config_lock);
 		return OP::GetSetting(context);
 	}
+
+	bool CanAccessFile(const string &path, FileType type);
+	void AddAllowedDirectory(const string &path);
+	void AddAllowedPath(const string &path);
+	string SanitizeAllowedPath(const string &path) const;
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

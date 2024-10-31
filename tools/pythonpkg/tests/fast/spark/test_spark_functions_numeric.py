@@ -1,8 +1,8 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql import functions as F
-from duckdb.experimental.spark.sql.types import Row
+from spark_namespace.sql import functions as F
+from spark_namespace.sql.types import Row
 
 
 class TestSparkFunctionsNumeric(object):
@@ -86,7 +86,7 @@ class TestSparkFunctionsNumeric(object):
 
     def test_cos(self, spark):
         data = [
-            (0,),
+            (0.0,),
             (3.14159,),
         ]
         df = spark.createDataFrame(data, ["firstColumn"])
@@ -107,3 +107,160 @@ class TestSparkFunctionsNumeric(object):
         assert len(res) == 2
         assert res[0].acos_value == pytest.approx(0.0)
         assert res[1].acos_value == pytest.approx(3.141592653589793)
+
+    def test_exp(self, spark):
+        data = [
+            (0.693,),
+            (0.0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("exp_value", F.exp(F.col("firstColumn")))
+        res = df.select("exp_value").collect()
+        round(res[0].exp_value, 2) == 2
+        res[1].exp_value == 1
+
+    def test_factorial(self, spark):
+        data = [
+            (4,),
+            (5,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("factorial_value", F.factorial(F.col("firstColumn")))
+        res = df.select("factorial_value").collect()
+        assert res == [
+            Row(factorial_value=24),
+            Row(factorial_value=120),
+        ]
+
+    def test_log2(self, spark):
+        data = [
+            (4,),
+            (8,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("log2_value", F.log2(F.col("firstColumn")))
+        res = df.select("log2_value").collect()
+        assert res == [
+            Row(log2_value=2.0),
+            Row(log2_value=3.0),
+        ]
+
+    def test_ln(self, spark):
+        data = [
+            (2.718,),
+            (1.0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("ln_value", F.ln(F.col("firstColumn")))
+        res = df.select("ln_value").collect()
+        round(res[0].ln_value, 2) == 1
+        res[1].ln_value == 0
+
+    def test_degrees(self, spark):
+        data = [
+            (3.14159,),
+            (0.0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("degrees_value", F.degrees(F.col("firstColumn")))
+        res = df.select("degrees_value").collect()
+        round(res[0].degrees_value, 2) == 180
+        res[1].degrees_value == 0
+
+    def test_radians(self, spark):
+        data = [
+            (180,),
+            (0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("radians_value", F.radians(F.col("firstColumn")))
+        res = df.select("radians_value").collect()
+        round(res[0].radians_value, 2) == 3.14
+        res[1].radians_value == 0
+
+    def test_atan(self, spark):
+        data = [
+            (1,),
+            (0,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("atan_value", F.atan(F.col("firstColumn")))
+        res = df.select("atan_value").collect()
+        round(res[0].atan_value, 2) == 0.79
+        res[1].atan_value == 0
+
+    def test_atan2(self, spark):
+        data = [
+            (1, 1),
+            (0, 0),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+
+        # Both columns
+        df2 = df.withColumn("atan2_value", F.atan2(F.col("firstColumn"), "secondColumn"))
+        res = df2.select("atan2_value").collect()
+        round(res[0].atan2_value, 2) == 0.79
+        res[1].atan2_value == 0
+
+        # Both literals
+        df2 = df.withColumn("atan2_value_lit", F.atan2(1, 1))
+        res = df2.select("atan2_value_lit").collect()
+        round(res[0].atan2_value_lit, 2) == 0.79
+        round(res[1].atan2_value_lit, 2) == 0.79
+
+        # One literal, one column
+        df2 = df.withColumn("atan2_value_lit_col", F.atan2(1.0, F.col("secondColumn")))
+        res = df2.select("atan2_value_lit_col").collect()
+        round(res[0].atan2_value_lit_col, 2) == 0.79
+        res[1].atan2_value_lit_col == 0
+
+    def test_tan(self, spark):
+        data = [
+            (0,),
+            (1,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("tan_value", F.tan(F.col("firstColumn")))
+        res = df.select("tan_value").collect()
+        res[0].tan_value == 0
+        round(res[1].tan_value, 2) == 1.56
+
+    def test_round(self, spark):
+        data = [
+            (11.15,),
+            (2.9,),
+            # Test with this that HALF_UP rounding method is used and not HALF_EVEN
+            (2.5,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = (
+            df.withColumn("round_value", F.round("firstColumn"))
+            .withColumn("round_value_1", F.round(F.col("firstColumn"), 1))
+            .withColumn("round_value_minus_1", F.round("firstColumn", -1))
+        )
+        res = df.select("round_value", "round_value_1", "round_value_minus_1").collect()
+        assert res == [
+            Row(round_value=11, round_value_1=11.2, round_value_minus_1=10),
+            Row(round_value=3, round_value_1=2.9, round_value_minus_1=0),
+            Row(round_value=3, round_value_1=2.5, round_value_minus_1=0),
+        ]
+
+    def test_bround(self, spark):
+        data = [
+            (11.15,),
+            (2.9,),
+            # Test with this that HALF_EVEN rounding method is used and not HALF_UP
+            (2.5,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = (
+            df.withColumn("round_value", F.bround(F.col("firstColumn")))
+            .withColumn("round_value_1", F.bround(F.col("firstColumn"), 1))
+            .withColumn("round_value_minus_1", F.bround(F.col("firstColumn"), -1))
+        )
+        res = df.select("round_value", "round_value_1", "round_value_minus_1").collect()
+        assert res == [
+            Row(round_value=11, round_value_1=11.2, round_value_minus_1=10),
+            Row(round_value=3, round_value_1=2.9, round_value_minus_1=0),
+            Row(round_value=2, round_value_1=2.5, round_value_minus_1=0),
+        ]

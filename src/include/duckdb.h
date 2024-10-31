@@ -626,7 +626,7 @@ typedef struct _duckdb_arrow_array {
 //===--------------------------------------------------------------------===//
 //! Passed to C API extension as parameter to the entrypoint
 struct duckdb_extension_access {
-	//! Indicate that an error has occured
+	//! Indicate that an error has occurred
 	void (*set_error)(duckdb_extension_info info, const char *error);
 	//! Fetch the database from duckdb to register extensions to
 	duckdb_database *(*get_database)(duckdb_extension_info info);
@@ -1470,6 +1470,19 @@ Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the stat
 * @return The parameter type
 */
 DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+
+/*!
+Returns the parameter logical type for the parameter at the given index.
+
+Returns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.
+
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+* @param prepared_statement The prepared statement.
+* @param param_idx The parameter index.
+* @return The parameter logical type
+*/
+DUCKDB_API duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
 /*!
 Clear the params bind to the prepared statement.
