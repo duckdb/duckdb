@@ -139,6 +139,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 
 namespace duckdb {
@@ -3657,6 +3658,54 @@ const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value) {
 template<>
 TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value) {
 	return static_cast<TaskExecutionResult>(StringUtil::StringToEnum(GetTaskExecutionResultValues(), 4, "TaskExecutionResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTemporaryBufferSizeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TemporaryBufferSize::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S32K), "S32K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S64K), "S64K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S96K), "S96K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S128K), "S128K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S160K), "S160K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S192K), "S192K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::S224K), "S224K" },
+		{ static_cast<uint32_t>(TemporaryBufferSize::DEFAULT), "DEFAULT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value) {
+	return StringUtil::EnumToString(GetTemporaryBufferSizeValues(), 9, "TemporaryBufferSize", static_cast<uint32_t>(value));
+}
+
+template<>
+TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value) {
+	return static_cast<TemporaryBufferSize>(StringUtil::StringToEnum(GetTemporaryBufferSizeValues(), 9, "TemporaryBufferSize", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTemporaryCompressionLevelValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_MINUS_FIVE), "ZSTD_MINUS_FIVE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_MINUS_THREE), "ZSTD_MINUS_THREE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_MINUS_ONE), "ZSTD_MINUS_ONE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::UNCOMPRESSED), "UNCOMPRESSED" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_ONE), "ZSTD_ONE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_THREE), "ZSTD_THREE" },
+		{ static_cast<uint32_t>(TemporaryCompressionLevel::ZSTD_FIVE), "ZSTD_FIVE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TemporaryCompressionLevel>(TemporaryCompressionLevel value) {
+	return StringUtil::EnumToString(GetTemporaryCompressionLevelValues(), 7, "TemporaryCompressionLevel", static_cast<uint32_t>(value));
+}
+
+template<>
+TemporaryCompressionLevel EnumUtil::FromString<TemporaryCompressionLevel>(const char *value) {
+	return static_cast<TemporaryCompressionLevel>(StringUtil::StringToEnum(GetTemporaryCompressionLevelValues(), 7, "TemporaryCompressionLevel", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTimestampCastResultValues() {
