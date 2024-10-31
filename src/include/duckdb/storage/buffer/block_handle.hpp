@@ -102,7 +102,6 @@ public:
 	}
 
 	inline void SetDestroyBufferUpon(DestroyBufferUpon destroy_buffer_upon_p) {
-		lock_guard<mutex> guard(lock);
 		destroy_buffer_upon = destroy_buffer_upon_p;
 	}
 
@@ -152,7 +151,7 @@ private:
 	//! LRU timestamp (for age-based eviction)
 	atomic<int64_t> lru_timestamp_msec;
 	//! When to destroy the data buffer
-	DestroyBufferUpon destroy_buffer_upon;
+	atomic<DestroyBufferUpon> destroy_buffer_upon;
 	//! The memory usage of the block (when loaded). If we are pinning/loading
 	//! an unloaded block, this tells us how much memory to reserve.
 	idx_t memory_usage;
