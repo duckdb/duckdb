@@ -735,7 +735,7 @@
       },
       {"id": 121,
         "name": "dialect_options.state_machine_options.delimiter",
-        "type": "CSVOption<char>"
+        "type": "CSVOption<string>"
       },
       {"id": 122,
         "name": "dialect_options.state_machine_options.quote",

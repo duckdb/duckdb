@@ -41,7 +41,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 	}
 
-	uint8_t delimiter = static_cast<uint8_t>(state_machine_options.delimiter.GetValue());
+	uint8_t delimiter = static_cast<uint8_t>(state_machine_options.delimiter.GetValue()[0]);
 	uint8_t quote = static_cast<uint8_t>(state_machine_options.quote.GetValue());
 	uint8_t escape = static_cast<uint8_t>(state_machine_options.escape.GetValue());
 	uint8_t comment = static_cast<uint8_t>(state_machine_options.comment.GetValue());

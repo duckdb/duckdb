@@ -102,7 +102,7 @@ void CSVReaderOptions::SetSkipRows(int64_t skip_rows) {
 }
 
 string CSVReaderOptions::GetDelimiter() const {
-	return std::string(1, this->dialect_options.state_machine_options.delimiter.GetValue());
+	return this->dialect_options.state_machine_options.delimiter.GetValue();
 }
 
 void CSVReaderOptions::SetDelimiter(const string &input) {
@@ -110,7 +110,7 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 	if (input.empty()) {
 		delim_str = string("\0", 1);
 	}
-	this->dialect_options.state_machine_options.delimiter.Set(delim_str[0]);
+	this->dialect_options.state_machine_options.delimiter.Set(delim_str);
 }
 
 string CSVReaderOptions::GetQuote() const {

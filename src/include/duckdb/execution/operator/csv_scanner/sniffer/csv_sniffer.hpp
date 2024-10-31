@@ -43,7 +43,7 @@ struct DialectCandidates {
 	string Print();
 
 	//! Candidates for the delimiter
-	vector<char> delim_candidates;
+	vector<string> delim_candidates;
 	//! Candidates for the comment
 	vector<char> comment_candidates;
 	//! Quote-Rule Candidates

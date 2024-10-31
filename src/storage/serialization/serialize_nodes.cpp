@@ -188,7 +188,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(118, "rejects_limit", rejects_limit);
 	/* [Deleted] (vector<string>) "rejects_recovery_columns" */
 	/* [Deleted] (vector<idx_t>) "rejects_recovery_column_ids" */
-	serializer.WriteProperty<CSVOption<char>>(121, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
+	serializer.WriteProperty<CSVOption<string>>(121, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
 	serializer.WriteProperty<CSVOption<char>>(122, "dialect_options.state_machine_options.quote", dialect_options.state_machine_options.quote);
 	serializer.WriteProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", dialect_options.state_machine_options.escape);
 	serializer.WriteProperty<CSVOption<bool>>(124, "dialect_options.header", dialect_options.header);
@@ -231,7 +231,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit", result.rejects_limit);
 	deserializer.ReadDeletedProperty<vector<string>>(119, "rejects_recovery_columns");
 	deserializer.ReadDeletedProperty<vector<idx_t>>(120, "rejects_recovery_column_ids");
-	deserializer.ReadProperty<CSVOption<char>>(121, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
+	deserializer.ReadProperty<CSVOption<string>>(121, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
 	deserializer.ReadProperty<CSVOption<char>>(122, "dialect_options.state_machine_options.quote", result.dialect_options.state_machine_options.quote);
 	deserializer.ReadProperty<CSVOption<char>>(123, "dialect_options.state_machine_options.escape", result.dialect_options.state_machine_options.escape);
 	deserializer.ReadProperty<CSVOption<bool>>(124, "dialect_options.header", result.dialect_options.header);
