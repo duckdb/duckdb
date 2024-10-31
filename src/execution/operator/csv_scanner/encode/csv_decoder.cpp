@@ -49,12 +49,12 @@ CSVDecoder::CSVDecoder(DBConfig &config, const string &enconding_name_p, idx_t b
 		throw InvalidInputException(error.str());
 	}
 	// Let's enforce that the encoded buffer size is divisible by 2, makes life easier.
-	idx_t encoded_buffer_size = buffer_size / function->ratio;
+	idx_t encoded_buffer_size = buffer_size / function->GetRatio();
 	if (encoded_buffer_size % 2 != 0) {
 		encoded_buffer_size = encoded_buffer_size - 1;
 	}
 	encoded_buffer.Initialize(encoded_buffer_size);
-	remaining_bytes_buffer.Initialize(function->bytes_per_iteration);
+	remaining_bytes_buffer.Initialize(function->GetBytesPerIteration());
 	decoding_function = function;
 	D_ASSERT(encoded_buffer_size > 0);
 }
@@ -73,7 +73,7 @@ idx_t CSVDecoder::Decode(FileHandle &file_handle_input, char *output_buffer, con
 	}
 	// 2. remaining encoded buffer
 	if (encoded_buffer.HasDataToRead()) {
-		decoding_function->decode_function(
+		decoding_function->GetFunction()(
 		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
 		    nr_bytes_to_read, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
 	}
@@ -84,7 +84,7 @@ idx_t CSVDecoder::Decode(FileHandle &file_handle_input, char *output_buffer, con
 		auto actual_encoded_bytes =
 		    static_cast<idx_t>(file_handle_input.Read(encoded_buffer.Ptr(), encoded_buffer.GetCapacity()));
 		encoded_buffer.SetSize(actual_encoded_bytes);
-		decoding_function->decode_function(
+		decoding_function->GetFunction()(
 		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
 		    nr_bytes_to_read, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
 		if (output_buffer_pos == current_decoded_buffer_start) {

@@ -109,10 +109,19 @@ void DecodeUTF8(char *encoded_buffer, idx_t &encoded_buffer_current_position, co
 static const DecodingFunction internal_decode_methods[] = {
     {"utf-8", DecodeLatin1, 1, 0}, {"latin-1", DecodeLatin1, 2, 1}, {"utf-16", DecodeUTF16, 2, 2}};
 
-DecodingFunctionSet::DecodingFunctionSet() {
+void DecodingFunctionSet::Initialize(DBConfig &config) {
 	for (auto &decode_method : internal_decode_methods) {
-		functions[decode_method.decoding_type] = decode_method;
+		config.RegisterDecodeFunction(decode_method);
 	}
+}
+
+void DBConfig::RegisterDecodeFunction(const DecodingFunction &function) const {
+	lock_guard<mutex> l(decoding_functions->lock);
+	const auto decode_type = function.GetType();
+	if (decoding_functions->functions.find(decode_type) != decoding_functions->functions.end()) {
+		throw InvalidInputException("Decoding function with name %s already registered", decode_type);
+	}
+	decoding_functions->functions[decode_type] = function;
 }
 
 optional_ptr<DecodingFunction> DBConfig::GetDecodeFunction(string name) const {

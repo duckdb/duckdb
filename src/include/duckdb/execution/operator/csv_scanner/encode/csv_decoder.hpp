@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class DBConfig;
+struct DBConfig;
 
 //! Struct that holds encoder buffers
 struct CSVEncoderBuffer {

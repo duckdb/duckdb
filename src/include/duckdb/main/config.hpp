@@ -361,6 +361,8 @@ public:
 
 	//! Returns the decode function matching the encoding name.
 	DUCKDB_API optional_ptr<DecodingFunction> GetDecodeFunction(string name) const;
+	DUCKDB_API void RegisterDecodeFunction(const DecodingFunction &function) const;
+
 	//! Returns the decode function names.
 	DUCKDB_API vector<string> GetLoadedDecodeFunctionNames() const;
 	bool operator==(const DBConfig &other);
