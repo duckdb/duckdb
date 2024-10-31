@@ -6,7 +6,6 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/constants.hpp"
 #include "zstd_wrapper.hpp"
-#include "duckdb/storage/compression/zstd.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
@@ -990,7 +989,7 @@ CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
 	auto zstd = CompressionFunction(
 	    CompressionType::COMPRESSION_ZSTD, data_type, ZSTDStorage::StringInitAnalyze, ZSTDStorage::StringAnalyze,
-	    ZSTDStorage::StringFinalAnalyze, nullptr, ZSTDStorage::InitCompression, ZSTDStorage::Compress,
+	    ZSTDStorage::StringFinalAnalyze, ZSTDStorage::InitCompression, ZSTDStorage::Compress,
 	    ZSTDStorage::FinalizeCompress, ZSTDStorage::StringInitScan, ZSTDStorage::StringScan,
 	    ZSTDStorage::StringScanPartial, ZSTDStorage::StringFetchRow, ZSTDStorage::StringSkip);
 	zstd.init_segment = ZSTDStorage::StringInitSegment;
