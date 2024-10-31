@@ -86,7 +86,7 @@ struct CSVReaderOptions {
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
 	idx_t maximum_line_size = 2097152;
-	//! Whether or not header names shall be normalized
+	//! Whether header names shall be normalized
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
 	unordered_set<string> force_not_null_names;

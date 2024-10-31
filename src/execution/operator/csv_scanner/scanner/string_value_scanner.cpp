@@ -533,14 +533,19 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 }
 
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
+	idx_t extra_delimiter_bytes =
+	    result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1;
 	if (result.last_position.buffer_pos > buffer_pos) {
 		return;
 	}
 	if (result.quoted) {
-		StringValueResult::AddQuotedValue(result, buffer_pos);
+		AddQuotedValue(result, buffer_pos - extra_delimiter_bytes);
 	} else {
-		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
-		                        buffer_pos - result.last_position.buffer_pos);
+		idx_t size = buffer_pos - result.last_position.buffer_pos - extra_delimiter_bytes;
+		if (buffer_pos < result.last_position.buffer_pos + extra_delimiter_bytes) {
+			size = 0;
+		}
+		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos, size);
 	}
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
