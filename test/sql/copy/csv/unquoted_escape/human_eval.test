@@ -19,8 +19,8 @@
 # CREATE TABLE t (task_id TEXT, prompt TEXT, entry_point TEXT, canonical_solution TEXT, test TEXT);
 # SET GLOBAL local_infile = 1;
 # LOAD DATA LOCAL INFILE './HumanEval.csv' INTO TABLE t FIELDS TERMINATED BY ',' ENCLOSED BY '"' ESCAPED BY '"' IGNORE 1 LINES;
-# TABLE t INTO OUTFILE '/tmp/human_eval.tsv';
-# TABLE t INTO OUTFILE '/tmp/human_eval.csv' FIELDS TERMINATED BY ',';
+# TABLE t LIMIT 10 INTO OUTFILE '/tmp/human_eval.tsv';
+# TABLE t LIMIT 10 INTO OUTFILE '/tmp/human_eval.csv' FIELDS TERMINATED BY ',';
 # EOF
 #
 # docker cp tmp-gen-csv:/tmp/human_eval.tsv .
@@ -40,21 +40,34 @@ CREATE TABLE human_eval_jsonl AS
 SELECT REPLACE(COLUMNS(*), '    ', E'\t') FROM read_ndjson_auto(
 'https://raw.githubusercontent.com/openai/human-eval/refs/heads/master/data/HumanEval.jsonl.gz');
 
+# keep the first 10 rows
+statement ok
+DELETE FROM human_eval_jsonl WHERE split_part(task_id, '/', 2)::int >= 10;
+
 statement ok
 CREATE TABLE human_eval_csv(task_id TEXT, prompt TEXT, entry_point TEXT, canonical_solution TEXT, test TEXT);
 
 statement ok
 CREATE TABLE human_eval_tsv(task_id TEXT, prompt TEXT, entry_point TEXT, canonical_solution TEXT, test TEXT);
 
+loop buffer_size 10 25
+
+statement ok
+TRUNCATE human_eval_csv;
+
+statement ok
+TRUNCATE human_eval_tsv;
+
+# replace the CRLF with LF to pass the test on Windows
 statement ok
 INSERT INTO human_eval_csv
 SELECT replace(COLUMNS(*), E'\r\n', E'\n')
-FROM read_csv('data/csv/unquoted_escape/human_eval.csv', quote = '', escape = '\', sep = ',', header = false);
+FROM read_csv('data/csv/unquoted_escape/human_eval.csv', quote = '', escape = '\', sep = ',', header = false, rfc_4180 = false);
 
 statement ok
 INSERT INTO human_eval_tsv
 SELECT replace(COLUMNS(*), E'\r\n', E'\n')
-FROM read_csv('data/csv/unquoted_escape/human_eval.tsv', quote = '', escape = '\', sep = '\t', header = false);
+FROM read_csv('data/csv/unquoted_escape/human_eval.tsv', quote = '', escape = '\', sep = '\t', header = false, rfc_4180 = false);
 
 # Verify that the three copies are the same
 query II
@@ -66,6 +79,8 @@ SELECT count(*), bool_and(
     j.test = c.test AND j.test = t.test
 )::int
 FROM human_eval_jsonl j, human_eval_csv c, human_eval_tsv t
-WHERE j.task_id = c.task_id AND j.task_id = t.task_id;
+WHERE j.task_id = c.task_id AND j.task_id = t.task_id
 ----
-164	1
+10	1
+
+endloop

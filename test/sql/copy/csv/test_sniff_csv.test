@@ -94,7 +94,7 @@ FROM sniff_csv('data/csv/timings.csv')
 |	"	"	\n	\0	0	1	[{'name': tool, 'type': VARCHAR}, {'name': sf, 'type': BIGINT}, {'name': day, 'type': DATE}, {'name': batch_type, 'type': VARCHAR}, {'name': q, 'type': VARCHAR}, {'name': parameters, 'type': VARCHAR}, {'name': time, 'type': DOUBLE}]	%Y-%m-%d	NULL	NULL	FROM read_csv('data/csv/timings.csv', auto_detect=false, delim='|', quote='"', escape='"', new_line='\n', skip=0, comment='', header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d');
 
 query IIIIIII
-FROM read_csv('data/csv/timings.csv', auto_detect=false, delim='|', quote='"', escape='', new_line='\n', skip=0, header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d') order by all limit 1;
+FROM read_csv('data/csv/timings.csv', auto_detect=false, delim='|', quote='"', escape='\', new_line='\n', skip=0, header=true, columns={'tool': 'VARCHAR', 'sf': 'BIGINT', 'day': 'DATE', 'batch_type': 'VARCHAR', 'q': 'VARCHAR', 'parameters': 'VARCHAR', 'time': 'DOUBLE'}, dateformat='%Y-%m-%d') order by all limit 1;
 ----
 Umbra	100	2012-11-29	power	1	{"datetime": "2010-02-26T03:51:21.000+00:00"}	0.05473947525024414
 

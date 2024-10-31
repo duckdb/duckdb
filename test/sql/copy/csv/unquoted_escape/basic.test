@@ -5,6 +5,17 @@
 statement ok
 PRAGMA enable_verification
 
+query IT
+SELECT * FROM read_csv('data/csv/unquoted_escape/plain.csv', escape = '\', sep = ',', rfc_4180 = false);
+----
+0	\
+1	,
+2	"
+3	\,
+4	\"
+5	,"
+6	\,"
+
 statement ok
 CREATE TABLE special_char(a INT, b STRING);
 
@@ -20,8 +31,9 @@ INSERT INTO special_char VALUES
 
 loop buffer_size 10 25
 
+# replace CRLF with LF to pass the test on Windows
 query I
-SELECT bool_and(b = replace(s, E'\r\n', E'\n'))::int FROM special_char JOIN read_csv('data/csv/unquoted_escape/basic.tsv', quote = '', escape = '\', sep = '\t') t (i, s, j) ON i = a;
+SELECT bool_and(b = replace(s, E'\r\n', E'\n'))::int FROM special_char JOIN read_csv('data/csv/unquoted_escape/basic.tsv', quote = '', escape = '\', sep = '\t', rfc_4180 = false) t (i, s, j) ON i = a;
 ----
 1
 

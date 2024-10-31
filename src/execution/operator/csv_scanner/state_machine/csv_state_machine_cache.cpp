@@ -49,6 +49,9 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	auto new_line_id = state_machine_options.new_line.GetValue();
 
+	bool enable_unquoted_escape = state_machine_options.rfc_4180.GetValue() == false
+		&& state_machine_options.quote != state_machine_options.escape;
+
 	// Now set values depending on configuration
 	// 1) Standard/Invalid State
 	vector<uint8_t> std_inv {static_cast<uint8_t>(CSVState::STANDARD), static_cast<uint8_t>(CSVState::INVALID)};
@@ -63,7 +66,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		if (comment != '\0') {
 			transition_array[comment][state] = CSVState::COMMENT;
 		}
-		if (state_machine_options.quote != state_machine_options.escape) {
+		if (enable_unquoted_escape) {
 			transition_array[escape][state] = CSVState::UNQUOTED_ESCAPE;
 		}
 	}
@@ -85,7 +88,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::DELIMITER)] = CSVState::COMMENT;
 	}
-	if (state_machine_options.quote != state_machine_options.escape) {
+	if (enable_unquoted_escape) {
 		transition_array[escape][static_cast<uint8_t>(CSVState::DELIMITER)] = CSVState::UNQUOTED_ESCAPE;
 	}
 
@@ -107,7 +110,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::COMMENT;
 	}
-	if (state_machine_options.quote != state_machine_options.escape) {
+	if (enable_unquoted_escape) {
 		transition_array[escape][static_cast<uint8_t>(CSVState::RECORD_SEPARATOR)] = CSVState::UNQUOTED_ESCAPE;
 	}
 
@@ -123,7 +126,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] = CSVState::COMMENT;
 	}
-	if (state_machine_options.quote != state_machine_options.escape) {
+	if (enable_unquoted_escape) {
 		transition_array[escape][static_cast<uint8_t>(CSVState::CARRIAGE_RETURN)] = CSVState::UNQUOTED_ESCAPE;
 	}
 
@@ -172,7 +175,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::COMMENT;
 	}
-	if (state_machine_options.quote != state_machine_options.escape) {
+	if (enable_unquoted_escape) {
 		transition_array[escape][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::UNQUOTED_ESCAPE;
 	}
 
@@ -197,7 +200,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::EMPTY_SPACE)] = CSVState::COMMENT;
 	}
-	if (state_machine_options.quote != state_machine_options.escape) {
+	if (enable_unquoted_escape) {
 		transition_array[escape][static_cast<uint8_t>(CSVState::EMPTY_SPACE)] = CSVState::UNQUOTED_ESCAPE;
 	}
 
@@ -212,22 +215,24 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 
 	// 12) Unquoted Escape State
-	transition_array[delimiter][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
-	transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
-	transition_array[escape][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
-	transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
-	transition_array[static_cast<uint8_t>('\0')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
-	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
-	if (new_line_id == NewLineIdentifier::CARRY_ON) {
-		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
-		    CSVState::ESCAPED_RETURN;
-	} else {
-		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
-		    CSVState::STANDARD;
+	if (enable_unquoted_escape) {
+		transition_array[delimiter][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
+		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
+		transition_array[escape][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
+		transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
+		transition_array[static_cast<uint8_t>('\0')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
+		transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] = CSVState::STANDARD;
+		if (new_line_id == NewLineIdentifier::CARRY_ON) {
+			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
+				CSVState::ESCAPED_RETURN;
+		} else {
+			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED_ESCAPE)] =
+				CSVState::STANDARD;
+		}
 	}
 
 	// 13) Escaped Return State
-	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+	if (enable_unquoted_escape && new_line_id == NewLineIdentifier::CARRY_ON) {
 		// The new state is STANDARD for \r + \n and \r + ordinary character.
 		// Other special characters need to be handled.
 		transition_array[delimiter][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::DELIMITER;
@@ -241,9 +246,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		if (comment != '\0') {
 			transition_array[comment][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::COMMENT;
 		}
-		if (state_machine_options.quote != state_machine_options.escape) {
-			transition_array[escape][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::UNQUOTED_ESCAPE;
-		}
+		transition_array[escape][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::UNQUOTED_ESCAPE;
 	}
 
 	// Initialize characters we can skip during processing, for Standard and Quoted states
@@ -297,9 +300,11 @@ CSVStateMachineCache::CSVStateMachineCache() {
 				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quote_rule)];
 				for (const auto &escape : escape_candidates) {
 					for (const auto &comment : default_comment) {
-						Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_N});
-						Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_R});
-						Insert({delimiter, quote, escape, comment, NewLineIdentifier::CARRY_ON});
+						for (const bool rfc_4180 : {true, false}) {
+							Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_N, rfc_4180});
+							Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_R, rfc_4180});
+							Insert({delimiter, quote, escape, comment, NewLineIdentifier::CARRY_ON, rfc_4180});
+						}
 					}
 				}
 			}
