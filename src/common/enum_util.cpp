@@ -3073,6 +3073,24 @@ SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value) {
 	return static_cast<SecretPersistType>(StringUtil::StringToEnum(GetSecretPersistTypeValues(), 3, "SecretPersistType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetSecretSerializationTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SecretSerializationType::CUSTOM), "CUSTOM" },
+		{ static_cast<uint32_t>(SecretSerializationType::KEY_VALUE_SECRET), "KEY_VALUE_SECRET" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value) {
+	return StringUtil::EnumToString(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", static_cast<uint32_t>(value));
+}
+
+template<>
+SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value) {
+	return static_cast<SecretSerializationType>(StringUtil::StringToEnum(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetSequenceInfoValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SequenceInfo::SEQ_START), "SEQ_START" },
@@ -3083,29 +3101,6 @@ const StringUtil::EnumStringLiteral *GetSequenceInfoValues() {
 		{ static_cast<uint32_t>(SequenceInfo::SEQ_OWN), "SEQ_OWN" }
 	};
 	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value) {
-	switch(value) {
-	case SecretSerializationType::CUSTOM:
-		return "CUSTOM";
-	case SecretSerializationType::KEY_VALUE_SECRET:
-		return "KEY_VALUE_SECRET";
-	default:
-		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SecretSerializationType>", value));
-	}
-}
-
-template<>
-SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value) {
-	if (StringUtil::Equals(value, "CUSTOM")) {
-		return SecretSerializationType::CUSTOM;
-	}
-	if (StringUtil::Equals(value, "KEY_VALUE_SECRET")) {
-		return SecretSerializationType::KEY_VALUE_SECRET;
-	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SecretSerializationType>", value));
 }
 
 template<>
