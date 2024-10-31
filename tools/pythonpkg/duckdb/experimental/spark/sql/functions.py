@@ -2374,6 +2374,7 @@ def bround(col: "ColumnOrName", scale: int = 0) -> Column:
     """
     return _invoke_function_over_columns("round_even", col, lit(scale))
 
+
 def hex(col: "ColumnOrName") -> Column:
     """
     Computes hex value of the given column, which could be :class:`~pyspark.sql.types.StringType`, :class:`~pyspark.sql.types.BinaryType`, :class:`~pyspark.sql.types.IntegerType` or :class:`~pyspark.sql.types.LongType`.
@@ -2400,6 +2401,7 @@ def hex(col: "ColumnOrName") -> Column:
     """
     return _invoke_function_over_columns("hex", col)
 
+
 def unhex(col: "ColumnOrName") -> Column:
     """
     Inverse of hex. Interprets each pair of characters as a hexadecimal number and converts to the byte representation of number. column and returns it as a binary column.
@@ -2425,3 +2427,75 @@ def unhex(col: "ColumnOrName") -> Column:
     [Row(unhex(a)=bytearray(b'ABC'))]
     """
     return _invoke_function_over_columns("unhex", col)
+
+
+def base64(col: "ColumnOrName") -> Column:
+    """
+    Computes the BASE64 encoding of a binary column and returns it as a string column.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        BASE64 encoding of string value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(["Spark", "PySpark", "Pandas API"], "STRING")
+    >>> df.select(base64("value")).show()
+    +----------------+
+    |   base64(value)|
+    +----------------+
+    |        U3Bhcms=|
+    |    UHlTcGFyaw==|
+    |UGFuZGFzIEFQSQ==|
+    +----------------+
+    """
+    if isinstance(col,str):
+        col = Column(ColumnExpression(col))
+    return _invoke_function_over_columns("base64", col.cast("BLOB"))
+
+
+def unbase64(col: "ColumnOrName") -> Column:
+    """
+    Decodes a BASE64 encoded string column and returns it as a binary column.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        encoded string value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(["U3Bhcms=",
+    ...                            "UHlTcGFyaw==",
+    ...                            "UGFuZGFzIEFQSQ=="], "STRING")
+    >>> df.select(unbase64("value")).show()
+    +--------------------+
+    |     unbase64(value)|
+    +--------------------+
+    |    [53 70 61 72 6B]|
+    |[50 79 53 70 61 7...|
+    |[50 61 6E 64 61 7...|
+    +--------------------+
+    """
+    return _invoke_function_over_columns("from_base64", col)
