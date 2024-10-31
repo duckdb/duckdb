@@ -32,7 +32,8 @@ add_library_unity(
   statistics_propagator.cpp
   limit_pushdown.cpp
   topn_optimizer.cpp
-  unnest_rewriter.cpp)
+  unnest_rewriter.cpp
+  sampling_pushdown.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

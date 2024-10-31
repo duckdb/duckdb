@@ -214,10 +214,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
-		D_ASSERT(partition.inputs);
-		const auto &inputs = *partition.inputs;
-		D_ASSERT(inputs.ColumnCount() == 1);
-		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
+		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
 
 		QuantileIncluded<INPUT_TYPE> included(fmask, data);
@@ -320,10 +317,7 @@ struct QuantileListOperation : QuantileOperation {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
-		D_ASSERT(partition.inputs);
-		const auto &inputs = *partition.inputs;
-		D_ASSERT(inputs.ColumnCount() == 1);
-		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
+		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
 
 		D_ASSERT(aggr_input_data.bind_data);
@@ -426,7 +420,8 @@ struct ScalarDiscreteQuantile {
 	static AggregateFunction GetFunction(const LogicalType &type) {
 		using STATE = QuantileState<INPUT_TYPE, TYPE_OP>;
 		using OP = QuantileScalarOperation<true>;
-		auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
+		auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP,
+		                                                       AggregateDestructorType::LEGACY>(type, type);
 #ifndef DUCKDB_SMALLER_BINARY
 		fun.window = OP::Window<STATE, INPUT_TYPE, INPUT_TYPE>;
 		fun.window_init = OP::WindowInit<STATE, INPUT_TYPE>;
@@ -438,11 +433,12 @@ struct ScalarDiscreteQuantile {
 		using STATE = QuantileState<string_t, QuantileStringType>;
 		using OP = QuantileScalarFallback;
 
-		AggregateFunction fun(
-		    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
-		    AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-		    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, nullptr,
-		    AggregateFunction::StateDestroy<STATE, OP>);
+		AggregateFunction fun({type}, type, AggregateFunction::StateSize<STATE>,
+		                      AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
+		                      AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
+		                      AggregateFunction::StateCombine<STATE, OP>,
+		                      AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, nullptr,
+		                      AggregateFunction::StateDestroy<STATE, OP>);
 		return fun;
 	}
 };
@@ -451,7 +447,8 @@ template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 static AggregateFunction QuantileListAggregate(const LogicalType &input_type, const LogicalType &child_type) { // NOLINT
 	LogicalType result_type = LogicalType::LIST(child_type);
 	return AggregateFunction(
-	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+	    {input_type}, result_type, AggregateFunction::StateSize<STATE>,
+	    AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>,
 	    nullptr, AggregateFunction::StateDestroy<STATE, OP>);
@@ -475,11 +472,12 @@ struct ListDiscreteQuantile {
 		using STATE = QuantileState<string_t, QuantileStringType>;
 		using OP = QuantileListFallback;
 
-		AggregateFunction fun(
-		    {type}, LogicalType::LIST(type), AggregateFunction::StateSize<STATE>,
-		    AggregateFunction::StateInitialize<STATE, OP>, AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
-		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, list_entry_t, OP>,
-		    nullptr, nullptr, AggregateFunction::StateDestroy<STATE, OP>);
+		AggregateFunction fun({type}, LogicalType::LIST(type), AggregateFunction::StateSize<STATE>,
+		                      AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
+		                      AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>,
+		                      AggregateFunction::StateCombine<STATE, OP>,
+		                      AggregateFunction::StateFinalize<STATE, list_entry_t, OP>, nullptr, nullptr,
+		                      AggregateFunction::StateDestroy<STATE, OP>);
 		return fun;
 	}
 };
@@ -553,7 +551,8 @@ struct ScalarContinuousQuantile {
 		using STATE = QuantileState<INPUT_TYPE, QuantileStandardType>;
 		using OP = QuantileScalarOperation<false>;
 		auto fun =
-		    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
+		    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
+		                                                AggregateDestructorType::LEGACY>(input_type, target_type);
 		fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 #ifndef DUCKDB_SMALLER_BINARY
 		fun.window = OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>;

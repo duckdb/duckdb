@@ -222,7 +222,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
-			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
+			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(
+			    StringValue::Get(config.GetSetting<AutoinstallExtensionRepositorySetting>(context)));
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
@@ -373,7 +374,7 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, c
 		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",
 		                            extension_name);
 	} else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
-		throw InternalException("Failed to update extension '%s', an unknown error ocurred", extension_name);
+		throw InternalException("Failed to update extension '%s', an unknown error occurred", extension_name);
 	}
 	return update_result;
 }

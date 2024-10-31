@@ -29,11 +29,11 @@
 
 namespace duckdb {
 
-using duckdb_parquet::format::CompressionCodec;
-using duckdb_parquet::format::ConvertedType;
-using duckdb_parquet::format::Encoding;
-using duckdb_parquet::format::PageType;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::CompressionCodec;
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::Encoding;
+using duckdb_parquet::PageType;
+using duckdb_parquet::Type;
 
 const uint64_t ParquetDecodeUtils::BITPACK_MASKS[] = {0,
                                                       1,
@@ -237,6 +237,10 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	block.reset();
 	PageHeader page_hdr;
 	reader.Read(page_hdr, *protocol);
+	// some basic sanity check
+	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
+		throw std::runtime_error("Page sizes can't be < 0");
+	}
 
 	switch (page_hdr.type) {
 	case PageType::DATA_PAGE_V2:
@@ -277,7 +281,6 @@ void ColumnReader::ResetPage() {
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
-
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
@@ -299,6 +302,10 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
+	if (uncompressed_bytes > page_hdr.uncompressed_page_size) {
+		throw std::runtime_error("Page header inconsistency, uncompressed_page_size needs to be larger than "
+		                         "repetition_levels_byte_length + definition_levels_byte_length");
+	}
 	trans.read(block->ptr, uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
@@ -487,15 +494,16 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 }
 
-void ColumnReader::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now) {
+void ColumnReader::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now,
+                                       idx_t result_offset) {
 	D_ASSERT(read_now <= STANDARD_VECTOR_SIZE);
 	idx_t offset_idx = 0;
 	for (idx_t row_idx = 0; row_idx < read_now; row_idx++) {
-		if (HasDefines() && defines[row_idx] != max_define) {
+		if (HasDefines() && defines[row_idx + result_offset] != max_define) {
 			dictionary_selection_vector.set_index(row_idx, 0); // dictionary entry 0 is NULL
 			continue;                                          // we don't have a dict entry for NULLs
 		}
-		if (filter.test(row_idx)) {
+		if (filter.test(row_idx + result_offset)) {
 			auto offset = offsets[offset_idx++];
 			if (offset >= dictionary_size) {
 				throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
@@ -554,6 +562,11 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			}
 		}
 
+		if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
+			result.Flatten(result_offset);
+			result.Resize(result_offset, result_offset + read_now);
+		}
+
 		if (dict_decoder) {
 			if ((!dictionary || dictionary_size == 0) && null_count < read_now) {
 				throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
@@ -561,12 +574,12 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			offset_buffer.resize(reader.allocator, sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr),
-			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now);
-			if (read_now == num_values) {
-				D_ASSERT(result_offset == 0);
+			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now, result_offset);
+			if (result_offset == 0) {
 				result.Slice(*dictionary, dictionary_selection_vector, read_now);
 				D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 			} else {
+				D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 				VectorOperations::Copy(*dictionary, result, dictionary_selection_vector, read_now, 0, result_offset);
 			}
 		} else if (dbp_decoder) {
@@ -574,12 +587,12 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			auto read_buf = make_shared_ptr<ResizeableBuffer>();
 
 			switch (schema.type) {
-			case duckdb_parquet::format::Type::INT32:
+			case duckdb_parquet::Type::INT32:
 				read_buf->resize(reader.allocator, sizeof(int32_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int32_t>(read_buf->ptr, read_now - null_count);
 
 				break;
-			case duckdb_parquet::format::Type::INT64:
+			case duckdb_parquet::Type::INT64:
 				read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
 				break;
@@ -604,11 +617,11 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			auto read_buf = make_shared_ptr<ResizeableBuffer>();
 
 			switch (schema.type) {
-			case duckdb_parquet::format::Type::FLOAT:
+			case duckdb_parquet::Type::FLOAT:
 				read_buf->resize(reader.allocator, sizeof(float) * (read_now - null_count));
 				bss_decoder->GetBatch<float>(read_buf->ptr, read_now - null_count);
 				break;
-			case duckdb_parquet::format::Type::DOUBLE:
+			case duckdb_parquet::Type::DOUBLE:
 				read_buf->resize(reader.allocator, sizeof(double) * (read_now - null_count));
 				bss_decoder->GetBatch<double>(read_buf->ptr, read_now - null_count);
 				break;
@@ -719,6 +732,7 @@ void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < value_count; i++) {
 		auto str_len = length_data[i];
+		buffer.available(str_len);
 		string_data[i] = StringVector::EmptyString(*byte_array_data, str_len);
 		auto result_data = string_data[i].GetDataWriteable();
 		memcpy(result_data, buffer.ptr, length_data[i]);
@@ -747,6 +761,7 @@ void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < prefix_count; i++) {
 		auto str_len = prefix_data[i] + suffix_data[i];
+		buffer.available(suffix_data[i]);
 		string_data[i] = StringVector::EmptyString(*byte_array_data, str_len);
 		auto result_data = string_data[i].GetDataWriteable();
 		if (prefix_data[i] > 0) {
@@ -1334,7 +1349,7 @@ static unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reade
 
 template <>
 double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size,
-                                             const duckdb_parquet::format::SchemaElement &schema_ele) {
+                                             const duckdb_parquet::SchemaElement &schema_ele) {
 	double res = 0;
 	bool positive = (*pointer & 0x80) == 0;
 	for (idx_t i = 0; i < size; i += 8) {

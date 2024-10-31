@@ -22,8 +22,9 @@
 
 namespace duckdb {
 
-WALWriteState::WALWriteState(WriteAheadLog &log, optional_ptr<StorageCommitState> commit_state)
-    : log(log), commit_state(commit_state), current_table_info(nullptr) {
+WALWriteState::WALWriteState(DuckTransaction &transaction_p, WriteAheadLog &log,
+                             optional_ptr<StorageCommitState> commit_state)
+    : transaction(transaction_p), log(log), commit_state(commit_state), current_table_info(nullptr) {
 }
 
 void WALWriteState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
@@ -217,19 +218,20 @@ void WALWriteState::WriteUpdate(UpdateInfo &info) {
 	// write the row ids into the chunk
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
 	idx_t start = column_data.start + info.vector_index * STANDARD_VECTOR_SIZE;
+	auto tuples = info.GetTuples();
 	for (idx_t i = 0; i < info.N; i++) {
-		row_ids[info.tuples[i]] = UnsafeNumericCast<int64_t>(start + info.tuples[i]);
+		row_ids[tuples[i]] = UnsafeNumericCast<int64_t>(start + tuples[i]);
 	}
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
 		// zero-initialize the booleans
 		// FIXME: this is only required because of NullValue<T> in Vector::Serialize...
 		auto booleans = FlatVector::GetData<bool>(update_chunk->data[0]);
 		for (idx_t i = 0; i < info.N; i++) {
-			auto idx = info.tuples[i];
+			auto idx = tuples[i];
 			booleans[idx] = false;
 		}
 	}
-	SelectionVector sel(info.tuples);
+	SelectionVector sel(tuples);
 	update_chunk->Slice(sel, info.N);
 
 	// construct the column index path
@@ -259,7 +261,7 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		if (!info->table->IsTemporary()) {
-			info->table->WriteToLog(log, info->start_row, info->count, commit_state.get());
+			info->table->WriteToLog(transaction, log, info->start_row, info->count, commit_state.get());
 		}
 		break;
 	}

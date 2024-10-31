@@ -3,8 +3,8 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 from datetime import date, datetime
 
-from duckdb.experimental.spark.sql import functions as F
-from duckdb.experimental.spark.sql.types import Row
+from spark_namespace.sql import functions as F
+from spark_namespace.sql.types import Row
 
 
 class TestsSparkFunctionsDate(object):
@@ -36,7 +36,9 @@ class TestsSparkFunctionsDate(object):
         gen_record = df.select(*[F.date_trunc(fmt, "dt_ref").alias(fmt) for fmt in cols]).collect()[0]
 
         expected_record = spark.createDataFrame(
-            [r.values() for r in expected],
+            # Need to convert to a list for Spark which otherwise throws a TypeError.
+            # It would work without it for DuckDB.
+            [list(r.values()) for r in expected],
             cols,
         ).collect()[0]
 

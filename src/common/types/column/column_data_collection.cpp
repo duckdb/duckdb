@@ -119,6 +119,13 @@ idx_t ColumnDataCollection::AllocationSize() const {
 	return total_size;
 }
 
+void ColumnDataCollection::SetPartitionIndex(const idx_t index) {
+	D_ASSERT(!partition_index.IsValid());
+	D_ASSERT(Count() == 0);
+	partition_index = index;
+	allocator->SetPartitionIndex(index);
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnDataRow
 //===--------------------------------------------------------------------===//
@@ -401,7 +408,7 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 
 		auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
 		                                                  current_segment.offset);
-		auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, OP::TypeSize());
+		auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, OP::TypeSize());
 
 		ValidityMask result_validity(validity_data);
 		if (current_segment.count == 0) {
@@ -517,7 +524,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		auto &current_segment = segment.GetVectorData(current_index);
 		auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
 		                                                  current_segment.offset);
-		auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, sizeof(string_t));
+		auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, sizeof(string_t));
 		ValidityMask target_validity(validity_data);
 		if (current_segment.count == 0) {
 			// first time appending to this vector

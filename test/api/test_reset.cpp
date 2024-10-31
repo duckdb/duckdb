@@ -43,8 +43,8 @@ struct OptionValueSet {
 void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line);
 #define REQUIRE_VALUE_EQUAL(op, lhs, rhs) RequireValueEqual(op, lhs, rhs, __LINE__)
 
-OptionValueSet GetValueForOption(const string &name, LogicalTypeId type) {
-	static duckdb::unordered_map<string, OptionValueSet> value_map = {
+OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
+	static static_unordered_map<string, OptionValueSet> value_map = {
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
 	    {"checkpoint_threshold", {"4.0 GiB"}},
 	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
@@ -109,7 +109,7 @@ OptionValueSet GetValueForOption(const string &name, LogicalTypeId type) {
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
-		switch (type) {
+		switch (type.id()) {
 		case LogicalTypeId::BOOLEAN:
 			return OptionValueSet(Value::BOOLEAN(true));
 		case LogicalTypeId::TINYINT:
@@ -130,8 +130,10 @@ OptionValueSet GetValueForOption(const string &name, LogicalTypeId type) {
 }
 
 bool OptionIsExcludedFromTest(const string &name) {
-	static duckdb::unordered_set<string> excluded_options = {
+	static static_unordered_set<string> excluded_options = {
 	    "access_mode",
+	    "allowed_directories",
+	    "allowed_paths",
 	    "schema",
 	    "search_path",
 	    "debug_window_mode",
@@ -197,8 +199,9 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 
 		// Get the current value of the option
 		auto original_value = op->get_setting(*con.context);
+		auto parameter_type = DBConfig::ParseLogicalType(option.parameter_type);
 
-		auto value_set = GetValueForOption(option.name, option.parameter_type);
+		auto value_set = GetValueForOption(option.name, parameter_type);
 		// verify that at least one value is different
 		bool any_different = false;
 		string options;
@@ -221,7 +224,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 		}
 		for (auto &value_pair : value_set.pairs) {
 			// Get the new value for the option
-			auto input = value_pair.input.DefaultCastAs(op->parameter_type);
+			auto input = value_pair.input.DefaultCastAs(parameter_type);
 			// Set the new option
 			if (op->set_local) {
 				op->set_local(*con.context, input);

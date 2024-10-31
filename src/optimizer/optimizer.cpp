@@ -10,11 +10,12 @@
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
+#include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
+#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
@@ -24,10 +25,10 @@
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
+#include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
-#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -180,6 +181,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		cse_optimizer.VisitOperator(*plan);
 	});
 
+	// creates projection maps so unused columns are projected out early
+	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
+		ColumnLifetimeAnalyzer column_lifetime(*this, *plan, true);
+		column_lifetime.VisitOperator(*plan);
+	});
+
 	// Once we know the column lifetime, we have more information regarding
 	// what relations should be the build side/probe side.
 	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
@@ -193,16 +200,16 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = limit_pushdown.Optimize(std::move(plan));
 	});
 
+	// perform sampling pushdown
+	RunOptimizer(OptimizerType::SAMPLING_PUSHDOWN, [&]() {
+		SamplingPushdown sampling_pushdown;
+		plan = sampling_pushdown.Optimize(std::move(plan));
+	});
+
 	// transform ORDER BY + LIMIT to TopN
 	RunOptimizer(OptimizerType::TOP_N, [&]() {
 		TopN topn;
 		plan = topn.Optimize(std::move(plan));
-	});
-
-	// creates projection maps so unused columns are projected out early
-	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
-		ColumnLifetimeAnalyzer column_lifetime(true);
-		column_lifetime.VisitOperator(*plan);
 	});
 
 	// perform statistics propagation
@@ -221,7 +228,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
-		ColumnLifetimeAnalyzer column_lifetime(true);
+		ColumnLifetimeAnalyzer column_lifetime(*this, *plan, true);
 		column_lifetime.VisitOperator(*plan);
 	});
 

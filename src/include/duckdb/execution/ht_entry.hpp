@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/stl_allocator.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
@@ -22,17 +21,10 @@ namespace duckdb {
 */
 struct ht_entry_t { // NOLINT
 public:
-#ifdef USE_JEMALLOC // If we use jemalloc we're sure that the pointer is at most 48 bits
 	//! Upper 16 bits are salt
 	static constexpr const hash_t SALT_MASK = 0xFFFF000000000000;
 	//! Lower 48 bits are the pointer
 	static constexpr const hash_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
-#else // If we don't use jemalloc the pointer could be up to 52 bits (ARM64v8)
-	//! Upper 12 bits are salt
-	static constexpr const hash_t SALT_MASK = 0xFFF0000000000000;
-	//! Lower 52 bits are the pointer
-	static constexpr const hash_t POINTER_MASK = 0x000FFFFFFFFFFFFF;
-#endif
 
 	explicit inline ht_entry_t(hash_t value_p) noexcept : value(value_p) {
 	}

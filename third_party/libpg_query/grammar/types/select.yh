@@ -77,7 +77,7 @@
 
 %type <list>	map_arg map_arguments map_arguments_opt_comma opt_map_arguments_opt_comma
 
-%type <alias>	alias_clause opt_alias_clause
+%type <alias>	alias_clause opt_alias_clause alias_prefix_colon_clause
 %type <list>	func_alias_clause
 %type <sortby>	sortby
 
