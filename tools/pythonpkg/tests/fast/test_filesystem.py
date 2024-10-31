@@ -21,18 +21,18 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
-    error_occured = []
+    error_occurred = []
     orig = getattr(obj, name)
 
     def ceptor(*args, **kwargs):
         try:
             return orig(*args, **kwargs)
         except Exception as e:
-            error_occured.append(e)
+            error_occurred.append(e)
             raise e
 
     monkeypatch.setattr(obj, name, ceptor)
-    return error_occured
+    return error_occurred
 
 
 @fixture()

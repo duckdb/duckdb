@@ -38,3 +38,9 @@ statement error
 PIVOT test ON j IN ('a', 'b') USING sum(sum(41) over ());
 ----
 cannot contain window functions
+
+# empty pivot clause
+statement error
+FROM tbl PIVOT (c FOR IN enum_val);
+----
+Parser Error
