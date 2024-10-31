@@ -40,6 +40,8 @@ struct HeapEntry<string_t> {
 	HeapEntry(HeapEntry &&other) noexcept {
 		if (other.value.IsInlined()) {
 			value = other.value;
+			capacity = 0;
+			allocated_data = nullptr;
 		} else {
 			capacity = other.capacity;
 			allocated_data = other.allocated_data;
