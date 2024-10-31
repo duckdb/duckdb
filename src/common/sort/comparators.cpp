@@ -24,7 +24,7 @@ bool Comparators::TieIsBreakable(const idx_t &tie_col, const data_ptr_t &row_ptr
 	}
 	const auto &tie_col_offset = row_layout.GetOffsets()[col_idx];
 	auto tie_string = Load<string_t>(row_ptr + tie_col_offset);
-	if (tie_string.GetSize() < sort_layout.prefix_lengths[tie_col]) {
+	if (tie_string.GetSize() < sort_layout.prefix_lengths[tie_col] && tie_string.GetSize() > 0) {
 		// No need to break the tie - we already compared the full string
 		return false;
 	}
@@ -71,7 +71,7 @@ int Comparators::BreakBlobTie(const idx_t &tie_col, const SBScanState &left, con
                               const SortLayout &sort_layout, const bool &external) {
 	data_ptr_t l_data_ptr = left.DataPtr(*left.sb->blob_sorting_data);
 	data_ptr_t r_data_ptr = right.DataPtr(*right.sb->blob_sorting_data);
-	if (!TieIsBreakable(tie_col, l_data_ptr, sort_layout)) {
+	if (!TieIsBreakable(tie_col, l_data_ptr, sort_layout) && !TieIsBreakable(tie_col, r_data_ptr, sort_layout)) {
 		// Quick check to see if ties can be broken
 		return 0;
 	}

@@ -3086,6 +3086,29 @@ const StringUtil::EnumStringLiteral *GetSequenceInfoValues() {
 }
 
 template<>
+const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value) {
+	switch(value) {
+	case SecretSerializationType::CUSTOM:
+		return "CUSTOM";
+	case SecretSerializationType::KEY_VALUE_SECRET:
+		return "KEY_VALUE_SECRET";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented in ToChars<SecretSerializationType>", value));
+	}
+}
+
+template<>
+SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value) {
+	if (StringUtil::Equals(value, "CUSTOM")) {
+		return SecretSerializationType::CUSTOM;
+	}
+	if (StringUtil::Equals(value, "KEY_VALUE_SECRET")) {
+		return SecretSerializationType::KEY_VALUE_SECRET;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented in FromString<SecretSerializationType>", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value) {
 	return StringUtil::EnumToString(GetSequenceInfoValues(), 6, "SequenceInfo", static_cast<uint32_t>(value));
 }
