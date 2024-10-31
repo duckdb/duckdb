@@ -196,11 +196,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 	// now that we have analyzed the compression functions we can start writing to disk
 	auto best_function = compression_functions[compression_idx];
-	if (best_function->prepare_compress) {
-		ScanSegments([&](Vector &scan_vector, idx_t count) {
-			best_function->prepare_compress(*analyze_state, scan_vector, count);
-		});
-	}
 	auto compress_state = best_function->init_compression(*this, std::move(analyze_state));
 
 	ScanSegments(

@@ -957,7 +957,7 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 template <class T, bool WRITE_STATISTICS = true>
 CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_BITPACKING, data_type, BitpackingInitAnalyze<T>,
-	                           BitpackingAnalyze<T>, BitpackingFinalAnalyze<T>, nullptr,
+	                           BitpackingAnalyze<T>, BitpackingFinalAnalyze<T>,
 	                           BitpackingInitCompression<T, WRITE_STATISTICS>, BitpackingCompress<T, WRITE_STATISTICS>,
 	                           BitpackingFinalizeCompress<T, WRITE_STATISTICS>, BitpackingInitScan<T>,
 	                           BitpackingScan<T>, BitpackingScanPartial<T>, BitpackingFetchRow<T>, BitpackingSkip<T>);

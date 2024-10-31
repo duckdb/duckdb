@@ -246,17 +246,17 @@ void UncompressedStringStorage::CleanupState(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
-	return CompressionFunction(
-	    CompressionType::COMPRESSION_UNCOMPRESSED, data_type, UncompressedStringStorage::StringInitAnalyze,
-	    UncompressedStringStorage::StringAnalyze, UncompressedStringStorage::StringFinalAnalyze, nullptr,
-	    UncompressedFunctions::InitCompression, UncompressedFunctions::Compress,
-	    UncompressedFunctions::FinalizeCompress, UncompressedStringStorage::StringInitScan,
-	    UncompressedStringStorage::StringScan, UncompressedStringStorage::StringScanPartial,
-	    UncompressedStringStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
-	    UncompressedStringStorage::StringInitSegment, UncompressedStringStorage::StringInitAppend,
-	    UncompressedStringStorage::StringAppend, UncompressedStringStorage::FinalizeAppend, nullptr,
-	    UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
-	    UncompressedStringStorage::CleanupState, UncompressedStringInitPrefetch);
+	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type,
+	                           UncompressedStringStorage::StringInitAnalyze, UncompressedStringStorage::StringAnalyze,
+	                           UncompressedStringStorage::StringFinalAnalyze, UncompressedFunctions::InitCompression,
+	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
+	                           UncompressedStringStorage::StringInitScan, UncompressedStringStorage::StringScan,
+	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
+	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
+	                           UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
+	                           UncompressedStringStorage::FinalizeAppend, nullptr,
+	                           UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
+	                           UncompressedStringStorage::CleanupState, UncompressedStringInitPrefetch);
 }
 
 //===--------------------------------------------------------------------===//

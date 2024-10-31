@@ -258,11 +258,11 @@ idx_t FixedSizeFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) 
 template <class T, class APPENDER = StandardFixedSizeAppend>
 CompressionFunction FixedSizeGetFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, FixedSizeInitAnalyze,
-	                           FixedSizeAnalyze, FixedSizeFinalAnalyze<T>, nullptr,
-	                           UncompressedFunctions::InitCompression, UncompressedFunctions::Compress,
-	                           UncompressedFunctions::FinalizeCompress, FixedSizeInitScan, FixedSizeScan<T>,
-	                           FixedSizeScanPartial<T>, FixedSizeFetchRow<T>, UncompressedFunctions::EmptySkip, nullptr,
-	                           FixedSizeInitAppend, FixedSizeAppend<T, APPENDER>, FixedSizeFinalizeAppend<T>);
+	                           FixedSizeAnalyze, FixedSizeFinalAnalyze<T>, UncompressedFunctions::InitCompression,
+	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
+	                           FixedSizeInitScan, FixedSizeScan<T>, FixedSizeScanPartial<T>, FixedSizeFetchRow<T>,
+	                           UncompressedFunctions::EmptySkip, nullptr, FixedSizeInitAppend,
+	                           FixedSizeAppend<T, APPENDER>, FixedSizeFinalizeAppend<T>);
 }
 
 CompressionFunction FixedSizeUncompressed::GetFunction(PhysicalType data_type) {

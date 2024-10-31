@@ -90,13 +90,6 @@ static void PragmaEnableForceParallelism(ClientContext &context, const FunctionP
 	ClientConfig::GetConfig(context).verify_parallelism = true;
 }
 
-static void PragmaEnableZSTDDictionaryLimit(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.limit_zstd_dictionary = true;
-}
-static void PragmaDisableZSTDDictionaryLimit(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.limit_zstd_dictionary = false;
-}
-
 static void PragmaForceCheckpoint(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).options.force_checkpoint = true;
 }
@@ -149,9 +142,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_parallelism", PragmaEnableForceParallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_parallelism", PragmaDisableForceParallelism));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("enable_zstd_dictionary_limit", PragmaEnableZSTDDictionaryLimit));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_zstd_dictionary_limit", PragmaDisableZSTDDictionaryLimit));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
