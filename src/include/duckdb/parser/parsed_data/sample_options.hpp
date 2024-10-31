@@ -15,7 +15,9 @@
 
 namespace duckdb {
 
-enum class SampleMethod : uint8_t { INVALID = 0, SYSTEM_SAMPLE = 1, BERNOULLI_SAMPLE = 2, RESERVOIR_SAMPLE = 3 };
+// Invalid is 255 because previously stored databases have SampleMethods according to the current ENUMS and we need to
+// maintain that
+enum class SampleMethod : uint8_t { SYSTEM_SAMPLE = 0, BERNOULLI_SAMPLE = 1, RESERVOIR_SAMPLE = 2, INVALID = 255 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.
 string SampleMethodToString(SampleMethod method);

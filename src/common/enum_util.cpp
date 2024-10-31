@@ -2980,10 +2980,10 @@ ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetSampleMethodValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(SampleMethod::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(SampleMethod::SYSTEM_SAMPLE), "System" },
 		{ static_cast<uint32_t>(SampleMethod::BERNOULLI_SAMPLE), "Bernoulli" },
-		{ static_cast<uint32_t>(SampleMethod::RESERVOIR_SAMPLE), "Reservoir" }
+		{ static_cast<uint32_t>(SampleMethod::RESERVOIR_SAMPLE), "Reservoir" },
+		{ static_cast<uint32_t>(SampleMethod::INVALID), "INVALID" }
 	};
 	return values;
 }
