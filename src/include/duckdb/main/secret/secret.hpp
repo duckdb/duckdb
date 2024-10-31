@@ -80,6 +80,13 @@ struct SecretType {
 	string default_provider;
 };
 
+enum class SecretSerializationType : uint8_t {
+	//! The secret is serialized with a custom serialization function
+	CUSTOM = 0,
+	//! The secret has been serialized as a KeyValueSecret
+	KEY_VALUE_SECRET = 1
+};
+
 //! Base class from which BaseSecret classes can be made.
 class BaseSecret {
 	friend class SecretManager;
