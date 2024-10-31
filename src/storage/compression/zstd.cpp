@@ -692,7 +692,7 @@ void ZSTDStorage::PrepareCompress(AnalyzeState &analyze_state, Vector &input, id
 
 	if (!prepare.sample_buffer) {
 		prepare.sample_buffer = Allocator::DefaultAllocator().Allocate(prepare.dict_size * 100);
-		prepare.combine_vectors = (state.count / ZSTD_VECTOR_SIZE) > ZSTD_MIN_SAMPLE_COUNT;
+		prepare.combine_vectors = (state.count / ZSTD_VECTOR_SIZE) > 1000;
 	}
 
 	if (prepare.finished) {
@@ -711,11 +711,15 @@ void ZSTDStorage::PrepareCompress(AnalyzeState &analyze_state, Vector &input, id
 		}
 		auto &str = data[idx];
 		auto string_size = str.GetSize();
-		sum += string_size;
 		if (prepare.sample_buffer_offset + string_size >= prepare.sample_buffer.GetSize()) {
 			prepare.finished = true;
 			break;
 		}
+		if (prepare.sample_sizes.size() >= 10000) {
+			prepare.finished = true;
+			break;
+		}
+		sum += string_size;
 		memcpy(prepare.sample_buffer.get() + prepare.sample_buffer_offset, str.GetData(), string_size);
 		if (!prepare.combine_vectors) {
 			prepare.sample_sizes.push_back(string_size);
