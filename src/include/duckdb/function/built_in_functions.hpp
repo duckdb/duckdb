@@ -58,8 +58,6 @@ private:
 	void RegisterDistributiveAggregates();
 
 	// scalar functions
-	void RegisterCompressedMaterializationFunctions();
-	void RegisterOperators();
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 

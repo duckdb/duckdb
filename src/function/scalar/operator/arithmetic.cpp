@@ -12,6 +12,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/operators.hpp"
+#include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -298,7 +299,7 @@ unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &
 	return nullptr;
 }
 
-ScalarFunction AddFun::GetFunction(const LogicalType &type) {
+ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	D_ASSERT(type.IsNumeric());
 	if (type.id() == LogicalTypeId::DECIMAL) {
 		return ScalarFunction("+", {type}, type, ScalarFunction::NopFunction, NopDecimalBind);
@@ -307,7 +308,7 @@ ScalarFunction AddFun::GetFunction(const LogicalType &type) {
 	}
 }
 
-ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
+ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
 			auto function = ScalarFunction("+", {left_type, right_type}, left_type, nullptr,
@@ -398,47 +399,44 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 	// LCOV_EXCL_STOP
 }
 
-void AddFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("+");
+ScalarFunctionSet OperatorAddFun::GetFunctions() {
+	ScalarFunctionSet add("+");
 	for (auto &type : LogicalType::Numeric()) {
 		// unary add function is a nop, but only exists for numeric types
-		functions.AddFunction(GetFunction(type));
+		add.AddFunction(AddFunction::GetFunction(type));
 		// binary add function adds two numbers together
-		functions.AddFunction(GetFunction(type, type));
+		add.AddFunction(AddFunction::GetFunction(type, type));
 	}
 	// we can add integers to dates
-	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::INTEGER));
-	functions.AddFunction(GetFunction(LogicalType::INTEGER, LogicalType::DATE));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::DATE, LogicalType::INTEGER));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTEGER, LogicalType::DATE));
 	// we can add intervals together
-	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::INTERVAL));
 	// we can add intervals to dates/times/timestamps
-	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::INTERVAL));
-	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::DATE));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::DATE, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::DATE));
 
-	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
-	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIME));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIME));
 
-	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
-	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
 
-	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
-	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIME_TZ));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::INTERVAL, LogicalType::TIME_TZ));
 
 	// we can add times to dates
-	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::DATE));
-	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIME, LogicalType::DATE));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::DATE, LogicalType::TIME));
 
 	// we can add times with time zones (offsets) to dates
-	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::DATE));
-	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::TIME_TZ));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::TIME_TZ, LogicalType::DATE));
+	add.AddFunction(AddFunction::GetFunction(LogicalType::DATE, LogicalType::TIME_TZ));
 
 	// we can add lists together
-	functions.AddFunction(ListConcatFun::GetFunction());
+	add.AddFunction(ListConcatFun::GetFunction());
 
-	set.AddFunction(functions);
-
-	functions.name = "add";
-	set.AddFunction(functions);
+	return add;
 }
 
 //===--------------------------------------------------------------------===//
@@ -578,7 +576,7 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 	return stats.ToUnique();
 }
 
-ScalarFunction SubtractFun::GetFunction(const LogicalType &type) {
+ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::INTERVAL) {
 		return ScalarFunction("-", {type}, type, ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>);
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
@@ -590,7 +588,7 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &type) {
 	}
 }
 
-ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
+ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
 			auto function =
@@ -664,33 +662,31 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 	// LCOV_EXCL_STOP
 }
 
-void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("-");
+ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
+	ScalarFunctionSet subtract("-");
 	for (auto &type : LogicalType::Numeric()) {
 		// unary subtract function, negates the input (i.e. multiplies by -1)
-		functions.AddFunction(GetFunction(type));
+		subtract.AddFunction(SubtractFunction::GetFunction(type));
 		// binary subtract function "a - b", subtracts b from a
-		functions.AddFunction(GetFunction(type, type));
+		subtract.AddFunction(SubtractFunction::GetFunction(type, type));
 	}
 	// we can subtract dates from each other
-	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::DATE));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::DATE));
 	// we can subtract integers from dates
-	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::INTEGER));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::INTEGER));
 	// we can subtract timestamps from each other
-	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::TIMESTAMP));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP, LogicalType::TIMESTAMP));
 	// we can subtract intervals from each other
-	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::INTERVAL, LogicalType::INTERVAL));
 	// we can subtract intervals from dates/times/timestamps, but not the other way around
-	functions.AddFunction(GetFunction(LogicalType::DATE, LogicalType::INTERVAL));
-	functions.AddFunction(GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
-	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
-	functions.AddFunction(GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::DATE, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIME, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::TIME_TZ, LogicalType::INTERVAL));
 	// we can negate intervals
-	functions.AddFunction(GetFunction(LogicalType::INTERVAL));
-	set.AddFunction(functions);
+	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::INTERVAL));
 
-	functions.name = "subtract";
-	set.AddFunction(functions);
+	return subtract;
 }
 
 //===--------------------------------------------------------------------===//
@@ -803,34 +799,32 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 	return std::move(bind_data);
 }
 
-void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("*");
+ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
+	ScalarFunctionSet multiply("*");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			ScalarFunction function({type, type}, type, nullptr, BindDecimalMultiply);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>;
-			functions.AddFunction(function);
+			multiply.AddFunction(function);
 		} else if (TypeIsIntegral(type.InternalType())) {
-			functions.AddFunction(ScalarFunction(
+			multiply.AddFunction(ScalarFunction(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, nullptr,
 			    PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
 		} else {
-			functions.AddFunction(
+			multiply.AddFunction(
 			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
 		}
 	}
-	functions.AddFunction(
+	multiply.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
-	functions.AddFunction(
+	multiply.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
-	set.AddFunction(functions);
 
-	functions.name = "multiply";
-	set.AddFunction(functions);
+	return multiply;
 }
 
 //===--------------------------------------------------------------------===//
@@ -965,7 +959,7 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarF
 	return nullptr;
 }
 
-void DivideFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	ScalarFunctionSet fp_divide("/");
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT, nullptr,
 	                                     BindBinaryFloatingPoint<DivideOperator>));
@@ -974,8 +968,10 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	fp_divide.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
-	set.AddFunction(fp_divide);
+	return fp_divide;
+}
 
+ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 	ScalarFunctionSet full_divide("//");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
@@ -985,10 +981,7 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType())));
 		}
 	}
-	set.AddFunction(full_divide);
-
-	full_divide.name = "divide";
-	set.AddFunction(full_divide);
+	return full_divide;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1031,21 +1024,19 @@ hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
 	return left % right;
 }
 
-void ModFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("%");
+ScalarFunctionSet OperatorModuloFun::GetFunctions() {
+	ScalarFunctionSet modulo("%");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE) {
-			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, BindBinaryFloatingPoint<ModuloOperator>));
+			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindBinaryFloatingPoint<ModuloOperator>));
 		} else if (type.id() == LogicalTypeId::DECIMAL) {
-			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>));
+			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>));
 		} else {
-			functions.AddFunction(
+			modulo.AddFunction(
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type.InternalType())));
 		}
 	}
-	set.AddFunction(functions);
-	functions.name = "mod";
-	set.AddFunction(functions);
+	return modulo;
 }
 
 } // namespace duckdb
