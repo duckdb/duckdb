@@ -241,13 +241,15 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 
 	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
+		// Check for the occurrence of escaped null string like \N only if RFC 4180 conformance is disabled
+		const bool check_unquoted_escaped_null =
+		    state_machine.state_machine_options.rfc_4180.GetValue() == false && escaped && !quoted && size == 1;
 		for (idx_t i = 0; i < null_str_count; i++) {
 			bool isNull = false;
-			if (quoted && size == null_str_size[i]) {
+			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
+				isNull = check_unquoted_escaped_null && null_str_ptr[i][1] == value_ptr[0];
+			} else if (size == null_str_size[i] && !check_unquoted_escaped_null) {
 				isNull = IsValueNull(null_str_ptr[i], value_ptr, size);
-			} else if (escaped && !quoted && size == 1 && null_str_size[i] == 2) {
-				isNull = null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue() &&
-					null_str_ptr[i][1] == value_ptr[0];
 			}
 			if (isNull) {
 				bool empty = false;
