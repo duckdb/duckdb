@@ -2624,3 +2624,42 @@ def add_months(start: "ColumnOrName", months: Union["ColumnOrName", int]) -> Col
     """
     months = ConstantExpression(months) if isinstance(months, int) else _to_column_expr(months)
     return _invoke_function("date_add", _to_column_expr(start), FunctionExpression("to_months", months))
+
+
+def array_join(
+    col: "ColumnOrName", delimiter: str, null_replacement: Optional[str] = None
+) -> Column:
+    """
+    Concatenates the elements of `column` using the `delimiter`. Null values are replaced with
+    `null_replacement` if set, otherwise they are ignored.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    delimiter : str
+        delimiter used to concatenate elements
+    null_replacement : str, optional
+        if set then null values will be replaced by this value
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a column of string type. Concatenated values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(["a", "b", "c"],), (["a", None],)], ['data'])
+    >>> df.select(array_join(df.data, ",").alias("joined")).collect()
+    [Row(joined='a,b,c'), Row(joined='a')]
+    >>> df.select(array_join(df.data, ",", "NULL").alias("joined")).collect()
+    [Row(joined='a,b,c'), Row(joined='a,NULL')]
+    """
+    if null_replacement is not None:
+        raise ContributionsAcceptedError("null_replacement is not yet supported")
+    return _invoke_function("array_to_string", _to_column_expr(col), ConstantExpression(delimiter))

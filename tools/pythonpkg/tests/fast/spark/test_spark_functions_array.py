@@ -109,3 +109,9 @@ class TestSparkFunctionsArray:
             Row(data=['hello', 'a', 'b', 'c', 'e']),
             Row(data=['hello', None, 'c', 'b', 'a']),
         ]
+
+    def test_array_join(self, spark):
+        df = spark.createDataFrame([(["a", "b", "c"],), (["a", None],)], ['data'])
+
+        res = df.select(F.array_join(df.data, ",").alias("joined")).collect()
+        assert res == [Row(joined='a,b,c'), Row(joined='a')]
