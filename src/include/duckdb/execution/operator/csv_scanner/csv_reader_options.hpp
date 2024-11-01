@@ -24,7 +24,7 @@ struct DialectOptions {
 	CSVStateMachineOptions state_machine_options;
 	//! Expected number of columns
 	idx_t num_cols = 0;
-	//! Whether or not the file has a header line
+	//! Whether the file has a header line
 	CSVOption<bool> header = false;
 	//! The date format to use (if any is specified)
 	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
@@ -72,7 +72,7 @@ struct CSVReaderOptions {
 	vector<string> name_list;
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
-	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
+	//! Types considered as candidates for auto-detection ordered by descending specificity (~ from high to low)
 	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR,   LogicalType::DOUBLE, LogicalType::BIGINT,
 	                                            LogicalType::TIMESTAMP, LogicalType::DATE,   LogicalType::TIME,
 	                                            LogicalType::BOOLEAN,   LogicalType::SQLNULL};

@@ -2,6 +2,10 @@
 # description: Test CSVs delimiter with two bytes
 # group: [multidelimiter]
 
+statement ok
+PRAGMA enable_verification
+
+
 query II
 FROM read_csv('data/csv/multidelimiter/aa_delim_small.csv', delim = 'aa', header = False,  buffer_size = 8)
 ----

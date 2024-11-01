@@ -64,6 +64,11 @@ void BaseCSVData::Finalize() {
 		options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
 	}
 	auto delimiter_string = options.dialect_options.state_machine_options.delimiter.GetValue();
+
+	// quote and delimiter must not be substrings of each other
+	SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), delimiter_string, "QUOTE",
+	                   "DELIMITER");
+
 	// escape and delimiter must not be substrings of each other
 	SubstringDetection(options.dialect_options.state_machine_options.escape.GetValue(), delimiter_string, "ESCAPE",
 	                   "DELIMITER");
@@ -74,11 +79,11 @@ void BaseCSVData::Finalize() {
 		                options.dialect_options.state_machine_options.escape.GetValue(), "QUOTE", "ESCAPE");
 	}
 
-	// delimiter and quote must not be substrings of each other
+	// comment and quote must not be substrings of each other
 	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
 	                options.dialect_options.state_machine_options.quote.GetValue(), "COMMENT", "QUOTE");
 
-	// delimiter and quote must not be substrings of each other
+	// delimiter and comment must not be substrings of each other
 	SubstringDetection(options.dialect_options.state_machine_options.comment.GetValue(), delimiter_string, "COMMENT",
 	                   "DELIMITER");
 
