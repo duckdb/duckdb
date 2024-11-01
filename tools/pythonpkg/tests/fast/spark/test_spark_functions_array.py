@@ -127,3 +127,9 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.array_prepend(df.data, 1).alias("pre")).collect()
         assert res == [Row(pre=[1, 2, 3, 4]), Row(pre=[1])]
+
+    def test_array_repeat(self, spark):
+        df = spark.createDataFrame([('ab',)], ['data'])
+
+        res = df.select(F.array_repeat(df.data, 3).alias('r')).collect()
+        assert res == [Row(r=['ab', 'ab', 'ab'])]

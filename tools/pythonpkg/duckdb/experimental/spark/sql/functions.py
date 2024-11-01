@@ -2728,3 +2728,35 @@ def array_prepend(col: "ColumnOrName", value: Any) -> Column:
     [Row(array_prepend(data, 1)=[1, 2, 3, 4]), Row(array_prepend(data, 1)=[1])]
     """
     return _invoke_function_over_columns("list_prepend", lit(value), col)
+
+
+def array_repeat(col: "ColumnOrName", count: Union["ColumnOrName", int]) -> Column:
+    """
+    Collection function: creates an array containing a column repeated count times.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column name or column that contains the element to be repeated
+    count : :class:`~pyspark.sql.Column` or str or int
+        column name, column, or int containing the number of times to repeat the first argument
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of repeated elements.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('ab',)], ['data'])
+    >>> df.select(array_repeat(df.data, 3).alias('r')).collect()
+    [Row(r=['ab', 'ab', 'ab'])]
+    """
+    count = lit(count) if isinstance(count, int) else count
+
+    return _invoke_function_over_columns("list_resize", _invoke_function_over_columns("list_value", col), count, col)
