@@ -133,3 +133,9 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.array_repeat(df.data, 3).alias('r')).collect()
         assert res == [Row(r=['ab', 'ab', 'ab'])]
+
+    def test_array_size(self, spark):
+        df = spark.createDataFrame([([2, 1, 3],), (None,)], ['data'])
+
+        res = df.select(F.array_size(df.data).alias('r')).collect()
+        assert res == [Row(r=3), Row(r=None)]
