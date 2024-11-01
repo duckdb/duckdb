@@ -45,3 +45,19 @@ where
  group_1 = 2;
 ----
 logical_opt	<REGEX>:.*Filters:.*
+
+
+query II
+explain
+with my_cte as (
+  from my_temp
+  select
+    group_1,
+    min(i) as min_i,
+    max(i) as max_i
+  group by group_1 having min_i > 1
+)
+from my_cte
+where group_1 = 2;
+----
+logical_opt	<REGEX>:.*Filters:.*

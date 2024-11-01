@@ -1,0 +1,13 @@
+# name: test/optimizer/reported_bugs/automatically_materialize_ctes.test
+# description: automatically materialize a. cte that reads from parquet
+# group: [reported_bugs]
+
+require parquet
+
+statement ok
+WITH
+   base_view as (FROM read_parquet("mock_data/*/*/*", hive_partitioning = true)),
+   filtered_view AS (FROM base_view WHERE i = 10 AND k = 3)
+FROM base_view
+INNER JOIN filtered_view ON base_view.i = filtered_view.i
+WHERE base_view.j = 10 AND base_view.l = 4;
