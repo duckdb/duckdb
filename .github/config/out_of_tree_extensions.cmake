@@ -29,8 +29,7 @@ if (NOT MINGW)
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
-            GIT_TAG e738b4cc07a86d323db8b38220323752cd183a04
-            APPLY_PATCHES
+            GIT_TAG f743d4b3c2faecda15498d0219a1727ad6d62b5b
             )
 endif()
 
