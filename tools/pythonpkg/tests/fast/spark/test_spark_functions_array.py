@@ -121,3 +121,9 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.array_position(df.data, "a").alias("pos")).collect()
         assert res == [Row(pos=3), Row(pos=0)]
+
+    def test_array_preprend(self, spark):
+        df = spark.createDataFrame([([2, 3, 4],), ([],)], ['data'])
+
+        res = df.select(F.array_prepend(df.data, 1).alias("pre")).collect()
+        assert res == [Row(pre=[1, 2, 3, 4]), Row(pre=[1])]
