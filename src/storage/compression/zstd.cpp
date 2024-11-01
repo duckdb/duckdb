@@ -13,6 +13,7 @@
 #include "zstd.h"
 
 /*
+Data layout per segment:
 +--------------------------------------------+
 |            Vector Metadata                 |
 |   +------------------------------------+   |
@@ -43,12 +44,33 @@ static int32_t GetCompressionLevel() {
 }
 
 static constexpr idx_t ZSTD_VECTOR_SIZE = STANDARD_VECTOR_SIZE > 2048 ? STANDARD_VECTOR_SIZE : 2048;
-//! The combined string length of a vector required for ZSTD to be effective (1Kb)
-static constexpr idx_t MINIMUM_AVERAGE_VECTOR_STRING_LENGTH = 1 << 10;
-//! The penalty we put on the analyzed compression score determined by FinalAnalyze
-static constexpr double ZSTD_DEFAULT_PENALTY_STORE = 1.3;
 
 namespace duckdb {
+
+static idx_t GetWritableSpace(const CompressionInfo &info) {
+	return info.GetBlockSize() - sizeof(block_id_t);
+}
+
+static idx_t GetVectorCount(idx_t count) {
+	idx_t vector_count = count / ZSTD_VECTOR_SIZE;
+	vector_count += (count % ZSTD_VECTOR_SIZE) != 0;
+	return vector_count;
+}
+
+static idx_t GetVectorMetadataSize(idx_t vector_count) {
+	idx_t vector_metadata_size = 0;
+	vector_metadata_size += sizeof(page_id_t) * vector_count;
+
+	vector_metadata_size = AlignValue<idx_t, sizeof(page_offset_t)>(vector_metadata_size);
+	vector_metadata_size += sizeof(page_offset_t) * vector_count;
+
+	vector_metadata_size = AlignValue<idx_t, sizeof(uncompressed_size_t)>(vector_metadata_size);
+	vector_metadata_size += sizeof(uncompressed_size_t) * vector_count;
+
+	vector_metadata_size = AlignValue<idx_t, sizeof(compressed_size_t)>(vector_metadata_size);
+	vector_metadata_size += sizeof(compressed_size_t) * vector_count;
+	return vector_metadata_size;
+}
 
 struct ZSTDStorage {
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
@@ -67,6 +89,7 @@ struct ZSTDStorage {
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
 	static void StringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+		// NO OP
 	}
 
 	// Segment state metadata
@@ -97,28 +120,6 @@ public:
 		auto string_size = str.GetSize();
 		total_size += string_size;
 	}
-	inline idx_t GetVectorCount() const {
-		idx_t vector_count = count / ZSTD_VECTOR_SIZE;
-		vector_count += (count % ZSTD_VECTOR_SIZE) != 0;
-		return vector_count;
-	}
-
-	inline idx_t GetVectorMetadataSize() const {
-		auto vector_count = GetVectorCount();
-
-		idx_t vector_metadata_size = 0;
-		vector_metadata_size += sizeof(page_id_t) * vector_count;
-
-		vector_metadata_size = AlignValue<idx_t, sizeof(page_offset_t)>(vector_metadata_size);
-		vector_metadata_size += sizeof(page_offset_t) * vector_count;
-
-		vector_metadata_size = AlignValue<idx_t, sizeof(uncompressed_size_t)>(vector_metadata_size);
-		vector_metadata_size += sizeof(uncompressed_size_t) * vector_count;
-
-		vector_metadata_size = AlignValue<idx_t, sizeof(compressed_size_t)>(vector_metadata_size);
-		vector_metadata_size += sizeof(compressed_size_t) * vector_count;
-		return vector_metadata_size;
-	}
 
 public:
 	DBConfig &config;
@@ -128,6 +129,15 @@ public:
 	idx_t total_size = 0;
 	//! The total amount of values in the segment
 	idx_t count = 0;
+
+	//! The amount of vectors per filled segment
+	idx_t vectors_per_segment = 0;
+	//! The total amount of segments we will create
+	idx_t segment_count = 0;
+	//! Current vector in the segment
+	idx_t vectors_in_segment = 0;
+	//! Current amount of values in the vector
+	idx_t values_in_vector = 0;
 };
 
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
@@ -137,21 +147,6 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 	auto &config = DBConfig::Get(attached_db);
 
 	return make_uniq<ZSTDAnalyzeState>(info, config);
-}
-
-static bool NotEnoughRoom(ZSTDAnalyzeState &state) {
-	idx_t block_size = state.info.GetBlockSize();
-	auto room = block_size - sizeof(block_id_t);
-
-	idx_t room_needed = 0;
-	room_needed += state.GetVectorMetadataSize();
-
-	if (room_needed > room) {
-		// FIXME: We currently require all vector metadata to fit on the first page
-		// a new segment would need to be created at this point
-		return true;
-	}
-	return false;
 }
 
 bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -169,18 +164,29 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 		auto string_size = str.GetSize();
 		state.total_size += string_size;
 	}
-	state.count += count;
-	if (NotEnoughRoom(state)) {
-		// FIXME: support creating multiple segments
-		// this woudl require switching to a new segment at predefined cut off points
-		return false;
+	state.values_in_vector += count;
+	while (state.values_in_vector >= ZSTD_VECTOR_SIZE) {
+		if (GetVectorMetadataSize(state.vectors_in_segment + 1) > GetWritableSpace(state.info)) {
+			state.vectors_per_segment = state.vectors_in_segment;
+			state.segment_count++;
+			state.vectors_in_segment = 0;
+		} else {
+			state.vectors_in_segment++;
+		}
+		state.values_in_vector -= ZSTD_VECTOR_SIZE;
 	}
+	state.count += count;
 	return true;
 }
 
 // Compression score to determine which compression to use
 idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
+
+	if (state.values_in_vector) {
+		D_ASSERT(state.values_in_vector < ZSTD_VECTOR_SIZE);
+		state.segment_count++;
+	}
 
 	double penalty;
 	idx_t average_length = state.total_size / state.count;
@@ -194,18 +200,13 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		penalty = 1.0;
 	}
 
-	if ((state.total_size / state.count) * ZSTD_VECTOR_SIZE < MINIMUM_AVERAGE_VECTOR_STRING_LENGTH) {
-		// Compressing this with ZSTD won't be effective as the block sizes are too small
-		return NumericLimits<idx_t>::Maximum();
-	}
-
 	auto expected_compressed_size = (double)state.total_size / 2.0;
 
 	idx_t estimated_size = 0;
 	estimated_size += LossyNumericCast<idx_t>(expected_compressed_size);
 
 	estimated_size += state.count * sizeof(string_length_t);
-	estimated_size += state.GetVectorMetadataSize();
+	estimated_size += GetVectorMetadataSize(GetVectorCount(state.count));
 
 	return LossyNumericCast<idx_t>((double)estimated_size * penalty);
 }
@@ -216,46 +217,24 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 class ZSTDCompressionState : public CompressionState {
 public:
-	static constexpr int COMPRESSION_LEVEL = 3;
-
 	explicit ZSTDCompressionState(ColumnDataCheckpointer &checkpointer, unique_ptr<ZSTDAnalyzeState> &&analyze_state_p)
 	    : CompressionState(analyze_state_p->info), analyze_state(std::move(analyze_state_p)),
 	      checkpointer(checkpointer), partial_block_manager(checkpointer.GetCheckpointState().GetPartialBlockManager()),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)) {
-		CreateEmptySegment(checkpointer.GetRowGroup().start);
-		SetCurrentBuffer(segment_handle);
+
+		total_vector_count = GetVectorCount(analyze_state->count);
+		total_segment_count = analyze_state->segment_count;
+		vectors_per_segment = analyze_state->vectors_per_segment;
+
+		segment_count = 0;
 		vector_count = 0;
+		vector_in_segment_count = 0;
 		tuple_count = 0;
 
-		total_vector_count = analyze_state->GetVectorCount();
-
-		// Set pointers to the Vector Metadata
-		idx_t offset = GetCurrentOffset();
-
-		offset = AlignValue<idx_t, sizeof(page_id_t)>(offset);
-#ifdef DEBUG
-		auto start_of_vector_metadata = current_buffer->Ptr() + offset;
-#endif
-		page_ids = reinterpret_cast<page_id_t *>(current_buffer->Ptr() + offset);
-		offset += (sizeof(page_id_t) * total_vector_count);
-
-		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
-		page_offsets = reinterpret_cast<page_offset_t *>(current_buffer->Ptr() + offset);
-		offset += (sizeof(page_offset_t) * total_vector_count);
-
-		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
-		uncompressed_sizes = reinterpret_cast<uncompressed_size_t *>(current_buffer->Ptr() + offset);
-		offset += (sizeof(uncompressed_size_t) * total_vector_count);
-
-		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
-		compressed_sizes = reinterpret_cast<compressed_size_t *>(current_buffer->Ptr() + offset);
-		offset += (sizeof(compressed_size_t) * total_vector_count);
-		current_buffer_ptr = current_buffer->Ptr() + offset;
-
-#ifdef DEBUG
-		D_ASSERT(uint64_t(current_buffer_ptr - start_of_vector_metadata) == analyze_state->GetVectorMetadataSize());
-#endif
-		D_ASSERT(GetCurrentOffset() <= GetWritableSpace());
+		idx_t offset = NewSegment();
+		SetCurrentBuffer(segment_handle);
+		current_buffer_ptr = segment_handle.Ptr() + offset;
+		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 	}
 
 public:
@@ -311,6 +290,50 @@ public:
 		return *to_use;
 	}
 
+	idx_t NewSegment() {
+		if (current_buffer == &segment_handle) {
+			// This should never happen, the string lengths + vector metadata size should always exceed a page size,
+			// even if the strings are all empty
+			throw InternalException("We are asking for a new segment, but somehow we're still writing vector data onto "
+			                        "the initial (segment) page");
+		}
+		idx_t row_start;
+		if (segment) {
+			row_start = segment->start + segment->count;
+			FlushSegment();
+		} else {
+			row_start = checkpointer.GetRowGroup().start;
+		}
+		CreateEmptySegment(row_start);
+
+		// Figure out how many vectors we are storing in this segment
+		idx_t vectors_in_segment;
+		if (segment_count + 1 >= total_segment_count) {
+			vectors_in_segment = total_vector_count - vector_count;
+		} else {
+			vectors_in_segment = vectors_per_segment;
+		}
+
+		idx_t offset = 0;
+		page_ids = reinterpret_cast<page_id_t *>(segment_handle.Ptr() + offset);
+		offset += (sizeof(page_id_t) * vectors_in_segment);
+
+		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
+		page_offsets = reinterpret_cast<page_offset_t *>(segment_handle.Ptr() + offset);
+		offset += (sizeof(page_offset_t) * vectors_in_segment);
+
+		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
+		uncompressed_sizes = reinterpret_cast<uncompressed_size_t *>(segment_handle.Ptr() + offset);
+		offset += (sizeof(uncompressed_size_t) * vectors_in_segment);
+
+		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
+		compressed_sizes = reinterpret_cast<compressed_size_t *>(segment_handle.Ptr() + offset);
+		offset += (sizeof(compressed_size_t) * vectors_in_segment);
+
+		D_ASSERT(offset == GetVectorMetadataSize(vectors_in_segment));
+		return offset;
+	}
+
 	void InitializeVector() {
 		D_ASSERT(!in_vector);
 		if (vector_count + 1 >= total_vector_count) {
@@ -325,7 +348,14 @@ public:
 		compressed_size = 0;
 		uncompressed_size = 0;
 
-		if (current_offset + (vector_size * sizeof(string_length_t)) >= GetWritableSpace()) {
+		if (GetVectorMetadataSize(vector_in_segment_count + 1) > GetWritableSpace(info)) {
+			D_ASSERT(vector_in_segment_count <= vectors_per_segment);
+			// Can't fit this vector on this segment anymore, have to flush and a grab new one
+			NewSegment();
+		}
+
+		if (current_offset + (vector_size * sizeof(string_length_t)) >= GetWritableSpace(info)) {
+			// Check if there is room on the current page for the vector data
 			NewPage();
 		}
 		current_offset = GetCurrentOffset();
@@ -404,10 +434,6 @@ public:
 		UncompressedStringStorage::UpdateStringStats(segment->stats, string);
 	}
 
-	idx_t GetWritableSpace() {
-		return info.GetBlockSize() - sizeof(block_id_t);
-	}
-
 	void NewPage(bool additional_data_page = false) {
 		block_id_t new_id = FinalizePage();
 		block_id_t current_block_id = block_id;
@@ -423,7 +449,7 @@ public:
 		auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
 
-		D_ASSERT(GetCurrentOffset() <= GetWritableSpace());
+		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 
 		// Write the new id at the end of the last page
 		Store<block_id_t>(new_id, current_buffer_ptr);
@@ -447,12 +473,14 @@ public:
 
 	void FlushVector() {
 		// Write the metadata for this Vector
-		page_ids[vector_count] = starting_page;
-		page_offsets[vector_count] = starting_offset;
-		compressed_sizes[vector_count] = compressed_size;
-		uncompressed_sizes[vector_count] = uncompressed_size;
+		page_ids[vector_in_segment_count] = starting_page;
+		page_offsets[vector_in_segment_count] = starting_offset;
+		compressed_sizes[vector_in_segment_count] = compressed_size;
+		uncompressed_sizes[vector_in_segment_count] = uncompressed_size;
 		vector_count++;
+		vector_in_segment_count++;
 		in_vector = false;
+		segment->count += tuple_count;
 
 		const bool is_last_vector = vector_count == total_vector_count;
 		tuple_count = 0;
@@ -483,7 +511,7 @@ public:
 		auto start_of_buffer = handle.Ptr();
 		D_ASSERT(current_buffer_ptr >= start_of_buffer);
 		auto res = (page_offset_t)(current_buffer_ptr - start_of_buffer);
-		D_ASSERT(res <= GetWritableSpace());
+		D_ASSERT(res <= GetWritableSpace(info));
 		return res;
 	}
 
@@ -499,19 +527,26 @@ public:
 		segment_handle = buffer_manager.Pin(segment->block);
 	}
 
-	void Finalize() {
-		D_ASSERT(!tuple_count);
-
+	void FlushSegment() {
 		auto &state = checkpointer.GetCheckpointState();
 		idx_t segment_block_size;
+
 		if (current_buffer.get() == &segment_handle) {
 			segment_block_size = GetCurrentOffset();
 		} else {
-			// If we have overflowed to other pages, the segment block will have been fully utilized
-			// FIXME: we might leave some data at the end uninitialized ???
+			// Block is fully used
 			segment_block_size = info.GetBlockSize();
 		}
+
 		state.FlushSegment(std::move(segment), segment_block_size);
+		segment_handle.Destroy();
+		segment_count++;
+		vector_in_segment_count = 0;
+	}
+
+	void Finalize() {
+		D_ASSERT(!tuple_count);
+		FlushSegment();
 		segment.reset();
 	}
 
@@ -526,6 +561,14 @@ public:
 	CompressionFunction &function;
 
 	// The segment state
+	//! Current segment index we're at
+	idx_t segment_count = 0;
+	//! The total amount of segments we're writing
+	idx_t total_segment_count = 0;
+	//! The vectors to store in the last segment
+	idx_t vectors_in_last_segment = 0;
+	//! The vectors to store in a segment (not the last one)
+	idx_t vectors_per_segment = 0;
 	unique_ptr<ColumnSegment> segment;
 	BufferHandle segment_handle;
 
@@ -551,6 +594,8 @@ public:
 	compressed_size_t *compressed_sizes;
 	//! The amount of vectors we've seen so far
 	idx_t vector_count = 0;
+	//! The amount of vectors we've seen in the current segment
+	idx_t vector_in_segment_count = 0;
 	//! The amount of vectors we're writing
 	idx_t total_vector_count = 0;
 	//! Whether we are currently in a Vector
@@ -590,7 +635,6 @@ void ZSTDStorage::Compress(CompressionState &state_p, Vector &input, idx_t count
 		}
 		state.AddString(data[idx]);
 	}
-	state.segment->count += count;
 }
 
 void ZSTDStorage::FinalizeCompress(CompressionState &state_p) {
@@ -869,8 +913,6 @@ public:
 	}
 
 	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count) {
-		D_ASSERT(offset + count <= ZSTD_VECTOR_SIZE);
-
 		idx_t remaining = count;
 		idx_t scanned = 0;
 		while (remaining) {
