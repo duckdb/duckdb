@@ -14,7 +14,11 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 		idx_t swap_likeliness_idx = 100;
 		if (conj_expr.children[idx]->CanThrow()) {
 			// effectively disables swapping expressions that can throw.
-			swap_likeliness.back() = 0;
+			if (!swap_likeliness.empty()) {
+				// disable swapping with previous expressions
+				swap_likeliness.back() = 0;
+			}
+			// disables swapping with next expressions
 			swap_likeliness_idx = 0;
 		}
 		if (idx != conj_expr.children.size() - 1) {
