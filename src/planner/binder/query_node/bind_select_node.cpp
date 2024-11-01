@@ -631,12 +631,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		}
 		D_ASSERT(result->groups.grouping_sets.empty());
 		result->groups.grouping_sets.push_back(group_by_all_indexes_set);
-		// rebind the having in this case
-		if (statement.having) {
-			HavingBinder having_binder(*this, context, *result, info, statement.aggregate_handling);
-			ExpressionBinder::QualifyColumnNames(having_binder, statement.having);
-			result->having = having_binder.Bind(statement.having);
-		}
 	}
 	result->column_count = new_names.size();
 	result->names = std::move(new_names);
