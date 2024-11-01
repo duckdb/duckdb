@@ -358,7 +358,7 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunction concat_op = ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
 	                                          ConcatFunction, BindConcatOperator);
-	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	concat_op.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat_op);
 }
 
