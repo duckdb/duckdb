@@ -115,3 +115,9 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.array_join(df.data, ",").alias("joined")).collect()
         assert res == [Row(joined='a,b,c'), Row(joined='a')]
+
+    def test_array_position(self, spark):
+        df = spark.createDataFrame([(["c", "b", "a"],), ([],)], ['data'])
+
+        res = df.select(F.array_position(df.data, "a").alias("pos")).collect()
+        assert res == [Row(pos=3), Row(pos=0)]
