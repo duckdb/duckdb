@@ -11,8 +11,14 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 	D_ASSERT(conj_expr.children.size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
 		permutation.push_back(idx);
+		idx_t swap_likeliness_idx = 100;
+		if (conj_expr.children[idx]->CanThrow()) {
+			// effectively disables swapping expressions that can throw.
+			swap_likeliness.back() = 0;
+			swap_likeliness_idx = 0;
+		}
 		if (idx != conj_expr.children.size() - 1) {
-			swap_likeliness.push_back(100);
+			swap_likeliness.push_back(swap_likeliness_idx);
 		}
 	}
 	right_random_border = 100 * (conj_expr.children.size() - 1);
