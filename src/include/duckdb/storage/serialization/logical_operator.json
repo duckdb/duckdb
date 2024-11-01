@@ -892,6 +892,26 @@
     "custom_implementation": true
   },
   {
+    "class": "LogicalExport",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXPORT",
+    "members": [
+      {
+        "id": 200,
+        "name": "copy_info",
+        "type": "CopyInfo*",
+        "base": "ParseInfo"
+      },
+      {
+        "id": 201,
+        "name": "exported_tables",
+        "type": "BoundExportData*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": ["$ClientContext", "copy_info", "exported_tables"]
+  },
+  {
     "class": "FilenamePattern",
     "pointer_type": "none",
     "members": [
