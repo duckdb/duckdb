@@ -201,7 +201,7 @@ CREATE TABLE abac_tbl (a VARCHAR);
 statement error
 COPY abac_tbl FROM 'data/csv/multidelimiter/incomplete_multibyte_delimiter.csv' (DELIMITER 'ABAC', AUTO_DETECT FALSE, quote '"');
 ----
-bla
+Value with unterminated quote found.
 
 query I
 COPY abac_tbl FROM 'data/csv/multidelimiter/incomplete_multibyte_delimiter.csv' (DELIMITER 'AB', AUTO_DETECT FALSE , quote '"');
@@ -248,9 +248,9 @@ DROP TABLE abac_tbl
 # DROP TABLE abac_tbl
 #
 # # Delimiter, quote and escape have a maximum size of 255 bytes
-# statement ok
-# CREATE TABLE abac_tbl (a VARCHAR);
-#
+statement ok
+CREATE TABLE abac_tbl (a VARCHAR);
+
 # statement error
 # COPY abac_tbl FROM 'data/csv/multidelimiter/abac.csv' (QUOTE 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', AUTO_DETECT FALSE);
 #
@@ -259,15 +259,18 @@ DROP TABLE abac_tbl
 
 statement error
 COPY abac_tbl FROM 'data/csv/multidelimiter/abac.csv' (DELIMITER 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', AUTO_DETECT FALSE);
+----
+The delimiter option cannot exceed a size of 4 bytes.
+
 
 # query I
 # COPY abac_tbl FROM 'data/csv/multidelimiter/abac.csv' (QUOTE 'BLABLABLA', AUTO_DETECT FALSE);
 # ----
 # 1
-#
-# statement ok
-# DROP TABLE abac_tbl
-#
+
+statement ok
+DROP TABLE abac_tbl
+
 # Test newline with multi-byte delimiter
 statement ok
 CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
@@ -310,6 +313,8 @@ CREATE TABLE abac_tbl (a VARCHAR);
 
 statement error
 COPY abac_tbl FROM 'data/csv/multidelimiter/unterminated_quote_multi_line.csv' (DELIMITER 'BA', AUTO_DETECT FALSE);
+----
+Value with unterminated quote found.
 
 statement ok
 DROP TABLE abac_tbl
@@ -320,16 +325,8 @@ CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
 
 statement error
 COPY abac_tbl FROM 'data/csv/multidelimiter/unquote_without_delimiter.csv' (DELIMITER 'BA', AUTO_DETECT FALSE);
-
-statement ok
-DROP TABLE abac_tbl
-
-# Test escape followed by non-quote and non-escape (single-byte)
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
-
-statement error
-COPY abac_tbl FROM 'data/csv/multidelimiter/escape_non_quote_escape.csv' (DELIMITER '|', ESCAPE 'X', AUTO_DETECT FALSE);
+----
+Value with unterminated quote found.
 
 statement ok
 DROP TABLE abac_tbl

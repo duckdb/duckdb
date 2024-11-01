@@ -10,6 +10,8 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 
+#include <core_functions_extension.hpp>
+
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
 // explicitly when they are undefined
 #ifndef DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED

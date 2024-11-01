@@ -479,6 +479,9 @@ void StringValueResult::Reset() {
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
+	if (!result.unquoted) {
+		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
+	}
 	if (result.escaped) {
 		if (result.projecting_columns) {
 			if (!result.projected_columns[result.cur_col_id]) {
@@ -1150,6 +1153,11 @@ void StringValueScanner::ProcessExtraRow() {
 				iterator.pos.buffer_pos++;
 			}
 			break;
+		case CSVState::UNQUOTED: {
+			result.SetUnquoted(result);
+			iterator.pos.buffer_pos++;
+			break;
+		}
 		case CSVState::COMMENT:
 			result.SetComment(result, iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
@@ -1227,6 +1235,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
 		}
+		if (states.IsUnquoted()) {
+			result.SetUnquoted(result);
+		}
 		if (states.IsEscaped()) {
 			result.escaped = true;
 		}
@@ -1299,7 +1310,13 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
 		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
-			result.AddValueToVector(value.GetData(), value.GetSize(), true);
+			if (!states.IsDelimiter()) {
+				result.AddValueToVector(value.GetData(), value.GetSize(), true);
+			} else {
+				idx_t extra_delimiter_bytes =
+				    result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1;
+				result.AddValueToVector(value.GetData(), value.GetSize() - extra_delimiter_bytes, true);
+			}
 		}
 	} else {
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
@@ -1369,6 +1386,10 @@ bool StringValueScanner::MoveToNextBuffer() {
 				if (result.IsCommentSet(result)) {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
+					if (result.quoted && states.IsDelimiterBytes()) {
+						result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
+						                             result.last_position);
+					}
 					result.AddRow(result, previous_buffer_handle->actual_size);
 				}
 				lines_read++;
