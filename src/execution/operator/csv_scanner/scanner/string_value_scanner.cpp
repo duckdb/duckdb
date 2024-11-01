@@ -1212,12 +1212,12 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 
 void StringValueScanner::ProcessOverBufferValue() {
 	// Process first string
-	states.Initialize();
+	if (result.last_position.buffer_pos != previous_buffer_handle->actual_size) {
+		states.Initialize();
+	}
+
 	string over_buffer_string;
 	auto previous_buffer = previous_buffer_handle->Ptr();
-	if (result.last_position.buffer_pos == previous_buffer_handle->actual_size) {
-		state_machine->Transition(states, previous_buffer[result.last_position.buffer_pos - 1]);
-	}
 	idx_t j = 0;
 	result.quoted = false;
 	for (idx_t i = result.last_position.buffer_pos; i < previous_buffer_handle->actual_size; i++) {
@@ -1310,13 +1310,17 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
 		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
-			if (!states.IsDelimiter()) {
-				result.AddValueToVector(value.GetData(), value.GetSize(), true);
-			} else {
+			idx_t value_size = value.GetSize();
+			if (states.IsDelimiter()) {
 				idx_t extra_delimiter_bytes =
 				    result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1;
-				result.AddValueToVector(value.GetData(), value.GetSize() - extra_delimiter_bytes, true);
+				if (extra_delimiter_bytes > value_size) {
+					value_size = 0;
+				} else {
+					value_size -= extra_delimiter_bytes;
+				}
 			}
+			result.AddValueToVector(value.GetData(), value_size, true);
 		}
 	} else {
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {

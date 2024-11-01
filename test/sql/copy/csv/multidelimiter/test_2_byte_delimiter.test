@@ -2,7 +2,15 @@
 # description: Test CSVs delimiter with two bytes
 # group: [multidelimiter]
 
-loop buffer_size 6 10
+query II
+FROM read_csv('data/csv/multidelimiter/aa_delim_small.csv', delim = 'aa', header = False,  buffer_size = 8)
+----
+1	2
+1	a2
+1ab	2
+
+
+loop buffer_size 8 12
 
 query II
 FROM read_csv('data/csv/multidelimiter/ab_delim.csv', delim = 'ab', header = False, buffer_size = ${buffer_size})
@@ -26,5 +34,28 @@ FROM read_csv('data/csv/multidelimiter/ab_delim.csv', delim = 'ab', header = Fal
 1	2
 1a	2
 1a	b2
+
+query II
+FROM read_csv('data/csv/multidelimiter/aa_delim.csv', delim = 'aa', header = False,  buffer_size = ${buffer_size})
+----
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	a2
+1	ab2
+1	2
+1	2
+1	2
+1	2
+1	a2
+1ab	2
 
 endloop

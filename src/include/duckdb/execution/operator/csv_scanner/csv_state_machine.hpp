@@ -54,7 +54,7 @@ struct CSVStates {
 	}
 
 	inline bool IsDelimiter() const {
-		return states[0] == CSVState::DELIMITER || states[1] == CSVState::DELIMITER;
+		return states[1] == CSVState::DELIMITER;
 	}
 
 	inline bool IsNotSet() const {
