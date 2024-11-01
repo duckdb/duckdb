@@ -2984,19 +2984,20 @@ const StringUtil::EnumStringLiteral *GetSampleMethodValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SampleMethod::SYSTEM_SAMPLE), "System" },
 		{ static_cast<uint32_t>(SampleMethod::BERNOULLI_SAMPLE), "Bernoulli" },
-		{ static_cast<uint32_t>(SampleMethod::RESERVOIR_SAMPLE), "Reservoir" }
+		{ static_cast<uint32_t>(SampleMethod::RESERVOIR_SAMPLE), "Reservoir" },
+		{ static_cast<uint32_t>(SampleMethod::INVALID), "INVALID" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value) {
-	return StringUtil::EnumToString(GetSampleMethodValues(), 3, "SampleMethod", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSampleMethodValues(), 4, "SampleMethod", static_cast<uint32_t>(value));
 }
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
-	return static_cast<SampleMethod>(StringUtil::StringToEnum(GetSampleMethodValues(), 3, "SampleMethod", value));
+	return static_cast<SampleMethod>(StringUtil::StringToEnum(GetSampleMethodValues(), 4, "SampleMethod", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSampleTypeValues() {
@@ -3072,6 +3073,24 @@ const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value) {
 template<>
 SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value) {
 	return static_cast<SecretPersistType>(StringUtil::StringToEnum(GetSecretPersistTypeValues(), 3, "SecretPersistType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSecretSerializationTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SecretSerializationType::CUSTOM), "CUSTOM" },
+		{ static_cast<uint32_t>(SecretSerializationType::KEY_VALUE_SECRET), "KEY_VALUE_SECRET" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value) {
+	return StringUtil::EnumToString(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", static_cast<uint32_t>(value));
+}
+
+template<>
+SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value) {
+	return static_cast<SecretSerializationType>(StringUtil::StringToEnum(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSequenceInfoValues() {
