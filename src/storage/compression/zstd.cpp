@@ -193,7 +193,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto overflow_string_threshold = StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize());
 	if (average_length < overflow_string_threshold) {
 		average_length = MaxValue<idx_t>(average_length, 200);
-		penalty = 5.0 + (overflow_string_threshold - average_length - 200) * 25;
+		penalty = 5.0 + (double)(overflow_string_threshold - average_length - 200) * 25;
 	} else {
 		// From this point on, ZSTD starts to beat Uncompressed scan speed by about 5x, increasing rapidly (4096 is 5x,
 		// 8000 is 15x)
@@ -371,7 +371,7 @@ public:
 
 		// Initialize the context for streaming compression
 		duckdb_zstd::ZSTD_CCtx_reset(analyze_state->context, duckdb_zstd::ZSTD_reset_session_only);
-		duckdb_zstd::ZSTD_CCtx_refCDict(analyze_state->context, NULL);
+		duckdb_zstd::ZSTD_CCtx_refCDict(analyze_state->context, nullptr);
 		duckdb_zstd::ZSTD_CCtx_setParameter(analyze_state->context, duckdb_zstd::ZSTD_c_compressionLevel,
 		                                    GetCompressionLevel());
 		in_vector = true;
@@ -798,7 +798,7 @@ public:
 
 		// Initialize the context for streaming decompression
 		duckdb_zstd::ZSTD_DCtx_reset(decompression_context, duckdb_zstd::ZSTD_reset_session_only);
-		duckdb_zstd::ZSTD_DCtx_refDDict(decompression_context, NULL);
+		duckdb_zstd::ZSTD_DCtx_refDDict(decompression_context, nullptr);
 
 		if (internal_offset) {
 			Skip(scan_state, internal_offset);
