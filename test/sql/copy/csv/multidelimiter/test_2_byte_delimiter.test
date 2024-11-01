@@ -59,3 +59,30 @@ FROM read_csv('data/csv/multidelimiter/aa_delim.csv', delim = 'aa', header = Fal
 1ab	2
 
 endloop
+
+loop buffer_size 12 16
+
+query II
+FROM read_csv('data/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa', header = False,  buffer_size = ${buffer_size})
+----
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	2
+1	a2
+1	aa2
+1	2
+1	2
+1	2
+1	2
+1a	2
+1a	a2
+
+endloop
