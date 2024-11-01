@@ -49,7 +49,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG 811db25f5bd405dea186d6c461a642a387502ad8
+            GIT_TAG b7333c0143e101c720117d564651e693b317bb31
     )
 endif()
 
@@ -73,7 +73,7 @@ if (NOT MINGW)
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG 8b48d1261564613274ac8e9fae01e572d965c99d
+            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
             )
 endif()
 
@@ -81,7 +81,7 @@ endif()
 duckdb_extension_load(inet
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_inet
-    GIT_TAG eca867b2517af06eabc89ccd6234266e9a7d6d71
+    GIT_TAG 51d7ad789f34eecb36a2071bac5aef0e12747d70
     INCLUDE_DIR src/include
     TEST_DIR test/sql
     )
