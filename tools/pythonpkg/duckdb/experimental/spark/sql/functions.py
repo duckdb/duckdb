@@ -218,6 +218,109 @@ def array_append(col: "ColumnOrName", value: Any) -> Column:
     return _invoke_function("list_append", _to_column_expr(col), _get_expr(value))
 
 
+def array_insert(
+    arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Any
+) -> Column:
+    """
+    Collection function: adds an item into a given array at a specified array index.
+    Array indices start at 1, or start from the end if index is negative.
+    Index above array size appends the array, or prepends the array if index is negative,
+    with 'null' elements.
+
+    .. versionadded:: 3.4.0
+
+    Parameters
+    ----------
+    arr : :class:`~pyspark.sql.Column` or str
+        name of column containing an array
+    pos : :class:`~pyspark.sql.Column` or str or int
+        name of Numeric type column indicating position of insertion
+        (starting at index 1, negative position is a start from the back of the array)
+    value :
+        a literal value, or a :class:`~pyspark.sql.Column` expression.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of values, including the new specified value
+
+    Notes
+    -----
+    Supports Spark Connect.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(
+    ...     [(['a', 'b', 'c'], 2, 'd'), (['c', 'b', 'a'], -2, 'd')],
+    ...     ['data', 'pos', 'val']
+    ... )
+    >>> df.select(array_insert(df.data, df.pos.cast('integer'), df.val).alias('data')).collect()
+    [Row(data=['a', 'd', 'b', 'c']), Row(data=['c', 'b', 'd', 'a'])]
+    >>> df.select(array_insert(df.data, 5, 'hello').alias('data')).collect()
+    [Row(data=['a', 'b', 'c', None, 'hello']), Row(data=['c', 'b', 'a', None, 'hello'])]
+    """
+    pos = _get_expr(pos)
+    arr = _to_column_expr(arr)
+    # Depending on if the position is positive or not, we need to interpret it differently.
+    # This is because negative numbers are relative to the end of the NEW list.
+    # For example, if it's -2, it's expected that the inserted value is at the second position
+    # in the NEW list.
+    pos_is_positive = pos > 0
+
+    list_length_plus_1 = FunctionExpression("add", FunctionExpression("len", arr), 1)
+
+    # If the position is above the list size plus 1, first extend the list with the
+    # relevant number of nulls to get the list to the size of (pos - 1).
+    list_ = CaseExpression(
+        pos > list_length_plus_1,
+        FunctionExpression("list_resize", arr, FunctionExpression("subtract", pos, 1)),
+    ).otherwise(
+        CaseExpression(
+            (pos < 0) & (FunctionExpression("abs", pos) > list_length_plus_1),
+            FunctionExpression(
+                "list_concat",
+                FunctionExpression(
+                    "list_resize",
+                    FunctionExpression("list_value", None),
+                    FunctionExpression(
+                        "subtract", FunctionExpression("abs", pos), list_length_plus_1
+                    ),
+                ),
+                arr,
+            ),
+        ).otherwise(arr)
+    )
+
+    # We slice the array into two parts, insert the value in between and concatenate the two parts
+    # together again.
+    return _invoke_function(
+        "list_concat",
+        FunctionExpression(
+            "list_concat",
+            # First part of the list
+            FunctionExpression(
+                "list_slice",
+                list_,
+                1,
+                CaseExpression(
+                    pos_is_positive, FunctionExpression("subtract", pos, 1)
+                ).otherwise(pos),
+            ),
+            # Here we insert the value at the specified position
+            FunctionExpression("list_value", _get_expr(value)),
+        ),
+        # The remainder of the list
+        FunctionExpression(
+            "list_slice",
+            list_,
+            CaseExpression(pos_is_positive, pos).otherwise(
+                FunctionExpression("add", pos, 1)
+            ),
+            -1,
+        ),
+    )
+
+
 def array_contains(col: "ColumnOrName", value: Any) -> Column:
     """
     Collection function: returns null if the array is null, true if the array contains the

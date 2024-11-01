@@ -68,7 +68,7 @@ class TestSparkFunctionsArray:
         ]
 
     def test_array_agg(self, spark):
-        df = spark.createDataFrame([[1, "A"],[1, "A"],[2, "A"]], ["c", "group"])
+        df = spark.createDataFrame([[1, "A"], [1, "A"], [2, "A"]], ["c", "group"])
 
         res = df.groupBy("group").agg(F.array_agg("c").alias("r")).collect()
 
@@ -82,3 +82,30 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.array_append(df.c1, 'x')).collect()
         assert res == [Row(r=['b', 'a', 'c', 'x'])]
+
+    def test_array_insert(self, spark):
+        df = spark.createDataFrame(
+            [(['a', 'b', 'c'], 2, 'd'), (['a', 'b', 'c', 'e'], 2, 'd'), (['c', 'b', 'a'], -2, 'd')],
+            ['data', 'pos', 'val'],
+        )
+
+        res = df.select(F.array_insert(df.data, df.pos.cast('integer'), df.val).alias('data')).collect()
+        assert res == [
+            Row(data=['a', 'd', 'b', 'c']),
+            Row(data=['a', 'd', 'b', 'c', 'e']),
+            Row(data=['c', 'b', 'd', 'a']),
+        ]
+
+        res = df.select(F.array_insert(df.data, 5, 'hello').alias('data')).collect()
+        assert res == [
+            Row(data=['a', 'b', 'c', None, 'hello']),
+            Row(data=['a', 'b', 'c', 'e', 'hello']),
+            Row(data=['c', 'b', 'a', None, 'hello']),
+        ]
+
+        res = df.select(F.array_insert(df.data, -5, 'hello').alias('data')).collect()
+        assert res == [
+            Row(data=['hello', None, 'a', 'b', 'c']),
+            Row(data=['hello', 'a', 'b', 'c', 'e']),
+            Row(data=['hello', None, 'c', 'b', 'a']),
+        ]
