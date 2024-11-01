@@ -656,4 +656,7 @@ TEST_CASE("Test union vector set tag function", "[capi]") {
 	REQUIRE(duckdb_validity_row_is_valid(validity2, 0));
 
 	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_logical_type(&union_type);
+	duckdb_destroy_logical_type(&mtypes[0]);
+	duckdb_destroy_logical_type(&mtypes[1]);
 }
