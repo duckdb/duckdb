@@ -13,9 +13,9 @@ include_directories = [
         'third_party/brotli/dec',
         'third_party/brotli/enc',
         'third_party/snappy',
-        'third_party/zstd/include',
         'third_party/mbedtls',
         'third_party/mbedtls/include',
+        'third_party/zstd/include',
     ]
 ]
 # source files
@@ -46,33 +46,6 @@ source_files += [
         'third_party/thrift/thrift/transport/TBufferTransports.cpp',
         'third_party/snappy/snappy.cc',
         'third_party/snappy/snappy-sinksource.cc',
-    ]
-]
-# zstd
-source_files += [
-    os.path.sep.join(x.split('/'))
-    for x in [
-        'third_party/zstd/decompress/zstd_ddict.cpp',
-        'third_party/zstd/decompress/huf_decompress.cpp',
-        'third_party/zstd/decompress/zstd_decompress.cpp',
-        'third_party/zstd/decompress/zstd_decompress_block.cpp',
-        'third_party/zstd/common/entropy_common.cpp',
-        'third_party/zstd/common/fse_decompress.cpp',
-        'third_party/zstd/common/zstd_common.cpp',
-        'third_party/zstd/common/error_private.cpp',
-        'third_party/zstd/common/xxhash.cpp',
-        'third_party/zstd/compress/fse_compress.cpp',
-        'third_party/zstd/compress/hist.cpp',
-        'third_party/zstd/compress/huf_compress.cpp',
-        'third_party/zstd/compress/zstd_compress.cpp',
-        'third_party/zstd/compress/zstd_compress_literals.cpp',
-        'third_party/zstd/compress/zstd_compress_sequences.cpp',
-        'third_party/zstd/compress/zstd_compress_superblock.cpp',
-        'third_party/zstd/compress/zstd_double_fast.cpp',
-        'third_party/zstd/compress/zstd_fast.cpp',
-        'third_party/zstd/compress/zstd_lazy.cpp',
-        'third_party/zstd/compress/zstd_ldm.cpp',
-        'third_party/zstd/compress/zstd_opt.cpp',
     ]
 ]
 # lz4

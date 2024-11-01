@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Add comment
         run: |
-          cat > needs-reproducible-example-comment.md << EOF
+          cat > needs-reproducible-example-comment.md << EOF
           Thanks for opening this issue in the DuckDB issue tracker! To resolve this issue, our team needs a reproducible example. This includes:
 
           * A source code snippet which reproduces the issue.
@@ -37,7 +37,7 @@ jobs:
 
           For more detailed guidelines on how to create reproducible examples, please visit Stack Overflow's [“Minimal, Reproducible Example”](https://stackoverflow.com/help/minimal-reproducible-example) page.
           EOF
-          gh issue comment ${{ github.event.issue.number }} --body-file needs-reproducible-example-comment.md
+          gh issue comment --repo duckdb/duckdb ${{ github.event.issue.number }} --body-file needs-reproducible-example-comment.md
 
   create_or_label_mirror_issue:
     if: github.event.label.name == 'reproduced' || github.event.label.name == 'under review'
