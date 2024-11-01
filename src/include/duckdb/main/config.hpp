@@ -33,8 +33,7 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
-
-#include <duckdb/function/decoding_function.hpp>
+#include "duckdb/function/decoding_function.hpp"
 
 namespace duckdb {
 
