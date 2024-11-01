@@ -139,3 +139,9 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.array_size(df.data).alias('r')).collect()
         assert res == [Row(r=3), Row(r=None)]
+
+    def test_array_sort(self, spark):
+        df = spark.createDataFrame([([2, 1, None, 3],),([1],),([],)], ['data'])
+
+        res = df.select(F.array_sort(df.data).alias('r')).collect()
+        assert res == [Row(r=[1, 2, 3, None]), Row(r=[1]), Row(r=[])]
