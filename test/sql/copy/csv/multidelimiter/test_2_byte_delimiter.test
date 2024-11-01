@@ -86,3 +86,16 @@ FROM read_csv('data/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa', heade
 1a	a2
 
 endloop
+
+
+query IIII
+FROM read_csv('data/csv/multidelimiter/many_bytes.csv', delim = '\|', header = False)
+----
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
