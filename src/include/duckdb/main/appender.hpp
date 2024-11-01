@@ -87,6 +87,9 @@ public:
 	}
 	DUCKDB_API void AppendDataChunk(DataChunk &value);
 
+	virtual void SetDefaultColumn(const column_t col_idx) = 0;
+	virtual void SetDefaultValue(const column_t col_idx, const row_t row_idx) = 0;
+
 protected:
 	void Destructor();
 	virtual void FlushInternal(ColumnDataCollection &collection) = 0;
@@ -118,8 +121,13 @@ class Appender : public BaseAppender {
 	shared_ptr<ClientContext> context;
 	//! The table description (including column names)
 	unique_ptr<TableDescription> description;
-	//! The default expressions
-	unordered_map<idx_t, Value> default_values;
+
+	//! The default expressions.
+	unordered_map<column_t, Value> default_values;
+	//! The column IDs of default-value columns.
+	unordered_set<column_t> default_columns;
+	//! Fine-grained default values.
+	unordered_map<column_t, unordered_set<row_t>> default_entries;
 
 public:
 	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
@@ -130,6 +138,8 @@ public:
 
 public:
 	void AppendDefault();
+	void SetDefaultColumn(const column_t col_idx) override;
+	void SetDefaultValue(const column_t col_idx, const row_t row_idx) override;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
@@ -148,6 +158,8 @@ public:
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
+	void SetDefaultColumn(const column_t col_idx) override;
+	void SetDefaultValue(const column_t col_idx, const row_t row_idx) override;
 };
 
 template <>

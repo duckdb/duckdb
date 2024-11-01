@@ -449,7 +449,14 @@ void BaseAppender::Flush() {
 }
 
 void Appender::FlushInternal(ColumnDataCollection &collection) {
-	context->Append(*description, collection);
+	if (default_columns.empty() && default_entries.empty()) {
+		context->Append(*description, collection);
+		return;
+	}
+
+	if (!default_columns.empty()) {
+
+	}
 }
 
 void Appender::AppendDefault() {
@@ -464,10 +471,33 @@ void Appender::AppendDefault() {
 	Append(default_value);
 }
 
+void Appender::SetDefaultColumn(const column_t col_idx) {
+	default_columns.insert(col_idx);
+}
+
+void Appender::SetDefaultValue(const column_t col_idx, const row_t row_idx) {
+	auto it = default_entries.find(col_idx);
+	if (it != default_entries.end()) {
+		it->second.insert(row_idx);
+		return;
+	}
+
+	unordered_set<row_t> row_ids = {row_idx};
+	default_entries.emplace(col_idx, std::move(row_ids));
+}
+
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(table);
 	table.GetStorage().LocalAppend(table, context, collection, bound_constraints);
+}
+
+void InternalAppender::SetDefaultColumn(const column_t col_idx) {
+	throw InternalException("SetDefaultColumn not implemented for InternalAppender");
+}
+
+void InternalAppender::SetDefaultValue(const column_t col_idx, const row_t row_idx) {
+	throw InternalException("SetDefaultValue not implemented for InternalAppender");
 }
 
 void BaseAppender::Close() {
