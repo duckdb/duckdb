@@ -2373,3 +2373,55 @@ def bround(col: "ColumnOrName", scale: int = 0) -> Column:
     [Row(r=2.0)]
     """
     return _invoke_function_over_columns("round_even", col, lit(scale))
+
+def hex(col: "ColumnOrName") -> Column:
+    """
+    Computes hex value of the given column, which could be :class:`~pyspark.sql.types.StringType`, :class:`~pyspark.sql.types.BinaryType`, :class:`~pyspark.sql.types.IntegerType` or :class:`~pyspark.sql.types.LongType`.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        hexadecimal representation of given value as string.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([('ABC', 3)], ['a', 'b']).select(hex('a'), hex('b')).collect()
+    [Row(hex(a)='414243', hex(b)='3')]
+    """
+    return _invoke_function_over_columns("hex", col)
+
+def unhex(col: "ColumnOrName") -> Column:
+    """
+    Inverse of hex. Interprets each pair of characters as a hexadecimal number and converts to the byte representation of number. column and returns it as a binary column.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        string representation of given hexadecimal value.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([('414243',)], ['a']).select(unhex('a')).collect()
+    [Row(unhex(a)=bytearray(b'ABC'))]
+    """
+    return _invoke_function_over_columns("unhex", col)
