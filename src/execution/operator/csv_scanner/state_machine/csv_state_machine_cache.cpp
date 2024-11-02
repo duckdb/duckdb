@@ -251,7 +251,9 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array.skip_standard[static_cast<uint8_t>('\n')] = false;
 	transition_array.skip_standard[static_cast<uint8_t>('\r')] = false;
 	transition_array.skip_standard[comment] = false;
-	transition_array.skip_standard[escape] = false;
+	if (enable_unquoted_escape) {
+		transition_array.skip_standard[escape] = false;
+	}
 
 	// For quoted we only care about quote, escape and for delimiters \r and \n
 	transition_array.skip_quoted[quote] = false;
