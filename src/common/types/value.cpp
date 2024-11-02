@@ -702,6 +702,7 @@ Value Value::STRUCT(const LogicalType &type, vector<Value> struct_values) {
 	result.is_null = false;
 	return result;
 }
+
 Value Value::STRUCT(child_list_t<Value> values) {
 	child_list_t<LogicalType> child_types;
 	vector<Value> struct_values;
@@ -736,8 +737,8 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 	for (idx_t i = 0; i < keys.size(); i++) {
 		child_list_t<Value> new_children;
 		new_children.reserve(2);
-		new_children.push_back(std::make_pair("key", std::move(keys[i])));
-		new_children.push_back(std::make_pair("value", std::move(values[i])));
+		new_children.push_back(std::make_pair("key", keys[i].DefaultCastAs(key_type)));
+		new_children.push_back(std::make_pair("value", values[i].DefaultCastAs(value_type)));
 		values[i] = Value::STRUCT(std::move(new_children));
 	}
 	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
@@ -1822,89 +1823,101 @@ void Value::Reinterpret(LogicalType new_type) {
 	this->type_ = std::move(new_type);
 }
 
-void Value::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(100, "type", type_);
+void Value::SerializeInternal(Serializer &serializer, bool is_root) const {
+	if (is_root || !serializer.ShouldSerialize(4)) {
+		// only the root value needs to serialize its type
+		// for forwards compatibility reasons, we also serialize the type always when targeting versions < v1.2.0
+		serializer.WriteProperty(100, "type", type_);
+	}
 	serializer.WriteProperty(101, "is_null", is_null);
-	if (!IsNull()) {
-		switch (type_.InternalType()) {
-		case PhysicalType::BIT:
-			throw InternalException("BIT type should not be serialized");
-		case PhysicalType::BOOL:
-			serializer.WriteProperty(102, "value", value_.boolean);
-			break;
-		case PhysicalType::INT8:
-			serializer.WriteProperty(102, "value", value_.tinyint);
-			break;
-		case PhysicalType::INT16:
-			serializer.WriteProperty(102, "value", value_.smallint);
-			break;
-		case PhysicalType::INT32:
-			serializer.WriteProperty(102, "value", value_.integer);
-			break;
-		case PhysicalType::INT64:
-			serializer.WriteProperty(102, "value", value_.bigint);
-			break;
-		case PhysicalType::UINT8:
-			serializer.WriteProperty(102, "value", value_.utinyint);
-			break;
-		case PhysicalType::UINT16:
-			serializer.WriteProperty(102, "value", value_.usmallint);
-			break;
-		case PhysicalType::UINT32:
-			serializer.WriteProperty(102, "value", value_.uinteger);
-			break;
-		case PhysicalType::UINT64:
-			serializer.WriteProperty(102, "value", value_.ubigint);
-			break;
-		case PhysicalType::INT128:
-			serializer.WriteProperty(102, "value", value_.hugeint);
-			break;
-		case PhysicalType::UINT128:
-			serializer.WriteProperty(102, "value", value_.uhugeint);
-			break;
-		case PhysicalType::FLOAT:
-			serializer.WriteProperty(102, "value", value_.float_);
-			break;
-		case PhysicalType::DOUBLE:
-			serializer.WriteProperty(102, "value", value_.double_);
-			break;
-		case PhysicalType::INTERVAL:
-			serializer.WriteProperty(102, "value", value_.interval);
-			break;
-		case PhysicalType::VARCHAR: {
-			if (type_.id() == LogicalTypeId::BLOB) {
-				auto blob_str = Blob::ToString(StringValue::Get(*this));
-				serializer.WriteProperty(102, "value", blob_str);
-			} else {
-				serializer.WriteProperty(102, "value", StringValue::Get(*this));
-			}
-		} break;
-		case PhysicalType::LIST: {
-			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
-				auto &children = ListValue::GetChildren(*this);
-				serializer.WriteProperty(100, "children", children);
-			});
-		} break;
-		case PhysicalType::STRUCT: {
-			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
-				auto &children = StructValue::GetChildren(*this);
-				serializer.WriteProperty(100, "children", children);
-			});
-		} break;
-		case PhysicalType::ARRAY: {
-			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
-				auto &children = ArrayValue::GetChildren(*this);
-				serializer.WriteProperty(100, "children", children);
-			});
-		} break;
-		default:
-			throw NotImplementedException("Unimplemented type for Serialize");
+	if (IsNull()) {
+		return;
+	}
+	switch (type_.InternalType()) {
+	case PhysicalType::BIT:
+		throw InternalException("BIT type should not be serialized");
+	case PhysicalType::BOOL:
+		serializer.WriteProperty(102, "value", value_.boolean);
+		break;
+	case PhysicalType::INT8:
+		serializer.WriteProperty(102, "value", value_.tinyint);
+		break;
+	case PhysicalType::INT16:
+		serializer.WriteProperty(102, "value", value_.smallint);
+		break;
+	case PhysicalType::INT32:
+		serializer.WriteProperty(102, "value", value_.integer);
+		break;
+	case PhysicalType::INT64:
+		serializer.WriteProperty(102, "value", value_.bigint);
+		break;
+	case PhysicalType::UINT8:
+		serializer.WriteProperty(102, "value", value_.utinyint);
+		break;
+	case PhysicalType::UINT16:
+		serializer.WriteProperty(102, "value", value_.usmallint);
+		break;
+	case PhysicalType::UINT32:
+		serializer.WriteProperty(102, "value", value_.uinteger);
+		break;
+	case PhysicalType::UINT64:
+		serializer.WriteProperty(102, "value", value_.ubigint);
+		break;
+	case PhysicalType::INT128:
+		serializer.WriteProperty(102, "value", value_.hugeint);
+		break;
+	case PhysicalType::UINT128:
+		serializer.WriteProperty(102, "value", value_.uhugeint);
+		break;
+	case PhysicalType::FLOAT:
+		serializer.WriteProperty(102, "value", value_.float_);
+		break;
+	case PhysicalType::DOUBLE:
+		serializer.WriteProperty(102, "value", value_.double_);
+		break;
+	case PhysicalType::INTERVAL:
+		serializer.WriteProperty(102, "value", value_.interval);
+		break;
+	case PhysicalType::VARCHAR: {
+		if (type_.id() == LogicalTypeId::BLOB) {
+			auto blob_str = Blob::ToString(StringValue::Get(*this));
+			serializer.WriteProperty(102, "value", blob_str);
+		} else {
+			serializer.WriteProperty(102, "value", StringValue::Get(*this));
 		}
+	} break;
+	case PhysicalType::LIST:
+		SerializeChildren(serializer, ListValue::GetChildren(*this));
+		break;
+	case PhysicalType::STRUCT:
+		SerializeChildren(serializer, StructValue::GetChildren(*this));
+		break;
+	case PhysicalType::ARRAY:
+		SerializeChildren(serializer, ArrayValue::GetChildren(*this));
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for Serialize");
 	}
 }
 
+void Value::SerializeChildren(Serializer &serializer, const vector<Value> &children) const {
+	serializer.WriteObject(102, "value", [&](Serializer &child_serializer) {
+		child_serializer.WriteList(100, "children", children.size(), [&](Serializer::List &list, idx_t i) {
+			list.WriteObject(
+			    [&](Serializer &element_serializer) { children[i].SerializeInternal(element_serializer, false); });
+		});
+	});
+}
+
+void Value::Serialize(Serializer &serializer) const {
+	SerializeInternal(serializer, true);
+}
+
 Value Value::Deserialize(Deserializer &deserializer) {
-	auto type = deserializer.ReadProperty<LogicalType>(100, "type");
+	auto type = deserializer.ReadPropertyWithExplicitDefault<LogicalType>(100, "type", LogicalTypeId::INVALID);
+	if (type.id() == LogicalTypeId::INVALID) {
+		type = deserializer.Get<const LogicalType &>();
+	}
 	auto is_null = deserializer.ReadProperty<bool>(101, "is_null");
 	Value new_value = Value(type);
 	if (is_null) {
@@ -1965,22 +1978,32 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		}
 	} break;
 	case PhysicalType::LIST: {
+		deserializer.Set<const LogicalType &>(ListType::GetChildType(type));
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
 			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
+		deserializer.Unset<LogicalType>();
 	} break;
 	case PhysicalType::STRUCT: {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
-			auto children = obj.ReadProperty<vector<Value>>(100, "children");
+			vector<Value> children;
+			obj.ReadList(100, "children", [&](Deserializer::List &list, idx_t i) {
+				deserializer.Set<const LogicalType &>(StructType::GetChildType(type, i));
+				auto child = list.ReadElement<Value>();
+				deserializer.Unset<LogicalType>();
+				children.push_back(std::move(child));
+			});
 			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
 	} break;
 	case PhysicalType::ARRAY: {
+		deserializer.Set<const LogicalType &>(ArrayType::GetChildType(type));
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
 			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
+		deserializer.Unset<LogicalType>();
 	} break;
 	default:
 		throw NotImplementedException("Unimplemented type for Deserialize");
