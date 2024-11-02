@@ -781,72 +781,24 @@ Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) 
 	return result;
 }
 
-Value Value::LIST(vector<Value> values) {
-	if (values.empty()) {
-		throw InternalException("Value::LIST without providing a child-type requires a non-empty list of values. Use "
-		                        "Value::LIST(child_type, list) instead.");
-	}
-#ifdef DEBUG
-	for (idx_t i = 1; i < values.size(); i++) {
-		D_ASSERT(values[i].type() == values[0].type());
-	}
-#endif
-	Value result;
-	result.type_ = LogicalType::LIST(values[0].type());
-	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
-	result.is_null = false;
-	return result;
-}
-
 Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
-	if (values.empty()) {
-		return Value::EMPTYLIST(child_type);
-	}
+	Value result;
+	result.type_ = LogicalType::LIST(child_type);
+	result.is_null = false;
 	for (auto &val : values) {
 		val = val.DefaultCastAs(child_type);
 	}
-	return Value::LIST(std::move(values));
-}
-
-Value Value::EMPTYLIST(const LogicalType &child_type) {
-	Value result;
-	result.type_ = LogicalType::LIST(child_type);
-	result.value_info_ = make_shared_ptr<NestedValueInfo>();
-	result.is_null = false;
-	return result;
-}
-
-Value Value::ARRAY(vector<Value> values) {
-	if (values.empty()) {
-		throw InternalException("Value::ARRAY without providing a child-type requires a non-empty list of values. Use "
-		                        "Value::ARRAY(child_type, list) instead.");
-	}
-#ifdef DEBUG
-	for (idx_t i = 1; i < values.size(); i++) {
-		D_ASSERT(values[i].type() == values[0].type());
-	}
-#endif
-	Value result;
-	result.type_ = LogicalType::ARRAY(values[0].type(), values.size());
 	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
-	result.is_null = false;
 	return result;
 }
 
 Value Value::ARRAY(const LogicalType &child_type, vector<Value> values) {
-	if (values.empty()) {
-		return Value::EMPTYARRAY(child_type, 0);
-	}
+	Value result;
+	result.type_ = LogicalType::ARRAY(child_type, values.size());
 	for (auto &val : values) {
 		val = val.DefaultCastAs(child_type);
 	}
-	return Value::ARRAY(std::move(values));
-}
-
-Value Value::EMPTYARRAY(const LogicalType &child_type, uint32_t size) {
-	Value result;
-	result.type_ = LogicalType::ARRAY(child_type, size);
-	result.value_info_ = make_shared_ptr<NestedValueInfo>();
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
 	result.is_null = false;
 	return result;
 }

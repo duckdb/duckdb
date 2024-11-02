@@ -178,7 +178,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		}
 	}
 	columns << "}";
-	output.SetValue(7, 0, Value::LIST(values));
+	output.SetValue(7, 0, Value::LIST(values[0].type(), values));
 	// 9. Date Format
 	auto date_format = sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue();
 	if (!date_format.Empty()) {

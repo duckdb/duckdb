@@ -159,20 +159,10 @@ public:
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
 	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
-	//! Create a list value with the given entries, list type is inferred from children
-	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
-	DUCKDB_API static Value LIST(vector<Value> values);
 	//! Create a list value with the given entries
 	DUCKDB_API static Value LIST(const LogicalType &child_type, vector<Value> values);
-	//! Create an empty list with the specified child-type
-	DUCKDB_API static Value EMPTYLIST(const LogicalType &child_type);
-	//! Create an array value with the given entries. Array type is inferred from children
-	//! Cannot be called with an empty list, use either EMPTYARRAY or ARRAY with a type instead
-	DUCKDB_API static Value ARRAY(vector<Value> values);
 	// Create an array value with the given entries
 	DUCKDB_API static Value ARRAY(const LogicalType &type, vector<Value> values);
-	//! Create an empty array of the given type and size
-	DUCKDB_API static Value EMPTYARRAY(const LogicalType &type, uint32_t size);
 	//! Create a map value with the given entries
 	DUCKDB_API static Value MAP(const LogicalType &child_type, vector<Value> values);
 	//! Create a map value with the given entries
