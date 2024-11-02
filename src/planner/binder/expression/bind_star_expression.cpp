@@ -134,8 +134,61 @@ static string ReplaceColumnsAlias(const string &alias, const string &column_name
 	return result;
 }
 
+void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
+	// detect "* LIKE [literal]" and similar expressions
+	if (root->expression_class != ExpressionClass::FUNCTION) {
+		return;
+	}
+	auto &function = root->Cast<FunctionExpression>();
+	if (function.children.size() != 2) {
+		return;
+	}
+	auto &left = function.children[0];
+	// expression must have a star on the LHS, and a literal on the RHS
+	if (left->expression_class != ExpressionClass::STAR) {
+		return;
+	}
+	auto &star = left->Cast<StarExpression>();
+	if (star.columns) {
+		// COLUMNS(*) has different semantics
+		return;
+	}
+	unordered_set<string> supported_ops {"~~", "!~~", "~~~", "!~~~", "~~*", "!~~*", "regexp_full_match"};
+	if (supported_ops.count(function.function_name) == 0) {
+		// unsupported op for * expression
+		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.function_name);
+	}
+	auto &right = function.children[1];
+	if (right->expression_class != ExpressionClass::CONSTANT) {
+		throw BinderException(*root, "Pattern applied to a star expression must be a constant");
+	}
+	if (!star.replace_list.empty()) {
+		throw BinderException(*root, "Replace list cannot be combined with a filtering operation");
+	}
+	// generate a columns expression
+	// "* LIKE '%literal%'
+	// -> COLUMNS(list_filter(*, x -> x LIKE '%literal%'))
+	auto star_expr = std::move(left);
+
+	auto lhs = make_uniq<ColumnRefExpression>("__lambda_col");
+	function.children[0] = lhs->Copy();
+
+	auto lambda = make_uniq<LambdaExpression>(std::move(lhs), std::move(root));
+	vector<unique_ptr<ParsedExpression>> filter_children;
+	filter_children.push_back(std::move(star_expr));
+	filter_children.push_back(std::move(lambda));
+	auto list_filter = make_uniq<FunctionExpression>("list_filter", std::move(filter_children));
+
+	auto columns_expr = make_uniq<StarExpression>();
+	columns_expr->columns = true;
+	columns_expr->expr = std::move(list_filter);
+	root = std::move(columns_expr);
+}
+
 void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
+	TryTransformStarLike(expr);
+
 	StarExpression *star = nullptr;
 	if (!FindStarExpression(expr, &star, true, false)) {
 		// no star expression: add it as-is
