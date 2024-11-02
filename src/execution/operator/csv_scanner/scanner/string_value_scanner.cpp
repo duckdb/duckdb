@@ -245,13 +245,13 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		const bool check_unquoted_escaped_null =
 		    state_machine.state_machine_options.rfc_4180.GetValue() == false && escaped && !quoted && size == 1;
 		for (idx_t i = 0; i < null_str_count; i++) {
-			bool isNull = false;
+			bool is_null = false;
 			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
-				isNull = check_unquoted_escaped_null && null_str_ptr[i][1] == value_ptr[0];
+				is_null = check_unquoted_escaped_null && null_str_ptr[i][1] == value_ptr[0];
 			} else if (size == null_str_size[i] && !check_unquoted_escaped_null) {
-				isNull = IsValueNull(null_str_ptr[i], value_ptr, size);
+				is_null = IsValueNull(null_str_ptr[i], value_ptr, size);
 			}
-			if (isNull) {
+			if (is_null) {
 				bool empty = false;
 				if (chunk_col_id < state_machine.options.force_not_null.size()) {
 					empty = state_machine.options.force_not_null[chunk_col_id];
