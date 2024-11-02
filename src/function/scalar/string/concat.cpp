@@ -155,14 +155,14 @@ struct ListConcatInputData {
 	const list_entry_t *input_entries = nullptr;
 };
 
-static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
 	auto count = args.size();
 
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
 	vector<ListConcatInputData> input_data;
 	for (auto &input : args.data) {
-		if (input.GetType().id() == LogicalTypeId::SQLNULL) {
-			// ignore NULL values
+		if (!is_operator && input.GetType().id() == LogicalTypeId::SQLNULL) {
+			// LIST_CONCAT ignores NULL values
 			continue;
 		}
 
@@ -178,6 +178,7 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 		input_data.push_back(std::move(data));
 	}
 
+	auto &result_validity = FlatVector::Validity(result);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto &result_entry = result_entries[i];
@@ -186,6 +187,10 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 		for (auto &data : input_data) {
 			auto list_index = data.vdata.sel->get_index(i);
 			if (!data.vdata.validity.RowIsValid(list_index)) {
+				// LIST_CONCAT ignores NULL values, but || does not
+				if (is_operator) {
+					result_validity.SetInvalid(i);
+				}
 				continue;
 			}
 			const auto &list_entry = data.input_entries[list_index];
@@ -206,7 +211,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ConcatFunctionData>();
 	if (info.return_type.id() == LogicalTypeId::LIST) {
-		return ListConcatFunction(args, state, result);
+		return ListConcatFunction(args, state, result, info.is_operator);
 	} else if (info.is_operator) {
 		return ConcatOperator(args, state, result);
 	}
