@@ -1823,8 +1823,38 @@ void Value::Reinterpret(LogicalType new_type) {
 	this->type_ = std::move(new_type);
 }
 
-void Value::SerializeInternal(Serializer &serializer, bool is_root) const {
-	if (is_root || !serializer.ShouldSerialize(4)) {
+const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {
+	switch (parent_type.InternalType()) {
+	case PhysicalType::LIST:
+		return ListType::GetChildType(parent_type);
+	case PhysicalType::STRUCT:
+		return StructType::GetChildType(parent_type, i);
+	case PhysicalType::ARRAY:
+		return ArrayType::GetChildType(parent_type);
+	default:
+		throw InternalException("Parent type is not a nested type");
+	}
+}
+
+void Value::SerializeChildren(Serializer &serializer, const vector<Value> &children, const LogicalType &parent_type) {
+	serializer.WriteObject(102, "value", [&](Serializer &child_serializer) {
+		child_serializer.WriteList(100, "children", children.size(), [&](Serializer::List &list, idx_t i) {
+			auto &value_type = GetChildType(parent_type, i);
+			bool serialize_type = value_type.id() == LogicalTypeId::ANY;
+			if (!serialize_type && children[i].type() != value_type) {
+				throw InternalException("Error when serializing type - serializing a child of a nested value with type "
+				                        "%s, but expected type %s",
+				                        children[i].type(), value_type);
+			}
+			list.WriteObject([&](Serializer &element_serializer) {
+				children[i].SerializeInternal(element_serializer, serialize_type);
+			});
+		});
+	});
+}
+
+void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const {
+	if (serialize_type || !serializer.ShouldSerialize(4)) {
 		// only the root value needs to serialize its type
 		// for forwards compatibility reasons, we also serialize the type always when targeting versions < v1.2.0
 		serializer.WriteProperty(100, "type", type_);
@@ -1887,29 +1917,21 @@ void Value::SerializeInternal(Serializer &serializer, bool is_root) const {
 		}
 	} break;
 	case PhysicalType::LIST:
-		SerializeChildren(serializer, ListValue::GetChildren(*this));
+		SerializeChildren(serializer, ListValue::GetChildren(*this), type_);
 		break;
 	case PhysicalType::STRUCT:
-		SerializeChildren(serializer, StructValue::GetChildren(*this));
+		SerializeChildren(serializer, StructValue::GetChildren(*this), type_);
 		break;
 	case PhysicalType::ARRAY:
-		SerializeChildren(serializer, ArrayValue::GetChildren(*this));
+		SerializeChildren(serializer, ArrayValue::GetChildren(*this), type_);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for Serialize");
 	}
 }
 
-void Value::SerializeChildren(Serializer &serializer, const vector<Value> &children) const {
-	serializer.WriteObject(102, "value", [&](Serializer &child_serializer) {
-		child_serializer.WriteList(100, "children", children.size(), [&](Serializer::List &list, idx_t i) {
-			list.WriteObject(
-			    [&](Serializer &element_serializer) { children[i].SerializeInternal(element_serializer, false); });
-		});
-	});
-}
-
 void Value::Serialize(Serializer &serializer) const {
+	// serialize the value - the top-level value always needs to serialize its type
 	SerializeInternal(serializer, true);
 }
 

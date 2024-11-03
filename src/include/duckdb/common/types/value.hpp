@@ -292,8 +292,9 @@ public:
 	DUCKDB_API void Print() const;
 
 private:
-	void SerializeInternal(Serializer &serializer, bool is_root = false) const;
-	void SerializeChildren(Serializer &serializer, const vector<Value> &children) const;
+	void SerializeInternal(Serializer &serializer, bool serialize_type) const;
+	static void SerializeChildren(Serializer &serializer, const vector<Value> &children,
+	                              const LogicalType &parent_type);
 
 private:
 	//! The logical of the value
