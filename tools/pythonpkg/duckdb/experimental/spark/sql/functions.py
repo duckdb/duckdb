@@ -2833,3 +2833,47 @@ def array_sort(
         raise ContributionsAcceptedError("comparator is not yet supported")
     else:
         return _invoke_function_over_columns("list_sort", col, lit("ASC"), lit("NULLS LAST"))
+
+
+def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
+    """
+    Collection function: returns true if the arrays contain any common non-null element; if not,
+    returns null if both the arrays are non-empty and any of them contains a null element; returns
+    false otherwise.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a column of Boolean type.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(["a", "b"], ["b", "c"]), (["a"], ["b", "c"])], ['x', 'y'])
+    >>> df.select(arrays_overlap(df.x, df.y).alias("overlap")).collect()
+    [Row(overlap=True), Row(overlap=False)]
+    """
+    a1 = _to_column_expr(a1)
+    a2 = _to_column_expr(a2)
+
+    # FIXME: Hacky way to check if the array contains null as we can't write a lambda function
+    # with the expression API or use list comprehensions. Else, we could for example filter
+    # the list to remove nulls and then check if the length of the list has changed.
+    def list_contains_null(a: ColumnExpression) -> Expression:
+        return FunctionExpression("len", FunctionExpression("regexp_extract_all", FunctionExpression("array_to_string", a, ConstantExpression('|')), ConstantExpression('\|'))) < (FunctionExpression("len", a) - 1)
+
+    a1_has_null = list_contains_null(a1)
+    a2_has_null = list_contains_null(a2)
+
+    return Column(
+        CaseExpression(
+            FunctionExpression("list_has_any", a1, a2), ConstantExpression(True)
+        ).otherwise(
+            CaseExpression(
+                (FunctionExpression("len", a1) > 0) & (FunctionExpression("len", a2) > 0) & (a1_has_null | a2_has_null), ConstantExpression(None)
+                ).otherwise(ConstantExpression(False)))
+    )
