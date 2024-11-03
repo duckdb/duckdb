@@ -18,7 +18,7 @@ public:
 	}
 
 	/**
-	 * Execute a prepated statment previously "groomed" and print the result
+	 * Execute a prepared statement previously "groomed" and print the result
 	 */
 	int ExecutePreparedStmt() {
 		if (!stmt) {

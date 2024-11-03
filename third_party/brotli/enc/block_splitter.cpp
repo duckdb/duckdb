@@ -1578,7 +1578,7 @@ void duckdb_brotli::BrotliSplitBlock(MemoryManager* m,
     CopyLiteralsToByteArray(cmds, num_commands, data, pos, mask, literals);
     /* Create the block split on the array of literals.
      * Literal histograms can have alphabet size up to 256.
-     * Though, to accomodate context modeling, less than half of maximum size
+     * Though, to accommodate context modeling, less than half of maximum size
      * is allowed. */
     SplitByteVectorLiteral(
         m, literals, literals_count,

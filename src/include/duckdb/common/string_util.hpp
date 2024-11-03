@@ -137,7 +137,7 @@ public:
 	//! Split the input string based on newline char
 	DUCKDB_API static vector<string> Split(const string &str, char delimiter);
 
-	//! Split the input string allong a quote. Note that any escaping is NOT supported.
+	//! Split the input string along a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator

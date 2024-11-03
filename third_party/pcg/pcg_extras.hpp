@@ -253,7 +253,7 @@ inline std::istream& operator>>(std::istream& in, uint8_t& value)
  */
 
 /*
- * XorShifts are invertable, but they are someting of a pain to invert.
+ * XorShifts are invertable, but they are something of a pain to invert.
  * This function backs them out.  It's used by the whacky "inside out"
  * generator defined later.
  */

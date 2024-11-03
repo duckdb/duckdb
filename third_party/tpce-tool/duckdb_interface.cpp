@@ -139,8 +139,8 @@ void CTradeOrderDBInterface::DoTradeOrderFrame3(const TTradeOrderFrame3Input *pI
 	// } else {
 	// 	// This is a buy transaction, so estimate the impact to any currently
 	// 	// held short positions in the security. These are represented as
-	// 	// negative H_QTY holdings. Short postions will be covered before
-	// 	// opening a long postion in // this security.
+	// 	// negative H_QTY holdings. Short positions will be covered before
+	// 	// opening a long position in // this security.
 	// 	if (hs_qty < 0) {
 	// 		if (pIn->is_lifo) {
 	// 			// Estimates will be based on closing most recently acquired
@@ -154,7 +154,7 @@ void CTradeOrderDBInterface::DoTradeOrderFrame3(const TTradeOrderFrame3Input *pI
 	// 			                   " and H_S_SYMB = " + symbol + " order by H_DTS asc");
 	// 		}
 	// 		// Estimate, based on the requested price, any profit that may be
-	// 		// realized by covering short postions currently held for this
+	// 		// realized by covering short positions currently held for this
 	// 		// security. The customer may have multiple holdings for this
 	// 		// security (representing different purchases of this security at
 	// 		// different times and therefore, most likely, different prices).

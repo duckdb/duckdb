@@ -1,5 +1,5 @@
 // Provides an efficient implementation of a semaphore (LightweightSemaphore).
-// This is an extension of Jeff Preshing's sempahore implementation (licensed
+// This is an extension of Jeff Preshing's semaphore implementation (licensed
 // under the terms of its separate zlib license) that has been adapted and
 // extended by Cameron Desrochers.
 

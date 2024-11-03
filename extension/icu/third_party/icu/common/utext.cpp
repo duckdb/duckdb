@@ -2394,7 +2394,7 @@ ucstrTextLength(UText *ut) {
     if (ut->a < 0) {
         // null terminated, we don't yet know the length.  Scan for it.
         //    Access is not convenient for doing this
-        //    because the current interation postion can't be changed.
+        //    because the current interation position can't be changed.
         const UChar  *str = (const UChar *)ut->context;
         for (;;) {
             if (str[ut->chunkNativeLimit] == 0) {

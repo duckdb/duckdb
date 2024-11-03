@@ -762,7 +762,7 @@ NFRuleSet::parse(const UnicodeString& text, ParsePosition& pos, double upperBoun
 #ifdef RBNF_DEBUG
     fprintf(stderr, "<nfrs> exit\n");
 #endif
-    // finally, update the parse postion we were passed to point to the
+    // finally, update the parse position we were passed to point to the
     // first character we didn't use, and return the result that
     // corresponds to that string of characters
     pos = highWaterMark;

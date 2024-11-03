@@ -80,7 +80,7 @@ const RNGSEED RNGSeedBaseNumberOfAccountPermissions = 27794203;
 const RNGSEED RNGSeedBaseCIDForPermission1 = 76103629;
 const RNGSEED RNGSeedBaseCIDForPermission2 = 103275149;
 
-// Base seed used when generating acount tax status
+// Base seed used when generating account tax status
 const RNGSEED RNGSeedBaseAccountTaxStatus = 34376701;
 
 // Base seed for determining account broker id

@@ -23,7 +23,7 @@
 /**
  * UHashtable stores key-value pairs and does moderately fast lookup
  * based on keys.  It provides a good tradeoff between access time and
- * storage space.  As elements are added to it, it grows to accomodate
+ * storage space.  As elements are added to it, it grows to accommodate
  * them.  By default, the table never shrinks, even if all elements
  * are removed from it.
  *

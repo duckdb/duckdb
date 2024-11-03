@@ -2298,7 +2298,7 @@ ultag_parse(const char* tag, int32_t tagLen, int32_t* parsedLen, UErrorCode* sta
         if (next & EXTV) {
             if (_isExtensionSubtag(pSubtag, subtagLen)) {
                 if (pExtValueSubtag == NULL) {
-                    /* if the start postion of this extension's value is not yet,
+                    /* if the start position of this extension's value is not yet,
                         this one is the first value subtag */
                     pExtValueSubtag = pSubtag;
                 }

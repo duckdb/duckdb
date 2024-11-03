@@ -10962,7 +10962,7 @@ static void output_quoted_string(FILE *out, const char *z){
 
 /*
 ** Output the given string as a quoted string using SQL quoting conventions.
-** Additionallly , escape the "\n" and "\r" characters so that they do not
+** Additionally , escape the "\n" and "\r" characters so that they do not
 ** get corrupted by end-of-line translation facilities in some operating
 ** systems.
 **
@@ -12305,7 +12305,7 @@ static void explain_data_prepare(ShellState *p, sqlite3_stmt *pSql){
     /* Grow the p->aiIndent array as required */
     if( iOp>=nAlloc ){
       if( iOp==0 ){
-        /* Do further verfication that this is explain output.  Abort if
+        /* Do further verification that this is explain output.  Abort if
         ** it is not */
         static const char *explainCols[] = {
            "addr", "opcode", "p1", "p2", "p3", "p4", "p5", "comment" };
@@ -15938,7 +15938,7 @@ static RecoverTable *recoverOrphanTable(
   if( nCol>=0 && *pRc==SQLITE_OK ){
     int i;
 
-    /* This block determines the name of the orphan table. The prefered
+    /* This block determines the name of the orphan table. The preferred
     ** name is zLostAndFound. But if that clashes with another name
     ** in the recovered schema, try zLostAndFound_0, zLostAndFound_1
     ** and so on until a non-clashing name is found.  */

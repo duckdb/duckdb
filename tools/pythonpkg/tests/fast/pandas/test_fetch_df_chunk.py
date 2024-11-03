@@ -72,7 +72,7 @@ class TestType(object):
         assert cur_chunk['a'][0] == fetched
         assert len(cur_chunk) == expected
 
-        # These shouldn't throw errors (Just emmit empty chunks)
+        # These shouldn't throw errors (Just emit empty chunks)
         cur_chunk = query.fetch_df_chunk(100)
         assert len(cur_chunk) == 0
 

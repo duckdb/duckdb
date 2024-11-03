@@ -6796,7 +6796,7 @@ yyjson_doc *yyjson_read_fp(FILE *file,
         if (fseek(file, 0, SEEK_END) == 0) file_size = ftell(file);
         /* reset to original position, may fail */
         if (fseek(file, file_pos, SEEK_SET) != 0) file_size = 0;
-        /* get file size from current postion to end */
+        /* get file size from current position to end */
         if (file_size > 0) file_size -= file_pos;
     }
 
