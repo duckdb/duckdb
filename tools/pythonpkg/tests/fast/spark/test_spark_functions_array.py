@@ -141,17 +141,15 @@ class TestSparkFunctionsArray:
         assert res == [Row(r=3), Row(r=None)]
 
     def test_array_sort(self, spark):
-        df = spark.createDataFrame([([2, 1, None, 3],),([1],),([],)], ['data'])
+        df = spark.createDataFrame([([2, 1, None, 3],), ([1],), ([],)], ['data'])
 
         res = df.select(F.array_sort(df.data).alias('r')).collect()
         assert res == [Row(r=[1, 2, 3, None]), Row(r=[1]), Row(r=[])]
 
     def test_arrays_overlap(self, spark):
-        df = spark.createDataFrame([(["a", "b"], ["b", "c"]),
-                                    (["a"], ["b", "c"]),
-                                    ([None, "c"], ["a"]),
-                                    ([None, "c"], [None])],
-                                    ['x', 'y'])
+        df = spark.createDataFrame(
+            [(["a", "b"], ["b", "c"]), (["a"], ["b", "c"]), ([None, "c"], ["a"]), ([None, "c"], [None])], ['x', 'y']
+        )
 
         res = df.select(F.arrays_overlap(df.x, df.y).alias("overlap")).collect()
         assert res == [Row(overlap=True), Row(overlap=False), Row(overlap=None), Row(overlap=None)]

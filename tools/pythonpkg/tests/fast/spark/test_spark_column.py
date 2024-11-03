@@ -39,9 +39,10 @@ class TestSparkColumn(object):
     def test_array_column(self, spark):
         df = spark.createDataFrame([Row(a=1, b=2, c=3, d=4)])
 
-        df2 = df.select(array(df.col0, df.col1).alias("array"),
-                  array(df.col0).alias("array_single"),
-                  array("col1", "col2", "col3").alias("array_str")
+        df2 = df.select(
+            array(df.col0, df.col1).alias("array"),
+            array(df.col0).alias("array_single"),
+            array("col1", "col2", "col3").alias("array_str"),
         )
         res = df2.collect()
 
