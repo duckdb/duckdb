@@ -13,8 +13,7 @@ Value ConvertVectorToValue(vector<Value> set) {
 	if (set.empty()) {
 		return Value::LIST(LogicalType::BOOLEAN, std::move(set));
 	}
-	auto &list_type = set[0].type();
-	return Value::LIST(list_type, std::move(set));
+	return Value::LIST(std::move(set));
 }
 
 vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, const string &loption) {

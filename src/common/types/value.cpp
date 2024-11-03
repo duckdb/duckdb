@@ -793,6 +793,15 @@ Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
 	return result;
 }
 
+Value Value::LIST(vector<Value> values) {
+	if (values.empty()) {
+		throw InternalException(
+		    "Value::LIST(values) cannot be used to make an empty list - use Value::LIST(type, values) instead");
+	}
+	auto &type = values[0].type();
+	return Value::LIST(type, std::move(values));
+}
+
 Value Value::ARRAY(const LogicalType &child_type, vector<Value> values) {
 	Value result;
 	result.type_ = LogicalType::ARRAY(child_type, values.size());

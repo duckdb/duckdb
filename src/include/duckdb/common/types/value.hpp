@@ -161,6 +161,9 @@ public:
 	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
 	//! Create a list value with the given entries
 	DUCKDB_API static Value LIST(const LogicalType &child_type, vector<Value> values);
+	//! Create a list value with the given entries
+	//! The type of the first value determines the list type. The list cannot be empty.
+	DUCKDB_API static Value LIST(vector<Value> values);
 	// Create an array value with the given entries
 	DUCKDB_API static Value ARRAY(const LogicalType &type, vector<Value> values);
 	//! Create a map value with the given entries
