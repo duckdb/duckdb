@@ -201,6 +201,7 @@ static int64_t ImplicitCastHugeint(const LogicalType &to) {
 
 static int64_t ImplicitCastUhugeint(const LogicalType &to) {
 	switch (to.id()) {
+	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
