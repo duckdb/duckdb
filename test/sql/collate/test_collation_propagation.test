@@ -1,0 +1,106 @@
+# name: test/issues/general/test_9854.test
+# description: Issue 1091: Functions don't check or pass collation.
+# group: [general]
+
+statement ok
+create table tbl (a varchar, b varchar);
+
+statement ok
+insert into tbl values ('ö', '>>>>>ö<<<<<'), ('o', '>>>>>o<<<<<'), ('p', '>>>>>p<<<<<');
+
+# test propagation of collation through string functions
+query I
+select concat(a collate noaccent, a) from tbl order by all;
+----
+öö
+oo
+pp
+
+query I
+select lower(a collate noaccent) from tbl order by all;
+----
+ö
+o
+p
+
+query I
+select upper(a collate noaccent) from tbl order by all;
+----
+Ö
+O
+P
+
+query I
+select trim(b collate noaccent, '<>') from tbl order by all
+----
+ö
+o
+p
+
+query I
+select ltrim(b collate noaccent, '<>') from tbl order by all
+----
+ö<<<<<
+o<<<<<
+p<<<<<
+
+query I
+select rtrim(b collate noaccent, '<>') from tbl order by all
+----
+>>>>>ö
+>>>>>o
+>>>>>p
+
+query I
+select repeat(a collate noaccent, 10) from tbl order by all;
+----
+öööööööööö
+oooooooooo
+pppppppppp
+
+query I
+select left(b collate noaccent, 6) from tbl order by all;
+----
+>>>>>ö
+>>>>>o
+>>>>>p
+
+query I
+select right(b collate noaccent, 6) from tbl order by all;
+----
+ö<<<<<
+o<<<<<
+p<<<<<
+
+query I
+select right(left(b collate noaccent, 6), 1) from tbl order by all;
+----
+ö
+o
+p
+
+query I
+select reverse(a collate noaccent) from tbl order by all;
+----
+ö
+o
+p
+
+# test application of collation
+query I
+select a from tbl where contains(b collate noaccent, 'o') order by all
+----
+o
+ös
+
+query I
+select a from tbl where starts_with(b collate noaccent, 'o') order by all
+----
+o
+ö
+
+query I
+select a from tbl where ends_with(b collate noaccent, 'o') order by all
+----
+o
+ö
