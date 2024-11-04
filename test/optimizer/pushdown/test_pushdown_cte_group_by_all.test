@@ -3,11 +3,9 @@
 # group: [pushdown]
 
 statement ok
-create or replace temp table my_temp as
+create or replace table my_temp as
 from generate_series(99) t(i)
-select
-i,
-i % 10 as group_1;
+select i, i % 10 as group_1;
 
 statement ok
 pragma explain_output='optimized_only';
