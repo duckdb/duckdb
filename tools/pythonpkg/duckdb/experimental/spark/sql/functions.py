@@ -119,6 +119,247 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     )
 
 
+def asc(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the ascending order of the given column name.
+
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the ascending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    Sort by the column 'id' in the descending order.
+
+    >>> df = spark.range(5)
+    >>> df = df.sort(desc("id"))
+    >>> df.show()
+    +---+
+    | id|
+    +---+
+    |  4|
+    |  3|
+    |  2|
+    |  1|
+    |  0|
+    +---+
+
+    Sort by the column 'id' in the ascending order.
+
+    >>> df.orderBy(asc("id")).show()
+    +---+
+    | id|
+    +---+
+    |  0|
+    |  1|
+    |  2|
+    |  3|
+    |  4|
+    +---+
+    """
+    return Column(_to_column_expr(col)).asc()
+
+
+def asc_nulls_first(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the ascending order of the given
+    column name, and null values return before non-null values.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the ascending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    >>> df1 = spark.createDataFrame([(1, "Bob"),
+    ...                              (0, None),
+    ...                              (2, "Alice")], ["age", "name"])
+    >>> df1.sort(asc_nulls_first(df1.name)).show()
+    +---+-----+
+    |age| name|
+    +---+-----+
+    |  0| NULL|
+    |  2|Alice|
+    |  1|  Bob|
+    +---+-----+
+
+    """
+    return asc(col).nulls_first()
+
+
+def asc_nulls_last(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the ascending order of the given
+    column name, and null values appear after non-null values.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the ascending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    >>> df1 = spark.createDataFrame([(0, None),
+    ...                              (1, "Bob"),
+    ...                              (2, "Alice")], ["age", "name"])
+    >>> df1.sort(asc_nulls_last(df1.name)).show()
+    +---+-----+
+    |age| name|
+    +---+-----+
+    |  2|Alice|
+    |  1|  Bob|
+    |  0| NULL|
+    +---+-----+
+
+    """
+    return asc(col).nulls_last()
+
+
+def desc(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the descending order of the given column name.
+
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the descending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    Sort by the column 'id' in the descending order.
+
+    >>> spark.range(5).orderBy(desc("id")).show()
+    +---+
+    | id|
+    +---+
+    |  4|
+    |  3|
+    |  2|
+    |  1|
+    |  0|
+    +---+
+    """
+    return Column(_to_column_expr(col)).desc()
+
+
+def desc_nulls_first(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the descending order of the given
+    column name, and null values appear before non-null values.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the descending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    >>> df1 = spark.createDataFrame([(0, None),
+    ...                              (1, "Bob"),
+    ...                              (2, "Alice")], ["age", "name"])
+    >>> df1.sort(desc_nulls_first(df1.name)).show()
+    +---+-----+
+    |age| name|
+    +---+-----+
+    |  0| NULL|
+    |  1|  Bob|
+    |  2|Alice|
+    +---+-----+
+
+    """
+    return desc(col).nulls_first()
+
+
+def desc_nulls_last(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the descending order of the given
+    column name, and null values appear after non-null values.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the descending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    >>> df1 = spark.createDataFrame([(0, None),
+    ...                              (1, "Bob"),
+    ...                              (2, "Alice")], ["age", "name"])
+    >>> df1.sort(desc_nulls_last(df1.name)).show()
+    +---+-----+
+    |age| name|
+    +---+-----+
+    |  1|  Bob|
+    |  2|Alice|
+    |  0| NULL|
+    +---+-----+
+
+    """
+    return desc(col).nulls_last()
+
+
 def array_contains(col: "ColumnOrName", value: Any) -> Column:
     """
     Collection function: returns null if the array is null, true if the array contains the
