@@ -265,7 +265,8 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
                                                                    const LogicalType &target_type) {
 	using STATE = QuantileState<INPUT_TYPE, QuantileStandardType>;
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
-	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
+	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
+	                                                       AggregateDestructorType::LEGACY>(input_type, target_type);
 	fun.bind = BindMAD;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 #ifndef DUCKDB_SMALLER_BINARY

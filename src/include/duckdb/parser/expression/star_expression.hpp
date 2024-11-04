@@ -28,6 +28,8 @@ public:
 	qualified_column_set_t exclude_list;
 	//! List of columns to replace with another expression
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_list;
+	//! List of columns to rename
+	qualified_column_map_t<string> rename_list;
 	//! The expression to select the columns (regular expression or list)
 	unique_ptr<ParsedExpression> expr;
 	//! Whether or not this is a COLUMNS expression

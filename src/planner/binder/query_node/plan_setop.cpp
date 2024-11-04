@@ -132,7 +132,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	                                node.right_binder->has_unplanned_dependent_joins;
 
 	// create actual logical ops for setops
-	LogicalOperatorType logical_type;
+	LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_INVALID;
 	switch (node.setop_type) {
 	case SetOperationType::UNION:
 	case SetOperationType::UNION_BY_NAME:

@@ -447,7 +447,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		return;
 	}
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
-
 	table.InitializeIndexes(context);
 
 	const idx_t row_group_size = storage.row_groups->GetRowGroupSize();
