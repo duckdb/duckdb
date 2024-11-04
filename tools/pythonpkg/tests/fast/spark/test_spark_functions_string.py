@@ -109,3 +109,9 @@ class TestSparkFunctionsString(object):
             Row(startswith=False),
             Row(startswith=True),
         ]
+
+    def test_ascii(self, spark):
+        df = spark.createDataFrame([("Spark",),  ("PySpark",), ("Pandas API",)], ["value"])
+
+        res = df.select(F.ascii("value").alias("a")).collect()
+        assert res == [Row(a=83), Row(a=80), Row(a=80)]
