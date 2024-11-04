@@ -92,6 +92,8 @@ typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_fun
 //! The type to bind the scalar function and to create the function data
 typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &context, ScalarFunction &bound_function,
                                                            vector<unique_ptr<Expression>> &arguments);
+typedef unique_ptr<FunctionData> (*bind_scalar_function_with_binder_t)(Binder &binder, ScalarFunction &bound_function,
+                                                                       vector<unique_ptr<Expression>> &arguments);
 //! The type to initialize a thread local state for the scalar function
 typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &state,
                                                              const BoundFunctionExpression &expr,
@@ -147,6 +149,8 @@ public:
 	function_bind_expression_t bind_expression;
 	//! Gets the modified databases (if any)
 	get_modified_databases_t get_modified_databases;
+	//! The bind function that receives a binder (if any)
+	bind_scalar_function_with_binder_t bind_with_binder = nullptr;
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;

@@ -16,7 +16,9 @@
 
 namespace duckdb {
 
-FunctionBinder::FunctionBinder(ClientContext &context) : context(context) {
+FunctionBinder::FunctionBinder(ClientContext &context_p) : binder(nullptr), context(context_p) {
+}
+FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(binder_p.context) {
 }
 
 optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments) {
@@ -362,7 +364,15 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
+	} else if (bound_function.bind_with_binder) {
+		if (!binder) {
+			throw InternalException("Function '%s' has a 'bind_with_binder' but the FunctionBinder was created without "
+			                        "a reference to a Binder",
+			                        bound_function.name);
+		}
+		bind_info = bound_function.bind_with_binder(*binder, bound_function, children);
 	}
+
 	if (bound_function.get_modified_databases && binder) {
 		auto &properties = binder->GetStatementProperties();
 		FunctionModifiedDatabasesInput input(bind_info, properties);

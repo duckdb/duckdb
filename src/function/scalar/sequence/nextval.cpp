@@ -29,15 +29,23 @@ struct NextSequenceValueOperator {
 	}
 };
 
-SequenceCatalogEntry &BindSequence(ClientContext &context, string &catalog, string &schema, const string &name) {
+SequenceCatalogEntry &BindSequence(Binder &binder, string &catalog, string &schema, const string &name) {
 	// fetch the sequence from the catalog
+	binder.BindSchemaOrCatalog(binder.context, catalog, schema);
+	return binder.EntryRetriever()
+	    .GetEntry(CatalogType::SEQUENCE_ENTRY, catalog, schema, name)
+	    ->Cast<SequenceCatalogEntry>();
+}
+
+SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, string &catalog, string &schema,
+                                              const string &name) {
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
 	return Catalog::GetEntry<SequenceCatalogEntry>(context, catalog, schema, name);
 }
 
-SequenceCatalogEntry &BindSequence(ClientContext &context, const string &name) {
+SequenceCatalogEntry &BindSequence(Binder &binder, const string &name) {
 	auto qname = QualifiedName::Parse(name);
-	return BindSequence(context, qname.catalog, qname.schema, qname.name);
+	return BindSequence(binder, qname.catalog, qname.schema, qname.name);
 }
 
 struct NextValLocalState : public FunctionLocalState {
@@ -81,7 +89,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFunction &,
+static unique_ptr<FunctionData> NextValBind(Binder &binder, ScalarFunction &,
                                             vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[0]->IsFoldable()) {
 		throw NotImplementedException(
@@ -89,11 +97,11 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 	}
 	// parameter to nextval function is a foldable constant
 	// evaluate the constant and perform the catalog lookup already
-	auto seqname = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
+	auto seqname = ExpressionExecutor::EvaluateScalar(binder.context, *arguments[0]);
 	if (seqname.IsNull()) {
 		return nullptr;
 	}
-	auto &seq = BindSequence(context, seqname.ToString());
+	auto &seq = BindSequence(binder, seqname.ToString());
 	return make_uniq<NextvalBindData>(seq);
 }
 
@@ -118,7 +126,9 @@ unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction 
 	}
 	auto &seq_info = create_info->Cast<CreateSequenceInfo>();
 	auto &context = deserializer.Get<ClientContext &>();
-	auto &sequence = BindSequence(context, seq_info.catalog, seq_info.schema, seq_info.name);
+	// FIXME: this will break if the bind context is required to find the right Sequence (if the CatalogSearchPath was
+	// overridden for example)
+	auto &sequence = BindSequenceFromContext(context, seq_info.catalog, seq_info.schema, seq_info.name);
 	return make_uniq<NextvalBindData>(sequence);
 }
 
@@ -132,7 +142,8 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 
 ScalarFunction NextvalFun::GetFunction() {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                        NextValFunction<NextSequenceValueOperator>, NextValBind, NextValDependency);
+	                        NextValFunction<NextSequenceValueOperator>, nullptr, NextValDependency);
+	next_val.bind_with_binder = NextValBind;
 	next_val.stability = FunctionStability::VOLATILE;
 	next_val.serialize = Serialize;
 	next_val.deserialize = Deserialize;
@@ -143,7 +154,8 @@ ScalarFunction NextvalFun::GetFunction() {
 
 ScalarFunction CurrvalFun::GetFunction() {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                        NextValFunction<CurrentSequenceValueOperator>, NextValBind, NextValDependency);
+	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, NextValDependency);
+	curr_val.bind_with_binder = NextValBind;
 	curr_val.stability = FunctionStability::VOLATILE;
 	curr_val.serialize = Serialize;
 	curr_val.deserialize = Deserialize;

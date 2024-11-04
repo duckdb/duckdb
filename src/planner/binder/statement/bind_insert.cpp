@@ -540,7 +540,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	// bind the default values
-	BindDefaultValues(table.GetColumns(), insert->bound_defaults);
+	auto &catalog_name = table.ParentCatalog().GetName();
+	auto &schema_name = table.ParentSchema().name;
+	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name, schema_name);
 	insert->bound_constraints = BindConstraints(table);
 	if (!stmt.select_statement && !stmt.default_values) {
 		result.plan = std::move(insert);

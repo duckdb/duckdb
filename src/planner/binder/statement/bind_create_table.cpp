@@ -244,7 +244,21 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	}
 }
 
-void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults) {
+void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults,
+                               const string &catalog_name, const string &schema_p) {
+	string schema_name = schema_p;
+	if (schema_p.empty()) {
+		schema_name = DEFAULT_SCHEMA;
+	}
+
+	// FIXME: We might want to save the existing search path of the binder
+	vector<CatalogSearchEntry> defaults_search_path;
+	defaults_search_path.emplace_back(catalog_name, schema_name);
+	if (schema_name != DEFAULT_SCHEMA) {
+		defaults_search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
+	}
+	entry_retriever.SetSearchPath(std::move(defaults_search_path));
+
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
 		if (column.HasDefaultValue()) {
@@ -358,7 +372,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// bind any constraints
 		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
 		// bind the default values
-		BindDefaultValues(base.columns, bound_defaults);
+		auto &catalog_name = schema.ParentCatalog().GetName();
+		auto &schema_name = schema.name;
+		BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name);
 	}
 	// extract dependencies from any default values or CHECK constraints
 	ExtractDependencies(*result, bound_defaults, bound_constraints);
