@@ -151,6 +151,6 @@ class TestsSparkFunctionsDate(object):
             F.add_months(col("dt"), df["months"]).alias("with_col"),
         ).collect()
 
-        assert result[0].with_literal == datetime(2024, 6, 12, 13, 30, 45)
-        assert result[0].with_str == datetime(2024, 7, 12, 13, 30, 45)
-        assert result[0].with_col == datetime(2024, 7, 12, 13, 30, 45)
+        assert result[0].with_literal == date(2024, 6, 12)
+        assert result[0].with_str == date(2024, 7, 12)
+        assert result[0].with_col == date(2024, 7, 12)

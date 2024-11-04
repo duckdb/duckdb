@@ -2623,7 +2623,7 @@ def add_months(start: "ColumnOrName", months: Union["ColumnOrName", int]) -> Col
     [Row(prev_month=datetime.date(2015, 2, 8))]
     """
     months = ConstantExpression(months) if isinstance(months, int) else _to_column_expr(months)
-    return _invoke_function("date_add", _to_column_expr(start), FunctionExpression("to_months", months))
+    return _invoke_function("date_add", _to_column_expr(start), FunctionExpression("to_months", months)).cast("date")
 
 
 def array_join(
