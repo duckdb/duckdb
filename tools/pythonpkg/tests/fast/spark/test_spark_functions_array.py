@@ -3,6 +3,7 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
+from spark_namespace import USE_ACTUAL_SPARK
 
 
 class TestSparkFunctionsArray:
@@ -153,3 +154,13 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.arrays_overlap(df.x, df.y).alias("overlap")).collect()
         assert res == [Row(overlap=True), Row(overlap=False), Row(overlap=None), Row(overlap=None)]
+
+    def test_arrays_zip(self, spark):
+        df = spark.createDataFrame([([1, 2, 3], [2, 4, 6], [3, 6])], ['vals1', 'vals2', 'vals3'])
+
+        res = df.select(F.arrays_zip(df.vals1, df.vals2, df.vals3).alias('zipped')).collect()
+        # FIXME: The structure of the results should be the same
+        if USE_ACTUAL_SPARK:
+            assert res == [Row(zipped=[Row(vals1=1, vals2=2, vals3=3), Row(vals1=2, vals2=4, vals3=6), Row(vals1=3, vals2=6, vals3=None)])]
+        else:
+            assert res == [Row(zipped=[(1, 2, 3), (2, 4, 6), (3, 6, None)])]

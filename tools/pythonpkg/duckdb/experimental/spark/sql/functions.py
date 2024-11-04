@@ -2877,3 +2877,46 @@ def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
                 (FunctionExpression("len", a1) > 0) & (FunctionExpression("len", a2) > 0) & (a1_has_null | a2_has_null), ConstantExpression(None)
                 ).otherwise(ConstantExpression(False)))
     )
+
+
+def arrays_zip(*cols: "ColumnOrName") -> Column:
+    """
+    Collection function: Returns a merged array of structs in which the N-th struct contains all
+    N-th values of input arrays. If one of the arrays is shorter than others then
+    resulting struct type value will be a `null` for missing elements.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    cols : :class:`~pyspark.sql.Column` or str
+        columns of arrays to be merged.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        merged array of entries.
+
+    Examples
+    --------
+    >>> from pyspark.sql.functions import arrays_zip
+    >>> df = spark.createDataFrame([([1, 2, 3], [2, 4, 6], [3, 6])], ['vals1', 'vals2', 'vals3'])
+    >>> df = df.select(arrays_zip(df.vals1, df.vals2, df.vals3).alias('zipped'))
+    >>> df.show(truncate=False)
+    +------------------------------------+
+    |zipped                              |
+    +------------------------------------+
+    |[{1, 2, 3}, {2, 4, 6}, {3, 6, NULL}]|
+    +------------------------------------+
+    >>> df.printSchema()
+    root
+     |-- zipped: array (nullable = true)
+     |    |-- element: struct (containsNull = false)
+     |    |    |-- vals1: long (nullable = true)
+     |    |    |-- vals2: long (nullable = true)
+     |    |    |-- vals3: long (nullable = true)
+    """
+    return _invoke_function_over_columns("list_zip", *cols)
