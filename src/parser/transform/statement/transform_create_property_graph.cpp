@@ -15,11 +15,11 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	vector<string> label_names;
 
 	auto table_name = reinterpret_cast<duckdb_libpgquery::PGRangeVar *>(graph_table->table->head->data.ptr_value);
-	auto graph_table_name = TransformQualifiedName(*table_name).name;
+	auto transformed_name = TransformQualifiedName(*table_name);
 	string table_name_alias =
 	    reinterpret_cast<duckdb_libpgquery::PGValue *>(graph_table->table->head->next->data.ptr_value)->val.str;
 	if (!table_name_alias.empty()) {
-		table_alias_map[table_name_alias] = graph_table_name;
+		table_alias_map[table_name_alias] = transformed_name.name;
 	}
 
 	bool all_columns = false;
@@ -53,7 +53,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		D_ASSERT(label->type == duckdb_libpgquery::T_PGString);
 		std::string label_str;
 		if (label->val.str == nullptr) {
-			label_str = graph_table_name;
+			label_str = transformed_name.name;
 		} else {
 			label_str = label->val.str;
 		}
@@ -65,7 +65,8 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		label_names.emplace_back(label_str);
 	}
 
-	auto pg_table = make_shared_ptr<PropertyGraphTable>(graph_table_name, table_name_alias, column_names, label_names);
+	auto pg_table = make_shared_ptr<PropertyGraphTable>(transformed_name.name,
+		table_name_alias, column_names, label_names, transformed_name.schema);
 
 	pg_table->is_vertex_table = graph_table->is_vertex_table;
 	pg_table->except_columns = std::move(except_list);
