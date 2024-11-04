@@ -161,6 +161,14 @@ class TestSparkFunctionsArray:
         res = df.select(F.arrays_zip(df.vals1, df.vals2, df.vals3).alias('zipped')).collect()
         # FIXME: The structure of the results should be the same
         if USE_ACTUAL_SPARK:
-            assert res == [Row(zipped=[Row(vals1=1, vals2=2, vals3=3), Row(vals1=2, vals2=4, vals3=6), Row(vals1=3, vals2=6, vals3=None)])]
+            assert res == [
+                Row(
+                    zipped=[
+                        Row(vals1=1, vals2=2, vals3=3),
+                        Row(vals1=2, vals2=4, vals3=6),
+                        Row(vals1=3, vals2=6, vals3=None),
+                    ]
+                )
+            ]
         else:
             assert res == [Row(zipped=[(1, 2, 3), (2, 4, 6), (3, 6, None)])]

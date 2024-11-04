@@ -6,6 +6,7 @@ pa = pytest.importorskip("pyarrow")
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql.dataframe import DataFrame
 
+
 class TestArrowTable:
     @pytest.mark.skipif(
         USE_ACTUAL_SPARK and not hasattr(DataFrame, "toArrow"),
