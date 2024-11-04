@@ -183,6 +183,10 @@ bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 
+	if (!state.count) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+
 	if (state.values_in_vector) {
 		D_ASSERT(state.values_in_vector < ZSTD_VECTOR_SIZE);
 		state.segment_count++;
@@ -193,7 +197,9 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto overflow_string_threshold = StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize());
 	if (average_length < overflow_string_threshold) {
 		average_length = MaxValue<idx_t>(average_length, 200);
-		penalty = 5.0 + (double)(overflow_string_threshold - average_length - 200) * 25;
+		penalty =
+		    5.0 +
+		    ((double)(overflow_string_threshold - (double)average_length) / (double)overflow_string_threshold) * 25.0;
 	} else {
 		// From this point on, ZSTD starts to beat Uncompressed scan speed by about 5x, increasing rapidly (4096 is 5x,
 		// 8000 is 15x)
