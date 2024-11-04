@@ -33,7 +33,7 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
-#include "duckdb/function/decoding_function.hpp"
+#include "duckdb/function/encoding_function.hpp"
 
 namespace duckdb {
 
@@ -358,12 +358,12 @@ public:
 	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
 	                                                                    const PhysicalType physical_type);
 
-	//! Returns the decode function matching the encoding name.
-	DUCKDB_API optional_ptr<DecodingFunction> GetDecodeFunction(string name) const;
-	DUCKDB_API void RegisterDecodeFunction(const DecodingFunction &function) const;
+	//! Returns the encode function matching the encoding name.
+	DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(string name) const;
+	DUCKDB_API void RegisterEncodeFunction(const EncodingFunction &function) const;
 
-	//! Returns the decode function names.
-	DUCKDB_API vector<string> GetLoadedDecodeFunctionNames() const;
+	//! Returns the encode function names.
+	DUCKDB_API vector<reference<EncodingFunction>> GetLoadedEncodedFunctions() const;
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
 

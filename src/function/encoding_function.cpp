@@ -1,18 +1,18 @@
-#include "duckdb/function/decoding_function.hpp"
+#include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
-struct DefaultDecodeMethod {
+struct DefaultEncodeMethod {
 	string name;
-	decode_t decode_function;
+	encode_t encode_function;
 	idx_t ratio;
 	idx_t bytes_per_iteration;
 };
 
-void DecodeUTF16(char *encoded_buffer, idx_t &encoded_buffer_current_position, const idx_t encoded_buffer_size,
-                 char *decoded_buffer, idx_t &decoded_buffer_current_position, const idx_t decoded_buffer_size,
-                 char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
+void DecodeUTF16ToUTF8(char *encoded_buffer, idx_t &encoded_buffer_current_position, const idx_t encoded_buffer_size,
+                       char *decoded_buffer, idx_t &decoded_buffer_current_position, const idx_t decoded_buffer_size,
+                       char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
 
 	for (; encoded_buffer_current_position < encoded_buffer_size; encoded_buffer_current_position += 2) {
 		if (decoded_buffer_current_position == decoded_buffer_size) {
@@ -63,9 +63,9 @@ void DecodeUTF16(char *encoded_buffer, idx_t &encoded_buffer_current_position, c
 	}
 }
 
-void DecodeLatin1(char *encoded_buffer, idx_t &encoded_buffer_current_position, const idx_t encoded_buffer_size,
-                  char *decoded_buffer, idx_t &decoded_buffer_current_position, const idx_t decoded_buffer_size,
-                  char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
+void DecodeLatin1ToUTF8(char *encoded_buffer, idx_t &encoded_buffer_current_position, const idx_t encoded_buffer_size,
+                        char *decoded_buffer, idx_t &decoded_buffer_current_position, const idx_t decoded_buffer_size,
+                        char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
 	for (; encoded_buffer_current_position < encoded_buffer_size; encoded_buffer_current_position++) {
 		if (decoded_buffer_current_position == decoded_buffer_size) {
 			// We are done
@@ -106,16 +106,16 @@ void DecodeUTF8(char *encoded_buffer, idx_t &encoded_buffer_current_position, co
 	}
 }
 
-static const DecodingFunction internal_decode_methods[] = {
-    {"utf-8", DecodeLatin1, 1, 0}, {"latin-1", DecodeLatin1, 2, 1}, {"utf-16", DecodeUTF16, 2, 2}};
+static const EncodingFunction internal_encode_methods[] = {
+    {"utf-8", DecodeUTF8, 1, 0}, {"latin-1", DecodeLatin1ToUTF8, 2, 1}, {"utf-16", DecodeUTF16ToUTF8, 2, 2}};
 
 void DecodingFunctionSet::Initialize(DBConfig &config) {
-	for (auto &decode_method : internal_decode_methods) {
-		config.RegisterDecodeFunction(decode_method);
+	for (auto &decode_method : internal_encode_methods) {
+		config.RegisterEncodeFunction(decode_method);
 	}
 }
 
-void DBConfig::RegisterDecodeFunction(const DecodingFunction &function) const {
+void DBConfig::RegisterEncodeFunction(const EncodingFunction &function) const {
 	lock_guard<mutex> l(decoding_functions->lock);
 	const auto decode_type = function.GetType();
 	if (decoding_functions->functions.find(decode_type) != decoding_functions->functions.end()) {
@@ -124,7 +124,7 @@ void DBConfig::RegisterDecodeFunction(const DecodingFunction &function) const {
 	decoding_functions->functions[decode_type] = function;
 }
 
-optional_ptr<DecodingFunction> DBConfig::GetDecodeFunction(string name) const {
+optional_ptr<EncodingFunction> DBConfig::GetEncodeFunction(string name) const {
 	lock_guard<mutex> l(decoding_functions->lock);
 	name = StringUtil::Lower(name);
 	// Check if the function is already loaded into the global compression functions.
@@ -134,11 +134,11 @@ optional_ptr<DecodingFunction> DBConfig::GetDecodeFunction(string name) const {
 	return nullptr;
 }
 
-vector<string> DBConfig::GetLoadedDecodeFunctionNames() const {
+vector<reference<EncodingFunction>> DBConfig::GetLoadedEncodedFunctions() const {
 	lock_guard<mutex> l(decoding_functions->lock);
-	vector<string> result;
+	vector<reference<EncodingFunction>> result;
 	for (auto &function : decoding_functions->functions) {
-		result.push_back(function.first);
+		result.push_back(function.second);
 	}
 	return result;
 }

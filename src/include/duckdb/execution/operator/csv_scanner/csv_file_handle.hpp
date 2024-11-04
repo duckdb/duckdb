@@ -12,7 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/execution/operator/csv_scanner/encode/csv_decoder.hpp"
+#include "duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp"
 namespace duckdb {
 class Allocator;
 class FileSystem;
@@ -52,7 +52,7 @@ public:
 
 private:
 	unique_ptr<FileHandle> file_handle;
-	CSVDecoder decoder;
+	CSVEncoder encoder;
 	string path;
 	bool can_seek = false;
 	bool on_disk_file = false;

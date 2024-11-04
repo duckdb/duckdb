@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/csv_scanner/encode/csv_decoder.hpp
+// duckdb/execution/operator/csv_scanner/encode/csv_encoder.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,7 +10,7 @@
 
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/function/decoding_function.hpp"
+#include "duckdb/function/encoding_function.hpp"
 
 namespace duckdb {
 
@@ -43,12 +43,12 @@ private:
 	idx_t encoded_buffer_size;
 };
 
-class CSVDecoder {
+class CSVEncoder {
 public:
 	//! Constructor, basically takes an encoding and the output buffer size
-	CSVDecoder(DBConfig &config, const string &enconding_name, idx_t buffer_size);
+	CSVEncoder(DBConfig &config, const string &enconding_name, idx_t buffer_size);
 	//! Main decode function, it reads the file into an encoded buffer and converts it to the output buffer
-	idx_t Decode(FileHandle &file_handle_input, char *output_buffer, const idx_t nr_bytes_to_read);
+	idx_t Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t nr_bytes_to_read);
 	string encoding_name;
 
 private:
@@ -56,7 +56,7 @@ private:
 	CSVEncoderBuffer encoded_buffer;
 	//! Potential remaining bytes
 	CSVEncoderBuffer remaining_bytes_buffer;
-	//! Actual Decoding Function
-	optional_ptr<DecodingFunction> decoding_function;
+	//! Actual Enconding Function
+	optional_ptr<EncodingFunction> encoding_function;
 };
 } // namespace duckdb
