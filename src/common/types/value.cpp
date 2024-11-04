@@ -1784,6 +1784,9 @@ bool Value::DefaultTryCastAs(const LogicalType &target_type, Value &new_value, s
 
 Value Value::CastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
                     bool strict) const {
+	if (target_type.id() == LogicalTypeId::ANY) {
+		return *this;
+	}
 	Value new_value;
 	string error_message;
 	if (!TryCastAs(set, get_input, target_type, new_value, &error_message, strict)) {
@@ -1845,12 +1848,25 @@ const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {
 	}
 }
 
+bool SerializeTypeMatches(const LogicalType &expected_type, const LogicalType &actual_type) {
+	if (expected_type.id() != actual_type.id()) {
+		// type id needs to be the same
+		return false;
+	}
+	if (expected_type.IsNested()) {
+		// for nested types that is enough - we will recurse into the children and check there again anyway
+		return true;
+	}
+	// otherwise we do a deep comparison of the type (e.g. decimal flags need to be consistent)
+	return expected_type == actual_type;
+}
+
 void Value::SerializeChildren(Serializer &serializer, const vector<Value> &children, const LogicalType &parent_type) {
 	serializer.WriteObject(102, "value", [&](Serializer &child_serializer) {
 		child_serializer.WriteList(100, "children", children.size(), [&](Serializer::List &list, idx_t i) {
 			auto &value_type = GetChildType(parent_type, i);
 			bool serialize_type = value_type.id() == LogicalTypeId::ANY;
-			if (!serialize_type && children[i].type() != value_type) {
+			if (!serialize_type && !SerializeTypeMatches(value_type, children[i].type())) {
 				throw InternalException("Error when serializing type - serializing a child of a nested value with type "
 				                        "%s, but expected type %s",
 				                        children[i].type(), value_type);
