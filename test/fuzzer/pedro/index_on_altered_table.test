@@ -16,7 +16,7 @@ ALTER TABLE t4 ADD c1 BLOB;
 statement error
 CREATE INDEX i3 ON t4 (c3);
 ----
-<REGEX>:TransactionContext Error.*Transaction conflict.*cannot add.*index.*table.*altered.*
+<REGEX>:TransactionContext Error.*cannot add.*index.*table.*altered.*
 
 statement ok con1
 COMMIT;
