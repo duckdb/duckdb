@@ -44,10 +44,15 @@ enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_H
 //! VOLATILE                -> the result of this function might change per row (e.g. RANDOM())
 enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
 //! How to handle collations
-//! PROPAGATE_COLLATIONS    -> this function combines collation from its inputs and emits them again (default behavior)
-//! PUSH_COLLATIONS         -> collations are executed for the input arguments, and collations are propagated
-//! IGNORE_COLLATIONS       -> collations are completely ignored by the function
-enum class FunctionCollationHandling : uint8_t { PROPAGATE_COLLATIONS = 0, PUSH_COLLATIONS = 1, IGNORE_COLLATIONS = 2 };
+//! PROPAGATE_COLLATIONS        -> this function combines collation from its inputs and emits them again (default
+//! behavior) PUSH_COMBINABLE_COLLATIONS  -> combinable collations are executed for the input arguments, and collations
+//! are propagated. non-combinable collations are ignored IGNORE_COLLATIONS           -> collations are completely
+//! ignored by the function
+enum class FunctionCollationHandling : uint8_t {
+	PROPAGATE_COLLATIONS = 0,
+	PUSH_COMBINABLE_COLLATIONS = 1,
+	IGNORE_COLLATIONS = 2
+};
 
 struct FunctionData {
 	DUCKDB_API virtual ~FunctionData();

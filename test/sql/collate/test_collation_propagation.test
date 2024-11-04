@@ -1,12 +1,17 @@
-# name: test/issues/general/test_9854.test
-# description: Issue 1091: Functions don't check or pass collation.
-# group: [general]
+# name: test/sql/collate/test_collation_propagation.test
+# description: Test collations with string functions.
+# group: [collate]
 
 statement ok
 create table tbl (a varchar, b varchar);
 
 statement ok
 insert into tbl values ('ö', '>>>>>ö<<<<<'), ('o', '>>>>>o<<<<<'), ('p', '>>>>>p<<<<<');
+
+query I
+select a from tbl where contains(b collate nocase, 'O') order by all
+----
+o
 
 # test propagation of collation through string functions
 query I
@@ -86,21 +91,26 @@ select reverse(a collate noaccent) from tbl order by all;
 o
 p
 
-# test application of collation
+# test pushing collations
 query I
 select a from tbl where contains(b collate noaccent, 'o') order by all
-----
-o
-ös
-
-query I
-select a from tbl where starts_with(b collate noaccent, 'o') order by all
 ----
 o
 ö
 
 query I
-select a from tbl where ends_with(b collate noaccent, 'o') order by all
+select a from tbl where contains(b, 'ö' collate noaccent) order by all
+----
+o
+ö
+
+query I
+select a from tbl where contains(b collate nocase, 'O') order by all
+----
+o
+
+query I
+select a from tbl where starts_with(b collate noaccent, '>>>>>o') order by all
 ----
 o
 ö

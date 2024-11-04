@@ -356,15 +356,14 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	return BindScalarFunction(bound_function, std::move(children), is_operator, binder);
 }
 
-void PropagateCollations(ClientContext &context, ScalarFunction &bound_function,
-                         vector<unique_ptr<Expression>> &children) {
-	if (bound_function.return_type.id() != LogicalTypeId::VARCHAR || bound_function.return_type.HasAlias()) {
-		// we only propagate collations for VARCHAR columns
-		return;
-	}
+bool RequiresCollationPropagation(const LogicalType &type) {
+	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias();
+}
+
+string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 	string collation;
 	for (auto &arg : children) {
-		if (arg->return_type.id() != LogicalTypeId::VARCHAR || arg->return_type.HasAlias()) {
+		if (!RequiresCollationPropagation(arg->return_type)) {
 			// not a varchar column
 			continue;
 		}
@@ -375,26 +374,44 @@ void PropagateCollations(ClientContext &context, ScalarFunction &bound_function,
 			throw BinderException("Cannot combine types with different collation!");
 		}
 	}
+	return collation;
+}
+
+void PropagateCollations(ClientContext &, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &children) {
+	if (!RequiresCollationPropagation(bound_function.return_type)) {
+		// we only need to propagate if the function returns a varchar
+		return;
+	}
+	auto collation = ExtractCollation(children);
 	if (collation.empty()) {
 		// no collation to propagate
 		return;
 	}
-	// propagate the collation
-	auto collation_type = LogicalType::VARCHAR_COLLATION(collation);
-	bound_function.return_type = collation_type;
-	for (auto &arg : children) {
-		if (arg->return_type.id() != LogicalTypeId::VARCHAR || arg->return_type.HasAlias()) {
-			// not a varchar column
-			continue;
-		}
-		arg->return_type = collation_type;
-	}
+	// propagate the collation to the return type
+	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
+	bound_function.return_type = std::move(collation_type);
 }
 
-void PushCollations(ClientContext &context, vector<unique_ptr<Expression>> &children) {
-	// push collations
+void PushCollations(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &children,
+                    CollationType type) {
+	auto collation = ExtractCollation(children);
+	if (collation.empty()) {
+		// no collation to push
+		return;
+	}
+	// push collation into the return type if required
+	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
+	if (RequiresCollationPropagation(bound_function.return_type)) {
+		bound_function.return_type = collation_type;
+	}
+	// push collations to the children
 	for (auto &arg : children) {
-		ExpressionBinder::PushCollation(context, arg, arg->return_type);
+		if (RequiresCollationPropagation(arg->return_type)) {
+			// if this is a varchar type - propagate the collation
+			arg->return_type = collation_type;
+		}
+		// now push the actual collation handling
+		ExpressionBinder::PushCollation(context, arg, arg->return_type, type);
 	}
 }
 
@@ -405,13 +422,11 @@ void HandleCollations(ClientContext &context, ScalarFunction &bound_function,
 		// explicitly ignoring collation handling
 		break;
 	case FunctionCollationHandling::PROPAGATE_COLLATIONS:
-		// propagate collations to the return type
 		PropagateCollations(context, bound_function, children);
 		break;
-	case FunctionCollationHandling::PUSH_COLLATIONS:
+	case FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS:
 		// first propagate, then push collations to the children
-		PropagateCollations(context, bound_function, children);
-		PushCollations(context, children);
+		PushCollations(context, bound_function, children, CollationType::COMBINABLE_COLLATIONS);
 		break;
 	default:
 		throw InternalException("Unrecognized collation handling");
