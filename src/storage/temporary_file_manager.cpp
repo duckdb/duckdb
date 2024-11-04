@@ -36,7 +36,12 @@ static TemporaryBufferSize SizeToTemporaryBufferSize(const idx_t size) {
 }
 
 static idx_t TemporaryBufferSizeToSize(const TemporaryBufferSize size) {
-	D_ASSERT(TemporaryBufferSizeIsValid(size));
+	// Silence a compiler warning turned error on TemporaryBufferSizeIsValid not being used
+	{
+		const bool res = TemporaryBufferSizeIsValid(size);
+		(void)res;
+		D_ASSERT(res);
+	}
 	return static_cast<idx_t>(size);
 }
 
