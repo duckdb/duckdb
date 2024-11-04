@@ -394,6 +394,41 @@ def ascii(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("ascii", col)
 
 
+def asin(col: "ColumnOrName") -> Column:
+    """
+    Computes inverse sine of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        inverse sine of `col`, as if computed by `java.lang.Math.asin()`
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(0,), (2,)])
+    >>> df.select(asin(df.schema.fieldNames()[0])).show()
+    +--------+
+    |ASIN(_1)|
+    +--------+
+    |     0.0|
+    |     NaN|
+    +--------+
+    """
+    col = _to_column_expr(col)
+    # FIXME: ConstantExpression(float("nan")) gives NULL and not NaN
+    return Column(CaseExpression((col < -1.0) | (col > 1.0), ConstantExpression(float("nan"))).otherwise(FunctionExpression("asin", col)))
+
+
 def array_contains(col: "ColumnOrName", value: Any) -> Column:
     """
     Collection function: returns null if the array is null, true if the array contains the
