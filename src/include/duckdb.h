@@ -2243,6 +2243,10 @@ Returns the MAP value at index as a duckdb_value.
 */
 DUCKDB_API duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index);
 
+DUCKDB_API bool duckdb_value_is_null_value(duckdb_value value);
+
+DUCKDB_API duckdb_value duckdb_value_create_null_value();
+
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
 //===--------------------------------------------------------------------===//
