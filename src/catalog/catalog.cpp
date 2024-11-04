@@ -395,7 +395,7 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
 		}
-		if (entries.empty()) {
+		if (entries.empty() && !IsInvalidSchema(schema)) {
 			// There are no catalog+schema combinations that match the provided schema
 			// try all the catalogs in the search path anyways
 			auto catalogs = search_path.GetCatalogs();

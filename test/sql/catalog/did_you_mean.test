@@ -21,7 +21,7 @@ Did you mean "hello"
 statement error
 SELECT * FROM bye;
 ----
-Did you mean "test.bye
+Did you mean "memory.test.bye
 
 statement ok
 CREATE SCHEMA a;
@@ -30,7 +30,7 @@ CREATE TABLE a.foo(name text);
 statement error
 SELECT * FROM foo;
 ----
-Did you mean "a.foo"?
+Did you mean "memory.a.foo"?
 
 statement ok
 CREATE SCHEMA b;
@@ -39,7 +39,7 @@ CREATE TABLE b.foo(name text);
 statement error
 SELECT * FROM foo;
 ----
-Did you mean "a.foo or b.foo"?
+Did you mean "memory.a.foo or memory.b.foo"?
 
 statement ok
 CREATE SCHEMA c;
@@ -48,7 +48,7 @@ CREATE TABLE c.foo(name text);
 statement error
 SELECT * FROM foo;
 ----
-Did you mean "a.foo, b.foo, or c.foo"?
+Did you mean "memory.a.foo, memory.b.foo, or memory.c.foo"?
 
 statement error
 SELECT * FROM a.fooo;
