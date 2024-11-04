@@ -356,13 +356,14 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	return BindScalarFunction(bound_function, std::move(children), is_operator, binder);
 }
 
-void PropagateCollations(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &children) {
+void PropagateCollations(ClientContext &context, ScalarFunction &bound_function,
+                         vector<unique_ptr<Expression>> &children) {
 	if (bound_function.return_type.id() != LogicalTypeId::VARCHAR || bound_function.return_type.HasAlias()) {
 		// we only propagate collations for VARCHAR columns
 		return;
 	}
 	string collation;
-	for(auto &arg : children) {
+	for (auto &arg : children) {
 		if (arg->return_type.id() != LogicalTypeId::VARCHAR || arg->return_type.HasAlias()) {
 			// not a varchar column
 			continue;
@@ -381,7 +382,7 @@ void PropagateCollations(ClientContext &context, ScalarFunction &bound_function,
 	// propagate the collation
 	auto collation_type = LogicalType::VARCHAR_COLLATION(collation);
 	bound_function.return_type = collation_type;
-	for(auto &arg : children) {
+	for (auto &arg : children) {
 		if (arg->return_type.id() != LogicalTypeId::VARCHAR || arg->return_type.HasAlias()) {
 			// not a varchar column
 			continue;
@@ -392,13 +393,14 @@ void PropagateCollations(ClientContext &context, ScalarFunction &bound_function,
 
 void PushCollations(ClientContext &context, vector<unique_ptr<Expression>> &children) {
 	// push collations
-	for(auto &arg : children) {
+	for (auto &arg : children) {
 		ExpressionBinder::PushCollation(context, arg, arg->return_type);
 	}
 }
 
-void HandleCollations(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &children) {
-	switch(bound_function.collation_handling) {
+void HandleCollations(ClientContext &context, ScalarFunction &bound_function,
+                      vector<unique_ptr<Expression>> &children) {
+	switch (bound_function.collation_handling) {
 	case FunctionCollationHandling::IGNORE_COLLATIONS:
 		// explicitly ignoring collation handling
 		break;
