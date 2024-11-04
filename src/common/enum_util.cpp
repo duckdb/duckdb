@@ -563,6 +563,9 @@ const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CSVState::STANDARD), "STANDARD" },
 		{ static_cast<uint32_t>(CSVState::DELIMITER), "DELIMITER" },
+		{ static_cast<uint32_t>(CSVState::DELIMITER_FIRST_BYTE), "DELIMITER_FIRST_BYTE" },
+		{ static_cast<uint32_t>(CSVState::DELIMITER_SECOND_BYTE), "DELIMITER_SECOND_BYTE" },
+		{ static_cast<uint32_t>(CSVState::DELIMITER_THIRD_BYTE), "DELIMITER_THIRD_BYTE" },
 		{ static_cast<uint32_t>(CSVState::RECORD_SEPARATOR), "RECORD_SEPARATOR" },
 		{ static_cast<uint32_t>(CSVState::CARRIAGE_RETURN), "CARRIAGE_RETURN" },
 		{ static_cast<uint32_t>(CSVState::QUOTED), "QUOTED" },
@@ -580,12 +583,12 @@ const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 
 template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value) {
-	return StringUtil::EnumToString(GetCSVStateValues(), 13, "CSVState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCSVStateValues(), 16, "CSVState", static_cast<uint32_t>(value));
 }
 
 template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value) {
-	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 13, "CSVState", value));
+	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 16, "CSVState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCTEMaterializeValues() {
