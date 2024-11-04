@@ -165,7 +165,7 @@ static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, Funct
 
 ScalarFunction ListFlattenFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::LIST(LogicalType::ANY))}, LogicalType::LIST(LogicalType::ANY),
-	                      ListFlattenFunction, ListFlattenBind, nullptr, ListFlattenStats);
+	                      ListFlattenFunction, ListFlattenBind, ListFlattenStats);
 }
 
 } // namespace duckdb

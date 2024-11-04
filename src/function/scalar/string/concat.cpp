@@ -331,8 +331,7 @@ static unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, Functi
 ScalarFunction ListConcatFun::GetFunction() {
 	// The arguments and return types are set in the binder function.
 	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)},
-	                          LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, nullptr,
-	                          ListConcatStats);
+	                          LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, ListConcatStats);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }

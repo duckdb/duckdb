@@ -153,7 +153,7 @@ unique_ptr<FunctionData> GetBindData(idx_t index) {
 
 ScalarFunction GetKeyExtractFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
+	                      StructExtractFunction, StructExtractBind, PropagateStructExtractStats);
 }
 
 ScalarFunction GetIndexExtractFunction() {

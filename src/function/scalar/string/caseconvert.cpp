@@ -138,12 +138,12 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 
 ScalarFunction LowerFun::GetFunction() {
 	return ScalarFunction("lower", {LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<false>, nullptr,
-	                      nullptr, CaseConvertPropagateStats<false>);
+	                      CaseConvertPropagateStats<false>);
 }
 
 ScalarFunction UpperFun::GetFunction() {
 	return ScalarFunction("upper", {LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<true>, nullptr,
-	                      nullptr, CaseConvertPropagateStats<true>);
+	                      CaseConvertPropagateStats<true>);
 }
 
 } // namespace duckdb

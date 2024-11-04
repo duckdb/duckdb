@@ -219,7 +219,7 @@ ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet length("length");
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
-	                                  nullptr, LengthPropagateStats));
+	                                  LengthPropagateStats));
 	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
 	length.AddFunction(
@@ -231,7 +231,7 @@ ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 	ScalarFunctionSet length_grapheme("length_grapheme");
 	length_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                           ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
-	                                           nullptr, nullptr, LengthPropagateStats));
+	                                           nullptr, LengthPropagateStats));
 	return (length_grapheme);
 }
 

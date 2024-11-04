@@ -343,7 +343,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 
 ScalarFunction FinalizeFun::GetFunction() {
 	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
-	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
+	                             AggregateStateFinalize, BindAggregateState, nullptr, InitFinalizeState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.serialize = ExportStateScalarSerialize;
 	result.deserialize = ExportStateScalarDeserialize;
@@ -353,7 +353,7 @@ ScalarFunction FinalizeFun::GetFunction() {
 ScalarFunction CombineFun::GetFunction() {
 	auto result =
 	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
-	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
+	                   AggregateStateCombine, BindAggregateState, nullptr, InitCombineState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.serialize = ExportStateScalarSerialize;
 	result.deserialize = ExportStateScalarDeserialize;

@@ -31,7 +31,7 @@ struct NextSequenceValueOperator {
 
 SequenceCatalogEntry &BindSequence(Binder &binder, string &catalog, string &schema, const string &name) {
 	// fetch the sequence from the catalog
-	binder.BindSchemaOrCatalog(binder.context, catalog, schema);
+	Binder::BindSchemaOrCatalog(binder.context, catalog, schema);
 	return binder.EntryRetriever()
 	    .GetEntry(CatalogType::SEQUENCE_ENTRY, catalog, schema, name)
 	    ->Cast<SequenceCatalogEntry>();
@@ -105,14 +105,6 @@ static unique_ptr<FunctionData> NextValBind(Binder &binder, ScalarFunction &,
 	return make_uniq<NextvalBindData>(seq);
 }
 
-static void NextValDependency(BoundFunctionExpression &expr, LogicalDependencyList &dependencies) {
-	if (!expr.bind_info) {
-		return;
-	}
-	auto &info = expr.bind_info->Cast<NextvalBindData>();
-	dependencies.AddDependency(info.sequence);
-}
-
 void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data, const ScalarFunction &) {
 	auto &next_val_bind_data = bind_data->Cast<NextvalBindData>();
 	serializer.WritePropertyWithDefault(100, "sequence_create_info", next_val_bind_data.create_info);
@@ -142,7 +134,7 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 
 ScalarFunction NextvalFun::GetFunction() {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                        NextValFunction<NextSequenceValueOperator>, nullptr, NextValDependency);
+	                        NextValFunction<NextSequenceValueOperator>, nullptr, nullptr);
 	next_val.bind_with_binder = NextValBind;
 	next_val.stability = FunctionStability::VOLATILE;
 	next_val.serialize = Serialize;
@@ -154,7 +146,7 @@ ScalarFunction NextvalFun::GetFunction() {
 
 ScalarFunction CurrvalFun::GetFunction() {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, NextValDependency);
+	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
 	curr_val.bind_with_binder = NextValBind;
 	curr_val.stability = FunctionStability::VOLATILE;
 	curr_val.serialize = Serialize;

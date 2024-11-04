@@ -525,13 +525,13 @@ ScalarFunction GlobPatternFun::GetFunction() {
 
 ScalarFunction ILikeFun::GetFunction() {
 	return ScalarFunction("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, nullptr, nullptr,
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, nullptr,
 	                      ILikePropagateStats<ILikeOperatorASCII>);
 }
 
 ScalarFunction NotILikeFun::GetFunction() {
 	return ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, nullptr, nullptr,
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, nullptr,
 	                      ILikePropagateStats<NotILikeOperatorASCII>);
 }
 
