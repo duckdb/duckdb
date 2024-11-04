@@ -146,7 +146,47 @@ André Lefèvre	36
 Léonard Dubois	29
 
 query II
+FROM read_csv('data/csv/encodings/latin1.csv.gz', encoding = 'latin-1', buffer_size = ${buffer_size})
+----
+José Álvarez	30
+Müller	25
+François Dupont	45
+Björn Andersson	50
+Søren Kierkegaard	42
+García López	38
+Élodie Moreau	33
+Håkon Lindberg	28
+Brontë Johnson	47
+Zoë Robinson	21
+André Lefèvre	36
+Léonard Dubois	29
+
+query II
 FROM read_csv('data/csv/encodings/utf16.csv', encoding = 'utf-16', buffer_size = ${buffer_size})
+----
+José Álvarez	30
+Müller	25
+François Dupont	45
+Björn Andersson	50
+Søren Kierkegaard	42
+García López	38
+Élodie Moreau	33
+Håkon Lindberg	28
+Brontë Johnson	47
+Zoë Robinson	21
+André Lefèvre	36
+Léonard Dubois	29
+Dvořák Novak	60
+Iván García	34
+Łukasz Kowalski	27
+Renée Martin	41
+Øystein Olsen	39
+Anaïs Dupuis	24
+Sigurður Jónsson	55
+Krystýna Novák	23
+
+query II
+FROM read_csv('data/csv/encodings/utf16.csv.gz', encoding = 'utf-16', buffer_size = ${buffer_size})
 ----
 José Álvarez	30
 Müller	25

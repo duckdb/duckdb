@@ -99,13 +99,10 @@ void DecodeUTF8(const char *source_buffer, idx_t &source_buffer_current_position
 	throw InternalException("Decode UTF8 is not a valid function, and should be verified one level up.");
 }
 
-static const EncodingFunction internal_encode_methods[] = {
-    {"utf-8", DecodeUTF8, 1, 1}, {"latin-1", DecodeLatin1ToUTF8, 2, 1}, {"utf-16", DecodeUTF16ToUTF8, 2, 2}};
-
 void EncodingFunctionSet::Initialize(DBConfig &config) {
-	for (auto &decode_method : internal_encode_methods) {
-		config.RegisterEncodeFunction(decode_method);
-	}
+	config.RegisterEncodeFunction({"utf-8", DecodeUTF8, 1, 1});
+	config.RegisterEncodeFunction({"latin-1", DecodeLatin1ToUTF8, 2, 1});
+	config.RegisterEncodeFunction({"utf-16", DecodeUTF16ToUTF8, 2, 2});
 }
 
 void DBConfig::RegisterEncodeFunction(const EncodingFunction &function) const {
