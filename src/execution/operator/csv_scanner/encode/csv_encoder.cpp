@@ -36,31 +36,28 @@ void CSVEncoderBuffer::Reset() {
 	actual_encoded_buffer_size = 0;
 }
 
-CSVEncoder::CSVEncoder(DBConfig &config, const string &enconding_name_p, idx_t buffer_size) {
-	encoding_name = StringUtil::Lower(enconding_name_p);
-	auto function = config.GetEncodeFunction(encoding_name);
+CSVEncoder::CSVEncoder(DBConfig &config, const string &encoding_name_to_find, idx_t buffer_size) {
+	encoding_name = StringUtil::Lower(encoding_name_to_find);
+	auto function = config.GetEncodeFunction(encoding_name_to_find);
 	if (!function) {
 		auto loaded_encodings = config.GetLoadedEncodedFunctions();
 		std::ostringstream error;
-		error << "The CSV Reader does not support the encoding: \"" << enconding_name_p << "\"\n";
+		error << "The CSV Reader does not support the encoding: \"" << encoding_name_to_find << "\"\n";
 		error << "The currently supported encodings are: " << '\n';
 		for (auto &encoding_function : loaded_encodings) {
 			error << "*  " << encoding_function.get().GetType() << '\n';
 		}
 		throw InvalidInputException(error.str());
 	}
-	// Let's enforce that the encoded buffer size is divisible by 2, makes life easier.
-	idx_t encoded_buffer_size = buffer_size / function->GetRatio();
-	if (encoded_buffer_size % 2 != 0) {
-		encoded_buffer_size = encoded_buffer_size - 1;
-	}
+	// We ensure that the encoded buffer size is an even number to make the two byte lookup on utf-16 work
+	idx_t encoded_buffer_size = buffer_size % 2 != 0 ? buffer_size - 1 : buffer_size;
+	D_ASSERT(encoded_buffer_size > 0);
 	encoded_buffer.Initialize(encoded_buffer_size);
 	remaining_bytes_buffer.Initialize(function->GetBytesPerIteration());
 	encoding_function = function;
-	D_ASSERT(encoded_buffer_size > 0);
 }
 
-idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t nr_bytes_to_read) {
+idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t decoded_buffer_size) {
 	idx_t output_buffer_pos = 0;
 	// Check if we have some left-overs. These can either be
 	// 1. missing decoded bytes
@@ -76,10 +73,10 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 	if (encoded_buffer.HasDataToRead()) {
 		encoding_function->GetFunction()(
 		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
-		    nr_bytes_to_read, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
+		    decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
 	}
-	// Otherwise we read a new encoded buffer from the file
-	while (output_buffer_pos < nr_bytes_to_read) {
+	// 3. a new encoded buffer from the file
+	while (output_buffer_pos < decoded_buffer_size) {
 		idx_t current_decoded_buffer_start = output_buffer_pos;
 		encoded_buffer.Reset();
 		auto actual_encoded_bytes =
@@ -87,7 +84,7 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 		encoded_buffer.SetSize(actual_encoded_bytes);
 		encoding_function->GetFunction()(
 		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
-		    nr_bytes_to_read, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
+		    decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
 		if (output_buffer_pos == current_decoded_buffer_start) {
 			return output_buffer_pos;
 		}

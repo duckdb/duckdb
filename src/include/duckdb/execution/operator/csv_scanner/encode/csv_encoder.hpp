@@ -46,9 +46,9 @@ private:
 class CSVEncoder {
 public:
 	//! Constructor, basically takes an encoding and the output buffer size
-	CSVEncoder(DBConfig &config, const string &enconding_name, idx_t buffer_size);
-	//! Main decode function, it reads the file into an encoded buffer and converts it to the output buffer
-	idx_t Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t nr_bytes_to_read);
+	CSVEncoder(DBConfig &config, const string &encoding_name, idx_t buffer_size);
+	//! Main encode function, it reads the file into an encoded buffer and converts it to the output buffer
+	idx_t Encode(FileHandle &file_handle_input, char *output_buffer, const idx_t decoded_buffer_size);
 	string encoding_name;
 
 private:
@@ -56,7 +56,7 @@ private:
 	CSVEncoderBuffer encoded_buffer;
 	//! Potential remaining bytes
 	CSVEncoderBuffer remaining_bytes_buffer;
-	//! Actual Enconding Function
+	//! Actual Encoding Function
 	optional_ptr<EncodingFunction> encoding_function;
 };
 } // namespace duckdb

@@ -21,19 +21,26 @@ namespace duckdb {
 struct DBConfig;
 
 //! Decode function, basically takes information about the decoded and the encoded buffers.
-typedef void (*encode_t)(char *encoded_buffer, idx_t &encoded_buffer_current_position, const idx_t encoded_buffer_size,
-                         char *decoded_buffer, idx_t &decoded_buffer_current_position, const idx_t decoded_buffer_size,
-                         char *remaining_bytes_buffer, idx_t &remaining_bytes_size);
+typedef void (*encode_t)(const char *encoded_buffer, idx_t &encoded_buffer_current_position,
+                         const idx_t encoded_buffer_size, char *decoded_buffer, idx_t &decoded_buffer_current_position,
+                         const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size);
 
 class EncodingFunction {
 public:
 	EncodingFunction() : encode_function(nullptr), ratio(0), bytes_per_iteration(0) {
 	}
-	EncodingFunction(const string &decoding_type_p, encode_t decode_function, const idx_t ratio,
+
+	EncodingFunction(const string &encode_type, encode_t encode_function, const idx_t ratio,
 	                 const idx_t bytes_per_iteration)
-	    : encode_function(decode_function), ratio(ratio), bytes_per_iteration(bytes_per_iteration) {
-		encoding_type = StringUtil::Lower(decoding_type_p);
+	    : encoding_type(encode_type), encode_function(encode_function), ratio(ratio),
+	      bytes_per_iteration(bytes_per_iteration) {
+		D_ASSERT(ratio > 0);
+		D_ASSERT(encode_function);
+		D_ASSERT(bytes_per_iteration > 0);
 	};
+
+	~EncodingFunction() {};
+
 	string GetType() const {
 		return encoding_type;
 	}
@@ -60,12 +67,12 @@ private:
 	idx_t bytes_per_iteration;
 };
 
-//! The set of decoding functions
-struct DecodingFunctionSet {
-	DecodingFunctionSet() {};
+//! The set of encoding functions
+struct EncodingFunctionSet {
+	EncodingFunctionSet() {};
 	static void Initialize(DBConfig &config);
 	mutex lock;
-	map<string, EncodingFunction> functions;
+	case_insensitive_map_t<EncodingFunction> functions;
 };
 
 } // namespace duckdb

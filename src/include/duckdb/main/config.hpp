@@ -359,7 +359,7 @@ public:
 	                                                                    const PhysicalType physical_type);
 
 	//! Returns the encode function matching the encoding name.
-	DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(string name) const;
+	DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(const string &name) const;
 	DUCKDB_API void RegisterEncodeFunction(const EncodingFunction &function) const;
 
 	//! Returns the encode function names.
@@ -394,7 +394,7 @@ public:
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
-	unique_ptr<DecodingFunctionSet> decoding_functions;
+	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<CastFunctionSet> cast_functions;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
