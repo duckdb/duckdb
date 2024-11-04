@@ -167,6 +167,9 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 		auto &result_validity = ConstantVector::Validity(result);
 		SelectionVector true_sel(1);
 		auto match_count = ComparisonSelector::Select<OP>(left, right, nullptr, 1, &true_sel, nullptr, result_validity);
+		// since we are dealing with nested types where the values are not NULL, the result is always valid (i.e true or
+		// false)
+		result_validity.SetAllValid(1);
 		auto result_data = ConstantVector::GetData<bool>(result);
 		result_data[0] = match_count > 0;
 		return;

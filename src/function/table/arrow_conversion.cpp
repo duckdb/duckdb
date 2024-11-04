@@ -138,6 +138,12 @@ static ArrowListOffsetData ConvertArrowListOffsetsTemplated(Vector &vector, Arro
 	auto &start_offset = result.start_offset;
 	auto &list_size = result.list_size;
 
+	if (size == 0) {
+		start_offset = 0;
+		list_size = 0;
+		return result;
+	}
+
 	idx_t cur_offset = 0;
 	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;
 	start_offset = offsets[0];
@@ -765,14 +771,12 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 	case LogicalTypeId::BOOLEAN: {
 		//! Arrow bit-packs boolean values
 		//! Lets first figure out where we are in the source array
-		auto src_ptr = ArrowBufferData<uint8_t>(array, 1) +
-		               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset) / 8;
+		auto effective_offset =
+		    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), scan_state, nested_offset);
+		auto src_ptr = ArrowBufferData<uint8_t>(array, 1) + effective_offset / 8;
 		auto tgt_ptr = (uint8_t *)FlatVector::GetData(vector);
 		int src_pos = 0;
-		idx_t cur_bit = scan_state.chunk_offset % 8;
-		if (nested_offset != -1) {
-			cur_bit = NumericCast<idx_t>(nested_offset % 8);
-		}
+		idx_t cur_bit = effective_offset % 8;
 		for (idx_t row = 0; row < size; row++) {
 			if ((src_ptr[src_pos] & (1 << cur_bit)) == 0) {
 				tgt_ptr[row] = 0;

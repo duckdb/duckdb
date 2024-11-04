@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 
 namespace duckdb {
 
@@ -26,6 +26,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		switch (cur_state) {
 		case CSVState::QUOTED:
 		case CSVState::QUOTED_NEW_LINE:
+		case CSVState::ESCAPE:
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::UNQUOTED:

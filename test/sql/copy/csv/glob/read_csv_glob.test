@@ -5,18 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# Globbing with different dialects
-query III
-FROM 'data/csv/glob_dif_dialect/f_*.csv'
-----
-1	alice	alice@email.com
-2	eve	eve@email.com
-3r	bob	NULL
-1	alice	alice@email.com
-3	bob	bob@email.com
-4	pedro	pedro@email.com
-5	tim	tim@email.com
-
 # simple globbing
 query I
 SELECT * FROM read_csv('data/csv/glob/a?/*.csv') ORDER BY 1

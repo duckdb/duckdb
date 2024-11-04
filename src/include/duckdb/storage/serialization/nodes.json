@@ -918,5 +918,54 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "ExportedTableInfo",
+    "includes": [
+      "duckdb/parser/parsed_data/exported_table_data.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "table_data",
+        "type": "ExportedTableData"
+      }
+    ],
+    "constructor": ["$ClientContext", "table_data"],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ExportedTableData",
+    "includes": [
+      "duckdb/parser/parsed_data/exported_table_data.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "table_name",
+        "type": "string"
+      },
+      {
+        "id": 2,
+        "name": "schema_name",
+        "type": "string"
+      },
+      {
+        "id": 3,
+        "name": "database_name",
+        "type": "string"
+      },
+      {
+        "id": 4,
+        "name": "file_path",
+        "type": "string"
+      },
+      {
+        "id": 5,
+        "name": "not_null_columns",
+        "type": "vector<string>"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

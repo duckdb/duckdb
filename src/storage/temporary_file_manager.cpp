@@ -72,7 +72,7 @@ void BlockIndexManager::SetMaxIndex(idx_t new_index) {
 			auto difference = new_index - old;
 			auto size_on_disk = difference * TEMP_FILE_BLOCK_SIZE;
 			manager->IncreaseSizeOnDisk(size_on_disk);
-			// Increase can throw, so this is only updated after it was succesfully updated
+			// Increase can throw, so this is only updated after it was successfully updated
 			max_index = new_index;
 		}
 	}
