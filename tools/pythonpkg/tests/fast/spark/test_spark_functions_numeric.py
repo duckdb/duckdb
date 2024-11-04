@@ -87,6 +87,17 @@ class TestSparkFunctionsNumeric(object):
             Row(sqrt_value=3.0),
         ]
 
+    def test_cbrt(self, spark):
+        data = [
+            (8,),
+            (27,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("cbrt_value", F.cbrt(F.col("firstColumn")))
+        res = df.select("cbrt_value").collect()
+        assert pytest.approx(res[0].cbrt_value) == 2.0
+        assert pytest.approx(res[1].cbrt_value) == 3.0
+
     def test_cos(self, spark):
         data = [
             (0.0,),

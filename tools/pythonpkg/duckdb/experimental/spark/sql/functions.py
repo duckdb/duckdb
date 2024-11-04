@@ -1198,6 +1198,38 @@ def sqrt(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("sqrt", col)
 
 
+def cbrt(col: "ColumnOrName") -> Column:
+    """
+    Computes the cube-root of the given value.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(cbrt(lit(27))).show()
+    +--------+
+    |CBRT(27)|
+    +--------+
+    |     3.0|
+    +--------+
+    """
+    return _invoke_function_over_columns("cbrt", col)
+
+
 def greatest(*cols: "ColumnOrName") -> Column:
     """
     Returns the greatest value of the list of column names, skipping null values.
