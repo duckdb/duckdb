@@ -335,5 +335,5 @@ bool duckdb_value_is_null_value(duckdb_value value) {
 }
 
 duckdb_value duckdb_value_create_null_value() {
-	return WrapValue(new duckdb::Value(LogicalType::SQLNULL));
+	return WrapValue(new duckdb::Value());
 }
