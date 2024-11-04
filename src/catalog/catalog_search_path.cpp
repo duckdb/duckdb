@@ -217,13 +217,24 @@ string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 }
 
 vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) {
-	vector<string> schemas;
+	vector<string> catalogs;
 	for (auto &path : paths) {
 		if (StringUtil::CIEquals(path.schema, schema)) {
-			schemas.push_back(path.catalog);
+			catalogs.push_back(path.catalog);
 		}
 	}
-	return schemas;
+	return catalogs;
+}
+
+vector<string> CatalogSearchPath::GetCatalogs() {
+	vector<string> catalogs;
+	case_insensitive_set_t unique_catalogs;
+	for (auto &path : paths) {
+		if (unique_catalogs.insert(path.catalog).second) {
+			catalogs.push_back(path.catalog);
+		}
+	}
+	return catalogs;
 }
 
 vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) {
