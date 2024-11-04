@@ -111,13 +111,21 @@ class TestSparkFunctionsString(object):
         ]
 
     def test_ascii(self, spark):
-        df = spark.createDataFrame([("Spark",),  ("PySpark",), ("Pandas API",)], ["value"])
+        df = spark.createDataFrame([("Spark",), ("PySpark",), ("Pandas API",)], ["value"])
 
         res = df.select(F.ascii("value").alias("a")).collect()
         assert res == [Row(a=83), Row(a=80), Row(a=80)]
 
     def test_btrim(self, spark):
-        df = spark.createDataFrame([("SSparkSQLS", "SL", )], ['a', 'b'])
+        df = spark.createDataFrame(
+            [
+                (
+                    "SSparkSQLS",
+                    "SL",
+                )
+            ],
+            ['a', 'b'],
+        )
 
         res = df.select(F.btrim(df.a, df.b).alias('r')).collect()
         assert res == [Row(r='parkSQ')]
