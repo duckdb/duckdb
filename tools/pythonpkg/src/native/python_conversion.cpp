@@ -236,7 +236,7 @@ Value TransformListValue(py::handle ele, const LogicalType &target_type = Logica
 	auto size = py::len(ele);
 
 	if (size == 0) {
-		return Value::EMPTYLIST(LogicalType::SQLNULL);
+		return Value::LIST(LogicalType::SQLNULL, vector<Value>());
 	}
 
 	vector<Value> values;
