@@ -3,6 +3,9 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "jemalloc/jemalloc.h"
+#include "malloc_ncpus.h"
+
+#include <thread>
 
 namespace duckdb {
 
@@ -113,6 +116,10 @@ std::string JemallocExtension::Version() const {
 } // namespace duckdb
 
 extern "C" {
+
+unsigned duckdb_malloc_ncpus() {
+	return duckdb::NumericCast<unsigned>(std::thread::hardware_concurrency());
+}
 
 DUCKDB_EXTENSION_API void jemalloc_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
