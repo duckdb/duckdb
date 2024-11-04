@@ -15,8 +15,6 @@ namespace duckdb {
 
 class ExpressionHeuristics : public LogicalOperatorVisitor {
 public:
-	static constexpr idx_t CAN_THROW_PENALTY = 10000;
-
 	explicit ExpressionHeuristics(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 

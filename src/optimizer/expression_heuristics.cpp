@@ -42,14 +42,18 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 		}
 	};
 
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		if (expressions[i]->CanThrow()) {
+			// do not allow reordering if an expression can throw
+			return;
+		}
+	}
+
 	vector<ExpressionCosts> expression_costs;
 	expression_costs.reserve(expressions.size());
 	// iterate expressions, get cost for each one
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		idx_t cost = Cost(*expressions[i]);
-		if (expressions[i]->CanThrow()) {
-			cost += ExpressionHeuristics::CAN_THROW_PENALTY;
-		}
 		expression_costs.push_back({std::move(expressions[i]), cost});
 	}
 
