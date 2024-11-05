@@ -341,6 +341,8 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 	)";
 	expression.def("__repr__", &DuckDBPyExpression::ToString, docs);
 
+	expression.def("get_name", &DuckDBPyExpression::GetName, docs);
+
 	docs = R"(
 		Create a copy of this expression with the given alias.
 

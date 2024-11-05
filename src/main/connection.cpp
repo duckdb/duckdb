@@ -19,7 +19,7 @@
 namespace duckdb {
 
 Connection::Connection(DatabaseInstance &database)
-    : context(make_shared_ptr<ClientContext>(database.shared_from_this())) {
+    : context(make_shared_ptr<ClientContext>(database.shared_from_this())), warning_cb(nullptr) {
 	ConnectionManager::Get(database).AddConnection(*context);
 #ifdef DEBUG
 	EnableProfiling();
@@ -50,11 +50,7 @@ Connection::~Connection() {
 
 string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	auto &profiler = QueryProfiler::Get(*context);
-	if (format == ProfilerPrintFormat::JSON) {
-		return profiler.ToJSON();
-	} else {
-		return profiler.QueryTreeToString();
-	}
+	return profiler.ToString(format);
 }
 
 optional_ptr<ProfilingNode> Connection::GetProfilingTree() {
@@ -160,12 +156,17 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	return statement->Execute(values, false);
 }
 
-unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
-	return TableInfo(INVALID_SCHEMA, table_name);
+unique_ptr<TableDescription> Connection::TableInfo(const string &database_name, const string &schema_name,
+                                                   const string &table_name) {
+	return context->TableInfo(database_name, schema_name, table_name);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, const string &table_name) {
-	return context->TableInfo(schema_name, table_name);
+	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+}
+
+unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {
+	return TableInfo(INVALID_CATALOG, DEFAULT_SCHEMA, table_name);
 }
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
@@ -194,7 +195,7 @@ shared_ptr<Relation> Connection::Table(const string &table_name) {
 }
 
 shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
-	auto table_info = TableInfo(schema_name, table_name);
+	auto table_info = TableInfo(INVALID_CATALOG, schema_name, table_name);
 	if (!table_info) {
 		throw CatalogException("Table '%s' does not exist!", table_name);
 	}

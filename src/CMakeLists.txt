@@ -83,9 +83,6 @@ else()
   add_subdirectory(optimizer)
   add_subdirectory(planner)
   add_subdirectory(parser)
-  if(${BUILD_CORE_FUNCTIONS_EXTENSION})
-    add_subdirectory(core_functions)
-  endif()
   add_subdirectory(function)
   add_subdirectory(catalog)
   add_subdirectory(common)
@@ -108,7 +105,8 @@ else()
       duckdb_fastpforlib
       duckdb_skiplistlib
       duckdb_mbedtls
-      duckdb_yyjson)
+      duckdb_yyjson
+      duckdb_zstd)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
 

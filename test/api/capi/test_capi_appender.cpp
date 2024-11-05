@@ -649,50 +649,60 @@ TEST_CASE("Test append DEFAULT in C API", "[capi]") {
 TEST_CASE("Test append timestamp in C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
-	duckdb_state status;
-
-	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	tester.Query("CREATE TABLE test (t timestamp)");
 	duckdb_appender appender;
 
-	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
+	auto status = duckdb_appender_create_ext(tester.connection, nullptr, nullptr, "test", &appender);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_appender_error(appender) == nullptr);
 
-	// successful append
-	status = duckdb_appender_begin_row(appender);
-	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_varchar(appender, "2022-04-09 15:56:37.544") == DuckDBSuccess);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
 
-	// status = duckdb_append_timestamp(appender, duckdb_timestamp{1649519797544000});
-	status = duckdb_append_varchar(appender, "2022-04-09 15:56:37.544");
-	REQUIRE(status == DuckDBSuccess);
-
-	status = duckdb_appender_end_row(appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	// append failure
-	status = duckdb_appender_begin_row(appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	status = duckdb_append_varchar(appender, "XXXXX");
-	REQUIRE(status == DuckDBError);
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_varchar(appender, "XXXXX") == DuckDBError);
 	REQUIRE(duckdb_appender_error(appender) != nullptr);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBError);
 
-	status = duckdb_appender_end_row(appender);
-	REQUIRE(status == DuckDBError);
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
 
-	status = duckdb_appender_flush(appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	status = duckdb_appender_close(appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	status = duckdb_appender_destroy(&appender);
-	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
 
 	result = tester.Query("SELECT * FROM test");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<string>(0, 0) == "2022-04-09 15:56:37.544");
+}
+
+TEST_CASE("Test append to different catalog in C API") {
+	CAPITester tester;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	auto test_dir = GetTestDirectory();
+	auto attach_query = "ATTACH '" + test_dir + "/append_to_other.db'";
+	REQUIRE(tester.Query(attach_query)->success);
+
+	auto result = tester.Query("CREATE OR REPLACE TABLE append_to_other.tbl(i INTEGER)");
+	REQUIRE(result->success);
+
+	duckdb_appender appender;
+	auto status = duckdb_appender_create_ext(tester.connection, "append_to_other", "main", "tbl", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	for (idx_t i = 0; i < 200; i++) {
+		REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+		REQUIRE(duckdb_append_int32(appender, 2) == DuckDBSuccess);
+		REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+	}
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+
+	result = tester.Query("SELECT SUM(i)::BIGINT FROM append_to_other.tbl");
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 400);
+
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+	tester.Cleanup();
 }

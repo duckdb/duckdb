@@ -6,7 +6,6 @@
 statement ok
 PRAGMA verify_parallelism
 
-
 query III
 SELECT sum(a), sum(b), sum(c) FROM read_csv('data/csv/test/multi_column_integer.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER'), auto_detect='true', delim = '|', buffer_size=30)
 ----

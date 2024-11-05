@@ -24,6 +24,10 @@ string DuckDBPyExpression::ToString() const {
 	return expression->ToString();
 }
 
+string DuckDBPyExpression::GetName() const {
+	return expression->GetName();
+}
+
 void DuckDBPyExpression::Print() const {
 	Printer::Print(expression->ToString());
 }
@@ -248,14 +252,14 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
 
 // Static creation methods
 
-static void PopulateExcludeList(case_insensitive_set_t &exclude, py::object list_p) {
+static void PopulateExcludeList(qualified_column_set_t &exclude, py::object list_p) {
 	if (py::none().is(list_p)) {
 		list_p = py::list();
 	}
 	py::list list = py::cast<py::list>(list_p);
 	for (auto item : list) {
 		if (py::isinstance<py::str>(item)) {
-			exclude.insert(std::string(py::str(item)));
+			exclude.insert(QualifiedColumnName(std::string(py::str(item))));
 			continue;
 		}
 		shared_ptr<DuckDBPyExpression> expr;
@@ -266,7 +270,7 @@ static void PopulateExcludeList(case_insensitive_set_t &exclude, py::object list
 			throw py::value_error("Only ColumnExpressions are accepted Expression types here");
 		}
 		auto &column = expr->GetExpression().Cast<ColumnRefExpression>();
-		exclude.insert(column.GetColumnName());
+		exclude.insert(QualifiedColumnName(column.GetColumnName()));
 	}
 }
 

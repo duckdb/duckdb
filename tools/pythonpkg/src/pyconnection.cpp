@@ -66,7 +66,7 @@
 
 namespace duckdb {
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;       // NOLINT: allow global
+DefaultConnectionHolder DuckDBPyConnection::default_connection;                        // NOLINT: allow global
 DBInstanceCache instance_cache;                                                        // NOLINT: allow global
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;              // NOLINT: allow global
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL; // NOLINT: allow global
@@ -1765,6 +1765,20 @@ void DuckDBPyConnection::LoadExtension(const string &extension) {
 	ExtensionHelper::LoadExternalExtension(*connection.context, extension);
 }
 
+shared_ptr<DuckDBPyConnection> DefaultConnectionHolder::Get() {
+	lock_guard<mutex> guard(l);
+	if (!connection) {
+		py::dict config_dict;
+		connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
+	}
+	return connection;
+}
+
+void DefaultConnectionHolder::Set(shared_ptr<DuckDBPyConnection> conn) {
+	lock_guard<mutex> guard(l);
+	connection = conn;
+}
+
 void DuckDBPyConnection::Cursors::AddCursor(shared_ptr<DuckDBPyConnection> conn) {
 	lock_guard<mutex> l(lock);
 
@@ -2041,11 +2055,11 @@ case_insensitive_map_t<BoundParameterData> DuckDBPyConnection::TransformPythonPa
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
-	if (!default_connection) {
-		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
-	}
-	return default_connection;
+	return default_connection.Get();
+}
+
+void DuckDBPyConnection::SetDefaultConnection(shared_ptr<DuckDBPyConnection> connection) {
+	return default_connection.Set(std::move(connection));
 }
 
 PythonImportCache *DuckDBPyConnection::ImportCache() {
@@ -2090,7 +2104,7 @@ void DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 }
 
 void DuckDBPyConnection::Cleanup() {
-	default_connection.reset();
+	default_connection.Set(nullptr);
 	import_cache.reset();
 }
 

@@ -49,13 +49,14 @@ public:
 private:
 	mutex version_lock;
 	idx_t start;
-	unique_ptr<ChunkInfo> vector_info[Storage::ROW_GROUP_VECTOR_COUNT];
+	vector<unique_ptr<ChunkInfo>> vector_info;
 	bool has_changes;
 	vector<MetaBlockPointer> storage_pointers;
 
 private:
 	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
 	ChunkVectorInfo &GetVectorInfo(idx_t vector_idx);
+	void FillVectorInfo(idx_t vector_idx);
 };
 
 } // namespace duckdb
