@@ -24,15 +24,16 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/main/client_properties.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
-#include "duckdb/main/client_properties.hpp"
-#include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/function/encoding_function.hpp"
 
 namespace duckdb {
 
@@ -201,7 +202,7 @@ struct DBConfigOptions {
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
-	//! Whether or not preserving insertion order should be preserved
+	//! Whether preserving insertion order should be preserved
 	bool preserve_insertion_order = true;
 	//! Whether Arrow Arrays use Large or Regular buffers
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
@@ -362,6 +363,12 @@ public:
 	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
 	                                                                    const PhysicalType physical_type);
 
+	//! Returns the encode function matching the encoding name.
+	DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(const string &name) const;
+	DUCKDB_API void RegisterEncodeFunction(const EncodingFunction &function) const;
+
+	//! Returns the encode function names.
+	DUCKDB_API vector<reference<EncodingFunction>> GetLoadedEncodedFunctions() const;
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
 
@@ -397,6 +404,7 @@ public:
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
+	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<CastFunctionSet> cast_functions;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
