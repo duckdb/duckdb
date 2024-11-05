@@ -58,7 +58,7 @@ void ColumnRefExpression::ReplaceOrRemoveTableName(const string &replacement) {
 	D_ASSERT(column_names.size() > table_name_index.GetIndex());
 	if (replacement.empty()) {
 		// Remove all the qualifiers leading up to the table name
-		auto offset = static_cast<long>(table_name_index.GetIndex()) + 1;
+		auto offset = static_cast<int64_t>(table_name_index.GetIndex()) + 1;
 		column_names.erase(column_names.begin(), column_names.begin() + offset);
 	} else {
 		column_names[table_name_index.GetIndex()] = replacement;

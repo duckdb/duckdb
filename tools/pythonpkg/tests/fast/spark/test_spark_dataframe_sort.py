@@ -4,7 +4,6 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 import spark_namespace.errors
 from spark_namespace.sql.types import Row
-from spark_namespace.errors import PySparkTypeError, PySparkValueError, PySparkIndexError
 from spark_namespace.sql.functions import desc, asc
 from spark_namespace.errors import PySparkTypeError, PySparkValueError
 from spark_namespace import USE_ACTUAL_SPARK
