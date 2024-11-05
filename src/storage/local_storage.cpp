@@ -124,7 +124,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 	// figure out which columns we need to scan for the set of indexes
 	auto index_columns = index_list.GetRequiredColumns();
 	vector<StorageIndex> required_columns;
-	for(auto &col : index_columns) {
+	for (auto &col : index_columns) {
 		required_columns.emplace_back(col);
 	}
 	// create an empty mock chunk that contains all the correct types for the table

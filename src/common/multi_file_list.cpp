@@ -16,7 +16,7 @@ namespace duckdb {
 MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get)
     : table_index(get.table_index), column_names(get.names), column_indexes(get.GetColumnIds()),
       extra_info(get.extra_info) {
-	for(auto &col_id : column_indexes) {
+	for (auto &col_id : column_indexes) {
 		column_ids.push_back(col_id.GetPrimaryIndex());
 	}
 }

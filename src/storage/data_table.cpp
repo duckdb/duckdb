@@ -223,8 +223,8 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<StorageIndex> &column_ids,
-                               TableFilterSet *table_filters) {
+void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state,
+                               const vector<StorageIndex> &column_ids, TableFilterSet *table_filters) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, table_filters);

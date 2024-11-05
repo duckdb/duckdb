@@ -153,7 +153,8 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void ColumnScanState::Initialize(const LogicalType &type, const vector<StorageIndex> &children, optional_ptr<TableScanOptions> options) {
+void ColumnScanState::Initialize(const LogicalType &type, const vector<StorageIndex> &children,
+                                 optional_ptr<TableScanOptions> options) {
 	// Register the options in the state
 	scan_options = options;
 
@@ -165,16 +166,21 @@ void ColumnScanState::Initialize(const LogicalType &type, const vector<StorageIn
 		// validity + struct children
 		auto &struct_children = StructType::GetChildTypes(type);
 		child_states.resize(struct_children.size() + 1);
+
 		if (children.empty()) {
 			// scan all struct children
+			scan_child_column.resize(struct_children.size(), true);
 			for (idx_t i = 0; i < struct_children.size(); i++) {
 				child_states[i + 1].Initialize(struct_children[i].second, options);
 			}
 		} else {
 			// only scan the specified subset of columns
-			for(auto &child : children) {
+			scan_child_column.resize(struct_children.size(), false);
+			for (idx_t i = 0; i < children.size(); i++) {
+				auto &child = children[i];
 				auto index = child.GetPrimaryIndex();
 				auto &child_indexes = child.GetChildIndexes();
+				scan_child_column[index] = true;
 				child_states[index + 1].Initialize(struct_children[index].second, child_indexes, options);
 			}
 		}
@@ -234,7 +240,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 		const auto &column = column_ids[i];
 		if (!column.IsRowIdColumn()) {
 			auto &column_data = GetColumn(column);
-			column_data.InitializeScanWithOffset(state.column_scans[i], column.GetChildIndexes(), row_number);
+			column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
 			state.column_scans[i].scan_options = &state.GetOptions();
 		} else {
 			state.column_scans[i].current = nullptr;

@@ -254,7 +254,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 vector<column_t> GetColumnsToFetch(const TableBinding &binding) {
 	auto &bound_columns = binding.GetBoundColumnIds();
 	vector<column_t> result;
-	for(auto &col : bound_columns) {
+	for (auto &col : bound_columns) {
 		result.push_back(col.GetPrimaryIndex());
 	}
 	return result;

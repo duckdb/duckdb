@@ -252,7 +252,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			for (auto col_sel_idx : col_sel) {
 				auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 				if (entry == column_references.end()) {
-					throw InternalException("Referenced column binding not found!?");
+					throw InternalException("eek");
 				}
 				if (final_column_ids[col_sel_idx].HasChildren()) {
 					throw InternalException("LogicalGet::column_ids already has children");
@@ -354,7 +354,7 @@ bool RemoveUnusedColumns::HandleStructExtract(Expression &expr) {
 		return false;
 	}
 	auto &function = expr.Cast<BoundFunctionExpression>();
-	if (function.function.name != "struct_extract") {
+	if (function.function.name != "struct_extract" && function.function.name != "array_extract") {
 		return false;
 	}
 	// struct extract, check if left child is a bound column ref
@@ -391,7 +391,7 @@ void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col, ColumnIndex 
 			return;
 		}
 		// if we are already extract sub-fields, add it (if it is not there yet
-		for(auto &binding : column.child_columns) {
+		for (auto &binding : column.child_columns) {
 			if (binding.GetPrimaryIndex() == child_column.GetPrimaryIndex()) {
 				// sub-field is already projected
 				// FIXME: this should recurse to handle nested struct fields
@@ -414,7 +414,6 @@ void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col) {
 		column.child_columns.clear();
 	}
 }
-
 
 void RemoveUnusedColumns::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = **expression;

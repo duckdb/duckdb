@@ -17,7 +17,7 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 		auto get_bindings = get.GetColumnBindings();
 		auto &column_ids = get.GetColumnIds();
 		bool has_row_id = false;
-		for(auto &col_id : column_ids) {
+		for (auto &col_id : column_ids) {
 			if (col_id.IsRowIdColumn()) {
 				has_row_id = true;
 				break;

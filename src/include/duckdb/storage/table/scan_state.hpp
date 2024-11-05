@@ -97,11 +97,14 @@ struct ColumnScanState {
 	vector<unique_ptr<SegmentScanState>> previous_states;
 	//! The last read offset in the child state (used for LIST columns only)
 	idx_t last_offset = 0;
+	//! Whether or not we should scan a specific child column
+	vector<bool> scan_child_column;
 	//! Contains TableScan level config for scanning
 	optional_ptr<TableScanOptions> scan_options;
 
 public:
-	void Initialize(const LogicalType &type, const vector<StorageIndex> &children, optional_ptr<TableScanOptions> options);
+	void Initialize(const LogicalType &type, const vector<StorageIndex> &children,
+	                optional_ptr<TableScanOptions> options);
 	void Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);

@@ -34,7 +34,7 @@ PhysicalInsert::PhysicalInsert(
       return_chunk(return_chunk), parallel(parallel), action_type(action_type),
       set_expressions(std::move(set_expressions)), set_columns(std::move(set_columns)), set_types(std::move(set_types)),
       on_conflict_condition(std::move(on_conflict_condition_p)), do_update_condition(std::move(do_update_condition_p)),
-      conflict_target(std::move(conflict_target_p)){
+      conflict_target(std::move(conflict_target_p)) {
 
 	if (action_type == OnConflictAction::THROW) {
 		return;

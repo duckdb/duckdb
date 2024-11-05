@@ -37,7 +37,7 @@ struct TableScanLocalState : public LocalTableFunctionState {
 
 static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
 	vector<StorageIndex> result;
-	for(auto &child_id : column_id.GetChildIndexes()) {
+	for (auto &child_id : column_id.GetChildIndexes()) {
 		result.push_back(TransformStorageIndex(child_id));
 	}
 	return StorageIndex(column_id.GetPrimaryIndex(), std::move(result));

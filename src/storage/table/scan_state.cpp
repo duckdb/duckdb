@@ -45,7 +45,8 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 }
 
 ScanFilter::ScanFilter(idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter)
-    : scan_column_index(index), table_column_index(column_ids[index].GetPrimaryIndex()), filter(filter), always_true(false) {
+    : scan_column_index(index), table_column_index(column_ids[index].GetPrimaryIndex()), filter(filter),
+      always_true(false) {
 }
 
 void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<StorageIndex> &column_ids) {

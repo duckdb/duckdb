@@ -14,11 +14,12 @@
 namespace duckdb {
 
 struct StorageIndex {
-	StorageIndex() : index(DConstants::INVALID_INDEX) {}
+	StorageIndex() : index(DConstants::INVALID_INDEX) {
+	}
 	explicit StorageIndex(idx_t index) : index(index) {
 	}
 	StorageIndex(idx_t index, vector<StorageIndex> child_indexes_p)
-		: index(index), child_indexes(std::move(child_indexes_p)) {
+	    : index(index), child_indexes(std::move(child_indexes_p)) {
 	}
 
 	inline bool operator==(const StorageIndex &rhs) const {

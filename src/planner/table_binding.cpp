@@ -201,7 +201,7 @@ ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 
 	// Locate the column_id that matches the 'column_index'
 	binding.column_index = column_ids.size();
-	for(idx_t i = 0; i < column_ids.size(); ++i) {
+	for (idx_t i = 0; i < column_ids.size(); ++i) {
 		auto &col_id = column_ids[i];
 		if (col_id.GetPrimaryIndex() == column_index) {
 			binding.column_index = i;

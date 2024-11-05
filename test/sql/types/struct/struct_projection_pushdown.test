@@ -6,10 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE test_structs(s STRUCT(a integer, b bool));
+CREATE TABLE test_structs(id INT, s STRUCT(a integer, b bool));
 
 statement ok
-INSERT INTO test_structs VALUES ({'a': 42, 'b': true}), (NULL), ({'a': 84, 'b': NULL}), ({'a': NULL, 'b': false});
+INSERT INTO test_structs VALUES (1, {'a': 42, 'b': true}), (2, NULL), (3, {'a': 84, 'b': NULL}), (4, {'a': NULL, 'b': false});
 
 query I
 SELECT s.b FROM test_structs
@@ -18,3 +18,21 @@ true
 NULL
 NULL
 false
+
+query II
+SELECT s.b, s.a FROM test_structs
+----
+true	42
+NULL	NULL
+NULL	84
+false	NULL
+
+query I
+SELECT s FROM test_structs WHERE s.b
+----
+{'a': 42, 'b': true}
+
+query I
+SELECT id FROM test_structs WHERE s.b
+----
+1

@@ -130,7 +130,7 @@ void LogicalGet::ResolveTypes() {
 	} else {
 		for (auto &proj_index : projection_ids) {
 			auto &index = column_ids[proj_index];
-			if (index .IsRowIdColumn()) {
+			if (index.IsRowIdColumn()) {
 				types.emplace_back(LogicalType::ROW_TYPE);
 			} else {
 				types.push_back(returned_types[index.GetPrimaryIndex()]);
@@ -206,7 +206,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		deserializer.ReadProperty(206, "parameters", result->parameters);
 		deserializer.ReadProperty(207, "named_parameters", result->named_parameters);
 		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
-	deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
+		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
 	} else {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}
@@ -214,9 +214,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
-			throw SerializationException("LogicalGet::Deserialize - either column_ids or column_indexes should be set - not both");
+			throw SerializationException(
+			    "LogicalGet::Deserialize - either column_ids or column_indexes should be set - not both");
 		}
-		for(auto &col_id : legacy_column_ids) {
+		for (auto &col_id : legacy_column_ids) {
 			result->column_ids.emplace_back(col_id);
 		}
 	}
