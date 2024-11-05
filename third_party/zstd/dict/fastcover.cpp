@@ -325,6 +325,8 @@ FASTCOVER_ctx_init(FASTCOVER_ctx_t* ctx,
     const size_t trainingSamplesSize = splitPoint < 1.0 ? COVER_sum(samplesSizes, nbTrainSamples) : totalSamplesSize;
     const size_t testSamplesSize = splitPoint < 1.0 ? COVER_sum(samplesSizes + nbTrainSamples, nbTestSamples) : totalSamplesSize;
 
+	(void) testSamplesSize;
+
     /* Checks */
     if (totalSamplesSize < MAX(d, sizeof(U64)) ||
         totalSamplesSize >= (size_t)FASTCOVER_MAX_SAMPLES_SIZE) {
@@ -647,6 +649,10 @@ ZDICT_optimizeTrainFromBuffer_fastCover(
     COVER_best_t best;
     POOL_ctx *pool = NULL;
     int warned = 0;
+
+	(void) kIterations;
+	(void) iteration;
+
     /* Checks */
     if (splitPoint <= 0 || splitPoint > 1) {
       LOCALDISPLAYLEVEL(displayLevel, 1, "Incorrect splitPoint\n");
