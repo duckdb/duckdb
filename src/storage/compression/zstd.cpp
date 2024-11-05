@@ -199,7 +199,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		average_length = MaxValue<idx_t>(average_length, 200);
 		penalty =
 		    5.0 +
-		    ((double)(overflow_string_threshold - (double)average_length) / (double)overflow_string_threshold) * 25.0;
+		    (((double)overflow_string_threshold - (double)average_length) / (double)overflow_string_threshold) * 25.0;
 	} else {
 		// From this point on, ZSTD starts to beat Uncompressed scan speed by about 5x, increasing rapidly (4096 is 5x,
 		// 8000 is 15x)
