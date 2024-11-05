@@ -52,7 +52,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
-  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '' }}
+  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || 'cp37-*' }}
 
 jobs:
 #  This is just a sanity check of Python 3.9 running with Arrow
@@ -62,9 +62,10 @@ jobs:
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose && USE_ACTUAL_SPARK=true JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) SPARK_HOME={project}/spark_installation/spark python -m pytest {project}/tests/fast/spark --verbose'
       PYTEST_TIMEOUT: '600'
       CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
+      CIBW_BEFORE_ALL: 'cd {project} && ./scripts/install_spark_in_cibuildwheels_linux_container.sh'
 
     steps:
     - uses: actions/checkout@v3

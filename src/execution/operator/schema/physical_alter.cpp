@@ -11,7 +11,6 @@ namespace duckdb {
 SourceResultType PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	catalog.Alter(context.client, *info);
-
 	return SourceResultType::FINISHED;
 }
 

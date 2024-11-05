@@ -30,6 +30,9 @@ struct BufferAllocatorData : PrivateAllocatorData {
 unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
                                                                      FileBufferType type) {
 	unique_ptr<FileBuffer> result;
+	if (type == FileBufferType::BLOCK) {
+		throw InternalException("ConstructManagedBuffer cannot be used to construct blocks");
+	}
 	if (source) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size));
@@ -123,24 +126,23 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx
 	// Otherwise, any non-default block size would register as small memory, causing problems when
 	// trying to convert that memory to consistent blocks later on.
 	if (size < block_size) {
-		return RegisterSmallMemory(size);
+		return RegisterSmallMemory(MemoryTag::IN_MEMORY_TABLE, size);
 	}
 
 	auto buffer_handle = Allocate(MemoryTag::IN_MEMORY_TABLE, size, false);
 	return buffer_handle.GetBlockHandle();
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(const idx_t size) {
+shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag, const idx_t size) {
 	D_ASSERT(size < GetBlockSize());
-	auto reservation = EvictBlocksOrThrow(MemoryTag::BASE_TABLE, size, nullptr, "could not allocate block of size %s%s",
+	auto reservation = EvictBlocksOrThrow(tag, size, nullptr, "could not allocate block of size %s%s",
 	                                      StringUtil::BytesToHumanReadableString(size));
 
 	auto buffer = ConstructManagedBuffer(size, nullptr, FileBufferType::TINY_BUFFER);
 
 	// Create a new block pointer for this block.
-	auto result =
-	    make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, MemoryTag::BASE_TABLE, std::move(buffer),
-	                                 DestroyBufferUpon::BLOCK, size, std::move(reservation));
+	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
+	                                           DestroyBufferUpon::BLOCK, size, std::move(reservation));
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
 	WriteGarbageIntoBuffer(*result->buffer);
@@ -356,8 +358,8 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return buf;
 }
 
-void StandardBufferManager::PurgeQueue(FileBufferType type) {
-	buffer_pool.PurgeQueue(type);
+void StandardBufferManager::PurgeQueue(const BlockHandle &handle) {
+	buffer_pool.PurgeQueue(handle);
 }
 
 void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
@@ -366,8 +368,15 @@ void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) 
 
 void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
-	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
-	                                                handle->memory_usage - Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	unique_ptr<FileBuffer> replacement_buffer;
+	auto &allocator = Allocator::Get(db);
+	auto alloc_size = handle->memory_usage - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	if (handle->buffer->type == FileBufferType::BLOCK) {
+		auto block = reinterpret_cast<Block *>(handle->buffer.get());
+		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size);
+	} else {
+		replacement_buffer = make_uniq<FileBuffer>(allocator, handle->buffer->type, alloc_size);
+	}
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
 	WriteGarbageIntoBuffer(*handle->buffer);
 	handle->buffer = std::move(replacement_buffer);
@@ -395,7 +404,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 
 	// We do not have to keep the handle locked while purging.
 	if (purge) {
-		PurgeQueue(handle->buffer->type);
+		PurgeQueue(*handle);
 	}
 }
 

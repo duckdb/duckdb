@@ -21,6 +21,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
@@ -92,6 +93,10 @@ vector<shared_ptr<ColumnData>> &RowGroup::GetColumns() {
 
 idx_t RowGroup::GetColumnCount() const {
 	return columns.size();
+}
+
+idx_t RowGroup::GetRowGroupSize() const {
+	return collection.get().GetRowGroupSize();
 }
 
 ColumnData &RowGroup::GetColumn(storage_t c) {
@@ -416,6 +421,10 @@ static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
 		}
 		return max_count;
 	}
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto &zone_filter = filter.Cast<OptionalFilter>();
+		return GetFilterScanCount(state, *zone_filter.child_filter);
+	}
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
 	case TableFilterType::CONSTANT_COMPARISON:
@@ -441,6 +450,8 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			continue;
 		}
+
+		// check zone map segment.
 		idx_t target_row = GetFilterScanCount(state.column_scans[column_idx], filter);
 		if (target_row >= state.max_row) {
 			target_row = state.max_row;
@@ -480,6 +491,13 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
+
+		// check the sampling info if we have to sample this chunk
+		if (state.GetSamplingInfo().do_system_sample &&
+		    state.random.NextRandom() > state.GetSamplingInfo().sample_rate) {
+			NextVector(state);
+			continue;
+		}
 
 		//! first check the zonemap if we have to scan this partition
 		if (!CheckZonemapSegments(state)) {
@@ -769,10 +787,11 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 }
 
 void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
+	const idx_t row_group_size = GetRowGroupSize();
 	idx_t row_group_start = this->count.load();
 	idx_t row_group_end = row_group_start + count;
-	if (row_group_end > Storage::ROW_GROUP_SIZE) {
-		row_group_end = Storage::ROW_GROUP_SIZE;
+	if (row_group_end > row_group_size) {
+		row_group_end = row_group_size;
 	}
 	// create the version_info if it doesn't exist yet
 	auto &vinfo = GetOrCreateVersionInfo();

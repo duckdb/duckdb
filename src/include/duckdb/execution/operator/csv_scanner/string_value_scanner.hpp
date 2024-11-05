@@ -12,7 +12,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
-
+#include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
 namespace duckdb {
 
 struct CSVBufferUsage {
@@ -132,6 +132,10 @@ public:
 
 	bool HandleErrors(StringValueResult &result);
 
+	bool HasError() const {
+		return !current_errors.empty();
+	}
+
 private:
 	vector<CurrentError> current_errors;
 	bool is_error_in_line;
@@ -186,7 +190,7 @@ public:
 
 	//! Internal Data Chunk used for flushing
 	DataChunk parse_chunk;
-	idx_t number_of_rows = 0;
+	int64_t number_of_rows = 0;
 	idx_t cur_col_id = 0;
 	bool figure_out_new_line = false;
 	//! Information to properly handle errors
@@ -267,6 +271,18 @@ public:
 	void RemoveLastLine();
 };
 
+struct ValidRowInfo {
+	ValidRowInfo(bool is_valid_p, idx_t start_pos_p, idx_t end_buffer_idx_p, idx_t end_pos_p, bool last_state_quote_p)
+	    : is_valid(is_valid_p), start_pos(start_pos_p), end_buffer_idx(end_buffer_idx_p), end_pos(end_pos_p),
+	      last_state_quote(last_state_quote_p) {};
+	ValidRowInfo() : is_valid(false), start_pos(0), end_buffer_idx(0), end_pos(0) {};
+
+	bool is_valid;
+	idx_t start_pos;
+	idx_t end_buffer_idx;
+	idx_t end_pos;
+	bool last_state_quote = false;
+};
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
 class StringValueScanner : public BaseScanner {
 public:
@@ -297,6 +313,9 @@ public:
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
 
+	//! Gets validation line information
+	ValidatorLine GetValidationLine();
+
 	const idx_t scanner_idx;
 
 	//! Variable that manages buffer tracking
@@ -308,20 +327,28 @@ private:
 	void FinalizeChunkProcess() override;
 
 	//! Function used to process values that go over the first buffer, extra allocation might be necessary
-	void ProcessOverbufferValue();
+	void ProcessOverBufferValue();
 
 	void ProcessExtraRow();
 	//! Function used to move from one buffer to the other, if necessary
 	bool MoveToNextBuffer();
 
-	void SkipUntilNewLine();
-
+	//! -------- Functions used to figure out where lines start ---------!//
+	//! Main function, sets the correct start
 	void SetStart();
+	//! From a given initial state, it skips until we reach the until_state
+	bool SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator,
+	                    bool &quoted) const;
+	//! If the current row we found is valid
+	bool IsRowValid(CSVIterator &current_iterator) const;
+	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const;
+	bool FirstValueEndsOnQuote(CSVIterator iterator) const;
 
 	StringValueResult result;
 	vector<LogicalType> types;
-
-	//! Pointer to the previous buffer handle, necessary for overbuffer values
+	//! True Position where this scanner started scanning(i.e., after figuring out where the first line starts)
+	idx_t start_pos;
+	//! Pointer to the previous buffer handle, necessary for over-buffer values
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
 };
 

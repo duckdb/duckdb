@@ -36,6 +36,43 @@
             }
         },
         {
+            "name": "duckdb_appender_create_ext",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_connection",
+                    "name": "connection"
+                },
+                {
+                    "type": "const char *",
+                    "name": "catalog"
+                },
+                {
+                    "type": "const char *",
+                    "name": "schema"
+                },
+                {
+                    "type": "const char *",
+                    "name": "table"
+                },
+                {
+                    "type": "duckdb_appender *",
+                    "name": "out_appender"
+                }
+            ],
+            "comment": {
+                "description": "Creates an appender object.\n\nNote that the object must be destroyed with `duckdb_appender_destroy`.\n\n",
+                "param_comments": {
+                    "connection": "The connection context to create the appender in.",
+                    "catalog": "The catalog of the table to append to, or `nullptr` for the default catalog.",
+                    "schema": "The schema of the table to append to, or `nullptr` for the default schema.",
+                    "table": "The table name to append to.",
+                    "out_appender": "The resulting appender object."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
             "name": "duckdb_appender_column_count",
             "return_type": "idx_t",
             "params": [

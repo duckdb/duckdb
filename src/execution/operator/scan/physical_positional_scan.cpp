@@ -208,4 +208,12 @@ bool PhysicalPositionalScan::Equals(const PhysicalOperator &other_p) const {
 	return true;
 }
 
+vector<const_reference<PhysicalOperator>> PhysicalPositionalScan::GetChildren() const {
+	auto result = PhysicalOperator::GetChildren();
+	for (auto &entry : child_tables) {
+		result.push_back(*entry);
+	}
+	return result;
+}
+
 } // namespace duckdb

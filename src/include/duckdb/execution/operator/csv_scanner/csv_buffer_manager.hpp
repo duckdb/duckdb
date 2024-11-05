@@ -45,6 +45,8 @@ public:
 	void ResetBufferManager();
 	string GetFilePath() const;
 
+	bool IsBlockUnloaded(idx_t block_idx);
+
 	ClientContext &context;
 	idx_t skip_rows = 0;
 	bool sniffing = false;

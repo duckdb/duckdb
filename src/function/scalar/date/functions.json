@@ -1,0 +1,26 @@
+[
+    {
+        "name": "strftime",
+        "parameters": "data,format",
+        "description": "Converts a date to a string according to the format string.",
+        "example": "strftime(date '1992-01-01', '%a, %-d %B %Y')",
+        "type": "scalar_function_set",
+        "struct": "StrfTimeFun"
+    },
+    {
+        "name": "strptime",
+        "parameters": "text,format",
+        "description": "Converts the string text to timestamp according to the format string. Throws an error on failure. To return NULL on failure, use try_strptime.",
+        "example": "strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')",
+        "type": "scalar_function_set",
+        "struct": "StrpTimeFun"
+    },
+    {
+        "name": "try_strptime",
+        "parameters": "text,format",
+        "description": "Converts the string text to timestamp according to the format string. Returns NULL on failure.",
+        "example": "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')",
+        "type": "scalar_function_set",
+        "struct": "TryStrpTimeFun"
+    }
+]

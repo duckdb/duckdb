@@ -52,36 +52,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 
 	options.FromNamedParameters(input.named_parameters, context);
-	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
-	    options.store_rejects.IsSetByUser()) {
-		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
-	}
-	if (options.rejects_scan_name.IsSetByUser() && !options.store_rejects.GetValue() &&
-	    options.store_rejects.IsSetByUser()) {
-		throw BinderException("REJECTS_SCAN option is only supported when store_rejects is not manually set to false");
-	}
-	if (options.rejects_scan_name.IsSetByUser() || options.rejects_table_name.IsSetByUser()) {
-		// Ensure we set store_rejects to true automagically
-		options.store_rejects.Set(true, false);
-	}
-	// Validate rejects_table options
-	if (options.store_rejects.GetValue()) {
-		if (!options.ignore_errors.GetValue() && options.ignore_errors.IsSetByUser()) {
-			throw BinderException(
-			    "STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false");
-		}
-		// Ensure we set ignore errors to true automagically
-		options.ignore_errors.Set(true, false);
-		if (options.file_options.union_by_name) {
-			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
-		}
-	}
-	if (options.rejects_limit != 0 && !options.store_rejects.GetValue()) {
-		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
-	}
 
 	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
-
+	options.Verify();
 	if (!options.auto_detect) {
 		if (!options.columns_set) {
 			throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
@@ -249,10 +222,12 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	} while (true);
 }
 
-static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                    LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &data = local_state->Cast<CSVLocalState>();
-	return data.csv_reader->scanner_idx;
+static OperatorPartitionData CSVReaderGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("CSVReader::GetPartitionData: partition columns not supported");
+	}
+	auto &data = input.local_state->Cast<CSVLocalState>();
+	return OperatorPartitionData(data.csv_reader->scanner_idx);
 }
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
@@ -364,7 +339,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.get_batch_index = CSVReaderGetBatchIndex;
+	read_csv.get_partition_data = CSVReaderGetPartitionData;
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;
 	read_csv.type_pushdown = PushdownTypeToCSVScanner;

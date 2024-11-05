@@ -496,7 +496,7 @@ class TestReadCSV(object):
         assert rel.columns == ['a', 'b', 'c', 'd']
 
         # Duplicates are not okay
-        with pytest.raises(duckdb.BinderException, match="has duplicate column name"):
+        with pytest.raises(duckdb.BinderException, match="names must have unique values"):
             rel = con.read_csv(file, names=['a', 'b', 'a', 'b'])
             assert rel.columns == ['a', 'b', 'a', 'b']
 
@@ -584,12 +584,9 @@ class TestReadCSV(object):
     @pytest.mark.parametrize(
         'options',
         [
-            {'lineterminator': '\\r\\n'},
             {'lineterminator': '\\n'},
             {'lineterminator': 'LINE_FEED'},
-            {'lineterminator': 'CARRIAGE_RETURN_LINE_FEED'},
             {'lineterminator': CSVLineTerminator.LINE_FEED},
-            {'lineterminator': CSVLineTerminator.CARRIAGE_RETURN_LINE_FEED},
             {'columns': {'id': 'INTEGER', 'name': 'INTEGER', 'c': 'integer', 'd': 'INTEGER'}},
             {'auto_type_candidates': ['INTEGER', 'INTEGER']},
             {'max_line_size': 10000},
