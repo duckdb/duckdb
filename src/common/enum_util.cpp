@@ -1658,6 +1658,25 @@ ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value) {
 	return static_cast<ForeignKeyType>(StringUtil::StringToEnum(GetForeignKeyTypeValues(), 3, "ForeignKeyType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetFunctionCollationHandlingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FunctionCollationHandling::PROPAGATE_COLLATIONS), "PROPAGATE_COLLATIONS" },
+		{ static_cast<uint32_t>(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS), "PUSH_COMBINABLE_COLLATIONS" },
+		{ static_cast<uint32_t>(FunctionCollationHandling::IGNORE_COLLATIONS), "IGNORE_COLLATIONS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandling value) {
+	return StringUtil::EnumToString(GetFunctionCollationHandlingValues(), 3, "FunctionCollationHandling", static_cast<uint32_t>(value));
+}
+
+template<>
+FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const char *value) {
+	return static_cast<FunctionCollationHandling>(StringUtil::StringToEnum(GetFunctionCollationHandlingValues(), 3, "FunctionCollationHandling", value));
+}
+
 const StringUtil::EnumStringLiteral *GetFunctionNullHandlingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FunctionNullHandling::DEFAULT_NULL_HANDLING), "DEFAULT_NULL_HANDLING" },
