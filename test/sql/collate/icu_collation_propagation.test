@@ -98,3 +98,9 @@ query I
 select a from tbl where starts_with(b collate de, '>>>>>o') order by all
 ----
 o
+
+query I
+select a from tbl where b collate de like '%>o<%' order by all
+----
+o
+

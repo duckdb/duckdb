@@ -99,7 +99,7 @@ void BuiltinFunctions::Initialize() {
 
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
-	AddCollation("noaccent", StripAccentsFun::GetFunction());
+	AddCollation("noaccent", StripAccentsFun::GetFunction(), true);
 	AddCollation("nfc", NFCNormalizeFun::GetFunction());
 
 	RegisterExtensionOverloads();

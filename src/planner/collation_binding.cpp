@@ -31,7 +31,12 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto splits = StringUtil::Split(StringUtil::Lower(collation), ".");
 	vector<reference<CollateCatalogEntry>> entries;
+	unordered_set<string> collations;
 	for (auto &collation_argument : splits) {
+		if (collations.count(collation_argument)) {
+			// we already applied this collation
+			continue;
+		}
 		auto &collation_entry = catalog.GetEntry<CollateCatalogEntry>(context, DEFAULT_SCHEMA, collation_argument);
 		if (collation_entry.combinable) {
 			entries.insert(entries.begin(), collation_entry);
@@ -42,6 +47,7 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 			}
 			entries.push_back(collation_entry);
 		}
+		collations.insert(collation_argument);
 	}
 	for (auto &entry : entries) {
 		auto &collation_entry = entry.get();
