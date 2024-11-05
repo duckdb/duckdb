@@ -1,21 +1,24 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/checksum.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/storage/index.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/common/checksum.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -259,19 +262,31 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 
-void SerializeIndexToWAL(WriteAheadLogSerializer &serializer, Index &index,
-                         const case_insensitive_map_t<Value> &options) {
+void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
+                    const string &name) {
+	const auto &db_options = db.GetDatabase().config.options;
+	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	case_insensitive_map_t<Value> options;
+	if (!v1_0_0_storage) {
+		options.emplace("v1_0_0_storage", v1_0_0_storage);
+	}
 
-	// We will never write an index to the WAL that is not bound
-	D_ASSERT(index.IsBound());
-	const auto index_storage_info = index.Cast<BoundIndex>().GetStorageInfo(options, true);
-	serializer.WriteProperty(102, "index_storage_info", index_storage_info);
+	list.Scan([&](Index &index) {
+		if (name == index.GetIndexName()) {
+			// We never write an unbound index to the WAL.
+			D_ASSERT(index.IsBound());
 
-	serializer.WriteList(103, "index_storage", index_storage_info.buffers.size(), [&](Serializer::List &list, idx_t i) {
-		auto &buffers = index_storage_info.buffers[i];
-		for (auto buffer : buffers) {
-			list.WriteElement(buffer.buffer_ptr, buffer.allocation_size);
+			const auto &info = index.Cast<BoundIndex>().GetStorageInfo(options, true);
+			serializer.WriteProperty(102, "index_storage_info", info);
+			serializer.WriteList(103, "index_storage", info.buffers.size(), [&](Serializer::List &list, idx_t i) {
+				auto &buffers = info.buffers[i];
+				for (auto buffer : buffers) {
+					list.WriteElement(buffer.buffer_ptr, buffer.allocation_size);
+				}
+			});
+			return true;
 		}
+		return false;
 	});
 }
 
@@ -279,24 +294,10 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::CREATE_INDEX);
 	serializer.WriteProperty(101, "index_catalog_entry", &entry);
 
-	auto db_options = database.GetDatabase().config.options;
-	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
-	case_insensitive_map_t<Value> options;
-	if (!v1_0_0_storage) {
-		options.emplace("v1_0_0_storage", v1_0_0_storage);
-	}
-
-	// now serialize the index data to the persistent storage and write the index metadata
-	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
-	auto &table_idx_list = duck_index_entry.GetDataTableInfo().GetIndexes();
-
-	table_idx_list.Scan([&](Index &index) {
-		if (duck_index_entry.name == index.GetIndexName()) {
-			SerializeIndexToWAL(serializer, index, options);
-			return true;
-		}
-		return false;
-	});
+	// Serialize the index data to the persistent storage and write the metadata.
+	auto &index_entry = entry.Cast<DuckIndexEntry>();
+	auto &list = index_entry.GetDataTableInfo().GetIndexes();
+	SerializeIndex(database, serializer, list, index_entry.name);
 	serializer.End();
 }
 
@@ -400,9 +401,25 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 //===--------------------------------------------------------------------===//
 // Write ALTER Statement
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteAlter(const AlterInfo &info) {
+void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 	WriteAheadLogSerializer serializer(*this, WALType::ALTER_INFO);
 	serializer.WriteProperty(101, "info", &info);
+
+	if (!info.IsAddPrimaryKey()) {
+		return serializer.End();
+	}
+
+	auto &table_info = info.Cast<AlterTableInfo>();
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	auto &unique = constraint_info.constraint->Cast<UniqueConstraint>();
+
+	auto &table_entry = entry.Cast<DuckTableEntry>();
+	auto &parent = table_entry.Parent().Cast<DuckTableEntry>();
+	auto &parent_info = parent.GetStorage().GetDataTableInfo();
+	auto &list = parent_info->GetIndexes();
+
+	auto name = unique.GetName(parent.name);
+	SerializeIndex(database, serializer, list, name);
 	serializer.End();
 }
 

@@ -12,4 +12,4 @@ CREATE TABLE t0(c0 INT);
 statement error
 CREATE INDEX i0 ON t0(rowid, c0);
 ----
-<REGEX>:Binder Error:.*Cannot create an index.*
+<REGEX>:Binder Error:.*cannot create an index.*
