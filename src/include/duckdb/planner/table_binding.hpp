@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 class BindContext;

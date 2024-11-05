@@ -11,6 +11,7 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 class Binder;
