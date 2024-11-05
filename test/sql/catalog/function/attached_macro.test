@@ -1,0 +1,47 @@
+# name: test/sql/catalog/function/attached_macro.test
+# group: [function]
+
+require skip_reload
+
+require httpfs
+
+statement ok
+ATTACH 'https://blobs.duckdb.org/data/checksum-macro.duckdb' AS checksum_macro;
+
+# Use 'query_table' with a schema-qualified table name
+
+statement ok
+begin
+
+statement ok
+CREATE TABLE tbl AS
+	SELECT
+		unnest([42, 43]) AS x;
+
+statement ok
+USE checksum_macro;
+
+query I
+SELECT * FROM checksum('memory.tbl');
+----
+60609334165039584609948387465088153270
+
+statement ok
+abort
+
+# Call a table function that lives in a different catalog
+
+statement ok
+begin
+
+statement ok
+USE memory;
+
+statement ok
+CREATE TABLE tbl AS SELECT unnest([42, 43]) AS x;
+
+statement ok
+SELECT * FROM checksum_macro.checksum('tbl');
+
+statement ok
+abort
