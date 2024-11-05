@@ -336,7 +336,7 @@
 			},
 			{
 				"name": "prefer_nullable_dtypes",
-				"default": "False",
+				"default": "True",
 				"type": "bool"
 			}
 		],
@@ -361,7 +361,7 @@
 			},
 			{
 				"name": "prefer_nullable_dtypes",
-				"default": "False",
+				"default": "True",
 				"type": "bool"
 			}
 		],

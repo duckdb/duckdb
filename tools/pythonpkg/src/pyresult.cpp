@@ -327,12 +327,8 @@ static py::object ConvertNumpyDtype(py::handle numpy_array) {
 	case NumpyNullableType::INT_64: {
 		return import_cache.pandas.Int64Dtype()();
 	}
-	case NumpyNullableType::FLOAT_32: {
-		return import_cache.pandas.Float32Dtype()();
-	}
-	case NumpyNullableType::FLOAT_64: {
-		return import_cache.pandas.Float64Dtype()();
-	}
+	case NumpyNullableType::FLOAT_32:
+	case NumpyNullableType::FLOAT_64:
 	case NumpyNullableType::FLOAT_16: // there is no pandas.Float16Dtype
 	default:
 		return dtype;

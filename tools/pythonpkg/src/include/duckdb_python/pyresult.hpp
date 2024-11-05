@@ -39,7 +39,7 @@ public:
 	duckdb::pyarrow::Table FetchArrowTable(idx_t rows_per_batch, bool to_polars);
 
 	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false,
-	                             bool prefer_nullable_dtypes = false);
+	                             bool prefer_nullable_dtypes = true);
 
 	py::dict FetchPyTorch();
 

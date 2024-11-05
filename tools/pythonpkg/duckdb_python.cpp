@@ -363,7 +363,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->FetchDF(date_as_object, prefer_nullable_dtypes);
 	    },
 	    "Fetch a result as DataFrame following execute()", py::kw_only(), py::arg("date_as_object") = false,
-	    py::arg("prefer_nullable_dtypes") = false, py::arg("connection") = py::none());
+	    py::arg("prefer_nullable_dtypes") = true, py::arg("connection") = py::none());
 	m.def(
 	    "fetch_df",
 	    [](bool date_as_object, bool prefer_nullable_dtypes, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -373,7 +373,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->FetchDF(date_as_object, prefer_nullable_dtypes);
 	    },
 	    "Fetch a result as DataFrame following execute()", py::kw_only(), py::arg("date_as_object") = false,
-	    py::arg("prefer_nullable_dtypes") = false, py::arg("connection") = py::none());
+	    py::arg("prefer_nullable_dtypes") = true, py::arg("connection") = py::none());
 	m.def(
 	    "df",
 	    [](bool date_as_object, bool prefer_nullable_dtypes, shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -383,10 +383,10 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->FetchDF(date_as_object, prefer_nullable_dtypes);
 	    },
 	    "Fetch a result as DataFrame following execute()", py::kw_only(), py::arg("date_as_object") = false,
-	    py::arg("prefer_nullable_dtypes") = false, py::arg("connection") = py::none());
+	    py::arg("prefer_nullable_dtypes") = true, py::arg("connection") = py::none());
 	m.def(
 	    "fetch_df_chunk",
-	    [](const idx_t vectors_per_chunk = 1, bool date_as_object = false, bool prefer_nullable_dtypes = false,
+	    [](const idx_t vectors_per_chunk = 1, bool date_as_object = false, bool prefer_nullable_dtypes = true,
 	       shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
@@ -394,7 +394,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->FetchDFChunk(vectors_per_chunk, date_as_object, prefer_nullable_dtypes);
 	    },
 	    "Fetch a chunk of the result as DataFrame following execute()", py::arg("vectors_per_chunk") = 1, py::kw_only(),
-	    py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = false,
+	    py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = true,
 	    py::arg("connection") = py::none());
 	m.def(
 	    "pl",
@@ -986,7 +986,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->FetchDF(date_as_object, prefer_nullable_dtypes);
 	    },
 	    "Fetch a result as DataFrame following execute()", py::kw_only(), py::arg("date_as_object") = false,
-	    py::arg("prefer_nullable_dtypes") = false, py::arg("connection") = py::none());
+	    py::arg("prefer_nullable_dtypes") = true, py::arg("connection") = py::none());
 	m.def(
 	    "df",
 	    [](const PandasDataFrame &value, shared_ptr<DuckDBPyConnection> conn) -> unique_ptr<DuckDBPyRelation> {

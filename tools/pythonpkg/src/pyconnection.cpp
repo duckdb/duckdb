@@ -179,14 +179,14 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute");
 	m.def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute");
 	m.def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
-	      py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = false);
+	      py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = true);
 	m.def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
-	      py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = false);
+	      py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = true);
 	m.def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
-	      py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = false);
+	      py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = true);
 	m.def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
 	      "Fetch a chunk of the result as DataFrame following execute()", py::arg("vectors_per_chunk") = 1,
-	      py::kw_only(), py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = false);
+	      py::kw_only(), py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = true);
 	m.def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
 	      py::arg("rows_per_batch") = 1000000);
 	m.def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",

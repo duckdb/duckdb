@@ -187,7 +187,7 @@ public:
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
 	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false,
-	                             bool prefer_nullable_dtypes = false);
+	                             bool prefer_nullable_dtypes = true);
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 

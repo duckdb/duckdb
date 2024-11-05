@@ -312,7 +312,7 @@ public:
 	py::dict FetchNumpy();
 	PandasDataFrame FetchDF(bool date_as_object, bool prefer_nullable_dtypes);
 	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false,
-	                             bool prefer_nullable_dtypes = false);
+	                             bool prefer_nullable_dtypes = true);
 
 	duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch);
 	PolarsDataFrame FetchPolars(idx_t rows_per_batch);
