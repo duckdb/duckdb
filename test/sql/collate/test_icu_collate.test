@@ -145,12 +145,8 @@ aAàÀáÁâÂãÃäÄåÅ
 bB
 zZ
 
-statement error
+statement ok
 SELECT 'Á' COLLATE "ICU_NOACCENT.NOACCENT"
-----
-Binder Error: Cannot combine collation types "icu_noaccent" and "noaccent"
 
-statement error
+statement ok
 SELECT 'Á' COLLATE "NOACCENT.ICU_NOACCENT"
-----
-Binder Error: Cannot combine collation types "noaccent" and "icu_noaccent"
