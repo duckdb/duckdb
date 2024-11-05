@@ -6,6 +6,7 @@ import string
 from packaging import version
 import warnings
 from contextlib import suppress
+from conftest import is_null
 
 
 def round_trip(data, pandas_type):
@@ -98,7 +99,8 @@ class TestNumpyNullableTypes(object):
         result = duckdb_cursor.execute("SELECT MIN(value) FROM testdf2").fetchall()
         assert result[0][0] == 26
 
-    def test_pandas_boolean(self, duckdb_cursor):
+    @pytest.mark.parametrize('nullable', [True, False])
+    def test_pandas_boolean(self, nullable):
         data = numpy.array([True, None, pd.NA, numpy.nan, True])
         df_in = pd.DataFrame(
             {
@@ -106,14 +108,15 @@ class TestNumpyNullableTypes(object):
             }
         )
 
-        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df(prefer_nullable_dtypes=nullable)
         assert df_out['object'][0] == df_in['object'][0]
-        assert pd.isna(df_out['object'][1])
-        assert pd.isna(df_out['object'][2])
-        assert pd.isna(df_out['object'][3])
+        assert is_null(df_out['object'][1], nullable)
+        assert is_null(df_out['object'][2], nullable)
+        assert is_null(df_out['object'][3], nullable)
         assert df_out['object'][4] == df_in['object'][4]
 
-    def test_pandas_float32(self, duckdb_cursor):
+    @pytest.mark.parametrize('nullable', [True, False])
+    def test_pandas_float32(self, duckdb_cursor, nullable):
         data = numpy.array([0.1, 0.32, 0.78, numpy.nan])
         df_in = pd.DataFrame(
             {
@@ -121,29 +124,31 @@ class TestNumpyNullableTypes(object):
             }
         )
 
-        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df(prefer_nullable_dtypes=nullable)
 
         assert df_out['object'][0] == df_in['object'][0]
         assert df_out['object'][1] == df_in['object'][1]
         assert df_out['object'][2] == df_in['object'][2]
-        assert pd.isna(df_out['object'][3])
+        assert is_null(df_out['object'][3], nullable)
 
-    def test_pandas_float64(self):
+    @pytest.mark.parametrize('nullable', [True, False])
+    def test_pandas_float64(self, nullable):
         data = numpy.array([0.233, numpy.nan, 3456.2341231, float('-inf'), -23424.45345, float('+inf'), 0.0000000001])
         df_in = pd.DataFrame(
             {
                 'object': pd.Series(data, dtype='float64'),
             }
         )
-        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df(prefer_nullable_dtypes=nullable)
 
         for i in range(len(data)):
-            if pd.isna(df_out['object'][i]):
+            if is_null(df_out['object'][i], nullable):
                 assert i == 1
                 continue
             assert df_out['object'][i] == df_in['object'][i]
 
-    def test_pandas_interval(self, duckdb_cursor):
+    @pytest.mark.parametrize('nullable', [True, False])
+    def test_pandas_interval(self, duckdb_cursor, nullable):
         if pd.__version__ != '1.2.4':
             return
 
@@ -154,12 +159,12 @@ class TestNumpyNullableTypes(object):
             }
         )
 
-        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df(prefer_nullable_dtypes=nullable)
 
         assert df_out['object'][0] == df_in['object'][0]
-        assert pd.isnull(df_out['object'][1])
+        assert is_null(df_out['object'][1], nullable)
 
-    def test_pandas_encoded_utf8(self, duckdb_cursor):
+    def test_pandas_encoded_utf8(self):
         data = u'\u00c3'  # Unicode data
         data = [data.encode('utf8')]
         expected_result = data[0]
@@ -224,7 +229,7 @@ class TestNumpyNullableTypes(object):
         # Pandas <= 2.2.3 does not convert without throwing a warning
         warnings.simplefilter(action='ignore', category=RuntimeWarning)
         with suppress(TypeError):
-            df = rel.df()
+            df = rel.df(prefer_nullable_dtypes=True)
             warnings.resetwarnings()
 
             nullable_dtype = getattr(pd, input.expected_dtype)

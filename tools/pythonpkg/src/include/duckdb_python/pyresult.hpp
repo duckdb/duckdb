@@ -34,11 +34,12 @@ public:
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1,
 	                            unique_ptr<NumpyResultConversion> conversion = nullptr);
 
-	PandasDataFrame FetchDF(bool date_as_object);
+	PandasDataFrame FetchDF(bool date_as_object, bool prefer_nullable_dtypes);
 
 	duckdb::pyarrow::Table FetchArrowTable(idx_t rows_per_batch, bool to_polars);
 
-	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false);
+	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false,
+	                             bool prefer_nullable_dtypes = false);
 
 	py::dict FetchPyTorch();
 
@@ -62,7 +63,7 @@ public:
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 
-	PandasDataFrame FrameFromNumpy(bool date_as_object, const py::handle &o);
+	PandasDataFrame FrameFromNumpy(bool date_as_object, bool prefer_nullable_dtypes, const py::handle &o);
 
 	void ChangeToTZType(PandasDataFrame &df);
 	unique_ptr<DataChunk> FetchNext(QueryResult &result);

@@ -333,6 +333,11 @@
 				"name": "date_as_object",
 				"default": "False",
 				"type": "bool"
+			},
+			{
+				"name": "prefer_nullable_dtypes",
+				"default": "False",
+				"type": "bool"
 			}
 		],
 		"return": "pandas.DataFrame"
@@ -351,6 +356,11 @@
 		"kwargs": [
 			{
 				"name": "date_as_object",
+				"default": "False",
+				"type": "bool"
+			},
+			{
+				"name": "prefer_nullable_dtypes",
 				"default": "False",
 				"type": "bool"
 			}

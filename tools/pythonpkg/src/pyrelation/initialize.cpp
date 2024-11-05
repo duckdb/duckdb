@@ -51,13 +51,14 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
 	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
 	    .def("df", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
+	         py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = false)
 	    .def("fetchdf", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
+	         py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = false)
 	    .def("to_df", &DuckDBPyRelation::FetchDF, "Execute and fetch all rows as a pandas DataFrame", py::kw_only(),
-	         py::arg("date_as_object") = false)
+	         py::arg("date_as_object") = false, py::arg("prefer_nullable_dtypes") = false)
 	    .def("fetch_df_chunk", &DuckDBPyRelation::FetchDFChunk, "Execute and fetch a chunk of the rows",
-	         py::arg("vectors_per_chunk") = 1, py::kw_only(), py::arg("date_as_object") = false)
+	         py::arg("vectors_per_chunk") = 1, py::kw_only(), py::arg("date_as_object") = false,
+	         py::arg("prefer_nullable_dtypes") = false)
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",

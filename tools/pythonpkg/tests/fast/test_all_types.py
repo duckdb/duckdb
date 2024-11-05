@@ -566,7 +566,8 @@ class TestAllTypes(object):
             assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
 
     @pytest.mark.parametrize('cur_type', all_types)
-    def test_pandas(self, cur_type):
+    @pytest.mark.parametrize('nullable', [True, False])
+    def test_pandas(self, cur_type, nullable):
         # We skip those since the extreme ranges are not supported in python.
         replacement_values = {
             'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
@@ -589,13 +590,17 @@ class TestAllTypes(object):
         warnings.simplefilter(action='ignore', category=RuntimeWarning)
         with suppress(TypeError):
             if cur_type in replacement_values:
-                dataframe = conn.execute("select " + replacement_values[cur_type]).df()
+                dataframe = conn.execute("select " + replacement_values[cur_type]).df(prefer_nullable_dtypes=nullable)
             elif cur_type in adjusted_values:
-                dataframe = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
+                dataframe = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df(
+                    prefer_nullable_dtypes=nullable
+                )
             else:
-                dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
+                dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df(
+                    prefer_nullable_dtypes=nullable
+                )
             print(cur_type)
-            round_trip_dataframe = conn.execute("select * from dataframe").df()
+            round_trip_dataframe = conn.execute("select * from dataframe").df(prefer_nullable_dtypes=nullable)
             result_dataframe = conn.execute("select * from dataframe").fetchall()
             print(round_trip_dataframe)
             result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()

@@ -339,28 +339,33 @@ static py::object ConvertNumpyDtype(py::handle numpy_array) {
 	}
 }
 
-PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
+PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, bool prefer_nullable_dtypes,
+                                               const py::handle &input) {
 	D_ASSERT(py::gil_check());
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	auto pandas = import_cache.pandas();
 
-	py::object items = o.attr("items")();
-	for (const py::handle &item : items) {
-		// Each item is a tuple of (key, value)
-		auto key_value = py::cast<py::tuple>(item);
-		py::handle key = key_value[0];   // Access the first element (key)
-		py::handle value = key_value[1]; // Access the second element (value)
+	if (prefer_nullable_dtypes) {
+		// For every np.ma.masked_array we produced, get the Pandas nullable dtype variant
+		// then construct a Series from the array, set the created Series in the 'input'
+		py::object items = input.attr("items")();
+		for (const py::handle &item : items) {
+			// Each item is a tuple of (key, value)
+			auto key_value = py::cast<py::tuple>(item);
+			py::handle key = key_value[0];   // Access the first element (key)
+			py::handle value = key_value[1]; // Access the second element (value)
 
-		auto dtype = ConvertNumpyDtype(value);
-		if (py::isinstance(value, import_cache.numpy.ma.masked_array())) {
-			// o[key] = pd.Series(value.filled(pd.NA), dtype=dtype)
-			auto series = pandas.attr("Series")(value.attr("data"), py::arg("dtype") = dtype);
-			series.attr("__setitem__")(value.attr("mask"), import_cache.pandas.NA());
-			o.attr("__setitem__")(key, series);
+			auto dtype = ConvertNumpyDtype(value);
+			if (py::isinstance(value, import_cache.numpy.ma.masked_array())) {
+				// o[key] = pd.Series(value.filled(pd.NA), dtype=dtype)
+				auto series = pandas.attr("Series")(value.attr("data"), py::arg("dtype") = dtype);
+				series.attr("__setitem__")(value.attr("mask"), import_cache.pandas.NA());
+				input.attr("__setitem__")(key, series);
+			}
 		}
 	}
 
-	PandasDataFrame df = py::cast<PandasDataFrame>(pandas.attr("DataFrame").attr("from_dict")(o));
+	PandasDataFrame df = py::cast<PandasDataFrame>(pandas.attr("DataFrame").attr("from_dict")(input));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 
@@ -376,14 +381,15 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 	return df;
 }
 
-PandasDataFrame DuckDBPyResult::FetchDF(bool date_as_object) {
+PandasDataFrame DuckDBPyResult::FetchDF(bool date_as_object, bool prefer_nullable_dtypes) {
 	auto conversion = InitializeNumpyConversion(true);
-	return FrameFromNumpy(date_as_object, FetchNumpyInternal(false, 1, std::move(conversion)));
+	return FrameFromNumpy(date_as_object, prefer_nullable_dtypes, FetchNumpyInternal(false, 1, std::move(conversion)));
 }
 
-PandasDataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object) {
+PandasDataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object, bool prefer_nullable_dtypes) {
 	auto conversion = InitializeNumpyConversion(true);
-	return FrameFromNumpy(date_as_object, FetchNumpyInternal(true, num_of_vectors, std::move(conversion)));
+	return FrameFromNumpy(date_as_object, prefer_nullable_dtypes,
+	                      FetchNumpyInternal(true, num_of_vectors, std::move(conversion)));
 }
 
 py::dict DuckDBPyResult::FetchPyTorch() {

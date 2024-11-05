@@ -1,17 +1,18 @@
 import pytest
 import duckdb
 import sys
+from conftest import null
 
 pd = pytest.importorskip("pandas")
 import numpy as np
 
 
-def compare_results(con, query, expected):
+def compare_results(con, query, expected, nullable):
     expected = pd.DataFrame.from_dict(expected)
 
-    unsorted_res = con.query(query).df()
+    unsorted_res = con.query(query).df(prefer_nullable_dtypes=nullable)
     print(unsorted_res, unsorted_res['a'][0].__class__)
-    df_duck = con.query("select * from unsorted_res order by all").df()
+    df_duck = con.query("select * from unsorted_res order by all").df(prefer_nullable_dtypes=nullable)
     print(df_duck, df_duck['a'][0].__class__)
     print(expected, expected['a'][0].__class__)
     pd.testing.assert_frame_equal(df_duck, expected)
@@ -320,145 +321,176 @@ class TestFetchNested(object):
                 compare_results(duckdb_cursor, query, expected)
 
     # fmt: off
+    @pytest.mark.parametrize('nullable', [True, False])
     @pytest.mark.parametrize('query, expected', [
-        ("""
+        (
+            """
             SELECT [
                 {'i':1,'j':2},
                 NULL,
                 {'i':2,'j':NULL}
             ] as a
-        """, {
-            'a': [
-                np.ma.array([
-                    {'i': 1, 'j': 2},
-                    None,
-                    {'i': 2, 'j': None}
-                ], mask=[0, 1, 0])
-            ]
-        }),
-        ("""
+            """,
+            lambda nullable: {
+                'a': [
+                    np.ma.array([
+                        {'i': 1, 'j': 2},
+                        None,
+                        {'i': 2, 'j': None}
+                    ], mask=[0, 1, 0])
+                ]
+            }
+        ),
+        (
+            """
             SELECT [{'i':1,'j':2},NULL,{'i':2,'j':NULL}] as a
-        """, {
-            'a': [
-                np.ma.array([
-                    {'i': 1, 'j': 2},
-                    None,
-                    {'i': 2, 'j': None}
-                ], mask=[0, 1, 0])
-            ]
-        }),
-        ("""
+            """,
+            lambda nullable: {
+                'a': [
+                    np.ma.array([
+                        {'i': 1, 'j': 2},
+                        None,
+                        {'i': 2, 'j': None}
+                    ], mask=[0, 1, 0])
+                ]
+            }
+        ),
+        (
+            """
             SELECT [{'i':1,'j':[2,3]},NULL] as a
-        """, {
-            'a': [
-                np.ma.array([
-                    {'i': 1, 'j': [2, 3]},
-                    None,
-                ], mask=[0, 1])
-            ]
-        }),
-        ("""
+            """,
+            lambda nullable: {
+                'a': [
+                    np.ma.array([
+                        {'i': 1, 'j': [2, 3]},
+                        None,
+                    ], mask=[0, 1])
+                ]
+            }
+        ),
+        (
+            """
             SELECT {'i':mp,'j':mp2} as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
-        """, {
-            'a': [
-                {
-                    'i': {
-                        '1':10,
-                        '2':9,
-                        '3':8,
-                        '4':7
-                    },
-                    'j': {
-                        '1':10,
-                        '2':9,
-                        '3':8,
-                        '5':7
-                    },
-                }
-            ]
-        }),
-        ("""
-            SELECT [mp,mp2] as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
-        """, {
-            'a': [
-                [
+            """,
+            lambda nullable: {
+                'a': [
                     {
-                        '1':10,
-                        '2':9,
-                        '3':8,
-                        '4':7
-                    },
-                    {
-                        '1':10,
-                        '2':9,
-                        '3':8,
-                        '5':7
+                        'i': {
+                            '1': 10,
+                            '2': 9,
+                            '3': 8,
+                            '4': 7
+                        },
+                        'j': {
+                            '1': 10,
+                            '2': 9,
+                            '3': 8,
+                            '5': 7
+                        },
                     }
                 ]
-            ]
-        }),
-        ("""
+            }
+        ),
+        (
+            """
+            SELECT [mp,mp2] as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
+            """,
+            lambda nullable: {
+                'a': [
+                    [
+                        {
+                            '1': 10,
+                            '2': 9,
+                            '3': 8,
+                            '4': 7
+                        },
+                        {
+                            '1': 10,
+                            '2': 9,
+                            '3': 8,
+                            '5': 7
+                        }
+                    ]
+                ]
+            }
+        ),
+        (
+            """
             SELECT MAP(LIST_VALUE([1,2],[3,4],[5,4]),LIST_VALUE([1,2],[3,4],[5,4])) as a
-        """, {
-            'a': [
-                {'key': [[1, 2], [3, 4], [5, 4]], 'value': [[1, 2], [3, 4], [5, 4]]}
-            ]
-        }),
-        ("""
+            """,
+            lambda nullable: {
+                'a': [
+                    {'key': [[1, 2], [3, 4], [5, 4]], 'value': [[1, 2], [3, 4], [5, 4]]}
+                ]
+            }
+        ),
+        (
+            """
             SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a
-        """, {
-            'a': [
-                {'key': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}], 'value': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}]}
-            ]
-        }),
-        ("""
+            """,
+            lambda nullable: {
+                'a': [
+                    {'key': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}], 'value': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}]}
+                ]
+            }
+        ),
+        (
+            """
             SELECT [{'i':1,'j':[2,3]},NULL,{'i':1,'j':[2,3]}] as a
-        """, {
-            'a': [
-                np.ma.array([
-                    {'i': 1, 'j': [2, 3]},
-                    None,
-                    {'i': 1, 'j': [2, 3]}
-                ], mask=[0, 1, 0])
-            ]
-        }),
-        ("""
+            """,
+            lambda nullable: {
+                'a': [
+                    np.ma.array([
+                        {'i': 1, 'j': [2, 3]},
+                        None,
+                        {'i': 1, 'j': [2, 3]}
+                    ], mask=[0, 1, 0])
+                ]
+            }
+        ),
+        (
+            """
             SELECT * FROM (VALUES
             ({'i':1,'j':2}),
             ({'i':1,'j':2}),
             (NULL),
             (NULL)
-        ) t(a)
-        """, {
-            'a': [
-                {'i': 1, 'j': 2},
-                {'i': 1, 'j': 2},
-                pd.NA,
-                pd.NA
-            ]
-        }),
-        ("""
+            ) t(a)
+            """,
+            lambda nullable: {
+                'a': [
+                    {'i': 1, 'j': 2},
+                    {'i': 1, 'j': 2},
+                    null(nullable),
+                    null(nullable)
+                ]
+            }
+        ),
+        (
+            """
             SELECT a FROM (VALUES
                 (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),
                 (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),
                 (NULL),
                 (NULL)
             ) t(a)
-        """, {
-            'a': [
-                {
-                    '1':3,
-                    '2':4
-                },
-                {
-                    '1':3,
-                    '2':4
-                },
-                pd.NA,
-                pd.NA
-            ]
-        }),
+            """,
+            lambda nullable: {
+                'a': [
+                    {
+                        '1': 3,
+                        '2': 4
+                    },
+                    {
+                        '1': 3,
+                        '2': 4
+                    },
+                    null(nullable),
+                    null(nullable)
+                ]
+            }
+        ),
     ])
     # fmt: on
-    def test_nested_mix(self, duckdb_cursor, query, expected):
-        compare_results(duckdb_cursor, query, expected)
+    def test_nested_mix(self, duckdb_cursor, query, expected, nullable):
+        compare_results(duckdb_cursor, query, expected(nullable), nullable)

@@ -803,7 +803,7 @@ void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 	result = make_uniq<DuckDBPyResult>(std::move(query_result));
 }
 
-PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
+PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object, bool prefer_nullable_dtypes) {
 	if (!result) {
 		if (!rel) {
 			return py::none();
@@ -813,7 +813,7 @@ PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
 	if (result->IsClosed()) {
 		return py::none();
 	}
-	auto df = result->FetchDF(date_as_object);
+	auto df = result->FetchDF(date_as_object, prefer_nullable_dtypes);
 	result = nullptr;
 	return df;
 }
@@ -919,7 +919,8 @@ py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chu
 }
 
 //! Should this also keep track of when the result is empty and set result->result_closed accordingly?
-PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
+PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object,
+                                               bool prefer_nullable_dtypes) {
 	if (!result) {
 		if (!rel) {
 			return py::none();
@@ -927,7 +928,7 @@ PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool dat
 		ExecuteOrThrow(true);
 	}
 	AssertResultOpen();
-	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
+	return result->FetchDFChunk(vectors_per_chunk, date_as_object, prefer_nullable_dtypes);
 }
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTableInternal(idx_t batch_size, bool to_polars) {
