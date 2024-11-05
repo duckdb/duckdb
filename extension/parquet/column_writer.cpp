@@ -836,14 +836,14 @@ struct ParquetCastOperator : public BaseParquetOperator {
 	}
 };
 
-struct ParquetTimestampNSOperator : public BaseParquetOperator {
+struct ParquetTimestampNSOperator : public ParquetCastOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return TGT(input);
 	}
 };
 
-struct ParquetTimestampSOperator : public BaseParquetOperator {
+struct ParquetTimestampSOperator : public ParquetCastOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochSecondsPossiblyInfinite(input).value;
@@ -2408,6 +2408,38 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		throw InternalException("Unsupported type \"%s\" in Parquet writer", type.ToString());
 	}
 }
+
+template <>
+struct NumericLimits<float_na_equal> {
+	static constexpr float Minimum() {
+		return std::numeric_limits<float>::lowest();
+	};
+	static constexpr float Maximum() {
+		return std::numeric_limits<float>::max();
+	};
+	static constexpr bool IsSigned() {
+		return std::is_signed<float>::value;
+	}
+	static constexpr bool IsIntegral() {
+		return std::is_integral<float>::value;
+	}
+};
+
+template <>
+struct NumericLimits<double_na_equal> {
+	static constexpr double Minimum() {
+		return std::numeric_limits<double>::lowest();
+	};
+	static constexpr double Maximum() {
+		return std::numeric_limits<double>::max();
+	};
+	static constexpr bool IsSigned() {
+		return std::is_signed<double>::value;
+	}
+	static constexpr bool IsIntegral() {
+		return std::is_integral<double>::value;
+	}
+};
 
 } // namespace duckdb
 
