@@ -40,7 +40,7 @@ void SubstringDetection(char str_1, string &str_2, const string &name_str_1, con
 	}
 }
 
-void StringDetection(string str_1, string &str_2, const string &name_str_1, const string &name_str_2) {
+void StringDetection(const string &str_1, const string &str_2, const string &name_str_1, const string &name_str_2) {
 	if (str_1.empty() || str_2.empty()) {
 		return;
 	}

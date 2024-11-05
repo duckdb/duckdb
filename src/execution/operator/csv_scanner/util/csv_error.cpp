@@ -175,7 +175,7 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_s
 }
 
 CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
-                                       idx_t column_count, string delimiter) {
+                                       const idx_t column_count, const string &delimiter) {
 	std::ostringstream error;
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
