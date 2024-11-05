@@ -574,8 +574,8 @@ const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 		{ static_cast<uint32_t>(CSVState::EMPTY_SPACE), "EMPTY_SPACE" },
 		{ static_cast<uint32_t>(CSVState::COMMENT), "COMMENT" },
 		{ static_cast<uint32_t>(CSVState::STANDARD_NEWLINE), "STANDARD_NEWLINE" },
-    { static_cast<uint32_t>(CSVState::UNQUOTED_ESCAPE), "UNQUOTED_ESCAPE" },
-    { static_cast<uint32_t>(CSVState::ESCAPED_RETURN), "ESCAPED_RETURN" }
+		{ static_cast<uint32_t>(CSVState::UNQUOTED_ESCAPE), "UNQUOTED_ESCAPE" },
+		{ static_cast<uint32_t>(CSVState::ESCAPED_RETURN), "ESCAPED_RETURN" }
 	};
 	return values;
 }
