@@ -983,7 +983,6 @@ def test_nullbyte_error_rendering(shell):
     result = test.run()
     result.check_stderr('INT32')
 
-<<<<<<< HEAD
 @pytest.mark.parametrize("stmt", [
 	"select sha3(NULL);"
 ])
@@ -1044,7 +1043,7 @@ def test_decimal_sep(shell):
     result = test.run()
     result.check_stdout("10 5")
     result.check_stdout("10,5")
-    result.check_stdout("105")
+    result.check_stdout("10.5")
     result.check_stdout("current decimal separator")
 
 # fmt: on
