@@ -95,13 +95,13 @@ public:
 		map.resize(nz);
 	}
 
-	void insert(const string &key, V &value) { // NOLINT: match stl API
-		map.push_back(make_pair(key, std::move(value)));
+	void insert(const string &key, V &&value) { // NOLINT: match stl API
+		map.emplace_back(key, std::move(value));
 		map_idx[key] = map.size() - 1;
 	}
 
-	void insert(const string &key, V &&value) { // NOLINT: match stl API
-		map.push_back(make_pair(key, std::move(value)));
+	void insert(const string &key, const V &value) { // NOLINT: match stl API
+		map.emplace_back(key, value);
 		map_idx[key] = map.size() - 1;
 	}
 
@@ -133,7 +133,7 @@ public:
 	V &operator[](const string &key) {
 		if (!contains(key)) {
 			auto v = V();
-			insert(key, v);
+			insert(key, std::move(v));
 		}
 		return map[map_idx[key]].second;
 	}

@@ -1,3 +1,4 @@
+#include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -65,10 +66,6 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-ScalarFunction ConstantOrNull::GetFunction(const LogicalType &return_type) {
-	return ScalarFunction("constant_or_null", {return_type, LogicalType::ANY}, return_type, ConstantOrNullFunction);
-}
-
 unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
@@ -97,11 +94,12 @@ unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFuncti
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 
-void ConstantOrNull::RegisterFunction(BuiltinFunctions &set) {
-	auto fun = ConstantOrNull::GetFunction(LogicalType::ANY);
+ScalarFunction ConstantOrNullFun::GetFunction() {
+	auto fun = ScalarFunction("constant_or_null", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
+	                          ConstantOrNullFunction);
 	fun.bind = ConstantOrNullBind;
 	fun.varargs = LogicalType::ANY;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

@@ -1,5 +1,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
+#include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -339,7 +341,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	                                           child_aggregate->aggr_type);
 }
 
-ScalarFunction ExportAggregateFunction::GetFinalize() {
+ScalarFunction FinalizeFun::GetFunction() {
 	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
 	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
@@ -348,7 +350,7 @@ ScalarFunction ExportAggregateFunction::GetFinalize() {
 	return result;
 }
 
-ScalarFunction ExportAggregateFunction::GetCombine() {
+ScalarFunction CombineFun::GetFunction() {
 	auto result =
 	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
 	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
@@ -356,11 +358,6 @@ ScalarFunction ExportAggregateFunction::GetCombine() {
 	result.serialize = ExportStateScalarSerialize;
 	result.deserialize = ExportStateScalarDeserialize;
 	return result;
-}
-
-void ExportAggregateFunction::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ExportAggregateFunction::GetCombine());
-	set.AddFunction(ExportAggregateFunction::GetFinalize());
 }
 
 } // namespace duckdb

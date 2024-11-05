@@ -25,6 +25,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/main/capi/extension_api.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -56,6 +57,7 @@ DBConfig::~DBConfig() {
 
 DatabaseInstance::DatabaseInstance() {
 	config.is_user_config = false;
+	create_api_v0 = nullptr;
 }
 
 DatabaseInstance::~DatabaseInstance() {
@@ -258,6 +260,10 @@ void DatabaseInstance::LoadExtensionSettings() {
 	}
 }
 
+static duckdb_ext_api_v0 CreateAPIv0Wrapper() {
+	return CreateAPIv0();
+}
+
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
 	DBConfig default_config;
 	DBConfig *config_ptr = &default_config;
@@ -267,10 +273,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	Configure(*config_ptr, database_path);
 
-	if (user_config && !user_config->options.use_temporary_directory) {
-		// temporary directories explicitly disabled
-		config.options.temporary_directory = string();
-	}
+	create_api_v0 = CreateAPIv0Wrapper;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
@@ -410,6 +413,13 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>();
 	}
+	if (database_path && !config.options.enable_external_access) {
+		config.AddAllowedPath(database_path);
+		config.AddAllowedPath(database_path + string(".wal"));
+		if (!config.options.temporary_directory.empty()) {
+			config.AddAllowedDirectory(config.options.temporary_directory);
+		}
+	}
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	}
@@ -502,6 +512,11 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 
 ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
+}
+
+const duckdb_ext_api_v0 DatabaseInstance::GetExtensionAPIV0() {
+	D_ASSERT(create_api_v0);
+	return create_api_v0();
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {

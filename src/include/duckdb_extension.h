@@ -486,6 +486,18 @@ typedef struct {
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
 #endif
 
+#ifdef DUCKDB_EXTENSION_API_VERSION_DEV // dev
+	// WARNING! the functions below are not (yet) stable
+
+	duckdb_state (*duckdb_appender_create_ext)(duckdb_connection connection, const char *catalog, const char *schema,
+	                                           const char *table, duckdb_appender *out_appender);
+	duckdb_state (*duckdb_table_description_create_ext)(duckdb_connection connection, const char *catalog,
+	                                                    const char *schema, const char *table,
+	                                                    duckdb_table_description *out);
+	char *(*duckdb_table_description_get_column_name)(duckdb_table_description table_description, idx_t index);
+	duckdb_logical_type (*duckdb_param_logical_type)(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+#endif
+
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -864,6 +876,12 @@ typedef struct {
 #define duckdb_cast_function_set_row_error          duckdb_ext_api.duckdb_cast_function_set_row_error
 #define duckdb_register_cast_function               duckdb_ext_api.duckdb_register_cast_function
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
+
+// Version dev
+#define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
+#define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
+#define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
+#define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros

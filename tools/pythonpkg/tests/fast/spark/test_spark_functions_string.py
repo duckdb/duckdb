@@ -1,8 +1,8 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql import functions as F
-from duckdb.experimental.spark.sql.types import Row
+from spark_namespace.sql import functions as F
+from spark_namespace.sql.types import Row
 
 
 class TestSparkFunctionsString(object):
@@ -82,4 +82,30 @@ class TestSparkFunctionsString(object):
         assert res == [
             Row(rtrimmed=" firstRowFirstColumn"),
             Row(rtrimmed=" 2ndRowFirstColumn"),
+        ]
+
+    def test_endswith(self, spark):
+        data = [
+            ("firstRowFirstColumn", "Column"),
+            ("2ndRowFirstColumn", "column"),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+        df = df.withColumn("endswith", F.endswith(F.col("firstColumn"), F.col("secondColumn")))
+        res = df.select("endswith").collect()
+        assert res == [
+            Row(endswith=True),
+            Row(endswith=False),
+        ]
+
+    def test_startswith(self, spark):
+        data = [
+            ("firstRowFirstColumn", "irst"),
+            ("2ndRowFirstColumn", "2nd"),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+        df = df.withColumn("startswith", F.startswith(F.col("firstColumn"), F.col("secondColumn")))
+        res = df.select("startswith").collect()
+        assert res == [
+            Row(startswith=False),
+            Row(startswith=True),
         ]

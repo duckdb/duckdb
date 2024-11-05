@@ -40,7 +40,7 @@ ifeq (${DISABLE_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG=-DENABLE_SANITIZER=FALSE -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_UBSAN}, 1)
-	DISABLE_SANITIZER_FLAG=-DENABLE_UBSAN=0
+	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_VPTR_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DDISABLE_VPTR_SANITIZER=1
@@ -480,6 +480,7 @@ coverage-check:
 generate-files:
 	python3 scripts/generate_c_api.py
 	python3 scripts/generate_functions.py
+	python3 scripts/generate_settings.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"

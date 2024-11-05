@@ -28,7 +28,8 @@ public:
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
 		}
 		if (op.function.init_global) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op));
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op),
+			                             op.extra_info.sample_options);
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
 				max_threads = global_state->MaxThreads();
@@ -71,7 +72,7 @@ public:
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
-			                             gstate.GetTableFilters(op));
+			                             gstate.GetTableFilters(op), op.extra_info.sample_options);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}
@@ -120,14 +121,24 @@ double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState 
 	return -1;
 }
 
-idx_t PhysicalTableScan::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                       LocalSourceState &lstate) const {
-	D_ASSERT(SupportsBatchIndex());
-	D_ASSERT(function.get_batch_index);
+bool PhysicalTableScan::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+	if (!function.get_partition_data) {
+		return false;
+	}
+	// FIXME: actually check if partition info is supported
+	return true;
+}
+
+OperatorPartitionData PhysicalTableScan::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                          GlobalSourceState &gstate_p, LocalSourceState &lstate,
+                                                          const OperatorPartitionInfo &partition_info) const {
+	D_ASSERT(SupportsPartitioning(partition_info));
+	D_ASSERT(function.get_partition_data);
 	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
 	auto &state = lstate.Cast<TableScanLocalSourceState>();
-	return function.get_batch_index(context.client, bind_data.get(), state.local_state.get(),
-	                                gstate.global_state.get());
+	TableFunctionGetPartitionInput input(bind_data.get(), state.local_state.get(), gstate.global_state.get(),
+	                                     partition_info);
+	return function.get_partition_data(context.client, input);
 }
 
 string PhysicalTableScan::GetName() const {
@@ -183,6 +194,9 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 			}
 		}
 		result["Filters"] = filters_info;
+	}
+	if (extra_info.sample_options) {
+		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
 	}
 	if (!extra_info.file_filters.empty()) {
 		result["File Filters"] = extra_info.file_filters;

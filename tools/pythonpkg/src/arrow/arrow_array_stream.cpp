@@ -44,8 +44,23 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_
 	auto filters = parameters.filters;
 	auto &column_list = parameters.projected_columns.columns;
 	auto &filter_to_col = parameters.projected_columns.filter_to_col;
-	bool has_filter = filters && !filters->filters.empty();
 	py::list projection_list = py::cast(column_list);
+
+	bool has_filter = filters && !filters->filters.empty();
+
+	if (has_filter) {
+		for (auto it = filters->filters.begin(); it != filters->filters.end();) {
+			if (it->second->filter_type == TableFilterType::OPTIONAL_FILTER) {
+				it = filters->filters.erase(it);
+			} else {
+				++it;
+			}
+		}
+	}
+
+	// make sure there is still a filter
+	has_filter = filters && !filters->filters.empty();
+
 	if (has_filter) {
 		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
 		                              client_properties, arrow_table);
@@ -272,7 +287,7 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 	case LogicalTypeId::VARCHAR:
 		return dataset_scalar(constant.ToString());
 	case LogicalTypeId::BLOB:
-		return dataset_scalar(constant.GetValueUnsafe<string>());
+		return dataset_scalar(py::bytes(constant.GetValueUnsafe<string>()));
 	case LogicalTypeId::DECIMAL: {
 		py::object date_type = py::module_::import("pyarrow").attr("decimal128");
 		uint8_t width;

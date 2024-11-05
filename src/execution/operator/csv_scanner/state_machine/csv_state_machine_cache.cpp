@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine_cache.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 
 namespace duckdb {
 
@@ -26,10 +26,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		switch (cur_state) {
 		case CSVState::QUOTED:
 		case CSVState::QUOTED_NEW_LINE:
+		case CSVState::ESCAPE:
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::UNQUOTED:
-		case CSVState::ESCAPE:
 			InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
 			break;
 		case CSVState::COMMENT:
@@ -59,7 +59,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			if (state == static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
 			} else {
-				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
+				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 			}
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
@@ -144,9 +144,6 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::COMMENT;
 	}
-	// 7) Escaped State
-	transition_array[quote][static_cast<uint8_t>(CSVState::ESCAPE)] = CSVState::QUOTED;
-	transition_array[escape][static_cast<uint8_t>(CSVState::ESCAPE)] = CSVState::QUOTED;
 
 	// 8) Not Set
 	transition_array[delimiter][static_cast<uint8_t>(CSVState::NOT_SET)] = CSVState::DELIMITER;

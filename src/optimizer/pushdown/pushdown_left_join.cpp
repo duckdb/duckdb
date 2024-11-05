@@ -31,7 +31,7 @@ static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewrit
                               unordered_set<idx_t> &right_bindings) {
 	// make a copy of the expression
 	auto copy = expr->Copy();
-	// replace all BoundColumnRef expressions frmo the RHS with NULL constants in the copied expression
+	// replace all BoundColumnRef expressions from the RHS with NULL constants in the copied expression
 	copy = ReplaceColRefWithNull(std::move(copy), right_bindings);
 
 	// attempt to flatten the expression by running the expression rewriter on it
@@ -97,6 +97,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 			// bindings match right side or both sides: we cannot directly push it into the right
 			// however, if the filter removes rows with null values from the RHS we can turn the left outer join
 			// in an inner join, and then push down as we would push down an inner join
+			// Edit: This is only possible if the bindings match BOTH sides, so the filter can be pushed down to both
+			// children. If the filter can only be applied to the right side, and the filter filters
+			// all tuples, then the inner join cannot be converted.
 			if (FilterRemovesNull(optimizer.context, optimizer.rewriter, filters[i]->filter.get(), right_bindings)) {
 				// the filter removes NULL values, turn it into an inner join
 				join.join_type = JoinType::INNER;

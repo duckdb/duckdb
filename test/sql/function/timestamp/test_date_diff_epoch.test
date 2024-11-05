@@ -1,0 +1,66 @@
+# name: test/sql/function/timestamp/test_date_diff_epoch.test
+# description: Test equal period timestamp diffs across the Unix epoch
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT 
+	start_ts, 
+	end_ts, 
+	DATEDIFF('day', start_ts, end_ts) AS dd_hour 
+FROM VALUES (
+	'1970-01-03 12:12:12'::TIMESTAMP, 
+	'1969-12-25 05:05:05'::TIMESTAMP
+	) x(start_ts, end_ts);
+----
+1970-01-03 12:12:12	1969-12-25 05:05:05	-9
+
+query III
+SELECT 
+	start_ts, 
+	end_ts, 
+	DATEDIFF('hour', start_ts, end_ts) AS dd_hour 
+FROM VALUES (
+	'1970-01-01 12:12:12'::TIMESTAMP, 
+	'1969-12-31 05:05:05'::TIMESTAMP
+	) x(start_ts, end_ts);
+----
+1970-01-01 12:12:12	1969-12-31 05:05:05	-31
+
+query III
+SELECT 
+	start_ts, 
+	end_ts, 
+	DATEDIFF('minute', start_ts, end_ts) AS dd_minute 
+FROM VALUES (
+	'1970-01-01 00:12:12'::TIMESTAMP, 
+	'1969-12-31 23:05:05'::TIMESTAMP
+	) x(start_ts, end_ts);
+----
+1970-01-01 00:12:12	1969-12-31 23:05:05	-67
+
+query III
+SELECT 
+	start_ts, 
+	end_ts, 
+	DATEDIFF('second', start_ts, end_ts) AS dd_second 
+FROM VALUES (
+	'1970-01-01 00:00:12.456'::TIMESTAMP, 
+	'1969-12-31 23:59:05.123'::TIMESTAMP
+	) x(start_ts, end_ts);
+----
+1970-01-01 00:00:12.456	1969-12-31 23:59:05.123	-67
+
+query III
+SELECT 
+	start_ts, 
+	end_ts, 
+	DATEDIFF('millisecond', start_ts, end_ts) AS dd_second 
+FROM VALUES (
+	'1970-01-01 00:00:12.456789'::TIMESTAMP, 
+	'1969-12-31 23:59:05.123456'::TIMESTAMP
+	) x(start_ts, end_ts);
+----
+1970-01-01 00:00:12.456789	1969-12-31 23:59:05.123456	-67333
