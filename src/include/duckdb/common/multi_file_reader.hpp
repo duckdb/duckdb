@@ -132,11 +132,11 @@ struct MultiFileReader {
 	//! Parse a Value containing 1 or more paths into a vector of paths. Note: no expansion is performed here
 	DUCKDB_API virtual vector<string> ParsePaths(const Value &input);
 	//! Create a MultiFileList from a vector of paths. Any globs will be expanded using the default filesystem
-	DUCKDB_API virtual unique_ptr<MultiFileList>
+	DUCKDB_API virtual shared_ptr<MultiFileList>
 	CreateFileList(ClientContext &context, const vector<string> &paths,
 	               FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 	//! Shorthand for ParsePaths + CreateFileList
-	DUCKDB_API unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
+	DUCKDB_API shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const Value &input,
 	                                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
@@ -194,6 +194,13 @@ struct MultiFileReader {
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
 	                                      const MultiFileReaderData &reader_data, DataChunk &chunk,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
+
+	//! Fetch the partition data for the current chunk
+	DUCKDB_API virtual void GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
+	                                         const MultiFileReaderData &reader_data,
+	                                         optional_ptr<MultiFileReaderGlobalState> global_state,
+	                                         const OperatorPartitionInfo &partition_info,
+	                                         OperatorPartitionData &partition_data);
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
@@ -286,6 +293,11 @@ struct MultiFileReader {
 			}
 		}
 	}
+
+	//! Get partition info
+	DUCKDB_API virtual TablePartitionInfo GetPartitionInfo(ClientContext &context,
+	                                                       const MultiFileReaderBindData &bind_data,
+	                                                       TableFunctionPartitionInput &input);
 
 protected:
 	virtual void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,

@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -154,14 +155,14 @@ struct ListConcatInputData {
 	const list_entry_t *input_entries = nullptr;
 };
 
-static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
 	auto count = args.size();
 
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
 	vector<ListConcatInputData> input_data;
 	for (auto &input : args.data) {
-		if (input.GetType().id() == LogicalTypeId::SQLNULL) {
-			// ignore NULL values
+		if (!is_operator && input.GetType().id() == LogicalTypeId::SQLNULL) {
+			// LIST_CONCAT ignores NULL values
 			continue;
 		}
 
@@ -177,6 +178,7 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 		input_data.push_back(std::move(data));
 	}
 
+	auto &result_validity = FlatVector::Validity(result);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto &result_entry = result_entries[i];
@@ -185,6 +187,10 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 		for (auto &data : input_data) {
 			auto list_index = data.vdata.sel->get_index(i);
 			if (!data.vdata.validity.RowIsValid(list_index)) {
+				// LIST_CONCAT ignores NULL values, but || does not
+				if (is_operator) {
+					result_validity.SetInvalid(i);
+				}
 				continue;
 			}
 			const auto &list_entry = data.input_entries[list_index];
@@ -205,7 +211,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ConcatFunctionData>();
 	if (info.return_type.id() == LogicalTypeId::LIST) {
-		return ListConcatFunction(args, state, result);
+		return ListConcatFunction(args, state, result, info.is_operator);
 	} else if (info.is_operator) {
 		return ConcatOperator(args, state, result);
 	}
@@ -336,30 +342,26 @@ ScalarFunction ListConcatFun::GetFunction() {
 	return fun;
 }
 
-void ListConcatFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_concat", "list_cat", "array_concat", "array_cat"}, GetFunction());
-}
+// the concat operator and concat function have different behavior regarding NULLs
+// this is strange but seems consistent with postgresql and mysql
+// (sqlite does not support the concat function, only the concat operator)
 
-void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
-	// the concat operator and concat function have different behavior regarding NULLs
-	// this is strange but seems consistent with postgresql and mysql
-	// (sqlite does not support the concat function, only the concat operator)
-
-	// the concat operator behaves as one would expect: any NULL value present results in a NULL
-	// i.e. NULL || 'hello' = NULL
-	// the concat function, however, treats NULL values as an empty string
-	// i.e. concat(NULL, 'hello') = 'hello'
-
+// the concat operator behaves as one would expect: any NULL value present results in a NULL
+// i.e. NULL || 'hello' = NULL
+// the concat function, however, treats NULL values as an empty string
+// i.e. concat(NULL, 'hello') = 'hello'
+ScalarFunction ConcatFun::GetFunction() {
 	ScalarFunction concat =
 	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
 	concat.varargs = LogicalType::ANY;
 	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(concat);
+	return concat;
+}
 
+ScalarFunction ConcatOperatorFun::GetFunction() {
 	ScalarFunction concat_op = ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
 	                                          ConcatFunction, BindConcatOperator);
-	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(concat_op);
+	return concat_op;
 }
 
 } // namespace duckdb

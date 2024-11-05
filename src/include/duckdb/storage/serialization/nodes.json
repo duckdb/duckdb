@@ -176,10 +176,10 @@
   },
   {
     "class": "SampleOptions",
-    "includes": [
+      "includes": [
       "duckdb/parser/parsed_data/sample_options.hpp"
     ],
-    "members": [
+      "members": [
       {
         "id": 100,
         "name": "sample_size",
@@ -198,9 +198,11 @@
       {
         "id": 103,
         "name": "seed",
-        "type": "int64_t"
+        "type": "int64_t",
+        "serialize_property": "GetSeed()"
       }
-    ]
+    ],
+    "constructor": ["seed"]
   },
   {
     "class": "BaseReservoirSampling",
@@ -915,6 +917,35 @@
         "id": 3,
         "name": "micros",
         "type": "int64_t"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "QualifiedColumnName",
+    "includes": [
+      "duckdb/parser/qualified_name.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "column",
+        "type": "string"
       }
     ],
     "pointer_type": "none"

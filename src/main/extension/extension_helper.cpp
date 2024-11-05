@@ -12,6 +12,10 @@
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
 // explicitly when they are undefined
+#ifndef DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
+#define DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED false
+#endif
+
 #ifndef DUCKDB_EXTENSION_ICU_LINKED
 #define DUCKDB_EXTENSION_ICU_LINKED false
 #endif
@@ -58,6 +62,10 @@
 #else
 // TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 //		 these can be removed
+#if DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
+#include "core_functions_extension.hpp"
+#endif
+
 #if DUCKDB_EXTENSION_ICU_LINKED
 #include "icu_extension.hpp"
 #endif
@@ -93,6 +101,7 @@
 #if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
 #include "autocomplete_extension.hpp"
 #endif
+
 #endif
 
 namespace duckdb {
@@ -101,6 +110,7 @@ namespace duckdb {
 // Default Extensions
 //===--------------------------------------------------------------------===//
 static const DefaultExtension internal_extensions[] = {
+    {"core_functions", "Core function library", DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED},
     {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED},
     {"excel", "Adds support for Excel-like format strings", DUCKDB_EXTENSION_EXCEL_LINKED},
     {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
@@ -212,7 +222,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
-			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
+			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(
+			    StringValue::Get(config.GetSetting<AutoinstallExtensionRepositorySetting>(context)));
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
@@ -403,8 +414,8 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// The in-tree extensions that we check. Non-cmake builds are currently limited to these for static linking
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 	//		 these can be removed
-	unordered_set<string> extensions {"parquet", "icu",   "tpch", "tpcds",    "fts",         "httpfs",
-	                                  "json",    "excel", "inet", "jemalloc", "autocomplete"};
+	vector<string> extensions {"parquet", "icu",   "tpch", "tpcds",    "fts",          "httpfs",
+	                           "json",    "excel", "inet", "jemalloc", "autocomplete", "core_functions"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -538,6 +549,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		db.LoadStaticExtension<InetExtension>();
 #else
 		// inet extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "core_functions") {
+#if DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
+		db.LoadStaticExtension<CoreFunctionsExtension>();
+#else
+		// core_functions extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	}

@@ -1,9 +1,9 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -135,13 +135,16 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
 		const auto &extract_expr_type = extract_exp->return_type;
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
-		    extract_expr_type.id() != LogicalTypeId::SQLNULL && !extract_expr_type.IsJSONType()) {
+		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
+		    !extract_expr_type.IsJSONType()) {
 			return BindResult(StringUtil::Format(
-			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, or json",
+			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, map, or json",
 			    name_exp->ToString(), extract_exp->ToString()));
 		}
 		if (extract_expr_type.id() == LogicalTypeId::UNION) {
 			function_name = "union_extract";
+		} else if (extract_expr_type.id() == LogicalTypeId::MAP) {
+			function_name = "map_extract";
 		} else if (extract_expr_type.IsJSONType()) {
 			function_name = "json_extract";
 			// Make sure we only extract fields, not array elements, by adding $. syntax

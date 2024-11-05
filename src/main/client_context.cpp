@@ -1107,19 +1107,20 @@ void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fu
 	RunFunctionInTransactionInternal(*lock, fun, requires_valid_transaction);
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name) {
+unique_ptr<TableDescription> ClientContext::TableInfo(const string &database_name, const string &schema_name,
+                                                      const string &table_name) {
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
-		// obtain the table info
-		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, schema_name, table_name,
+		// Obtain the table from the catalog.
+		auto table = Catalog::GetEntry<TableCatalogEntry>(*this, database_name, schema_name, table_name,
 		                                                  OnEntryNotFound::RETURN_NULL);
 		if (!table) {
 			return;
 		}
-		// write the table info to the result
-		result = make_uniq<TableDescription>();
-		result->schema = schema_name;
-		result->table = table_name;
+		// Create the table description.
+		result = make_uniq<TableDescription>(database_name, schema_name, table_name);
+		auto &catalog = Catalog::GetCatalog(*this, database_name);
+		result->readonly = catalog.GetAttached().IsReadOnly();
 		for (auto &column : table->GetColumns().Logical()) {
 			result->columns.emplace_back(column.Copy());
 		}
@@ -1127,10 +1128,14 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	return result;
 }
 
+unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name, const string &table_name) {
+	return TableInfo(INVALID_CATALOG, schema_name, table_name);
+}
+
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
 	RunFunctionInTransaction([&]() {
 		auto &table_entry =
-		    Catalog::GetEntry<TableCatalogEntry>(*this, INVALID_CATALOG, description.schema, description.table);
+		    Catalog::GetEntry<TableCatalogEntry>(*this, description.database, description.schema, description.table);
 		// verify that the table columns and types match up
 		if (description.PhysicalColumnCount() != table_entry.GetColumns().PhysicalColumnCount()) {
 			throw InvalidInputException("Failed to append: table entry has different number of columns!");
@@ -1153,22 +1158,24 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 	});
 }
 
+void ClientContext::InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
+	// bind the expressions
+	auto binder = Binder::CreateBinder(*this);
+	auto result = relation.Bind(*binder);
+	D_ASSERT(result.names.size() == result.types.size());
+
+	result_columns.reserve(result_columns.size() + result.names.size());
+	for (idx_t i = 0; i < result.names.size(); i++) {
+		result_columns.emplace_back(result.names[i], result.types[i]);
+	}
+}
+
 void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
 #ifdef DEBUG
 	D_ASSERT(!relation.GetAlias().empty());
 	D_ASSERT(!relation.ToString().empty());
 #endif
-	RunFunctionInTransaction([&]() {
-		// bind the expressions
-		auto binder = Binder::CreateBinder(*this);
-		auto result = relation.Bind(*binder);
-		D_ASSERT(result.names.size() == result.types.size());
-
-		result_columns.reserve(result_columns.size() + result.names.size());
-		for (idx_t i = 0; i < result.names.size(); i++) {
-			result_columns.emplace_back(result.names[i], result.types[i]);
-		}
-	});
+	RunFunctionInTransaction([&]() { InternalTryBindRelation(relation, result_columns); });
 }
 
 unordered_set<string> ClientContext::GetTableNames(const string &query) {
@@ -1304,7 +1311,7 @@ ClientProperties ClientContext::GetClientProperties() const {
 		timezone = result.ToString();
 	}
 	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views, db->config.options.arrow_arrow_lossless_conversion};
+	        db->config.options.produce_arrow_string_views, db->config.options.arrow_lossless_conversion};
 }
 
 bool ClientContext::ExecutionIsFinished() {

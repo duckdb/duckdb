@@ -8,9 +8,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
-#ifndef DISABLE_CORE_FUNCTIONS_EXTENSION
-#include "duckdb/core_functions/core_functions.hpp"
-#endif
+#include "duckdb/function/function_list.hpp"
 
 namespace duckdb {
 
@@ -35,13 +33,11 @@ void DuckCatalog::Initialize(bool load_builtin) {
 	CreateSchema(data, info);
 
 	if (load_builtin) {
-		// initialize default functions
 		BuiltinFunctions builtin(data, *this);
 		builtin.Initialize();
 
-#ifndef DISABLE_CORE_FUNCTIONS_EXTENSION
-		CoreFunctions::RegisterFunctions(*this, data);
-#endif
+		// initialize default functions
+		FunctionList::RegisterFunctions(*this, data);
 	}
 
 	Verify();

@@ -21,6 +21,7 @@ if (NOT MINGW)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
             GIT_TAG c50862c82c065096722745631f4230832a3a04e8
+            APPLY_PATCHES
             )
 endif()
 
@@ -39,6 +40,7 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
             GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
+            APPLY_PATCHES
             )
 endif()
 
@@ -50,6 +52,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
             GIT_TAG b7333c0143e101c720117d564651e693b317bb31
+            APPLY_PATCHES
     )
 endif()
 
@@ -74,6 +77,7 @@ if (NOT MINGW)
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
             GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
+            APPLY_PATCHES
             )
 endif()
 
@@ -94,6 +98,7 @@ if (NOT MINGW)
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
             GIT_TAG 03eaed75f0ec5500609b7a97aa05468493b229d1
+            APPLY_PATCHES
             )
 endif()
 
@@ -104,6 +109,7 @@ duckdb_extension_load(spatial
     GIT_TAG 7ea79b614755d2bdee4be468691e4e17b39b8dbc
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
@@ -118,6 +124,7 @@ duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
         GIT_TAG d5d62657702d33cb44a46cddc7ffc4b67bf7e961
+        APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith
@@ -132,6 +139,7 @@ if (NOT WIN32)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/substrait
             GIT_TAG be71387cf0a484dc7b261a0cb21abec0d0e0ce5c
+            APPLY_PATCHES
             )
 endif()
 
@@ -143,6 +151,7 @@ duckdb_extension_load(vss
         GIT_URL https://github.com/duckdb/duckdb_vss
         GIT_TAG 96374099476b3427c9ab43c1821e610b0465c864
         TEST_DIR test/sql
+        APPLY_PATCHES
     )
 
 ################# MYSQL

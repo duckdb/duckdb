@@ -71,13 +71,8 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
@@ -106,6 +101,44 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
+  smaller-binary:
+    name: Smaller Binary
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;json"
+      SMALLER_BINARY: 1
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Measure Size
+      shell: bash
+      run: ls -trlah build/release/src/libduckdb*
+
+    - name: Test
+      shell: bash
+      run: |
+          build/release/test/unittest "*"
 
   linux-clang:
     name: Clang 14
@@ -117,7 +150,7 @@ jobs:
       CXX: /home/runner/work/llvm/bin/clang++
       LD: /home/runner/work/llvm/bin/ld.lld
       EXTENSION_STATIC_BUILD: 1
-      BUILD_JSON: 1
+      CORE_EXTENSIONS: "json"
       TREAT_WARNINGS_AS_ERRORS: 1
 
     steps:
@@ -201,7 +234,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DCORE_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
       - name: Test
         shell: bash
@@ -436,7 +469,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: BUILD_TPCH=1 make
+        run: CORE_EXTENSIONS="tpch" make
 
       - name: Start Minio
         shell: bash
@@ -460,13 +493,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      CORE_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
@@ -503,10 +530,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_JSON: 1
+      CORE_EXTENSIONS: "parquet;json;tpch;tpcds"
       LATEST_STORAGE: 1
       BLOCK_VERIFICATION: 1
 
@@ -556,13 +580,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      CORE_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       VERIFY_VECTOR: ${{ matrix.vector_type }}
 
     steps:
@@ -596,13 +614,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      CORE_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
@@ -637,10 +649,8 @@ jobs:
      CXX: g++-10
      GEN: ninja
      BUILD_BENCHMARK: 1
-     BUILD_TPCH: 1
-     BUILD_TPCDS: 1
-     BUILD_HTTPFS: 1
      BUILD_JEMALLOC: 1
+     CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
    steps:
      - name: Checkout
@@ -685,31 +695,31 @@ jobs:
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --verbose --threads 2
 
      - name: Regression Test TPCH
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --verbose --threads 2
 
      - name: Regression Test TPCDS
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --verbose --threads 2
 
      - name: Regression Test H2OAI
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --verbose --threads 2
 
      - name: Regression Test IMDB
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
 
   threadsan:
@@ -720,13 +730,8 @@ jobs:
       CC: clang
       CXX: clang++
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:
@@ -803,8 +808,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BLOCK_ALLOC_SIZE: 16384
-      BUILD_JSON: 1
-      BUILD_PARQUET: 1
+      CORE_EXTENSIONS: "json;parquet"
 
     steps:
       - uses: actions/checkout@v3
@@ -966,11 +970,7 @@ jobs:
     name: Linux HTTPFS
     runs-on: ubuntu-20.04
     env:
-      BUILD_HTTPFS: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_PARQUET: 1
-      BUILD_JSON: 1
+      CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
       S3_TEST_SERVER_AVAILABLE: 1
       AWS_DEFAULT_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: minio_duckdb_user
