@@ -2246,7 +2246,7 @@ DUCKDB_API duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index);
 /*!
 Returns whether the specified value is null value or not.
 
-* @param The value to check.
+* @param value The value to check.
 * @return True if the value is null, otherwise false.
 */
 DUCKDB_API bool duckdb_value_is_null_value(duckdb_value value);
