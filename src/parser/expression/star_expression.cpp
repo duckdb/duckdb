@@ -52,6 +52,20 @@ string StarExpression::ToString() const {
 		}
 		result += ")";
 	}
+	if (!rename_list.empty()) {
+		result += " RENAME (";
+		bool first_entry = true;
+		for (auto &entry : rename_list) {
+			if (!first_entry) {
+				result += ", ";
+			}
+			result += entry.first.ToString();
+			result += " AS ";
+			result += KeywordHelper::WriteOptionallyQuoted(entry.second);
+			first_entry = false;
+		}
+		result += ")";
+	}
 	if (columns) {
 		result += ")";
 	}
@@ -59,7 +73,7 @@ string StarExpression::ToString() const {
 }
 
 bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
-	if (a.relation_name != b.relation_name || a.exclude_list != b.exclude_list) {
+	if (a.relation_name != b.relation_name || a.exclude_list != b.exclude_list || a.rename_list != b.rename_list) {
 		return false;
 	}
 	if (a.columns != b.columns) {
@@ -116,6 +130,7 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	for (auto &entry : replace_list) {
 		copy->replace_list[entry.first] = entry.second->Copy();
 	}
+	copy->rename_list = rename_list;
 	copy->columns = columns;
 	copy->expr = expr ? expr->Copy() : nullptr;
 	copy->CopyProperties(*this);

@@ -303,19 +303,20 @@ const StringUtil::EnumStringLiteral *GetAlterTableTypeValues() {
 		{ static_cast<uint32_t>(AlterTableType::FOREIGN_KEY_CONSTRAINT), "FOREIGN_KEY_CONSTRAINT" },
 		{ static_cast<uint32_t>(AlterTableType::SET_NOT_NULL), "SET_NOT_NULL" },
 		{ static_cast<uint32_t>(AlterTableType::DROP_NOT_NULL), "DROP_NOT_NULL" },
-		{ static_cast<uint32_t>(AlterTableType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" }
+		{ static_cast<uint32_t>(AlterTableType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" },
+		{ static_cast<uint32_t>(AlterTableType::ADD_CONSTRAINT), "ADD_CONSTRAINT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
-	return StringUtil::EnumToString(GetAlterTableTypeValues(), 11, "AlterTableType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterTableTypeValues(), 12, "AlterTableType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
-	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 11, "AlterTableType", value));
+	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 12, "AlterTableType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterTypeValues() {
@@ -2984,19 +2985,20 @@ const StringUtil::EnumStringLiteral *GetSampleMethodValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SampleMethod::SYSTEM_SAMPLE), "System" },
 		{ static_cast<uint32_t>(SampleMethod::BERNOULLI_SAMPLE), "Bernoulli" },
-		{ static_cast<uint32_t>(SampleMethod::RESERVOIR_SAMPLE), "Reservoir" }
+		{ static_cast<uint32_t>(SampleMethod::RESERVOIR_SAMPLE), "Reservoir" },
+		{ static_cast<uint32_t>(SampleMethod::INVALID), "INVALID" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value) {
-	return StringUtil::EnumToString(GetSampleMethodValues(), 3, "SampleMethod", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSampleMethodValues(), 4, "SampleMethod", static_cast<uint32_t>(value));
 }
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value) {
-	return static_cast<SampleMethod>(StringUtil::StringToEnum(GetSampleMethodValues(), 3, "SampleMethod", value));
+	return static_cast<SampleMethod>(StringUtil::StringToEnum(GetSampleMethodValues(), 4, "SampleMethod", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSampleTypeValues() {
@@ -3072,6 +3074,24 @@ const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value) {
 template<>
 SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value) {
 	return static_cast<SecretPersistType>(StringUtil::StringToEnum(GetSecretPersistTypeValues(), 3, "SecretPersistType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSecretSerializationTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SecretSerializationType::CUSTOM), "CUSTOM" },
+		{ static_cast<uint32_t>(SecretSerializationType::KEY_VALUE_SECRET), "KEY_VALUE_SECRET" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value) {
+	return StringUtil::EnumToString(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", static_cast<uint32_t>(value));
+}
+
+template<>
+SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value) {
+	return static_cast<SecretSerializationType>(StringUtil::StringToEnum(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSequenceInfoValues() {
