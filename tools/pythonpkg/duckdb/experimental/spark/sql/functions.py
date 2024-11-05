@@ -1333,6 +1333,44 @@ def e() -> Column:
     """
     return lit(2.718281828459045)
 
+
+def encode(col: "ColumnOrName", charset: str) -> Column:
+    """
+    Computes the first argument into a binary from a string using the provided character set
+    (one of 'US-ASCII', 'ISO-8859-1', 'UTF-8', 'UTF-16BE', 'UTF-16LE', 'UTF-16').
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    charset : str
+        charset to use to encode.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('abcd',)], ['c'])
+    >>> df.select(encode("c", "UTF-8")).show()
+    +----------------+
+    |encode(c, UTF-8)|
+    +----------------+
+    |   [61 62 63 64]|
+    +----------------+
+    """
+    if charset != "UTF-8":
+        raise ContributionsAcceptedError("Only UTF-8 charset is supported right now")
+    return _invoke_function("encode", _to_column_expr(col))
+
+
 def greatest(*cols: "ColumnOrName") -> Column:
     """
     Returns the greatest value of the list of column names, skipping null values.

@@ -1,6 +1,8 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
+
+from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 
@@ -147,3 +149,13 @@ class TestSparkFunctionsString(object):
 
         res = df.select(F.char(df.a).alias('ch')).collect()
         assert res == [Row(ch='A'), Row(ch='A'), Row(ch='B')]
+
+    def test_encode(self, spark):
+        df = spark.createDataFrame([('abcd',)], ['c'])
+
+        res = df.select(F.encode("c", "UTF-8").alias("encoded")).collect()
+        # FIXME: Should return the same type
+        if USE_ACTUAL_SPARK:
+            assert res == [Row(encoded=bytearray(b'abcd'))]
+        else:
+            assert res == [Row(encoded=b'abcd')]
