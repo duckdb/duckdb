@@ -18,15 +18,17 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/function/scalar/struct_utils.hpp"
 
 namespace duckdb {
 
 void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs != column_references.end()) {
-		for (auto &colref : colrefs->second) {
-			D_ASSERT(colref->binding == current_binding);
-			colref->binding = new_binding;
+		for (auto &colref_p : colrefs->second.bindings) {
+			auto &colref = colref_p.get();
+			D_ASSERT(colref.binding == current_binding);
+			colref.binding = new_binding;
 		}
 	}
 }
@@ -95,9 +97,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 						// if there are any columns that refer to the RHS,
 						auto colrefs = column_references.find(rhs_col.binding);
 						if (colrefs != column_references.end()) {
-							for (auto &entry : colrefs->second) {
-								entry->binding = lhs_col.binding;
-								column_references[lhs_col.binding].push_back(entry);
+							for (auto &entry : colrefs->second.bindings) {
+								auto &colref = entry.get();
+								colref.binding = lhs_col.binding;
+								AddBinding(colref);
 							}
 							column_references.erase(rhs_col.binding);
 						}
@@ -209,7 +212,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				return;
 			}
 
-			auto &final_column_ids = get.GetColumnIds();
+			auto final_column_ids = get.GetColumnIds();
 
 			// Create "selection vector" of all column ids
 			vector<idx_t> proj_sel;
@@ -236,7 +239,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				}
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				if (column_references.find(filter_binding) == column_references.end()) {
-					column_references.insert(make_pair(filter_binding, vector<BoundColumnRefExpression *>()));
+					column_references.insert(make_pair(filter_binding, ReferencedColumn()));
 				}
 			}
 
@@ -247,7 +250,21 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			vector<ColumnIndex> column_ids;
 			column_ids.reserve(col_sel.size());
 			for (auto col_sel_idx : col_sel) {
-				column_ids.emplace_back(final_column_ids[col_sel_idx]);
+				auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
+				if (entry == column_references.end()) {
+					throw InternalException("Referenced column binding not found!?");
+				}
+				if (final_column_ids[col_sel_idx].HasChildren()) {
+					throw InternalException("LogicalGet::column_ids already has children");
+				}
+				ColumnIndex new_index(final_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
+				column_ids.emplace_back(new_index);
+			}
+			if (column_ids.empty()) {
+				// this generally means we are only interested in whether or not anything exists in the table (e.g.
+				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
+				// need to read any of the columns
+				column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 			}
 			get.SetColumnIds(std::move(column_ids));
 
@@ -263,13 +280,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 						}
 					}
 				}
-			}
-
-			if (final_column_ids.empty()) {
-				// this generally means we are only interested in whether or not anything exists in the table (e.g.
-				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
-				// need to read any of the columns
-				get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 			}
 		}
 		return;
@@ -339,10 +349,87 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 }
 
+bool RemoveUnusedColumns::HandleStructExtract(Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &function = expr.Cast<BoundFunctionExpression>();
+	if (function.function.name != "struct_extract") {
+		return false;
+	}
+	// struct extract, check if left child is a bound column ref
+	// FIXME: handle recursive struct extract calls
+	if (function.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return false;
+	}
+	auto &colref = function.children[0]->Cast<BoundColumnRefExpression>();
+	if (colref.return_type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+	auto &bind_data = function.bind_info->Cast<StructExtractBindData>();
+
+	ColumnIndex index(bind_data.index);
+	AddBinding(colref, std::move(index));
+	return true;
+}
+
+void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column) {
+	auto entry = column_references.find(col.binding);
+	if (entry == column_references.end()) {
+		// column not referenced yet - add a binding to it entirely
+		ReferencedColumn column;
+		column.bindings.push_back(col);
+		column.child_columns.push_back(std::move(child_column));
+		column_references.insert(make_pair(col.binding, std::move(column)));
+	} else {
+		// column reference already exists - check add the binding
+		auto &column = entry->second;
+		column.bindings.push_back(col);
+		if (column.child_columns.empty()) {
+			// there's already a reference to the full column - we can't extract only a subfield
+			// skip struct projection pushdown
+			return;
+		}
+		// if we are already extract sub-fields, add it (if it is not there yet
+		for(auto &binding : column.child_columns) {
+			if (binding.GetPrimaryIndex() == child_column.GetPrimaryIndex()) {
+				// sub-field is already projected
+				// FIXME: this should recurse to handle nested struct fields
+				return;
+			}
+		}
+		column.child_columns.push_back(std::move(child_column));
+	}
+}
+
+void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col) {
+	auto entry = column_references.find(col.binding);
+	if (entry == column_references.end()) {
+		// column not referenced yet - add a binding to it entirely
+		column_references[col.binding].bindings.push_back(col);
+	} else {
+		// column reference already exists - add the binding and clear any sub-references
+		auto &column = entry->second;
+		column.bindings.push_back(col);
+		column.child_columns.clear();
+	}
+}
+
+
+void RemoveUnusedColumns::VisitExpression(unique_ptr<Expression> *expression) {
+	auto &expr = **expression;
+	if (HandleStructExtract(expr)) {
+		// already handled
+		return;
+	}
+	// recurse
+	LogicalOperatorVisitor::VisitExpression(expression);
+}
+
 unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundColumnRefExpression &expr,
                                                          unique_ptr<Expression> *expr_ptr) {
-	// add a column reference
-	column_references[expr.binding].push_back(&expr);
+	// add a reference to the entire column
+	AddBinding(expr);
 	return nullptr;
 }
 

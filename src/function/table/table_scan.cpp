@@ -106,11 +106,11 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	if (input.CanRemoveFilterColumns()) {
 		result->projection_ids = input.projection_ids;
 		const auto &columns = bind_data.table.GetColumns();
-		for (const auto &col_idx : input.column_ids) {
-			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+		for (const auto &col_idx : input.column_indexes) {
+			if (col_idx.IsRowIdColumn()) {
 				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 			} else {
-				result->scanned_types.push_back(columns.GetColumn(LogicalIndex(col_idx)).Type());
+				result->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 			}
 		}
 	}

@@ -101,6 +101,7 @@ struct ColumnScanState {
 	optional_ptr<TableScanOptions> scan_options;
 
 public:
+	void Initialize(const LogicalType &type, const vector<StorageIndex> &children, optional_ptr<TableScanOptions> options);
 	void Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);

@@ -17,6 +17,11 @@ class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
 
+struct ReferencedColumn {
+	vector<reference<BoundColumnRefExpression>> bindings;
+	vector<ColumnIndex> child_columns;
+};
+
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public LogicalOperatorVisitor {
 public:
@@ -25,6 +30,7 @@ public:
 	}
 
 	void VisitOperator(LogicalOperator &op) override;
+	void VisitExpression(unique_ptr<Expression> *expression) override;
 
 protected:
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
@@ -37,14 +43,20 @@ private:
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
 	//! The map of column references
-	column_binding_map_t<vector<BoundColumnRefExpression *>> column_references;
+	column_binding_map_t<ReferencedColumn> column_references;
 
 private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
 
+	//! Add a reference to the column in its entirey
+	void AddBinding(BoundColumnRefExpression &col);
+	//! Add a reference to a sub-section of the column
+	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings
 	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
+
+	bool HandleStructExtract(Expression &expr);
 };
 } // namespace duckdb
