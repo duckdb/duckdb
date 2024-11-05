@@ -247,14 +247,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		table_names = BindContext::AliasColumnNames(ref.table_name, table_names, ref.column_name_alias);
 
-		auto logical_get = make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data),
-		                                         std::move(return_types), std::move(return_names));
+		auto logical_get =
+		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
+		                          std::move(return_names), table.GetRowIdType());
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {
-			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, ref.table_name);
+			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, ref.table_name,
+			                          table.GetRowIdType());
 		} else {
-			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, *table_entry);
+			bind_context.AddBaseTable(table_index, ref.alias, table_names, table_types, col_ids, *table_entry, true,
+			                          table.GetRowIdType());
 		}
 		return make_uniq_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
 	}

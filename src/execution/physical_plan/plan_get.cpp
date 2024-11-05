@@ -160,8 +160,24 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		vector<unique_ptr<Expression>> expressions;
 		for (auto &column_id : column_ids) {
 			if (column_id.IsRowIdColumn()) {
-				types.emplace_back(LogicalType::ROW_TYPE);
-				expressions.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
+				types.emplace_back(op.GetRowIdType());
+				// Now how to make that a constant expression.
+				switch (op.GetRowIdType().id()) {
+				case LogicalTypeId::BIGINT:
+					expressions.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
+					break;
+				case LogicalTypeId::SMALLINT:
+					expressions.push_back(make_uniq<BoundConstantExpression>(Value::SMALLINT(0)));
+					break;
+				case LogicalTypeId::VARCHAR:
+					expressions.push_back(make_uniq<BoundConstantExpression>(Value("")));
+					break;
+				case LogicalTypeId::BLOB:
+					expressions.push_back(make_uniq<BoundConstantExpression>(Value::BLOB("")));
+					break;
+				default:
+					throw NotImplementedException("Unsupported LogicalTypeId type for row id");
+				}
 			} else {
 				auto col_id = column_id.GetPrimaryIndex();
 				auto type = op.returned_types[col_id];

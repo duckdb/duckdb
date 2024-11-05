@@ -94,9 +94,11 @@ public:
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                  vector<ColumnIndex> &bound_column_ids, StandardEntry &entry, bool add_row_id = true);
+	                  vector<ColumnIndex> &bound_column_ids, StandardEntry &entry, bool add_row_id = true,
+	                  const LogicalType &rowid_type = LogicalType(LogicalType::ROW_TYPE));
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                  vector<ColumnIndex> &bound_column_ids, const string &table_name);
+	                  vector<ColumnIndex> &bound_column_ids, const string &table_name,
+	                  const LogicalType &rowid_type = LogicalType(LogicalType::ROW_TYPE));
 	//! Adds a call to a table function with the given alias to the BindContext.
 	void AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
 	                      const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,

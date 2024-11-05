@@ -76,7 +76,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	// set up the delete expression
 	auto &column_ids = get.GetColumnIds();
 	del->expressions.push_back(
-	    make_uniq<BoundColumnRefExpression>(LogicalType::ROW_TYPE, ColumnBinding(get.table_index, column_ids.size())));
+	    make_uniq<BoundColumnRefExpression>(table.GetRowIdType(), ColumnBinding(get.table_index, column_ids.size())));
 	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	if (!stmt.returning_list.empty()) {

@@ -33,7 +33,8 @@ enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index);
+	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index,
+	        LogicalType rowid_type = LogicalType(LogicalType::ROW_TYPE));
 	virtual ~Binding() = default;
 
 	//! The type of Binding
@@ -48,6 +49,8 @@ struct Binding {
 	vector<string> names;
 	//! Name -> index for the names
 	case_insensitive_map_t<column_t> name_map;
+
+	LogicalType rowid_type;
 
 public:
 	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
@@ -101,7 +104,7 @@ public:
 public:
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
 	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
-	             bool add_row_id = false);
+	             bool add_row_id = false, LogicalType rowid_type = LogicalType(LogicalType::ROW_TYPE));
 
 	//! A reference to the set of bound column ids
 	vector<ColumnIndex> &bound_column_ids;
