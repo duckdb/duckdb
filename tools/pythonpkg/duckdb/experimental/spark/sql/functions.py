@@ -1256,6 +1256,38 @@ def char(col: "ColumnOrName") -> Column:
     return Column(FunctionExpression("chr", CaseExpression(col > 256, col % 256).otherwise(col)))
 
 
+def corr(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """Returns a new :class:`~pyspark.sql.Column` for the Pearson Correlation Coefficient for
+    ``col1`` and ``col2``.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+        first column to calculate correlation.
+    col1 : :class:`~pyspark.sql.Column` or str
+        second column to calculate correlation.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        Pearson Correlation Coefficient of these two column values.
+
+    Examples
+    --------
+    >>> a = range(20)
+    >>> b = [2 * x for x in range(20)]
+    >>> df = spark.createDataFrame(zip(a, b), ["a", "b"])
+    >>> df.agg(corr("a", "b").alias('c')).collect()
+    [Row(c=1.0)]
+    """
+    return _invoke_function_over_columns("corr", col1, col2)
+
+
 def greatest(*cols: "ColumnOrName") -> Column:
     """
     Returns the greatest value of the list of column names, skipping null values.

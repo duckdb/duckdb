@@ -292,3 +292,13 @@ class TestSparkFunctionsNumeric(object):
             # FIXME: DuckDB should return NaN here. Reason is that
             # ConstantExpression(float("nan")) gives NULL and not NaN
             assert res[1].asin_value is None
+
+    def test_corr(self, spark):
+        N = 20
+        a = range(N)
+        b = [2 * x for x in range(N)]
+        # Have to use a groupby to test this as agg is not yet implemented without
+        df = spark.createDataFrame(zip(a, b, ["group1"] * N), ["a", "b", "g"])
+
+        res = df.groupBy("g").agg(F.corr("a", "b").alias('c')).collect()
+        assert pytest.approx(res[0].c) == 1
