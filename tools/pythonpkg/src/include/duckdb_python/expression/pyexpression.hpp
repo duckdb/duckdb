@@ -38,6 +38,7 @@ public:
 	string Type() const;
 
 	string ToString() const;
+	string GetName() const;
 	void Print() const;
 	shared_ptr<DuckDBPyExpression> Add(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Negate();

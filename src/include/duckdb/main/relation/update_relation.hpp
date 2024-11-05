@@ -15,8 +15,9 @@ namespace duckdb {
 
 class UpdateRelation : public Relation {
 public:
-	UpdateRelation(ClientContextWrapper &context, unique_ptr<ParsedExpression> condition, string schema_name,
-	               string table_name, vector<string> update_columns, vector<unique_ptr<ParsedExpression>> expressions);
+	UpdateRelation(shared_ptr<ClientContextWrapper> &context, unique_ptr<ParsedExpression> condition,
+	               string schema_name, string table_name, vector<string> update_columns,
+	               vector<unique_ptr<ParsedExpression>> expressions);
 
 	vector<ColumnDefinition> columns;
 	unique_ptr<ParsedExpression> condition;

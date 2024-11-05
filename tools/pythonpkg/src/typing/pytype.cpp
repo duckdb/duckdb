@@ -270,6 +270,9 @@ static LogicalType FromGenericAlias(const py::object &obj) {
 static LogicalType FromDictionary(const py::object &obj) {
 	auto dict = py::reinterpret_steal<py::dict>(obj);
 	child_list_t<LogicalType> children;
+	if (dict.size() == 0) {
+		throw InvalidInputException("Could not convert empty dictionary to a duckdb STRUCT type");
+	}
 	children.reserve(dict.size());
 	for (auto &item : dict) {
 		auto &name_p = item.first;

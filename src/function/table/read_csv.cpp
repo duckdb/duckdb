@@ -8,7 +8,7 @@
 #include "duckdb/common/union_by_name.hpp"
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -52,36 +52,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 
 	options.FromNamedParameters(input.named_parameters, context);
-	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
-	    options.store_rejects.IsSetByUser()) {
-		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
-	}
-	if (options.rejects_scan_name.IsSetByUser() && !options.store_rejects.GetValue() &&
-	    options.store_rejects.IsSetByUser()) {
-		throw BinderException("REJECTS_SCAN option is only supported when store_rejects is not manually set to false");
-	}
-	if (options.rejects_scan_name.IsSetByUser() || options.rejects_table_name.IsSetByUser()) {
-		// Ensure we set store_rejects to true automagically
-		options.store_rejects.Set(true, false);
-	}
-	// Validate rejects_table options
-	if (options.store_rejects.GetValue()) {
-		if (!options.ignore_errors.GetValue() && options.ignore_errors.IsSetByUser()) {
-			throw BinderException(
-			    "STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false");
-		}
-		// Ensure we set ignore errors to true automagically
-		options.ignore_errors.Set(true, false);
-		if (options.file_options.union_by_name) {
-			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
-		}
-	}
-	if (options.rejects_limit != 0 && !options.store_rejects.GetValue()) {
-		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
-	}
 
 	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
-
+	options.Verify();
 	if (!options.auto_detect) {
 		if (!options.columns_set) {
 			throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
@@ -249,10 +222,12 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	} while (true);
 }
 
-static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                    LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &data = local_state->Cast<CSVLocalState>();
-	return data.csv_reader->scanner_idx;
+static OperatorPartitionData CSVReaderGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("CSVReader::GetPartitionData: partition columns not supported");
+	}
+	auto &data = input.local_state->Cast<CSVLocalState>();
+	return OperatorPartitionData(data.csv_reader->scanner_idx);
 }
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
@@ -291,7 +266,6 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["types"] = LogicalType::ANY;
 	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
-	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 
 	MultiFileReader::AddParameters(table_function);
@@ -365,7 +339,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.get_batch_index = CSVReaderGetBatchIndex;
+	read_csv.get_partition_data = CSVReaderGetPartitionData;
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;
 	read_csv.type_pushdown = PushdownTypeToCSVScanner;

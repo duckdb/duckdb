@@ -33,7 +33,7 @@ string StarExpression::ToString() const {
 			if (!first_entry) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(entry);
+			result += entry.ToString();
 			first_entry = false;
 		}
 		result += ")";
@@ -52,6 +52,20 @@ string StarExpression::ToString() const {
 		}
 		result += ")";
 	}
+	if (!rename_list.empty()) {
+		result += " RENAME (";
+		bool first_entry = true;
+		for (auto &entry : rename_list) {
+			if (!first_entry) {
+				result += ", ";
+			}
+			result += entry.first.ToString();
+			result += " AS ";
+			result += KeywordHelper::WriteOptionallyQuoted(entry.second);
+			first_entry = false;
+		}
+		result += ")";
+	}
 	if (columns) {
 		result += ")";
 	}
@@ -59,7 +73,7 @@ string StarExpression::ToString() const {
 }
 
 bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
-	if (a.relation_name != b.relation_name || a.exclude_list != b.exclude_list) {
+	if (a.relation_name != b.relation_name || a.exclude_list != b.exclude_list || a.rename_list != b.rename_list) {
 		return false;
 	}
 	if (a.columns != b.columns) {
@@ -116,11 +130,41 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	for (auto &entry : replace_list) {
 		copy->replace_list[entry.first] = entry.second->Copy();
 	}
+	copy->rename_list = rename_list;
 	copy->columns = columns;
 	copy->expr = expr ? expr->Copy() : nullptr;
 	copy->CopyProperties(*this);
 	copy->unpacked = unpacked;
 	return std::move(copy);
+}
+
+StarExpression::StarExpression(const case_insensitive_set_t &exclude_list_p, qualified_column_set_t qualified_set)
+    : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), exclude_list(std::move(qualified_set)) {
+	for (auto &entry : exclude_list_p) {
+		exclude_list.insert(QualifiedColumnName(entry));
+	}
+}
+
+case_insensitive_set_t StarExpression::SerializedExcludeList() const {
+	// we serialize non-qualified elements in a separate list of only column names for backwards compatibility
+	case_insensitive_set_t result;
+	for (auto &entry : exclude_list) {
+		if (!entry.IsQualified()) {
+			result.insert(entry.column);
+		}
+	}
+	return result;
+}
+
+qualified_column_set_t StarExpression::SerializedQualifiedExcludeList() const {
+	// we serialize only qualified elements in the qualified list for backwards compatibility
+	qualified_column_set_t result;
+	for (auto &entry : exclude_list) {
+		if (entry.IsQualified()) {
+			result.insert(entry);
+		}
+	}
+	return result;
 }
 
 } // namespace duckdb

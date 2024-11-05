@@ -1,0 +1,37 @@
+# name: test/sql/join/external/tpch_all_tables.test_slow
+# description: Join all tables in TPC-H together under a tight memory limit
+# group: [external]
+
+load __TEST_DIR__/tpch_all_tables.db
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1)
+
+statement ok
+SET threads=4;
+
+statement ok
+SET memory_limit='1GB';
+
+query I
+SELECT min(COLUMNS(*))
+FROM customer c,
+     lineitem l,
+     nation n,
+     orders o,
+     part p,
+     partsupp ps,
+     region r,
+     supplier s
+WHERE c.c_custkey = o.o_custkey
+  AND n.n_nationkey = c.c_nationkey
+  AND o.o_orderkey = l.l_orderkey
+  AND p.p_partkey = ps.ps_partkey
+  AND ps.ps_partkey = l.l_partkey
+  AND ps.ps_suppkey = l.l_suppkey
+  AND r.r_regionkey = n.n_regionkey
+  AND s.s_suppkey = ps.ps_suppkey
+----
+61 values hashing to 75e39ab1e96c3069839f38729b0ed427

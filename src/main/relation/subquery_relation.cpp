@@ -8,7 +8,7 @@ SubqueryRelation::SubqueryRelation(shared_ptr<Relation> child_p, const string &a
     : Relation(child_p->context, RelationType::SUBQUERY_RELATION, alias_p), child(std::move(child_p)) {
 	D_ASSERT(child.get() != this);
 	vector<ColumnDefinition> dummy_columns;
-	context.GetContext()->TryBindRelation(*this, dummy_columns);
+	Relation::TryBindRelation(dummy_columns);
 }
 
 unique_ptr<QueryNode> SubqueryRelation::GetQueryNode() {

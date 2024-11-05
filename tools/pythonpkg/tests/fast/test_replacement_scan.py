@@ -8,13 +8,15 @@ pd = pytest.importorskip("pandas")
 
 
 def using_table(con, to_scan, object_name):
-    exec(f"{object_name} = to_scan")
-    return con.table(object_name)
+    local_scope = {'con': con, object_name: to_scan, 'object_name': object_name}
+    exec(f"result = con.table(object_name)", globals(), local_scope)
+    return local_scope["result"]
 
 
 def using_sql(con, to_scan, object_name):
-    exec(f"{object_name} = to_scan")
-    return con.sql(f"select * from to_scan")
+    local_scope = {'con': con, object_name: to_scan, 'object_name': object_name}
+    exec(f"result = con.sql('select * from \"{object_name}\"')", globals(), local_scope)
+    return local_scope["result"]
 
 
 # Fetch methods
@@ -164,6 +166,12 @@ class TestReplacementScan(object):
         pyrel3 = con.query('select i + 100 from pyrel2')
         assert type(pyrel3) == duckdb.DuckDBPyRelation
         assert pyrel3.fetchall() == [(142,), (184,)]
+
+    def test_replacement_scan_not_found(self):
+        con = duckdb.connect()
+        con.execute("set python_scan_all_frames=true")
+        with pytest.raises(duckdb.CatalogException, match='Table with name non_existant does not exist'):
+            res = con.sql("select * from non_existant").fetchall()
 
     def test_replacement_scan_alias(self):
         con = duckdb.connect()

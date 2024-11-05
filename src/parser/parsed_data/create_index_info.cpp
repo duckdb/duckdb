@@ -1,6 +1,7 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -23,6 +24,7 @@ static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &expr
 		ParsedExpressionIterator::EnumerateChildren(*expr, [&table_name](unique_ptr<ParsedExpression> &child) {
 			RemoveTableQualificationRecursive(child, table_name);
 		});
+		return;
 	}
 }
 
@@ -32,18 +34,19 @@ vector<string> CreateIndexInfo::ExpressionsToList() const {
 	for (idx_t i = 0; i < parsed_expressions.size(); i++) {
 		auto &expr = parsed_expressions[i];
 		auto copy = expr->Copy();
-		// column ref expressions are qualified with the table name
-		// we need to remove them to reproduce the original query
+
+		// Column reference expressions are qualified with the table name.
+		// We need to remove them to reproduce the original query.
 		RemoveTableQualificationRecursive(copy, table);
 		bool add_parenthesis = true;
 		if (copy->type == ExpressionType::COLUMN_REF) {
 			auto &column_ref = copy->Cast<ColumnRefExpression>();
 			if (!column_ref.IsQualified()) {
-				// Only when column references are not qualified, i.e (col1, col2)
-				// then these expressions do not need to be wrapped in parenthesis
+				// Only not qualified references like (col1, col2) don't need parenthesis.
 				add_parenthesis = false;
 			}
 		}
+
 		if (add_parenthesis) {
 			list.push_back(StringUtil::Format("(%s)", copy->ToString()));
 		} else {
@@ -98,7 +101,6 @@ string CreateIndexInfo::ToString() const {
 }
 
 unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
-
 	auto result = make_uniq<CreateIndexInfo>(*this);
 	CopyProperties(*result);
 
@@ -108,7 +110,6 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 	for (auto &expr : parsed_expressions) {
 		result->parsed_expressions.push_back(expr->Copy());
 	}
-
 	return std::move(result);
 }
 

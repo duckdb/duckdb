@@ -64,7 +64,10 @@ class OperatorProfiler {
 
 public:
 	DUCKDB_API explicit OperatorProfiler(ClientContext &context);
+	~OperatorProfiler() {
+	}
 
+public:
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
 
@@ -72,20 +75,14 @@ public:
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 
-	~OperatorProfiler() {
-	}
-
+public:
 	ClientContext &context;
-
-	bool HasOperatorSetting(const MetricsType &metric) const {
-		return operator_settings.find(metric) != operator_settings.end();
-	}
 
 private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
 	//! Sub-settings for the operator profiler
-	profiler_settings_t operator_settings;
+	profiler_settings_t settings;
 
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
@@ -113,8 +110,10 @@ public:
 	using TreeMap = reference_map_t<const PhysicalOperator, reference<ProfilingNode>>;
 
 private:
-	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
+	                                     const idx_t depth = 0);
 	void Render(const ProfilingNode &node, std::ostream &str) const;
+	string RenderDisabledMessage(ProfilerPrintFormat format) const;
 
 public:
 	DUCKDB_API bool IsEnabled() const;
@@ -147,6 +146,7 @@ public:
 	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
 	//! the return value is formatted based on the current print format (see GetPrintFormat()).
 	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	DUCKDB_API string ToString(ProfilerPrintFormat format) const;
 
 	static InsertionOrderPreservingMap<string> JSONSanitize(const InsertionOrderPreservingMap<string> &input);
 	static string JSONSanitize(const string &text);
@@ -209,6 +209,7 @@ private:
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+	ExplainFormat GetExplainFormat(ProfilerPrintFormat format) const;
 };
 
 } // namespace duckdb

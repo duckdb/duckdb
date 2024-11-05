@@ -83,22 +83,19 @@ public:
 	//! Set the DataChunk to own the data of data chunk, destroying the other chunk in the process
 	DUCKDB_API void Move(DataChunk &chunk);
 
-	//! Initializes the DataChunk with the specified types to an empty DataChunk
-	//! This will create one vector of the specified type for each LogicalType in the
-	//! types list. The vector will be referencing vector to the data owned by
-	//! the DataChunk.
-	DUCKDB_API void Initialize(Allocator &allocator, const vector<LogicalType> &types,
-	                           idx_t capacity = STANDARD_VECTOR_SIZE);
-	DUCKDB_API void Initialize(ClientContext &context, const vector<LogicalType> &types,
-	                           idx_t capacity = STANDARD_VECTOR_SIZE);
-	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
+	//! Initializes a DataChunk with the given types and without any vector data allocation.
 	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
 
-	DUCKDB_API void InitializeEmpty(vector<LogicalType>::const_iterator begin, vector<LogicalType>::const_iterator end);
-	DUCKDB_API void Initialize(Allocator &allocator, vector<LogicalType>::const_iterator begin,
-	                           vector<LogicalType>::const_iterator end, idx_t capacity = STANDARD_VECTOR_SIZE);
-	DUCKDB_API void Initialize(ClientContext &context, vector<LogicalType>::const_iterator begin,
-	                           vector<LogicalType>::const_iterator end, idx_t capacity = STANDARD_VECTOR_SIZE);
+	//! Initializes a DataChunk with the given types. Then, if the corresponding boolean in the initialize-vector is
+	//! true, it initializes the vector for that data type.
+	DUCKDB_API void Initialize(ClientContext &context, const vector<LogicalType> &types,
+	                           idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void Initialize(Allocator &allocator, const vector<LogicalType> &types,
+	                           idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void Initialize(ClientContext &context, const vector<LogicalType> &types, const vector<bool> &initialize,
+	                           idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void Initialize(Allocator &allocator, const vector<LogicalType> &types, const vector<bool> &initialize,
+	                           idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
@@ -109,7 +106,7 @@ public:
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
 
-	//! Copies the data from this vector to another vector.
+	//! Copies the data from this chunk to another chunk.
 	DUCKDB_API void Copy(DataChunk &other, idx_t offset = 0) const;
 	DUCKDB_API void Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count,
 	                     const idx_t offset = 0) const;

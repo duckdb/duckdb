@@ -102,6 +102,9 @@ void ParsedExpressionIterator::EnumerateChildren(
 		if (star_expr.expr) {
 			callback(star_expr.expr);
 		}
+		for (auto &item : star_expr.replace_list) {
+			callback(item.second);
+		}
 		break;
 	}
 	case ExpressionClass::SUBQUERY: {
