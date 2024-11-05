@@ -2,6 +2,7 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+import math
 import numpy as np
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
@@ -302,3 +303,9 @@ class TestSparkFunctionsNumeric(object):
 
         res = df.groupBy("g").agg(F.corr("a", "b").alias('c')).collect()
         assert pytest.approx(res[0].c) == 1
+
+    def test_cot(self, spark):
+        df = spark.createDataFrame([(math.radians(45),)], ["value"])
+
+        res = df.select(F.cot(df["value"]).alias("cot")).collect()
+        assert pytest.approx(res[0].cot) == 1

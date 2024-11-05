@@ -1288,6 +1288,35 @@ def corr(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("corr", col1, col2)
 
 
+def cot(col: "ColumnOrName") -> Column:
+    """
+    Computes cotangent of the input column.
+
+    .. versionadded:: 3.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in radians.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        cotangent of the angle.
+
+    Examples
+    --------
+    >>> import math
+    >>> df = spark.range(1)
+    >>> df.select(cot(lit(math.radians(45)))).first()
+    Row(COT(0.78539...)=1.00000...)
+    """
+    return _invoke_function_over_columns("cot", col)
+
+
 def greatest(*cols: "ColumnOrName") -> Column:
     """
     Returns the greatest value of the list of column names, skipping null values.
