@@ -133,3 +133,17 @@ class TestSparkFunctionsString(object):
         df = spark.createDataFrame([("    SparkSQL   ",)], ['a'])
         res = df.select(F.btrim(df.a).alias('r')).collect()
         assert res == [Row(r='SparkSQL')]
+
+    def test_char(self, spark):
+        df = spark.createDataFrame(
+            [
+                (
+                    65,
+
+                ), (65 + 256,), (66 + 256,)
+            ],
+            ['a',],
+        )
+
+        res = df.select(F.char(df.a).alias('ch')).collect()
+        assert res == [Row(ch='A'), Row(ch='A'), Row(ch='B')]
