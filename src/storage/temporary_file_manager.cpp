@@ -12,7 +12,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // TemporaryBufferSize
 //===--------------------------------------------------------------------===//
-static bool TemporaryBufferSizeIsValid(const TemporaryBufferSize size) {
+bool TemporaryBufferSizeIsValid(const TemporaryBufferSize size) {
 	switch (size) {
 	case TemporaryBufferSize::S32K:
 	case TemporaryBufferSize::S64K:
