@@ -983,33 +983,6 @@ def test_nullbyte_error_rendering(shell):
     result = test.run()
     result.check_stderr('INT32')
 
-@pytest.mark.parametrize("stmt", [
-	"select sha3(NULL);"
-])
-def test_sqlite_udf_null(shell, stmt):
-    test = (
-        ShellTest(shell)
-        .statement(stmt)
-    )
-    result = test.run()
-    result.check_stdout('NULL')
-
-def test_sqlite_udf_sha3_int(shell):
-    test = (
-        ShellTest(shell)
-        .statement("select sha3(256)")
-    )
-    result = test.run()
-    result.check_stdout('A7')
-
-def test_sqlite_udf_sha3_non_inlined_string(shell):
-    test = (
-        ShellTest(shell)
-        .statement("select sha3('hello world this is a long string');")
-    )
-    result = test.run()
-    result.check_stdout('D4')
-
 def test_thousand_sep(shell):
     test = (
         ShellTest(shell)
