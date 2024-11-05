@@ -309,3 +309,9 @@ class TestSparkFunctionsNumeric(object):
 
         res = df.select(F.cot(df["value"]).alias("cot")).collect()
         assert pytest.approx(res[0].cot) == 1
+
+    def test_e(self, spark):
+        df = spark.createDataFrame([("value",)], ["value"])
+
+        res = df.select(F.e().alias("e")).collect()
+        assert pytest.approx(res[0].e) == math.e

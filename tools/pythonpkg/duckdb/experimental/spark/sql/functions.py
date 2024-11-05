@@ -1317,6 +1317,22 @@ def cot(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("cot", col)
 
 
+def e() -> Column:
+    """Returns Euler's number.
+
+    .. versionadded:: 3.5.0
+
+    Examples
+    --------
+    >>> spark.range(1).select(e()).show()
+    +-----------------+
+    |              E()|
+    +-----------------+
+    |2.718281828459045|
+    +-----------------+
+    """
+    return lit(2.718281828459045)
+
 def greatest(*cols: "ColumnOrName") -> Column:
     """
     Returns the greatest value of the list of column names, skipping null values.
