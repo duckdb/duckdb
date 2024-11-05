@@ -2243,8 +2243,19 @@ Returns the MAP value at index as a duckdb_value.
 */
 DUCKDB_API duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index);
 
+/*!
+Returns whether the specified value is null value or not.
+
+* @param The value to check.
+* @return True if the value is null, otherwise false.
+*/
 DUCKDB_API bool duckdb_value_is_null_value(duckdb_value value);
 
+/*!
+Creates a value representing a NULL value.
+
+* @return The duckdb_value that represents NULL. This must be destroyed with `duckdb_destroy_value`.
+*/
 DUCKDB_API duckdb_value duckdb_value_create_null_value();
 
 //===--------------------------------------------------------------------===//

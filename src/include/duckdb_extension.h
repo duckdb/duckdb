@@ -878,6 +878,8 @@ typedef struct {
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
 
 // Version dev
+#define duckdb_value_is_null_value               duckdb_ext_api.duckdb_value_is_null_value
+#define duckdb_value_create_null_value           duckdb_ext_api.duckdb_value_create_null_value
 #define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
 #define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
 #define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
