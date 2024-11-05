@@ -2126,7 +2126,7 @@ struct double_na_equal {
 	}
 
 	bool operator==(const double &right) const {
-		if (isnan(val) && isnan(right)) {
+		if (std::isnan(val) && std::isnan(right)) {
 			return true;
 		}
 		return val == right;
@@ -2143,7 +2143,7 @@ struct float_na_equal {
 		return val;
 	}
 	bool operator==(const float &right) const {
-		if (isnan(val) && isnan(right)) {
+		if (std::isnan(val) && std::isnan(right)) {
 			return true;
 		}
 		return val == right;
@@ -2461,7 +2461,7 @@ struct std::hash<duckdb::ParquetUUIDTargetType> {
 template <>
 struct std::hash<duckdb::float_na_equal> {
 	inline size_t operator()(const duckdb::float_na_equal &val) const {
-		if (isnan(val.val)) {
+		if (std::isnan(val.val)) {
 			return duckdb::Hash<float>(std::numeric_limits<float>::quiet_NaN());
 		}
 		return duckdb::Hash<float>(val.val);
@@ -2471,7 +2471,7 @@ struct std::hash<duckdb::float_na_equal> {
 template <>
 struct std::hash<duckdb::double_na_equal> {
 	inline size_t operator()(const duckdb::double_na_equal &val) const {
-		if (isnan(val.val)) {
+		if (std::isnan(val.val)) {
 			return duckdb::Hash<double>(std::numeric_limits<double>::quiet_NaN());
 		}
 		return duckdb::Hash<double>(val.val);
