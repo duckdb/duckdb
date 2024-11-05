@@ -726,7 +726,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		for (idx_t i = offset; i < offset + stride; i++) {
 			children.push_back(child_vec.GetValue(i));
 		}
-		return Value::ARRAY(std::move(children));
+		return Value::ARRAY(ArrayType::GetChildType(type), std::move(children));
 	}
 	default:
 		throw InternalException("Unimplemented type for value access");

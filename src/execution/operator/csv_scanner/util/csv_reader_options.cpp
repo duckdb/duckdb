@@ -443,7 +443,7 @@ static Value StringVectorToValue(const vector<string> &vec) {
 	for (auto &item : vec) {
 		content.push_back(Value(item));
 	}
-	return Value::LIST(std::move(content));
+	return Value::LIST(LogicalType::VARCHAR, std::move(content));
 }
 
 static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
