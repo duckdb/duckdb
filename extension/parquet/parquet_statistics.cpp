@@ -427,19 +427,22 @@ uint64_t ValueXH64FixedWidth(const Value &constant) {
 // TODO perhaps we can re-use some writer infra here
 static uint64_t ValueXXH64(const Value &constant) {
 	switch (constant.type().InternalType()) {
-	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
+		return ValueXH64FixedWidth<int32_t>(constant);
 	case PhysicalType::INT8:
-		return ValueXH64FixedWidth<uint8_t>(constant);
+		return ValueXH64FixedWidth<int32_t>(constant);
 	case PhysicalType::UINT16:
+		return ValueXH64FixedWidth<int32_t>(constant);
 	case PhysicalType::INT16:
-		return ValueXH64FixedWidth<uint16_t>(constant);
+		return ValueXH64FixedWidth<int32_t>(constant);
 	case PhysicalType::UINT32:
-	case PhysicalType::INT32:
 		return ValueXH64FixedWidth<uint32_t>(constant);
+	case PhysicalType::INT32:
+		return ValueXH64FixedWidth<int32_t>(constant);
 	case PhysicalType::UINT64:
-	case PhysicalType::INT64:
 		return ValueXH64FixedWidth<uint64_t>(constant);
+	case PhysicalType::INT64:
+		return ValueXH64FixedWidth<int64_t>(constant);
 	case PhysicalType::FLOAT:
 		return ValueXH64FixedWidth<float>(constant);
 	case PhysicalType::DOUBLE:
@@ -478,6 +481,26 @@ static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilte
 		}
 		return all_children_true;
 	}
+	default:
+		return false;
+	}
+}
+
+bool ParquetStatisticsUtils::BloomFilterSupported(const LogicalTypeId &type_id) {
+	switch (type_id) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		return true;
 	default:
 		return false;
 	}

@@ -85,10 +85,10 @@ Failed to cast value
 
 # more types
 
-#query I
-#FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_int16', 200);
-#----
-#true
+query I
+FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_int16', 200);
+----
+true
 
 query I
 FROM assert_bloom_filter_hit('__TEST_DIR__/bloom1.parquet', 'r_int32', 200);

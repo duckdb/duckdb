@@ -739,6 +739,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 			// TODO we might not have stats but STILL a bloom filter so move this up
 			// check the bloom filter if present
 			if (!column_reader->Type().IsNested() &&
+			    ParquetStatisticsUtils::BloomFilterSupported(column_reader->Type().id()) &&
 			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[column_reader->FileIdx()].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;

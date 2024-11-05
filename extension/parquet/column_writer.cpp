@@ -948,6 +948,10 @@ struct ParquetIntervalTargetType {
 struct ParquetIntervalOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
+
+		if (input.days < 0 || input.months < 0 || input.micros < 0) {
+			throw IOException("Parquet files do not support negative intervals");
+		}
 		TGT result;
 		Store<uint32_t>(input.months, result.bytes);
 		Store<uint32_t>(input.days, result.bytes + sizeof(uint32_t));
@@ -2116,6 +2120,42 @@ void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 	child_writer->Write(*state.child_state, array_child, count * array_size);
 }
 
+// special double/float class to deal with dictionary encoding and NaN equality
+struct double_na_equal {
+	double_na_equal() : val(0) {
+	}
+	double_na_equal(const double val_p) : val(val_p) {
+	}
+	operator double() const {
+		return val;
+	}
+
+	bool operator==(const double &right) const {
+		if (isnan(val) && isnan(right)) {
+			return true;
+		}
+		return val == right;
+	}
+	double val;
+};
+
+struct float_na_equal {
+	float_na_equal() : val(0) {
+	}
+	float_na_equal(const float val_p) : val(val_p) {
+	}
+	operator float() const {
+		return val;
+	}
+	bool operator==(const float &right) const {
+		if (isnan(val) && isnan(right)) {
+			return true;
+		}
+		return val == right;
+	}
+	float val;
+};
+
 //===--------------------------------------------------------------------===//
 // Create Column Writer
 //===--------------------------------------------------------------------===//
@@ -2336,11 +2376,11 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema_idx, std::move(schema_path),
 		                                                           max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::FLOAT:
-		return make_uniq<StandardColumnWriter<float, float>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                     max_define, can_have_nulls);
+		return make_uniq<StandardColumnWriter<float_na_equal, float>>(writer, schema_idx, std::move(schema_path),
+		                                                              max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::DOUBLE:
-		return make_uniq<StandardColumnWriter<double, double>>(writer, schema_idx, std::move(schema_path), max_repeat,
-		                                                       max_define, can_have_nulls);
+		return make_uniq<StandardColumnWriter<double_na_equal, double>>(writer, schema_idx, std::move(schema_path),
+		                                                                max_repeat, max_define, can_have_nulls);
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
@@ -2388,5 +2428,25 @@ template <>
 struct std::hash<duckdb::ParquetUUIDTargetType> {
 	inline size_t operator()(const duckdb::ParquetUUIDTargetType &val) const {
 		return duckdb::Hash(duckdb::const_char_ptr_cast(val.bytes), duckdb::ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+	}
+};
+
+template <>
+struct std::hash<duckdb::float_na_equal> {
+	inline size_t operator()(const duckdb::float_na_equal &val) const {
+		if (isnan(val.val)) {
+			return duckdb::Hash<float>(std::numeric_limits<float>::quiet_NaN());
+		}
+		return duckdb::Hash<float>(val.val);
+	}
+};
+
+template <>
+struct std::hash<duckdb::double_na_equal> {
+	inline size_t operator()(const duckdb::double_na_equal &val) const {
+		if (isnan(val.val)) {
+			return duckdb::Hash<double>(std::numeric_limits<double>::quiet_NaN());
+		}
+		return duckdb::Hash<double>(val.val);
 	}
 };
