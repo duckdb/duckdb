@@ -1,5 +1,5 @@
 # name: benchmark/micro/pushdown/or_pushdown.benchmark
-# description: Show the perfomance of OR pushed down
+# description: Show the performance of OR pushed down
 # group: [pushdown]
 
 name OrPushdown

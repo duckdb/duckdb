@@ -79,7 +79,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 		for (idx_t i = samples_remaining; i < collected_sample_count; i++) {
 			sel.set_index(i - samples_remaining, i);
 		}
-		ret->Initialize(allocator, reservoir_types.begin(), reservoir_types.end(), STANDARD_VECTOR_SIZE);
+		ret->Initialize(allocator, reservoir_types);
 		ret->Slice(*reservoir_data_chunk, sel, STANDARD_VECTOR_SIZE);
 		ret->SetCardinality(STANDARD_VECTOR_SIZE);
 		// reduce capacity and cardinality of the sample data chunk

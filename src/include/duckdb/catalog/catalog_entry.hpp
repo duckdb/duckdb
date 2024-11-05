@@ -18,15 +18,16 @@
 #include <memory>
 
 namespace duckdb {
-struct AlterInfo;
+
 class Catalog;
 class CatalogSet;
 class ClientContext;
+class Deserializer;
 class SchemaCatalogEntry;
 class Serializer;
-class Deserializer;
 class Value;
 
+struct AlterInfo;
 struct CatalogTransaction;
 struct CreateInfo;
 
@@ -68,6 +69,7 @@ public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info);
 	virtual unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction transaction, AlterInfo &info);
 	virtual void UndoAlter(ClientContext &context, AlterInfo &info);
+	virtual void Rollback(CatalogEntry &prev_entry);
 
 	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const;
 

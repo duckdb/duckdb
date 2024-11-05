@@ -261,8 +261,8 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Constraints transform
 	//===--------------------------------------------------------------------===//
-	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell &cell);
-	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell &cell, ColumnDefinition &column,
+	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGConstraint &constraint);
+	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGConstraint &constraint, ColumnDefinition &column,
 	                                           idx_t index);
 
 	//===--------------------------------------------------------------------===//
@@ -323,6 +323,8 @@ private:
 	//! Transform a range var into a (schema) qualified name
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar &root);
 
+	//! Transform a Postgres TypeName string into a LogicalType (non-LIST types)
+	LogicalType TransformTypeNameInternal(duckdb_libpgquery::PGTypeName &name);
 	//! Transform a Postgres TypeName string into a LogicalType
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName &name);
 

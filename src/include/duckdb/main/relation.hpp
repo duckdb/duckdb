@@ -34,16 +34,35 @@ class LogicalOperator;
 class QueryNode;
 class TableRef;
 
-class Relation : public enable_shared_from_this<Relation> {
+class RelationContextWrapper : public ClientContextWrapper {
 public:
-	Relation(const shared_ptr<ClientContext> &context, RelationType type) : context(context), type(type) {
-	}
-	Relation(ClientContextWrapper &context, RelationType type) : context(context.GetContext()), type(type) {
-	}
-	virtual ~Relation() {
+	~RelationContextWrapper() override = default;
+	explicit RelationContextWrapper(const shared_ptr<ClientContext> &context) : ClientContextWrapper(context) {};
+
+	explicit RelationContextWrapper(const ClientContextWrapper &context) : ClientContextWrapper(context) {};
+
+	void TryBindRelation(Relation &relation, vector<ColumnDefinition> &columns) override {
+		GetContext()->InternalTryBindRelation(relation, columns);
 	}
 
-	ClientContextWrapper context;
+private:
+	weak_ptr<ClientContext> client_context;
+};
+
+class Relation : public enable_shared_from_this<Relation> {
+public:
+	Relation(const shared_ptr<ClientContext> &context_p, const RelationType type) : type(type) {
+		context = make_shared_ptr<ClientContextWrapper>(context_p);
+	}
+	Relation(const shared_ptr<ClientContextWrapper> &context, RelationType type) : context(context), type(type) {
+	}
+
+	Relation(const shared_ptr<RelationContextWrapper> &context, RelationType type) : context(context), type(type) {
+	}
+
+	virtual ~Relation() = default;
+
+	shared_ptr<ClientContextWrapper> context;
 	RelationType type;
 	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
@@ -64,7 +83,7 @@ public:
 	DUCKDB_API shared_ptr<Relation> CreateView(const string &name, bool replace = true, bool temporary = false);
 	DUCKDB_API shared_ptr<Relation> CreateView(const string &schema_name, const string &name, bool replace = true,
 	                                           bool temporary = false);
-	DUCKDB_API unique_ptr<QueryResult> Query(const string &sql);
+	DUCKDB_API unique_ptr<QueryResult> Query(const string &sql) const;
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &name, const string &sql);
 
 	//! Explain the query plan of this relation
@@ -75,6 +94,7 @@ public:
 	virtual bool IsReadOnly() {
 		return true;
 	}
+	DUCKDB_API void TryBindRelation(vector<ColumnDefinition> &columns);
 
 public:
 	// PROJECT
@@ -177,7 +197,7 @@ public:
 	DUCKDB_API vector<shared_ptr<ExternalDependency>> GetAllDependencies();
 
 protected:
-	DUCKDB_API string RenderWhitespace(idx_t depth);
+	DUCKDB_API static string RenderWhitespace(idx_t depth);
 
 public:
 	template <class TARGET>

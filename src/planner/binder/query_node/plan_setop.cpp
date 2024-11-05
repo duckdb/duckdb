@@ -52,7 +52,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 					for (auto &type : new_column_types) {
 						logical_get.returned_types[type.first] = type.second;
 					}
-					return op;
+					return std::move(op->children[0]);
 				}
 			}
 		}
@@ -132,7 +132,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	                                node.right_binder->has_unplanned_dependent_joins;
 
 	// create actual logical ops for setops
-	LogicalOperatorType logical_type;
+	LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_INVALID;
 	switch (node.setop_type) {
 	case SetOperationType::UNION:
 	case SetOperationType::UNION_BY_NAME:

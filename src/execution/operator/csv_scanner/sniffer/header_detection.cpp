@@ -1,5 +1,5 @@
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 #include "utf8proc.hpp"

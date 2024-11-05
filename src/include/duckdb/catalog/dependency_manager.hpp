@@ -91,6 +91,10 @@ public:
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 
+	//! Get the order of entries needed by EXPORT, the objects with no dependencies are exported first
+	void ReorderEntries(catalog_entry_vector_t &entries);
+	void ReorderEntries(catalog_entry_vector_t &entries, ClientContext &context);
+
 private:
 	DuckCatalog &catalog;
 	CatalogSet subjects;
@@ -110,6 +114,9 @@ public:
 	static CatalogEntryInfo GetLookupProperties(const CatalogEntry &entry);
 
 private:
+	void ReorderEntry(CatalogTransaction transaction, CatalogEntry &entry, catalog_entry_set_t &visited,
+	                  catalog_entry_vector_t &order);
+	void ReorderEntries(catalog_entry_vector_t &entries, CatalogTransaction transaction);
 	void AddObject(CatalogTransaction transaction, CatalogEntry &object, const LogicalDependencyList &dependencies);
 	void VerifyExistence(CatalogTransaction transaction, DependencyEntry &object);
 	void VerifyCommitDrop(CatalogTransaction transaction, transaction_t start_time, CatalogEntry &object);

@@ -29,6 +29,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
@@ -40,15 +41,15 @@
 
 namespace duckdb {
 
-using duckdb_parquet::format::ColumnChunk;
-using duckdb_parquet::format::ConvertedType;
-using duckdb_parquet::format::FieldRepetitionType;
-using duckdb_parquet::format::FileCryptoMetaData;
-using duckdb_parquet::format::FileMetaData;
-using ParquetRowGroup = duckdb_parquet::format::RowGroup;
-using duckdb_parquet::format::SchemaElement;
-using duckdb_parquet::format::Statistics;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::ColumnChunk;
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::FieldRepetitionType;
+using duckdb_parquet::FileCryptoMetaData;
+using duckdb_parquet::FileMetaData;
+using ParquetRowGroup = duckdb_parquet::RowGroup;
+using duckdb_parquet::SchemaElement;
+using duckdb_parquet::Statistics;
+using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
@@ -147,6 +148,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		}
 	}
 	if (s_ele.__isset.converted_type) {
+		// Legacy NULL type, does no longer exist, but files are still around of course
+		if (static_cast<uint8_t>(s_ele.converted_type) == 24) {
+			return LogicalTypeId::SQLNULL;
+		}
 		switch (s_ele.converted_type) {
 		case ConvertedType::INT_8:
 			if (s_ele.type == Type::INT32) {
@@ -251,8 +256,6 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			return LogicalType::INTERVAL;
 		case ConvertedType::JSON:
 			return LogicalType::JSON();
-		case ConvertedType::NULL_TYPE:
-			return LogicalTypeId::SQLNULL;
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
@@ -637,8 +640,7 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(state.current_group >= 0 && (idx_t)state.current_group < state.group_idx_list.size());
-	D_ASSERT(state.group_idx_list[state.current_group] >= 0 &&
-	         state.group_idx_list[state.current_group] < file_meta_data->row_groups.size());
+	D_ASSERT(state.group_idx_list[state.current_group] < file_meta_data->row_groups.size());
 	return file_meta_data->row_groups[state.group_idx_list[state.current_group]];
 }
 
@@ -794,7 +796,14 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	if (!state.file_handle || state.file_handle->path != file_handle->path) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
 
-		if (!file_handle->OnDiskFile() && file_handle->CanSeek()) {
+		Value disable_prefetch = false;
+		Value prefetch_all_files = false;
+		context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
+		context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
+		bool should_prefetch = !file_handle->OnDiskFile() || prefetch_all_files.GetValue<bool>();
+		bool can_prefetch = file_handle->CanSeek() && !disable_prefetch.GetValue<bool>();
+
+		if (should_prefetch && can_prefetch) {
 			state.prefetch_mode = true;
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 		} else {
@@ -818,15 +827,16 @@ void FilterIsNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 		}
 		return;
 	}
-	D_ASSERT(v.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	auto &mask = FlatVector::Validity(v);
-	if (mask.AllValid()) {
+	UnifiedVectorFormat unified;
+	v.ToUnifiedFormat(count, unified);
+
+	if (unified.validity.AllValid()) {
 		filter_mask.reset();
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			if (filter_mask.test(i)) {
-				filter_mask.set(i, !mask.RowIsValid(i));
+				filter_mask.set(i, !unified.validity.RowIsValid(unified.sel->get_index(i)));
 			}
 		}
 	}
@@ -840,13 +850,14 @@ void FilterIsNotNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 		}
 		return;
 	}
-	D_ASSERT(v.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	auto &mask = FlatVector::Validity(v);
-	if (!mask.AllValid()) {
+	UnifiedVectorFormat unified;
+	v.ToUnifiedFormat(count, unified);
+
+	if (!unified.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (filter_mask.test(i)) {
-				filter_mask.set(i, mask.RowIsValid(i));
+				filter_mask.set(i, unified.validity.RowIsValid(unified.sel->get_index(i)));
 			}
 		}
 	}
@@ -866,20 +877,20 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 		return;
 	}
 
-	D_ASSERT(v.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto v_ptr = FlatVector::GetData<T>(v);
-	auto &mask = FlatVector::Validity(v);
+	UnifiedVectorFormat unified;
+	v.ToUnifiedFormat(count, unified);
+	auto data_ptr = UnifiedVectorFormat::GetData<T>(unified);
 
-	if (!mask.AllValid()) {
+	if (!unified.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			if (filter_mask.test(i) && mask.RowIsValid(i)) {
-				filter_mask.set(i, OP::Operation(v_ptr[i], constant));
+			if (filter_mask.test(i) && unified.validity.RowIsValid(unified.sel->get_index(i))) {
+				filter_mask.set(i, OP::Operation(data_ptr[unified.sel->get_index(i)], constant));
 			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			if (filter_mask.test(i)) {
-				filter_mask.set(i, OP::Operation(v_ptr[i], constant));
+				filter_mask.set(i, OP::Operation(data_ptr[unified.sel->get_index(i)], constant));
 			}
 		}
 	}
@@ -993,7 +1004,12 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		auto &struct_filter = filter.Cast<StructFilter>();
 		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
 		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
-	} break;
+	}
+	case TableFilterType::OPTIONAL_FILTER: {
+		// we don't execute zone map filters here - we only consider them for zone map pruning
+		// do nothing to the mask.
+		break;
+	}
 	default:
 		D_ASSERT(0);
 		break;
@@ -1040,14 +1056,16 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		auto &group = GetGroup(state);
 		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
-
 			uint64_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
 
 			if (to_scan_compressed_bytes > total_row_group_span) {
-				throw InvalidInputException(
-				    "Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
+				throw IOException(
+				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
+				    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
+				    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
+				    file_name);
 			}
 
 			if (!reader_data.filters &&

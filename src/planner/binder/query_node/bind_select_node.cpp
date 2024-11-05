@@ -1,7 +1,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -140,6 +140,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 					    make_uniq<ConstantExpression>(Value::INTEGER(UnsafeNumericCast<int32_t>(1 + i))));
 				}
 			}
+			order_binder.SetQueryComponent("DISTINCT ON");
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
 				auto expr = BindOrderExpression(order_binder, std::move(distinct_on_target));
 				if (!expr) {
@@ -147,10 +148,13 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				}
 				bound_distinct->target_distincts.push_back(std::move(expr));
 			}
+			order_binder.SetQueryComponent();
+
 			bound_modifier = std::move(bound_distinct);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
+
 			auto &order = mod->Cast<OrderModifier>();
 			auto bound_order = make_uniq<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
@@ -488,7 +492,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 				info.collated_groups[i] = result->aggregates.size();
 
-				auto first_fun = FirstFun::GetFunction(bound_expr_ref.return_type);
+				auto first_fun = FirstFunctionGetter::GetFunction(bound_expr_ref.return_type);
 				vector<unique_ptr<Expression>> first_children;
 				// FIXME: would be better to just refer to this expression, but for now we copy
 				first_children.push_back(bound_expr_ref.Copy());
@@ -514,7 +518,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	// bind the HAVING clause, if any
 	if (statement.having) {
 		HavingBinder having_binder(*this, context, *result, info, statement.aggregate_handling);
-		ExpressionBinder::QualifyColumnNames(*this, statement.having);
+		ExpressionBinder::QualifyColumnNames(having_binder, statement.having);
 		result->having = having_binder.Bind(statement.having);
 	}
 

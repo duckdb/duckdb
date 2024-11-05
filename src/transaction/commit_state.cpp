@@ -20,8 +20,8 @@
 
 namespace duckdb {
 
-CommitState::CommitState(transaction_t commit_id, transaction_t start_time)
-    : commit_id(commit_id), start_time(start_time) {
+CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id, transaction_t start_time)
+    : transaction(transaction_p), commit_id(commit_id), start_time(start_time) {
 }
 
 void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
@@ -205,7 +205,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert this append
-		info->table->RevertAppend(info->start_row, info->count);
+		info->table->RevertAppend(transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {

@@ -14,6 +14,7 @@
 namespace duckdb {
 class CatalogEntry;
 class DataChunk;
+class DuckTransaction;
 class WriteAheadLog;
 class ClientContext;
 
@@ -23,7 +24,7 @@ struct UpdateInfo;
 
 class CommitState {
 public:
-	explicit CommitState(transaction_t commit_id, transaction_t start_time);
+	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id, transaction_t start_time);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
@@ -33,7 +34,7 @@ private:
 	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data);
 
 private:
-	//! The new id assigned to this commit
+	DuckTransaction &transaction;
 	transaction_t commit_id;
 	//! The state of the catalog at the start of the transaction we're currently committing
 	transaction_t start_time;

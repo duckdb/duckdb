@@ -59,7 +59,7 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
     : context(context), bind_context(*this), parent(std::move(parent_p)), bound_tables(0), binder_type(binder_type),
       entry_retriever(context) {
 	if (parent) {
-		entry_retriever.SetCallback(parent->entry_retriever.GetCallback());
+		entry_retriever.Inherit(parent->entry_retriever);
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
@@ -237,7 +237,7 @@ static bool ParsedExpressionIsAggregate(Binder &binder, const ParsedExpression &
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &function = expr.Cast<FunctionExpression>();
 		QueryErrorContext error_context;
-		auto entry = binder.GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		auto entry = binder.GetCatalogEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, function.catalog, function.schema,
 		                                    function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			return true;
@@ -584,51 +584,30 @@ void Binder::AddCorrelatedColumn(const CorrelatedColumnInfo &info) {
 	}
 }
 
-bool Binder::HasMatchingBinding(const string &table_name, const string &column_name, ErrorData &error) {
+optional_ptr<Binding> Binder::GetMatchingBinding(const string &table_name, const string &column_name,
+                                                 ErrorData &error) {
 	string empty_schema;
-	return HasMatchingBinding(empty_schema, table_name, column_name, error);
+	return GetMatchingBinding(empty_schema, table_name, column_name, error);
 }
 
-bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
-                                ErrorData &error) {
+optional_ptr<Binding> Binder::GetMatchingBinding(const string &schema_name, const string &table_name,
+                                                 const string &column_name, ErrorData &error) {
 	string empty_catalog;
-	return HasMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
+	return GetMatchingBinding(empty_catalog, schema_name, table_name, column_name, error);
 }
 
-bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
-                                const string &column_name, ErrorData &error) {
+optional_ptr<Binding> Binder::GetMatchingBinding(const string &catalog_name, const string &schema_name,
+                                                 const string &table_name, const string &column_name,
+                                                 ErrorData &error) {
 	optional_ptr<Binding> binding;
 	D_ASSERT(!lambda_bindings);
-	if (macro_binding && table_name == macro_binding->alias) {
+	if (macro_binding && table_name == macro_binding->GetAlias()) {
 		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
-		binding = bind_context.GetBinding(table_name, error);
+		BindingAlias alias(catalog_name, schema_name, table_name);
+		binding = bind_context.GetBinding(alias, column_name, error);
 	}
-
-	if (!binding) {
-		return false;
-	}
-	if (!catalog_name.empty() || !schema_name.empty()) {
-		auto catalog_entry = binding->GetStandardEntry();
-		if (!catalog_entry) {
-			return false;
-		}
-		if (!catalog_name.empty() && catalog_entry->catalog.GetName() != catalog_name) {
-			return false;
-		}
-		if (!schema_name.empty() && catalog_entry->schema.name != schema_name) {
-			return false;
-		}
-		if (catalog_entry->name != table_name) {
-			return false;
-		}
-	}
-	bool binding_found;
-	binding_found = binding->HasMatchingBinding(column_name);
-	if (!binding_found) {
-		error = binding->ColumnNotFoundError(column_name);
-	}
-	return binding_found;
+	return binding;
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
@@ -714,8 +693,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, alias.empty() ? table.name : alias, names, types,
-	                                  bound_columns, &table, false);
+	binder->bind_context.AddBaseTable(update_table_index, alias, names, types, bound_columns, table, false);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;

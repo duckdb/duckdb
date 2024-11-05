@@ -1,4 +1,5 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -17,7 +18,7 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
-#include "duckdb/core_functions/scalar/generic_functions.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
 
@@ -87,8 +88,9 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		first_children.push_back(std::move(bound));
 
 		FunctionBinder function_binder(binder.context);
-		auto first_agg = function_binder.BindAggregateFunction(
-		    FirstFun::GetFunction(expr.return_type), std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+		auto first_agg =
+		    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(expr.return_type),
+		                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 
 		expressions.push_back(std::move(first_agg));
 		if (error_on_multiple_rows) {

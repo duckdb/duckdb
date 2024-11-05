@@ -1,4 +1,7 @@
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
+#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
@@ -8,13 +11,10 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -129,29 +129,6 @@ static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
 }
 
-bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, idx_t &range_count) {
-	for (size_t c = 0; c < conds.size(); ++c) {
-		auto &cond = conds[c];
-		switch (cond.comparison) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			return true;
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			++range_count;
-			break;
-		case ExpressionType::COMPARE_NOTEQUAL:
-		case ExpressionType::COMPARE_DISTINCT_FROM:
-			break;
-		default:
-			throw NotImplementedException("Unimplemented comparison join");
-		}
-	}
-	return false;
-}
-
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
@@ -169,7 +146,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 	}
 
 	idx_t has_range = 0;
-	bool has_equality = HasEquality(op.conditions, has_range);
+	bool has_equality = op.HasEquality(has_range);
 	bool can_merge = has_range > 0;
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 	switch (op.join_type) {
@@ -200,6 +177,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 		                                op.estimated_cardinality, perfect_join_stats, std::move(op.filter_pushdown));
 
 	} else {
+		D_ASSERT(op.left_projection_map.empty());
 		if (left->estimated_cardinality <= client_config.nested_loop_join_threshold ||
 		    right->estimated_cardinality <= client_config.nested_loop_join_threshold) {
 			can_iejoin = false;

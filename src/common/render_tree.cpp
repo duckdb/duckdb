@@ -41,29 +41,13 @@ public:
 
 template <>
 bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
-	switch (op.type) {
-	case PhysicalOperatorType::LEFT_DELIM_JOIN:
-	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
-	case PhysicalOperatorType::POSITIONAL_SCAN:
-		return true;
-	default:
-		return !op.children.empty();
-	}
+	return !op.GetChildren().empty();
 }
 template <>
 void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
                                    const std::function<void(const PhysicalOperator &child)> &callback) {
-	for (auto &child : op.children) {
-		callback(*child);
-	}
-	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
-		auto &delim = op.Cast<PhysicalDelimJoin>();
-		callback(*delim.join);
-	} else if ((op.type == PhysicalOperatorType::POSITIONAL_SCAN)) {
-		auto &pscan = op.Cast<PhysicalPositionalScan>();
-		for (auto &table : pscan.child_tables) {
-			callback(*table);
-		}
+	for (auto &child : op.GetChildren()) {
+		callback(child);
 	}
 }
 
@@ -118,7 +102,7 @@ static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
 static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 	auto &info = op.GetProfilingInfo();
 	InsertionOrderPreservingMap<string> extra_info;
-	if (info.Enabled(MetricsType::EXTRA_INFO)) {
+	if (info.Enabled(info.settings, MetricsType::EXTRA_INFO)) {
 		extra_info = op.GetProfilingInfo().extra_info;
 	}
 
@@ -128,11 +112,13 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 	}
 
 	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
-	if (info.Enabled(MetricsType::OPERATOR_CARDINALITY)) {
-		result->extra_text[RenderTreeNode::CARDINALITY] = info.GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
+	if (info.Enabled(info.settings, MetricsType::OPERATOR_CARDINALITY)) {
+		auto cardinality = info.GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
+		result->extra_text[RenderTreeNode::CARDINALITY] = cardinality;
 	}
-	if (info.Enabled(MetricsType::OPERATOR_TIMING)) {
-		string timing = StringUtil::Format("%.2f", info.metrics.at(MetricsType::OPERATOR_TIMING).GetValue<double>());
+	if (info.Enabled(info.settings, MetricsType::OPERATOR_TIMING)) {
+		auto value = info.metrics.at(MetricsType::OPERATOR_TIMING).GetValue<double>();
+		string timing = StringUtil::Format("%.2f", value);
 		result->extra_text[RenderTreeNode::TIMING] = timing + "s";
 	}
 	return result;
