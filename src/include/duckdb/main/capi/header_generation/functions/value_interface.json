@@ -880,7 +880,7 @@
             }
         },
         {
-            "name": "duckdb_value_is_null_value",
+            "name": "duckdb_is_null_value",
             "return_type": "bool",
             "params": [
                 {
@@ -897,7 +897,7 @@
             }
         },
         {
-            "name": "duckdb_value_create_null_value",
+            "name": "duckdb_create_null_value",
             "return_type": "duckdb_value",
             "params": [],
             "comment": {

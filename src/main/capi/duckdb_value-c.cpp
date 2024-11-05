@@ -330,10 +330,10 @@ duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index) {
 	return WrapValue(new duckdb::Value(child_struct[1]));
 }
 
-bool duckdb_value_is_null_value(duckdb_value value) {
+bool duckdb_is_null_value(duckdb_value value) {
 	return UnwrapValue(value).IsNull();
 }
 
-duckdb_value duckdb_value_create_null_value() {
+duckdb_value duckdb_create_null_value() {
 	return WrapValue(new duckdb::Value());
 }
