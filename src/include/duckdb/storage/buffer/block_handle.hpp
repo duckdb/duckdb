@@ -57,7 +57,6 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 
 class BlockHandle : public enable_shared_from_this<BlockHandle> {
 	friend class BlockManager;
-	friend class BufferHandle;
 	friend class BufferManager;
 	friend class StandardBufferManager;
 	friend class BufferPool;

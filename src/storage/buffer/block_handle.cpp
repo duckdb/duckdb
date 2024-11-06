@@ -87,14 +87,14 @@ BufferHandle BlockHandle::LoadFromBuffer(data_ptr_t data, unique_ptr<FileBuffer>
 	memcpy(block->InternalBuffer(), data, block->AllocSize());
 	buffer = std::move(block);
 	state = BlockState::BLOCK_LOADED;
-	return BufferHandle(shared_from_this());
+	return BufferHandle(shared_from_this(), buffer.get());
 }
 
 BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 	if (state == BlockState::BLOCK_LOADED) {
 		// already loaded
 		D_ASSERT(buffer);
-		return BufferHandle(shared_from_this());
+		return BufferHandle(shared_from_this(), buffer.get());
 	}
 
 	if (block_id < MAXIMUM_BLOCK) {
@@ -109,7 +109,7 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 		}
 	}
 	state = BlockState::BLOCK_LOADED;
-	return BufferHandle(shared_from_this());
+	return BufferHandle(shared_from_this(), buffer.get());
 }
 
 unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
