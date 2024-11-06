@@ -207,6 +207,8 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(136, "columns_set", columns_set, false);
 	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	serializer.WritePropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", dialect_options.rows_until_header);
+	serializer.WritePropertyWithDefault<string>(139, "encoding", encoding);
+	serializer.WriteProperty<CSVOption<bool>>(140, "dialect_options.state_machine_options.rfc_4180", dialect_options.state_machine_options.rfc_4180);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -250,6 +252,8 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithExplicitDefault<bool>(136, "columns_set", result.columns_set, false);
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", result.dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	deserializer.ReadPropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", result.dialect_options.rows_until_header);
+	deserializer.ReadPropertyWithDefault<string>(139, "encoding", result.encoding);
+	deserializer.ReadProperty<CSVOption<bool>>(140, "dialect_options.state_machine_options.rfc_4180", result.dialect_options.state_machine_options.rfc_4180);
 	return result;
 }
 
@@ -561,15 +565,18 @@ void SampleOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<Value>(100, "sample_size", sample_size);
 	serializer.WritePropertyWithDefault<bool>(101, "is_percentage", is_percentage);
 	serializer.WriteProperty<SampleMethod>(102, "method", method);
-	serializer.WritePropertyWithDefault<int64_t>(103, "seed", seed);
+	serializer.WritePropertyWithDefault<int64_t>(103, "seed", GetSeed());
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<SampleOptions>(new SampleOptions());
-	deserializer.ReadProperty<Value>(100, "sample_size", result->sample_size);
-	deserializer.ReadPropertyWithDefault<bool>(101, "is_percentage", result->is_percentage);
-	deserializer.ReadProperty<SampleMethod>(102, "method", result->method);
-	deserializer.ReadPropertyWithDefault<int64_t>(103, "seed", result->seed);
+	auto sample_size = deserializer.ReadProperty<Value>(100, "sample_size");
+	auto is_percentage = deserializer.ReadPropertyWithDefault<bool>(101, "is_percentage");
+	auto method = deserializer.ReadProperty<SampleMethod>(102, "method");
+	auto seed = deserializer.ReadPropertyWithDefault<int64_t>(103, "seed");
+	auto result = duckdb::unique_ptr<SampleOptions>(new SampleOptions(seed));
+	result->sample_size = sample_size;
+	result->is_percentage = is_percentage;
+	result->method = method;
 	return result;
 }
 

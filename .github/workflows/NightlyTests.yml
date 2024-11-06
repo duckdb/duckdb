@@ -978,6 +978,7 @@ jobs:
       DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
       DUCKDB_S3_USE_SSL: false
       HTTP_PROXY_PUBLIC: localhost:3128
+      TEST_PERSISTENT_SECRETS_AVAILABLE: true
 
       GEN: ninja
 
@@ -994,6 +995,9 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+    - name: Fix permissions of test secrets
+      shell: bash
+      run: chmod -R 700 data/secrets
 
     # TODO: fix the authenticated proxy here
     - name: Install and run http proxy squid

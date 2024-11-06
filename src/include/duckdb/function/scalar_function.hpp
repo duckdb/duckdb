@@ -52,6 +52,7 @@ struct ScalarFunctionInfo {
 class Binder;
 class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
+
 struct StatementProperties;
 
 struct FunctionStatisticsInput {

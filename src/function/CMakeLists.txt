@@ -16,6 +16,7 @@ add_library_unity(
   cast_rules.cpp
   compression_config.cpp
   copy_function.cpp
+  encoding_function.cpp
   function.cpp
   function_binder.cpp
   function_list.cpp

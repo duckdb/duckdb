@@ -176,10 +176,10 @@
   },
   {
     "class": "SampleOptions",
-    "includes": [
+      "includes": [
       "duckdb/parser/parsed_data/sample_options.hpp"
     ],
-    "members": [
+      "members": [
       {
         "id": 100,
         "name": "sample_size",
@@ -198,9 +198,11 @@
       {
         "id": 103,
         "name": "seed",
-        "type": "int64_t"
+        "type": "int64_t",
+        "serialize_property": "GetSeed()"
       }
-    ]
+    ],
+    "constructor": ["seed"]
   },
   {
     "class": "BaseReservoirSampling",
@@ -807,6 +809,15 @@
       {"id": 138,
         "name": "dialect_options.rows_until_header",
         "type": "idx_t"
+      },
+      {"id": 139,
+        "name": "encoding",
+        "type": "string"
+      }
+      ,
+      {"id": 140,
+        "name": "dialect_options.state_machine_options.rfc_4180",
+        "type": "CSVOption<bool>"
       }
     ],
     "pointer_type": "none"

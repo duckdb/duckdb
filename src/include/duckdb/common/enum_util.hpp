@@ -166,6 +166,8 @@ enum class FilterPropagateResult : uint8_t;
 
 enum class ForeignKeyType : uint8_t;
 
+enum class FunctionCollationHandling : uint8_t;
+
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionStability : uint8_t;
@@ -277,6 +279,8 @@ enum class ScanType : uint8_t;
 enum class SecretDisplayType : uint8_t;
 
 enum class SecretPersistType : uint8_t;
+
+enum class SecretSerializationType : uint8_t;
 
 enum class SequenceInfo : uint8_t;
 
@@ -567,6 +571,9 @@ template<>
 const char* EnumUtil::ToChars<ForeignKeyType>(ForeignKeyType value);
 
 template<>
+const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandling value);
+
+template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
@@ -733,6 +740,9 @@ const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value);
 
 template<>
 const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value);
+
+template<>
+const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
 
 template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
@@ -1066,6 +1076,9 @@ template<>
 ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value);
 
 template<>
+FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const char *value);
+
+template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
 
 template<>
@@ -1232,6 +1245,9 @@ SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
 
 template<>
 SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
+
+template<>
+SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);
 
 template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);

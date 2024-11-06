@@ -1009,6 +1009,9 @@ static size_t ZDICT_trainFromBuffer_unsafe_legacy(
         unsigned const nb = MIN(25, dictList[0].pos);
         unsigned const dictContentSize = ZDICT_dictSize(dictList);
         unsigned u;
+
+        (void) dictContentSize;
+
         DISPLAYLEVEL(3, "\n %u segments found, of total size %u \n", (unsigned)dictList[0].pos-1, dictContentSize);
         DISPLAYLEVEL(3, "list %u best segments \n", nb-1);
         for (u=1; u<nb; u++) {

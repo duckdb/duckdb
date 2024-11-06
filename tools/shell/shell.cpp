@@ -1528,7 +1528,7 @@ columnar_end:
 
 extern "C" {
 extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                                   int columns);
+                                   int columns, char thousands, char decimal);
 }
 
 /*
@@ -1539,7 +1539,8 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
 		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
-		char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns);
+		char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
+		                                  decimal_separator);
 		if (str) {
 			utf8_printf(out, "%s", str);
 			sqlite3_free(str);
@@ -1985,6 +1986,7 @@ static const char *azHelp[] = {
     ".constantcode ?CODE?     Sets the syntax highlighting terminal code used for constant values",
 #endif
     ".databases               List names and files of attached databases",
+    ".decimal_sep SEP         Sets the decimal separator used when rendering numbers. Only for duckbox mode.",
     ".dump ?TABLE?            Render database content as SQL",
     "   Options:",
     "     --preserve-rowids      Include ROWID values in the output",
@@ -2092,6 +2094,7 @@ static const char *azHelp[] = {
 #endif
     ".tables ?TABLE?          List names of tables matching LIKE pattern TABLE",
     ".testcase NAME           Begin redirecting output to 'testcase-out.txt'",
+    ".thousand_sep SEP        Sets the thousand separator used when rendering numbers. Only for duckbox mode.",
     ".timer on|off            Turn SQL timer on or off",
     ".width NUM1 NUM2 ...     Set minimum column widths for columnar output",
     "     Negative values right-justify",
@@ -2864,6 +2867,33 @@ MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) 
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetSeparator(ShellState &state, const char **azArg, idx_t nArg, const char *separator_name,
+                            char &separator) {
+	if (nArg == 1) {
+		raw_printf(state.out, "current %s separator: %c\n", separator_name, separator);
+	} else if (nArg != 2) {
+		return MetadataResult::PRINT_USAGE;
+	} else if (strcmp(azArg[1], "space") == 0) {
+		separator = ' ';
+	} else if (strcmp(azArg[1], "none") == 0) {
+		separator = '\0';
+	} else if (strlen(azArg[1]) != 1) {
+		raw_printf(stderr, ".%s_sep SEP must be one byte, \"space\" or \"none\"\n", separator_name);
+		return MetadataResult::FAIL;
+	} else {
+		separator = azArg[1][0];
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetDecimalSep(ShellState &state, const char **azArg, idx_t nArg) {
+	return SetSeparator(state, azArg, nArg, "decimal", state.decimal_separator);
+}
+
+MetadataResult SetThousandSep(ShellState &state, const char **azArg, idx_t nArg) {
+	return SetSeparator(state, azArg, nArg, "thousand", state.thousand_separator);
 }
 
 MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
@@ -3900,6 +3930,8 @@ static const MetadataCommand metadata_commands[] = {
     {"changes", 2, ToggleChanges, "on|off", "Show number of rows changed by SQL", 3},
     {"columns", 1, SetColumnRendering, "", "Column-wise rendering of query results", 0},
 
+    {"decimal_sep", 0, SetDecimalSep, "SEP",
+     "Sets the decimal separator used when rendering numbers. Only for duckbox mode.", 3},
     {"databases", 1, ShowDatabases, "", "List names and files of attached databases", 2},
     {"dump", 0, DumpTable, "?TABLE?",
      "Render database content as SQL\n   Options:\n     --newlines             Allow unescaped newline characters in "
@@ -3941,6 +3973,8 @@ static const MetadataCommand metadata_commands[] = {
     {"show", 1, ShowConfiguration, "", "Show the current values for various settings", 0},
     {"system", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
     {"tables", 0, ShowTables, "?TABLE?", "List names of tables matching LIKE pattern TABLE", 2},
+    {"thousand_sep", 0, SetThousandSep, "SEP",
+     "Sets the thousand separator used when rendering numbers. Only for duckbox mode.", 4},
     {"timeout", 0, nullptr, "", "", 5},
     {"timer", 2, ToggleTimer, "on|off", "Turn SQL timer on or off", 0},
     {"version", 1, ShowVersion, "", "Show the version", 0},

@@ -358,10 +358,88 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	return BindScalarFunction(bound_function, std::move(children), is_operator, binder);
 }
 
+bool RequiresCollationPropagation(const LogicalType &type) {
+	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias();
+}
+
+string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
+	string collation;
+	for (auto &arg : children) {
+		if (!RequiresCollationPropagation(arg->return_type)) {
+			// not a varchar column
+			continue;
+		}
+		auto child_collation = StringType::GetCollation(arg->return_type);
+		if (collation.empty()) {
+			collation = child_collation;
+		} else if (!child_collation.empty() && collation != child_collation) {
+			throw BinderException("Cannot combine types with different collation!");
+		}
+	}
+	return collation;
+}
+
+void PropagateCollations(ClientContext &, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &children) {
+	if (!RequiresCollationPropagation(bound_function.return_type)) {
+		// we only need to propagate if the function returns a varchar
+		return;
+	}
+	auto collation = ExtractCollation(children);
+	if (collation.empty()) {
+		// no collation to propagate
+		return;
+	}
+	// propagate the collation to the return type
+	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
+	bound_function.return_type = std::move(collation_type);
+}
+
+void PushCollations(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &children,
+                    CollationType type) {
+	auto collation = ExtractCollation(children);
+	if (collation.empty()) {
+		// no collation to push
+		return;
+	}
+	// push collation into the return type if required
+	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
+	if (RequiresCollationPropagation(bound_function.return_type)) {
+		bound_function.return_type = collation_type;
+	}
+	// push collations to the children
+	for (auto &arg : children) {
+		if (RequiresCollationPropagation(arg->return_type)) {
+			// if this is a varchar type - propagate the collation
+			arg->return_type = collation_type;
+		}
+		// now push the actual collation handling
+		ExpressionBinder::PushCollation(context, arg, arg->return_type, type);
+	}
+}
+
+void HandleCollations(ClientContext &context, ScalarFunction &bound_function,
+                      vector<unique_ptr<Expression>> &children) {
+	switch (bound_function.collation_handling) {
+	case FunctionCollationHandling::IGNORE_COLLATIONS:
+		// explicitly ignoring collation handling
+		break;
+	case FunctionCollationHandling::PROPAGATE_COLLATIONS:
+		PropagateCollations(context, bound_function, children);
+		break;
+	case FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS:
+		// first propagate, then push collations to the children
+		PushCollations(context, bound_function, children, CollationType::COMBINABLE_COLLATIONS);
+		break;
+	default:
+		throw InternalException("Unrecognized collation handling");
+	}
+}
+
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
                                                           optional_ptr<Binder> binder) {
 	unique_ptr<FunctionData> bind_info;
+
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
 	} else if (bound_function.bind_with_binder) {
@@ -378,10 +456,11 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 		FunctionModifiedDatabasesInput input(bind_info, properties);
 		bound_function.get_modified_databases(context, input);
 	}
+	HandleCollations(context, bound_function, children);
+
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
 
-	// now create the function
 	auto return_type = bound_function.return_type;
 	unique_ptr<Expression> result;
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function),

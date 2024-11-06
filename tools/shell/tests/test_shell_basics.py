@@ -983,4 +983,40 @@ def test_nullbyte_error_rendering(shell):
     result = test.run()
     result.check_stderr('INT32')
 
+def test_thousand_sep(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".thousand_sep space")
+        .statement("SELECT 10000")
+        .statement(".thousand_sep ,")
+        .statement("SELECT 10000")
+        .statement(".thousand_sep none")
+        .statement("SELECT 10000")
+        .statement(".thousand_sep")
+    )
+
+    result = test.run()
+    result.check_stdout("10 000")
+    result.check_stdout("10,000")
+    result.check_stdout("10000")
+    result.check_stdout("current thousand separator")
+
+def test_decimal_sep(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".decimal_sep space")
+        .statement("SELECT 10.5")
+        .statement(".decimal_sep ,")
+        .statement("SELECT 10.5")
+        .statement(".decimal_sep none")
+        .statement("SELECT 10.5")
+        .statement(".decimal_sep")
+    )
+
+    result = test.run()
+    result.check_stdout("10 5")
+    result.check_stdout("10,5")
+    result.check_stdout("10.5")
+    result.check_stdout("current decimal separator")
+
 # fmt: on
