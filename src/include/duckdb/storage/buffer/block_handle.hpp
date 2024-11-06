@@ -77,13 +77,7 @@ public:
 		return block_id;
 	}
 
-	void ResizeBuffer(idx_t block_size, int64_t memory_delta) {
-		D_ASSERT(buffer);
-		// resize and adjust current memory
-		buffer->Resize(block_size);
-		memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage) + memory_delta);
-		D_ASSERT(memory_usage == buffer->AllocSize());
-	}
+	void ResizeBuffer(idx_t block_size, int64_t memory_delta);
 
 	int32_t Readers() const {
 		return readers;
@@ -147,9 +141,9 @@ private:
 	//! The block id of the block
 	const block_id_t block_id;
 	//! Memory tag
-	MemoryTag tag;
+	const MemoryTag tag;
 	//! File buffer type
-	FileBufferType buffer_type;
+	const FileBufferType buffer_type;
 	//! Pointer to loaded data (if any)
 	unique_ptr<FileBuffer> buffer;
 	//! Internal eviction sequence number

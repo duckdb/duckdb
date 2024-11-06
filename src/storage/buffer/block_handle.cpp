@@ -72,6 +72,14 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
+void BlockHandle::ResizeBuffer(idx_t block_size, int64_t memory_delta) {
+	D_ASSERT(buffer);
+	// resize and adjust current memory
+	buffer->Resize(block_size);
+	memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage) + memory_delta);
+	D_ASSERT(memory_usage == buffer->AllocSize());
+}
+
 BufferHandle BlockHandle::LoadFromBuffer(data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(state != BlockState::BLOCK_LOADED);
 	// copy over the data into the block from the file buffer
