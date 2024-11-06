@@ -629,7 +629,6 @@ include_directories(third_party/pcg)
 include_directories(third_party/tdigest)
 include_directories(third_party/mbedtls/include)
 include_directories(third_party/jaro_winkler)
-include_directories(third_party/zstd/include)
 include_directories(third_party/yyjson/include)
 include_directories(third_party/zstd/include)
 
