@@ -912,7 +912,7 @@ jobs:
       run: |
         zip -r duckdb-wasm32.zip duckdb-wasm/packages/duckdb-wasm/src/bindings
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: duckdb-wasm32
         path: |
@@ -955,7 +955,7 @@ jobs:
         run: |
           zip -r coverage.zip coverage_html
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage

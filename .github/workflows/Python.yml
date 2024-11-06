@@ -154,7 +154,7 @@ jobs:
         treat_warn_as_error: 0
         ninja: 1
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: manylinux-extensions-x64
         path: |
