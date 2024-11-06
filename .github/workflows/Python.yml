@@ -234,7 +234,7 @@ jobs:
         pip install 'cibuildwheel>=2.16.2' build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       if: ${{ matrix.arch == 'x86_64' }}
       with:
         name: manylinux-extensions-x64

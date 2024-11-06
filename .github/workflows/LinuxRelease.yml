@@ -330,7 +330,7 @@ jobs:
       run: |
         make
 
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
         name: linux-extensions-64
         path: build/release/repository
