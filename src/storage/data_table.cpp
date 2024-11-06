@@ -886,7 +886,10 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 			continue;
 		}
 
-		D_ASSERT(col.HasDefaultValue());
+		if (!col.HasDefaultValue()) {
+			throw InvalidInputException("cannot set the default value of a column without a default value");
+		}
+
 		auto default_copy = col.DefaultValue().Copy();
 		default_binder.target_type = col.Type();
 		auto bound_default = default_binder.Bind(default_copy);

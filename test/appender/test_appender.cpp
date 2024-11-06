@@ -571,3 +571,173 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 	REQUIRE(failed);
 	REQUIRE_NO_FAIL(con.Query("COMMIT TRANSACTION"));
 }
+
+TEST_CASE("Test appending to a default column", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
+	Appender appender(con, "main", "tbl");
+	appender.SetDefaultColumn("k");
+
+	DataChunk chunk;
+	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
+	chunk.Initialize(*con.context, types);
+
+	auto &col_i = chunk.data[0];
+	auto col_i_data = reinterpret_cast<int32_t *>(col_i.GetData());
+	col_i_data[0] = 42;
+	col_i_data[1] = 43;
+
+	auto &col_j = chunk.data[1];
+	auto col_j_data = reinterpret_cast<int32_t *>(col_j.GetData());
+	col_j_data[0] = 111;
+	col_j_data[1] = 112;
+
+	chunk.SetCardinality(2);
+	appender.AppendDataChunk(chunk);
+	appender.Close();
+
+	result = con.Query("SELECT i, j, k FROM tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
+	REQUIRE(CHECK_COLUMN(result, 1, {111, 112}));
+	REQUIRE(CHECK_COLUMN(result, 2, {30, 30}));
+}
+
+TEST_CASE("Test appending to multiple default columns", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
+	Appender appender(con, "main", "tbl");
+	appender.SetDefaultColumn("k");
+	appender.SetDefaultColumn("i");
+
+	DataChunk chunk;
+	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
+	chunk.Initialize(*con.context, types);
+
+	for (idx_t i = 0; i < 4; i++) {
+		auto &col_j = chunk.data[1];
+		auto col_j_data = reinterpret_cast<int32_t *>(col_j.GetData());
+
+		auto offset = i * STANDARD_VECTOR_SIZE;
+		for (idx_t j = 0; j < STANDARD_VECTOR_SIZE; j++) {
+			col_j_data[j] = int32_t(offset + j);
+		}
+
+		chunk.SetCardinality(STANDARD_VECTOR_SIZE);
+		appender.AppendDataChunk(chunk);
+		chunk.Reset();
+	}
+	appender.Close();
+
+	result = con.Query("SELECT SUM(i), SUM(j), SUM(k) FROM tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {32768}));
+	REQUIRE(CHECK_COLUMN(result, 1, {33550336}));
+	REQUIRE(CHECK_COLUMN(result, 2, {245760}));
+}
+
+TEST_CASE("Test changing the default column configuration", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
+	Appender appender(con, "main", "tbl");
+
+	// Create a data chunk with all three columns filled.
+
+	DataChunk chunk;
+	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
+	chunk.Initialize(*con.context, types);
+
+	auto &col_i = chunk.data[0];
+	auto col_i_data = reinterpret_cast<int32_t *>(col_i.GetData());
+	col_i_data[0] = 42;
+
+	auto &col_j = chunk.data[1];
+	auto col_j_data = reinterpret_cast<int32_t *>(col_j.GetData());
+	col_j_data[0] = 111;
+
+	auto &col_k = chunk.data[2];
+	auto col_k_data = reinterpret_cast<int32_t *>(col_k.GetData());
+	col_k_data[0] = 50;
+
+	chunk.SetCardinality(1);
+	appender.AppendDataChunk(chunk);
+
+	appender.SetDefaultColumn("k");
+	appender.AppendDataChunk(chunk);
+
+	appender.SetDefaultColumn("i");
+	appender.AppendDataChunk(chunk);
+
+	appender.ResetDefaultColumn("k");
+	appender.ResetDefaultColumn("i");
+	appender.AppendDataChunk(chunk);
+
+	appender.SetDefaultColumn("i");
+	appender.AppendDataChunk(chunk);
+
+	appender.ResetDefaultColumn("i");
+	appender.AppendDataChunk(chunk);
+	appender.Close();
+
+	result = con.Query("SELECT i, j, k FROM tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {42, 42, 4, 42, 4, 42}));
+	REQUIRE(CHECK_COLUMN(result, 1, {111, 111, 111, 111, 111, 111}));
+	REQUIRE(CHECK_COLUMN(result, 2, {50, 30, 30, 50, 50, 50}));
+}
+
+TEST_CASE("Test edge cases for the default column configuration", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (2 * j))"));
+	Appender appender(con, "main", "tbl");
+
+	appender.SetDefaultColumn("k");
+	// Ignore columns that do not exist.
+	appender.ResetDefaultColumn("hello");
+	appender.SetDefaultColumn("world");
+	// Ignore generated columns as default values.
+	appender.SetDefaultColumn("l");
+
+	DataChunk chunk;
+	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
+	chunk.Initialize(*con.context, types);
+
+	auto &col_i = chunk.data[0];
+	auto col_i_data = reinterpret_cast<int32_t *>(col_i.GetData());
+	col_i_data[0] = 42;
+	col_i_data[1] = 43;
+
+	auto &col_j = chunk.data[1];
+	auto col_j_data = reinterpret_cast<int32_t *>(col_j.GetData());
+	col_j_data[0] = 111;
+	col_j_data[1] = 112;
+
+	chunk.SetCardinality(2);
+	appender.AppendDataChunk(chunk);
+
+	// We flush the previous valid data.
+	// Then, we set a column that does not have a default value.
+	appender.SetDefaultColumn("j");
+	appender.AppendDataChunk(chunk);
+
+	bool failed;
+	try {
+		appender.Flush();
+		failed = false;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("cannot set the default value of a column without a default value") !=
+		        std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+}
