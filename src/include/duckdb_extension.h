@@ -496,6 +496,8 @@ typedef struct {
 	                                                    duckdb_table_description *out);
 	char *(*duckdb_table_description_get_column_name)(duckdb_table_description table_description, idx_t index);
 	duckdb_logical_type (*duckdb_param_logical_type)(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+	bool (*duckdb_is_null_value)(duckdb_value value);
+	duckdb_value (*duckdb_create_null_value)();
 #endif
 
 } duckdb_ext_api_v0;
@@ -879,6 +881,8 @@ typedef struct {
 
 // Version dev
 #define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
+#define duckdb_is_null_value                     duckdb_ext_api.duckdb_is_null_value
+#define duckdb_create_null_value                 duckdb_ext_api.duckdb_create_null_value
 #define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
 #define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
 #define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name

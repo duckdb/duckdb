@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 
 namespace duckdb {
@@ -302,13 +303,75 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const py::ar
 			column_names.push_back(std::string(py::str(part)));
 		}
 	}
-
-	return make_shared_ptr<DuckDBPyExpression>(make_uniq<duckdb::ColumnRefExpression>(std::move(column_names)));
+	auto column_ref = make_uniq<duckdb::ColumnRefExpression>(std::move(column_names));
+	return make_shared_ptr<DuckDBPyExpression>(std::move(column_ref));
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ConstantExpression(const py::object &value) {
 	auto val = TransformPythonValue(value);
 	return InternalConstantExpression(std::move(val));
+}
+
+static py::args CreateArgsFromItem(py::handle item) {
+	if (py::isinstance<py::tuple>(item)) {
+		return py::cast<py::args>(item);
+	} else {
+		return py::make_tuple(item);
+	}
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::object &lhs_p,
+                                                                    const DuckDBPyExpression &rhs) {
+	unique_ptr<ParsedExpression> lhs;
+	if (py::isinstance<py::tuple>(lhs_p)) {
+		// LambdaExpression(lhs=(<item>, <item>, <item>))
+		auto lhs_tuple = py::cast<py::tuple>(lhs_p);
+		vector<unique_ptr<ParsedExpression>> children;
+		for (auto &item : lhs_tuple) {
+			unique_ptr<ParsedExpression> column;
+			if (py::isinstance<DuckDBPyExpression>(item)) {
+				// 'item' is already an Expression, check its type and use it
+				auto column_expr = py::cast<shared_ptr<DuckDBPyExpression>>(item);
+				if (column_expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+					throw py::value_error("'lhs' was provided as a tuple of columns, but one of the columns is not of "
+					                      "type ColumnExpression");
+				}
+				column = column_expr->GetExpression().Copy();
+			} else {
+				// 'item' is a tuple[str, ...] or str, construct a ColumnExpression from it
+				auto args = CreateArgsFromItem(item);
+				auto column_expr = ColumnExpression(args);
+				if (column_expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+					throw py::value_error("'lhs' was provided as a tuple of columns, but one of the columns is not of "
+					                      "type ColumnExpression");
+				}
+				column = std::move(column_expr->expression);
+			}
+			children.push_back(std::move(column));
+		}
+		auto row_function = InternalFunctionExpression("row", std::move(children), false);
+		lhs = std::move(row_function->expression);
+	} else if (py::isinstance<py::str>(lhs_p)) {
+		// LambdaExpression(lhs=str)
+		auto args = CreateArgsFromItem(lhs_p);
+		auto column_expr = ColumnExpression(args);
+		if (column_expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+			throw py::value_error("'lhs' should be a valid ColumnExpression (or be used to create one)");
+		}
+		lhs = std::move(column_expr->expression);
+	} else if (py::isinstance<DuckDBPyExpression>(lhs_p)) {
+		// LambdaExpression(lhs=Expression)
+		// 'lhs_p' is already an Expression, check its type and use it
+		auto column_expr = py::cast<shared_ptr<DuckDBPyExpression>>(lhs_p);
+		if (column_expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+			throw py::value_error("'lhs' was an Expression, but is not of type ColumnExpression");
+		}
+		lhs = column_expr->GetExpression().Copy();
+	} else {
+		throw py::value_error("Please provide 'lhs' as either a tuple containing strings, or a single string");
+	}
+	auto lambda_expression = make_uniq<duckdb::LambdaExpression>(std::move(lhs), rhs.GetExpression().Copy());
+	return make_shared_ptr<DuckDBPyExpression>(std::move(lambda_expression));
 }
 
 // Private methods

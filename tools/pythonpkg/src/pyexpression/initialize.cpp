@@ -34,6 +34,10 @@ void InitializeStaticMethods(py::module_ &m) {
 	// Coalesce Operator
 	docs = "";
 	m.def("CoalesceOperator", &DuckDBPyExpression::Coalesce, docs);
+
+	// Lambda Expression
+	docs = "";
+	m.def("LambdaExpression", &DuckDBPyExpression::LambdaExpression, py::arg("lhs"), py::arg("rhs"), docs);
 }
 
 static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
