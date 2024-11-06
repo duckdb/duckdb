@@ -93,12 +93,19 @@ void BaseCSVData::Finalize() {
 			StringDetection(options.dialect_options.state_machine_options.delimiter.GetValue(), null_str, "DELIMITER",
 			                "NULL");
 
-			// quote/escape and nullstr must not be substrings of each other
+			// quote and nullstr must not be substrings of each other
 			SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), null_str, "QUOTE",
 			                   "NULL");
 
-			SubstringDetection(options.dialect_options.state_machine_options.escape.GetValue(), null_str, "ESCAPE",
-			                   "NULL");
+			// Validate the nullstr against the escape character
+			const char escape = options.dialect_options.state_machine_options.escape.GetValue();
+			// Allow nullstr to be escape character + some non-special character, e.g., "\N" (MySQL default).
+			// In this case, only unquoted occurrences of the nullstr will be recognized as null values.
+			if (options.dialect_options.state_machine_options.rfc_4180 == false && null_str.size() == 2 &&
+			    null_str[0] == escape && null_str[1] != '\0') {
+				continue;
+			}
+			SubstringDetection(escape, null_str, "ESCAPE", "NULL");
 		}
 	}
 

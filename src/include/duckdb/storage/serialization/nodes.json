@@ -809,6 +809,15 @@
       {"id": 138,
         "name": "dialect_options.rows_until_header",
         "type": "idx_t"
+      },
+      {"id": 139,
+        "name": "encoding",
+        "type": "string"
+      }
+      ,
+      {"id": 140,
+        "name": "dialect_options.state_machine_options.rfc_4180",
+        "type": "CSVOption<bool>"
       }
     ],
     "pointer_type": "none"

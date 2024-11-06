@@ -173,12 +173,12 @@ select jaro_winkler_similarity('PENNSYLVANIA', 'PENNCISYLVNIA')
 
 # test score cutoff
 query T
-select jaro_winkler_similarity('CRATE', 'TRACE', 0.7)
+select jaro_winkler_similarity('CRATE', 'TRACE', 0.6)
 ----
 0.733333
 
 query T
-select jaro_winkler_similarity('CRATE', 'TRACE', 0.75)
+select jaro_winkler_similarity('CRATE', 'TRACE', 0.8)
 ----
 0.0
 

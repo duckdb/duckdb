@@ -84,7 +84,16 @@ struct CSVStates {
 		return states[0] == CSVState::UNQUOTED;
 	}
 	inline bool IsEscaped() const {
-		return states[1] == CSVState::ESCAPE || (states[0] == CSVState::UNQUOTED && states[1] == CSVState::QUOTED);
+		switch (states[1]) {
+		case CSVState::ESCAPE:
+		case CSVState::UNQUOTED_ESCAPE:
+		case CSVState::ESCAPED_RETURN:
+			return true;
+		case CSVState::QUOTED:
+			return states[0] == CSVState::UNQUOTED;
+		default:
+			return false;
+		}
 	}
 	inline bool IsQuotedCurrent() const {
 		return states[1] == CSVState::QUOTED || states[1] == CSVState::QUOTED_NEW_LINE;

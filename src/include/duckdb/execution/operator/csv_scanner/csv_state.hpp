@@ -32,6 +32,7 @@ enum class CSVState : uint8_t {
 	EMPTY_SPACE = 13,      //! If we have empty spaces in the beginning and end of value
 	COMMENT = 14,          //! If we are in a comment state, and hence have to skip the whole line
 	STANDARD_NEWLINE = 15, //! State used for figuring out a new line.
+	UNQUOTED_ESCAPE = 16,  //! State when encountering an escape character (e.g., \) in an unquoted field
+	ESCAPED_RETURN = 17 //! State when the carriage return is preceded by an escape character (for '\r\n' newline only)
 };
-
 } // namespace duckdb
