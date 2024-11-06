@@ -172,6 +172,14 @@ void CSVReaderOptions::SetNewline(const string &input) {
 	}
 }
 
+bool CSVReaderOptions::GetRFC4180() const {
+	return this->dialect_options.state_machine_options.rfc_4180.GetValue();
+}
+
+void CSVReaderOptions::SetRFC4180(bool input) {
+	this->dialect_options.state_machine_options.rfc_4180.Set(input);
+}
+
 bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
@@ -374,6 +382,8 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, 
 
 	} else if (loption == "compression") {
 		SetCompression(ParseString(value, loption));
+	} else if (loption == "rfc_4180") {
+		SetRFC4180(ParseBoolean(value, loption));
 	} else {
 		// unrecognized option in base CSV
 		return false;
@@ -398,6 +408,7 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	auto &escape = dialect_options.state_machine_options.escape;
 	auto &comment = dialect_options.state_machine_options.comment;
 	auto &new_line = dialect_options.state_machine_options.new_line;
+	auto &rfc_4180 = dialect_options.state_machine_options.rfc_4180;
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
@@ -417,6 +428,8 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	error += FormatOptionLine("skip_rows", skip_rows);
 	// comment
 	error += FormatOptionLine("comment", comment);
+	// rfc_4180
+	error += FormatOptionLine("rfc_4180", rfc_4180);
 	// date format
 	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
 	// timestamp format
@@ -653,6 +666,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
 	auto &comment = dialect_options.state_machine_options.comment;
+	auto &rfc_4180 = dialect_options.state_machine_options.rfc_4180;
 	auto &header = dialect_options.header;
 	if (delimiter.IsSetByUser()) {
 		named_params["delim"] = Value(GetDelimiter());
@@ -671,6 +685,9 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	}
 	if (header.IsSetByUser()) {
 		named_params["header"] = Value(GetHeader());
+	}
+	if (rfc_4180.IsSetByUser()) {
+		named_params["rfc_4180"] = Value(GetRFC4180());
 	}
 	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size));
 	if (dialect_options.skip_rows.IsSetByUser()) {
