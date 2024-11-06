@@ -80,9 +80,12 @@ public:
 
 } // namespace duckdb
 
+namespace std {
 template <>
-struct std::hash<duckdb::uhugeint_t> {
-	inline size_t operator()(const duckdb::uhugeint_t &val) const {
+struct hash<duckdb::uhugeint_t> {
+	size_t operator()(const duckdb::uhugeint_t &val) const {
+		using std::hash;
 		return hash<uint64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
 	}
 };
+} // namespace std

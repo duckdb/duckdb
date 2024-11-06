@@ -2443,24 +2443,25 @@ struct NumericLimits<double_na_equal> {
 
 } // namespace duckdb
 
+namespace std {
 template <>
-struct std::hash<duckdb::ParquetIntervalTargetType> {
-	inline size_t operator()(const duckdb::ParquetIntervalTargetType &val) const {
+struct hash<duckdb::ParquetIntervalTargetType> {
+	size_t operator()(const duckdb::ParquetIntervalTargetType &val) const {
 		return duckdb::Hash(duckdb::const_char_ptr_cast(val.bytes),
 		                    duckdb::ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE);
 	}
 };
 
 template <>
-struct std::hash<duckdb::ParquetUUIDTargetType> {
-	inline size_t operator()(const duckdb::ParquetUUIDTargetType &val) const {
+struct hash<duckdb::ParquetUUIDTargetType> {
+	size_t operator()(const duckdb::ParquetUUIDTargetType &val) const {
 		return duckdb::Hash(duckdb::const_char_ptr_cast(val.bytes), duckdb::ParquetUUIDTargetType::PARQUET_UUID_SIZE);
 	}
 };
 
 template <>
-struct std::hash<duckdb::float_na_equal> {
-	inline size_t operator()(const duckdb::float_na_equal &val) const {
+struct hash<duckdb::float_na_equal> {
+	size_t operator()(const duckdb::float_na_equal &val) const {
 		if (std::isnan(val.val)) {
 			return duckdb::Hash<float>(std::numeric_limits<float>::quiet_NaN());
 		}
@@ -2469,7 +2470,7 @@ struct std::hash<duckdb::float_na_equal> {
 };
 
 template <>
-struct std::hash<duckdb::double_na_equal> {
+struct hash<duckdb::double_na_equal> {
 	inline size_t operator()(const duckdb::double_na_equal &val) const {
 		if (std::isnan(val.val)) {
 			return duckdb::Hash<double>(std::numeric_limits<double>::quiet_NaN());
@@ -2477,3 +2478,4 @@ struct std::hash<duckdb::double_na_equal> {
 		return duckdb::Hash<double>(val.val);
 	}
 };
+} // namespace std

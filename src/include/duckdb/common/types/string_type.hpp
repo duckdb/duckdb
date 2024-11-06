@@ -236,9 +236,11 @@ private:
 
 } // namespace duckdb
 
+namespace std {
 template <>
-struct std::hash<duckdb::string_t> {
-	inline size_t operator()(const duckdb::string_t &val) const {
+struct hash<duckdb::string_t> {
+	size_t operator()(const duckdb::string_t &val) const {
 		return Hash(val);
 	}
 };
+} // namespace std
