@@ -239,7 +239,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 }
 
 EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &handle) {
-	const auto &handle_buffer_type = handle.buffer->type;
+	const auto &handle_buffer_type = handle.GetBufferType();
 
 	// Get offset into eviction queues for this FileBufferType
 	idx_t queue_index = 0;

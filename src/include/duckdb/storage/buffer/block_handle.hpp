@@ -122,18 +122,22 @@ public:
 	}
 
 	void SetEvictionQueueIndex(const idx_t index) {
-		D_ASSERT(!eviction_queue_idx.IsValid());                  // Cannot overwrite
-		D_ASSERT(buffer->type == FileBufferType::MANAGED_BUFFER); // MANAGED_BUFFER only (at least, for now)
+		D_ASSERT(!eviction_queue_idx.IsValid());                     // Cannot overwrite
+		D_ASSERT(GetBufferType() == FileBufferType::MANAGED_BUFFER); // MANAGED_BUFFER only (at least, for now)
 		eviction_queue_idx = index;
 	}
 
-private:
+	FileBufferType GetBufferType() const {
+		return buffer_type;
+	}
+
 	BufferHandle Load(unique_ptr<FileBuffer> buffer = nullptr);
 	BufferHandle LoadFromBuffer(data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
 	void Unload();
 	bool CanUnload();
 
+private:
 	//! The block-level lock
 	mutex lock;
 	//! Whether or not the block is loaded/unloaded
@@ -144,6 +148,8 @@ private:
 	const block_id_t block_id;
 	//! Memory tag
 	MemoryTag tag;
+	//! File buffer type
+	FileBufferType buffer_type;
 	//! Pointer to loaded data (if any)
 	unique_ptr<FileBuffer> buffer;
 	//! Internal eviction sequence number

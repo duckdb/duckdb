@@ -387,11 +387,11 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	bool purge = false;
 	{
 		lock_guard<mutex> lock(handle->lock);
-		if (!handle->buffer || handle->buffer->type == FileBufferType::TINY_BUFFER) {
+		if (!handle->buffer || handle->GetBufferType() == FileBufferType::TINY_BUFFER) {
 			return;
 		}
 		D_ASSERT(handle->readers > 0);
-		handle->readers--;
+		--handle->readers;
 		if (handle->readers == 0) {
 			VerifyZeroReaders(handle);
 			if (handle->MustAddToEvictionQueue()) {
