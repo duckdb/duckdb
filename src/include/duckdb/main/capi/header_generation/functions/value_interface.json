@@ -878,6 +878,32 @@
                 },
                 "return_value": "The value as a duckdb_value."
             }
+        },
+        {
+            "name": "duckdb_is_null_value",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Returns whether the specified value is null value or not.\n\n",
+                "param_comments": {
+                    "value": "The value to check."
+                },
+                "return_value": "True if the value is null, otherwise false."
+            }
+        },
+        {
+            "name": "duckdb_create_null_value",
+            "return_type": "duckdb_value",
+            "params": [],
+            "comment": {
+                "description": "Creates a value representing a NULL value.\n\n",
+                "return_value": "The duckdb_value that represents NULL. This must be destroyed with `duckdb_destroy_value`."
+            }
         }
     ]
 }
