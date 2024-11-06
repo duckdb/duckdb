@@ -3,10 +3,12 @@
 
 require skip_reload
 
-require httpfs
-
 statement ok
-ATTACH 'https://blobs.duckdb.org/data/checksum-macro.duckdb' AS checksum_macro;
+ATTACH ':memory:' AS checksum_macro;
+
+CREATE MACRO checksum_macro.checksum(table_name) AS TABLE
+    SELECT bit_xor(md5_number(COLUMNS(*)::VARCHAR))
+    FROM query_table(table_name);
 
 # Use 'query_table' with a schema-qualified table name
 
