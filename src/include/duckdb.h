@@ -2258,6 +2258,17 @@ Creates a value representing a NULL value.
 */
 DUCKDB_API duckdb_value duckdb_create_null_value();
 
+DUCKDB_API idx_t duckdb_get_list_size();
+
+/*!
+Returns the LIST child at index as a duckdb_value.
+
+* @param value The LIST value.
+* @param index The index of the child.
+* @return The child as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index);
+
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
 //===--------------------------------------------------------------------===//

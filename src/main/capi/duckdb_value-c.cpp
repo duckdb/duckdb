@@ -337,3 +337,35 @@ bool duckdb_is_null_value(duckdb_value value) {
 duckdb_value duckdb_create_null_value() {
 	return WrapValue(new duckdb::Value());
 }
+
+idx_t duckdb_get_list_size(duckdb_value value) {
+	if (!value) {
+		return 0;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::LIST) {
+		return 0;
+	}
+
+	auto &children = duckdb::ListValue::GetChildren(val);
+	return children.size();
+}
+
+duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index) {
+	if (!value) {
+		return nullptr;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::LIST) {
+		return nullptr;
+	}
+
+	auto &children = duckdb::ListValue::GetChildren(val);
+	if (index >= children.size()) {
+		return nullptr;
+	}
+
+	return WrapValue(new duckdb::Value(children[index]));
+}

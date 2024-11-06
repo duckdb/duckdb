@@ -904,6 +904,37 @@
                 "description": "Creates a value representing a NULL value.\n\n",
                 "return_value": "The duckdb_value that represents NULL. This must be destroyed with `duckdb_destroy_value`."
             }
+        },
+        {
+            "name": "duckdb_get_list_size",
+            "return_type": "idx_t",
+                "description": "Returns the number of elements in a LIST value.\n\n",
+                "param_comments": {
+                    "value": "The LIST value."
+                },
+                "return_value": "The number of elements in the list."
+        },
+        {
+            "name": "duckdb_get_list_child",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the LIST child at index as a duckdb_value.\n\n",
+                "param_comments": {
+                    "value": "The LIST value.",
+                    "index": "The index of the child."
+                },
+                "return_value": "The child as a duckdb_value."
+            }
         }
     ]
 }
