@@ -442,13 +442,14 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
-	} else if (bound_function.bind_with_binder) {
+	} else if (bound_function.bind_extended) {
 		if (!binder) {
-			throw InternalException("Function '%s' has a 'bind_with_binder' but the FunctionBinder was created without "
+			throw InternalException("Function '%s' has a 'bind_extended' but the FunctionBinder was created without "
 			                        "a reference to a Binder",
 			                        bound_function.name);
 		}
-		bind_info = bound_function.bind_with_binder(*binder, bound_function, children);
+		ScalarFunctionBindInput bind_input(*binder);
+		bind_info = bound_function.bind_extended(bind_input, bound_function, children);
 	}
 
 	if (bound_function.get_modified_databases && binder) {

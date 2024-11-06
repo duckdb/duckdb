@@ -89,12 +89,13 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-static unique_ptr<FunctionData> NextValBind(Binder &binder, ScalarFunction &,
+static unique_ptr<FunctionData> NextValBind(ScalarFunctionBindInput &bind_input, ScalarFunction &,
                                             vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[0]->IsFoldable()) {
 		throw NotImplementedException(
 		    "currval/nextval requires a constant sequence - non-constant sequences are no longer supported");
 	}
+	auto &binder = bind_input.binder;
 	// parameter to nextval function is a foldable constant
 	// evaluate the constant and perform the catalog lookup already
 	auto seqname = ExpressionExecutor::EvaluateScalar(binder.context, *arguments[0]);
@@ -135,7 +136,7 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 ScalarFunction NextvalFun::GetFunction() {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, nullptr, nullptr);
-	next_val.bind_with_binder = NextValBind;
+	next_val.bind_extended = NextValBind;
 	next_val.stability = FunctionStability::VOLATILE;
 	next_val.serialize = Serialize;
 	next_val.deserialize = Deserialize;
@@ -147,7 +148,7 @@ ScalarFunction NextvalFun::GetFunction() {
 ScalarFunction CurrvalFun::GetFunction() {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
-	curr_val.bind_with_binder = NextValBind;
+	curr_val.bind_extended = NextValBind;
 	curr_val.stability = FunctionStability::VOLATILE;
 	curr_val.serialize = Serialize;
 	curr_val.deserialize = Deserialize;
