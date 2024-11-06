@@ -16,7 +16,7 @@ BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t evi
 }
 
 bool BufferEvictionNode::CanUnload(BlockHandle &handle_p) {
-	if (handle_sequence_number != handle_p.eviction_seq_num) {
+	if (handle_sequence_number != handle_p.EvictionSequenceNumber()) {
 		// handle was used in between
 		return false;
 	}

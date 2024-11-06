@@ -57,7 +57,6 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 
 class BlockHandle : public enable_shared_from_this<BlockHandle> {
 	friend class BlockManager;
-	friend struct BufferEvictionNode;
 	friend class BufferHandle;
 	friend class BufferManager;
 	friend class StandardBufferManager;
@@ -73,8 +72,12 @@ public:
 	BlockManager &block_manager;
 
 public:
-	block_id_t BlockId() {
+	block_id_t BlockId() const {
 		return block_id;
+	}
+
+	idx_t EvictionSequenceNumber() const {
+		return eviction_seq_num;
 	}
 
 	void ResizeBuffer(idx_t block_size, int64_t memory_delta);
