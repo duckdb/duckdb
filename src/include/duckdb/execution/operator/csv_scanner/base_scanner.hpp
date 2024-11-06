@@ -255,6 +255,8 @@ protected:
 				}
 			} break;
 			case CSVState::ESCAPE:
+			case CSVState::UNQUOTED_ESCAPE:
+			case CSVState::ESCAPED_RETURN:
 				T::SetEscaped(result);
 				ever_escaped = true;
 				iterator.pos.buffer_pos++;
@@ -267,6 +269,7 @@ protected:
 					if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
 					                     (value ^ state_machine->transition_array.new_line) &
 					                     (value ^ state_machine->transition_array.carriage_return) &
+					                     (value ^ state_machine->transition_array.escape) &
 					                     (value ^ state_machine->transition_array.comment))) {
 						break;
 					}

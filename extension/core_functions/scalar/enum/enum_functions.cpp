@@ -56,12 +56,7 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 	for (idx_t i = start; i < end; i++) {
 		enum_values.emplace_back(enum_vector.GetValue(i));
 	}
-	Value val;
-	if (enum_values.empty()) {
-		val = Value::EMPTYLIST(LogicalType::VARCHAR);
-	} else {
-		val = Value::LIST(enum_values);
-	}
+	auto val = Value::LIST(LogicalType::VARCHAR, enum_values);
 	result.Reference(val);
 }
 
