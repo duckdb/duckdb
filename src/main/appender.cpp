@@ -433,7 +433,7 @@ void BaseAppender::FlushChunk() {
 }
 
 void BaseAppender::Flush() {
-	// check that all vectors have the same length before appending
+	// Check that all vectors have the same length before appending.
 	if (column != 0) {
 		throw InvalidInputException("Failed to Flush appender: incomplete append to row!");
 	}
@@ -442,21 +442,14 @@ void BaseAppender::Flush() {
 	if (collection->Count() == 0) {
 		return;
 	}
-	FlushInternal(*collection);
 
+	FlushInternal(*collection);
 	collection->Reset();
 	column = 0;
 }
 
 void Appender::FlushInternal(ColumnDataCollection &collection) {
-	if (default_columns.empty() && default_entries.empty()) {
-		context->Append(*description, collection);
-		return;
-	}
-
-	if (!default_columns.empty()) {
-
-	}
+	context->Append(*description, collection, default_columns);
 }
 
 void Appender::AppendDefault() {
@@ -471,19 +464,14 @@ void Appender::AppendDefault() {
 	Append(default_value);
 }
 
-void Appender::SetDefaultColumn(const column_t col_idx) {
-	default_columns.insert(col_idx);
+void Appender::SetDefaultColumn(const string &name) {
+	Flush();
+	default_columns.insert(name);
 }
 
-void Appender::SetDefaultValue(const column_t col_idx, const row_t row_idx) {
-	auto it = default_entries.find(col_idx);
-	if (it != default_entries.end()) {
-		it->second.insert(row_idx);
-		return;
-	}
-
-	unordered_set<row_t> row_ids = {row_idx};
-	default_entries.emplace(col_idx, std::move(row_ids));
+void Appender::ResetDefaultColumn(const string &name) {
+	Flush();
+	default_columns.erase(name);
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
@@ -492,12 +480,12 @@ void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	table.GetStorage().LocalAppend(table, context, collection, bound_constraints);
 }
 
-void InternalAppender::SetDefaultColumn(const column_t col_idx) {
+void InternalAppender::SetDefaultColumn(const string &name) {
 	throw InternalException("SetDefaultColumn not implemented for InternalAppender");
 }
 
-void InternalAppender::SetDefaultValue(const column_t col_idx, const row_t row_idx) {
-	throw InternalException("SetDefaultValue not implemented for InternalAppender");
+void InternalAppender::ResetDefaultColumn(const string &name) {
+	throw InternalException("ResetDefaultColumn not implemented for InternalAppender");
 }
 
 void BaseAppender::Close() {

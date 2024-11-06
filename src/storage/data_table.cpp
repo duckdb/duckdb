@@ -26,6 +26,8 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -859,6 +861,49 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 	for (auto &chunk : collection.Chunks()) {
 		storage.LocalAppend(append_state, table, context, chunk);
+	}
+	storage.FinalizeLocalAppend(append_state);
+}
+
+void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+                            const unordered_set<string> &default_columns) {
+	if (default_columns.empty()) {
+		return LocalAppend(table, context, collection, bound_constraints);
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	ConstantBinder default_binder(*binder, context, "DEFAULT value");
+
+	auto &column_list = table.GetColumns();
+	vector<unique_ptr<Expression>> expressions;
+
+	for (idx_t i = 0; i < column_list.PhysicalColumnCount(); i++) {
+		auto &col = column_list.GetColumn(PhysicalIndex(i));
+		if (default_columns.find(col.Name()) == default_columns.end()) {
+			auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
+			expressions.push_back(std::move(expr));
+			continue;
+		}
+
+		D_ASSERT(col.HasDefaultValue());
+		auto default_copy = col.DefaultValue().Copy();
+		default_binder.target_type = col.Type();
+		auto bound_default = default_binder.Bind(default_copy);
+		expressions.push_back(std::move(bound_default));
+	}
+
+	ExpressionExecutor expression_executor(context, expressions);
+	DataChunk result;
+	result.Initialize(context, table.GetTypes());
+
+	LocalAppendState append_state;
+	auto &storage = table.GetStorage();
+	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
+	for (auto &chunk : collection.Chunks()) {
+		expression_executor.Execute(chunk, result);
+		storage.LocalAppend(append_state, table, context, result);
+		result.Reset();
 	}
 	storage.FinalizeLocalAppend(append_state);
 }

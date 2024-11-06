@@ -124,6 +124,10 @@ public:
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
 	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
+	//! Appends a DataChunk and its default columns to the specified table. Returns whether or not the append was
+	//! successful.
+	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection,
+	                       const unordered_set<string> &default_columns);
 
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns
