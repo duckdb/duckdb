@@ -395,16 +395,13 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
 		}
-		if (entries.empty() && !IsInvalidSchema(schema)) {
-			// There are no catalog+schema combinations that match the provided schema
-			// try all the catalogs in the search path anyways
-			auto catalogs = search_path.GetCatalogs();
-			for (auto &catalog_name : catalogs) {
-				entries.emplace_back(catalog_name, schema);
-			}
-		}
 		if (entries.empty()) {
-			entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+			auto &default_entry = search_path.GetDefault();
+			if (!IsInvalidCatalog(default_entry.catalog)) {
+				entries.emplace_back(default_entry.catalog, schema);
+			} else {
+				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+			}
 		}
 	} else if (IsInvalidSchema(schema)) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
