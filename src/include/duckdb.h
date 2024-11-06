@@ -2258,7 +2258,13 @@ Creates a value representing a NULL value.
 */
 DUCKDB_API duckdb_value duckdb_create_null_value();
 
-DUCKDB_API idx_t duckdb_get_list_size();
+/*!
+Returns the number of elements in a LIST value.
+
+* @param value The LIST value.
+* @return The number of elements in the list.
+*/
+DUCKDB_API idx_t duckdb_get_list_size(duckdb_value value);
 
 /*!
 Returns the LIST child at index as a duckdb_value.

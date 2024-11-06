@@ -908,11 +908,19 @@
         {
             "name": "duckdb_get_list_size",
             "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
                 "description": "Returns the number of elements in a LIST value.\n\n",
                 "param_comments": {
                     "value": "The LIST value."
                 },
                 "return_value": "The number of elements in the list."
+            }
         },
         {
             "name": "duckdb_get_list_child",
