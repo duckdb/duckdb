@@ -449,7 +449,7 @@ void BaseAppender::Flush() {
 }
 
 void Appender::FlushInternal(ColumnDataCollection &collection) {
-	context->Append(*description, collection, default_columns);
+	context->Append(*description, collection, &default_columns);
 }
 
 void Appender::AppendDefault() {

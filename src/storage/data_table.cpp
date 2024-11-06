@@ -867,8 +867,8 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
                             const vector<unique_ptr<BoundConstraint>> &bound_constraints,
-                            const unordered_set<string> &default_columns) {
-	if (default_columns.empty()) {
+                            optional_ptr<const unordered_set<string>> default_columns) {
+	if (!default_columns || default_columns->empty()) {
 		return LocalAppend(table, context, collection, bound_constraints);
 	}
 
@@ -880,7 +880,7 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	for (idx_t i = 0; i < column_list.PhysicalColumnCount(); i++) {
 		auto &col = column_list.GetColumn(PhysicalIndex(i));
-		if (default_columns.find(col.Name()) == default_columns.end()) {
+		if (default_columns->find(col.Name()) == default_columns->end()) {
 			auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
 			expressions.push_back(std::move(expr));
 			continue;
