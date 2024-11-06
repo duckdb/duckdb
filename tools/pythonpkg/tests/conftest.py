@@ -68,54 +68,6 @@ def duckdb_empty_cursor(request):
     return cursor
 
 
-def is_null(value, nullable: bool = False):
-    if nullable:
-        import pandas as pd
-
-        return pd.isna(value)
-    else:
-        import numpy as np
-
-        return np.isnan(value)
-
-
-def null(nullable: bool = False):
-    if nullable:
-        import pandas as pd
-
-        return pd.NA
-    else:
-        import numpy as np
-
-        return np.nan
-
-
-def create_masked_array(data, mask, dtype: str, nullable: bool = False):
-    type_mapping = {
-        "bool": "Boolean",
-        "uint8": "UInt8",
-        "uint16": "UInt16",
-        "uint32": "UInt32",
-        "uint64": "UInt64",
-        "int8": "Int8",
-        "int16": "Int16",
-        "int32": "Int32",
-        "int64": "Int64",
-        "float32": "Float32",
-        "float64": "Float64",
-    }
-
-    import numpy.ma
-
-    if nullable:
-        import pandas as pd
-
-        dtype = type_mapping.get(dtype, dtype)
-        return pd.Series(numpy.ma.masked_array(data=data, mask=mask), dtype=dtype)
-    else:
-        return numpy.ma.masked_array(data=data, mask=mask, dtype=dtype)
-
-
 def getTimeSeriesData(nper=None, freq: "Frequency" = "B"):
     from pandas import DatetimeIndex, bdate_range, Series
     from datetime import datetime

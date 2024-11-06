@@ -2,7 +2,6 @@ import duckdb
 import pandas as pd
 import numpy
 import pytest
-from conftest import is_null
 
 
 def check_category_equal(category):
@@ -65,14 +64,13 @@ class TestCategory(object):
         assert numpy.all(df_out['float'] == numpy.array([1.0, 2.0, 1.0]))
         assert numpy.all(df_out['int'] == numpy.array([1, 2, 1]))
 
-    @pytest.mark.parametrize('nullable', [True, False])
-    def test_category_nulls(self, nullable):
+    def test_category_nulls(self, duckdb_cursor):
         df_in = pd.DataFrame({'int': pd.Series([1, 2, None], dtype="category")})
-        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df(prefer_nullable_dtypes=nullable)
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         print(duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchall())
         assert df_out['int'][0] == 1
         assert df_out['int'][1] == 2
-        assert is_null(df_out['int'][2], nullable)
+        assert pd.isna(df_out['int'][2])
 
     def test_category_string(self, duckdb_cursor):
         check_category_equal(['foo', 'bla', 'zoo', 'foo', 'foo', 'bla'])

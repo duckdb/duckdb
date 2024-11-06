@@ -333,11 +333,6 @@
 				"name": "date_as_object",
 				"default": "False",
 				"type": "bool"
-			},
-			{
-				"name": "prefer_nullable_dtypes",
-				"default": "True",
-				"type": "bool"
 			}
 		],
 		"return": "pandas.DataFrame"
@@ -357,11 +352,6 @@
 			{
 				"name": "date_as_object",
 				"default": "False",
-				"type": "bool"
-			},
-			{
-				"name": "prefer_nullable_dtypes",
-				"default": "True",
 				"type": "bool"
 			}
 		],

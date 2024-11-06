@@ -3,7 +3,7 @@
 import numpy
 import pytest
 import duckdb
-from conftest import NumpyPandas, ArrowPandas, create_masked_array
+from conftest import NumpyPandas, ArrowPandas
 
 
 def assert_result_equal(result):
@@ -86,24 +86,20 @@ class TestSimpleDBAPI(object):
         arr.mask = [False, False, True]
         numpy.testing.assert_array_equal(result['t'], arr, "Incorrect result returned")
 
-    @pytest.mark.parametrize('nullable', [True, False])
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    def test_pandas_selection(self, duckdb_cursor, pandas, integers, timestamps, nullable):
+    def test_pandas_selection(self, duckdb_cursor, pandas, integers, timestamps):
         import datetime
 
         duckdb_cursor.execute('SELECT * FROM integers')
-        result = duckdb_cursor.fetchdf(prefer_nullable_dtypes=nullable)
-        if nullable:
-            dtype = 'Int32'
-        else:
-            dtype = 'float64'
-        arr = create_masked_array(numpy.arange(11), [False] * 10 + [True], dtype, nullable)
-        arr = {'i': arr}
+        result = duckdb_cursor.fetchdf()
+        arr = numpy.ma.masked_array(numpy.arange(11))
+        arr.mask = [False] * 10 + [True]
+        arr = {'i': pandas.Series(arr, dtype=pandas.Int32Dtype)}
         arr = pandas.DataFrame(arr)
         pandas.testing.assert_frame_equal(result, arr)
 
         duckdb_cursor.execute('SELECT * FROM timestamps')
-        result = duckdb_cursor.fetchdf(prefer_nullable_dtypes=nullable)
+        result = duckdb_cursor.fetchdf()
         df = pandas.DataFrame(
             {
                 't': pandas.Series(
