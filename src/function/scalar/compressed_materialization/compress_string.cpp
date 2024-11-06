@@ -224,7 +224,7 @@ unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserialize
 
 ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction result(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
-	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr,
+	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr, nullptr,
 	                      StringDecompressLocalState::Init);
 	result.serialize = CMStringDecompressSerialize;
 	result.deserialize = CMStringDecompressDeserialize;

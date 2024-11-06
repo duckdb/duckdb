@@ -34,7 +34,8 @@ static unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &stat
 }
 
 ScalarFunction RandomFun::GetFunction() {
-	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, RandomInitLocalState);
+	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, nullptr,
+	                      RandomInitLocalState);
 	random.stability = FunctionStability::VOLATILE;
 	return random;
 }
@@ -52,7 +53,8 @@ static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 ScalarFunction UUIDFun::GetFunction() {
-	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, nullptr, nullptr, RandomInitLocalState);
+	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, nullptr, nullptr, nullptr,
+	                             RandomInitLocalState);
 	// generate a random uuid
 	uuid_function.stability = FunctionStability::VOLATILE;
 	return uuid_function;

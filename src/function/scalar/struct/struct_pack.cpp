@@ -73,7 +73,7 @@ unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStati
 template <bool IS_STRUCT_PACK>
 ScalarFunction GetStructPackFunction() {
 	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
-	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
+	                   StructPackBind<IS_STRUCT_PACK>, nullptr, StructPackStats);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = VariableReturnBindData::Serialize;

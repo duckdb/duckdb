@@ -115,6 +115,7 @@ class ScalarFunction : public BaseScalarFunction { // NOLINT: work-around bug in
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
+	                          bind_scalar_function_with_binder_t bind_with_binder = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
 	                          FunctionStability stability = FunctionStability::CONSISTENT,
@@ -122,8 +123,9 @@ public:
 	                          bind_lambda_function_t bind_lambda = nullptr);
 
 	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-	                          bind_scalar_function_t bind = nullptr, function_statistics_t statistics = nullptr,
-	                          init_local_state_t init_local_state = nullptr,
+	                          bind_scalar_function_t bind = nullptr,
+	                          bind_scalar_function_with_binder_t bind_with_binder = nullptr,
+	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
 	                          FunctionStability stability = FunctionStability::CONSISTENT,
 	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
@@ -133,6 +135,8 @@ public:
 	scalar_function_t function;
 	//! The bind function (if any)
 	bind_scalar_function_t bind;
+	//! The bind function that receives a binder (if any)
+	bind_scalar_function_with_binder_t bind_with_binder = nullptr;
 	//! Init thread local state for the function (if any)
 	init_local_state_t init_local_state;
 	//! The statistics propagation function (if any)
@@ -143,8 +147,6 @@ public:
 	function_bind_expression_t bind_expression;
 	//! Gets the modified databases (if any)
 	get_modified_databases_t get_modified_databases;
-	//! The bind function that receives a binder (if any)
-	bind_scalar_function_with_binder_t bind_with_binder = nullptr;
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;

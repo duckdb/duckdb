@@ -44,7 +44,8 @@ static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, Fu
 }
 
 ScalarFunction StatsFun::GetFunction() {
-	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, StatsPropagateStats);
+	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, nullptr,
+	                     StatsPropagateStats);
 	stats.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	stats.stability = FunctionStability::VOLATILE;
 	return stats;

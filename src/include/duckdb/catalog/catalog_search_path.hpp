@@ -58,7 +58,6 @@ public:
 
 	DUCKDB_API vector<string> GetSchemasForCatalog(const string &catalog);
 	DUCKDB_API vector<string> GetCatalogsForSchema(const string &schema);
-	DUCKDB_API vector<string> GetCatalogs();
 
 	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const string &catalog_name, const string &schema_name);
 

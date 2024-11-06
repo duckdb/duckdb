@@ -207,6 +207,11 @@ static unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarF
                                                  vector<unique_ptr<Expression>> &arguments) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
+	for (auto &arg : arguments) {
+		if (arg->return_type.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(arg->return_type).empty()) {
+			return nullptr;
+		}
+	}
 	if (arguments[1]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		return LikeMatcher::CreateLikeMatcher(pattern_str.ToString());
@@ -514,49 +519,69 @@ static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector
 }
 
 ScalarFunction NotLikeFun::GetFunction() {
-	return ScalarFunction("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                      RegularLikeFunction<NotLikeOperator, true>, LikeBindFunction);
+	ScalarFunction not_like("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                        RegularLikeFunction<NotLikeOperator, true>, LikeBindFunction);
+	not_like.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return not_like;
 }
 
 ScalarFunction GlobPatternFun::GetFunction() {
-	return ScalarFunction("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator>);
+	ScalarFunction glob("~~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                    ScalarFunction::BinaryFunction<string_t, string_t, bool, GlobOperator>);
+	glob.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return glob;
 }
 
 ScalarFunction ILikeFun::GetFunction() {
-	return ScalarFunction("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, nullptr,
-	                      ILikePropagateStats<ILikeOperatorASCII>);
+	ScalarFunction ilike("~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                     ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator>, nullptr, nullptr,
+	                     ILikePropagateStats<ILikeOperatorASCII>);
+	ilike.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return ilike;
 }
 
 ScalarFunction NotILikeFun::GetFunction() {
-	return ScalarFunction("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, nullptr,
-	                      ILikePropagateStats<NotILikeOperatorASCII>);
+	ScalarFunction not_ilike("!~~*", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                         ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator>, nullptr,
+	                         nullptr, ILikePropagateStats<NotILikeOperatorASCII>);
+	not_ilike.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return not_ilike;
 }
 
 ScalarFunction LikeFun::GetFunction() {
-	return ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                      RegularLikeFunction<LikeOperator, false>, LikeBindFunction);
+	ScalarFunction like("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                    RegularLikeFunction<LikeOperator, false>, LikeBindFunction);
+	like.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return like;
 }
 
 ScalarFunction NotLikeEscapeFun::GetFunction() {
-	return ScalarFunction("not_like_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                      LogicalType::BOOLEAN, LikeEscapeFunction<NotLikeEscapeOperator>);
+	ScalarFunction not_like_escape("not_like_escape",
+	                               {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                               LogicalType::BOOLEAN, LikeEscapeFunction<NotLikeEscapeOperator>);
+	not_like_escape.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return not_like_escape;
 }
 
 ScalarFunction IlikeEscapeFun::GetFunction() {
-	return ScalarFunction("ilike_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                      LogicalType::BOOLEAN, LikeEscapeFunction<ILikeEscapeOperator>);
+	ScalarFunction ilike_escape("ilike_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                            LogicalType::BOOLEAN, LikeEscapeFunction<ILikeEscapeOperator>);
+	ilike_escape.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return ilike_escape;
 }
 
 ScalarFunction NotIlikeEscapeFun::GetFunction() {
-	return ScalarFunction("not_ilike_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                      LogicalType::BOOLEAN, LikeEscapeFunction<NotILikeEscapeOperator>);
+	ScalarFunction not_ilike_escape("not_ilike_escape",
+	                                {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                                LogicalType::BOOLEAN, LikeEscapeFunction<NotILikeEscapeOperator>);
+	not_ilike_escape.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return not_ilike_escape;
 }
 ScalarFunction LikeEscapeFun::GetFunction() {
-	return ScalarFunction("like_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                      LogicalType::BOOLEAN, LikeEscapeFunction<LikeEscapeOperator>);
+	ScalarFunction like_escape("like_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                           LogicalType::BOOLEAN, LikeEscapeFunction<LikeEscapeOperator>);
+	like_escape.collation_handling = FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS;
+	return like_escape;
 }
 
 } // namespace duckdb
