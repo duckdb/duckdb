@@ -238,10 +238,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				if (!index.IsValid()) {
 					throw InternalException("Could not find column index for table filter");
 				}
+				auto &column_type = get.returned_types[index.GetIndex()];
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
-				if (column_references.find(filter_binding) == column_references.end()) {
-					column_references.insert(make_pair(filter_binding, ReferencedColumn()));
-				}
+				auto column_ref = make_uniq<BoundColumnRefExpression>(column_type, filter_binding);
+				auto filter_expr = filter.second->ToExpression(*column_ref);
+				VisitExpression(&filter_expr);
 			}
 
 			// Clear unused ids, include filter columns that are projected out immediately
@@ -253,10 +254,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			for (auto col_sel_idx : col_sel) {
 				auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 				if (entry == column_references.end()) {
-					throw InternalException("eek");
+					throw InternalException("RemoveUnusedColumns - could not find referenced column");
 				}
 				if (final_column_ids[col_sel_idx].HasChildren()) {
-					throw InternalException("LogicalGet::column_ids already has children");
+					throw InternalException("RemoveUnusedColumns - LogicalGet::column_ids already has children");
 				}
 				ColumnIndex new_index(final_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
 				column_ids.emplace_back(new_index);

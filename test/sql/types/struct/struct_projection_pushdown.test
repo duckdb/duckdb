@@ -41,6 +41,11 @@ SELECT s FROM test_structs WHERE s.b
 {'a': 42, 'b': true}
 
 query I
+SELECT a FROM (SELECT UNNEST(s) FROM test_structs) WHERE b
+----
+42
+
+query I
 SELECT id FROM test_structs WHERE s.b
 ----
 1
