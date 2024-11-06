@@ -6,6 +6,7 @@ from duckdb import (
     Expression,
     ConstantExpression,
     ColumnExpression,
+    LambdaExpression,
     CoalesceOperator,
     StarExpression,
     FunctionExpression,
@@ -415,6 +416,51 @@ class TestExpression(object):
         rel2 = rel.select(expr1, expr2)
         res = rel2.fetchall()
         assert res == [(False, True)]
+
+    def test_lambda_expression(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select
+                [1,2,3] as a,
+            """
+        )
+
+        # Use a tuple of strings as 'lhs'
+        func = FunctionExpression(
+            "list_reduce",
+            ColumnExpression('a'),
+            LambdaExpression(('x', 'y'), ColumnExpression('x') + ColumnExpression('y')),
+        )
+        rel2 = rel.select(func)
+        res = rel2.fetchall()
+        assert res == [(6,)]
+
+        # Use only a string name as 'lhs'
+        func = FunctionExpression("list_apply", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('x') + 3))
+        rel2 = rel.select(func)
+        res = rel2.fetchall()
+        assert res == [([4, 5, 6],)]
+
+        # 'row' is not a lambda function, so it doesn't accept a lambda expression
+        func = FunctionExpression("row", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('x') + 3))
+        with pytest.raises(duckdb.BinderException, match='This scalar function does not support lambdas'):
+            rel2 = rel.select(func)
+
+        # lhs has to be a tuple of strings or a single string
+        with pytest.raises(
+            ValueError, match="Please provide 'lhs' as either a tuple containing strings, or a single string"
+        ):
+            func = FunctionExpression(
+                "list_filter", ColumnExpression('a'), LambdaExpression(42, ColumnExpression('x') + 3)
+            )
+
+        func = FunctionExpression(
+            "list_filter", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('y') != 3)
+        )
+        with pytest.raises(duckdb.BinderException, match='Referenced column "y" not found in FROM clause'):
+            rel2 = rel.select(func)
 
     def test_inequality_expression(self):
         con = duckdb.connect()
