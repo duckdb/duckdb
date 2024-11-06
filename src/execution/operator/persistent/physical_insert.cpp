@@ -18,6 +18,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/update_state.hpp"
+#include "duckdb/core_functions/create_sort_key.hpp"
 
 namespace duckdb {
 
@@ -317,31 +318,19 @@ static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids,
 	}
 }
 
-static void CheckDistinctnessInternal(DataChunk &input, const unordered_set<column_t> &column_ids,
+static void CheckDistinctnessInternal(ValidityMask &valid, vector<reference<Vector>> &sort_keys, idx_t count,
                                       map<idx_t, vector<idx_t>> &result) {
-	// FIXME: do we want to use the same validity mask across multiple distinctness checks (for different column_ids
-	// inputs) ?
-	ValidityMask valid(input.size());
-	for (idx_t i = 0; i < input.size(); i++) {
-		if (!valid.RowIsValid(i)) {
-			// Already a conflict
-			continue;
-		}
-
+	for (idx_t i = 0; i < count; i++) {
 		bool has_conflicts = false;
-		for (idx_t j = i + 1; j < input.size(); j++) {
+		for (idx_t j = i + 1; j < count; j++) {
 			if (!valid.RowIsValid(j)) {
 				// Already a conflict
 				continue;
 			}
 			bool matches = true;
-			for (auto &col_idx : column_ids) {
-				auto this_row = input.GetValue(col_idx, i);
-				auto other_row = input.GetValue(col_idx, j);
-				if (this_row.IsNull() || other_row.IsNull()) {
-					matches = false;
-					break;
-				}
+			for (auto &sort_key : sort_keys) {
+				auto &this_row = FlatVector::GetData<string_t>(sort_key.get())[i];
+				auto &other_row = FlatVector::GetData<string_t>(sort_key.get())[j];
 				if (this_row != other_row) {
 					matches = false;
 					break;
@@ -360,18 +349,44 @@ static void CheckDistinctnessInternal(DataChunk &input, const unordered_set<colu
 	}
 }
 
+void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr<Vector>> &sort_keys,
+                     const unordered_set<column_t> &column_ids) {
+	OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	for (auto &it : column_ids) {
+		auto &sort_key = sort_keys[it];
+		if (sort_key != nullptr) {
+			continue;
+		}
+		auto &column = input.data[it];
+		sort_key = make_uniq<Vector>(LogicalType::BLOB);
+		CreateSortKeyHelpers::CreateSortKey(column, input.size(), order_modifiers, *sort_key);
+	}
+}
+
 static map<idx_t, vector<idx_t>> CheckDistinctness(DataChunk &input, ConflictManager &conflict_manager) {
 	map<idx_t, vector<idx_t>> conflicts;
+	unordered_map<idx_t, unique_ptr<Vector>> sort_keys;
+	//! Register which rows have already caused a conflict
+	ValidityMask valid(input.size());
 
 	auto &column_ids = conflict_manager.GetConflictInfo().column_ids;
-	ValidityMask valid(input.size());
 	if (column_ids.empty()) {
 		for (auto index : conflict_manager.MatchedIndexes()) {
 			auto &index_column_ids = index->GetColumnIdSet();
-			CheckDistinctnessInternal(input, index_column_ids, conflicts);
+			PrepareSortKeys(input, sort_keys, index_column_ids);
+			vector<reference<Vector>> columns;
+			for (auto &idx : index_column_ids) {
+				columns.push_back(*sort_keys[idx]);
+			}
+			CheckDistinctnessInternal(valid, columns, input.size(), conflicts);
 		}
 	} else {
-		CheckDistinctnessInternal(input, column_ids, conflicts);
+		PrepareSortKeys(input, sort_keys, column_ids);
+		vector<reference<Vector>> columns;
+		for (auto &idx : column_ids) {
+			columns.push_back(*sort_keys[idx]);
+		}
+		CheckDistinctnessInternal(valid, columns, input.size(), conflicts);
 	}
 	return conflicts;
 }
