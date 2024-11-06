@@ -24,7 +24,7 @@ struct UpdateInfo;
 
 class CommitState {
 public:
-	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id, transaction_t start_time);
+	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
@@ -36,8 +36,6 @@ private:
 private:
 	DuckTransaction &transaction;
 	transaction_t commit_id;
-	//! The state of the catalog at the start of the transaction we're currently committing
-	transaction_t start_time;
 };
 
 } // namespace duckdb

@@ -20,8 +20,8 @@
 
 namespace duckdb {
 
-CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id, transaction_t start_time)
-    : transaction(transaction_p), commit_id(commit_id), start_time(start_time) {
+CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id)
+    : transaction(transaction_p), commit_id(commit_id) {
 }
 
 void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
@@ -148,7 +148,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 				new_entry.set->VerifyExistenceOfDependency(commit_id, new_entry);
 			}
 		} else if (new_entry.type == CatalogType::DELETED_ENTRY && old_entry.set) {
-			old_entry.set->CommitDrop(commit_id, start_time, old_entry);
+			old_entry.set->CommitDrop(commit_id, transaction.start_time, old_entry);
 		}
 		// Grab a write lock on the catalog
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
