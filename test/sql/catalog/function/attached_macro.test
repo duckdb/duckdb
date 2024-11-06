@@ -1,7 +1,7 @@
 # name: test/sql/catalog/function/attached_macro.test
 # group: [function]
 
-require skip_reload
+require noforcestorage
 
 statement ok
 ATTACH ':memory:' AS checksum_macro;
