@@ -88,7 +88,7 @@ struct FunctionBindExpressionInput {
 };
 
 struct ScalarFunctionBindInput {
-	ScalarFunctionBindInput(Binder &binder) : binder(binder) {
+	explicit ScalarFunctionBindInput(Binder &binder) : binder(binder) {
 	}
 
 	Binder &binder;
