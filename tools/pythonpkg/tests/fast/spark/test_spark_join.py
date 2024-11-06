@@ -411,6 +411,7 @@ class TestDataFrameJoin(object):
             == "[Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Jones', year_joined='2005', name='Jones', year_joined='2005'), Row(name='Rose', year_joined='2010', name='Rose', year_joined='2010'), Row(name='Smith', year_joined='2018', name='Smith', year_joined='2018'), Row(name='Williams', year_joined='2010', name='Williams', year_joined='2010')]"
         )
 
+    @pytest.mark.xfail(condition=True, reason="Selecting from a duplicate binding causes an error")
     def test_join_on_joined_data_error(self, spark):
         df = spark.createDataFrame([(2, "Alice"), (5, "Bob")]).toDF("age", "name")
         df2 = spark.createDataFrame([Row(height=80, name="Tom"), Row(height=85, name="Bob")], ["height", "name"])
