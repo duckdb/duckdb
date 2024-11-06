@@ -6,6 +6,7 @@ require skip_reload
 statement ok
 ATTACH ':memory:' AS checksum_macro;
 
+statement ok
 CREATE MACRO checksum_macro.checksum(table_name) AS TABLE
     SELECT bit_xor(md5_number(COLUMNS(*)::VARCHAR))
     FROM query_table(table_name);
