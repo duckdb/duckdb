@@ -238,7 +238,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				if (!index.IsValid()) {
 					throw InternalException("Could not find column index for table filter");
 				}
-				auto &column_type = get.returned_types[index.GetIndex()];
+				auto &column_type = get.returned_types[filter.first];
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				auto column_ref = make_uniq<BoundColumnRefExpression>(column_type, filter_binding);
 				auto filter_expr = filter.second->ToExpression(*column_ref);
