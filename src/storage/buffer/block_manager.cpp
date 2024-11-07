@@ -32,8 +32,14 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 
 shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block,
                                                           BufferHandle old_handle) {
-	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);
-	D_ASSERT(old_block->buffer);
+	// register a block with the new block id
+	auto new_block = RegisterBlock(block_id);
+	D_ASSERT(new_block->GetState() == BlockState::BLOCK_UNLOADED);
+	D_ASSERT(new_block->Readers() == 0);
+
+	auto lock = old_block->GetLock();
+	D_ASSERT(old_block->GetState() == BlockState::BLOCK_LOADED);
+	D_ASSERT(old_block->GetBuffer(lock));
 	if (old_block->Readers() > 1) {
 		throw InternalException("BlockManager::ConvertToPersistent - cannot be called for block %d as old_block has "
 		                        "multiple readers active",
@@ -42,28 +48,21 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 
 	// Temp buffers can be larger than the storage block size.
 	// But persistent buffers cannot.
-	D_ASSERT(old_block->buffer->AllocSize() <= GetBlockAllocSize());
+	D_ASSERT(old_block->GetBuffer(lock)->AllocSize() <= GetBlockAllocSize());
 
-	// register a block with the new block id
-	auto new_block = RegisterBlock(block_id);
-	D_ASSERT(new_block->state == BlockState::BLOCK_UNLOADED);
-	D_ASSERT(new_block->readers == 0);
-
-	// move the data from the old block into data for the new block
-	new_block->state = BlockState::BLOCK_LOADED;
-	new_block->buffer = ConvertBlock(block_id, *old_block->buffer);
-	new_block->memory_usage = old_block->memory_usage.load();
-	new_block->memory_charge = std::move(old_block->memory_charge);
-
-	// clear the old buffer and unload it
-	old_block->buffer.reset();
-	old_block->state = BlockState::BLOCK_UNLOADED;
-	old_block->memory_usage = 0;
-	old_handle.Destroy();
-	old_block.reset();
+	// convert the buffer to a block
+	auto converted_buffer = ConvertBlock(block_id, *old_block->GetBuffer(lock));
 
 	// persist the new block to disk
-	Write(*new_block->buffer, block_id);
+	Write(*converted_buffer, block_id);
+
+	// now convert the actual block
+	old_block->ConvertToPersistent(lock, *new_block, std::move(converted_buffer));
+
+	// destroy the old buffer
+	lock.unlock();
+	old_handle.Destroy();
+	old_block.reset();
 
 	// potentially purge the queue
 	auto purge_queue = buffer_manager.GetBufferPool().AddToEvictionQueue(new_block);

@@ -58,8 +58,6 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 using BlockLock = unique_lock<mutex>;
 
 class BlockHandle : public enable_shared_from_this<BlockHandle> {
-	friend class BlockManager;
-
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag);
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag, unique_ptr<FileBuffer> buffer,
@@ -174,6 +172,8 @@ public:
 	//! Note that while this method does not require a lock, whether or not a block can be unloaded can change if the
 	//! lock is not held
 	bool CanUnload() const;
+
+	void ConvertToPersistent(BlockLock &, BlockHandle &new_block, unique_ptr<FileBuffer> new_buffer);
 
 private:
 	void VerifyMutex(unique_lock<mutex> &l) const;

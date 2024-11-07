@@ -201,4 +201,19 @@ bool BlockHandle::CanUnload() const {
 	return true;
 }
 
+void BlockHandle::ConvertToPersistent(BlockLock &l, BlockHandle &new_block, unique_ptr<FileBuffer> new_buffer) {
+	VerifyMutex(l);
+
+	// move the data from the old block into data for the new block
+	new_block.state = BlockState::BLOCK_LOADED;
+	new_block.buffer = std::move(new_buffer);
+	new_block.memory_usage = memory_usage.load();
+	new_block.memory_charge = std::move(memory_charge);
+
+	// clear out the buffer data from this block
+	buffer.reset();
+	state = BlockState::BLOCK_UNLOADED;
+	memory_usage = 0;
+}
+
 } // namespace duckdb
