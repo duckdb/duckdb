@@ -4,6 +4,9 @@
 require noforcestorage
 
 statement ok
+pragma enable_verification;
+
+statement ok
 attach '__TEST_DIR__/backup.db';
 
 ## Only specifying a sequence name
@@ -96,7 +99,7 @@ create table tbl (
 statement error
 copy from database memory to backup;
 ----
-TransactionContext Error: Attempting to write to database "backup" in a transaction that has already modified database "memory"
+<REGEX>:TransactionContext Error: Attempting to write to database .* in a transaction that has already modified database .*
 
 statement ok
 drop sequence memory.backup.seq cascade;
