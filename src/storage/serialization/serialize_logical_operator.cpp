@@ -330,12 +330,14 @@ void LogicalCreateIndex::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<CreateIndexInfo>>(200, "info", info);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "unbound_expressions", unbound_expressions);
+	serializer.WritePropertyWithDefault<unique_ptr<AlterTableInfo>>(202, "alter_table_info", alter_table_info);
 }
 
 unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(Deserializer &deserializer) {
 	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "info");
 	auto unbound_expressions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "unbound_expressions");
-	auto result = duckdb::unique_ptr<LogicalCreateIndex>(new LogicalCreateIndex(deserializer.Get<ClientContext &>(), std::move(info), std::move(unbound_expressions)));
+	auto alter_table_info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(202, "alter_table_info");
+	auto result = duckdb::unique_ptr<LogicalCreateIndex>(new LogicalCreateIndex(deserializer.Get<ClientContext &>(), std::move(info), std::move(unbound_expressions), std::move(alter_table_info)));
 	return std::move(result);
 }
 
@@ -562,13 +564,13 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 void LogicalOrder::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(200, "orders", orders);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projections", projections);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projections", projection_map);
 }
 
 unique_ptr<LogicalOperator> LogicalOrder::Deserialize(Deserializer &deserializer) {
 	auto orders = deserializer.ReadPropertyWithDefault<vector<BoundOrderByNode>>(200, "orders");
 	auto result = duckdb::unique_ptr<LogicalOrder>(new LogicalOrder(std::move(orders)));
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(201, "projections", result->projections);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(201, "projections", result->projection_map);
 	return std::move(result);
 }
 

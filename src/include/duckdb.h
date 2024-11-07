@@ -1472,6 +1472,19 @@ Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the stat
 DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
 /*!
+Returns the parameter logical type for the parameter at the given index.
+
+Returns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.
+
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+* @param prepared_statement The prepared statement.
+* @param param_idx The parameter index.
+* @return The parameter logical type
+*/
+DUCKDB_API duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+
+/*!
 Clear the params bind to the prepared statement.
 */
 DUCKDB_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement);
@@ -3510,6 +3523,22 @@ DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, con
                                                duckdb_appender *out_appender);
 
 /*!
+Creates an appender object.
+
+Note that the object must be destroyed with `duckdb_appender_destroy`.
+
+* @param connection The connection context to create the appender in.
+* @param catalog The catalog of the table to append to, or `nullptr` for the default catalog.
+* @param schema The schema of the table to append to, or `nullptr` for the default schema.
+* @param table The table name to append to.
+* @param out_appender The resulting appender object.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog,
+                                                   const char *schema, const char *table,
+                                                   duckdb_appender *out_appender);
+
+/*!
 Returns the number of columns in the table that belongs to the appender.
 
 * @param appender The appender to get the column count from.
@@ -3727,6 +3756,21 @@ DUCKDB_API duckdb_state duckdb_table_description_create(duckdb_connection connec
                                                         const char *table, duckdb_table_description *out);
 
 /*!
+Creates a table description object. Note that `duckdb_table_description_destroy` must be called on the resulting
+table_description, even if the function returns `DuckDBError`.
+
+* @param connection The connection context.
+* @param catalog The catalog (database) name of the table, or `nullptr` for the default catalog.
+* @param schema The schema of the table, or `nullptr` for the default schema.
+* @param table The table name.
+* @param out The resulting table description object.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_table_description_create_ext(duckdb_connection connection, const char *catalog,
+                                                            const char *schema, const char *table,
+                                                            duckdb_table_description *out);
+
+/*!
 Destroy the TableDescription object.
 
 * @param table_description The table_description to destroy.
@@ -3752,6 +3796,16 @@ Check if the column at 'index' index of the table has a DEFAULT expression.
 * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
+
+/*!
+Obtain the column name at 'index'.
+The out result must be destroyed with `duckdb_free`.
+
+* @param table_description The table_description to query.
+* @param index The index of the column to query.
+* @return The column name.
+*/
+DUCKDB_API char *duckdb_table_description_get_column_name(duckdb_table_description table_description, idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface

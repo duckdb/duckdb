@@ -10,7 +10,7 @@ CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string sc
                                          bool temporary_p)
     : Relation(child_p->context, RelationType::CREATE_TABLE_RELATION), child(std::move(child_p)),
       schema_name(std::move(schema_name)), table_name(std::move(table_name)), temporary(temporary_p) {
-	context.GetContext()->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 BoundStatement CreateTableRelation::Bind(Binder &binder) {

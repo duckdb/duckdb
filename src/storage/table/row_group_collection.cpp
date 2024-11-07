@@ -1,5 +1,4 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
-
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -53,10 +52,17 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 //===--------------------------------------------------------------------===//
 // Row Group Collection
 //===--------------------------------------------------------------------===//
+RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, TableIOManager &io_manager,
+                                       vector<LogicalType> types_p, idx_t row_start, idx_t total_rows)
+    : RowGroupCollection(std::move(info_p), io_manager.GetBlockManagerForRowData(), std::move(types_p), row_start,
+                         total_rows, io_manager.GetRowGroupSize()) {
+}
+
 RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
-                                       vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
-    : block_manager(block_manager), total_rows(total_rows_p), info(std::move(info_p)), types(std::move(types_p)),
-      row_start(row_start_p), allocation_size(0) {
+                                       vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p,
+                                       idx_t row_group_size_p)
+    : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
+      types(std::move(types_p)), row_start(row_start_p), allocation_size(0) {
 	row_groups = make_shared_ptr<RowGroupSegmentTree>(*this);
 }
 
@@ -303,7 +309,8 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 // Append
 //===--------------------------------------------------------------------===//
 TableAppendState::TableAppendState()
-    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0) {
+    : row_group_append_state(*this), total_append_count(0), start_row_group(nullptr), transaction(0, 0),
+      hashes(LogicalType::HASH) {
 }
 
 TableAppendState::~TableAppendState() {
@@ -345,6 +352,7 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 }
 
 bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
+	const idx_t row_group_size = GetRowGroupSize();
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
@@ -356,7 +364,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		auto current_row_group = state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
 		idx_t append_count =
-		    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
+		    MinValue<idx_t>(remaining, row_group_size - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
 			auto previous_allocation_size = current_row_group->GetAllocationSize();
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
@@ -388,18 +396,50 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		}
 	}
 	state.current_row += row_t(total_append_count);
+
 	auto local_stats_lock = state.stats.GetLock();
+
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		state.stats.GetStats(*local_stats_lock, col_idx).UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
+		auto &column_stats = state.stats.GetStats(*local_stats_lock, col_idx);
+		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
+
+	if (state.stats.table_sample) {
+		D_ASSERT(state.stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = state.stats.table_sample->Cast<IngestionSample>();
+
+		auto ret = make_uniq<DataChunk>();
+		idx_t ret_chunk_size = static_cast<idx_t>(static_cast<double>(chunk.size()) * 0.25);
+		auto types = chunk.GetTypes();
+		SelectionVector sel(FIXED_SAMPLE_SIZE);
+		for (idx_t i = 0; i < ret_chunk_size; i++) {
+			sel.set_index(i, i);
+		}
+		ret->Initialize(Allocator::DefaultAllocator(), types, FIXED_SAMPLE_SIZE);
+		ret->Slice(chunk, sel, ret_chunk_size);
+		ret->SetCardinality(ret_chunk_size);
+
+		ingest_sample.AddToReservoir(*ret);
+	}
+
+	auto global_stats_lock = stats.GetLock();
+	// all performance related to ingestion samping happens in the table same code
+	if (stats.table_sample) {
+		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+		ingest_sample.AddToReservoir(chunk);
+	}
+
 	return new_row_group;
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
+	const idx_t row_group_size = GetRowGroupSize();
+
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {
-		auto append_count = MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - row_group->count);
+		auto append_count = MinValue<idx_t>(remaining, row_group_size - row_group->count);
 		row_group->AppendVersionInfo(transaction, append_count);
 		remaining -= append_count;
 		row_group = row_groups->GetNextSegment(row_group);
@@ -409,8 +449,8 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	state.total_append_count = 0;
 	state.start_row_group = nullptr;
 
-	auto global_stats_lock = stats.GetLock();
 	auto local_stats_lock = state.stats.GetLock();
+	auto global_stats_lock = stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &global_stats = stats.GetStats(*global_stats_lock, col_idx);
 		if (!global_stats.HasDistinctStats()) {
@@ -421,6 +461,14 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 			continue;
 		}
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
+	}
+
+	if (stats.table_sample && state.stats.table_sample) {
+		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+		ingest_sample.Merge(std::move(state.stats.table_sample));
+		// initialize the table sample again
+		state.stats.table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
 	}
 
 	Verify();
@@ -570,6 +618,12 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		}
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
+
+	// When deleting destroy the sample.
+	auto stats_guard = stats.GetLock();
+	if (stats.table_sample) {
+		stats.table_sample->Destroy();
+	}
 	return delete_count;
 }
 
@@ -607,6 +661,11 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 			stats.MergeStats(*l, column_id.index, *row_group->GetStatistics(column_id.index));
 		}
 	} while (pos < updates.size());
+	// on update destroy the sample
+	auto stats_guard = stats.GetLock();
+	if (stats.table_sample) {
+		stats.table_sample->Destroy();
+	}
 }
 
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
@@ -758,6 +817,7 @@ public:
 
 	void ExecuteTask() override {
 		auto &collection = checkpoint_state.collection;
+		const idx_t row_group_size = collection.GetRowGroupSize();
 		auto &types = collection.GetTypes();
 		// create the new set of target row groups (initially empty)
 		vector<unique_ptr<RowGroup>> new_row_groups;
@@ -765,7 +825,7 @@ public:
 		idx_t row_group_rows = merge_rows;
 		idx_t start = row_start;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
-			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, Storage::ROW_GROUP_SIZE);
+			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, row_group_size);
 			auto new_row_group = make_uniq<RowGroup>(collection, start, current_row_group_rows);
 			new_row_group->InitializeEmpty(types);
 			new_row_groups.push_back(std::move(new_row_group));
@@ -815,13 +875,12 @@ public:
 				scan_chunk.Flatten();
 				idx_t remaining = scan_chunk.size();
 				while (remaining > 0) {
-					idx_t append_count =
-					    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - append_counts[current_append_idx]);
+					idx_t append_count = MinValue<idx_t>(remaining, row_group_size - append_counts[current_append_idx]);
 					new_row_groups[current_append_idx]->Append(append_state.row_group_append_state, scan_chunk,
 					                                           append_count);
 					append_counts[current_append_idx] += append_count;
 					remaining -= append_count;
-					const bool row_group_full = append_counts[current_append_idx] == Storage::ROW_GROUP_SIZE;
+					const bool row_group_full = append_counts[current_append_idx] == row_group_size;
 					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
 					if (remaining > 0 || (row_group_full && !last_row_group)) {
 						// move to the next row group
@@ -917,8 +976,9 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	// hence we target_count should be less than merge_count for a marge to be worth it
 	// we greedily prefer to merge to the lowest target_count
 	// i.e. we prefer to merge 2 row groups into 1, than 3 row groups into 2
+	const idx_t row_group_size = GetRowGroupSize();
 	for (target_count = 1; target_count <= MAX_MERGE_COUNT; target_count++) {
-		auto total_target_size = target_count * Storage::ROW_GROUP_SIZE;
+		auto total_target_size = target_count * row_group_size;
 		merge_count = 0;
 		merge_rows = 0;
 		for (next_idx = segment_idx; next_idx < checkpoint_state.segments.size(); next_idx++) {
@@ -1050,8 +1110,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	new_types.push_back(new_column.GetType());
-	auto result =
-	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
+	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	                                                  total_rows.load(), row_group_size);
 
 	DataChunk dummy_chunk;
 	Vector default_vector(new_column.GetType());
@@ -1069,6 +1129,11 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
+	// When adding a column destroy the sample
+	D_ASSERT(lock);
+	if (result->stats.table_sample) {
+		result->stats.table_sample->Destroy();
+	}
 	return result;
 }
 
@@ -1077,9 +1142,11 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	auto new_types = types;
 	new_types.erase_at(col_idx);
 
-	auto result =
-	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
+	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	                                                  total_rows.load(), row_group_size);
 	result->stats.InitializeRemoveColumn(stats, col_idx);
+
+	result->stats.table_sample->Destroy();
 
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.RemoveColumn(*result, col_idx);
@@ -1095,8 +1162,8 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	auto new_types = types;
 	new_types[changed_idx] = target_type;
 
-	auto result =
-	    make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start, total_rows.load());
+	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	                                                  total_rows.load(), row_group_size);
 	result->stats.InitializeAlterType(stats, changed_idx, target_type);
 
 	vector<LogicalType> scan_types;
@@ -1126,7 +1193,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-
 	return result;
 }
 
@@ -1134,33 +1200,38 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 	if (total_rows == 0) {
 		return;
 	}
-	// scan the original table, check if there's any null value
+
+	// Scan the original table for NULL values.
 	auto &not_null_constraint = constraint.Cast<BoundNotNullConstraint>();
 	vector<LogicalType> scan_types;
 	auto physical_index = not_null_constraint.index.index;
 	D_ASSERT(physical_index < types.size());
+
 	scan_types.push_back(types[physical_index]);
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(GetAllocator(), scan_types);
 
+	vector<column_t> column_ids;
+	column_ids.push_back(physical_index);
+
+	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
-	vector<column_t> cids;
-	cids.push_back(physical_index);
-	// Use ScanCommitted to scan the latest committed data
-	state.Initialize(cids, nullptr);
-	InitializeScan(state.table_state, cids, nullptr);
+	auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	state.Initialize(column_ids, nullptr);
+	InitializeScan(state.table_state, column_ids, nullptr);
 	InitializeCreateIndexScan(state);
+
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.ScanCommitted(scan_chunk, state.segment_lock,
-		                                TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		state.table_state.ScanCommitted(scan_chunk, state.segment_lock, scan_type);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
-		// Check constraint
+
+		// Verify the NOT NULL constraint.
 		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->GetTableName(),
-			                          parent.Columns()[physical_index].GetName());
+			auto name = parent.Columns()[physical_index].GetName();
+			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->GetTableName(), name);
 		}
 	}
 }
@@ -1174,6 +1245,18 @@ void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 
 unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
+}
+
+unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
+	if (stats.table_sample && !stats.table_sample->destroyed) {
+		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
+		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
+		ingest_sample.Shrink();
+		// when get sample is called, return a sample that is min(FIXED_SAMPLE_SIZE, 0.01 * ingested_tuples).
+		auto ret = ingest_sample.ConvertToReservoirSampleToSerialize();
+		return ret;
+	}
+	return nullptr;
 }
 
 void RowGroupCollection::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {

@@ -6,7 +6,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -1194,7 +1194,7 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 		if (is_directory != match_directory) {
 			return;
 		}
-		if (LikeFun::Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
+		if (Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
 			if (join_path) {
 				result.push_back(fs.JoinPath(path, fname));
 			} else {

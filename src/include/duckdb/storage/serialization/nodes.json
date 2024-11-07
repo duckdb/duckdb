@@ -176,10 +176,10 @@
   },
   {
     "class": "SampleOptions",
-    "includes": [
+      "includes": [
       "duckdb/parser/parsed_data/sample_options.hpp"
     ],
-    "members": [
+      "members": [
       {
         "id": 100,
         "name": "sample_size",
@@ -198,9 +198,11 @@
       {
         "id": 103,
         "name": "seed",
-        "type": "int64_t"
+        "type": "int64_t",
+        "serialize_property": "GetSeed()"
       }
-    ]
+    ],
+    "constructor": ["seed"]
   },
   {
     "class": "BaseReservoirSampling",
@@ -242,65 +244,6 @@
     ]
   },
   {
-    "class": "BlockingSample",
-    "class_type": "type",
-    "members": [
-      {
-        "id" : 100,
-        "name" : "base_reservoir_sample",
-        "type" : "unique_ptr<BaseReservoirSampling>"
-      },
-      {
-        "id" : 101,
-        "name": "type",
-        "type": "SampleType"
-      },
-      {
-        "id": 102,
-        "name": "destroyed",
-        "type": "bool"
-      }
-    ]
-  },
-  {
-    "class": "ReservoirSample",
-    "base": "BlockingSample",
-    "enum": "RESERVOIR_SAMPLE",
-    "includes": [],
-    "members": [
-      {
-        "id": 200,
-        "name": "sample_count",
-        "type": "idx_t"
-      },
-      {
-        "id": 201,
-        "name": "reservoir_chunk",
-        "type": "unique_ptr<ReservoirChunk>"
-      }
-    ],
-    "constructor": ["sample_count"]
-  },
-  {
-    "class": "ReservoirSamplePercentage",
-    "base": "BlockingSample",
-    "enum": "RESERVOIR_PERCENTAGE_SAMPLE",
-    "includes": [],
-    "members": [
-      {
-        "id": 200,
-        "name": "sample_percentage",
-        "type": "double"
-      },
-      {
-        "id": 201,
-        "name": "reservoir_sample_size",
-        "type": "idx_t"
-      }
-    ],
-    "constructor": ["sample_percentage"]
-  },
-  {
     "class": "PivotColumn",
     "includes": [
       "duckdb/parser/tableref/pivotref.hpp"
@@ -329,7 +272,6 @@
     ],
     "pointer_type": "none"
   },
-
   {
     "class": "PivotColumnEntry",
     "members": [
@@ -915,6 +857,35 @@
         "id": 3,
         "name": "micros",
         "type": "int64_t"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "QualifiedColumnName",
+    "includes": [
+      "duckdb/parser/qualified_name.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 101,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "column",
+        "type": "string"
       }
     ],
     "pointer_type": "none"

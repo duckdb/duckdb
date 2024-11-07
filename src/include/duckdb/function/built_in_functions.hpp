@@ -54,19 +54,12 @@ private:
 	void RegisterArrowFunctions();
 	void RegisterSnifferFunction();
 
-	// aggregates
-	void RegisterDistributiveAggregates();
-
-	// scalar functions
-	void RegisterCompressedMaterializationFunctions();
-	void RegisterGenericFunctions();
-	void RegisterOperators();
-	void RegisterStringFunctions();
-	void RegisterNestedFunctions();
-	void RegisterSequenceFunctions();
+	void RegisterExtensionOverloads();
 
 	// pragmas
 	void RegisterPragmaFunctions();
+
+	void AddExtensionFunction(ScalarFunctionSet set);
 };
 
 } // namespace duckdb

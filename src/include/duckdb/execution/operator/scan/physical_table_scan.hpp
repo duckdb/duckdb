@@ -42,7 +42,8 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
-	//! Currently stores info related to filters pushed down into MultiFileLists
+	//! Currently stores info related to filters pushed down into MultiFileLists and sample rate pushed down into the
+	//! table scan
 	ExtraOperatorInfo extra_info;
 	//! Parameters
 	vector<Value> parameters;
@@ -60,17 +61,16 @@ public:
 	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
-	idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                    LocalSourceState &lstate) const override;
+	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                                       LocalSourceState &lstate,
+	                                       const OperatorPartitionInfo &partition_info) const override;
 
 	bool IsSource() const override {
 		return true;
 	}
 	bool ParallelSource() const override;
 
-	bool SupportsBatchIndex() const override {
-		return function.get_batch_index != nullptr;
-	}
+	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 
 	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 };

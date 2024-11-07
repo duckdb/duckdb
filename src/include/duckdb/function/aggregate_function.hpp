@@ -16,6 +16,8 @@
 
 namespace duckdb {
 
+class BufferManager;
+
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
 struct FrameDelta {
@@ -29,14 +31,21 @@ struct FrameDelta {
 using FrameStats = array<FrameDelta, 2>;
 
 //! The partition data for custom window functions
+//! Note that if the inputs is nullptr then the column count is 0,
+//! but the row count will still be valid
+class ColumnDataCollection;
 struct WindowPartitionInput {
-	WindowPartitionInput(const Vector inputs[], idx_t input_count, idx_t count, const ValidityMask &filter_mask,
+	WindowPartitionInput(ClientContext &context, const ColumnDataCollection *inputs, idx_t count,
+	                     vector<column_t> &column_ids, vector<bool> &all_valid, const ValidityMask &filter_mask,
 	                     const FrameStats &stats)
-	    : inputs(inputs), input_count(input_count), count(count), filter_mask(filter_mask), stats(stats) {
+	    : context(context), inputs(inputs), count(count), column_ids(column_ids), all_valid(all_valid),
+	      filter_mask(filter_mask), stats(stats) {
 	}
-	const Vector *inputs;
-	idx_t input_count;
+	ClientContext &context;
+	const ColumnDataCollection *inputs;
 	idx_t count;
+	vector<column_t> column_ids;
+	vector<bool> all_valid;
 	const ValidityMask &filter_mask;
 	const FrameStats stats;
 };
@@ -92,6 +101,13 @@ struct AggregateFunctionInfo {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+};
+
+enum class AggregateDestructorType {
+	STANDARD,
+	// legacy destructors allow non-trivial destructors in aggregate states
+	// these might not be trivial to off-load to disk
+	LEGACY
 };
 
 class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
@@ -197,29 +213,33 @@ public:
 		    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::NullaryUpdate<STATE, OP>);
 	}
 
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
+	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction
 	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
-		return AggregateFunction(
-		    {input_type}, return_type, AggregateFunction::StateSize<STATE>,
-		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
-		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-		    null_handling, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
+		return AggregateFunction({input_type}, return_type, AggregateFunction::StateSize<STATE>,
+		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
+		                         AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
+		                         AggregateFunction::StateCombine<STATE, OP>,
+		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
+		                         AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
 	}
 
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
+	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
-		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP>(input_type, return_type);
+		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP, destructor_type>(input_type, return_type);
 		aggregate.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 		return aggregate;
 	}
 
-	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP>
+	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP,
+	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
 	                                         LogicalType return_type) {
 		return AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
-		                         AggregateFunction::StateInitialize<STATE, OP>,
+		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
 		                         AggregateFunction::StateCombine<STATE, OP>,
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
@@ -232,8 +252,14 @@ public:
 		return sizeof(STATE);
 	}
 
-	template <class STATE, class OP>
+	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static void StateInitialize(const AggregateFunction &, data_ptr_t state) {
+		// FIXME: we should remove the "destructor_type" option in the future
+#if !defined(__GNUC__) || (__GNUC__ >= 5)
+		static_assert(std::is_trivially_move_constructible<STATE>::value ||
+		                  destructor_type == AggregateDestructorType::LEGACY,
+		              "Aggregate state must be trivially move constructible");
+#endif
 		OP::Initialize(*reinterpret_cast<STATE *>(state));
 	}
 
@@ -263,16 +289,6 @@ public:
 	                        idx_t count) {
 		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, state, count);
-	}
-
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                        const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes, Vector &result,
-	                        idx_t rid) {
-
-		D_ASSERT(partition.input_count == 1);
-		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(
-		    partition.inputs[0], partition.filter_mask, aggr_input_data, l_state, subframes, result, rid, g_state);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

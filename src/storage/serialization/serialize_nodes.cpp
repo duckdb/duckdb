@@ -32,35 +32,10 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 
 namespace duckdb {
-
-void BlockingSample::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample", base_reservoir_sample);
-	serializer.WriteProperty<SampleType>(101, "type", type);
-	serializer.WritePropertyWithDefault<bool>(102, "destroyed", destroyed);
-}
-
-unique_ptr<BlockingSample> BlockingSample::Deserialize(Deserializer &deserializer) {
-	auto base_reservoir_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BaseReservoirSampling>>(100, "base_reservoir_sample");
-	auto type = deserializer.ReadProperty<SampleType>(101, "type");
-	auto destroyed = deserializer.ReadPropertyWithDefault<bool>(102, "destroyed");
-	unique_ptr<BlockingSample> result;
-	switch (type) {
-	case SampleType::RESERVOIR_PERCENTAGE_SAMPLE:
-		result = ReservoirSamplePercentage::Deserialize(deserializer);
-		break;
-	case SampleType::RESERVOIR_SAMPLE:
-		result = ReservoirSample::Deserialize(deserializer);
-		break;
-	default:
-		throw SerializationException("Unsupported type for deserialization of BlockingSample!");
-	}
-	result->base_reservoir_sample = std::move(base_reservoir_sample);
-	result->destroyed = destroyed;
-	return result;
-}
 
 void BaseReservoirSampling::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(100, "next_index_to_sample", next_index_to_sample);
@@ -488,6 +463,22 @@ PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void QualifiedColumnName::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "catalog", catalog);
+	serializer.WritePropertyWithDefault<string>(101, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(102, "table", table);
+	serializer.WritePropertyWithDefault<string>(103, "column", column);
+}
+
+QualifiedColumnName QualifiedColumnName::Deserialize(Deserializer &deserializer) {
+	QualifiedColumnName result;
+	deserializer.ReadPropertyWithDefault<string>(100, "catalog", result.catalog);
+	deserializer.ReadPropertyWithDefault<string>(101, "schema", result.schema);
+	deserializer.ReadPropertyWithDefault<string>(102, "table", result.table);
+	deserializer.ReadPropertyWithDefault<string>(103, "column", result.column);
+	return result;
+}
+
 void ReadCSVData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(100, "files", files);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(101, "csv_types", csv_types);
@@ -514,45 +505,22 @@ unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
-void ReservoirSample::Serialize(Serializer &serializer) const {
-	BlockingSample::Serialize(serializer);
-	serializer.WritePropertyWithDefault<idx_t>(200, "sample_count", sample_count);
-	serializer.WritePropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", reservoir_chunk);
-}
-
-unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializer) {
-	auto sample_count = deserializer.ReadPropertyWithDefault<idx_t>(200, "sample_count");
-	auto result = duckdb::unique_ptr<ReservoirSample>(new ReservoirSample(sample_count));
-	deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", result->reservoir_chunk);
-	return std::move(result);
-}
-
-void ReservoirSamplePercentage::Serialize(Serializer &serializer) const {
-	BlockingSample::Serialize(serializer);
-	serializer.WriteProperty<double>(200, "sample_percentage", sample_percentage);
-	serializer.WritePropertyWithDefault<idx_t>(201, "reservoir_sample_size", reservoir_sample_size);
-}
-
-unique_ptr<BlockingSample> ReservoirSamplePercentage::Deserialize(Deserializer &deserializer) {
-	auto sample_percentage = deserializer.ReadProperty<double>(200, "sample_percentage");
-	auto result = duckdb::unique_ptr<ReservoirSamplePercentage>(new ReservoirSamplePercentage(sample_percentage));
-	deserializer.ReadPropertyWithDefault<idx_t>(201, "reservoir_sample_size", result->reservoir_sample_size);
-	return std::move(result);
-}
-
 void SampleOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<Value>(100, "sample_size", sample_size);
 	serializer.WritePropertyWithDefault<bool>(101, "is_percentage", is_percentage);
 	serializer.WriteProperty<SampleMethod>(102, "method", method);
-	serializer.WritePropertyWithDefault<int64_t>(103, "seed", seed);
+	serializer.WritePropertyWithDefault<int64_t>(103, "seed", GetSeed());
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<SampleOptions>(new SampleOptions());
-	deserializer.ReadProperty<Value>(100, "sample_size", result->sample_size);
-	deserializer.ReadPropertyWithDefault<bool>(101, "is_percentage", result->is_percentage);
-	deserializer.ReadProperty<SampleMethod>(102, "method", result->method);
-	deserializer.ReadPropertyWithDefault<int64_t>(103, "seed", result->seed);
+	auto sample_size = deserializer.ReadProperty<Value>(100, "sample_size");
+	auto is_percentage = deserializer.ReadPropertyWithDefault<bool>(101, "is_percentage");
+	auto method = deserializer.ReadProperty<SampleMethod>(102, "method");
+	auto seed = deserializer.ReadPropertyWithDefault<int64_t>(103, "seed");
+	auto result = duckdb::unique_ptr<SampleOptions>(new SampleOptions(seed));
+	result->sample_size = sample_size;
+	result->is_percentage = is_percentage;
+	result->method = method;
 	return result;
 }
 

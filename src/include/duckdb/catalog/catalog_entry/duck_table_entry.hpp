@@ -9,8 +9,12 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
 namespace duckdb {
+
+struct AddConstraintInfo;
 
 //! A table catalog entry
 class DuckTableEntry : public TableCatalogEntry {
@@ -23,11 +27,15 @@ public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
 	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction, AlterInfo &info) override;
 	void UndoAlter(ClientContext &context, AlterInfo &info) override;
+	void Rollback(CatalogEntry &prev_entry) override;
+
 	//! Returns the underlying storage of the table
 	DataTable &GetStorage() override;
 
 	//! Get statistics of a column (physical or virtual) within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
+
+	unique_ptr<BlockingSample> GetSample() override;
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
@@ -57,6 +65,7 @@ private:
 	unique_ptr<CatalogEntry> AddForeignKeyConstraint(optional_ptr<ClientContext> context, AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> DropForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 	unique_ptr<CatalogEntry> SetColumnComment(ClientContext &context, SetColumnCommentInfo &info);
+	unique_ptr<CatalogEntry> AddConstraint(ClientContext &context, AddConstraintInfo &info);
 
 	void UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index, const vector<LogicalIndex> &adjusted_indices,
 	                                   const RemoveColumnInfo &info, CreateTableInfo &create_info,

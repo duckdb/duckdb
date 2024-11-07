@@ -34,11 +34,14 @@ struct VacuumState;
 struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
+class TableIOManager;
 
 class RowGroupCollection {
 public:
-	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
+	RowGroupCollection(shared_ptr<DataTableInfo> info, TableIOManager &io_manager, vector<LogicalType> types,
 	                   idx_t row_start, idx_t total_rows = 0);
+	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
+	                   idx_t row_start, idx_t total_rows, idx_t row_group_size);
 
 public:
 	idx_t GetTotalRows() const;
@@ -118,6 +121,7 @@ public:
 
 	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
+	unique_ptr<BlockingSample> GetSample();
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
 	AttachedDatabase &GetAttached();
@@ -133,12 +137,18 @@ public:
 		return allocation_size;
 	}
 
+	idx_t GetRowGroupSize() const {
+		return row_group_size;
+	}
+
 private:
 	bool IsEmpty(SegmentLock &) const;
 
 private:
 	//! BlockManager
 	BlockManager &block_manager;
+	//! The row group size of the row group collection
+	const idx_t row_group_size;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
 	//! The data table info

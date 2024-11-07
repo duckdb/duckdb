@@ -1,0 +1,28 @@
+diff --git a/src/include/storage/mysql_table_entry.hpp b/src/include/storage/mysql_table_entry.hpp
+index 6a34aaa..6c4c592 100644
+--- a/src/include/storage/mysql_table_entry.hpp
++++ b/src/include/storage/mysql_table_entry.hpp
+@@ -40,6 +40,8 @@ public:
+ public:
+ 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
+ 
++	unique_ptr<BlockingSample> GetSample() override;
++
+ 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
+ 
+ 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+diff --git a/src/storage/mysql_table_entry.cpp b/src/storage/mysql_table_entry.cpp
+index 0a9112d..af1b93f 100644
+--- a/src/storage/mysql_table_entry.cpp
++++ b/src/storage/mysql_table_entry.cpp
+@@ -81,6 +81,10 @@ unique_ptr<BaseStatistics> MySQLTableEntry::GetStatistics(ClientContext &context
+ 	return nullptr;
+ }
+ 
++unique_ptr<BlockingSample> MySQLTableEntry::GetSample() {
++	return nullptr;
++}
++
+ void MySQLTableEntry::BindUpdateConstraints(Binder &binder, LogicalGet &, LogicalProjection &, LogicalUpdate &, ClientContext &) {
+ }
+ 
