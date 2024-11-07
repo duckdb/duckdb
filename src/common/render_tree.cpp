@@ -108,7 +108,7 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 
 	string node_name = "QUERY";
 	if (op.depth > 0) {
-		node_name = info.GetMetricAsString(MetricsType::OPERATOR_NAME);
+		node_name = info.GetMetricAsString(MetricsType::OPERATOR_TYPE);
 	}
 
 	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
