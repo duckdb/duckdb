@@ -25,7 +25,7 @@ SELECT s.d FROM test_structs WHERE id=473564
 ----
 [473564, 473566]
 
-query I
+query II
 SELECT SUM(LENGTH(s.c)), COUNT(s.c) FROM test_structs WHERE id > 47356
 ----
 16242822	857379
