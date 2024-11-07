@@ -37,6 +37,7 @@ SELECT unnest(res) FROM (
 "OPERATOR_CARDINALITY": "true"
 "OPERATOR_ROWS_SCANNED": "true"
 "OPERATOR_TIMING": "true"
+"OPERATOR_NAME": "true"
 "OPERATOR_TYPE": "true"
 "QUERY_NAME": "true"
 "RESULT_SET_SIZE": "true"
