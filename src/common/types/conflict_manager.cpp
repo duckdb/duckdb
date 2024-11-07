@@ -163,12 +163,9 @@ bool ConflictManager::AddNull(idx_t chunk_index) {
 }
 
 bool ConflictManager::SingleIndexTarget() const {
+	D_ASSERT(conflict_info);
 	// We are only interested in a specific index
-	if (conflict_info->column_ids.empty()) {
-		// return matched_indexes.size() == 1;
-		return false;
-	}
-	return true;
+	return !conflict_info->column_ids.empty();
 }
 
 bool ConflictManager::ShouldThrow(idx_t chunk_index) const {
