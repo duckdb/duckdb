@@ -310,17 +310,17 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 		return {true, std::move(r)};
 	}
 
-	queue.IterateUnloadableBlocks([&](BufferEvictionNode &, const shared_ptr<BlockHandle> &handle) {
+	queue.IterateUnloadableBlocks([&](BufferEvictionNode &, const shared_ptr<BlockHandle> &handle, BlockLock &lock) {
 		// hooray, we can unload the block
-		if (buffer && handle->buffer->AllocSize() == extra_memory) {
+		if (buffer && handle->GetBuffer(lock)->AllocSize() == extra_memory) {
 			// we can re-use the memory directly
-			*buffer = handle->UnloadAndTakeBlock();
+			*buffer = handle->UnloadAndTakeBlock(lock);
 			found = true;
 			return false;
 		}
 
 		// release the memory and mark the block as unloaded
-		handle->Unload();
+		handle->Unload(lock);
 
 		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 			found = true;
@@ -354,12 +354,13 @@ idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
 
 idx_t BufferPool::PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit) {
 	idx_t purged_bytes = 0;
-	queue.IterateUnloadableBlocks([&](BufferEvictionNode &node, const shared_ptr<BlockHandle> &handle) {
+	queue.IterateUnloadableBlocks([&](BufferEvictionNode &node, const shared_ptr<BlockHandle> &handle, BlockLock &lock) {
 		// We will unload this block regardless. But stop the iteration immediately afterward if this
 		// block is younger than the age threshold.
-		bool is_fresh = handle->lru_timestamp_msec >= limit && handle->lru_timestamp_msec <= now;
+		auto lru_timestamp_msec = handle->GetLRUTimestamp();
+		bool is_fresh = lru_timestamp_msec >= limit && lru_timestamp_msec <= now;
 		purged_bytes += handle->GetMemoryUsage();
-		handle->Unload();
+		handle->Unload(lock);
 		// Return false to stop iterating if the current block is_fresh
 		return !is_fresh;
 	});
@@ -387,14 +388,14 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		}
 
 		// we might be able to free this block: grab the mutex and check if we can free it
-		lock_guard<mutex> lock(handle->lock);
+		auto lock = handle->GetLock();
 		if (!node.CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
 			DecrementDeadNodes();
 			continue;
 		}
 
-		if (!fn(node, handle)) {
+		if (!fn(node, handle, lock)) {
 			break;
 		}
 	}

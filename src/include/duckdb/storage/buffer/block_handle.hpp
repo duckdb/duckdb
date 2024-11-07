@@ -55,11 +55,12 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 	}
 };
 
+using BlockLock = unique_lock<mutex>;
+
 class BlockHandle : public enable_shared_from_this<BlockHandle> {
 	friend class BlockManager;
-	friend class StandardBufferManager;
 	friend class BufferPool;
-	friend struct EvictionQueue;
+	friend class StandardBufferManager;
 
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag);
@@ -128,28 +129,35 @@ public:
 		return state;
 	}
 
-	unique_lock<mutex> GetLock() {
-		return unique_lock<mutex>(lock);
+	int64_t GetLRUTimestamp() const {
+		return lru_timestamp_msec;
+	}
+
+	BlockLock GetLock() {
+		return BlockLock(lock);
 	}
 
 	//! Add a reader to the block handle
-	void AddReader(unique_lock<mutex> &l);
+	void AddReader(BlockLock &l);
 
 	//! Gets a reference to the buffer - the lock must be held
-	unique_ptr<FileBuffer> &GetBuffer(unique_lock<mutex> &l);
+	unique_ptr<FileBuffer> &GetBuffer(BlockLock &l);
 
 	//! Merge a new memory reservation
-	void MergeMemoryReservation(unique_lock<mutex> &, BufferPoolReservation reservation);
+	void MergeMemoryReservation(BlockLock &, BufferPoolReservation reservation);
 	//! Resize the memory allocation
-	void ResizeMemory(unique_lock<mutex> &, idx_t alloc_size);
+	void ResizeMemory(BlockLock &, idx_t alloc_size);
 
 	//! Resize the actual buffer
-	void ResizeBuffer(unique_lock<mutex> &, idx_t block_size, int64_t memory_delta);
+	void ResizeBuffer(BlockLock &, idx_t block_size, int64_t memory_delta);
 	BufferHandle Load(unique_ptr<FileBuffer> buffer = nullptr);
-	BufferHandle LoadFromBuffer(unique_lock<mutex> &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer, BufferPoolReservation reservation);
-	unique_ptr<FileBuffer> UnloadAndTakeBlock();
-	void Unload();
-	bool CanUnload();
+	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer, BufferPoolReservation reservation);
+	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &);
+	void Unload(BlockLock &);
+
+	//! Returns whether or not the block can be unloaded
+	//! Note that while this method does not require a lock, whether or not a block can be unloaded can change if the lock is not held
+	bool CanUnload() const;
 
 private:
 	void VerifyMutex(unique_lock<mutex> &l) const;

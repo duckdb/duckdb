@@ -72,7 +72,7 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
-void BlockHandle::AddReader(unique_lock<mutex> &l) {
+void BlockHandle::AddReader(BlockLock &l) {
 	VerifyMutex(l);
 	D_ASSERT(state == BlockState::BLOCK_LOADED);
 	D_ASSERT(readers > 0);
@@ -80,27 +80,27 @@ void BlockHandle::AddReader(unique_lock<mutex> &l) {
 	++readers;
 }
 
-unique_ptr<FileBuffer> &BlockHandle::GetBuffer(unique_lock<mutex> &l) {
+unique_ptr<FileBuffer> &BlockHandle::GetBuffer(BlockLock &l) {
 	VerifyMutex(l);
 	return buffer;
 }
 
-void BlockHandle::VerifyMutex(unique_lock<mutex> &l) const{
+void BlockHandle::VerifyMutex(BlockLock &l) const{
 	D_ASSERT(l.owns_lock());
 	D_ASSERT(l.mutex() == &lock);
 }
 
-void BlockHandle::MergeMemoryReservation(unique_lock<mutex> &l, BufferPoolReservation reservation) {
+void BlockHandle::MergeMemoryReservation(BlockLock &l, BufferPoolReservation reservation) {
 	VerifyMutex(l);
 	memory_charge.Merge(std::move(reservation));
 }
 
-void BlockHandle::ResizeMemory(unique_lock<mutex> &l, idx_t alloc_size) {
+void BlockHandle::ResizeMemory(BlockLock &l, idx_t alloc_size) {
 	VerifyMutex(l);
 	memory_charge.Resize(alloc_size);
 }
 
-void BlockHandle::ResizeBuffer(unique_lock<mutex> &l, idx_t block_size, int64_t memory_delta) {
+void BlockHandle::ResizeBuffer(BlockLock &l, idx_t block_size, int64_t memory_delta) {
 	VerifyMutex(l);
 
 	D_ASSERT(buffer);
@@ -110,7 +110,7 @@ void BlockHandle::ResizeBuffer(unique_lock<mutex> &l, idx_t block_size, int64_t 
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
-BufferHandle BlockHandle::LoadFromBuffer(unique_lock<mutex> &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer, BufferPoolReservation reservation) {
+BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer, BufferPoolReservation reservation) {
 	VerifyMutex(l);
 
 	D_ASSERT(state != BlockState::BLOCK_LOADED);
@@ -147,7 +147,9 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 	return BufferHandle(shared_from_this(), buffer.get());
 }
 
-unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
+unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock) {
+	VerifyMutex(lock);
+
 	if (state == BlockState::BLOCK_UNLOADED) {
 		// already unloaded: nothing to do
 		return nullptr;
@@ -164,12 +166,12 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 	return std::move(buffer);
 }
 
-void BlockHandle::Unload() {
-	auto block = UnloadAndTakeBlock();
+void BlockHandle::Unload(BlockLock &lock) {
+	auto block = UnloadAndTakeBlock(lock);
 	block.reset();
 }
 
-bool BlockHandle::CanUnload() {
+bool BlockHandle::CanUnload() const {
 	if (state == BlockState::BLOCK_UNLOADED) {
 		// already unloaded
 		return false;

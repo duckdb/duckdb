@@ -385,7 +385,7 @@ void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	bool purge = false;
 	{
-		lock_guard<mutex> lock(handle->lock);
+		auto lock = handle->GetLock();
 		if (!handle->buffer || handle->GetBufferType() == FileBufferType::TINY_BUFFER) {
 			return;
 		}
@@ -396,7 +396,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 			if (handle->MustAddToEvictionQueue()) {
 				purge = buffer_pool.AddToEvictionQueue(handle);
 			} else {
-				handle->Unload();
+				handle->Unload(lock);
 			}
 		}
 	}
