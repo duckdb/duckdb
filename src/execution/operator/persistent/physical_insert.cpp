@@ -102,9 +102,7 @@ public:
 	unique_ptr<RowGroupCollection> local_collection;
 	optional_ptr<OptimisticDataWriter> writer;
 	// Rows that have been updated by a DO UPDATE conflict
-	unordered_set<row_t> updated_global_rows;
-	// Rows in the transaction-local storage that have been updated by a DO UPDATE conflict
-	unordered_set<row_t> updated_local_rows;
+	unordered_set<row_t> updated_rows;
 	idx_t update_count = 0;
 	unique_ptr<ConstraintState> constraint_state;
 	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
@@ -299,14 +297,11 @@ static idx_t PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk
 }
 
 // TODO: should we use a hash table to keep track of this instead?
-template <bool GLOBAL>
 static void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) {
 	// Insert all rows, if any of the rows has already been updated before, we throw an error
 	auto data = FlatVector::GetData<row_t>(row_ids);
 
-	// The rowids in the transaction-local ART aren't final yet so we have to separately keep track of the two sets of
-	// rowids
-	unordered_set<row_t> &updated_rows = GLOBAL ? lstate.updated_global_rows : lstate.updated_local_rows;
+	auto &updated_rows = lstate.updated_rows;
 	for (idx_t i = 0; i < count; i++) {
 		auto result = updated_rows.insert(data[i]);
 		if (result.second == false) {
@@ -678,7 +673,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	VerifyOnConflictCondition<GLOBAL>(context, combined_chunk, on_conflict_condition, lstate, data_table, table,
 	                                  local_storage);
 
-	RegisterUpdatedRows<GLOBAL>(lstate, row_ids, combined_chunk.size());
+	RegisterUpdatedRows(lstate, row_ids, combined_chunk.size());
 
 	affected_tuples += PerformOnConflictAction<GLOBAL>(context, combined_chunk, table, row_ids, op);
 
