@@ -59,7 +59,6 @@ using BlockLock = unique_lock<mutex>;
 
 class BlockHandle : public enable_shared_from_this<BlockHandle> {
 	friend class BlockManager;
-	friend class BufferPool;
 	friend class StandardBufferManager;
 
 public:
@@ -77,6 +76,10 @@ public:
 
 	idx_t EvictionSequenceNumber() const {
 		return eviction_seq_num;
+	}
+
+	idx_t NextEvictionSequenceNumber() {
+		return ++eviction_seq_num;
 	}
 
 	int32_t Readers() const {
@@ -116,9 +119,15 @@ public:
 	}
 
 	void SetEvictionQueueIndex(const idx_t index) {
-		D_ASSERT(!eviction_queue_idx.IsValid());                     // Cannot overwrite
-		D_ASSERT(GetBufferType() == FileBufferType::MANAGED_BUFFER); // MANAGED_BUFFER only (at least, for now)
+		// can only be set once
+		D_ASSERT(eviction_queue_idx == DConstants::INVALID_INDEX);
+		// MANAGED_BUFFER only (at least, for now)
+		D_ASSERT(GetBufferType() == FileBufferType::MANAGED_BUFFER);
 		eviction_queue_idx = index;
+	}
+
+	idx_t GetEvictionQueueIndex() const {
+		return eviction_queue_idx;
 	}
 
 	FileBufferType GetBufferType() const {
@@ -131,6 +140,10 @@ public:
 
 	int64_t GetLRUTimestamp() const {
 		return lru_timestamp_msec;
+	}
+
+	void SetLRUTimestamp(int64_t timestamp_msec) {
+		lru_timestamp_msec = timestamp_msec;
 	}
 
 	BlockLock GetLock() {
@@ -191,7 +204,7 @@ private:
 	//! Does the block contain any memory pointers?
 	const char *unswizzled;
 	//! Index for eviction queue (FileBufferType::MANAGED_BUFFER only, for now)
-	optional_idx eviction_queue_idx;
+	atomic<idx_t> eviction_queue_idx;
 };
 
 } // namespace duckdb

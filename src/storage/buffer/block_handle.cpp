@@ -12,7 +12,7 @@ namespace duckdb {
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag)
     : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer_type(FileBufferType::BLOCK),
       buffer(nullptr), eviction_seq_num(0), destroy_buffer_upon(DestroyBufferUpon::BLOCK),
-      memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
+      memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr), eviction_queue_idx(DConstants::INVALID_INDEX) {
 	eviction_seq_num = 0;
 	state = BlockState::BLOCK_UNLOADED;
 	memory_usage = block_manager.GetBlockAllocSize();
@@ -23,7 +23,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
                          BufferPoolReservation &&reservation)
     : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer_type(buffer_p->GetBufferType()),
       eviction_seq_num(0), destroy_buffer_upon(destroy_buffer_upon_p),
-      memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
+      memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr), eviction_queue_idx(DConstants::INVALID_INDEX) {
 	buffer = std::move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
 	memory_usage = block_size;

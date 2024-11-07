@@ -220,13 +220,13 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 
 	// The block handle is locked during this operation (Unpin),
 	// or the block handle is still a local variable (ConvertToPersistent)
-	D_ASSERT(handle->readers == 0);
-	auto ts = ++handle->eviction_seq_num;
+	D_ASSERT(handle->Readers() == 0);
+	auto ts = handle->NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
-		handle->lru_timestamp_msec =
+		handle->SetLRUTimestamp(
 		    std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 		        .time_since_epoch()
-		        .count();
+		        .count());
 	}
 
 	if (ts != 1) {
@@ -254,8 +254,9 @@ EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &han
 
 	const auto &queue_size = eviction_queue_sizes[static_cast<uint8_t>(handle_buffer_type) - 1];
 	// Adjust if eviction_queue_idx is set (idx == 0 -> add at back, idx >= queue_size -> add at front)
-	if (handle.eviction_queue_idx.IsValid() && handle.eviction_queue_idx.GetIndex() < queue_size) {
-		queue_index += queue_size - handle.eviction_queue_idx.GetIndex() - 1;
+	auto eviction_queue_idx = handle.GetEvictionQueueIndex();
+	if (eviction_queue_idx < queue_size) {
+		queue_index += queue_size - eviction_queue_idx - 1;
 	}
 
 	D_ASSERT(queues[queue_index]->file_buffer_type == handle_buffer_type);
