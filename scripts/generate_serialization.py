@@ -259,14 +259,16 @@ def get_deserialize_element_template(
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
     if is_deleted:
-        template = template.replace(f', result{assignment}{property_key}', '').replace(
-            'ReadProperty', 'ReadDeletedProperty'
+        template = (
+            template.replace(f', result{assignment}{property_key}', '')
+            .replace(f'auto {property_name}', '')
+            .replace('ReadProperty', 'ReadDeletedProperty')
         )
     elif has_default and default_value is None:
         template = template.replace('ReadProperty', 'ReadPropertyWithDefault')
     elif has_default and default_value is not None:
         template = template.replace('ReadProperty', 'ReadPropertyWithExplicitDefault')
-    return template.format(
+    template = template.format(
         property_name=property_name,
         property_key=property_key,
         property_id=str(property_id),
@@ -274,6 +276,9 @@ def get_deserialize_element_template(
         property_type=property_type,
         assignment=assignment,
     )
+    if is_deleted:
+        template = template.replace(f'auto {property_name} = ', '')
+    return template
 
 
 def get_deserialize_element(

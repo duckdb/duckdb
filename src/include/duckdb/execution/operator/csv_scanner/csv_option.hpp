@@ -32,7 +32,11 @@ public:
 	}
 	CSVOption(T value_p, bool set_by_user_p) : value(value_p), set_by_user(set_by_user_p) {
 	}
+
 	CSVOption() {};
+
+	CSVOption(CSVOption &&other) noexcept : set_by_user(other.set_by_user), value(std::move(other.value)) {
+	}
 
 	//! Sets value.
 	//! If by user it also toggles the set_by user flag

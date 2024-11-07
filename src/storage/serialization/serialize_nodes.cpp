@@ -232,8 +232,8 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	auto force_quote = deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote");
 	auto rejects_table_name = deserializer.ReadPropertyWithExplicitDefault<string>(117, "rejects_table_name", "reject_errors");
 	auto rejects_limit = deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit");
-	auto rejects_recovery_columns = deserializer.ReadDeletedProperty<vector<string>>(119, "rejects_recovery_columns");
-	auto rejects_recovery_column_ids = deserializer.ReadDeletedProperty<vector<idx_t>>(120, "rejects_recovery_column_ids");
+	deserializer.ReadDeletedProperty<vector<string>>(119, "rejects_recovery_columns");
+	deserializer.ReadDeletedProperty<vector<idx_t>>(120, "rejects_recovery_column_ids");
 	auto delimiter = deserializer.ReadProperty<CSVOption<char>>(121, "delimiter");
 	auto quote = deserializer.ReadProperty<CSVOption<char>>(122, "quote");
 	auto escape = deserializer.ReadProperty<CSVOption<char>>(123, "escape");

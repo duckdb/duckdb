@@ -8,8 +8,7 @@
 
 namespace duckdb {
 
-CSVReaderOptions::CSVReaderOptions(CSVOption<char> single_byte_delimiter,
-                                   const CSVOption<string> &multi_byte_delimiter) {
+CSVReaderOptions::CSVReaderOptions(CSVOption<char> single_byte_delimiter, CSVOption<string> multi_byte_delimiter) {
 	if (multi_byte_delimiter.GetValue().empty()) {
 		char single_byte_value = single_byte_delimiter.GetValue();
 		string value(1, single_byte_value);
@@ -411,9 +410,10 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, 
 }
 
 template <class T>
-string FormatOptionLine(const string &name, const CSVOption<T> option) {
+string FormatOptionLine(const string &name, const CSVOption<T> &option) {
 	return name + " = " + option.FormatValue() + " " + option.FormatSet() + "\n  ";
 }
+
 bool CSVReaderOptions::WasTypeManuallySet(idx_t i) const {
 	if (i >= was_type_manually_set.size()) {
 		return false;

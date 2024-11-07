@@ -36,7 +36,7 @@ struct DialectOptions {
 
 struct CSVReaderOptions {
 	CSVReaderOptions() {};
-	CSVReaderOptions(CSVOption<char> single_byte_delimiter, const CSVOption<string> &multi_byte_delimiter);
+	CSVReaderOptions(CSVOption<char> single_byte_delimiter, CSVOption<string> multi_byte_delimiter);
 	//===--------------------------------------------------------------------===//
 	// CommonCSVOptions
 	//===--------------------------------------------------------------------===//
