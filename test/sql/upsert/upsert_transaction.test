@@ -68,17 +68,12 @@ statement ok
 INSERT INTO tbl VALUES
 	(5, 0)
 
-# FIXME: this is not the expected behavior, but it is a current limitation
-# due to the way the UPSERT logic is implemented when it comes to global and transaction-local storage checking
-# and the LocalAppend caused by inner-only conflict violations
-statement error
+statement ok
 insert into tbl VALUES
 	(5, 0),
 	(5, 1)
 ON CONFLICT (a) DO UPDATE SET
 	b = excluded.b;
-----
-PRIMARY KEY or UNIQUE constraint violated: duplicate key "5"
 
 statement ok
 COMMIT;

@@ -11,9 +11,12 @@ statement ok
 insert into tbl VALUES
 	(1, 'd'),
 	(3, 'nope'),
-	(2, 'n'),
+	(2, 'n')
 ;
 
+## Postgres says:
+## ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time
+## HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 # This insert causes both:
 # - conflicts only within the to-be-inserted-data
 # - conflicts only with the existing data
@@ -30,15 +33,25 @@ insert into tbl VALUES
 	(5, 'abc'),
 	(7, 'tes'), -- conflict (inner)
 	(2, 'b')	-- conflict (existing + inner)
-ON CONFLICT (number) DO UPDATE SET str = 'e';
+ON CONFLICT (number) DO UPDATE SET str = excluded.str || 'e';
+
 
 query II
 select * from tbl;
 ----
-1	e
-3	e
-2	e
-7	e
+1	ce
+3	abce
+2	be
 6	yep
 4	abc
+7	tese
 5	abc
+
+## sqlite says this is the correct order ??:
+## 1	e
+## 2	e
+## 3	e
+## 4	abc
+## 5	abc
+## 6	yep
+## 7	e

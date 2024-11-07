@@ -461,7 +461,10 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	VerifyOnConflictCondition<GLOBAL>(context, combined_chunk, on_conflict_condition, constraint_state, tuples,
 	                                  data_table, local_storage);
 
-	RegisterUpdatedRows(lstate, row_ids, combined_chunk.size());
+	if (&tuples == &lstate.update_chunk) {
+		// Allow updating duplicate rows for the 'update_chunk'
+		RegisterUpdatedRows(lstate, row_ids, combined_chunk.size());
+	}
 
 	affected_tuples += PerformOnConflictAction<GLOBAL>(context, combined_chunk, table, row_ids, op);
 
@@ -598,7 +601,10 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			// Flush the append so we can target the data we just appended with the update
 			storage.FinalizeLocalAppend(gstate.append_state);
 			gstate.initialized = false;
+			(void)HandleInsertConflicts<true>(table, context, lstate, lstate.update_chunk, *this);
 			(void)HandleInsertConflicts<false>(table, context, lstate, lstate.update_chunk, *this);
+			// All of the tuples should have been turned into an update, leaving the chunk empty afterwards
+			D_ASSERT(lstate.update_chunk.size() == 0);
 		}
 	} else {
 		D_ASSERT(!return_chunk);
@@ -614,8 +620,6 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
 		}
 		OnConflictHandling(table, context, gstate, lstate);
-		// Since this might need to update recently inserted tuples, this is impossible to do with the
-		// 'local_collection'
 		D_ASSERT(action_type != OnConflictAction::UPDATE);
 
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
