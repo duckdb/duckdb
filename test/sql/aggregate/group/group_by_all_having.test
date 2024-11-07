@@ -5,17 +5,15 @@
 statement ok
 PRAGMA disable_optimizer;
 
-# query I
-# SELECT * FROM (SELECT 1) t0(c0) GROUP BY c0 HAVING c0>0
-# ----
-# 1
+query I
+SELECT * FROM (SELECT 1) t0(c0) GROUP BY c0 HAVING c0>0
+----
+1
 
 query I
 SELECT c0 FROM (SELECT 1) t0(c0) GROUP BY ALL HAVING c0>0
 ----
 1
-
-mode skip
 
 query I
 SELECT c0 FROM (SELECT 1, 1 UNION ALL SELECT 1, 2) t0(c0, c1) GROUP BY ALL ORDER BY c0

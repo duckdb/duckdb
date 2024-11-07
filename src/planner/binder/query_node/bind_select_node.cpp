@@ -627,7 +627,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	set<idx_t> group_by_all_indexes_set;
 	if (!group_by_all_indexes.empty()) {
 		idx_t num_set_indexes = result->groups.group_expressions.size();
-		;
 		for (idx_t i = 0; i < num_set_indexes; i++) {
 			group_by_all_indexes_set.insert(i);
 		}
