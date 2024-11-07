@@ -72,21 +72,56 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
-void BlockHandle::ResizeBuffer(idx_t block_size, int64_t memory_delta) {
+void BlockHandle::AddReader(unique_lock<mutex> &l) {
+	VerifyMutex(l);
+	D_ASSERT(state == BlockState::BLOCK_LOADED);
+	D_ASSERT(readers > 0);
+	D_ASSERT(buffer);
+	++readers;
+}
+
+unique_ptr<FileBuffer> &BlockHandle::GetBuffer(unique_lock<mutex> &l) {
+	VerifyMutex(l);
+	return buffer;
+}
+
+void BlockHandle::VerifyMutex(unique_lock<mutex> &l) const{
+	D_ASSERT(l.owns_lock());
+	D_ASSERT(l.mutex() == &lock);
+}
+
+void BlockHandle::MergeMemoryReservation(unique_lock<mutex> &l, BufferPoolReservation reservation) {
+	VerifyMutex(l);
+	memory_charge.Merge(std::move(reservation));
+}
+
+void BlockHandle::ResizeMemory(unique_lock<mutex> &l, idx_t alloc_size) {
+	VerifyMutex(l);
+	memory_charge.Resize(alloc_size);
+}
+
+void BlockHandle::ResizeBuffer(unique_lock<mutex> &l, idx_t block_size, int64_t memory_delta) {
+	VerifyMutex(l);
+
 	D_ASSERT(buffer);
 	// resize and adjust current memory
 	buffer->Resize(block_size);
-	memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage) + memory_delta);
+	memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage.load()) + memory_delta);
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
-BufferHandle BlockHandle::LoadFromBuffer(data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer) {
+BufferHandle BlockHandle::LoadFromBuffer(unique_lock<mutex> &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer, BufferPoolReservation reservation) {
+	VerifyMutex(l);
+
 	D_ASSERT(state != BlockState::BLOCK_LOADED);
+	D_ASSERT(readers == 0);
 	// copy over the data into the block from the file buffer
 	auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 	memcpy(block->InternalBuffer(), data, block->AllocSize());
 	buffer = std::move(block);
 	state = BlockState::BLOCK_LOADED;
+	readers = 1;
+	memory_charge = std::move(reservation);
 	return BufferHandle(shared_from_this(), buffer.get());
 }
 

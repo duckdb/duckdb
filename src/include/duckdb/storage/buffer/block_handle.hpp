@@ -78,8 +78,6 @@ public:
 		return eviction_seq_num;
 	}
 
-	void ResizeBuffer(idx_t block_size, int64_t memory_delta);
-
 	int32_t Readers() const {
 		return readers;
 	}
@@ -108,11 +106,11 @@ public:
 		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
 	}
 
-	inline const idx_t &GetMemoryUsage() const {
+	inline idx_t GetMemoryUsage() const {
 		return memory_usage;
 	}
 
-	bool IsUnloaded() {
+	bool IsUnloaded() const {
 		return state == BlockState::BLOCK_UNLOADED;
 	}
 
@@ -126,11 +124,35 @@ public:
 		return buffer_type;
 	}
 
+	BlockState GetState() const {
+		return state;
+	}
+
+	unique_lock<mutex> GetLock() {
+		return unique_lock<mutex>(lock);
+	}
+
+	//! Add a reader to the block handle
+	void AddReader(unique_lock<mutex> &l);
+
+	//! Gets a reference to the buffer - the lock must be held
+	unique_ptr<FileBuffer> &GetBuffer(unique_lock<mutex> &l);
+
+	//! Merge a new memory reservation
+	void MergeMemoryReservation(unique_lock<mutex> &, BufferPoolReservation reservation);
+	//! Resize the memory allocation
+	void ResizeMemory(unique_lock<mutex> &, idx_t alloc_size);
+
+	//! Resize the actual buffer
+	void ResizeBuffer(unique_lock<mutex> &, idx_t block_size, int64_t memory_delta);
 	BufferHandle Load(unique_ptr<FileBuffer> buffer = nullptr);
-	BufferHandle LoadFromBuffer(data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer);
+	BufferHandle LoadFromBuffer(unique_lock<mutex> &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer, BufferPoolReservation reservation);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
 	void Unload();
 	bool CanUnload();
+
+private:
+	void VerifyMutex(unique_lock<mutex> &l) const;
 
 private:
 	//! The block-level lock
@@ -155,7 +177,7 @@ private:
 	atomic<DestroyBufferUpon> destroy_buffer_upon;
 	//! The memory usage of the block (when loaded). If we are pinning/loading
 	//! an unloaded block, this tells us how much memory to reserve.
-	idx_t memory_usage;
+	atomic<idx_t> memory_usage;
 	//! Current memory reservation / usage
 	BufferPoolReservation memory_charge;
 	//! Does the block contain any memory pointers?

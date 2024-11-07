@@ -48,7 +48,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	// move the data from the old block into data for the new block
 	new_block->state = BlockState::BLOCK_LOADED;
 	new_block->buffer = ConvertBlock(block_id, *old_block->buffer);
-	new_block->memory_usage = old_block->memory_usage;
+	new_block->memory_usage = old_block->memory_usage.load();
 	new_block->memory_charge = std::move(old_block->memory_charge);
 
 	// clear the old buffer and unload it
