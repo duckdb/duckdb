@@ -39,6 +39,10 @@ bool StringUtil::Contains(const string &haystack, const string &needle) {
 	return (haystack.find(needle) != string::npos);
 }
 
+bool StringUtil::Contains(const string &haystack, const char &needle_char) {
+	return (haystack.find(needle_char) != string::npos);
+}
+
 void StringUtil::LTrim(string &str) {
 	auto it = str.begin();
 	while (it != str.end() && CharacterIsSpace(*it)) {
@@ -85,16 +89,6 @@ string StringUtil::Repeat(const string &str, idx_t n) {
 		os << str;
 	}
 	return (os.str());
-}
-
-vector<string> StringUtil::Split(const string &str, char delimiter) {
-	std::stringstream ss(str);
-	vector<string> lines;
-	string temp;
-	while (getline(ss, temp, delimiter)) {
-		lines.push_back(temp);
-	}
-	return (lines);
 }
 
 namespace string_util_internal {
@@ -289,6 +283,16 @@ idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
 		}
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+vector<string> StringUtil::Split(const string &str, char delimiter) {
+	std::stringstream ss(str);
+	vector<string> lines;
+	string temp;
+	while (getline(ss, temp, delimiter)) {
+		lines.push_back(temp);
+	}
+	return (lines);
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {

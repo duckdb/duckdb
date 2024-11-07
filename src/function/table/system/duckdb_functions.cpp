@@ -76,8 +76,8 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("function_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
-	names.emplace_back("example");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("examples");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
 	names.emplace_back("stability");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -453,10 +453,46 @@ struct PragmaFunctionExtractor {
 	}
 };
 
+static vector<Value> ToVectorValue(vector<string> string_vector) {
+	vector<Value> result;
+	for (string &str : string_vector) {
+		result.emplace_back(Value(str));
+	}
+	return result;
+}
+
+template <class T, class OP>
+static vector<Value> GetParameterNames(FunctionEntry &entry, idx_t function_idx,
+                                       FunctionDescription &function_description) {
+	if (function_description.parameter_names.size() > 0) {
+		return ToVectorValue(function_description.parameter_names);
+	} else {
+		// fallback
+		auto &function = entry.Cast<T>();
+		return OP::GetParameters(function, function_idx);
+	}
+}
+
+static const int GetFunctionDescriptionIndex(vector<FunctionDescription> &function_descriptions,
+                                             duckdb::Value &parameter_types) {
+	// simplified logic, just check amount of arguments
+	vector<Value> types_to_match = ListValue::GetChildren(parameter_types);
+	for (idx_t descr_idx = 0; descr_idx < function_descriptions.size(); descr_idx++) {
+		if (types_to_match.size() == function_descriptions[descr_idx].parameter_types.size()) {
+			return descr_idx;
+		}
+	}
+	return -1; // no match
+}
+
 template <class T, class OP>
 bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &output, idx_t output_offset) {
 	auto &function = entry.Cast<T>();
 	idx_t col = 0;
+	Value parameter_types = OP::GetParameterTypes(function, function_idx);
+	int description_index = GetFunctionDescriptionIndex(entry.descriptions, parameter_types);
+	FunctionDescription function_description =
+	    (description_index >= 0) ? entry.descriptions[description_index] : FunctionDescription();
 
 	// database_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.schema.catalog.GetName()));
@@ -474,7 +510,7 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, Value(OP::GetFunctionType()));
 
 	// function_description, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, entry.description.empty() ? Value() : entry.description);
+	output.SetValue(col++, output_offset, Value(function_description.description));
 
 	// comment, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, entry.comment);
@@ -486,15 +522,12 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, OP::GetReturnType(function, function_idx));
 
 	// parameters, LogicalType::LIST(LogicalType::VARCHAR)
-	auto parameters = OP::GetParameters(function, function_idx);
-	for (idx_t param_idx = 0; param_idx < function.parameter_names.size() && param_idx < parameters.size();
-	     param_idx++) {
-		parameters[param_idx] = Value(function.parameter_names[param_idx]);
-	}
-	output.SetValue(col++, output_offset, Value::LIST(LogicalType::VARCHAR, std::move(parameters)));
+	output.SetValue(
+	    col++, output_offset,
+	    Value::LIST(LogicalType::VARCHAR, GetParameterNames<T, OP>(function, function_idx, function_description)));
 
 	// parameter_types, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, OP::GetParameterTypes(function, function_idx));
+	output.SetValue(col++, output_offset, parameter_types);
 
 	// varargs, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, OP::GetVarArgs(function, function_idx));
@@ -511,8 +544,9 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	// function_oid, LogicalType::BIGINT
 	output.SetValue(col++, output_offset, Value::BIGINT(NumericCast<int64_t>(function.oid)));
 
-	// example, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, entry.example.empty() ? Value() : entry.example);
+	// examples, LogicalType::LIST(LogicalType::VARCHAR)
+	output.SetValue(col++, output_offset,
+	                Value::LIST(LogicalType::VARCHAR, ToVectorValue(function_description.examples)));
 
 	// stability, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, OP::ResultType(function, function_idx));

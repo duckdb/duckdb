@@ -124,6 +124,7 @@ public:
 
 	//! Returns true if the needle string exists in the haystack
 	DUCKDB_API static bool Contains(const string &haystack, const string &needle);
+	DUCKDB_API static bool Contains(const string &haystack, const char &needle_char);
 
 	//! Returns true if the target string starts with the given prefix
 	DUCKDB_API static bool StartsWith(string str, string prefix);

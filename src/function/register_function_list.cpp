@@ -1,15 +1,66 @@
+#include "duckdb/catalog/default/default_types.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_list.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
 namespace duckdb {
 
+static void FillFunctionParameters(FunctionDescription &function_description, string function_name,
+                                   vector<string> &parameters, vector<string> &descriptions, vector<string> &examples) {
+	for (string &parameter : parameters) {
+		vector<string> parameter_name_type = StringUtil::Split(parameter, "::");
+		if (parameter_name_type.size() == 1) {
+			function_description.parameter_names.push_back(std::move(parameter_name_type[0]));
+			function_description.parameter_types.push_back(LogicalType::ANY);
+		} else if (parameter_name_type.size() == 2) {
+			function_description.parameter_names.push_back(std::move(parameter_name_type[0]));
+			LogicalType type = DefaultTypeGenerator::GetDefaultType(parameter_name_type[1]);
+			if (type != LogicalType::INVALID) {
+				function_description.parameter_types.push_back(LogicalType::ANY);
+			} else {
+				throw InternalException("Unsupported type in function variant for function '%s'!", function_name);
+			}
+		} else {
+			throw InternalException("Ill formed function variant for function '%s'!", function_name);
+		}
+	}
+}
+
+template <class T>
+void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info) {
+	vector<string> variants = StringUtil::Split(function.parameters, '\1');
+	vector<string> descriptions = StringUtil::Split(function.description, '\1');
+	vector<string> examples = StringUtil::Split(function.example, '\1');
+	for (idx_t variant_index = 0; variant_index < variants.size(); variant_index++) {
+		FunctionDescription function_description;
+		// parameter_names and parameter_types
+		vector<string> parameters = StringUtil::Split(variants[variant_index], ',');
+		FillFunctionParameters(function_description, function.name, parameters, descriptions, examples);
+		// description
+		if (descriptions.size() == variants.size()) {
+			function_description.description = descriptions[variant_index];
+		} else if (descriptions.size() == 1) {
+			function_description.description = descriptions[0];
+		} else if (descriptions.size() != 0) {
+			throw InternalException("Incorrect number of function descriptions for function '%s'!", function.name);
+		}
+		// examples
+		if (examples.size() == variants.size()) {
+			function_description.examples = StringUtil::Split(examples[variant_index], '\2');
+		} else if (examples.size() == 1) {
+			function_description.examples = StringUtil::Split(examples[0], '\2');
+		} else if (examples.size() != 0) {
+			throw InternalException("Incorrect number of function examples for function '%s'!", function.name);
+		}
+		info.descriptions.push_back(std::move(function_description));
+	}
+}
+
 template <class T>
 static void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 	info.internal = true;
-	info.description = function.description;
-	info.parameter_names = StringUtil::Split(function.parameters, ",");
-	info.example = function.example;
+	FillFunctionDescriptions(function, info);
 }
 
 static void RegisterFunctionList(Catalog &catalog, CatalogTransaction transaction,
