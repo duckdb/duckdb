@@ -119,8 +119,6 @@ unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction 
 	}
 	auto &seq_info = create_info->Cast<CreateSequenceInfo>();
 	auto &context = deserializer.Get<ClientContext &>();
-	// FIXME: this will break if the bind context is required to find the right Sequence (if the CatalogSearchPath was
-	// overridden for example)
 	auto &sequence = BindSequenceFromContext(context, seq_info.catalog, seq_info.schema, seq_info.name);
 	return make_uniq<NextvalBindData>(sequence);
 }
