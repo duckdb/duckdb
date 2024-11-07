@@ -362,6 +362,12 @@ bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optiona
 	if (function.function.name != "struct_extract" && function.function.name != "array_extract") {
 		return false;
 	}
+	if (!function.bind_info) {
+		return false;
+	}
+	if (function.children[0]->return_type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
 	auto &bind_data = function.bind_info->Cast<StructExtractBindData>();
 	// struct extract, check if left child is a bound column ref
 	index = ColumnIndex(bind_data.index);
