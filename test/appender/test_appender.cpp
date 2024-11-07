@@ -572,14 +572,14 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("COMMIT TRANSACTION"));
 }
 
-TEST_CASE("Test appending to a default column", "[appender]") {
+TEST_CASE("Test appending with an active default column", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
 	Appender appender(con, "main", "tbl");
-	appender.SetDefaultColumn("k");
+	appender.SetColumn("i");
 
 	DataChunk chunk;
 	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
@@ -590,30 +590,31 @@ TEST_CASE("Test appending to a default column", "[appender]") {
 	col_i_data[0] = 42;
 	col_i_data[1] = 43;
 
-	auto &col_j = chunk.data[1];
-	auto col_j_data = reinterpret_cast<int32_t *>(col_j.GetData());
-	col_j_data[0] = 111;
-	col_j_data[1] = 112;
-
 	chunk.SetCardinality(2);
 	appender.AppendDataChunk(chunk);
 	appender.Close();
 
 	result = con.Query("SELECT i, j, k FROM tbl");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
-	REQUIRE(CHECK_COLUMN(result, 1, {111, 112}));
 	REQUIRE(CHECK_COLUMN(result, 2, {30, 30}));
+
+	// Test that column 1 is NULL.
+	auto result_chunk = result->Fetch();
+	auto &null_result_vec = result_chunk->data[1];
+	UnifiedVectorFormat result_format;
+	null_result_vec.ToUnifiedFormat(result_chunk->size(), result_format);
+	REQUIRE(!result_format.validity.RowIsValid(0));
+	REQUIRE(!result_format.validity.RowIsValid(1));
 }
 
-TEST_CASE("Test appending to multiple default columns", "[appender]") {
+TEST_CASE("Test appending with an active normal column", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
 	Appender appender(con, "main", "tbl");
-	appender.SetDefaultColumn("k");
-	appender.SetDefaultColumn("i");
+	appender.SetColumn("j");
 
 	DataChunk chunk;
 	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
@@ -640,7 +641,7 @@ TEST_CASE("Test appending to multiple default columns", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {245760}));
 }
 
-TEST_CASE("Test changing the default column configuration", "[appender]") {
+TEST_CASE("Test changing the active column configuration", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -669,20 +670,22 @@ TEST_CASE("Test changing the default column configuration", "[appender]") {
 	chunk.SetCardinality(1);
 	appender.AppendDataChunk(chunk);
 
-	appender.SetDefaultColumn("k");
+	appender.SetColumn("j");
+	appender.SetColumn("i");
 	appender.AppendDataChunk(chunk);
 
-	appender.SetDefaultColumn("i");
+	appender.ResetColumn("i");
 	appender.AppendDataChunk(chunk);
 
-	appender.ResetDefaultColumn("k");
-	appender.ResetDefaultColumn("i");
+	appender.SetColumn("i");
+	appender.SetColumn("k");
 	appender.AppendDataChunk(chunk);
 
-	appender.SetDefaultColumn("i");
+	appender.ResetColumn("i");
 	appender.AppendDataChunk(chunk);
 
-	appender.ResetDefaultColumn("i");
+	appender.ResetColumn("j");
+	appender.ResetColumn("k");
 	appender.AppendDataChunk(chunk);
 	appender.Close();
 
@@ -692,7 +695,7 @@ TEST_CASE("Test changing the default column configuration", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {50, 30, 30, 50, 50, 50}));
 }
 
-TEST_CASE("Test edge cases for the default column configuration", "[appender]") {
+TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -700,12 +703,13 @@ TEST_CASE("Test edge cases for the default column configuration", "[appender]") 
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (2 * j))"));
 	Appender appender(con, "main", "tbl");
 
-	appender.SetDefaultColumn("k");
+	appender.SetColumn("i");
+	appender.SetColumn("j");
 	// Ignore columns that do not exist.
-	appender.ResetDefaultColumn("hello");
-	appender.SetDefaultColumn("world");
+	appender.ResetColumn("hello");
+	appender.SetColumn("world");
 	// Ignore generated columns as default values.
-	appender.SetDefaultColumn("l");
+	appender.SetColumn("l");
 
 	DataChunk chunk;
 	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
@@ -723,21 +727,5 @@ TEST_CASE("Test edge cases for the default column configuration", "[appender]") 
 
 	chunk.SetCardinality(2);
 	appender.AppendDataChunk(chunk);
-
-	// We flush the previous valid data.
-	// Then, we set a column that does not have a default value.
-	appender.SetDefaultColumn("j");
-	appender.AppendDataChunk(chunk);
-
-	bool failed;
-	try {
-		appender.Flush();
-		failed = false;
-	} catch (std::exception &ex) {
-		ErrorData error(ex);
-		REQUIRE(error.Message().find("cannot set the default value of a column without a default value") !=
-		        std::string::npos);
-		failed = true;
-	}
-	REQUIRE(failed);
+	appender.Close();
 }

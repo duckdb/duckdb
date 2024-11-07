@@ -87,12 +87,12 @@ public:
 	}
 	DUCKDB_API void AppendDataChunk(DataChunk &value);
 
-	//! Indicates that a column must be filled with its default values upon flushing.
+	//! Adds a column to the active column list.
 	//! Immediately flushes all previous data.
-	virtual void SetDefaultColumn(const string &name) = 0;
-	//! Indicates that a column must not be filled with its default values upon flushing.
+	virtual void SetColumn(const string &name) = 0;
+	//! Removes a column from the active column list.
 	//! Immediately flushes all previous data.
-	virtual void ResetDefaultColumn(const string &name) = 0;
+	virtual void ResetColumn(const string &name) = 0;
 
 protected:
 	void Destructor();
@@ -128,8 +128,9 @@ class Appender : public BaseAppender {
 
 	//! The default expressions.
 	unordered_map<column_t, Value> default_values;
-	//! The column names of default columns.
-	case_insensitive_set_t default_columns;
+	//! If not empty, then this holds all columns provided by the appender.
+	//! Any other columns default to NULL, or their default values.
+	case_insensitive_set_t active_columns;
 
 public:
 	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
@@ -140,8 +141,8 @@ public:
 
 public:
 	void AppendDefault();
-	void SetDefaultColumn(const string &name) override;
-	void ResetDefaultColumn(const string &name) override;
+	void SetColumn(const string &name) override;
+	void ResetColumn(const string &name) override;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
@@ -160,8 +161,8 @@ public:
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
-	void SetDefaultColumn(const string &name) override;
-	void ResetDefaultColumn(const string &name) override;
+	void SetColumn(const string &name) override;
+	void ResetColumn(const string &name) override;
 };
 
 template <>

@@ -449,7 +449,7 @@ void BaseAppender::Flush() {
 }
 
 void Appender::FlushInternal(ColumnDataCollection &collection) {
-	context->Append(*description, collection, &default_columns);
+	context->Append(*description, collection, &active_columns);
 }
 
 void Appender::AppendDefault() {
@@ -464,14 +464,14 @@ void Appender::AppendDefault() {
 	Append(default_value);
 }
 
-void Appender::SetDefaultColumn(const string &name) {
+void Appender::SetColumn(const string &name) {
 	Flush();
-	default_columns.insert(name);
+	active_columns.insert(name);
 }
 
-void Appender::ResetDefaultColumn(const string &name) {
+void Appender::ResetColumn(const string &name) {
 	Flush();
-	default_columns.erase(name);
+	active_columns.erase(name);
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
@@ -480,12 +480,12 @@ void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	table.GetStorage().LocalAppend(table, context, collection, bound_constraints);
 }
 
-void InternalAppender::SetDefaultColumn(const string &name) {
-	throw InternalException("SetDefaultColumn not implemented for InternalAppender");
+void InternalAppender::SetColumn(const string &name) {
+	throw InternalException("SetColumn not implemented for InternalAppender");
 }
 
-void InternalAppender::ResetDefaultColumn(const string &name) {
-	throw InternalException("ResetDefaultColumn not implemented for InternalAppender");
+void InternalAppender::ResetColumn(const string &name) {
+	throw InternalException("ResetColumn not implemented for InternalAppender");
 }
 
 void BaseAppender::Close() {

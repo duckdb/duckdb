@@ -1133,7 +1133,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 }
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection,
-                           optional_ptr<const case_insensitive_set_t> default_columns) {
+                           optional_ptr<const case_insensitive_set_t> active_columns) {
 
 	RunFunctionInTransaction([&]() {
 		auto &table_entry =
@@ -1156,7 +1156,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		auto binder = Binder::CreateBinder(*this);
 		auto bound_constraints = binder->BindConstraints(table_entry);
 		MetaTransaction::Get(*this).ModifyDatabase(table_entry.ParentCatalog().GetAttached());
-		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints, default_columns);
+		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints, active_columns);
 	});
 }
 

@@ -867,8 +867,8 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
                             const vector<unique_ptr<BoundConstraint>> &bound_constraints,
-                            optional_ptr<const case_insensitive_set_t> default_columns) {
-	if (!default_columns || default_columns->empty()) {
+                            optional_ptr<const case_insensitive_set_t> active_columns) {
+	if (!active_columns || active_columns->empty()) {
 		return LocalAppend(table, context, collection, bound_constraints);
 	}
 
@@ -877,17 +877,21 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	auto &column_list = table.GetColumns();
 	vector<unique_ptr<Expression>> expressions;
+	vector<column_t> null_columns;
 
 	for (idx_t i = 0; i < column_list.PhysicalColumnCount(); i++) {
 		auto &col = column_list.GetColumn(PhysicalIndex(i));
-		if (default_columns->find(col.Name()) == default_columns->end()) {
+		if (active_columns->find(col.Name()) != active_columns->end()) {
 			auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
 			expressions.push_back(std::move(expr));
 			continue;
 		}
 
 		if (!col.HasDefaultValue()) {
-			throw InvalidInputException("cannot set the default value of a column without a default value");
+			null_columns.push_back(i);
+			auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
+			expressions.push_back(std::move(expr));
+			continue;
 		}
 
 		auto default_copy = col.DefaultValue().Copy();
@@ -904,6 +908,12 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 	for (auto &chunk : collection.Chunks()) {
+		for (const auto i : null_columns) {
+			auto &null_vec = chunk.data[i];
+			auto &mask = FlatVector::Validity(null_vec);
+			mask.SetAllInvalid(chunk.size());
+		}
+
 		expression_executor.Execute(chunk, result);
 		storage.LocalAppend(append_state, table, context, result);
 		result.Reset();
