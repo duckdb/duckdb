@@ -5,7 +5,6 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/constants.hpp"
-#include "zstd_wrapper.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"

@@ -76,11 +76,11 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("block_offset");
 	return_types.emplace_back(LogicalType::BIGINT);
 
-	names.emplace_back("additional_block_ids");
-	return_types.emplace_back(LogicalType::LIST(LogicalTypeId::BIGINT));
-
 	names.emplace_back("segment_info");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("additional_block_ids");
+	return_types.emplace_back(LogicalType::LIST(LogicalTypeId::BIGINT));
 
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
