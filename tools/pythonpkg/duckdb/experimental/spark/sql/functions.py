@@ -1411,6 +1411,61 @@ def find_in_set(str: "ColumnOrName", str_array: "ColumnOrName") -> Column:
     )
 
 
+def first(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
+    """Aggregate function: returns the first value in a group.
+
+    The function by default returns the first values it sees. It will return the first non-null
+    value it sees when ignoreNulls is set to true. If all values are null, then null is returned.
+
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Notes
+    -----
+    The function is non-deterministic because its results depends on the order of the
+    rows which may be non-deterministic after a shuffle.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column to fetch first value for.
+    ignorenulls : :class:`~pyspark.sql.Column` or str
+        if first value is null then look for first non-null value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        first value of the group.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
+    >>> df = df.orderBy(df.age)
+    >>> df.groupby("name").agg(first("age")).orderBy("name").show()
+    +-----+----------+
+    | name|first(age)|
+    +-----+----------+
+    |Alice|      NULL|
+    |  Bob|         5|
+    +-----+----------+
+
+    Now, to ignore any nulls we needs to set ``ignorenulls`` to `True`
+
+    >>> df.groupby("name").agg(first("age", ignorenulls=True)).orderBy("name").show()
+    +-----+----------+
+    | name|first(age)|
+    +-----+----------+
+    |Alice|         2|
+    |  Bob|         5|
+    +-----+----------+
+    """
+    if ignorenulls:
+        raise ContributionsAcceptedError()
+    return _invoke_function_over_columns("first", col)
+
+
 def greatest(*cols: "ColumnOrName") -> Column:
     """
     Returns the greatest value of the list of column names, skipping null values.

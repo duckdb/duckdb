@@ -27,6 +27,7 @@ from spark_namespace.sql.functions import (
     approx_count_distinct,
     covar_pop,
     covar_samp,
+    first
 )
 
 
@@ -163,3 +164,11 @@ class TestDataFrameGroupBy(object):
 
         res = df.groupBy("name").count().columns
         assert res == ['name', 'count']
+
+    def test_group_by_first(self, spark):
+        df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
+
+        df = df.orderBy(df.age)
+        res = df.groupBy("name").agg(first("age").alias("first_age")).orderBy("name").collect()
+
+        assert res == [Row(name='Alice', first_age=2), Row(name='Bob', first_age=5)]
