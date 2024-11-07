@@ -1371,6 +1371,46 @@ def encode(col: "ColumnOrName", charset: str) -> Column:
     return _invoke_function("encode", _to_column_expr(col))
 
 
+def find_in_set(str: "ColumnOrName", str_array: "ColumnOrName") -> Column:
+    """
+    Returns the index (1-based) of the given string (`str`) in the comma-delimited
+    list (`strArray`). Returns 0, if the string was not found or if the given string (`str`)
+    contains a comma.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        The given string to be found.
+    str_array : :class:`~pyspark.sql.Column` or str
+        The comma-delimited list.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("ab", "abc,b,ab,c,def")], ['a', 'b'])
+    >>> df.select(find_in_set(df.a, df.b).alias('r')).collect()
+    [Row(r=3)]
+    """
+    str_array = _to_column_expr(str_array)
+    str = _to_column_expr(str)
+    return Column(
+        CaseExpression(
+            FunctionExpression("contains", str, ConstantExpression(",")), 0
+        ).otherwise(
+            CoalesceOperator(
+                FunctionExpression(
+                    "list_position",
+                    FunctionExpression("string_split", str_array, ConstantExpression(",")),
+                    str
+                ),
+                # If the element cannot be found, list_position returns null but we want to return 0
+                ConstantExpression(0)
+            )
+        )
+    )
+
+
 def greatest(*cols: "ColumnOrName") -> Column:
     """
     Returns the greatest value of the list of column names, skipping null values.

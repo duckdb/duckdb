@@ -156,3 +156,11 @@ class TestSparkFunctionsString(object):
             assert res == [Row(encoded=bytearray(b'abcd'))]
         else:
             assert res == [Row(encoded=b'abcd')]
+
+    def test_find_in_set(self, spark):
+        string_array = "abc,b,ab,c,def"
+        df = spark.createDataFrame([("ab", string_array), ("b,c", string_array), ("z", string_array)], ['a', 'b'])
+
+        res = df.select(F.find_in_set(df.a, df.b).alias('r')).collect()
+
+        assert res == [Row(r=3), Row(r=0), Row(r=0)]
