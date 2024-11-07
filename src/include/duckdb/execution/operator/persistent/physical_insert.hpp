@@ -13,11 +13,52 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/common/index_vector.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 
-class InsertLocalState;
-class InsertGlobalState;
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class InsertGlobalState : public GlobalSinkState {
+public:
+	explicit InsertGlobalState(ClientContext &context, const vector<LogicalType> &return_types, DuckTableEntry &table);
+
+public:
+	mutex lock;
+	DuckTableEntry &table;
+	idx_t insert_count;
+	bool initialized;
+	LocalAppendState append_state;
+	ColumnDataCollection return_collection;
+};
+
+class InsertLocalState : public LocalSinkState {
+public:
+public:
+	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
+	                 const vector<unique_ptr<Expression>> &bound_defaults,
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+
+public:
+	ConstraintState &GetConstraintState(DataTable &table, TableCatalogEntry &tableref);
+
+public:
+	//! The chunk that ends up getting inserted
+	DataChunk insert_chunk;
+	//! The chunk containing the tuples that become an update (if DO UPDATE)
+	DataChunk update_chunk;
+	ExpressionExecutor default_executor;
+	TableAppendState local_append_state;
+	unique_ptr<RowGroupCollection> local_collection;
+	optional_ptr<OptimisticDataWriter> writer;
+	// Rows that have been updated by a DO UPDATE conflict
+	unordered_set<row_t> updated_rows;
+	idx_t update_count = 0;
+	unique_ptr<ConstraintState> constraint_state;
+	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
+};
 
 //! Physically insert a set of data into a table
 class PhysicalInsert : public PhysicalOperator {
