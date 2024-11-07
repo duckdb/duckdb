@@ -444,11 +444,6 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_indexes, table);
 	IndexBinder idx_binder(*binder, context);
 
-	vector<column_t> column_ids;
-	for (auto &column_index : column_indexes) {
-		column_ids.push_back(column_index.GetPrimaryIndex());
-	}
-
 	// Bind the parsed expressions to create unbound expressions.
 	vector<unique_ptr<Expression>> unbound_expressions;
 	auto logical_indexes = unique_info.GetLogicalIndexes(column_list);
@@ -456,6 +451,11 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 		auto &col = column_list.GetColumn(logical_index);
 		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.name);
 		unbound_expressions.push_back(idx_binder.Bind(parsed));
+	}
+
+	vector<column_t> column_ids;
+	for (auto &column_index : column_indexes) {
+		column_ids.push_back(column_index.GetPrimaryIndex());
 	}
 
 	auto &storage = table.GetStorage();
