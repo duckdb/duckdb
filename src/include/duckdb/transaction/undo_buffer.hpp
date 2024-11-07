@@ -10,12 +10,14 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/transaction/undo_buffer_allocator.hpp"
 
 namespace duckdb {
+class BufferManager;
 class DuckTransaction;
 class StorageCommitState;
 class WriteAheadLog;
+struct UndoBufferPointer;
 
 struct UndoBufferProperties {
 	idx_t estimated_size = 0;
@@ -31,7 +33,8 @@ struct UndoBufferProperties {
 class UndoBuffer {
 public:
 	struct IteratorState {
-		ArenaChunk *current;
+		BufferHandle handle;
+		optional_ptr<UndoBufferEntry> current;
 		data_ptr_t start;
 		data_ptr_t end;
 	};
@@ -39,9 +42,8 @@ public:
 public:
 	explicit UndoBuffer(DuckTransaction &transaction, ClientContext &context);
 
-	//! Reserve space for an entry of the specified type and length in the undo
-	//! buffer
-	data_ptr_t CreateEntry(UndoFlags type, idx_t len);
+	//! Write a specified entry to the undo buffer
+	UndoBufferReference CreateEntry(UndoFlags type, idx_t len);
 
 	bool ChangesMade();
 	UndoBufferProperties GetProperties();
@@ -56,11 +58,11 @@ public:
 	void RevertCommit(UndoBuffer::IteratorState &iterator_state, transaction_t transaction_id);
 	//! Rollback the changes made in this UndoBuffer: should be called on
 	//! rollback
-	void Rollback() noexcept;
+	void Rollback();
 
 private:
 	DuckTransaction &transaction;
-	ArenaAllocator allocator;
+	UndoBufferAllocator allocator;
 
 private:
 	template <class T>

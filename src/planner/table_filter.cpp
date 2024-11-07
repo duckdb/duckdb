@@ -26,6 +26,10 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 	}
 }
 
+string TableFilter::DebugToString() {
+	return ToString("c0");
+}
+
 void DynamicTableFilterSet::ClearFilters(const PhysicalOperator &op) {
 	lock_guard<mutex> l(lock);
 	filters.erase(op);

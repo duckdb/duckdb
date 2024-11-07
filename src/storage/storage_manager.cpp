@@ -157,11 +157,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
-	if (!config.options.enable_external_access) {
-		if (!db.IsInitialDatabase()) {
-			throw PermissionException("Attaching on-disk databases is disabled through configuration");
-		}
-	}
 
 	StorageManagerOptions options;
 	options.read_only = read_only;

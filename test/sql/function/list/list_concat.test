@@ -187,6 +187,22 @@ SELECT array_push_front(NULL, 1);
 ----
 [1]
 
+# concat operator
+query T
+SELECT [1, 2] || NULL
+----
+NULL
+
+query T
+SELECT [1, 2] || b FROM (VALUES (NULL::INT[])) t(b)
+----
+NULL
+
+query T
+SELECT a || b FROM (VALUES ([1,2,3], NULL::INT[])) t(a,b)
+----
+NULL
+
 # type mismatch
 statement error
 SELECT concat([42], [84], 'str')

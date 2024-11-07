@@ -138,6 +138,12 @@ static ArrowListOffsetData ConvertArrowListOffsetsTemplated(Vector &vector, Arro
 	auto &start_offset = result.start_offset;
 	auto &list_size = result.list_size;
 
+	if (size == 0) {
+		start_offset = 0;
+		list_size = 0;
+		return result;
+	}
+
 	idx_t cur_offset = 0;
 	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;
 	start_offset = offsets[0];

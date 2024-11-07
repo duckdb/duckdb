@@ -21,8 +21,6 @@
 namespace duckdb {
 
 class DataTable;
-struct CreateTableInfo;
-struct BoundCreateTableInfo;
 
 struct RenameColumnInfo;
 struct AddColumnInfo;
@@ -33,12 +31,13 @@ struct AlterForeignKeyInfo;
 struct SetNotNullInfo;
 struct DropNotNullInfo;
 struct SetColumnCommentInfo;
+struct CreateTableInfo;
+struct BoundCreateTableInfo;
 
 class TableFunction;
 struct FunctionData;
 
 class Binder;
-class TableColumnInfo;
 struct ColumnSegmentInfo;
 class TableStorageInfo;
 
@@ -109,6 +108,11 @@ public:
 
 	virtual void BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
 	                                   ClientContext &context);
+
+	//! Returns a pointer to the table's primary key, if exists, else nullptr.
+	optional_ptr<Constraint> GetPrimaryKey() const;
+	//! Returns true, if the table has a primary key, else false.
+	bool HasPrimaryKey() const;
 
 protected:
 	//! A list of columns that are part of this table

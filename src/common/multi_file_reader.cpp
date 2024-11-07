@@ -43,7 +43,7 @@ Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) 
 	for (auto &file : file_list) {
 		files.push_back(file);
 	}
-	return Value::LIST(std::move(files));
+	return Value::LIST(LogicalType::VARCHAR, std::move(files));
 }
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
@@ -80,10 +80,6 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           FileGlobOptions options) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Scanning %s files is disabled through configuration", function_name);
-	}
 	vector<string> result_files;
 
 	auto res = make_uniq<GlobMultiFileList>(context, paths, options);

@@ -626,7 +626,7 @@ typedef struct _duckdb_arrow_array {
 //===--------------------------------------------------------------------===//
 //! Passed to C API extension as parameter to the entrypoint
 struct duckdb_extension_access {
-	//! Indicate that an error has occured
+	//! Indicate that an error has occurred
 	void (*set_error)(duckdb_extension_info info, const char *error);
 	//! Fetch the database from duckdb to register extensions to
 	duckdb_database *(*get_database)(duckdb_extension_info info);
@@ -1472,6 +1472,19 @@ Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the stat
 DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
 /*!
+Returns the parameter logical type for the parameter at the given index.
+
+Returns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.
+
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+* @param prepared_statement The prepared statement.
+* @param param_idx The parameter index.
+* @return The parameter logical type
+*/
+DUCKDB_API duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+
+/*!
 Clear the params bind to the prepared statement.
 */
 DUCKDB_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement);
@@ -2229,6 +2242,21 @@ Returns the MAP value at index as a duckdb_value.
 * @return The value as a duckdb_value.
 */
 DUCKDB_API duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index);
+
+/*!
+Returns whether the specified value is null value or not.
+
+* @param value The value to check.
+* @return True if the value is null, otherwise false.
+*/
+DUCKDB_API bool duckdb_is_null_value(duckdb_value value);
+
+/*!
+Creates a value representing a NULL value.
+
+* @return The duckdb_value that represents NULL. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_null_value();
 
 //===--------------------------------------------------------------------===//
 // Logical Type Interface

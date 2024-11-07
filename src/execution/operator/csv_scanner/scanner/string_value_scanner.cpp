@@ -239,31 +239,39 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			return;
 		}
 	}
-	for (idx_t i = 0; i < null_str_count; i++) {
-		if (size == null_str_size[i]) {
-			if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
-				if (IsValueNull(null_str_ptr[i], value_ptr, size)) {
-					bool empty = false;
-					if (chunk_col_id < state_machine.options.force_not_null.size()) {
-						empty = state_machine.options.force_not_null[chunk_col_id];
-					}
-					if (empty) {
-						if (parse_types[chunk_col_id].type_id != LogicalTypeId::VARCHAR) {
-							// If it is not a varchar, empty values are not accepted, we must error.
-							current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
-						}
-						static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
-					} else {
-						if (chunk_col_id == number_of_columns) {
-							// We check for a weird case, where we ignore an extra value, if it is a null value
-							return;
-						}
-						validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
-					}
-					cur_col_id++;
-					chunk_col_id++;
-					return;
+
+	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
+		// Check for the occurrence of escaped null string like \N only if RFC 4180 conformance is disabled
+		const bool check_unquoted_escaped_null =
+		    state_machine.state_machine_options.rfc_4180.GetValue() == false && escaped && !quoted && size == 1;
+		for (idx_t i = 0; i < null_str_count; i++) {
+			bool is_null = false;
+			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
+				is_null = check_unquoted_escaped_null && null_str_ptr[i][1] == value_ptr[0];
+			} else if (size == null_str_size[i] && !check_unquoted_escaped_null) {
+				is_null = IsValueNull(null_str_ptr[i], value_ptr, size);
+			}
+			if (is_null) {
+				bool empty = false;
+				if (chunk_col_id < state_machine.options.force_not_null.size()) {
+					empty = state_machine.options.force_not_null[chunk_col_id];
 				}
+				if (empty) {
+					if (parse_types[chunk_col_id].type_id != LogicalTypeId::VARCHAR) {
+						// If it is not a varchar, empty values are not accepted, we must error.
+						current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
+					}
+					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
+				} else {
+					if (chunk_col_id == number_of_columns) {
+						// We check for a weird case, where we ignore an extra value, if it is a null value
+						return;
+					}
+					validity_mask[chunk_col_id]->SetInvalid(static_cast<idx_t>(number_of_rows));
+				}
+				cur_col_id++;
+				chunk_col_id++;
+				return;
 			}
 		}
 	}
@@ -447,7 +455,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 }
 
 DataChunk &StringValueResult::ToChunk() {
-	parse_chunk.SetCardinality(number_of_rows);
+	if (number_of_rows < 0) {
+		throw InternalException("CSVScanner: ToChunk() function. Has a negative number of rows, this indicates an "
+		                        "issue with the error handler.");
+	}
+	parse_chunk.SetCardinality(static_cast<idx_t>(number_of_rows));
 	return parse_chunk;
 }
 
@@ -475,17 +487,22 @@ void StringValueResult::Reset() {
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
+	AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.quoted_position + 1,
+	                        buffer_pos - result.quoted_position - 2, buffer_pos < result.last_position.buffer_pos + 2);
+	result.quoted = false;
+}
+
+void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos,
+                                                const char *value_ptr, const idx_t length, const bool empty) {
 	if (result.escaped) {
 		if (result.projecting_columns) {
 			if (!result.projected_columns[result.cur_col_id]) {
 				result.cur_col_id++;
-				result.quoted = false;
 				result.escaped = false;
 				return;
 			}
 		}
-		if (!result.HandleTooManyColumnsError(result.buffer_ptr + result.quoted_position + 1,
-		                                      buffer_pos - result.quoted_position - 2)) {
+		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
 			// If it's an escaped value we have to remove all the escapes, this is not really great
 			// If we are going to escape, this vector must be a varchar vector
 			if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
@@ -495,11 +512,8 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 					std::ostringstream error;
 					// Casting Error Message
 
-					error << "Could not convert string \""
-					      << std::string(result.buffer_ptr + result.quoted_position + 1,
-					                     buffer_pos - result.quoted_position - 2)
-					      << "\" to \'" << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id)
-					      << "\'";
+					error << "Could not convert string \"" << std::string(value_ptr, length) << "\" to \'"
+					      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
 					auto error_string = error.str();
 					SanitizeError(error_string);
 					result.current_errors.ModifyErrorMessageOfLastError(error_string);
@@ -508,23 +522,20 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 				result.chunk_col_id++;
 			} else {
 				auto value = StringValueScanner::RemoveEscape(
-				    result.buffer_ptr + result.quoted_position + 1, buffer_pos - result.quoted_position - 2,
-				    result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
+				    value_ptr, length, result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
 				    result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
 		}
 	} else {
-		if (buffer_pos < result.last_position.buffer_pos + 2) {
+		if (empty) {
 			// empty value
 			auto value = string_t();
 			result.AddValueToVector(value.GetData(), value.GetSize());
 		} else {
-			result.AddValueToVector(result.buffer_ptr + result.quoted_position + 1,
-			                        buffer_pos - result.quoted_position - 2);
+			result.AddValueToVector(value_ptr, length);
 		}
 	}
-	result.quoted = false;
 	result.escaped = false;
 }
 
@@ -534,6 +545,10 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 	}
 	if (result.quoted) {
 		StringValueResult::AddQuotedValue(result, buffer_pos);
+	} else if (result.escaped) {
+		StringValueResult::AddPossiblyEscapedValue(result, buffer_pos,
+		                                           result.buffer_ptr + result.last_position.buffer_pos,
+		                                           buffer_pos - result.last_position.buffer_pos, false);
 	} else {
 		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
 		                        buffer_pos - result.last_position.buffer_pos);
@@ -658,7 +673,7 @@ bool LineError::HandleErrors(StringValueResult &result) {
 			result.RemoveLastLine();
 		} else {
 			// Otherwise, we add it to the borked rows to remove it later and just cleanup the column variables.
-			result.borked_rows.insert(result.number_of_rows);
+			result.borked_rows.insert(static_cast<idx_t>(result.number_of_rows));
 			result.cur_col_id = 0;
 			result.chunk_col_id = 0;
 		}
@@ -740,9 +755,9 @@ bool StringValueResult::AddRowInternal() {
 	}
 
 	if (current_errors.HandleErrors(*this)) {
-		line_positions_per_row[number_of_rows] = current_line_position;
+		line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 		number_of_rows++;
-		if (number_of_rows >= result_size) {
+		if (static_cast<idx_t>(number_of_rows) >= result_size) {
 			// We have a full chunk
 			return true;
 		}
@@ -769,7 +784,7 @@ bool StringValueResult::AddRowInternal() {
 				if (empty) {
 					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 				} else {
-					validity_mask[chunk_col_id]->SetInvalid(number_of_rows);
+					validity_mask[chunk_col_id]->SetInvalid(static_cast<idx_t>(number_of_rows));
 				}
 				cur_col_id++;
 				chunk_col_id++;
@@ -799,11 +814,11 @@ bool StringValueResult::AddRowInternal() {
 			RemoveLastLine();
 		}
 	}
-	line_positions_per_row[number_of_rows] = current_line_position;
+	line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 	cur_col_id = 0;
 	chunk_col_id = 0;
 	number_of_rows++;
-	if (number_of_rows >= result_size) {
+	if (static_cast<idx_t>(number_of_rows) >= result_size) {
 		// We have a full chunk
 		return true;
 	}
@@ -816,8 +831,13 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		if (result.quoted) {
 			AddQuotedValue(result, buffer_pos);
 		} else {
-			result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
-			                        buffer_pos - result.last_position.buffer_pos);
+			char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
+			idx_t size = buffer_pos - result.last_position.buffer_pos;
+			if (result.escaped) {
+				AddPossiblyEscapedValue(result, buffer_pos, value_ptr, size, size == 0);
+			} else {
+				result.AddValueToVector(value_ptr, size);
+			}
 		}
 		if (result.state_machine.dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
 			if (result.states.states[1] == CSVState::RECORD_SEPARATOR) {
@@ -856,12 +876,12 @@ bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_
 				if (empty) {
 					static_cast<string_t *>(result.vector_ptr[0])[result.number_of_rows] = string_t();
 				} else {
-					result.validity_mask[0]->SetInvalid(result.number_of_rows);
+					result.validity_mask[0]->SetInvalid(static_cast<idx_t>(result.number_of_rows));
 				}
 				result.number_of_rows++;
 			}
 		}
-		if (result.number_of_rows >= result.result_size) {
+		if (static_cast<idx_t>(result.number_of_rows) >= result.result_size) {
 			// We have a full chunk
 			return true;
 		}
@@ -1040,15 +1060,15 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	}
 	if (!result.borked_rows.empty()) {
 		// We must remove the borked lines from our chunk
-		SelectionVector succesful_rows(parse_chunk.size());
+		SelectionVector successful_rows(parse_chunk.size());
 		idx_t sel_idx = 0;
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 			if (result.borked_rows.find(row_idx) == result.borked_rows.end()) {
-				succesful_rows.set_index(sel_idx++, row_idx);
+				successful_rows.set_index(sel_idx++, row_idx);
 			}
 		}
 		// Now we slice the result
-		insert_chunk.Slice(succesful_rows, sel_idx);
+		insert_chunk.Slice(successful_rows, sel_idx);
 	}
 }
 
@@ -1130,6 +1150,8 @@ void StringValueScanner::ProcessExtraRow() {
 			}
 			break;
 		case CSVState::ESCAPE:
+		case CSVState::UNQUOTED_ESCAPE:
+		case CSVState::ESCAPED_RETURN:
 			result.SetEscaped(result);
 			iterator.pos.buffer_pos++;
 			break;
@@ -1286,6 +1308,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 			}
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
+			if (result.escaped) {
+				value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
+				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+				                     result.parse_chunk.data[result.chunk_col_id]);
+			}
 		}
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
@@ -1389,7 +1416,7 @@ void StringValueResult::SkipBOM() const {
 void StringValueResult::RemoveLastLine() {
 	// potentially de-nullify values
 	for (idx_t i = 0; i < chunk_col_id; i++) {
-		validity_mask[i]->SetValid(number_of_rows);
+		validity_mask[i]->SetValid(static_cast<idx_t>(number_of_rows));
 	}
 	// reset column trackers
 	cur_col_id = 0;
@@ -1611,7 +1638,7 @@ void StringValueScanner::SetStart() {
 }
 
 void StringValueScanner::FinalizeChunkProcess() {
-	if (result.number_of_rows >= result.result_size || iterator.done) {
+	if (static_cast<idx_t>(result.number_of_rows) >= result.result_size || iterator.done) {
 		// We are done
 		if (!sniffing) {
 			if (csv_file_scan) {
@@ -1649,14 +1676,18 @@ void StringValueScanner::FinalizeChunkProcess() {
 			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
 				has_unterminated_quotes = true;
 			}
-			result.current_errors.HandleErrors(result);
+			if (result.current_errors.HandleErrors(result)) {
+				result.number_of_rows++;
+			}
 		}
 		if (states.IsQuotedCurrent() && !has_unterminated_quotes) {
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
 			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
 			                             result.last_position);
-			result.current_errors.HandleErrors(result);
+			if (result.current_errors.HandleErrors(result)) {
+				result.number_of_rows++;
+			}
 		}
 		if (!iterator.done) {
 			if (iterator.pos.buffer_pos >= iterator.GetEndPos() || iterator.pos.buffer_idx > iterator.GetBufferIdx() ||
@@ -1667,9 +1698,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 	} else {
 		// 2) If a boundary is not set
 		// We read until the chunk is complete, or we have nothing else to read.
-		while (!FinishedFile() && result.number_of_rows < result.result_size) {
+		while (!FinishedFile() && static_cast<idx_t>(result.number_of_rows) < result.result_size) {
 			MoveToNextBuffer();
-			if (result.number_of_rows >= result.result_size) {
+			if (static_cast<idx_t>(result.number_of_rows) >= result.result_size) {
 				return;
 			}
 			if (cur_buffer_handle) {
@@ -1679,7 +1710,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		iterator.done = FinishedFile();
 		if (result.null_padding && result.number_of_rows < STANDARD_VECTOR_SIZE && result.chunk_col_id > 0) {
 			while (result.chunk_col_id < result.parse_chunk.ColumnCount()) {
-				result.validity_mask[result.chunk_col_id++]->SetInvalid(result.number_of_rows);
+				result.validity_mask[result.chunk_col_id++]->SetInvalid(static_cast<idx_t>(result.number_of_rows));
 				result.cur_col_id++;
 			}
 			result.number_of_rows++;

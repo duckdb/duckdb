@@ -75,7 +75,6 @@ enum class RenderMode : uint32_t {
 */
 struct ShellState {
 	sqlite3 *db = nullptr;                    /* The database */
-	uint8_t autoExplain = 0;                  /* Automatically turn on .explain mode */
 	uint8_t openMode = 0;                     /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
 	uint8_t doXdgOpen = 0;                    /* Invoke start/open/xdg-open in output_reset() */
 	int outCount = 0;                         /* Revert to stdout when reaching zero */
@@ -88,7 +87,7 @@ struct ShellState {
 	RenderMode modePrior = RenderMode::LINE;  /* Saved mode */
 	RenderMode cMode = RenderMode::LINE;      /* temporary output mode for the current query */
 	RenderMode normalMode = RenderMode::LINE; /* Output mode before ".explain on" */
-	int showHeader = 0;                       /* True to show column names in List or Column mode */
+	bool showHeader = false;                  /* True to show column names in List or Column mode */
 	unsigned shellFlgs = 0;                   /* Various flags */
 	unsigned priorShFlgs = 0;                 /* Saved copy of flags */
 	int64_t szMax = 0;                        /* --maxsize argument to .open */
@@ -107,25 +106,29 @@ struct ShellState {
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
 	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
+	//! Decimal separator (if any)
+	char decimal_separator = '\0';
+	//! Thousand separator (if any)
+	char thousand_separator = '\0';
 
 public:
-	void outputModePush();
-	void outputModePop();
-	void output_csv(const char *z, int bSep);
-	void print_row_separator(int nArg, const char *zSep, const vector<int> &actualWidth);
-	void print_markdown_separator(int nArg, const char *zSep, const vector<int> &colTypes,
-	                              const vector<int> &actualWidth);
-	void output_c_string(const char *z);
-	void output_quoted_string(const char *z);
-	void output_quoted_escaped_string(const char *z);
-	void output_hex_blob(const void *pBlob, int nBlob);
-	void printSchemaLine(const char *z, const char *zTail);
-	void printSchemaLineN(char *z, int n, const char *zTail);
+	void PushOutputMode();
+	void PopOutputMode();
+	void OutputCSV(const char *z, int bSep);
+	void PrintRowSeparator(idx_t nArg, const char *zSep, const vector<idx_t> &actualWidth);
+	void PrintMarkdownSeparator(idx_t nArg, const char *zSep, const vector<int> &colTypes,
+	                            const vector<idx_t> &actualWidth);
+	void OutputCString(const char *z);
+	void OutputQuotedString(const char *z);
+	void OutputQuotedEscapedString(const char *z);
+	void OutputHexBlob(const void *pBlob, int nBlob);
+	void PrintSchemaLine(const char *z, const char *zTail);
+	void PrintSchemaLineN(char *z, int n, const char *zTail);
 	void PrintOptionallyQuotedIdentifier(const char *z);
-	int isNumber(const char *z, int *realnum);
-	void output_json_string(const char *z, int n);
-	void print_dashes(int N);
-	void utf8_width_print(FILE *pOut, int w, const string &str);
+	bool IsNumber(const char *z, int *realnum);
+	void OutputJSONString(const char *z, int n);
+	void PrintDashes(idx_t N);
+	void UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool right_align);
 	bool SetOutputMode(const char *mode, const char *tbl_name);
 	bool ImportData(const char **azArg, idx_t nArg);
 	bool OpenDatabase(const char **azArg, idx_t nArg);
@@ -135,36 +138,36 @@ public:
 	MetadataResult DisplayEntries(const char **azArg, idx_t nArg, char type);
 	void ShowConfiguration();
 
-	int strlenChar(const char *z);
-	int strlenChar(const string &str);
+	idx_t RenderLength(const char *z);
+	idx_t RenderLength(const string &str);
 	void SetBinaryMode();
 	void SetTextMode();
-	static int StringLength(const char *z);
-	void set_table_name(const char *zName);
-	int run_table_dump_query(const char *zSelect);
+	static idx_t StringLength(const char *z);
+	void SetTableName(const char *zName);
+	int RunTableDumpQuery(const char *zSelect);
 	void PrintValue(const char *str);
 	void Print(const char *str);
 	void Print(const string &str);
 	void PrintPadded(const char *str, idx_t len);
-	bool column_type_is_integer(const char *type);
+	bool ColumnTypeIsInteger(const char *type);
 	string strdup_handle_newline(const char *z);
 	ColumnarResult ExecuteColumnar(sqlite3_stmt *pStmt);
 	unique_ptr<ColumnRenderer> GetColumnRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer();
 	unique_ptr<RowRenderer> GetRowRenderer(RenderMode mode);
-	void exec_prepared_stmt_columnar(sqlite3_stmt *pStmt);
-	char **tableColumnList(const char *zTab);
-	void exec_prepared_stmt(sqlite3_stmt *pStmt);
+	void ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt);
+	char **TableColumnList(const char *zTab);
+	void ExecutePreparedStatement(sqlite3_stmt *pStmt);
 
-	int shell_callback(RowRenderer &renderer, RowResult &result);
+	int RenderRow(RowRenderer &renderer, RowResult &result);
 
-	int shell_exec(const char *zSql, /* SQL to be evaluated */
+	int ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 	               char **pzErrMsg   /* Error msg written here */
 	);
-	int run_schema_dump_query(const char *zQuery);
-	void open_db(int openFlags);
+	int RunSchemaDumpQuery(const char *zQuery);
+	void OpenDB(int openFlags);
 
-	void setOrClearFlag(unsigned mFlag, const char *zArg);
+	void SetOrClearFlag(unsigned mFlag, const char *zArg);
 	bool ShellHasFlag(int flag) {
 		return (shellFlgs & flag) != 0;
 	}
@@ -176,14 +179,14 @@ public:
 	void ShellClearFlag(int flag) {
 		shellFlgs &= ~flag;
 	}
-	void output_reset();
-	void clearTempFile();
-	void newTempFile(const char *zSuffix);
-	int do_meta_command(char *zLine);
+	void ResetOutput();
+	void ClearTempFile();
+	void NewTempFile(const char *zSuffix);
+	int DoMetaCommand(char *zLine);
 
-	int runOneSqlLine(char *zSql, int startline);
-	void process_sqliterc(const char *sqliterc_override);
-	int process_input();
+	int RunOneSqlLine(char *zSql);
+	void ProcessDuckDBRC(const char *sqliterc_override);
+	int ProcessInput();
 };
 
 } // namespace duckdb_shell

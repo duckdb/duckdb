@@ -1174,7 +1174,7 @@ single_pivot_value:
 	;
 
 pivot_header:
-	| d_expr	                 			{ $$ = list_make1($1); }
+	d_expr	                 			{ $$ = list_make1($1); }
 	| indirection_expr						{ $$ = list_make1($1); }
 	| '(' c_expr_list_opt_comma ')' 		{ $$ = $2; }
 
@@ -2621,20 +2621,22 @@ a_expr:		c_expr									{ $$ = $1; }
 					star->location = @1;
 					$$ = (PGNode *) star;
 				}
-			| '*' opt_except_list opt_replace_list
+			| '*' opt_except_list opt_replace_list opt_rename_list
 				{
 					PGAStar *star = makeNode(PGAStar);
 					star->except_list = $2;
 					star->replace_list = $3;
+					star->rename_list = $4;
 					star->location = @1;
 					$$ = (PGNode *) star;
 				}
-			| ColId '.' '*' opt_except_list opt_replace_list
+			| ColId '.' '*' opt_except_list opt_replace_list opt_rename_list
 				{
 					PGAStar *star = makeNode(PGAStar);
 					star->relation = $1;
 					star->except_list = $4;
 					star->replace_list = $5;
+					star->rename_list = $6;
 					star->location = @1;
 					$$ = (PGNode *) star;
 				}
@@ -4025,6 +4027,23 @@ replace_list_opt_comma:
 opt_replace_list: REPLACE '(' replace_list_opt_comma ')'		{ $$ = $3; }
 			| REPLACE replace_list_el				{ $$ = list_make1($2); }
 			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+rename_list_el: ColId AS ColId								{ $$ = list_make2($1, $3); }
+		;
+
+rename_list:
+			rename_list_el									{ $$ = list_make1($1); }
+			| rename_list ',' rename_list_el				{ $$ = lappend($1, $3); }
+		;
+
+rename_list_opt_comma:
+			rename_list										{ $$ = $1; }
+			| rename_list ','								{ $$ = $1; }
+		;
+opt_rename_list: RENAME '(' rename_list_opt_comma ')'		{ $$ = $3; }
+			| RENAME rename_list_el							{ $$ = list_make1($2); }
+			| /*EMPTY*/										{ $$ = NULL; }
 		;
 
 /*****************************************************************************

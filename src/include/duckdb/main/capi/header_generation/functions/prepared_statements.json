@@ -122,6 +122,28 @@
             }
         },
         {
+            "name": "duckdb_param_logical_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                }
+            ],
+            "comment": {
+                "description": "Returns the parameter logical type for the parameter at the given index.\n\nReturns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.\n\nThe return type of this call should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement.",
+                    "param_idx": "The parameter index."
+                },
+                "return_value": "The parameter logical type"
+            }
+        },
+        {
             "name": "duckdb_clear_bindings",
             "return_type": "duckdb_state",
             "params": [

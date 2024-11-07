@@ -235,10 +235,6 @@ Value TransformTupleToStruct(py::handle ele, const LogicalType &target_type = Lo
 Value TransformListValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	auto size = py::len(ele);
 
-	if (size == 0) {
-		return Value::EMPTYLIST(LogicalType::SQLNULL);
-	}
-
 	vector<Value> values;
 	values.reserve(size);
 
@@ -257,10 +253,6 @@ Value TransformListValue(py::handle ele, const LogicalType &target_type = Logica
 
 Value TransformArrayValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	auto size = py::len(ele);
-
-	if (size == 0) {
-		return Value::EMPTYARRAY(LogicalType::SQLNULL, size);
-	}
 
 	vector<Value> values;
 	values.reserve(size);

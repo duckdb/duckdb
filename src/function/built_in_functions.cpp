@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -88,27 +89,6 @@ void BuiltinFunctions::AddFunction(CopyFunction function) {
 	catalog.CreateCopyFunction(transaction, info);
 }
 
-LogicalType ParseLogicalType(const string &type) {
-	if (StringUtil::EndsWith(type, "[]")) {
-		// array - recurse
-		auto child_type = ParseLogicalType(type.substr(0, type.size() - 2));
-		return LogicalType::LIST(child_type);
-	}
-	if (StringUtil::EndsWith(type, "()")) {
-		if (type != "STRUCT()") {
-			throw InternalException("Error while generating extension function overloads - expected STRUCT(), not %s",
-			                        type);
-		}
-		return LogicalType::STRUCT({});
-	}
-	auto type_id = TransformStringToLogicalTypeId(type);
-	if (type_id == LogicalTypeId::USER) {
-		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
-		                        type);
-	}
-	return type_id;
-}
-
 struct ExtensionFunctionInfo : public ScalarFunctionInfo {
 	explicit ExtensionFunctionInfo(string extension_p) : extension(std::move(extension_p)) {
 	}
@@ -161,10 +141,10 @@ void BuiltinFunctions::RegisterExtensionOverloads() {
 	for (auto &entry : EXTENSION_FUNCTION_OVERLOADS) {
 		vector<LogicalType> arguments;
 		auto splits = StringUtil::Split(entry.signature, ">");
-		auto return_type = ParseLogicalType(splits[1]);
+		auto return_type = DBConfig::ParseLogicalType(splits[1]);
 		auto argument_splits = StringUtil::Split(splits[0], ",");
 		for (auto &param : argument_splits) {
-			arguments.push_back(ParseLogicalType(param));
+			arguments.push_back(DBConfig::ParseLogicalType(param));
 		}
 		if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
 			throw InternalException(

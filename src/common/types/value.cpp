@@ -702,6 +702,7 @@ Value Value::STRUCT(const LogicalType &type, vector<Value> struct_values) {
 	result.is_null = false;
 	return result;
 }
+
 Value Value::STRUCT(child_list_t<Value> values) {
 	child_list_t<LogicalType> child_types;
 	vector<Value> struct_values;
@@ -736,8 +737,8 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 	for (idx_t i = 0; i < keys.size(); i++) {
 		child_list_t<Value> new_children;
 		new_children.reserve(2);
-		new_children.push_back(std::make_pair("key", std::move(keys[i])));
-		new_children.push_back(std::make_pair("value", std::move(values[i])));
+		new_children.push_back(std::make_pair("key", keys[i].DefaultCastAs(key_type)));
+		new_children.push_back(std::make_pair("value", values[i].DefaultCastAs(value_type)));
 		values[i] = Value::STRUCT(std::move(new_children));
 	}
 	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
@@ -781,72 +782,33 @@ Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) 
 	return result;
 }
 
-Value Value::LIST(vector<Value> values) {
-	if (values.empty()) {
-		throw InternalException("Value::LIST without providing a child-type requires a non-empty list of values. Use "
-		                        "Value::LIST(child_type, list) instead.");
-	}
-#ifdef DEBUG
-	for (idx_t i = 1; i < values.size(); i++) {
-		D_ASSERT(values[i].type() == values[0].type());
-	}
-#endif
-	Value result;
-	result.type_ = LogicalType::LIST(values[0].type());
-	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
-	result.is_null = false;
-	return result;
-}
-
 Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
-	if (values.empty()) {
-		return Value::EMPTYLIST(child_type);
-	}
+	Value result;
+	result.type_ = LogicalType::LIST(child_type);
+	result.is_null = false;
 	for (auto &val : values) {
 		val = val.DefaultCastAs(child_type);
 	}
-	return Value::LIST(std::move(values));
-}
-
-Value Value::EMPTYLIST(const LogicalType &child_type) {
-	Value result;
-	result.type_ = LogicalType::LIST(child_type);
-	result.value_info_ = make_shared_ptr<NestedValueInfo>();
-	result.is_null = false;
-	return result;
-}
-
-Value Value::ARRAY(vector<Value> values) {
-	if (values.empty()) {
-		throw InternalException("Value::ARRAY without providing a child-type requires a non-empty list of values. Use "
-		                        "Value::ARRAY(child_type, list) instead.");
-	}
-#ifdef DEBUG
-	for (idx_t i = 1; i < values.size(); i++) {
-		D_ASSERT(values[i].type() == values[0].type());
-	}
-#endif
-	Value result;
-	result.type_ = LogicalType::ARRAY(values[0].type(), values.size());
 	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
-	result.is_null = false;
 	return result;
+}
+
+Value Value::LIST(vector<Value> values) {
+	if (values.empty()) {
+		throw InternalException(
+		    "Value::LIST(values) cannot be used to make an empty list - use Value::LIST(type, values) instead");
+	}
+	auto &type = values[0].type();
+	return Value::LIST(type, std::move(values));
 }
 
 Value Value::ARRAY(const LogicalType &child_type, vector<Value> values) {
-	if (values.empty()) {
-		return Value::EMPTYARRAY(child_type, 0);
-	}
+	Value result;
+	result.type_ = LogicalType::ARRAY(child_type, values.size());
 	for (auto &val : values) {
 		val = val.DefaultCastAs(child_type);
 	}
-	return Value::ARRAY(std::move(values));
-}
-
-Value Value::EMPTYARRAY(const LogicalType &child_type, uint32_t size) {
-	Value result;
-	result.type_ = LogicalType::ARRAY(child_type, size);
-	result.value_info_ = make_shared_ptr<NestedValueInfo>();
+	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
 	result.is_null = false;
 	return result;
 }
@@ -1503,8 +1465,13 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::ENUM:
+	case LogicalTypeId::ENUM: {
+		auto str_val = ToString();
+		if (str_val.size() == 1 && str_val[0] == '\0') {
+			return "chr(0)";
+		}
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
+	}
 	case LogicalTypeId::STRUCT: {
 		bool is_unnamed = StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";
@@ -1817,6 +1784,9 @@ bool Value::DefaultTryCastAs(const LogicalType &target_type, Value &new_value, s
 
 Value Value::CastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, const LogicalType &target_type,
                     bool strict) const {
+	if (target_type.id() == LogicalTypeId::ANY) {
+		return *this;
+	}
 	Value new_value;
 	string error_message;
 	if (!TryCastAs(set, get_input, target_type, new_value, &error_message, strict)) {
@@ -1865,89 +1835,136 @@ void Value::Reinterpret(LogicalType new_type) {
 	this->type_ = std::move(new_type);
 }
 
-void Value::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(100, "type", type_);
-	serializer.WriteProperty(101, "is_null", is_null);
-	if (!IsNull()) {
-		switch (type_.InternalType()) {
-		case PhysicalType::BIT:
-			throw InternalException("BIT type should not be serialized");
-		case PhysicalType::BOOL:
-			serializer.WriteProperty(102, "value", value_.boolean);
-			break;
-		case PhysicalType::INT8:
-			serializer.WriteProperty(102, "value", value_.tinyint);
-			break;
-		case PhysicalType::INT16:
-			serializer.WriteProperty(102, "value", value_.smallint);
-			break;
-		case PhysicalType::INT32:
-			serializer.WriteProperty(102, "value", value_.integer);
-			break;
-		case PhysicalType::INT64:
-			serializer.WriteProperty(102, "value", value_.bigint);
-			break;
-		case PhysicalType::UINT8:
-			serializer.WriteProperty(102, "value", value_.utinyint);
-			break;
-		case PhysicalType::UINT16:
-			serializer.WriteProperty(102, "value", value_.usmallint);
-			break;
-		case PhysicalType::UINT32:
-			serializer.WriteProperty(102, "value", value_.uinteger);
-			break;
-		case PhysicalType::UINT64:
-			serializer.WriteProperty(102, "value", value_.ubigint);
-			break;
-		case PhysicalType::INT128:
-			serializer.WriteProperty(102, "value", value_.hugeint);
-			break;
-		case PhysicalType::UINT128:
-			serializer.WriteProperty(102, "value", value_.uhugeint);
-			break;
-		case PhysicalType::FLOAT:
-			serializer.WriteProperty(102, "value", value_.float_);
-			break;
-		case PhysicalType::DOUBLE:
-			serializer.WriteProperty(102, "value", value_.double_);
-			break;
-		case PhysicalType::INTERVAL:
-			serializer.WriteProperty(102, "value", value_.interval);
-			break;
-		case PhysicalType::VARCHAR: {
-			if (type_.id() == LogicalTypeId::BLOB) {
-				auto blob_str = Blob::ToString(StringValue::Get(*this));
-				serializer.WriteProperty(102, "value", blob_str);
-			} else {
-				serializer.WriteProperty(102, "value", StringValue::Get(*this));
-			}
-		} break;
-		case PhysicalType::LIST: {
-			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
-				auto &children = ListValue::GetChildren(*this);
-				serializer.WriteProperty(100, "children", children);
-			});
-		} break;
-		case PhysicalType::STRUCT: {
-			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
-				auto &children = StructValue::GetChildren(*this);
-				serializer.WriteProperty(100, "children", children);
-			});
-		} break;
-		case PhysicalType::ARRAY: {
-			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
-				auto &children = ArrayValue::GetChildren(*this);
-				serializer.WriteProperty(100, "children", children);
-			});
-		} break;
-		default:
-			throw NotImplementedException("Unimplemented type for Serialize");
-		}
+const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {
+	switch (parent_type.InternalType()) {
+	case PhysicalType::LIST:
+		return ListType::GetChildType(parent_type);
+	case PhysicalType::STRUCT:
+		return StructType::GetChildType(parent_type, i);
+	case PhysicalType::ARRAY:
+		return ArrayType::GetChildType(parent_type);
+	default:
+		throw InternalException("Parent type is not a nested type");
 	}
 }
 
+bool SerializeTypeMatches(const LogicalType &expected_type, const LogicalType &actual_type) {
+	if (expected_type.id() != actual_type.id()) {
+		// type id needs to be the same
+		return false;
+	}
+	if (expected_type.IsNested()) {
+		// for nested types that is enough - we will recurse into the children and check there again anyway
+		return true;
+	}
+	// otherwise we do a deep comparison of the type (e.g. decimal flags need to be consistent)
+	return expected_type == actual_type;
+}
+
+void Value::SerializeChildren(Serializer &serializer, const vector<Value> &children, const LogicalType &parent_type) {
+	serializer.WriteObject(102, "value", [&](Serializer &child_serializer) {
+		child_serializer.WriteList(100, "children", children.size(), [&](Serializer::List &list, idx_t i) {
+			auto &value_type = GetChildType(parent_type, i);
+			bool serialize_type = value_type.id() == LogicalTypeId::ANY;
+			if (!serialize_type && !SerializeTypeMatches(value_type, children[i].type())) {
+				throw InternalException("Error when serializing type - serializing a child of a nested value with type "
+				                        "%s, but expected type %s",
+				                        children[i].type(), value_type);
+			}
+			list.WriteObject([&](Serializer &element_serializer) {
+				children[i].SerializeInternal(element_serializer, serialize_type);
+			});
+		});
+	});
+}
+
+void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const {
+	if (serialize_type || !serializer.ShouldSerialize(4)) {
+		// only the root value needs to serialize its type
+		// for forwards compatibility reasons, we also serialize the type always when targeting versions < v1.2.0
+		serializer.WriteProperty(100, "type", type_);
+	}
+	serializer.WriteProperty(101, "is_null", is_null);
+	if (IsNull()) {
+		return;
+	}
+	switch (type_.InternalType()) {
+	case PhysicalType::BIT:
+		throw InternalException("BIT type should not be serialized");
+	case PhysicalType::BOOL:
+		serializer.WriteProperty(102, "value", value_.boolean);
+		break;
+	case PhysicalType::INT8:
+		serializer.WriteProperty(102, "value", value_.tinyint);
+		break;
+	case PhysicalType::INT16:
+		serializer.WriteProperty(102, "value", value_.smallint);
+		break;
+	case PhysicalType::INT32:
+		serializer.WriteProperty(102, "value", value_.integer);
+		break;
+	case PhysicalType::INT64:
+		serializer.WriteProperty(102, "value", value_.bigint);
+		break;
+	case PhysicalType::UINT8:
+		serializer.WriteProperty(102, "value", value_.utinyint);
+		break;
+	case PhysicalType::UINT16:
+		serializer.WriteProperty(102, "value", value_.usmallint);
+		break;
+	case PhysicalType::UINT32:
+		serializer.WriteProperty(102, "value", value_.uinteger);
+		break;
+	case PhysicalType::UINT64:
+		serializer.WriteProperty(102, "value", value_.ubigint);
+		break;
+	case PhysicalType::INT128:
+		serializer.WriteProperty(102, "value", value_.hugeint);
+		break;
+	case PhysicalType::UINT128:
+		serializer.WriteProperty(102, "value", value_.uhugeint);
+		break;
+	case PhysicalType::FLOAT:
+		serializer.WriteProperty(102, "value", value_.float_);
+		break;
+	case PhysicalType::DOUBLE:
+		serializer.WriteProperty(102, "value", value_.double_);
+		break;
+	case PhysicalType::INTERVAL:
+		serializer.WriteProperty(102, "value", value_.interval);
+		break;
+	case PhysicalType::VARCHAR: {
+		if (type_.id() == LogicalTypeId::BLOB) {
+			auto blob_str = Blob::ToString(StringValue::Get(*this));
+			serializer.WriteProperty(102, "value", blob_str);
+		} else {
+			serializer.WriteProperty(102, "value", StringValue::Get(*this));
+		}
+	} break;
+	case PhysicalType::LIST:
+		SerializeChildren(serializer, ListValue::GetChildren(*this), type_);
+		break;
+	case PhysicalType::STRUCT:
+		SerializeChildren(serializer, StructValue::GetChildren(*this), type_);
+		break;
+	case PhysicalType::ARRAY:
+		SerializeChildren(serializer, ArrayValue::GetChildren(*this), type_);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for Serialize");
+	}
+}
+
+void Value::Serialize(Serializer &serializer) const {
+	// serialize the value - the top-level value always needs to serialize its type
+	SerializeInternal(serializer, true);
+}
+
 Value Value::Deserialize(Deserializer &deserializer) {
-	auto type = deserializer.ReadProperty<LogicalType>(100, "type");
+	auto type = deserializer.ReadPropertyWithExplicitDefault<LogicalType>(100, "type", LogicalTypeId::INVALID);
+	if (type.id() == LogicalTypeId::INVALID) {
+		type = deserializer.Get<const LogicalType &>();
+	}
 	auto is_null = deserializer.ReadProperty<bool>(101, "is_null");
 	Value new_value = Value(type);
 	if (is_null) {
@@ -2008,22 +2025,32 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		}
 	} break;
 	case PhysicalType::LIST: {
+		deserializer.Set<const LogicalType &>(ListType::GetChildType(type));
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
 			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
+		deserializer.Unset<LogicalType>();
 	} break;
 	case PhysicalType::STRUCT: {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
-			auto children = obj.ReadProperty<vector<Value>>(100, "children");
+			vector<Value> children;
+			obj.ReadList(100, "children", [&](Deserializer::List &list, idx_t i) {
+				deserializer.Set<const LogicalType &>(StructType::GetChildType(type, i));
+				auto child = list.ReadElement<Value>();
+				deserializer.Unset<LogicalType>();
+				children.push_back(std::move(child));
+			});
 			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
 	} break;
 	case PhysicalType::ARRAY: {
+		deserializer.Set<const LogicalType &>(ArrayType::GetChildType(type));
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
 			new_value.value_info_ = make_shared_ptr<NestedValueInfo>(children);
 		});
+		deserializer.Unset<LogicalType>();
 	} break;
 	default:
 		throw NotImplementedException("Unimplemented type for Deserialize");

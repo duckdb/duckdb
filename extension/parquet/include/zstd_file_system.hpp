@@ -26,6 +26,10 @@ public:
 	unique_ptr<StreamWrapper> CreateStream() override;
 	idx_t InBufferSize() override;
 	idx_t OutBufferSize() override;
+
+	static int64_t DefaultCompressionLevel();
+	static int64_t MinimumCompressionLevel();
+	static int64_t MaximumCompressionLevel();
 };
 
 } // namespace duckdb

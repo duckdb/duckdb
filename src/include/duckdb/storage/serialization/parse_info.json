@@ -630,5 +630,32 @@
       }
     ],
     "constructor": ["options"]
+  },
+  {
+    "class": "BoundExportData",
+    "base": "ParseInfo",
+    "enum": "BOUND_EXPORT_DATA",
+    "includes": [
+      "duckdb/parser/parsed_data/exported_table_data.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "data",
+        "type": "vector<ExportedTableInfo>"
+      }
+    ]
+  },
+  {
+    "class": "AddConstraintInfo",
+    "base": "AlterTableInfo",
+    "enum": "ADD_CONSTRAINT",
+    "members": [
+      {
+        "id": 400,
+        "name": "constraint",
+        "type": "unique_ptr<Constraint>"
+      }
+    ]
   }
 ]

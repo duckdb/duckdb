@@ -24,15 +24,16 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/main/client_properties.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
-#include "duckdb/main/client_properties.hpp"
-#include "duckdb/execution/index/index_type_set.hpp"
+#include "duckdb/function/encoding_function.hpp"
 
 namespace duckdb {
 
@@ -70,7 +71,7 @@ typedef Value (*get_setting_function_t)(const ClientContext &context);
 struct ConfigurationOption {
 	const char *name;
 	const char *description;
-	LogicalTypeId parameter_type;
+	const char *parameter_type;
 	set_global_function_t set_global;
 	set_local_function_t set_local;
 	reset_global_function_t reset_global;
@@ -201,7 +202,7 @@ struct DBConfigOptions {
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
-	//! Whether or not preserving insertion order should be preserved
+	//! Whether preserving insertion order should be preserved
 	bool preserve_insertion_order = true;
 	//! Whether Arrow Arrays use Large or Regular buffers
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
@@ -272,6 +273,10 @@ struct DBConfigOptions {
 	bool debug_skip_checkpoint_on_commit = false;
 	//! The maximum amount of vacuum tasks to schedule during a checkpoint
 	idx_t max_vacuum_tasks = 100;
+	//! Paths that are explicitly allowed, even if enable_external_access is false
+	unordered_set<string> allowed_paths;
+	//! Directories that are explicitly allowed, even if enable_external_access is false
+	set<string> allowed_directories;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -346,6 +351,7 @@ public:
 	DUCKDB_API void ResetOption(DatabaseInstance *db, const ConfigurationOption &option);
 	DUCKDB_API void SetOption(const string &name, Value value);
 	DUCKDB_API void ResetOption(const string &name);
+	static LogicalType ParseLogicalType(const string &type);
 
 	DUCKDB_API void CheckLock(const string &name);
 
@@ -357,6 +363,12 @@ public:
 	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
 	                                                                    const PhysicalType physical_type);
 
+	//! Returns the encode function matching the encoding name.
+	DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(const string &name) const;
+	DUCKDB_API void RegisterEncodeFunction(const EncodingFunction &function) const;
+
+	//! Returns the encode function names.
+	DUCKDB_API vector<reference<EncodingFunction>> GetLoadedEncodedFunctions() const;
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
 
@@ -385,8 +397,14 @@ public:
 		return OP::GetSetting(context);
 	}
 
+	bool CanAccessFile(const string &path, FileType type);
+	void AddAllowedDirectory(const string &path);
+	void AddAllowedPath(const string &path);
+	string SanitizeAllowedPath(const string &path) const;
+
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
+	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<CastFunctionSet> cast_functions;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;

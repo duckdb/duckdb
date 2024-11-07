@@ -19,7 +19,7 @@
 namespace duckdb {
 
 Connection::Connection(DatabaseInstance &database)
-    : context(make_shared_ptr<ClientContext>(database.shared_from_this())) {
+    : context(make_shared_ptr<ClientContext>(database.shared_from_this())), warning_cb(nullptr) {
 	ConnectionManager::Get(database).AddConnection(*context);
 #ifdef DEBUG
 	EnableProfiling();

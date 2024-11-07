@@ -190,7 +190,7 @@ public:
 
 	//! Internal Data Chunk used for flushing
 	DataChunk parse_chunk;
-	idx_t number_of_rows = 0;
+	int64_t number_of_rows = 0;
 	idx_t cur_col_id = 0;
 	bool figure_out_new_line = false;
 	//! Information to properly handle errors
@@ -238,6 +238,9 @@ public:
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
+	//! Specialized code for possibly escaped values, makes sure to remove escapes
+	static inline void AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos, const char *value_ptr,
+	                                           const idx_t length, const bool empty);
 	//! Adds a Value to the result
 	static inline void AddValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Row to the result

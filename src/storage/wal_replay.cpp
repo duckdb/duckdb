@@ -370,12 +370,98 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	catalog.DropEntry(context, info);
 }
 
+void ReplayWithoutIndex(ClientContext &context, Catalog &catalog, AlterInfo &info, const bool only_deserialize) {
+	if (only_deserialize) {
+		return;
+	}
+	catalog.Alter(context, info);
+}
+
+void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, IndexStorageInfo &info,
+                     const bool deserialize_only) {
+	D_ASSERT(info.IsValid() && !info.name.empty());
+
+	auto &storage_manager = db.GetStorageManager();
+	auto &single_file_sm = storage_manager.Cast<SingleFileStorageManager>();
+	auto &block_manager = single_file_sm.block_manager;
+	auto &buffer_manager = block_manager->buffer_manager;
+
+	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
+		auto &data_info = info.allocator_infos[i];
+
+		// Read the data into buffer handles and convert them to blocks on disk.
+		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
+
+			// Read the data into a buffer handle.
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
+			auto block_handle = buffer_handle.GetBlockHandle();
+			auto data_ptr = buffer_handle.Ptr();
+
+			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
+
+			// Convert the buffer handle to a persistent block and store the block id.
+			if (!deserialize_only) {
+				auto block_id = block_manager->GetFreeBlockId();
+				block_manager->ConvertToPersistent(block_id, std::move(block_handle));
+				data_info.block_pointers[j].block_id = block_id;
+			}
+		}
+	});
+}
+
 void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
+	if (!alter_info.IsAddPrimaryKey()) {
+		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
+	}
+
+	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
+	ReplayIndexData(db, deserializer, index_storage_info, DeserializeOnly());
 	if (DeserializeOnly()) {
 		return;
 	}
+
+	auto &table_info = alter_info.Cast<AlterTableInfo>();
+	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
+	auto &unique_info = constraint_info.constraint->Cast<UniqueConstraint>();
+
+	auto &table =
+	    catalog.GetEntry<TableCatalogEntry>(context, table_info.schema, table_info.name).Cast<DuckTableEntry>();
+	auto &column_list = table.GetColumns();
+
+	// Add the table to the bind context to bind the parsed expressions.
+	auto binder = Binder::CreateBinder(context);
+	vector<LogicalType> column_types;
+	vector<string> column_names;
+	for (auto &col : column_list.Logical()) {
+		column_types.push_back(col.Type());
+		column_names.push_back(col.Name());
+	}
+
+	// Create a binder to bind the parsed expressions.
+	vector<column_t> column_ids;
+	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
+	IndexBinder idx_binder(*binder, context);
+
+	// Bind the parsed expressions to create unbound expressions.
+	vector<unique_ptr<Expression>> unbound_expressions;
+	auto logical_indexes = unique_info.GetLogicalIndexes(column_list);
+	for (const auto &logical_index : logical_indexes) {
+		auto &col = column_list.GetColumn(logical_index);
+		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.name);
+		unbound_expressions.push_back(idx_binder.Bind(parsed));
+	}
+
+	auto &storage = table.GetStorage();
+	CreateIndexInput input(TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
+	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
+	                       index_storage_info.options);
+
+	auto index_type = context.db->config.GetIndexTypes().FindByName(ART::TYPE_NAME);
+	auto index_instance = index_type->create_instance(input);
+	storage.AddIndex(std::move(index_instance));
+
 	catalog.Alter(context, alter_info);
 }
 
@@ -539,40 +625,15 @@ void WriteAheadLogDeserializer::ReplayDropTableMacro() {
 void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "index_catalog_entry");
 	auto index_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
-	D_ASSERT(index_info.IsValid() && !index_info.name.empty());
 
-	auto &storage_manager = db.GetStorageManager();
-	auto &single_file_sm = storage_manager.Cast<SingleFileStorageManager>();
-	auto &block_manager = single_file_sm.block_manager;
-	auto &buffer_manager = block_manager->buffer_manager;
-
-	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
-		auto &data_info = index_info.allocator_infos[i];
-
-		// read the data into buffer handles and convert them to blocks on disk
-		// then, update the block pointer
-		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
-
-			// read the data into a buffer handle
-			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
-			auto block_handle = buffer_handle.GetBlockHandle();
-			auto data_ptr = buffer_handle.Ptr();
-
-			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
-
-			// now convert the buffer handle to a persistent block and remember the block id
-			auto block_id = block_manager->GetFreeBlockId();
-			block_manager->ConvertToPersistent(block_id, std::move(block_handle));
-			data_info.block_pointers[j].block_id = block_id;
-		}
-	});
-
+	ReplayIndexData(db, deserializer, index_info, DeserializeOnly());
 	if (DeserializeOnly()) {
 		return;
 	}
+
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
-	// Ensure the index type exists
+	// Ensure that the index type exists.
 	if (info.index_type.empty()) {
 		info.index_type = ART::TYPE_NAME;
 	}
@@ -582,11 +643,11 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		throw InternalException("Index type \"%s\" not recognized", info.index_type);
 	}
 
-	// create the index in the catalog
+	// Create the index in the catalog.
 	auto &table = catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
 	auto &index = table.schema.CreateIndex(context, info, table)->Cast<DuckIndexEntry>();
 
-	// add the table to the bind context to bind the parsed expressions
+	// Add the table to the bind context to bind the parsed expressions.
 	auto binder = Binder::CreateBinder(context);
 	vector<LogicalType> column_types;
 	vector<string> column_names;
@@ -595,26 +656,23 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		column_names.push_back(col.Name());
 	}
 
-	// create a binder to bind the parsed expressions
+	// Create a binder to bind the parsed expressions.
 	vector<column_t> column_ids;
 	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
 	IndexBinder idx_binder(*binder, context);
 
-	// bind the parsed expressions to create unbound expressions
+	// Bind the parsed expressions to create unbound expressions.
 	vector<unique_ptr<Expression>> unbound_expressions;
-	unbound_expressions.reserve(index.parsed_expressions.size());
 	for (auto &expr : index.parsed_expressions) {
 		auto copy = expr->Copy();
 		unbound_expressions.push_back(idx_binder.Bind(copy));
 	}
 
-	auto &data_table = table.GetStorage();
-
-	CreateIndexInput input(TableIOManager::Get(data_table), data_table.db, info.constraint_type, info.index_name,
+	auto &storage = table.GetStorage();
+	CreateIndexInput input(TableIOManager::Get(storage), storage.db, info.constraint_type, info.index_name,
 	                       info.column_ids, unbound_expressions, index_info, info.options);
-
 	auto index_instance = index_type->create_instance(input);
-	data_table.AddIndex(std::move(index_instance));
+	storage.AddIndex(std::move(index_instance));
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {
