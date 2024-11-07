@@ -94,9 +94,13 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints)
 	    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
+		update_chunk.Initialize(Allocator::Get(context), types);
 	}
 
+	//! The chunk that ends up getting inserted
 	DataChunk insert_chunk;
+	//! The chunk containing the tuples that become an update (if DO UPDATE)
+	DataChunk update_chunk;
 	ExpressionExecutor default_executor;
 	TableAppendState local_append_state;
 	unique_ptr<RowGroupCollection> local_collection;
@@ -733,13 +737,6 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
-
-		// We finalize the local append to write the segment node count.
-		if (action_type != OnConflictAction::THROW) {
-			storage.FinalizeLocalAppend(gstate.append_state);
-			gstate.initialized = false;
-		}
-
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append
