@@ -129,22 +129,57 @@ class TestDataFrameOrderBy(object):
         df = spark.createDataFrame([(3, "A"), (3, None), (None, "A"), (2, "A")], ("value1", "value2"))
 
         res = df.orderBy("value1", "value2").collect()
-        assert res == [Row(value1=None, value2='A'), Row(value1=2, value2='A'), Row(value1=3, value2=None), Row(value1=3, value2='A')]
+        assert res == [
+            Row(value1=None, value2='A'),
+            Row(value1=2, value2='A'),
+            Row(value1=3, value2=None),
+            Row(value1=3, value2='A'),
+        ]
 
         res = df.orderBy("value1", "value2", ascending=True).collect()
-        assert res == [Row(value1=None, value2='A'), Row(value1=2, value2='A'), Row(value1=3, value2=None), Row(value1=3, value2='A')]
+        assert res == [
+            Row(value1=None, value2='A'),
+            Row(value1=2, value2='A'),
+            Row(value1=3, value2=None),
+            Row(value1=3, value2='A'),
+        ]
 
         res = df.orderBy("value1", "value2", ascending=False).collect()
-        assert res == [Row(value1=3, value2='A'), Row(value1=3, value2=None), Row(value1=2, value2='A'), Row(value1=None, value2='A')]
+        assert res == [
+            Row(value1=3, value2='A'),
+            Row(value1=3, value2=None),
+            Row(value1=2, value2='A'),
+            Row(value1=None, value2='A'),
+        ]
 
         res = df.orderBy(df.value1, df.value2).collect()
-        assert res == [Row(value1=None, value2='A'), Row(value1=2, value2='A'), Row(value1=3, value2=None), Row(value1=3, value2='A')]
+        assert res == [
+            Row(value1=None, value2='A'),
+            Row(value1=2, value2='A'),
+            Row(value1=3, value2=None),
+            Row(value1=3, value2='A'),
+        ]
 
         res = df.orderBy(df.value1.asc(), df.value2.asc()).collect()
-        assert res == [Row(value1=None, value2='A'), Row(value1=2, value2='A'), Row(value1=3, value2=None), Row(value1=3, value2='A')]
+        assert res == [
+            Row(value1=None, value2='A'),
+            Row(value1=2, value2='A'),
+            Row(value1=3, value2=None),
+            Row(value1=3, value2='A'),
+        ]
 
         res = df.orderBy(df.value1.desc(), df.value2.desc()).collect()
-        assert res == [Row(value1=3, value2='A'), Row(value1=3, value2=None), Row(value1=2, value2='A'), Row(value1=None, value2='A')]
+        assert res == [
+            Row(value1=3, value2='A'),
+            Row(value1=3, value2=None),
+            Row(value1=2, value2='A'),
+            Row(value1=None, value2='A'),
+        ]
 
         res = df.orderBy(df.value1, df.value2, ascending=[True, False]).collect()
-        assert res == [Row(value1=None, value2='A'), Row(value1=2, value2='A'), Row(value1=3, value2="A"), Row(value1=3, value2=None)]
+        assert res == [
+            Row(value1=None, value2='A'),
+            Row(value1=2, value2='A'),
+            Row(value1=3, value2="A"),
+            Row(value1=3, value2=None),
+        ]

@@ -28,7 +28,7 @@ from spark_namespace.sql.functions import (
     covar_pop,
     covar_samp,
     first,
-    last
+    last,
 )
 
 
@@ -170,6 +170,11 @@ class TestDataFrameGroupBy(object):
         df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
 
         df = df.orderBy(df.age)
-        res = df.groupBy("name").agg(first("age").alias("first_age"), last("age").alias("last_age")).orderBy("name").collect()
+        res = (
+            df.groupBy("name")
+            .agg(first("age").alias("first_age"), last("age").alias("last_age"))
+            .orderBy("name")
+            .collect()
+        )
 
         assert res == [Row(name='Alice', first_age=None, last_age=2), Row(name='Bob', first_age=5, last_age=5)]
