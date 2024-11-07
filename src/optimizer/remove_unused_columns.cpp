@@ -225,6 +225,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// Clear unused ids, exclude filter columns that are projected out immediately
 			ClearUnusedExpressions(proj_sel, get.table_index, false);
 
+			vector<unique_ptr<Expression>> filter_expressions;
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
 			for (auto &filter : get.table_filters.filters) {
@@ -243,6 +244,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				auto column_ref = make_uniq<BoundColumnRefExpression>(column_type, filter_binding);
 				auto filter_expr = filter.second->ToExpression(*column_ref);
 				VisitExpression(&filter_expr);
+				filter_expressions.push_back(std::move(filter_expr));
 			}
 
 			// Clear unused ids, include filter columns that are projected out immediately
