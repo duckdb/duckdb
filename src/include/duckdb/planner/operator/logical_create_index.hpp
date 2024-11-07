@@ -20,15 +20,15 @@ public:
 
 public:
 	LogicalCreateIndex(unique_ptr<CreateIndexInfo> info_p, vector<unique_ptr<Expression>> expressions_p,
-	                   TableCatalogEntry &table_p);
+	                   TableCatalogEntry &table_p, unique_ptr<AlterTableInfo> alter_table_info = nullptr);
 
-	// Info for index creation
+	//! Index creation information.
 	unique_ptr<CreateIndexInfo> info;
-
-	//! The table to create the index for
+	//! The table to create the index for.
 	TableCatalogEntry &table;
-
-	//! Unbound expressions to be used in the optimizer
+	// Alter table information.
+	unique_ptr<AlterTableInfo> alter_table_info;
+	//! Unbound expressions of the indexed columns.
 	vector<unique_ptr<Expression>> unbound_expressions;
 
 public:
@@ -39,8 +39,8 @@ protected:
 	void ResolveTypes() override;
 
 private:
-	LogicalCreateIndex(ClientContext &context, unique_ptr<CreateInfo> info, vector<unique_ptr<Expression>> expressions);
-
-	TableCatalogEntry &BindTable(ClientContext &context, CreateIndexInfo &info);
+	LogicalCreateIndex(ClientContext &context, unique_ptr<CreateInfo> info, vector<unique_ptr<Expression>> expressions,
+	                   unique_ptr<ParseInfo> alter_info);
+	TableCatalogEntry &BindTable(ClientContext &context, CreateIndexInfo &info_p);
 };
 } // namespace duckdb

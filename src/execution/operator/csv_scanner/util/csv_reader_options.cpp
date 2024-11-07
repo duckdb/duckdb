@@ -7,7 +7,6 @@
 #include "duckdb/common/set.hpp"
 
 namespace duckdb {
-
 static bool ParseBoolean(const Value &value, const string &loption);
 
 static bool ParseBoolean(const vector<Value> &set, const string &loption) {
@@ -173,6 +172,14 @@ void CSVReaderOptions::SetNewline(const string &input) {
 	}
 }
 
+bool CSVReaderOptions::GetRFC4180() const {
+	return this->dialect_options.state_machine_options.rfc_4180.GetValue();
+}
+
+void CSVReaderOptions::SetRFC4180(bool input) {
+	this->dialect_options.state_machine_options.rfc_4180.Set(input);
+}
+
 bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
@@ -274,6 +281,8 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 			throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be negative");
 		}
 		rejects_limit = NumericCast<idx_t>(limit);
+	} else if (loption == "encoding") {
+		encoding = ParseString(value, loption);
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}
@@ -371,13 +380,10 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, 
 			throw BinderException("CSV Writer function option %s only accepts one nullstr value.", loption);
 		}
 
-	} else if (loption == "encoding") {
-		auto encoding = StringUtil::Lower(ParseString(value, loption));
-		if (encoding != "utf8" && encoding != "utf-8") {
-			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
-		}
 	} else if (loption == "compression") {
 		SetCompression(ParseString(value, loption));
+	} else if (loption == "rfc_4180") {
+		SetRFC4180(ParseBoolean(value, loption));
 	} else {
 		// unrecognized option in base CSV
 		return false;
@@ -402,6 +408,7 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	auto &escape = dialect_options.state_machine_options.escape;
 	auto &comment = dialect_options.state_machine_options.comment;
 	auto &new_line = dialect_options.state_machine_options.new_line;
+	auto &rfc_4180 = dialect_options.state_machine_options.rfc_4180;
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
@@ -421,6 +428,8 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	error += FormatOptionLine("skip_rows", skip_rows);
 	// comment
 	error += FormatOptionLine("comment", comment);
+	// rfc_4180
+	error += FormatOptionLine("rfc_4180", rfc_4180);
 	// date format
 	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
 	// timestamp format
@@ -447,7 +456,7 @@ static Value StringVectorToValue(const vector<string> &vec) {
 	for (auto &item : vec) {
 		content.push_back(Value(item));
 	}
-	return Value::LIST(std::move(content));
+	return Value::LIST(LogicalType::VARCHAR, std::move(content));
 }
 
 static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
@@ -657,6 +666,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
 	auto &comment = dialect_options.state_machine_options.comment;
+	auto &rfc_4180 = dialect_options.state_machine_options.rfc_4180;
 	auto &header = dialect_options.header;
 	if (delimiter.IsSetByUser()) {
 		named_params["delim"] = Value(GetDelimiter());
@@ -675,6 +685,9 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	}
 	if (header.IsSetByUser()) {
 		named_params["header"] = Value(GetHeader());
+	}
+	if (rfc_4180.IsSetByUser()) {
+		named_params["rfc_4180"] = Value(GetRFC4180());
 	}
 	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size));
 	if (dialect_options.skip_rows.IsSetByUser()) {

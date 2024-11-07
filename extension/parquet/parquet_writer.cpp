@@ -317,12 +317,12 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p,
-                             double dictionary_compression_ratio_threshold_p, optional_idx compression_level_p,
+                             double dictionary_compression_ratio_threshold_p, int64_t compression_level_p,
                              bool debug_use_openssl_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
       field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)),
       dictionary_compression_ratio_threshold(dictionary_compression_ratio_threshold_p),
-      debug_use_openssl(debug_use_openssl_p) {
+      compression_level(compression_level_p), debug_use_openssl(debug_use_openssl_p) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -360,19 +360,6 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 		kv.__set_value(kv_pair.second);
 		file_meta_data.key_value_metadata.push_back(kv);
 		file_meta_data.__isset.key_value_metadata = true;
-	}
-	if (compression_level_p.IsValid()) {
-		idx_t level = compression_level_p.GetIndex();
-		switch (codec) {
-		case CompressionCodec::ZSTD:
-			if (level < 1 || level > 22) {
-				throw BinderException("Compression level for ZSTD must be between 1 and 22");
-			}
-			break;
-		default:
-			throw NotImplementedException("Compression level is only supported for the ZSTD compression codec");
-		}
-		compression_level = level;
 	}
 
 	// populate root schema object

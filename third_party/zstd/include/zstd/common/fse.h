@@ -20,6 +20,7 @@
 /*-*****************************************
 *  Dependencies
 ******************************************/
+
 #include "zstd/common/zstd_deps.h"    /* size_t, ptrdiff_t */
 
 namespace duckdb_zstd {
@@ -233,7 +234,7 @@ If there is an error, the function will return an error code, which can be teste
 #define FSE_H_FSE_STATIC_LINKING_ONLY
 
 /* *** Dependency *** */
-#include "bitstream.h"
+#include "zstd/common/bitstream.h"
 
 namespace duckdb_zstd {
 

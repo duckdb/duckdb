@@ -43,7 +43,7 @@ Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) 
 	for (auto &file : file_list) {
 		files.push_back(file);
 	}
-	return Value::LIST(std::move(files));
+	return Value::LIST(LogicalType::VARCHAR, std::move(files));
 }
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {

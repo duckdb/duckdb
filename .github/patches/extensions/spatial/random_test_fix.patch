@@ -99,3 +99,25 @@ index b730baa..8d08898 100644
  
  	scan.projection_pushdown = true;
  	scan.filter_pushdown = true;
+diff --git a/spatial/src/spatial/geos/functions/aggregate.cpp b/spatial/src/spatial/geos/functions/aggregate.cpp
+index aacc668..c478786 100644
+--- a/spatial/src/spatial/geos/functions/aggregate.cpp
++++ b/spatial/src/spatial/geos/functions/aggregate.cpp
+@@ -197,7 +197,7 @@ void GeosAggregateFunctions::Register(DatabaseInstance &db) {
+ 
+ 	AggregateFunctionSet st_intersection_agg("ST_Intersection_Agg");
+ 	st_intersection_agg.AddFunction(
+-	    AggregateFunction::UnaryAggregateDestructor<GEOSAggState, geometry_t, geometry_t, IntersectionAggFunction>(
++	    AggregateFunction::UnaryAggregateDestructor<GEOSAggState, geometry_t, geometry_t, IntersectionAggFunction, AggregateDestructorType::LEGACY>(
+ 	        core::GeoTypes::GEOMETRY(), core::GeoTypes::GEOMETRY()));
+ 
+ 	ExtensionUtil::RegisterFunction(db, st_intersection_agg);
+@@ -206,7 +206,7 @@ void GeosAggregateFunctions::Register(DatabaseInstance &db) {
+ 
+ 	AggregateFunctionSet st_union_agg("ST_Union_Agg");
+ 	st_union_agg.AddFunction(
+-	    AggregateFunction::UnaryAggregateDestructor<GEOSAggState, geometry_t, geometry_t, UnionAggFunction>(
++	    AggregateFunction::UnaryAggregateDestructor<GEOSAggState, geometry_t, geometry_t, UnionAggFunction, AggregateDestructorType::LEGACY>(
+ 	        core::GeoTypes::GEOMETRY(), core::GeoTypes::GEOMETRY()));
+ 
+ 	ExtensionUtil::RegisterFunction(db, st_union_agg);
