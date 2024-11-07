@@ -2,6 +2,16 @@
 # description: Test CSVs with repeating patterns in delimiter/escape/quote
 # group: [multidelimiter]
 
+query II
+FROM read_csv('data/csv/multidelimiter/aaab_delim.csv', delim = 'AAAB')
+----
+A	C
+
+query II
+FROM read_csv('data/csv/multidelimiter/aab_delim.csv', delim = 'AAB')
+----
+A	C
+
 # ABAC delimiter
 # CSV file contains ABABACABABABAC
 # this is equivalent to "AB|ABAB|"

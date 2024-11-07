@@ -114,6 +114,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[static_cast<uint8_t>(delimiter_value[1])]
 		                [static_cast<uint8_t>(CSVState::DELIMITER_FIRST_BYTE)] = CSVState::DELIMITER;
 	} else if (delimiter_value.size() == 3) {
+		if (delimiter_value[0] == delimiter_value[1]) {
+			transition_array[static_cast<uint8_t>(delimiter_value[1])]
+			                [static_cast<uint8_t>(CSVState::DELIMITER_SECOND_BYTE)] = CSVState::DELIMITER_SECOND_BYTE;
+		}
 		transition_array[static_cast<uint8_t>(delimiter_value[1])]
 		                [static_cast<uint8_t>(CSVState::DELIMITER_FIRST_BYTE)] = CSVState::DELIMITER_SECOND_BYTE;
 		transition_array[static_cast<uint8_t>(delimiter_value[2])]
@@ -122,6 +126,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		if (delimiter_value[0] == delimiter_value[2]) {
 			transition_array[static_cast<uint8_t>(delimiter_value[1])]
 			                [static_cast<uint8_t>(CSVState::DELIMITER_THIRD_BYTE)] = CSVState::DELIMITER_SECOND_BYTE;
+		}
+		if (delimiter_value[0] == delimiter_value[1] && delimiter_value[1] == delimiter_value[2]) {
+			transition_array[static_cast<uint8_t>(delimiter_value[1])]
+			                [static_cast<uint8_t>(CSVState::DELIMITER_THIRD_BYTE)] = CSVState::DELIMITER_THIRD_BYTE;
 		}
 		transition_array[static_cast<uint8_t>(delimiter_value[1])]
 		                [static_cast<uint8_t>(CSVState::DELIMITER_FIRST_BYTE)] = CSVState::DELIMITER_SECOND_BYTE;

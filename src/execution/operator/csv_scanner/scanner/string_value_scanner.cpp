@@ -23,6 +23,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
+      extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
       error_handler(error_hander_p), iterator(iterator_p), store_line_size(store_line_size_p),
       csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
       current_errors(state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(std::move(path_p)) {
@@ -501,8 +502,6 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 		if (result.projecting_columns) {
 			if (!result.projected_columns[result.cur_col_id]) {
 				result.cur_col_id++;
-				// we might need this
-				//result.quoted = false;
 				result.escaped = false;
 				return;
 			}
@@ -541,30 +540,38 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 			result.AddValueToVector(value_ptr, length);
 		}
 	}
-	// dont we need this
-	//result.quoted = false;
 	result.escaped = false;
 }
 
+inline idx_t StringValueResult::HandleMultiDelimiter(const idx_t buffer_pos) const {
+	idx_t size = buffer_pos - last_position.buffer_pos - extra_delimiter_bytes;
+	if (buffer_pos < last_position.buffer_pos + extra_delimiter_bytes) {
+		// If this is a scenario where the value is null, that is fine (e.g., delim = '||' and line is: A||)
+		if (buffer_pos == last_position.buffer_pos) {
+			size = 0;
+		} else {
+			// Otherwise something went wrong.
+			throw InternalException(
+			    "Value size is lower than the number of extra delimiter bytes in the HandleMultiDelimiter(). "
+			    "buffer_pos = %d, last_position.buffer_pos = %d, extra_delimiter_bytes = %d",
+			    buffer_pos, last_position.buffer_pos, extra_delimiter_bytes);
+		}
+	}
+	return size;
+}
+
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
-	idx_t extra_delimiter_bytes =
-	    result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1;
 	if (result.last_position.buffer_pos > buffer_pos) {
 		return;
 	}
 	if (result.quoted) {
-		AddQuotedValue(result, buffer_pos - extra_delimiter_bytes);
-	}  else if (result.escaped) {
-		// FIXME: THis looks breakabkle
-		AddPossiblyEscapedValue(result, buffer_pos,
-		                                           result.buffer_ptr + result.last_position.buffer_pos,
-		                                           buffer_pos - result.last_position.buffer_pos, false);
+		AddQuotedValue(result, buffer_pos - result.extra_delimiter_bytes);
+	} else if (result.escaped) {
+		AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.last_position.buffer_pos,
+		                        buffer_pos - result.last_position.buffer_pos, false);
 	} else {
-		idx_t size = buffer_pos - result.last_position.buffer_pos - extra_delimiter_bytes;
-		if (buffer_pos < result.last_position.buffer_pos + extra_delimiter_bytes) {
-			size = 0;
-		}
-		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos, size);
+		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
+		                        result.HandleMultiDelimiter(buffer_pos));
 	}
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
@@ -1343,10 +1350,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 				idx_t extra_delimiter_bytes =
 				    result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1;
 				if (extra_delimiter_bytes > value_size) {
-					value_size = 0;
-				} else {
-					value_size -= extra_delimiter_bytes;
+					throw InternalException(
+					    "Value size is lower than the number of extra delimiter bytes in the ProcesOverBufferValue()");
 				}
+				value_size -= extra_delimiter_bytes;
 			}
 			result.AddValueToVector(value.GetData(), value_size, true);
 		}

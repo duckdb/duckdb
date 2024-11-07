@@ -77,7 +77,7 @@ public:
 		return value != other;
 	}
 	//! Returns CSV Option value
-	inline const T GetValue() const {
+	inline const T &GetValue() const {
 		return value;
 	}
 	bool IsSetByUser() const {

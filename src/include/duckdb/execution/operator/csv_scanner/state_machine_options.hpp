@@ -17,8 +17,8 @@ struct CSVStateMachineOptions {
 	CSVStateMachineOptions() {};
 	CSVStateMachineOptions(string delimiter_p, char quote_p, char escape_p, char comment_p,
 	                       NewLineIdentifier new_line_p, bool rfc_4180_p)
-	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p),
-	      new_line(new_line_p), rfc_4180(rfc_4180_p) {};
+	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
+	      rfc_4180(rfc_4180_p) {};
 
 	//! Delimiter to separate columns within each line
 	CSVOption<string> delimiter {","};
