@@ -9,6 +9,11 @@ from duckdb.experimental.spark.conf import SparkConf
 class SparkContext:
     def __init__(self, master: str):
         self._connection = duckdb.connect(':memory:')
+        # We need this to align the ordering of ascending with Spark. For descending,
+        # Spark uses nulls last. Hence, in the API, we need to take care of that.
+        # Setting the ordering at least correctly for ascending is relevant
+        # for DataFrame.sort, see the comments there for more information.
+        self._connection.execute("set default_null_order='nulls first'")
 
     @property
     def connection(self) -> DuckDBPyConnection:

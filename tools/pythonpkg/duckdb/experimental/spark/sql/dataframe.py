@@ -457,7 +457,7 @@ class DataFrame:
             elif isinstance(c, int) and not isinstance(c, bool):
                 # ordinal is 1-based
                 if c > 0:
-                    _c = self[c - 1]
+                    _c = self[c - 1].asc()
                 # negative ordinal means sort by desc
                 elif c < 0:
                     _c = self[-c - 1].desc()
@@ -468,13 +468,23 @@ class DataFrame:
                     )
             columns.append(_c)
 
-        ascending = kwargs.get("ascending", True)
+        # In context.SparkContext, the default null ordering is set to 'nulls first',
+        # so that we don't have to call .asc() here on a column, as we don't know,
+        # if that column is already sorted. If the null ordering would not be
+        # set to 'nulls first', we would need to call '.asc' on any column to make
+        # that happen, but then this would no longer work: df.sort(df.age.desc())
+        # as we would need to call `.asc` on df.age because we don't know it's already
+        # ordered.
+        ascending_kwarg = kwargs.get("ascending")
+        ascending = ascending_kwarg if ascending_kwarg is not None else True
 
         if isinstance(ascending, (bool, int)):
-            if not ascending:
+            if ascending and ascending_kwarg is not None:
+                columns = [c.asc() for c in columns]
+            elif not ascending:
                 columns = [c.desc() for c in columns]
         elif isinstance(ascending, list):
-            columns = [c if asc else c.desc() for asc, c in zip(ascending, columns)]
+            columns = [c.asc() if asc else c.desc() for asc, c in zip(ascending, columns)]
         else:
             raise PySparkTypeError(
                 error_class="NOT_BOOL_OR_LIST",
