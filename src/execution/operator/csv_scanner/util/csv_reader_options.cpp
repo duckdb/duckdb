@@ -7,6 +7,17 @@
 #include "duckdb/common/set.hpp"
 
 namespace duckdb {
+
+CSVReaderOptions::CSVReaderOptions(CSVOption<char> single_byte_delimiter,
+                                   const CSVOption<string> &multi_byte_delimiter) {
+	if (multi_byte_delimiter.GetValue().empty()) {
+		char single_byte_value = single_byte_delimiter.GetValue();
+		string value(1, single_byte_value);
+		dialect_options.state_machine_options.delimiter = value;
+	} else {
+		dialect_options.state_machine_options.delimiter = multi_byte_delimiter;
+	}
+}
 static bool ParseBoolean(const Value &value, const string &loption);
 
 static bool ParseBoolean(const vector<Value> &set, const string &loption) {
@@ -182,6 +193,14 @@ void CSVReaderOptions::SetRFC4180(bool input) {
 
 bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
+}
+
+char CSVReaderOptions::GetSingleByteDelimiter() const {
+	return dialect_options.state_machine_options.delimiter.GetValue()[0];
+}
+
+string CSVReaderOptions::GetMultiByteDelimiter() const {
+	return dialect_options.state_machine_options.delimiter.GetValue();
 }
 
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {

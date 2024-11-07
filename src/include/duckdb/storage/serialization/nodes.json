@@ -737,7 +737,8 @@
       },
       {"id": 121,
         "name": "dialect_options.state_machine_options.delimiter",
-        "type": "CSVOption<string>"
+        "type": "CSVOption<string>",
+        "serialize_property": "GetSingleByteDelimiter()"
       },
       {"id": 122,
         "name": "dialect_options.state_machine_options.quote",
@@ -813,13 +814,18 @@
       {"id": 139,
         "name": "encoding",
         "type": "string"
-      }
-      ,
+      },
       {"id": 140,
         "name": "dialect_options.state_machine_options.rfc_4180",
         "type": "CSVOption<bool>"
+      },
+      {"id": 141,
+        "name": "multi_byte_delimiter",
+        "type": "CSVOption<string>",
+        "serialize_property": "GetMultiByteDelimiter()"
       }
     ],
+    "constructor": ["dialect_options.state_machine_options.delimiter", "multi_byte_delimiter"],
     "pointer_type": "none"
   },
   {

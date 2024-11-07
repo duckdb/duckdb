@@ -35,6 +35,8 @@ struct DialectOptions {
 };
 
 struct CSVReaderOptions {
+	CSVReaderOptions() {};
+	CSVReaderOptions(CSVOption<char> single_byte_delimiter, const CSVOption<string> &multi_byte_delimiter);
 	//===--------------------------------------------------------------------===//
 	// CommonCSVOptions
 	//===--------------------------------------------------------------------===//
@@ -59,7 +61,7 @@ struct CSVReaderOptions {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Option to convert quoted values to NULL values
 	bool allow_quoted_nulls = true;
-	char comment;
+	char comment = '\0';
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
@@ -162,6 +164,9 @@ struct CSVReaderOptions {
 
 	bool GetRFC4180() const;
 	void SetRFC4180(bool rfc4180);
+
+	char GetSingleByteDelimiter() const;
+	string GetMultiByteDelimiter() const;
 
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
