@@ -59,7 +59,6 @@ using BlockLock = unique_lock<mutex>;
 
 class BlockHandle : public enable_shared_from_this<BlockHandle> {
 	friend class BlockManager;
-	friend class StandardBufferManager;
 
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag);
@@ -84,6 +83,9 @@ public:
 
 	int32_t Readers() const {
 		return readers;
+	}
+	int32_t DecrementReaders() {
+		return --readers;
 	}
 
 	inline bool IsSwizzled() const {
@@ -150,12 +152,11 @@ public:
 		return BlockLock(lock);
 	}
 
-	//! Add a reader to the block handle
-	void AddReader(BlockLock &l);
-
 	//! Gets a reference to the buffer - the lock must be held
 	unique_ptr<FileBuffer> &GetBuffer(BlockLock &l);
 
+	void ChangeMemoryUsage(BlockLock &l, int64_t delta);
+	BufferPoolReservation &GetMemoryCharge(BlockLock &l);
 	//! Merge a new memory reservation
 	void MergeMemoryReservation(BlockLock &, BufferPoolReservation reservation);
 	//! Resize the memory allocation
@@ -164,12 +165,14 @@ public:
 	//! Resize the actual buffer
 	void ResizeBuffer(BlockLock &, idx_t block_size, int64_t memory_delta);
 	BufferHandle Load(unique_ptr<FileBuffer> buffer = nullptr);
-	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer, BufferPoolReservation reservation);
+	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
+	                            BufferPoolReservation reservation);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &);
 	void Unload(BlockLock &);
 
 	//! Returns whether or not the block can be unloaded
-	//! Note that while this method does not require a lock, whether or not a block can be unloaded can change if the lock is not held
+	//! Note that while this method does not require a lock, whether or not a block can be unloaded can change if the
+	//! lock is not held
 	bool CanUnload() const;
 
 private:

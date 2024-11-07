@@ -12,7 +12,8 @@ namespace duckdb {
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag)
     : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer_type(FileBufferType::BLOCK),
       buffer(nullptr), eviction_seq_num(0), destroy_buffer_upon(DestroyBufferUpon::BLOCK),
-      memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr), eviction_queue_idx(DConstants::INVALID_INDEX) {
+      memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr),
+      eviction_queue_idx(DConstants::INVALID_INDEX) {
 	eviction_seq_num = 0;
 	state = BlockState::BLOCK_UNLOADED;
 	memory_usage = block_manager.GetBlockAllocSize();
@@ -23,7 +24,8 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
                          BufferPoolReservation &&reservation)
     : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer_type(buffer_p->GetBufferType()),
       eviction_seq_num(0), destroy_buffer_upon(destroy_buffer_upon_p),
-      memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr), eviction_queue_idx(DConstants::INVALID_INDEX) {
+      memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr),
+      eviction_queue_idx(DConstants::INVALID_INDEX) {
 	buffer = std::move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
 	memory_usage = block_size;
@@ -72,12 +74,12 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 	}
 }
 
-void BlockHandle::AddReader(BlockLock &l) {
+void BlockHandle::ChangeMemoryUsage(BlockLock &l, int64_t delta) {
 	VerifyMutex(l);
-	D_ASSERT(state == BlockState::BLOCK_LOADED);
-	D_ASSERT(readers > 0);
-	D_ASSERT(buffer);
-	++readers;
+
+	D_ASSERT(delta < 0);
+	memory_usage += static_cast<idx_t>(delta);
+	memory_charge.Resize(memory_usage);
 }
 
 unique_ptr<FileBuffer> &BlockHandle::GetBuffer(BlockLock &l) {
@@ -85,9 +87,14 @@ unique_ptr<FileBuffer> &BlockHandle::GetBuffer(BlockLock &l) {
 	return buffer;
 }
 
-void BlockHandle::VerifyMutex(BlockLock &l) const{
+void BlockHandle::VerifyMutex(BlockLock &l) const {
 	D_ASSERT(l.owns_lock());
 	D_ASSERT(l.mutex() == &lock);
+}
+
+BufferPoolReservation &BlockHandle::GetMemoryCharge(BlockLock &l) {
+	VerifyMutex(l);
+	return memory_charge;
 }
 
 void BlockHandle::MergeMemoryReservation(BlockLock &l, BufferPoolReservation reservation) {
@@ -110,7 +117,8 @@ void BlockHandle::ResizeBuffer(BlockLock &l, idx_t block_size, int64_t memory_de
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
-BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer, BufferPoolReservation reservation) {
+BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
+                                         BufferPoolReservation reservation) {
 	VerifyMutex(l);
 
 	D_ASSERT(state != BlockState::BLOCK_LOADED);
@@ -129,6 +137,7 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 	if (state == BlockState::BLOCK_LOADED) {
 		// already loaded
 		D_ASSERT(buffer);
+		++readers;
 		return BufferHandle(shared_from_this(), buffer.get());
 	}
 
@@ -144,6 +153,7 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 		}
 	}
 	state = BlockState::BLOCK_LOADED;
+	readers = 1;
 	return BufferHandle(shared_from_this(), buffer.get());
 }
 
