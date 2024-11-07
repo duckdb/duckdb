@@ -8,11 +8,11 @@
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
@@ -453,10 +453,18 @@ struct PragmaFunctionExtractor {
 	}
 };
 
-static vector<Value> ToVectorValue(vector<string> string_vector) {
+static vector<Value> ToValueVector(vector<string> &string_vector) {
 	vector<Value> result;
 	for (string &str : string_vector) {
 		result.emplace_back(Value(str));
+	}
+	return result;
+}
+
+static vector<LogicalType> ToLogicalTypeVector(vector<Value> &value_vector) {
+	vector<LogicalType> result;
+	for (Value &value : value_vector) {
+		result.emplace_back(value.GetTypeMutable());
 	}
 	return result;
 }
@@ -465,7 +473,7 @@ template <class T, class OP>
 static vector<Value> GetParameterNames(FunctionEntry &entry, idx_t function_idx,
                                        FunctionDescription &function_description) {
 	if (function_description.parameter_names.size() > 0) {
-		return ToVectorValue(function_description.parameter_names);
+		return ToValueVector(function_description.parameter_names);
 	} else {
 		// fallback
 		auto &function = entry.Cast<T>();
@@ -473,16 +481,47 @@ static vector<Value> GetParameterNames(FunctionEntry &entry, idx_t function_idx,
 	}
 }
 
-static const int GetFunctionDescriptionIndex(vector<FunctionDescription> &function_descriptions,
-                                             duckdb::Value &parameter_types) {
-	// simplified logic, just check amount of arguments
-	vector<Value> types_to_match = ListValue::GetChildren(parameter_types);
-	for (idx_t descr_idx = 0; descr_idx < function_descriptions.size(); descr_idx++) {
-		if (types_to_match.size() == function_descriptions[descr_idx].parameter_types.size()) {
-			return descr_idx;
+// returns values:
+//  -1: no match; 0: explicit match; N: match by using N <ANY> values
+static int CalcDescriptionSpecificity(FunctionDescription &description, const vector<LogicalType> &parameter_types) {
+	int any_count = 0;
+
+	for (idx_t i = 0; i < description.parameter_types.size(); i++) {
+		if (description.parameter_types[i].id() == LogicalTypeId::ANY) {
+			any_count++;
+		} else if (!description.parameter_types[i].EqualTypeInfo(parameter_types[i])) {
+			return -1;
 		}
 	}
-	return -1; // no match
+	return any_count;
+}
+
+/*
+Find description object with matching number of arguments and types
+return -1: no description matches the overload
+return >= 0: index of best matching description
+*/
+static int GetFunctionDescriptionIndex(vector<FunctionDescription> &function_descriptions,
+                                       duckdb::Value &parameter_types) {
+	int best_description_index = -1;
+
+	//  -1: no match; 0: perfect match; N: match by using N <ANY> values
+	int best_specificity_score = -1;
+	int specificity_score;
+
+	vector<Value> types_to_match = ListValue::GetChildren(parameter_types);
+	for (idx_t descr_idx = 0; descr_idx < function_descriptions.size(); descr_idx++) {
+		specificity_score = -1;
+		if (types_to_match.size() == function_descriptions[descr_idx].parameter_types.size()) {
+			specificity_score =
+			    CalcDescriptionSpecificity(function_descriptions[descr_idx], ToLogicalTypeVector(types_to_match));
+		}
+		if (specificity_score >= 0 && (best_specificity_score < 0 || specificity_score < best_specificity_score)) {
+			best_specificity_score = specificity_score;
+			best_description_index = static_cast<int>(descr_idx);
+		}
+	}
+	return best_description_index;
 }
 
 template <class T, class OP>
@@ -492,7 +531,7 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	Value parameter_types = OP::GetParameterTypes(function, function_idx);
 	int description_index = GetFunctionDescriptionIndex(entry.descriptions, parameter_types);
 	FunctionDescription function_description =
-	    (description_index >= 0) ? entry.descriptions[description_index] : FunctionDescription();
+	    (description_index >= 0) ? entry.descriptions[static_cast<idx_t>(description_index)] : FunctionDescription();
 
 	// database_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.schema.catalog.GetName()));
@@ -546,7 +585,7 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 
 	// examples, LogicalType::LIST(LogicalType::VARCHAR)
 	output.SetValue(col++, output_offset,
-	                Value::LIST(LogicalType::VARCHAR, ToVectorValue(function_description.examples)));
+	                Value::LIST(LogicalType::VARCHAR, ToValueVector(function_description.examples)));
 
 	// stability, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, OP::ResultType(function, function_idx));
@@ -580,7 +619,6 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(entry, data.offset_in_entry,
 			                                                                            output, count);
 			break;
-
 		case CatalogType::MACRO_ENTRY:
 			finished = ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(entry, data.offset_in_entry, output,
 			                                                                        count);

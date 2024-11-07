@@ -17,7 +17,7 @@ static void FillFunctionParameters(FunctionDescription &function_description, st
 			function_description.parameter_names.push_back(std::move(parameter_name_type[0]));
 			LogicalType type = DefaultTypeGenerator::GetDefaultType(parameter_name_type[1]);
 			if (type != LogicalType::INVALID) {
-				function_description.parameter_types.push_back(LogicalType::ANY);
+				function_description.parameter_types.push_back(type);
 			} else {
 				throw InternalException("Unsupported type in function variant for function '%s'!", function_name);
 			}
