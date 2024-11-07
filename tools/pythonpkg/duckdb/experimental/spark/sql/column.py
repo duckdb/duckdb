@@ -345,8 +345,8 @@ class Column:
 
     asc = _unary_op("asc", _asc_doc)
     desc = _unary_op("desc", _desc_doc)
-    nulls_first = _unary_op("null_first")
-    nulls_last = _unary_op("null_last")
+    nulls_first = _unary_op("nulls_first")
+    nulls_last = _unary_op("nulls_last")
 
     def asc_nulls_first(self) -> "Column":
         return self.asc().nulls_first()
