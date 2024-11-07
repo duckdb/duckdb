@@ -573,19 +573,21 @@ const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 		{ static_cast<uint32_t>(CSVState::QUOTED_NEW_LINE), "QUOTED_NEW_LINE" },
 		{ static_cast<uint32_t>(CSVState::EMPTY_SPACE), "EMPTY_SPACE" },
 		{ static_cast<uint32_t>(CSVState::COMMENT), "COMMENT" },
-		{ static_cast<uint32_t>(CSVState::STANDARD_NEWLINE), "STANDARD_NEWLINE" }
+		{ static_cast<uint32_t>(CSVState::STANDARD_NEWLINE), "STANDARD_NEWLINE" },
+		{ static_cast<uint32_t>(CSVState::UNQUOTED_ESCAPE), "UNQUOTED_ESCAPE" },
+		{ static_cast<uint32_t>(CSVState::ESCAPED_RETURN), "ESCAPED_RETURN" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value) {
-	return StringUtil::EnumToString(GetCSVStateValues(), 13, "CSVState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCSVStateValues(), 15, "CSVState", static_cast<uint32_t>(value));
 }
 
 template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value) {
-	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 13, "CSVState", value));
+	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 15, "CSVState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCTEMaterializeValues() {
