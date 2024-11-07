@@ -24,6 +24,7 @@ struct PragmaTableInfo {
 };
 
 struct PragmaTableSample {
+
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
