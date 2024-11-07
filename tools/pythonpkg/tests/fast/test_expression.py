@@ -397,6 +397,33 @@ class TestExpression(object):
         res = rel2.fetchall()
         assert res == [(25,)]
 
+    def test_between_expression(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select
+                5 as a,
+                2 as b,
+                3 as c
+        """
+        )
+        a = ColumnExpression('a')
+        b = ColumnExpression('b')
+        c = ColumnExpression('c')
+
+        # 5 BETWEEN 2 AND 3 -> false
+        assert rel.select(a.between(b, c)).fetchall() == [(False,)]
+
+        # 2 BETWEEN 5 AND 3 -> false
+        assert rel.select(b.between(a, c)).fetchall() == [(False,)]
+
+        # 3 BETWEEN 5 AND 2 -> false
+        assert rel.select(c.between(a, b)).fetchall() == [(False,)]
+
+        # 3 BETWEEN 2 AND 5 -> true
+        assert rel.select(c.between(b, a)).fetchall() == [(True,)]
+
     def test_equality_expression(self):
         con = duckdb.connect()
 

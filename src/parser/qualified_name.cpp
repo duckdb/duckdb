@@ -1,6 +1,11 @@
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 
 namespace duckdb {
+
+string QualifiedName::ToString() const {
+	return ParseInfo::QualifierToString(catalog, schema, name);
+}
 
 QualifiedName QualifiedName::Parse(const string &input) {
 	string catalog;

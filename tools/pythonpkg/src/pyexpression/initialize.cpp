@@ -391,6 +391,9 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 			CastExpression: self::type
 	)";
 	expression.def("cast", &DuckDBPyExpression::Cast, py::arg("type"), docs);
+
+	docs = "";
+	expression.def("between", &DuckDBPyExpression::Between, py::arg("lower"), py::arg("upper"), docs);
 }
 
 } // namespace duckdb
