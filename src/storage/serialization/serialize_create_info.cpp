@@ -103,7 +103,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) 
 	auto result = duckdb::unique_ptr<CreateIndexInfo>(new CreateIndexInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->index_name);
 	deserializer.ReadPropertyWithDefault<string>(201, "table", result->table);
-	deserializer.ReadDeletedProperty<DeprecatedIndexType>(202, "index_type");
+	deserializer.ReadDeletedProperty<DeprecatedIndexType>(202, "index_type", result->index_type);
 	deserializer.ReadProperty<IndexConstraintType>(203, "constraint_type", result->constraint_type);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "parsed_expressions", result->parsed_expressions);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "scan_types", result->scan_types);

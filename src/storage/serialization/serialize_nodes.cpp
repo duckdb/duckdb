@@ -275,15 +275,13 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	result.force_quote = std::move(force_quote);
 	result.rejects_table_name = std::move(rejects_table_name);
 	result.rejects_limit = rejects_limit;
-	result.rejects_recovery_columns = std::move(rejects_recovery_columns);
-	result.rejects_recovery_column_ids = std::move(rejects_recovery_column_ids);
-	result.dialect_options.state_machine_options.quote = std::move(dialect_options.state_machine_options.quote);
-	result.dialect_options.state_machine_options.escape = std::move(dialect_options.state_machine_options.escape);
-	result.dialect_options.header = std::move(dialect_options.header);
-	result.dialect_options.num_cols = dialect_options.num_cols;
-	result.dialect_options.state_machine_options.new_line = std::move(dialect_options.state_machine_options.new_line);
-	result.dialect_options.skip_rows = std::move(dialect_options.skip_rows);
-	result.dialect_options.date_format = std::move(dialect_options.date_format);
+	result.dialect_options.state_machine_options.quote = std::move(quote);
+	result.dialect_options.state_machine_options.escape = std::move(escape);
+	result.dialect_options.header = std::move(header);
+	result.dialect_options.num_cols = num_cols;
+	result.dialect_options.state_machine_options.new_line = std::move(new_line);
+	result.dialect_options.skip_rows = std::move(skip_rows);
+	result.dialect_options.date_format = std::move(date_format);
 	result.sniffer_user_mismatch_error = std::move(sniffer_user_mismatch_error);
 	result.parallel = parallel;
 	result.was_type_manually_set = std::move(was_type_manually_set);
@@ -292,10 +290,10 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	result.sql_type_list = std::move(sql_type_list);
 	result.sql_types_per_column = std::move(sql_types_per_column);
 	result.columns_set = columns_set;
-	result.dialect_options.state_machine_options.comment = std::move(dialect_options.state_machine_options.comment);
-	result.dialect_options.rows_until_header = dialect_options.rows_until_header;
+	result.dialect_options.state_machine_options.comment = std::move(comment);
+	result.dialect_options.rows_until_header = rows_until_header;
 	result.encoding = std::move(encoding);
-	result.dialect_options.state_machine_options.rfc_4180 = std::move(dialect_options.state_machine_options.rfc_4180);
+	result.dialect_options.state_machine_options.rfc_4180 = std::move(rfc_4180);
 	return result;
 }
 
