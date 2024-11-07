@@ -151,10 +151,10 @@ SWITCH_STATEMENT_FORMAT = (
 '''
 )
 
-DESERIALIZE_ELEMENT_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<{property_type}>({property_id}, "{property_key}"{property_default});\n'
-DESERIALIZE_ELEMENT_BASE_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n'
+DESERIALIZE_ELEMENT_FORMAT = '\tauto {property_key} = deserializer.ReadProperty<{property_type}>({property_id}, "{property_key}"{property_default});\n'
+DESERIALIZE_ELEMENT_BASE_FORMAT = '\tauto {property_key} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n'
 DESERIALIZE_ELEMENT_CLASS_FORMAT = '\tdeserializer.ReadProperty<{property_type}>({property_id}, "{property_key}", result{assignment}{property_name}{property_default});\n'
-DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n\tresult{assignment}{property_name} = unique_ptr_cast<{base_property}, {derived_property}>(std::move({property_name}));\n'
+DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT = '\tauto {property_key} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n\tresult{assignment}{property_name} = unique_ptr_cast<{base_property}, {derived_property}>(std::move({property_name}));\n'
 
 MOVE_LIST = [
     'string',

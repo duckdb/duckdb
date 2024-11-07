@@ -48,7 +48,7 @@ void JSONScanData::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
-	auto type = deserializer.ReadProperty<JSONScanType>(100, "json_type");
+	auto json_type = deserializer.ReadProperty<JSONScanType>(100, "json_type");
 	auto options = deserializer.ReadProperty<BufferedJSONReaderOptions>(101, "options");
 	auto reader_bind = deserializer.ReadProperty<MultiFileReaderBindData>(102, "reader_bind");
 	auto files = deserializer.ReadPropertyWithDefault<vector<string>>(103, "files");

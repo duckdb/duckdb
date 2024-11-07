@@ -17,7 +17,7 @@ void ParsedExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deserializer) {
-	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "class");
+	auto class = deserializer.ReadProperty<ExpressionClass>(100, "class");
 	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(102, "alias");
 	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
