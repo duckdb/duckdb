@@ -293,7 +293,7 @@ void LogicalComparisonJoin::Serialize(Serializer &serializer) const {
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &deserializer) {
 	auto join_type = deserializer.ReadProperty<JoinType>(200, "join_type");
-	auto result = duckdb::unique_ptr<LogicalComparisonJoin>(new LogicalComparisonJoin(join_type, deserializer.Get<LogicalOperatorType>()));
+	auto result = duckdb::unique_ptr<LogicalComparisonJoin>(new LogicalComparisonJoin(join_type, deserializer.Get<type>()));
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "mark_index", result->mark_index);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(202, "left_projection_map", result->left_projection_map);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(203, "right_projection_map", result->right_projection_map);
@@ -322,7 +322,7 @@ void LogicalCreate::Serialize(Serializer &serializer) const {
 
 unique_ptr<LogicalOperator> LogicalCreate::Deserialize(Deserializer &deserializer) {
 	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "info");
-	auto result = duckdb::unique_ptr<LogicalCreate>(new LogicalCreate(deserializer.Get<LogicalOperatorType>(), deserializer.Get<ClientContext &>(), std::move(info)));
+	auto result = duckdb::unique_ptr<LogicalCreate>(new LogicalCreate(deserializer.Get<type>(), deserializer.Get<ClientContext &>(), std::move(info)));
 	return std::move(result);
 }
 
@@ -678,7 +678,7 @@ unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(Deserializer &deser
 	auto column_count = deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count");
 	auto setop_all = deserializer.ReadPropertyWithExplicitDefault<bool>(202, "setop_all", true);
 	auto allow_out_of_order = deserializer.ReadPropertyWithExplicitDefault<bool>(203, "allow_out_of_order", true);
-	auto result = duckdb::unique_ptr<LogicalSetOperation>(new LogicalSetOperation(table_index, column_count, deserializer.Get<LogicalOperatorType>(), setop_all, allow_out_of_order));
+	auto result = duckdb::unique_ptr<LogicalSetOperation>(new LogicalSetOperation(table_index, column_count, deserializer.Get<type>(), setop_all, allow_out_of_order));
 	return std::move(result);
 }
 
@@ -689,7 +689,7 @@ void LogicalSimple::Serialize(Serializer &serializer) const {
 
 unique_ptr<LogicalOperator> LogicalSimple::Deserialize(Deserializer &deserializer) {
 	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
-	auto result = duckdb::unique_ptr<LogicalSimple>(new LogicalSimple(deserializer.Get<LogicalOperatorType>(), std::move(info)));
+	auto result = duckdb::unique_ptr<LogicalSimple>(new LogicalSimple(deserializer.Get<type>(), std::move(info)));
 	return std::move(result);
 }
 

@@ -157,7 +157,7 @@ void BoundComparisonExpression::Serialize(Serializer &serializer) const {
 unique_ptr<Expression> BoundComparisonExpression::Deserialize(Deserializer &deserializer) {
 	auto left = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "left");
 	auto right = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "right");
-	auto result = duckdb::unique_ptr<BoundComparisonExpression>(new BoundComparisonExpression(deserializer.Get<ExpressionType>(), std::move(left), std::move(right)));
+	auto result = duckdb::unique_ptr<BoundComparisonExpression>(new BoundComparisonExpression(deserializer.Get<type>(), std::move(left), std::move(right)));
 	return std::move(result);
 }
 
@@ -167,7 +167,7 @@ void BoundConjunctionExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<Expression> BoundConjunctionExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<BoundConjunctionExpression>(new BoundConjunctionExpression(deserializer.Get<ExpressionType>()));
+	auto result = duckdb::unique_ptr<BoundConjunctionExpression>(new BoundConjunctionExpression(deserializer.Get<type>()));
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(200, "children", result->children);
 	return std::move(result);
 }
@@ -207,7 +207,7 @@ unique_ptr<Expression> BoundLambdaExpression::Deserialize(Deserializer &deserial
 	auto lambda_expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "lambda_expr");
 	auto captures = deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(202, "captures");
 	auto parameter_count = deserializer.ReadPropertyWithDefault<idx_t>(203, "parameter_count");
-	auto result = duckdb::unique_ptr<BoundLambdaExpression>(new BoundLambdaExpression(deserializer.Get<ExpressionType>(), std::move(return_type), std::move(lambda_expr), parameter_count));
+	auto result = duckdb::unique_ptr<BoundLambdaExpression>(new BoundLambdaExpression(deserializer.Get<type>(), std::move(return_type), std::move(lambda_expr), parameter_count));
 	result->captures = std::move(captures);
 	return std::move(result);
 }
@@ -237,7 +237,7 @@ void BoundOperatorExpression::Serialize(Serializer &serializer) const {
 
 unique_ptr<Expression> BoundOperatorExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
-	auto result = duckdb::unique_ptr<BoundOperatorExpression>(new BoundOperatorExpression(deserializer.Get<ExpressionType>(), std::move(return_type)));
+	auto result = duckdb::unique_ptr<BoundOperatorExpression>(new BoundOperatorExpression(deserializer.Get<type>(), std::move(return_type)));
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "children", result->children);
 	return std::move(result);
 }

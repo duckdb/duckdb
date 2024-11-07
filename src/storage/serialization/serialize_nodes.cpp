@@ -255,7 +255,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	auto encoding = deserializer.ReadPropertyWithDefault<string>(139, "encoding");
 	auto rfc_4180 = deserializer.ReadProperty<CSVOption<bool>>(140, "rfc_4180");
 	auto multi_byte_delimiter = deserializer.ReadProperty<CSVOption<string>>(141, "multi_byte_delimiter");
-	CSVReaderOptions result(std::move(dialect_options.state_machine_options.delimiter), std::move(multi_byte_delimiter));
+	CSVReaderOptions result(std::move(delimiter), std::move(multi_byte_delimiter));
 	result.ignore_errors = ignore_errors;
 	result.buffer_sample_size = buffer_sample_size;
 	result.null_str = std::move(null_str);

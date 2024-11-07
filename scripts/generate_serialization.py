@@ -609,7 +609,7 @@ def generate_class_code(class_entry):
                         constructor_parameters += ", "
                     type_name = replace_pointer(entry.type)
                     if requires_move(type_name) and not is_reference:
-                        constructor_parameters += 'std::move(' + entry.deserialize_property + ')'
+                        constructor_parameters += 'std::move(' + entry.name + ')'
                     else:
                         constructor_parameters += entry.deserialize_property
                     found = True
@@ -627,7 +627,7 @@ def generate_class_code(class_entry):
                     if entry.name == constructor_entry:
                         if len(constructor_parameters) > 0:
                             constructor_parameters += ", "
-                        constructor_parameters += GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type)
+                        constructor_parameters += GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.name)
                         found = True
                         break
             if not found:
