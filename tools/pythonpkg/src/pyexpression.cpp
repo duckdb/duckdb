@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
@@ -52,6 +53,14 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Cast(const DuckDBPyType &type
 	auto copied_expression = GetExpression().Copy();
 	auto case_expr = make_uniq<duckdb::CastExpression>(type.Type(), std::move(copied_expression));
 	return make_shared_ptr<DuckDBPyExpression>(std::move(case_expr));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Between(const DuckDBPyExpression &lower,
+                                                           const DuckDBPyExpression &upper) {
+	auto copied_expression = GetExpression().Copy();
+	auto between_expr = make_uniq<BetweenExpression>(std::move(copied_expression), lower.GetExpression().Copy(),
+	                                                 upper.GetExpression().Copy());
+	return make_shared_ptr<DuckDBPyExpression>(std::move(between_expr));
 }
 
 // Case Expression modifiers
