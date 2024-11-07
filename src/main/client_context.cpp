@@ -1133,7 +1133,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 }
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection,
-                           optional_ptr<const unordered_set<string>> default_columns) {
+                           optional_ptr<const case_insensitive_set_t> default_columns) {
 
 	RunFunctionInTransaction([&]() {
 		auto &table_entry =

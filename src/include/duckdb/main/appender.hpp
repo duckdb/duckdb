@@ -129,7 +129,7 @@ class Appender : public BaseAppender {
 	//! The default expressions.
 	unordered_map<column_t, Value> default_values;
 	//! The column names of default columns.
-	unordered_set<string> default_columns;
+	case_insensitive_set_t default_columns;
 
 public:
 	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
