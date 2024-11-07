@@ -1136,7 +1136,7 @@ single_pivot_value:
 	;
 
 pivot_header:
-	| d_expr	                 			{ $$ = list_make1($1); }
+	d_expr	                 			{ $$ = list_make1($1); }
 	| indirection_expr						{ $$ = list_make1($1); }
 	| '(' c_expr_list_opt_comma ')' 		{ $$ = $2; }
 

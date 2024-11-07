@@ -9454,7 +9454,7 @@ sqlite3expert *sqlite3_expert_new(sqlite3 *db, char **pzErrmsg){
     sqlite3_set_authorizer(pNew->dbv, idxAuthCallback, (void*)pNew);
   }
 
-  /* If an error has occurred, free the new object and reutrn NULL. Otherwise,
+  /* If an error has occurred, free the new object and return NULL. Otherwise,
   ** return the new sqlite3expert handle.  */
   if( rc!=SQLITE_OK ){
     sqlite3_expert_destroy(pNew);
@@ -14156,7 +14156,7 @@ static void open_db(ShellState *p, int openFlags){
 }
 
 /*
-** Attempt to close the databaes connection.  Report errors.
+** Attempt to close the database connection.  Report errors.
 */
 void close_db(sqlite3 *db){
   int rc = sqlite3_close(db);

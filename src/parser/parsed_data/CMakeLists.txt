@@ -27,6 +27,7 @@ add_library_unity(
   detach_info.cpp
   drop_info.cpp
   drop_property_graph_info.cpp
+  exported_table_data.cpp
   extra_drop_info.cpp
   load_info.cpp
   sample_options.cpp

@@ -8,6 +8,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
@@ -42,6 +44,21 @@ struct BitstringAggBindData : public FunctionData {
 			return true;
 		}
 		return false;
+	}
+
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                      const AggregateFunction &) {
+		auto &bind_data = bind_data_p->Cast<BitstringAggBindData>();
+		serializer.WriteProperty(100, "min", bind_data.min);
+		serializer.WriteProperty(101, "max", bind_data.max);
+	}
+
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &) {
+		Value min;
+		Value max;
+		deserializer.ReadProperty(100, "min", min);
+		deserializer.ReadProperty(101, "max", max);
+		return make_uniq<BitstringAggBindData>(min, max);
 	}
 };
 
@@ -247,7 +264,9 @@ static void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalType
 	auto function =
 	    AggregateFunction::UnaryAggregateDestructor<BitAggState<TYPE>, TYPE, string_t, BitStringAggOperation>(
 	        type, LogicalType::BIT);
-	function.bind = BindBitstringAgg;              // create new a 'BitstringAggBindData'
+	function.bind = BindBitstringAgg; // create new a 'BitstringAggBindData'
+	function.serialize = BitstringAggBindData::Serialize;
+	function.deserialize = BitstringAggBindData::Deserialize;
 	function.statistics = BitstringPropagateStats; // stores min and max from column stats in BitstringAggBindData
 	bitstring_agg.AddFunction(function); // uses the BitstringAggBindData to access statistics for creating bitstring
 	function.arguments = {type, type, type};
