@@ -205,7 +205,7 @@ struct RLECompressState : public CompressionState {
 		handle.Destroy();
 
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(std::move(current_segment), total_segment_size);
+		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
 	void Finalize() {

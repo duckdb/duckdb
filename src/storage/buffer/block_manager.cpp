@@ -30,11 +30,15 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
 	return result;
 }
 
-shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
-	// pin the old block to ensure we have it loaded in memory
-	auto old_handle = buffer_manager.Pin(old_block);
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block,
+                                                          BufferHandle old_handle) {
 	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);
 	D_ASSERT(old_block->buffer);
+	if (old_block->Readers() > 1) {
+		throw InternalException("BlockManager::ConvertToPersistent - cannot be called for block %d as old_block has "
+		                        "multiple readers active",
+		                        block_id);
+	}
 
 	// Temp buffers can be larger than the storage block size.
 	// But persistent buffers cannot.
@@ -66,8 +70,13 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	if (purge_queue) {
 		buffer_manager.GetBufferPool().PurgeQueue(*new_block);
 	}
-
 	return new_block;
+}
+
+shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
+	// pin the old block to ensure we have it loaded in memory
+	auto handle = buffer_manager.Pin(old_block);
+	return ConvertToPersistent(block_id, std::move(old_block), std::move(handle));
 }
 
 void BlockManager::UnregisterBlock(block_id_t id) {

@@ -80,7 +80,10 @@ void UncompressedCompressState::FlushSegment(idx_t segment_size) {
 		segment_state.overflow_writer->Flush();
 		segment_state.overflow_writer.reset();
 	}
-	state.FlushSegment(std::move(current_segment), segment_size);
+	append_state.child_appends.clear();
+	append_state.append_state.reset();
+	append_state.lock.reset();
+	state.FlushSegmentInternal(std::move(current_segment), segment_size);
 }
 
 void UncompressedCompressState::Finalize(idx_t segment_size) {
