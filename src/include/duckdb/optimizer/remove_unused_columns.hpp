@@ -59,5 +59,8 @@ private:
 	void ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
 
 	bool HandleStructExtract(Expression &expr);
+
+	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	                                  ColumnIndex &index);
 };
 } // namespace duckdb

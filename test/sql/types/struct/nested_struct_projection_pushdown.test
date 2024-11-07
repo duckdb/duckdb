@@ -1,0 +1,77 @@
+# name: test/sql/types/struct/nested_struct_projection_pushdown.test
+# description: Test nested struct projection pushdown
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test_structs(id INT, s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool)));
+
+statement ok
+INSERT INTO test_structs
+VALUES (1, {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}),
+       (2, NULL),
+       (3, {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}),
+       (4, {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}});
+
+query I
+SELECT s.nested_struct FROM test_structs
+----
+{'a': 42, 'b': true}
+NULL
+{'a': 84, 'b': NULL}
+{'a': NULL, 'b': false}
+
+query I
+SELECT s.nested_struct.a FROM test_structs
+----
+42
+NULL
+84
+NULL
+
+query II
+SELECT s.nested_struct.a, s.name.v FROM test_structs
+----
+42	Row 1
+NULL	NULL
+84	Row 3
+NULL	NULL
+
+query III
+SELECT s.nested_struct.a, s.nested_struct.b, s.nested_struct FROM test_structs
+----
+42	true	{'a': 42, 'b': true}
+NULL	NULL	NULL
+84	NULL	{'a': 84, 'b': NULL}
+NULL	false	{'a': NULL, 'b': false}
+
+query II
+SELECT s.nested_struct.a, s.nested_struct FROM test_structs
+----
+42	{'a': 42, 'b': true}
+NULL	NULL
+84	{'a': 84, 'b': NULL}
+NULL	{'a': NULL, 'b': false}
+
+query II
+SELECT s.nested_struct, s.nested_struct.a FROM test_structs
+----
+{'a': 42, 'b': true}	42
+NULL	NULL
+{'a': 84, 'b': NULL}	84
+{'a': NULL, 'b': false}	NULL
+
+query II
+SELECT s.name.id, s.nested_struct.b,  FROM test_structs
+----
+1	true
+NULL	NULL
+3	NULL
+NULL	false
+
+query I
+SELECT s.name.v FROM test_structs WHERE s.nested_struct.b
+----
+Row 1

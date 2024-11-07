@@ -353,7 +353,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 }
 
-bool RemoveUnusedColumns::HandleStructExtract(Expression &expr) {
+bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
+                                                       ColumnIndex &index) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
@@ -361,20 +362,65 @@ bool RemoveUnusedColumns::HandleStructExtract(Expression &expr) {
 	if (function.function.name != "struct_extract" && function.function.name != "array_extract") {
 		return false;
 	}
-	// struct extract, check if left child is a bound column ref
-	// FIXME: handle recursive struct extract calls
-	if (function.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-		return false;
-	}
-	auto &colref = function.children[0]->Cast<BoundColumnRefExpression>();
-	if (colref.return_type.id() != LogicalTypeId::STRUCT) {
-		return false;
-	}
 	auto &bind_data = function.bind_info->Cast<StructExtractBindData>();
-
-	ColumnIndex index(bind_data.index);
-	AddBinding(colref, std::move(index));
+	// struct extract, check if left child is a bound column ref
+	index = ColumnIndex(bind_data.index);
+	if (function.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		// column reference - check if it is a struct
+		auto &ref = function.children[0]->Cast<BoundColumnRefExpression>();
+		if (ref.return_type.id() != LogicalTypeId::STRUCT) {
+			return false;
+		}
+		colref = &ref;
+		return true;
+	}
+	// not a column reference - try to handle this recursively
+	ColumnIndex child_index;
+	if (!HandleStructExtractRecursive(*function.children[0], colref, child_index)) {
+		return false;
+	}
+	// recursive struct extract - add the child index
+	child_index.AddChildIndex(std::move(index));
+	index = std::move(child_index);
 	return true;
+}
+
+bool RemoveUnusedColumns::HandleStructExtract(Expression &expr) {
+	optional_ptr<BoundColumnRefExpression> colref;
+	ColumnIndex index;
+	if (!HandleStructExtractRecursive(expr, colref, index)) {
+		return false;
+	}
+	AddBinding(*colref, std::move(index));
+	return true;
+}
+
+void MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &new_child_column) {
+	if (current_child_columns.empty()) {
+		// there's already a reference to the full column - we can't extract only a subfield
+		// skip struct projection pushdown
+		return;
+	}
+	// if we are already extract sub-fields, add it (if it is not there yet)
+	for (auto &binding : current_child_columns) {
+		if (binding.GetPrimaryIndex() != new_child_column.GetPrimaryIndex()) {
+			continue;
+		}
+		// found a match: sub-field is already projected
+		// check if we have child columns
+		auto &nested_child_columns = binding.GetChildIndexesMutable();
+		if (!new_child_column.HasChildren()) {
+			// new child is a reference to a full column - clear any existing bindings (if any)
+			nested_child_columns.clear();
+		} else {
+			// new child has a sub-reference - merge recursively
+			D_ASSERT(new_child_column.ChildIndexCount() == 1);
+			MergeChildColumns(nested_child_columns, new_child_column.GetChildIndex(0));
+		}
+		return;
+	}
+	// this child column is not projected yet - add it in
+	current_child_columns.push_back(std::move(new_child_column));
 }
 
 void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column) {
@@ -389,20 +435,8 @@ void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col, ColumnIndex 
 		// column reference already exists - check add the binding
 		auto &column = entry->second;
 		column.bindings.push_back(col);
-		if (column.child_columns.empty()) {
-			// there's already a reference to the full column - we can't extract only a subfield
-			// skip struct projection pushdown
-			return;
-		}
-		// if we are already extract sub-fields, add it (if it is not there yet
-		for (auto &binding : column.child_columns) {
-			if (binding.GetPrimaryIndex() == child_column.GetPrimaryIndex()) {
-				// sub-field is already projected
-				// FIXME: this should recurse to handle nested struct fields
-				return;
-			}
-		}
-		column.child_columns.push_back(std::move(child_column));
+
+		MergeChildColumns(column.child_columns, child_column);
 	}
 }
 

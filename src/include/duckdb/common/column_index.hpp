@@ -52,6 +52,9 @@ struct ColumnIndex {
 	const vector<ColumnIndex> &GetChildIndexes() const {
 		return child_indexes;
 	}
+	vector<ColumnIndex> &GetChildIndexesMutable() {
+		return child_indexes;
+	}
 	void AddChildIndex(ColumnIndex new_index) {
 		this->child_indexes.push_back(std::move(new_index));
 	}
