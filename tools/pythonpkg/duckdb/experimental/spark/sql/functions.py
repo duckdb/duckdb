@@ -158,6 +158,319 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     )
 
 
+
+
+def asc(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the ascending order of the given column name.
+
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the ascending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    Sort by the column 'id' in the descending order.
+
+    >>> df = spark.range(5)
+    >>> df = df.sort(desc("id"))
+    >>> df.show()
+    +---+
+    | id|
+    +---+
+    |  4|
+    |  3|
+    |  2|
+    |  1|
+    |  0|
+    +---+
+
+    Sort by the column 'id' in the ascending order.
+
+    >>> df.orderBy(asc("id")).show()
+    +---+
+    | id|
+    +---+
+    |  0|
+    |  1|
+    |  2|
+    |  3|
+    |  4|
+    +---+
+    """
+    return Column(_to_column_expr(col)).asc()
+
+
+def asc_nulls_first(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the ascending order of the given
+    column name, and null values return before non-null values.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the ascending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    >>> df1 = spark.createDataFrame([(1, "Bob"),
+    ...                              (0, None),
+    ...                              (2, "Alice")], ["age", "name"])
+    >>> df1.sort(asc_nulls_first(df1.name)).show()
+    +---+-----+
+    |age| name|
+    +---+-----+
+    |  0| NULL|
+    |  2|Alice|
+    |  1|  Bob|
+    +---+-----+
+
+    """
+    return asc(col).nulls_first()
+
+
+def asc_nulls_last(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the ascending order of the given
+    column name, and null values appear after non-null values.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the ascending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    >>> df1 = spark.createDataFrame([(0, None),
+    ...                              (1, "Bob"),
+    ...                              (2, "Alice")], ["age", "name"])
+    >>> df1.sort(asc_nulls_last(df1.name)).show()
+    +---+-----+
+    |age| name|
+    +---+-----+
+    |  2|Alice|
+    |  1|  Bob|
+    |  0| NULL|
+    +---+-----+
+
+    """
+    return asc(col).nulls_last()
+
+
+def desc(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the descending order of the given column name.
+
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the descending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    Sort by the column 'id' in the descending order.
+
+    >>> spark.range(5).orderBy(desc("id")).show()
+    +---+
+    | id|
+    +---+
+    |  4|
+    |  3|
+    |  2|
+    |  1|
+    |  0|
+    +---+
+    """
+    return Column(_to_column_expr(col)).desc()
+
+
+def desc_nulls_first(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the descending order of the given
+    column name, and null values appear before non-null values.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the descending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    >>> df1 = spark.createDataFrame([(0, None),
+    ...                              (1, "Bob"),
+    ...                              (2, "Alice")], ["age", "name"])
+    >>> df1.sort(desc_nulls_first(df1.name)).show()
+    +---+-----+
+    |age| name|
+    +---+-----+
+    |  0| NULL|
+    |  1|  Bob|
+    |  2|Alice|
+    +---+-----+
+
+    """
+    return desc(col).nulls_first()
+
+
+def desc_nulls_last(col: "ColumnOrName") -> Column:
+    """
+    Returns a sort expression based on the descending order of the given
+    column name, and null values appear after non-null values.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to sort by in the descending order.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column specifying the order.
+
+    Examples
+    --------
+    >>> df1 = spark.createDataFrame([(0, None),
+    ...                              (1, "Bob"),
+    ...                              (2, "Alice")], ["age", "name"])
+    >>> df1.sort(desc_nulls_last(df1.name)).show()
+    +---+-----+
+    |age| name|
+    +---+-----+
+    |  1|  Bob|
+    |  2|Alice|
+    |  0| NULL|
+    +---+-----+
+
+    """
+    return desc(col).nulls_last()
+
+
+def ascii(col: "ColumnOrName") -> Column:
+    """
+    Computes the numeric value of the first character of the string column.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        numeric value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(["Spark", "PySpark", "Pandas API"], "STRING")
+    >>> df.select(ascii("value")).show()
+    +------------+
+    |ascii(value)|
+    +------------+
+    |          83|
+    |          80|
+    |          80|
+    +------------+
+    """
+    return _invoke_function_over_columns("ascii", col)
+
+
+def asin(col: "ColumnOrName") -> Column:
+    """
+    Computes inverse sine of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        inverse sine of `col`, as if computed by `java.lang.Math.asin()`
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(0,), (2,)])
+    >>> df.select(asin(df.schema.fieldNames()[0])).show()
+    +--------+
+    |ASIN(_1)|
+    +--------+
+    |     0.0|
+    |     NaN|
+    +--------+
+    """
+    col = _to_column_expr(col)
+    # FIXME: ConstantExpression(float("nan")) gives NULL and not NaN
+    return Column(CaseExpression((col < -1.0) | (col > 1.0), ConstantExpression(float("nan"))).otherwise(FunctionExpression("asin", col)))
+
+
+
 def array_agg(col: "ColumnOrName") -> Column:
     """
     Aggregate function: returns a list of objects with duplicates.
@@ -1102,6 +1415,330 @@ def sqrt(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("sqrt", col)
 
 
+def cbrt(col: "ColumnOrName") -> Column:
+    """
+    Computes the cube-root of the given value.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(cbrt(lit(27))).show()
+    +--------+
+    |CBRT(27)|
+    +--------+
+    |     3.0|
+    +--------+
+    """
+    return _invoke_function_over_columns("cbrt", col)
+
+
+def char(col: "ColumnOrName") -> Column:
+    """
+    Returns the ASCII character having the binary equivalent to `col`. If col is larger than 256 the
+    result is equivalent to char(col % 256)
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        Input column or strings.
+
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.range(1).select(sf.char(sf.lit(65))).show()
+    +--------+
+    |char(65)|
+    +--------+
+    |       A|
+    +--------+
+    """
+    col = _to_column_expr(col)
+    return Column(FunctionExpression("chr", CaseExpression(col > 256, col % 256).otherwise(col)))
+
+
+def corr(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """Returns a new :class:`~pyspark.sql.Column` for the Pearson Correlation Coefficient for
+    ``col1`` and ``col2``.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+        first column to calculate correlation.
+    col1 : :class:`~pyspark.sql.Column` or str
+        second column to calculate correlation.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        Pearson Correlation Coefficient of these two column values.
+
+    Examples
+    --------
+    >>> a = range(20)
+    >>> b = [2 * x for x in range(20)]
+    >>> df = spark.createDataFrame(zip(a, b), ["a", "b"])
+    >>> df.agg(corr("a", "b").alias('c')).collect()
+    [Row(c=1.0)]
+    """
+    return _invoke_function_over_columns("corr", col1, col2)
+
+
+def cot(col: "ColumnOrName") -> Column:
+    """
+    Computes cotangent of the input column.
+
+    .. versionadded:: 3.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        angle in radians.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        cotangent of the angle.
+
+    Examples
+    --------
+    >>> import math
+    >>> df = spark.range(1)
+    >>> df.select(cot(lit(math.radians(45)))).first()
+    Row(COT(0.78539...)=1.00000...)
+    """
+    return _invoke_function_over_columns("cot", col)
+
+
+def e() -> Column:
+    """Returns Euler's number.
+
+    .. versionadded:: 3.5.0
+
+    Examples
+    --------
+    >>> spark.range(1).select(e()).show()
+    +-----------------+
+    |              E()|
+    +-----------------+
+    |2.718281828459045|
+    +-----------------+
+    """
+    return lit(2.718281828459045)
+
+
+def encode(col: "ColumnOrName", charset: str) -> Column:
+    """
+    Computes the first argument into a binary from a string using the provided character set
+    (one of 'US-ASCII', 'ISO-8859-1', 'UTF-8', 'UTF-16BE', 'UTF-16LE', 'UTF-16').
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    charset : str
+        charset to use to encode.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('abcd',)], ['c'])
+    >>> df.select(encode("c", "UTF-8")).show()
+    +----------------+
+    |encode(c, UTF-8)|
+    +----------------+
+    |   [61 62 63 64]|
+    +----------------+
+    """
+    if charset != "UTF-8":
+        raise ContributionsAcceptedError("Only UTF-8 charset is supported right now")
+    return _invoke_function("encode", _to_column_expr(col))
+
+
+def find_in_set(str: "ColumnOrName", str_array: "ColumnOrName") -> Column:
+    """
+    Returns the index (1-based) of the given string (`str`) in the comma-delimited
+    list (`strArray`). Returns 0, if the string was not found or if the given string (`str`)
+    contains a comma.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        The given string to be found.
+    str_array : :class:`~pyspark.sql.Column` or str
+        The comma-delimited list.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("ab", "abc,b,ab,c,def")], ['a', 'b'])
+    >>> df.select(find_in_set(df.a, df.b).alias('r')).collect()
+    [Row(r=3)]
+    """
+    str_array = _to_column_expr(str_array)
+    str = _to_column_expr(str)
+    return Column(
+        CaseExpression(
+            FunctionExpression("contains", str, ConstantExpression(",")), 0
+        ).otherwise(
+            CoalesceOperator(
+                FunctionExpression(
+                    "list_position",
+                    FunctionExpression("string_split", str_array, ConstantExpression(",")),
+                    str
+                ),
+                # If the element cannot be found, list_position returns null but we want to return 0
+                ConstantExpression(0)
+            )
+        )
+    )
+
+
+def first(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
+    """Aggregate function: returns the first value in a group.
+
+    The function by default returns the first values it sees. It will return the first non-null
+    value it sees when ignoreNulls is set to true. If all values are null, then null is returned.
+
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Notes
+    -----
+    The function is non-deterministic because its results depends on the order of the
+    rows which may be non-deterministic after a shuffle.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column to fetch first value for.
+    ignorenulls : :class:`~pyspark.sql.Column` or str
+        if first value is null then look for first non-null value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        first value of the group.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
+    >>> df = df.orderBy(df.age)
+    >>> df.groupby("name").agg(first("age")).orderBy("name").show()
+    +-----+----------+
+    | name|first(age)|
+    +-----+----------+
+    |Alice|      NULL|
+    |  Bob|         5|
+    +-----+----------+
+
+    Now, to ignore any nulls we needs to set ``ignorenulls`` to `True`
+
+    >>> df.groupby("name").agg(first("age", ignorenulls=True)).orderBy("name").show()
+    +-----+----------+
+    | name|first(age)|
+    +-----+----------+
+    |Alice|         2|
+    |  Bob|         5|
+    +-----+----------+
+    """
+    if ignorenulls:
+        raise ContributionsAcceptedError()
+    return _invoke_function_over_columns("first", col)
+
+
+def last(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
+    """Aggregate function: returns the last value in a group.
+
+    The function by default returns the last values it sees. It will return the last non-null
+    value it sees when ignoreNulls is set to true. If all values are null, then null is returned.
+
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Notes
+    -----
+    The function is non-deterministic because its results depends on the order of the
+    rows which may be non-deterministic after a shuffle.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column to fetch last value for.
+    ignorenulls : :class:`~pyspark.sql.Column` or str
+        if last value is null then look for non-null value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        last value of the group.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
+    >>> df = df.orderBy(df.age.desc())
+    >>> df.groupby("name").agg(last("age")).orderBy("name").show()
+    +-----+---------+
+    | name|last(age)|
+    +-----+---------+
+    |Alice|     NULL|
+    |  Bob|        5|
+    +-----+---------+
+
+    Now, to ignore any nulls we needs to set ``ignorenulls`` to `True`
+
+    >>> df.groupby("name").agg(last("age", ignorenulls=True)).orderBy("name").show()
+    +-----+---------+
+    | name|last(age)|
+    +-----+---------+
+    |Alice|        2|
+    |  Bob|        5|
+    +-----+---------+
+    """
+    if ignorenulls:
+        raise ContributionsAcceptedError()
+    return _invoke_function_over_columns("last", col)
+
+
+
 def greatest(*cols: "ColumnOrName") -> Column:
     """
     Returns the greatest value of the list of column names, skipping null values.
@@ -1269,6 +1906,35 @@ def ltrim(col: "ColumnOrName") -> Column:
     +-------+------+
     """
     return _invoke_function_over_columns("ltrim", col)
+
+
+def btrim(str: "ColumnOrName", trim: Optional["ColumnOrName"] = None) -> Column:
+    """
+    Remove the leading and trailing `trim` characters from `str`.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        Input column or strings.
+    trim : :class:`~pyspark.sql.Column` or str
+        The trim string characters to trim, the default value is a single space
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("SSparkSQLS", "SL", )], ['a', 'b'])
+    >>> df.select(btrim(df.a, df.b).alias('r')).collect()
+    [Row(r='parkSQ')]
+
+    >>> df = spark.createDataFrame([("    SparkSQL   ",)], ['a'])
+    >>> df.select(btrim(df.a).alias('r')).collect()
+    [Row(r='SparkSQL')]
+    """
+    if trim is not None:
+        return _invoke_function_over_columns("trim", str, trim)
+    else:
+        return _invoke_function_over_columns("trim", str)
 
 
 def endswith(str: "ColumnOrName", suffix: "ColumnOrName") -> Column:

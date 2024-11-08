@@ -12,10 +12,9 @@ statement error
 CREATE TABLE collate_test(s INTEGER COLLATE blabla)
 ----
 
-# cannot combine these collations
-statement error
+# we can combine multiple of the same collation
+statement ok
 CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)
-----
 
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 1)
@@ -28,4 +27,3 @@ CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')
 statement error
 PRAGMA default_collation='blabla'
 ----
-

@@ -185,7 +185,7 @@ void MetadataManager::Flush() {
 		D_ASSERT(kv.first == block.block_id);
 		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
 			// temporary block - convert to persistent
-			block.block = block_manager.ConvertToPersistent(kv.first, std::move(block.block));
+			block.block = block_manager.ConvertToPersistent(kv.first, std::move(block.block), std::move(handle));
 		} else {
 			// already a persistent block - only need to write it
 			D_ASSERT(block.block->BlockId() == block.block_id);

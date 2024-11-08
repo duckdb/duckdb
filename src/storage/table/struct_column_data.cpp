@@ -127,7 +127,12 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 }
 
 void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
-	vector.Flatten(count);
+	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+		Vector append_vector(vector);
+		append_vector.Flatten(count);
+		Append(stats, state, append_vector, count);
+		return;
+	}
 
 	// append the null values
 	validity.Append(stats, state.child_appends[0], vector, count);
