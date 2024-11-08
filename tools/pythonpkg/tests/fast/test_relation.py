@@ -247,6 +247,10 @@ class TestRelation(object):
         with pytest.raises(duckdb.InvalidInputException, match='Expected objects of type tuple'):
             rel = duckdb_cursor.values((const(1), const(2), const(3)), const(4))
 
+        # Using Expressions that can't be resolved:
+        with pytest.raises(duckdb.BinderException, match='Referenced column "a" not found in FROM clause!'):
+            duckdb_cursor.values(duckdb.ColumnExpression('a'))
+
     def test_insert_into_operator(self):
         conn = duckdb.connect()
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
