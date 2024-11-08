@@ -17,6 +17,10 @@ void InitializeStaticMethods(py::module_ &m) {
 	docs = "Create a column reference from the provided column name";
 	m.def("ColumnExpression", &DuckDBPyExpression::ColumnExpression, py::arg("name"), docs);
 
+	// Default Expression
+	docs = "";
+	m.def("DefaultExpression", &DuckDBPyExpression::DefaultExpression, docs);
+
 	// Case Expression
 	docs = "";
 	m.def("CaseExpression", &DuckDBPyExpression::CaseExpression, py::arg("condition"), py::arg("value"), docs);

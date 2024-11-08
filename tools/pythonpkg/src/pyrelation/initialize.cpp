@@ -271,6 +271,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Only retrieve the first n rows from this relation object, starting at offset", py::arg("n"),
 	         py::arg("offset") = 0)
 	    .def("insert", &DuckDBPyRelation::Insert, "Inserts the given values into the relation", py::arg("values"))
+	    .def("update", &DuckDBPyRelation::Update, "Update the given relation with the provided expressions",
+	         py::arg("set"), py::kw_only(), py::arg("condition") = py::none())
 
 	    // This should be deprecated in favor of a replacement scan
 	    .def("query", &DuckDBPyRelation::Query,

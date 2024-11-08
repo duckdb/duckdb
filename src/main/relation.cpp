@@ -352,6 +352,11 @@ void Relation::Update(const string &update, const string &condition) {
 	throw InvalidInputException("UPDATE can only be used on base tables!");
 }
 
+void Relation::Update(vector<string> column_names, vector<unique_ptr<ParsedExpression>> &&update,
+                      unique_ptr<ParsedExpression> condition) {
+	throw InvalidInputException("UPDATE can only be used on base tables!");
+}
+
 void Relation::Delete(const string &condition) {
 	throw InvalidInputException("DELETE can only be used on base tables!");
 }
