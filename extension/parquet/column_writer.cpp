@@ -1252,12 +1252,12 @@ public:
 	}
 
 	bool HasDictionary(BasicColumnWriterState &state_p) override {
-		auto &state = state_p.Cast<StandardColumnWriterState<TGT>>();
+		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		return state.encoding == Encoding::RLE_DICTIONARY;
 	}
 
 	idx_t DictionarySize(BasicColumnWriterState &state_p) override {
-		auto &state = state_p.Cast<StandardColumnWriterState<TGT>>();
+		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		return state.dictionary.size();
 	}
 
