@@ -14,10 +14,10 @@ index 007d386..8754619 100644
  		state.current_idx++;
  	}
 diff --git a/spatial/src/spatial/core/index/rtree/rtree_index_plan_scan.cpp b/spatial/src/spatial/core/index/rtree/rtree_index_plan_scan.cpp
-index c453956..9092f71 100644
+index b420233..f904fdd 100644
 --- a/spatial/src/spatial/core/index/rtree/rtree_index_plan_scan.cpp
 +++ b/spatial/src/spatial/core/index/rtree/rtree_index_plan_scan.cpp
-@@ -42,7 +42,7 @@ public:
+@@ -46,7 +46,7 @@ public:
  			column_t referenced_column = column_ids[bound_colref.binding.column_index];
  			// search for the referenced column in the set of column_ids
  			for (idx_t i = 0; i < get_column_ids.size(); i++) {
@@ -26,8 +26,17 @@ index c453956..9092f71 100644
  					bound_colref.binding.column_index = i;
  					return;
  				}
+@@ -213,7 +213,7 @@ public:
+ 			auto &type = get.returned_types[column_id];
+ 			bool found = false;
+ 			for (idx_t i = 0; i < column_ids.size(); i++) {
+-				if (column_ids[i] == column_id) {
++				if (column_ids[i].GetPrimaryIndex() == column_id) {
+ 					column_id = i;
+ 					found = true;
+ 					break;
 diff --git a/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp b/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp
-index 9168790..33fe422 100644
+index 01f2966..0fabe44 100644
 --- a/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp
 +++ b/spatial/src/spatial/core/index/rtree/rtree_index_scan.cpp
 @@ -31,7 +31,7 @@ BindInfo RTreeIndexScanBindInfo(const optional_ptr<FunctionData> bind_data_p) {
@@ -48,7 +57,7 @@ index 9168790..33fe422 100644
  	}
  
  	// Initialize the storage scan state
-@@ -208,7 +208,6 @@ TableFunction RTreeIndexScanFunction::GetFunction() {
+@@ -205,7 +205,6 @@ TableFunction RTreeIndexScanFunction::GetFunction() {
  	func.pushdown_complex_filter = nullptr;
  	func.to_string = RTreeIndexScanToString;
  	func.table_scan_progress = nullptr;
@@ -87,10 +96,10 @@ index 465cb87..5aa49dd 100644
  
  	ExtensionUtil::RegisterFunction(db, read);
 diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
-index b730baa..8d08898 100644
+index 9bd92e8..600fad8 100644
 --- a/spatial/src/spatial/gdal/functions/st_read.cpp
 +++ b/spatial/src/spatial/gdal/functions/st_read.cpp
-@@ -676,7 +676,7 @@ void GdalTableFunction::Register(DatabaseInstance &db) {
+@@ -675,7 +675,7 @@ void GdalTableFunction::Register(DatabaseInstance &db) {
  	                   GdalTableFunction::InitGlobal, GdalTableFunction::InitLocal);
  
  	scan.cardinality = GdalTableFunction::Cardinality;
