@@ -58,8 +58,7 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		    cast_data.child_cast_info[i].function(source_child_vector, result_child_vector, count, child_parameters);
 		(void)converted;
 		D_ASSERT(converted);
-		// we flatten the child because we use FlatVector::SetNull below and we may have gotten something non-flat from
-		// cast
+		// we flatten the child because we use FlatVector::SetNull below and we may get non-flat from source/cast
 		result_child_vector.Flatten(count);
 	}
 
