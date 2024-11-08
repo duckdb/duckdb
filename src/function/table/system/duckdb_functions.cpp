@@ -464,21 +464,28 @@ static vector<Value> ToValueVector(vector<string> &string_vector) {
 static vector<LogicalType> ToLogicalTypeVector(vector<Value> &value_vector) {
 	vector<LogicalType> result;
 	for (Value &value : value_vector) {
-		result.emplace_back(value.GetTypeMutable());
+		result.emplace_back(value.type());
 	}
 	return result;
 }
 
 template <class T, class OP>
 static vector<Value> GetParameterNames(FunctionEntry &entry, idx_t function_idx,
-                                       FunctionDescription &function_description) {
+                                       FunctionDescription &function_description, Value &parameter_types) {
+	vector<Value> parameter_names;
 	if (function_description.parameter_names.size() > 0) {
-		return ToValueVector(function_description.parameter_names);
+		parameter_names = ToValueVector(function_description.parameter_names);
+		vector<Value> parameter_types_vector = ListValue::GetChildren(parameter_types);
+		for (idx_t i = parameter_names.size(); i < parameter_types_vector.size(); i++) {
+			parameter_names.emplace_back("col" + to_string(i));
+		}
+
 	} else {
 		// fallback
 		auto &function = entry.Cast<T>();
-		return OP::GetParameters(function, function_idx);
+		parameter_names = OP::GetParameters(function, function_idx);
 	}
+	return parameter_names;
 }
 
 // returns values:
@@ -503,24 +510,39 @@ return >= 0: index of best matching description
 */
 static int GetFunctionDescriptionIndex(vector<FunctionDescription> &function_descriptions,
                                        duckdb::Value &parameter_types) {
-	int best_description_index = -1;
-
-	//  -1: no match; 0: perfect match; N: match by using N <ANY> values
-	int best_specificity_score = -1;
-	int specificity_score;
-
 	vector<Value> types_to_match = ListValue::GetChildren(parameter_types);
-	for (idx_t descr_idx = 0; descr_idx < function_descriptions.size(); descr_idx++) {
-		specificity_score = -1;
-		if (types_to_match.size() == function_descriptions[descr_idx].parameter_types.size()) {
-			specificity_score =
-			    CalcDescriptionSpecificity(function_descriptions[descr_idx], ToLogicalTypeVector(types_to_match));
+
+	int best_description_index = -1;
+	if (function_descriptions.size() == 1) {
+		// one description, use it even if nr of parameters don't match
+		best_description_index = 0;
+		vector<duckdb::LogicalType> logic_types_to_match = ToLogicalTypeVector(types_to_match);
+		idx_t nr_function_parameters = logic_types_to_match.size();
+		for (idx_t i = 0; i < function_descriptions[0].parameter_types.size(); i++) {
+			if (i < nr_function_parameters && function_descriptions[0].parameter_types[i] != LogicalTypeId::ANY &&
+			    !function_descriptions[0].parameter_types[i].EqualTypeInfo(logic_types_to_match[i])) {
+				best_description_index = -1;
+			}
 		}
-		if (specificity_score >= 0 && (best_specificity_score < 0 || specificity_score < best_specificity_score)) {
-			best_specificity_score = specificity_score;
-			best_description_index = static_cast<int>(descr_idx);
+	} else {
+		// multiple options, search best match
+		//  -1: no match; 0: perfect match; N: match by using N <ANY> values
+		int best_specificity_score = -1;
+		int specificity_score;
+
+		for (idx_t descr_idx = 0; descr_idx < function_descriptions.size(); descr_idx++) {
+			specificity_score = -1;
+			if (types_to_match.size() == function_descriptions[descr_idx].parameter_types.size()) {
+				specificity_score =
+				    CalcDescriptionSpecificity(function_descriptions[descr_idx], ToLogicalTypeVector(types_to_match));
+			}
+			if (specificity_score >= 0 && (best_specificity_score < 0 || specificity_score < best_specificity_score)) {
+				best_specificity_score = specificity_score;
+				best_description_index = static_cast<int>(descr_idx);
+			}
 		}
 	}
+
 	return best_description_index;
 }
 
@@ -529,9 +551,9 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	auto &function = entry.Cast<T>();
 	idx_t col = 0;
 	Value parameter_types = OP::GetParameterTypes(function, function_idx);
-	int description_index = GetFunctionDescriptionIndex(entry.descriptions, parameter_types);
+	int description_idx = GetFunctionDescriptionIndex(entry.descriptions, parameter_types);
 	FunctionDescription function_description =
-	    (description_index >= 0) ? entry.descriptions[static_cast<idx_t>(description_index)] : FunctionDescription();
+	    (description_idx >= 0) ? entry.descriptions[static_cast<idx_t>(description_idx)] : FunctionDescription();
 
 	// database_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.schema.catalog.GetName()));
@@ -561,9 +583,9 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, OP::GetReturnType(function, function_idx));
 
 	// parameters, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(
-	    col++, output_offset,
-	    Value::LIST(LogicalType::VARCHAR, GetParameterNames<T, OP>(function, function_idx, function_description)));
+	output.SetValue(col++, output_offset,
+	                Value::LIST(LogicalType::VARCHAR, GetParameterNames<T, OP>(function, function_idx,
+	                                                                           function_description, parameter_types)));
 
 	// parameter_types, LogicalType::LIST(LogicalType::VARCHAR)
 	output.SetValue(col++, output_offset, parameter_types);
