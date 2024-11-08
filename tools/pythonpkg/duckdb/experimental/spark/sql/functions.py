@@ -1167,6 +1167,25 @@ def isnull(col: "ColumnOrName") -> Column:
     return Column(_to_column_expr(col).isnull())
 
 
+def isnotnull(col: "ColumnOrName") -> Column:
+    """
+    Returns true if `col` is not null, or false otherwise.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None,), (1,)], ["e"])
+    >>> df.select(isnotnull(df.e).alias('r')).collect()
+    [Row(r=False), Row(r=True)]
+    """
+    return Column(_to_column_expr(col).isnotnull())
+
+
 def sqrt(col: "ColumnOrName") -> Column:
     """
     Computes the square root of the specified float value.

@@ -53,3 +53,12 @@ class TestsSparkFunctionsNull(object):
             Row(a=1, b=None, r1=False, r2=True),
             Row(a=None, b=2, r1=True, r2=False),
         ]
+
+    def test_isnotnull(self, spark):
+        df = spark.createDataFrame([(1, None), (None, 2)], ("a", "b"))
+
+        res = df.select("a", "b", F.isnotnull("a").alias("r1"), F.isnotnull(df.b).alias("r2")).collect()
+        assert res == [
+            Row(a=1, b=None, r1=True, r2=False),
+            Row(a=None, b=2, r1=False, r2=True),
+        ]
