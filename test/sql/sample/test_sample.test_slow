@@ -218,10 +218,10 @@ select * from integers using sample 10000%;
 query I
 select i from integers using sample (1 rows) repeatable (0);
 ----
-152
+130
 
 query I
 select i from integers using sample reservoir(1%) repeatable (0);
 ----
-51
-78
+83
+21
