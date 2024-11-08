@@ -66,8 +66,14 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	}
 
 	auto pg_table = make_shared_ptr<PropertyGraphTable>(transformed_name.name,
-		table_name_alias, column_names, label_names, transformed_name.catalog, transformed_name.schema);
+		table_name_alias, column_names, label_names);
 
+	if (!transformed_name.schema.empty()) {
+		pg_table->catalog_name = transformed_name.catalog.empty() ? transformed_name.schema : transformed_name.catalog;
+		if (!transformed_name.catalog.empty()) {
+			pg_table->schema_name = transformed_name.schema;
+		}
+	}
 	pg_table->is_vertex_table = graph_table->is_vertex_table;
 	pg_table->except_columns = std::move(except_list);
 	pg_table->all_columns = all_columns;

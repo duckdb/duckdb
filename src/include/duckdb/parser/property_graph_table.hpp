@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/vector.hpp"
+#include <duckdb/parser/tableref/basetableref.hpp>
 
 namespace duckdb {
 
@@ -71,8 +72,16 @@ public:
 
 	static shared_ptr<PropertyGraphTable> Deserialize(Deserializer &deserializer);
 
-	bool hasTableNameAlias() {
+	bool hasTableNameAlias() const {
 		return !table_name_alias.empty();
+	}
+
+	unique_ptr<BaseTableRef> CreateBaseTableRef() const {
+		auto base_table_ref = make_uniq<BaseTableRef>();
+		base_table_ref->catalog_name = catalog_name;
+		base_table_ref->schema_name = schema_name;
+		base_table_ref->table_name = table_name;
+		return base_table_ref;
 	}
 
 	string ToLower(const std::string &str);
