@@ -3038,6 +3038,80 @@ def bround(col: "ColumnOrName", scale: int = 0) -> Column:
     return _invoke_function_over_columns("round_even", col, lit(scale))
 
 
+def get(col: "ColumnOrName", index: Union["ColumnOrName", int]) -> Column:
+    """
+    Collection function: Returns element of array at given (0-based) index.
+    If the index points outside of the array boundaries, then this function
+    returns NULL.
+
+    .. versionadded:: 3.4.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+    index : :class:`~pyspark.sql.Column` or str or int
+        index to check for in array
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        value at given position.
+
+    Notes
+    -----
+    The position is not 1 based, but 0 based index.
+    Supports Spark Connect.
+
+    See Also
+    --------
+    :meth:`element_at`
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(["a", "b", "c"], 1)], ['data', 'index'])
+    >>> df.select(get(df.data, 1)).show()
+    +------------+
+    |get(data, 1)|
+    +------------+
+    |           b|
+    +------------+
+
+    >>> df.select(get(df.data, -1)).show()
+    +-------------+
+    |get(data, -1)|
+    +-------------+
+    |         NULL|
+    +-------------+
+
+    >>> df.select(get(df.data, 3)).show()
+    +------------+
+    |get(data, 3)|
+    +------------+
+    |        NULL|
+    +------------+
+
+    >>> df.select(get(df.data, "index")).show()
+    +----------------+
+    |get(data, index)|
+    +----------------+
+    |               b|
+    +----------------+
+
+    >>> df.select(get(df.data, col("index") - 1)).show()
+    +----------------------+
+    |get(data, (index - 1))|
+    +----------------------+
+    |                     a|
+    +----------------------+
+    """
+    index = ConstantExpression(index) if isinstance(index, int) else _to_column_expr(index)
+    # Spark uses 0-indexing, DuckDB 1-indexing
+    index = index + 1
+
+    return _invoke_function("list_extract", _to_column_expr(col), index)
+
+
 def hex(col: "ColumnOrName") -> Column:
     """
     Computes hex value of the given column, which could be :class:`~pyspark.sql.types.StringType`, :class:`~pyspark.sql.types.BinaryType`, :class:`~pyspark.sql.types.IntegerType` or :class:`~pyspark.sql.types.LongType`.

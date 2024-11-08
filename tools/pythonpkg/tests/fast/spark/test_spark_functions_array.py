@@ -66,3 +66,21 @@ class TestSparkFunctionsArray:
             Row(max_value=1),
             Row(max_value=2),
         ]
+
+    def test_get(self, spark):
+        df = spark.createDataFrame([(["a", "b", "c"], 1)], ['data', 'index'])
+
+        res = df.select(F.get(df.data, 1).alias("r")).collect()
+        assert res == [Row(r="b")]
+
+        res = df.select(F.get(df.data, -1).alias("r")).collect()
+        assert res == [Row(r=None)]
+
+        res = df.select(F.get(df.data, 3).alias("r")).collect()
+        assert res == [Row(r=None)]
+
+        res = df.select(F.get(df.data, "index").alias("r")).collect()
+        assert res == [Row(r='b')]
+
+        res = df.select(F.get(df.data, F.col("index") - 1).alias("r")).collect()
+        assert res == [Row(r='a')]
