@@ -1223,9 +1223,8 @@ public:
 			if (validity.RowIsValid(vector_index)) {
 				if (state.dictionary.size() <= writer.DictionarySizeLimit()) {
 					const auto &src_value = data_ptr[vector_index];
-					// Try to insert into the dictionary. If it's not there yet, we get .second = true
-					auto found = state.dictionary.insert(pair<SRC, uint32_t>(src_value, new_value_index));
-					if (found.second) {
+					if (state.dictionary.find(src_value) == state.dictionary.end()) {
+						state.dictionary[src_value] = new_value_index;
 						new_value_index++;
 					}
 				}
