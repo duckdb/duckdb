@@ -34,6 +34,8 @@ PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry
 //===--------------------------------------------------------------------===//
 // CollectionMerger
 //===--------------------------------------------------------------------===//
+enum class RowGroupBatchType : uint8_t { FLUSHED, NOT_FLUSHED };
+
 class CollectionMerger {
 public:
 	explicit CollectionMerger(ClientContext &context) : context(context) {
@@ -41,10 +43,17 @@ public:
 
 	ClientContext &context;
 	vector<unique_ptr<RowGroupCollection>> current_collections;
+	RowGroupBatchType batch_type = RowGroupBatchType::NOT_FLUSHED;
 
 public:
-	void AddCollection(unique_ptr<RowGroupCollection> collection) {
+	void AddCollection(unique_ptr<RowGroupCollection> collection, RowGroupBatchType type) {
 		current_collections.push_back(std::move(collection));
+		if (type == RowGroupBatchType::FLUSHED) {
+			batch_type = RowGroupBatchType::FLUSHED;
+			if (current_collections.size() > 1) {
+				throw InternalException("Cannot merge flushed collections");
+			}
+		}
 	}
 
 	bool Empty() {
@@ -91,13 +100,14 @@ public:
 			}
 			new_collection->FinalizeAppend(TransactionData(0, 0), append_state);
 			writer.WriteLastRowGroup(*new_collection);
+		} else if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
+			writer.WriteLastRowGroup(*new_collection);
 		}
 		current_collections.clear();
 		return new_collection;
 	}
 };
 
-enum class RowGroupBatchType : uint8_t { FLUSHED, NOT_FLUSHED };
 struct RowGroupBatchEntry {
 	RowGroupBatchEntry(idx_t batch_idx, unique_ptr<RowGroupCollection> collection_p, RowGroupBatchType type)
 	    : batch_idx(batch_idx), total_rows(collection_p->GetTotalRows()), unflushed_memory(0),
@@ -332,7 +342,7 @@ unique_ptr<RowGroupCollection> BatchInsertGlobalState::MergeCollections(ClientCo
 	CollectionMerger merger(context);
 	idx_t written_data = 0;
 	for (auto &entry : merge_collections) {
-		merger.AddCollection(std::move(entry.collection));
+		merger.AddCollection(std::move(entry.collection), RowGroupBatchType::NOT_FLUSHED);
 		written_data += entry.unflushed_memory;
 	}
 	optimistically_written = true;
@@ -571,7 +581,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 				if (!current_merger) {
 					current_merger = make_uniq<CollectionMerger>(context);
 				}
-				current_merger->AddCollection(std::move(entry.collection));
+				current_merger->AddCollection(std::move(entry.collection), entry.type);
 				memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
 			} else {
 				// this collection has been flushed: it does not need to be merged
@@ -582,7 +592,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 					current_merger.reset();
 				}
 				auto larger_merger = make_uniq<CollectionMerger>(context);
-				larger_merger->AddCollection(std::move(entry.collection));
+				larger_merger->AddCollection(std::move(entry.collection), entry.type);
 				mergers.push_back(std::move(larger_merger));
 			}
 		}
