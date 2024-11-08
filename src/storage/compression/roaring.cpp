@@ -10,6 +10,53 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
+namespace {
+
+class ContainerMetadata {
+public:
+	ContainerMetadata(bool is_run, uint16_t value) {
+		if (isRun) {
+			data.run_container.is_run = 1;
+			data.run_container.number_of_runs = value;
+			data.run_container.free_real_estate = 0;
+		} else {
+			data.non_run_container.is_run = 0;
+			data.non_run_container.cardinality = value;
+			data.non_run_container.free_real_estate = 0;
+		}
+	}
+
+public:
+	bool IsRun() const {
+		return data.run_container.is_run;
+	}
+
+	uint16_t NumberOfRuns() const {
+		return data.run_container.number_of_runs;
+	}
+
+	uint16_t Cardinality() const {
+		return data.non_run_container.cardinality;
+	}
+
+private:
+	union {
+		struct {
+			uint16_t is_run : 1;           // 1 bit to indicate if this is a run container
+			uint16_t number_of_runs : 11;  // 11 bits for the number of runs
+			uint16_t free_real_estate : 4; // 4 bits of free space
+		} run_container;
+
+		struct {
+			uint16_t is_run : 1;           // 1 bit to indicate if this is not a run container
+			uint16_t cardinality : 12;     // 12 bits for cardinality
+			uint16_t free_real_estate : 3; // 3 bits of free space
+		} non_run_container;
+	} data;
+};
+
+} // namespace
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -35,6 +82,9 @@ bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = state.Cast<RoaringAnalyzeState<T>>();
 
 	// TODO: implement
+	// During analyze, we want to walk through the data, for every 8kB we determine which container type should be used,
+	// we save that in the analyze state this only costs us 16 bits per container, this will simultaneously be used in
+	// the compression stage as the container metadata written to disk
 	return true;
 }
 
