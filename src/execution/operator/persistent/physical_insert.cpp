@@ -18,7 +18,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/update_state.hpp"
-#include "duckdb/core_functions/create_sort_key.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 
 namespace duckdb {
 
