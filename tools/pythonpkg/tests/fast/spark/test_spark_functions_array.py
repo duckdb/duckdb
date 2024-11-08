@@ -84,3 +84,9 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.get(df.data, F.col("index") - 1).alias("r")).collect()
         assert res == [Row(r='a')]
+
+    def test_flatten(self, spark):
+        df = spark.createDataFrame([([[1, 2, 3], [4, 5], [6]],), ([None, [4, 5]],)], ['data'])
+
+        res = df.select(F.flatten(df.data).alias("r")).collect()
+        assert res == [Row(r=[1, 2, 3, 4, 5, 6]), Row(r=None)]

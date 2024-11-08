@@ -1186,6 +1186,60 @@ def isnotnull(col: "ColumnOrName") -> Column:
     return Column(_to_column_expr(col).isnotnull())
 
 
+def flatten(col: "ColumnOrName") -> Column:
+    """
+    Collection function: creates a single array from an array of arrays.
+    If a structure of nested arrays is deeper than two levels,
+    only one level of nesting is removed.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        flattened array.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([[1, 2, 3], [4, 5], [6]],), ([None, [4, 5]],)], ['data'])
+    >>> df.show(truncate=False)
+    +------------------------+
+    |data                    |
+    +------------------------+
+    |[[1, 2, 3], [4, 5], [6]]|
+    |[NULL, [4, 5]]          |
+    +------------------------+
+    >>> df.select(flatten(df.data).alias('r')).show()
+    +------------------+
+    |                 r|
+    +------------------+
+    |[1, 2, 3, 4, 5, 6]|
+    |              NULL|
+    +------------------+
+    """
+    col = _to_column_expr(col)
+    contains_null = FunctionExpression(
+        "list_contains",
+        FunctionExpression(
+            "list_transform", col, LambdaExpression("x", ColumnExpression("x").isnull())
+        ),
+        True,
+    )
+    return Column(
+        CaseExpression(contains_null, None).otherwise(
+            FunctionExpression("flatten", col)
+        )
+    )
+
+
 def sqrt(col: "ColumnOrName") -> Column:
     """
     Computes the square root of the specified float value.
