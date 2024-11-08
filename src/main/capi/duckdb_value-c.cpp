@@ -145,12 +145,58 @@ duckdb_value duckdb_create_time_tz_value(duckdb_time_tz input) {
 duckdb_time_tz duckdb_get_time_tz(duckdb_value val) {
 	return {CAPIGetValue<duckdb::dtime_tz_t, LogicalTypeId::TIME_TZ>(val).bits};
 }
+
 duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
-	return CAPICreateValue(duckdb::timestamp_t(input.micros));
+	duckdb::timestamp_t ts(input.micros);
+	return CAPICreateValue(ts);
 }
+
 duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
+	if (!val) {
+		return duckdb_timestamp {0};
+	}
 	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP>(val).value};
 }
+
+duckdb_value duckdb_create_timestamp_s(duckdb_timestamp input) {
+	duckdb::timestamp_sec_t ts_sec;
+	ts_sec.value = input.micros;
+	return CAPICreateValue(ts_sec);
+}
+
+duckdb_timestamp duckdb_get_timestamp_s(duckdb_value val) {
+	if (!val) {
+		return duckdb_timestamp {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP_SEC>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_ms(duckdb_timestamp input) {
+	duckdb::timestamp_ms_t ts_ms;
+	ts_ms.value = input.micros;
+	return CAPICreateValue(ts_ms);
+}
+
+duckdb_timestamp duckdb_get_timestamp_ms(duckdb_value val) {
+	if (!val) {
+		return duckdb_timestamp {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP_MS>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_ns(duckdb_timestamp input) {
+	duckdb::timestamp_ns_t ts_ns;
+	ts_ns.value = input.micros;
+	return CAPICreateValue(ts_ns);
+}
+
+duckdb_timestamp duckdb_get_timestamp_ns(duckdb_value val) {
+	if (!val) {
+		return duckdb_timestamp {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP_NS>(val).value};
+}
+
 duckdb_value duckdb_create_interval(duckdb_interval input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(input.months, input.days, input.micros)));
 }
@@ -331,6 +377,9 @@ duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index) {
 }
 
 bool duckdb_is_null_value(duckdb_value value) {
+	if (!value) {
+		return false;
+	}
 	return UnwrapValue(value).IsNull();
 }
 

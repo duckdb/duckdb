@@ -1056,6 +1056,9 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::TIME_TZ:
 		return Cast::Operation<dtime_tz_t, T>(value_.timetz);
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Cast::Operation<timestamp_t, T>(value_.timestamp);
 	case LogicalTypeId::UTINYINT:
@@ -1064,9 +1067,6 @@ T Value::GetValueInternal() const {
 		return Cast::Operation<uint16_t, T>(value_.usmallint);
 	case LogicalTypeId::UINTEGER:
 		return Cast::Operation<uint32_t, T>(value_.uinteger);
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UBIGINT:
 		return Cast::Operation<uint64_t, T>(value_.ubigint);
 	case LogicalTypeId::FLOAT:

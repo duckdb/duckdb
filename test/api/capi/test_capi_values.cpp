@@ -61,3 +61,16 @@ TEST_CASE("Test LIST getters", "[capi]") {
 
 	duckdb_destroy_value(&list_value);
 }
+
+TEST_CASE("Test NULL value", "[capi]") {
+	auto null_value = duckdb_create_null_value();
+	REQUIRE(null_value);
+
+	REQUIRE(!duckdb_is_null_value(nullptr));
+	auto uint_val = duckdb_create_uint64(42);
+	REQUIRE(!duckdb_is_null_value(uint_val));
+	REQUIRE(duckdb_is_null_value(null_value));
+
+	duckdb_destroy_value(&uint_val);
+	duckdb_destroy_value(&null_value);
+}

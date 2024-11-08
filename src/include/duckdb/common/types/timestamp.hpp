@@ -22,7 +22,7 @@ struct date_t;     // NOLINT
 struct dtime_t;    // NOLINT
 struct dtime_tz_t; // NOLINT
 
-//! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
+//! Type used to represent timestamps (seconds, microseconds, milliseconds, or nanoseconds since 1970-01-01).
 struct timestamp_t { // NOLINT
 	int64_t value;
 
