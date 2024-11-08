@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/planner/binding_alias.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -99,11 +100,11 @@ public:
 
 public:
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
-	             vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
+	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
 	             bool add_row_id = false);
 
 	//! A reference to the set of bound column ids
-	vector<column_t> &bound_column_ids;
+	vector<ColumnIndex> &bound_column_ids;
 	//! The underlying catalog entry (if any)
 	optional_ptr<StandardEntry> entry;
 
@@ -113,7 +114,7 @@ public:
 	optional_ptr<StandardEntry> GetStandardEntry() override;
 	ErrorData ColumnNotFoundError(const string &column_name) const override;
 	// These are columns that are present in the name_map, appearing in the order that they're bound
-	const vector<column_t> &GetBoundColumnIds() const;
+	const vector<ColumnIndex> &GetBoundColumnIds() const;
 
 protected:
 	ColumnBinding GetColumnBinding(column_t column_index);
