@@ -1507,7 +1507,7 @@ static vector<unique_ptr<ParsedExpression>> ValueListFromExpressions(const py::a
 	vector<unique_ptr<ParsedExpression>> result;
 	auto arg_count = expressions.size();
 	if (arg_count == 0) {
-		return result;
+		throw InvalidInputException("Please provide a non-empty tuple");
 	}
 
 	for (idx_t i = 0; i < arg_count; i++) {

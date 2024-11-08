@@ -194,6 +194,59 @@ class TestRelation(object):
             (4, 'four'),
         ]
 
+    def test_value_relation(self, duckdb_cursor):
+        # Needs at least one input
+        with pytest.raises(duckdb.InvalidInputException, match='Could not create a ValueRelation without any inputs'):
+            duckdb_cursor.values()
+
+        # From a list of (python) values
+        rel = duckdb_cursor.values([1, 2, 3])
+        assert rel.fetchall() == [(1, 2, 3)]
+
+        # From an Expression
+        rel = duckdb_cursor.values(duckdb.ConstantExpression('test'))
+        assert rel.fetchall() == [('test',)]
+
+        # From multiple Expressions
+        rel = duckdb_cursor.values(
+            duckdb.ConstantExpression('1'), duckdb.ConstantExpression('2'), duckdb.ConstantExpression('3')
+        )
+        assert rel.fetchall() == [('1', '2', '3')]
+
+        # From Expressions mixed with random values
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide arguments of type Expression!'):
+            rel = duckdb_cursor.values(
+                duckdb.ConstantExpression('1'),
+                {'test'},
+                duckdb.ConstantExpression('3'),
+            )
+
+        # From Expressions mixed with values that *can* be autocast to Expression
+        rel = duckdb_cursor.values(
+            duckdb.ConstantExpression('1'),
+            2,
+            duckdb.ConstantExpression('3'),
+        )
+
+        const = duckdb.ConstantExpression
+        # From a tuple of Expressions
+        rel = duckdb_cursor.values((const(1), const(2), const(3)))
+        assert rel.fetchall() == [(1, 2, 3)]
+
+        # From mismatching tuples of Expressions
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Mismatch between length of tuples in input, expected 3 but found 2'
+        ):
+            rel = duckdb_cursor.values((const(1), const(2), const(3)), (const(5), const(4)))
+
+        # From an empty tuple
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide a non-empty tuple'):
+            rel = duckdb_cursor.values(())
+
+        # Mixing tuples with Expressions
+        with pytest.raises(duckdb.InvalidInputException, match='Expected objects of type tuple'):
+            rel = duckdb_cursor.values((const(1), const(2), const(3)), const(4))
+
     def test_insert_into_operator(self):
         conn = duckdb.connect()
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
