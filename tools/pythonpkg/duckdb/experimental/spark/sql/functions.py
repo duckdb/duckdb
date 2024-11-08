@@ -1164,7 +1164,7 @@ def isnull(col: "ColumnOrName") -> Column:
     |NULL|   2| true|false|
     +----+----+-----+-----+
     """
-    return _invoke_function_over_columns("isnull", col)
+    return Column(_to_column_expr(col).isnull())
 
 
 def sqrt(col: "ColumnOrName") -> Column:
