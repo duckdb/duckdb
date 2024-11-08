@@ -385,6 +385,68 @@ def desc_nulls_last(col: "ColumnOrName") -> Column:
     return desc(col).nulls_last()
 
 
+def left(str: "ColumnOrName", len: "ColumnOrName") -> Column:
+    """
+    Returns the leftmost `len`(`len` can be string type) characters from the string `str`,
+    if `len` is less or equal than 0 the result is an empty string.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        Input column or strings.
+    len : :class:`~pyspark.sql.Column` or str
+        Input column or strings, the leftmost `len`.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Spark SQL", 3,)], ['a', 'b'])
+    >>> df.select(left(df.a, df.b).alias('r')).collect()
+    [Row(r='Spa')]
+    """
+    len = _to_column_expr(len)
+    return Column(
+        CaseExpression(len <= ConstantExpression(0), ConstantExpression("")).otherwise(
+            FunctionExpression(
+                "array_slice", _to_column_expr(str), ConstantExpression(0), len
+            )
+        )
+    )
+
+
+
+def right(str: "ColumnOrName", len: "ColumnOrName") -> Column:
+    """
+    Returns the rightmost `len`(`len` can be string type) characters from the string `str`,
+    if `len` is less or equal than 0 the result is an empty string.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        Input column or strings.
+    len : :class:`~pyspark.sql.Column` or str
+        Input column or strings, the rightmost `len`.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Spark SQL", 3,)], ['a', 'b'])
+    >>> df.select(right(df.a, df.b).alias('r')).collect()
+    [Row(r='SQL')]
+    """
+    len = _to_column_expr(len)
+    return Column(
+        CaseExpression(len <= ConstantExpression(0), ConstantExpression("")).otherwise(
+            FunctionExpression(
+                "array_slice", _to_column_expr(str), -len, ConstantExpression(-1)
+            )
+        )
+    )
+
+
+
 def ascii(col: "ColumnOrName") -> Column:
     """
     Computes the numeric value of the first character of the string column.

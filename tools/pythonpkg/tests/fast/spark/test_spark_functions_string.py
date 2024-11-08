@@ -196,3 +196,15 @@ class TestSparkFunctionsString(object):
 
         res = df.select(F.initcap("a").alias('v')).collect()
         assert res == [Row(v='Ab Cd')]
+
+    def test_left(self, spark):
+        df = spark.createDataFrame([("Spark SQL", 3,), ("Spark SQL", 0,), ("Spark SQL", -3,)], ['a', 'b'])
+
+        res = df.select(F.left(df.a, df.b).alias('r')).collect()
+        assert res == [Row(r='Spa'), Row(r=''), Row(r='')]
+
+    def test_left(self, spark):
+        df = spark.createDataFrame([("Spark SQL", 3,), ("Spark SQL", 0,), ("Spark SQL", -3,)], ['a', 'b'])
+
+        res = df.select(F.right(df.a, df.b).alias('r')).collect()
+        assert res == [Row(r='SQL'), Row(r=''), Row(r='')]
