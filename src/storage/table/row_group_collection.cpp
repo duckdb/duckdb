@@ -409,25 +409,19 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		auto &ingest_sample = state.stats.table_sample->Cast<IngestionSample>();
 
 		auto ret = make_uniq<DataChunk>();
-		idx_t ret_chunk_size = static_cast<idx_t>(static_cast<double>(chunk.size()) * 0.25);
+		// Only sample
+		idx_t sample_chunk_size =
+		    static_cast<idx_t>(static_cast<double>(chunk.size()) * IngestionSample::CHUNK_SAMPLE_PERCENTAGE);
 		auto types = chunk.GetTypes();
 		SelectionVector sel(FIXED_SAMPLE_SIZE);
-		for (idx_t i = 0; i < ret_chunk_size; i++) {
+		for (idx_t i = 0; i < sample_chunk_size; i++) {
 			sel.set_index(i, i);
 		}
 		ret->Initialize(Allocator::DefaultAllocator(), types, FIXED_SAMPLE_SIZE);
-		ret->Slice(chunk, sel, ret_chunk_size);
-		ret->SetCardinality(ret_chunk_size);
+		ret->Slice(chunk, sel, sample_chunk_size);
+		ret->SetCardinality(sample_chunk_size);
 
 		ingest_sample.AddToReservoir(*ret);
-	}
-
-	auto global_stats_lock = stats.GetLock();
-	// all performance related to ingestion samping happens in the table same code
-	if (stats.table_sample) {
-		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
-		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
-		ingest_sample.AddToReservoir(chunk);
 	}
 
 	return new_row_group;

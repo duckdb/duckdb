@@ -32,8 +32,8 @@ select count(*) from pragma_table_sample('materialized_range');
 query II
 select a, count(*) from pragma_table_sample('materialized_range') group by all order by a;
 ----
-1	1023
-2	1025
+1	1024
+2	1024
 
 
 # insert another
@@ -54,6 +54,6 @@ pragma threads=1;
 query II
 select a, count(*) from (select( range%3+1) as a from range(102400 * 3)) t(a) group by all USING SAMPLE reservoir(2048 rows) REPEATABLE (200) order by a;
 ----
-1	703
-2	680
-3	665
+1	696
+2	678
+3	674

@@ -35,12 +35,12 @@ create or replace table integers_2 as (select (range + 5)::VARCHAR a, range b fr
 
 # sample only has values in the table it was sampled from
 query I
-select count(*) from (from pragma_table_sample('integers_1') intersect (from integers_1));
+select count(*) from (select b from pragma_table_sample('integers_1') intersect (select b from integers_1));
 ----
 2048
 
 query I
-select count(*) from (from pragma_table_sample('integers_2') intersect (from integers_2));
+select count(*) from (select b from pragma_table_sample('integers_2') intersect (select b from integers_2));
 ----
 2048
 

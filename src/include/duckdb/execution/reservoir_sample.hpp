@@ -20,8 +20,6 @@
 
 namespace duckdb {
 
-enum class AddType : uint8_t { APPEND = 0, COPY = 1 };
-
 enum class SampleType : uint8_t {
 	BLOCKING_SAMPLE = 0,
 	RESERVOIR_SAMPLE = 1,
@@ -247,8 +245,10 @@ class IngestionSample : public BlockingSample {
 public:
 	static constexpr const SampleType TYPE = SampleType::INGESTION_SAMPLE;
 
-	constexpr static idx_t NEW_CHUNK_THRESHOLD = 300;
 	constexpr static idx_t FIXED_SAMPLE_SIZE_MULTIPLIER = 10;
+	// how much of every chunk we consider for sampling.
+	// This can be lowered to improve ingestion performance.
+	constexpr static double CHUNK_SAMPLE_PERCENTAGE = 1.00;
 
 	IngestionSample(Allocator &allocator, int64_t seed);
 	explicit IngestionSample(idx_t sample_count, int64_t seed = 1);

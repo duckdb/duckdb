@@ -164,24 +164,6 @@ AccessMode EnumUtil::FromString<AccessMode>(const char *value) {
 	return static_cast<AccessMode>(StringUtil::StringToEnum(GetAccessModeValues(), 4, "AccessMode", value));
 }
 
-const StringUtil::EnumStringLiteral *GetAddTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(AddType::APPEND), "APPEND" },
-		{ static_cast<uint32_t>(AddType::COPY), "COPY" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<AddType>(AddType value) {
-	return StringUtil::EnumToString(GetAddTypeValues(), 2, "AddType", static_cast<uint32_t>(value));
-}
-
-template<>
-AddType EnumUtil::FromString<AddType>(const char *value) {
-	return static_cast<AddType>(StringUtil::StringToEnum(GetAddTypeValues(), 2, "AddType", value));
-}
-
 const StringUtil::EnumStringLiteral *GetAggregateCombineTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AggregateCombineType::PRESERVE_INPUT), "PRESERVE_INPUT" },
