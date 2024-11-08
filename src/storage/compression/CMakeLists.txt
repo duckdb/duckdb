@@ -15,7 +15,8 @@ add_library_unity(
   bitpacking_hugeint.cpp
   patas.cpp
   alprd.cpp
-  fsst.cpp)
+  fsst.cpp
+  roaring.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_compression>
     PARENT_SCOPE)

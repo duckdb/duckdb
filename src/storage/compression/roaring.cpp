@@ -79,8 +79,6 @@ public:
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
-
-		data_ptr = handle.Ptr() + RoaringPrimitives::ROARING_HEADER_SIZE;
 		metadata_ptr = handle.Ptr() + info.GetBlockSize();
 	}
 
@@ -90,6 +88,7 @@ public:
 
 		// TODO: implement
 
+		idx_t total_segment_size = 0;
 		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
@@ -111,7 +110,7 @@ void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count
 	auto &state = state_p.Cast<RoaringCompressState<T>>();
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
-	state.Append(vdata, count);
+	// TODO: implement
 }
 
 template <class T>
@@ -198,7 +197,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 
 CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 	switch (type) {
-	case PhysicalType::VALIDITY:
+	case PhysicalType::BIT:
 		return GetCompressionFunction<validity_t>(type);
 	default:
 		throw InternalException("Unsupported type for Roaring");
@@ -207,7 +206,7 @@ CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 
 bool RoaringCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
 	switch (physical_type) {
-	case PhysicalType::VALIDITY:
+	case PhysicalType::BIT:
 		return true;
 	default:
 		return false;
