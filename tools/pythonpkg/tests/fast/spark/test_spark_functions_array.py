@@ -90,3 +90,9 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.flatten(df.data).alias("r")).collect()
         assert res == [Row(r=[1, 2, 3, 4, 5, 6]), Row(r=None)]
+
+    def test_array_compact(self, spark):
+        df = spark.createDataFrame([([1, None, 2, 3],), ([4, 5, None, 4],)], ['data'])
+
+        res = df.select(F.array_compact(df.data).alias("v")).collect()
+        assert [Row(v=[1, 2, 3]), Row(v=[4, 5, 4])]
