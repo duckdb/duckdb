@@ -354,7 +354,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 }
 
 bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
-                                                       ColumnIndex &index) {
+                                                       vector<idx_t> &indexes) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
@@ -369,8 +369,8 @@ bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optiona
 		return false;
 	}
 	auto &bind_data = function.bind_info->Cast<StructExtractBindData>();
+	indexes.push_back(bind_data.index);
 	// struct extract, check if left child is a bound column ref
-	index = ColumnIndex(bind_data.index);
 	if (function.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		// column reference - check if it is a struct
 		auto &ref = function.children[0]->Cast<BoundColumnRefExpression>();
@@ -381,21 +381,25 @@ bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optiona
 		return true;
 	}
 	// not a column reference - try to handle this recursively
-	ColumnIndex child_index;
-	if (!HandleStructExtractRecursive(*function.children[0], colref, child_index)) {
+	if (!HandleStructExtractRecursive(*function.children[0], colref, indexes)) {
 		return false;
 	}
-	// recursive struct extract - add the child index
-	child_index.AddChildIndex(std::move(index));
-	index = std::move(child_index);
 	return true;
 }
 
 bool RemoveUnusedColumns::HandleStructExtract(Expression &expr) {
 	optional_ptr<BoundColumnRefExpression> colref;
-	ColumnIndex index;
-	if (!HandleStructExtractRecursive(expr, colref, index)) {
+	vector<idx_t> indexes;
+	if (!HandleStructExtractRecursive(expr, colref, indexes)) {
 		return false;
+	}
+	D_ASSERT(!indexes.empty());
+	// construct the ColumnIndex
+	ColumnIndex index = ColumnIndex(indexes[0]);
+	for (idx_t i = 1; i < indexes.size(); i++) {
+		ColumnIndex new_index(indexes[i]);
+		new_index.AddChildIndex(std::move(index));
+		index = std::move(new_index);
 	}
 	AddBinding(*colref, std::move(index));
 	return true;

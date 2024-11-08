@@ -61,6 +61,6 @@ private:
 	bool HandleStructExtract(Expression &expr);
 
 	bool HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
-	                                  ColumnIndex &index);
+	                                  vector<idx_t> &indexes);
 };
 } // namespace duckdb
