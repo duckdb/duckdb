@@ -6,6 +6,7 @@ from duckdb import (
     Expression,
     ConstantExpression,
     ColumnExpression,
+    LambdaExpression,
     CoalesceOperator,
     StarExpression,
     FunctionExpression,
@@ -396,6 +397,33 @@ class TestExpression(object):
         res = rel2.fetchall()
         assert res == [(25,)]
 
+    def test_between_expression(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select
+                5 as a,
+                2 as b,
+                3 as c
+        """
+        )
+        a = ColumnExpression('a')
+        b = ColumnExpression('b')
+        c = ColumnExpression('c')
+
+        # 5 BETWEEN 2 AND 3 -> false
+        assert rel.select(a.between(b, c)).fetchall() == [(False,)]
+
+        # 2 BETWEEN 5 AND 3 -> false
+        assert rel.select(b.between(a, c)).fetchall() == [(False,)]
+
+        # 3 BETWEEN 5 AND 2 -> false
+        assert rel.select(c.between(a, b)).fetchall() == [(False,)]
+
+        # 3 BETWEEN 2 AND 5 -> true
+        assert rel.select(c.between(b, a)).fetchall() == [(True,)]
+
     def test_equality_expression(self):
         con = duckdb.connect()
 
@@ -415,6 +443,51 @@ class TestExpression(object):
         rel2 = rel.select(expr1, expr2)
         res = rel2.fetchall()
         assert res == [(False, True)]
+
+    def test_lambda_expression(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select
+                [1,2,3] as a,
+            """
+        )
+
+        # Use a tuple of strings as 'lhs'
+        func = FunctionExpression(
+            "list_reduce",
+            ColumnExpression('a'),
+            LambdaExpression(('x', 'y'), ColumnExpression('x') + ColumnExpression('y')),
+        )
+        rel2 = rel.select(func)
+        res = rel2.fetchall()
+        assert res == [(6,)]
+
+        # Use only a string name as 'lhs'
+        func = FunctionExpression("list_apply", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('x') + 3))
+        rel2 = rel.select(func)
+        res = rel2.fetchall()
+        assert res == [([4, 5, 6],)]
+
+        # 'row' is not a lambda function, so it doesn't accept a lambda expression
+        func = FunctionExpression("row", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('x') + 3))
+        with pytest.raises(duckdb.BinderException, match='This scalar function does not support lambdas'):
+            rel2 = rel.select(func)
+
+        # lhs has to be a tuple of strings or a single string
+        with pytest.raises(
+            ValueError, match="Please provide 'lhs' as either a tuple containing strings, or a single string"
+        ):
+            func = FunctionExpression(
+                "list_filter", ColumnExpression('a'), LambdaExpression(42, ColumnExpression('x') + 3)
+            )
+
+        func = FunctionExpression(
+            "list_filter", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('y') != 3)
+        )
+        with pytest.raises(duckdb.BinderException, match='Referenced column "y" not found in FROM clause'):
+            rel2 = rel.select(func)
 
     def test_inequality_expression(self):
         con = duckdb.connect()
