@@ -63,6 +63,30 @@ def upper(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("upper", col)
 
 
+def ucase(str: "ColumnOrName") -> Column:
+    """
+    Returns `str` with all characters changed to uppercase.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        Input column or strings.
+
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.range(1).select(sf.ucase(sf.lit("Spark"))).show()
+    +------------+
+    |ucase(Spark)|
+    +------------+
+    |       SPARK|
+    +------------+
+    """
+    return upper(str)
+
+
 def when(condition: "Column", value: Any) -> Column:
     if not isinstance(condition, Column):
         raise TypeError("condition should be a Column")

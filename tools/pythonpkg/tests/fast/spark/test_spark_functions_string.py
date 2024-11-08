@@ -34,6 +34,19 @@ class TestSparkFunctionsString(object):
             Row(upper="2NDROWFIRSTCOLUMN"),
         ]
 
+    def test_ucase(self, spark):
+        data = [
+            ("firstRowFirstColumn",),
+            ("2ndRowFirstColumn",),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("upper", F.ucase(F.col("firstColumn")))
+        res = df.select("upper").collect()
+        assert res == [
+            Row(upper="FIRSTROWFIRSTCOLUMN"),
+            Row(upper="2NDROWFIRSTCOLUMN"),
+        ]
+
     def test_lower(self, spark):
         data = [
             ("firstRowFirstColumn",),
