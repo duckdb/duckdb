@@ -4,28 +4,22 @@ include_directories(../../../third_party/httplib/)
 # include file and a loader function based on the `DUCKDB_EXTENSION_NAMES`
 # parameter.
 
+# generated_extension_headers.hpp
+configure_file(
+  generated_extension_headers.hpp.in
+  "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp")
+
 get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}"
                                  STATICALLY_LINKED_EXTENSIONS)
-if(EXISTS
-   "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp")
-
-else()
-  # generated_extension_headers.hpp
-  configure_file(
-    generated_extension_headers.hpp.in
-    "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp")
-
-  foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
-    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-    if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-      set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
-      file(
-        APPEND
-        "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp"
-        "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
-    endif()
-  endforeach()
-endif()
+foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
+  string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+  if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+    set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
+    file(APPEND
+         "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp"
+         "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+  endif()
+endforeach()
 
 # generated_extension_loader.hpp
 set(EXT_LOADER_NAME_LIST "")
