@@ -164,3 +164,9 @@ class TestSparkFunctionsString(object):
         res = df.select(F.find_in_set(df.a, df.b).alias('r')).collect()
 
         assert res == [Row(r=3), Row(r=0), Row(r=0)]
+
+    def test_initcap(self, spark):
+        df = spark.createDataFrame([('ab cd',)], ['a'])
+
+        res = df.select(F.initcap("a").alias('v')).collect()
+        assert res == [Row(v='Ab Cd')]

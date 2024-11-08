@@ -7,6 +7,7 @@ from duckdb import (
     ConstantExpression,
     Expression,
     FunctionExpression,
+    LambdaExpression
 )
 
 from ..errors import PySparkTypeError
@@ -3110,6 +3111,57 @@ def get(col: "ColumnOrName", index: Union["ColumnOrName", int]) -> Column:
     index = index + 1
 
     return _invoke_function("list_extract", _to_column_expr(col), index)
+
+
+def initcap(col: "ColumnOrName") -> Column:
+    """Translate the first letter of each word to upper case in the sentence.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        string with all first letters are uppercase in each word.
+
+    Examples
+    --------
+    >>> spark.createDataFrame([('ab cd',)], ['a']).select(initcap("a").alias('v')).collect()
+    [Row(v='Ab Cd')]
+    """
+    return Column(
+        FunctionExpression(
+            "array_to_string",
+            FunctionExpression(
+                "list_transform",
+                FunctionExpression(
+                    "string_split", _to_column_expr(col), ConstantExpression(" ")
+                ),
+                LambdaExpression(
+                    "x",
+                    FunctionExpression(
+                        "concat",
+                        FunctionExpression(
+                            "upper",
+                            FunctionExpression(
+                                "array_extract", ColumnExpression("x"), 1
+                            ),
+                        ),
+                        FunctionExpression("array_slice", ColumnExpression("x"), 2, -1),
+                    ),
+                ),
+            ),
+            ConstantExpression(" "),
+        )
+    )
+
 
 
 def hex(col: "ColumnOrName") -> Column:
