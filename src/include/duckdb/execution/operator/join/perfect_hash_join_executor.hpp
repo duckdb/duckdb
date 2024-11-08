@@ -41,8 +41,8 @@ public:
 	bool CanDoPerfectHashJoin();
 
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context);
-	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                         OperatorState &state);
+	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &lhs_output_columns,
+	                                         DataChunk &chunk, OperatorState &state);
 	bool BuildPerfectHashTable(LogicalType &type);
 
 private:

@@ -32,6 +32,8 @@
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/parsed_data/exported_table_data.hpp"
 
 namespace duckdb {
 
@@ -205,6 +207,8 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(136, "columns_set", columns_set, false);
 	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	serializer.WritePropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", dialect_options.rows_until_header);
+	serializer.WritePropertyWithDefault<string>(139, "encoding", encoding);
+	serializer.WriteProperty<CSVOption<bool>>(140, "dialect_options.state_machine_options.rfc_4180", dialect_options.state_machine_options.rfc_4180);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -248,6 +252,8 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithExplicitDefault<bool>(136, "columns_set", result.columns_set, false);
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", result.dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	deserializer.ReadPropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", result.dialect_options.rows_until_header);
+	deserializer.ReadPropertyWithDefault<string>(139, "encoding", result.encoding);
+	deserializer.ReadProperty<CSVOption<bool>>(140, "dialect_options.state_machine_options.rfc_4180", result.dialect_options.state_machine_options.rfc_4180);
 	return result;
 }
 
@@ -340,6 +346,34 @@ void CommonTableExpressionMap::Serialize(Serializer &serializer) const {
 CommonTableExpressionMap CommonTableExpressionMap::Deserialize(Deserializer &deserializer) {
 	CommonTableExpressionMap result;
 	deserializer.ReadPropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<CommonTableExpressionInfo>>>(100, "map", result.map);
+	return result;
+}
+
+void ExportedTableData::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(1, "table_name", table_name);
+	serializer.WritePropertyWithDefault<string>(2, "schema_name", schema_name);
+	serializer.WritePropertyWithDefault<string>(3, "database_name", database_name);
+	serializer.WritePropertyWithDefault<string>(4, "file_path", file_path);
+	serializer.WritePropertyWithDefault<vector<string>>(5, "not_null_columns", not_null_columns);
+}
+
+ExportedTableData ExportedTableData::Deserialize(Deserializer &deserializer) {
+	ExportedTableData result;
+	deserializer.ReadPropertyWithDefault<string>(1, "table_name", result.table_name);
+	deserializer.ReadPropertyWithDefault<string>(2, "schema_name", result.schema_name);
+	deserializer.ReadPropertyWithDefault<string>(3, "database_name", result.database_name);
+	deserializer.ReadPropertyWithDefault<string>(4, "file_path", result.file_path);
+	deserializer.ReadPropertyWithDefault<vector<string>>(5, "not_null_columns", result.not_null_columns);
+	return result;
+}
+
+void ExportedTableInfo::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<ExportedTableData>(1, "table_data", table_data);
+}
+
+ExportedTableInfo ExportedTableInfo::Deserialize(Deserializer &deserializer) {
+	auto table_data = deserializer.ReadProperty<ExportedTableData>(1, "table_data");
+	ExportedTableInfo result(deserializer.Get<ClientContext &>(), table_data);
 	return result;
 }
 
@@ -459,6 +493,22 @@ PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
+void QualifiedColumnName::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "catalog", catalog);
+	serializer.WritePropertyWithDefault<string>(101, "schema", schema);
+	serializer.WritePropertyWithDefault<string>(102, "table", table);
+	serializer.WritePropertyWithDefault<string>(103, "column", column);
+}
+
+QualifiedColumnName QualifiedColumnName::Deserialize(Deserializer &deserializer) {
+	QualifiedColumnName result;
+	deserializer.ReadPropertyWithDefault<string>(100, "catalog", result.catalog);
+	deserializer.ReadPropertyWithDefault<string>(101, "schema", result.schema);
+	deserializer.ReadPropertyWithDefault<string>(102, "table", result.table);
+	deserializer.ReadPropertyWithDefault<string>(103, "column", result.column);
+	return result;
+}
+
 void ReadCSVData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(100, "files", files);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(101, "csv_types", csv_types);
@@ -515,15 +565,18 @@ void SampleOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<Value>(100, "sample_size", sample_size);
 	serializer.WritePropertyWithDefault<bool>(101, "is_percentage", is_percentage);
 	serializer.WriteProperty<SampleMethod>(102, "method", method);
-	serializer.WritePropertyWithDefault<int64_t>(103, "seed", seed);
+	serializer.WritePropertyWithDefault<int64_t>(103, "seed", GetSeed());
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<SampleOptions>(new SampleOptions());
-	deserializer.ReadProperty<Value>(100, "sample_size", result->sample_size);
-	deserializer.ReadPropertyWithDefault<bool>(101, "is_percentage", result->is_percentage);
-	deserializer.ReadProperty<SampleMethod>(102, "method", result->method);
-	deserializer.ReadPropertyWithDefault<int64_t>(103, "seed", result->seed);
+	auto sample_size = deserializer.ReadProperty<Value>(100, "sample_size");
+	auto is_percentage = deserializer.ReadPropertyWithDefault<bool>(101, "is_percentage");
+	auto method = deserializer.ReadProperty<SampleMethod>(102, "method");
+	auto seed = deserializer.ReadPropertyWithDefault<int64_t>(103, "seed");
+	auto result = duckdb::unique_ptr<SampleOptions>(new SampleOptions(seed));
+	result->sample_size = sample_size;
+	result->is_percentage = is_percentage;
+	result->method = method;
 	return result;
 }
 

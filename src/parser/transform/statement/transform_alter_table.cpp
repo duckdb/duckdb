@@ -39,8 +39,9 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 
 			auto column_entry = TransformColumnDefinition(*column_def);
 			if (column_def->constraints) {
-				for (auto constr = column_def->constraints->head; constr != nullptr; constr = constr->next) {
-					auto constraint = TransformConstraint(*constr, column_entry, 0);
+				for (auto cell = column_def->constraints->head; cell != nullptr; cell = cell->next) {
+					auto pg_constraint = PGPointerCast<duckdb_libpgquery::PGConstraint>(cell->data.ptr_value);
+					auto constraint = TransformConstraint(*pg_constraint, column_entry, 0);
 					if (!constraint) {
 						continue;
 					}
@@ -74,6 +75,11 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 			if (stmt.relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Alter column's type is only supported for tables");
 			}
+
+			if (column_entry.GetType() == LogicalType::UNKNOWN && !column_def->raw_default) {
+				throw ParserException("Omitting the type is only possible in combination with USING");
+			}
+
 			if (column_def->raw_default) {
 				expr = TransformExpression(column_def->raw_default);
 			} else {
@@ -92,7 +98,16 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 			result->info = make_uniq<DropNotNullInfo>(std::move(data), command->name);
 			break;
 		}
-		case duckdb_libpgquery::PG_AT_DropConstraint:
+		case duckdb_libpgquery::PG_AT_AddConstraint: {
+			auto pg_constraint = PGCast<duckdb_libpgquery::PGConstraint>(*command->def);
+			if (pg_constraint.contype != duckdb_libpgquery::PGConstrType::PG_CONSTR_PRIMARY) {
+				throw NotImplementedException("No support for that ALTER TABLE option yet!");
+			}
+
+			auto constraint = TransformConstraint(pg_constraint);
+			result->info = make_uniq<AddConstraintInfo>(std::move(data), std::move(constraint));
+			break;
+		}
 		default:
 			throw NotImplementedException("No support for that ALTER TABLE option yet!");
 		}

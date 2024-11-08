@@ -80,6 +80,13 @@ struct SecretType {
 	string default_provider;
 };
 
+enum class SecretSerializationType : uint8_t {
+	//! The secret is serialized with a custom serialization function
+	CUSTOM = 0,
+	//! The secret has been serialized as a KeyValueSecret
+	KEY_VALUE_SECRET = 1
+};
+
 //! Base class from which BaseSecret classes can be made.
 class BaseSecret {
 	friend class SecretManager;
@@ -187,7 +194,7 @@ public:
 
 		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
 			auto kv_struct = StructValue::GetChildren(entry);
-			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
+			result->secret_map[kv_struct[0].ToString()] = kv_struct[1];
 		}
 
 		Value redact_set_value;

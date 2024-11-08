@@ -1,0 +1,16 @@
+[
+    {
+        "name": "currval",
+        "parameters": "'sequence_name'",
+        "description": "Return the current value of the sequence. Note that nextval must be called at least once prior to calling currval.",
+        "example": "currval('my_sequence_name')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "nextval",
+        "parameters": "'sequence_name'",
+        "description": "Return the following value of the sequence.",
+        "example": "nextval('my_sequence_name')",
+        "type": "scalar_function"
+    }
+]

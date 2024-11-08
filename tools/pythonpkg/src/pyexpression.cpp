@@ -3,7 +3,9 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 
 namespace duckdb {
@@ -22,6 +24,10 @@ string DuckDBPyExpression::Type() const {
 
 string DuckDBPyExpression::ToString() const {
 	return expression->ToString();
+}
+
+string DuckDBPyExpression::GetName() const {
+	return expression->GetName();
 }
 
 void DuckDBPyExpression::Print() const {
@@ -47,6 +53,14 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Cast(const DuckDBPyType &type
 	auto copied_expression = GetExpression().Copy();
 	auto case_expr = make_uniq<duckdb::CastExpression>(type.Type(), std::move(copied_expression));
 	return make_shared_ptr<DuckDBPyExpression>(std::move(case_expr));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Between(const DuckDBPyExpression &lower,
+                                                           const DuckDBPyExpression &upper) {
+	auto copied_expression = GetExpression().Copy();
+	auto between_expr = make_uniq<BetweenExpression>(std::move(copied_expression), lower.GetExpression().Copy(),
+	                                                 upper.GetExpression().Copy());
+	return make_shared_ptr<DuckDBPyExpression>(std::move(between_expr));
 }
 
 // Case Expression modifiers
@@ -248,14 +262,14 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
 
 // Static creation methods
 
-static void PopulateExcludeList(case_insensitive_set_t &exclude, py::object list_p) {
+static void PopulateExcludeList(qualified_column_set_t &exclude, py::object list_p) {
 	if (py::none().is(list_p)) {
 		list_p = py::list();
 	}
 	py::list list = py::cast<py::list>(list_p);
 	for (auto item : list) {
 		if (py::isinstance<py::str>(item)) {
-			exclude.insert(std::string(py::str(item)));
+			exclude.insert(QualifiedColumnName(std::string(py::str(item))));
 			continue;
 		}
 		shared_ptr<DuckDBPyExpression> expr;
@@ -266,7 +280,7 @@ static void PopulateExcludeList(case_insensitive_set_t &exclude, py::object list
 			throw py::value_error("Only ColumnExpressions are accepted Expression types here");
 		}
 		auto &column = expr->GetExpression().Cast<ColumnRefExpression>();
-		exclude.insert(column.GetColumnName());
+		exclude.insert(QualifiedColumnName(column.GetColumnName()));
 	}
 }
 
@@ -277,11 +291,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression(py::object exc
 	return make_shared_ptr<DuckDBPyExpression>(std::move(star));
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string &column_name) {
-	if (column_name == "*") {
-		return StarExpression();
-	}
-
+static unique_ptr<duckdb::ColumnRefExpression> InternalColumnExpression(const string &column_name) {
 	auto qualified_name = QualifiedName::Parse(column_name);
 	vector<string> column_names;
 	if (!qualified_name.catalog.empty()) {
@@ -292,12 +302,44 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string
 	}
 	column_names.push_back(qualified_name.name);
 
-	return make_shared_ptr<DuckDBPyExpression>(make_uniq<duckdb::ColumnRefExpression>(std::move(column_names)));
+	return make_uniq<duckdb::ColumnRefExpression>(std::move(column_names));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string &column_name) {
+	if (column_name == "*") {
+		return StarExpression();
+	}
+	return make_shared_ptr<DuckDBPyExpression>(InternalColumnExpression(column_name));
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ConstantExpression(const py::object &value) {
 	auto val = TransformPythonValue(value);
 	return InternalConstantExpression(std::move(val));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::object &lhs_p,
+                                                                    const DuckDBPyExpression &rhs) {
+	unique_ptr<ParsedExpression> lhs;
+	if (py::isinstance<py::tuple>(lhs_p)) {
+		auto lhs_tuple = py::cast<py::tuple>(lhs_p);
+		vector<unique_ptr<ParsedExpression>> children;
+		for (auto &item : lhs_tuple) {
+			if (!py::isinstance<py::str>(item)) {
+				throw py::value_error("'lhs' was provided as a tuple but not all the items are of type string");
+			}
+			auto item_string = std::string(py::str(item));
+			children.push_back(InternalColumnExpression(item_string));
+		}
+		auto row_function = InternalFunctionExpression("row", std::move(children), false);
+		lhs = std::move(row_function->expression);
+	} else if (py::isinstance<py::str>(lhs_p)) {
+		auto column_string = std::string(py::str(lhs_p));
+		lhs = InternalColumnExpression(column_string);
+	} else {
+		throw py::value_error("Please provide 'lhs' as either a tuple containing strings, or a single string");
+	}
+	auto lambda_expression = make_uniq<duckdb::LambdaExpression>(std::move(lhs), rhs.GetExpression().Copy());
+	return make_shared_ptr<DuckDBPyExpression>(std::move(lambda_expression));
 }
 
 // Private methods

@@ -23,11 +23,11 @@ endloop
 # These should both report only 140mb is used
 
 query I
-select temporary_storage_bytes < 150_000_000 from duckdb_memory() where tag = 'IN_MEMORY_TABLE';
+select sum(temporary_storage_bytes) < 150_000_000 from duckdb_memory() where tag = 'IN_MEMORY_TABLE';
 ----
 true
 
 query I
-select size < 150_000_000 FROM duckdb_temporary_files();
+select sum(size) < 150_000_000 FROM duckdb_temporary_files();
 ----
 true

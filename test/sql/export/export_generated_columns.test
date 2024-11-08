@@ -3,12 +3,22 @@
 # group: [export]
 
 statement ok
+pragma storage_compatibility_version='v1.1.0'
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
 BEGIN TRANSACTION
+
+# Create a macro that the generated column uses
+statement ok
+CREATE MACRO my_macro(b) AS b + 5;
 
 statement ok
 CREATE TABLE tbl (
 	x INTEGER,
-	gen_x AS (x + 5)
+	gen_x AS (my_macro(x))
 );
 
 statement ok
@@ -43,6 +53,11 @@ SELECT * FROM tbl
 statement error
 INSERT INTO tbl VALUES(2,3)
 ----
+
+statement error
+drop macro my_macro;
+----
+Dependency Error: Cannot drop entry "my_macro" because there are entries that depend on it
 
 # 'x' can not be removed, as 'gen_x' depends on it
 statement error

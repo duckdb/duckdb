@@ -156,7 +156,11 @@ string InsertStatement::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += returning_list[i]->ToString();
+			auto column = returning_list[i]->ToString();
+			if (!returning_list[i]->alias.empty()) {
+				column += StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->alias));
+			}
+			result += column;
 		}
 	}
 	return result;

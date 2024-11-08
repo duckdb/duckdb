@@ -22,6 +22,7 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/common/enums/collation_type.hpp"
 
 namespace duckdb {
 
@@ -107,7 +108,7 @@ public:
 	//! Returns a qualified column reference from a column reference with column_names.size() > 2
 	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, ErrorData &error);
 	//! Returns a qualified column reference from a column reference
-	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
+	virtual unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error);
 	//! Enables special-handling of lambda parameters by tracking them in the lambda_params vector
 	void QualifyColumnNamesInLambda(FunctionExpression &function, vector<unordered_set<string>> &lambda_params);
 	//! Recursively qualifies the column references in the (children) of the expression. Passes on the
@@ -116,8 +117,10 @@ public:
 	                        const bool within_function_expression = false);
 	//! Entry point for qualifying the column references of the expression
 	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
+	static void QualifyColumnNames(ExpressionBinder &binder, unique_ptr<ParsedExpression> &expr);
 
-	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type);
+	static bool PushCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
+	                          CollationType type = CollationType::ALL_COLLATIONS);
 	static void TestCollation(ClientContext &context, const string &collation);
 
 	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message);
@@ -220,6 +223,9 @@ protected:
 	//! Returns true if the function name is an alias for the UNNEST function
 	static bool IsUnnestFunction(const string &function_name);
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func);
+
+	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref, ErrorData &error,
+	                                                                   idx_t &struct_extract_start);
 	virtual void ThrowIfUnnestInLambda(const ColumnBinding &column_binding);
 };
 

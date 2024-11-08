@@ -34,6 +34,10 @@ void InitializeStaticMethods(py::module_ &m) {
 	// Coalesce Operator
 	docs = "";
 	m.def("CoalesceOperator", &DuckDBPyExpression::Coalesce, docs);
+
+	// Lambda Expression
+	docs = "";
+	m.def("LambdaExpression", &DuckDBPyExpression::LambdaExpression, py::arg("lhs"), py::arg("rhs"), docs);
 }
 
 static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
@@ -341,6 +345,8 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 	)";
 	expression.def("__repr__", &DuckDBPyExpression::ToString, docs);
 
+	expression.def("get_name", &DuckDBPyExpression::GetName, docs);
+
 	docs = R"(
 		Create a copy of this expression with the given alias.
 
@@ -385,6 +391,9 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 			CastExpression: self::type
 	)";
 	expression.def("cast", &DuckDBPyExpression::Cast, py::arg("type"), docs);
+
+	docs = "";
+	expression.def("between", &DuckDBPyExpression::Between, py::arg("lower"), py::arg("upper"), docs);
 }
 
 } // namespace duckdb

@@ -18,7 +18,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
@@ -50,8 +49,8 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
       column_definitions(std::move(column_definitions_p)), is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	auto types = GetTypes();
-	this->row_groups =
-	    make_shared_ptr<RowGroupCollection>(info, TableIOManager::Get(*this).GetBlockManagerForRowData(), types, 0);
+	auto &io_manager = TableIOManager::Get(*this);
+	this->row_groups = make_shared_ptr<RowGroupCollection>(info, io_manager, types, 0);
 	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
 	} else {
@@ -134,9 +133,16 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	parent.is_root = false;
 }
 
-// Alter column to add new constraint
-DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint)
+DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
     : db(parent.db), info(parent.info), row_groups(parent.row_groups), is_root(true) {
+
+	// ALTER COLUMN to add a new constraint.
+
+	// Clone the storage info vector or the table.
+	for (const auto &index_info : parent.info->index_storage_infos) {
+		info->index_storage_infos.push_back(IndexStorageInfo(index_info.name));
+	}
+	info->InitializeIndexes(context);
 
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -144,14 +150,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Bound
 		column_definitions.emplace_back(column_def.Copy());
 	}
 
-	info->InitializeIndexes(context);
-
-	// Verify the new constraint against current persistent/local data
-	VerifyNewConstraint(local_storage, parent, *constraint);
-
-	// Get the local data ownership from old dt
+	if (constraint.type != ConstraintType::UNIQUE) {
+		VerifyNewConstraint(local_storage, parent, constraint);
+	}
 	local_storage.MoveStorage(parent, *this);
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
 }
 
@@ -223,34 +225,29 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
-                               TableFilterSet *table_filters) {
-	if (!state.checkpoint_lock) {
-		state.checkpoint_lock = make_shared_ptr<CheckpointLock>(info->checkpoint_lock.GetSharedLock());
-	}
-	state.Initialize(column_ids, table_filters);
-	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
-}
-
 void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
-	InitializeScan(state, column_ids, table_filters);
+	state.Initialize(column_ids, table_filters);
+	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
-void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
-                                         idx_t end_row) {
-	if (!state.checkpoint_lock) {
-		state.checkpoint_lock = make_shared_ptr<CheckpointLock>(info->checkpoint_lock.GetSharedLock());
-	}
+void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
+                                         const vector<column_t> &column_ids, idx_t start_row, idx_t end_row) {
+	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
 }
 
-idx_t DataTable::MaxThreads(ClientContext &context) {
-	idx_t parallel_scan_vector_count = Storage::ROW_GROUP_VECTOR_COUNT;
+idx_t DataTable::GetRowGroupSize() const {
+	return row_groups->GetRowGroupSize();
+}
+
+idx_t DataTable::MaxThreads(ClientContext &context) const {
+	idx_t row_group_size = GetRowGroupSize();
+	idx_t parallel_scan_vector_count = row_group_size / STANDARD_VECTOR_SIZE;
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		parallel_scan_vector_count = 1;
 	}
@@ -424,7 +421,8 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, error.RawMessage());
-	} catch (...) { // LCOV_EXCL_START
+	} catch (...) {
+		// LCOV_EXCL_START
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
 	} // LCOV_EXCL_STOP
 	UnifiedVectorFormat vdata;
@@ -755,14 +753,14 @@ void DataTable::VerifyAppendConstraints(ConstraintState &state, ClientContext &c
 		auto &constraint = state.bound_constraints[i];
 		switch (base_constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
-			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
+			auto &bound_not_null = constraint->Cast<BoundNotNullConstraint>();
+			auto &not_null = base_constraint->Cast<NotNullConstraint>();
 			auto &col = table.GetColumns().GetColumn(LogicalIndex(not_null.index));
 			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], chunk.size(), col.Name());
 			break;
 		}
 		case ConstraintType::CHECK: {
-			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
+			auto &check = constraint->Cast<BoundCheckConstraint>();
 			VerifyCheckConstraint(context, table, *check.expression, chunk);
 			break;
 		}
@@ -771,7 +769,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &state, ClientContext &c
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
-			auto &bfk = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			auto &bfk = constraint->Cast<BoundForeignKeyConstraint>();
 			if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 			    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 				VerifyAppendForeignKeyConstraint(bfk, context, chunk);
@@ -887,7 +885,8 @@ void DataTable::FinalizeAppend(DuckTransaction &transaction, TableAppendState &s
 	row_groups->FinalizeAppend(transaction, state);
 }
 
-void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
+void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, idx_t count,
+                                 const std::function<void(DataChunk &chunk)> &function) {
 	if (count == 0) {
 		return;
 	}
@@ -905,7 +904,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	CreateIndexScanState state;
 
-	InitializeScanWithOffset(state, column_ids, row_start, row_start + count);
+	InitializeScanWithOffset(transaction, state, column_ids, row_start, row_start + count);
 	auto row_start_aligned = state.table_state.row_group->start + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 
 	idx_t current_row = row_start_aligned;
@@ -947,7 +946,7 @@ void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &,
 	row_groups->Verify();
 }
 
-void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count,
+void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
                            optional_ptr<StorageCommitState> commit_state) {
 	log.WriteSetTable(info->schema, info->table);
 	if (commit_state) {
@@ -969,7 +968,7 @@ void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count,
 			}
 		}
 	}
-	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
+	ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }
 
 void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count) {
@@ -983,7 +982,7 @@ void DataTable::RevertAppendInternal(idx_t start_row) {
 	row_groups->RevertAppendInternal(start_row);
 }
 
-void DataTable::RevertAppend(idx_t start_row, idx_t count) {
+void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 
 	// revert any appends to indexes
@@ -992,7 +991,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 		row_t row_data[STANDARD_VECTOR_SIZE];
 		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data));
 		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
-		ScanTableSegment(start_row, scan_count, [&](DataChunk &chunk) {
+		ScanTableSegment(transaction, start_row, scan_count, [&](DataChunk &chunk) {
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}
@@ -1133,7 +1132,7 @@ void DataTable::VerifyDeleteConstraints(TableDeleteState &state, ClientContext &
 		case ConstraintType::UNIQUE:
 			break;
 		case ConstraintType::FOREIGN_KEY: {
-			auto &bfk = *reinterpret_cast<BoundForeignKeyConstraint *>(constraint.get());
+			auto &bfk = constraint->Cast<BoundForeignKeyConstraint>();
 			if (bfk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ||
 			    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 				VerifyDeleteForeignKeyConstraint(bfk, context, chunk);
@@ -1266,8 +1265,8 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 		auto &constraint = bound_constraints[constr_idx];
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
-			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
+			auto &bound_not_null = constraint->Cast<BoundNotNullConstraint>();
+			auto &not_null = base_constraint->Cast<NotNullConstraint>();
 			// check if the constraint is in the list of column_ids
 			for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 				if (column_ids[col_idx] == bound_not_null.index) {
@@ -1280,7 +1279,7 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 			break;
 		}
 		case ConstraintType::CHECK: {
-			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
+			auto &check = constraint->Cast<BoundCheckConstraint>();
 
 			DataChunk mock_chunk;
 			if (CreateMockChunk(table, column_ids, check.bound_columns, chunk, mock_chunk)) {
@@ -1455,11 +1454,39 @@ void DataTable::CommitDropTable() {
 }
 
 //===--------------------------------------------------------------------===//
-// GetColumnSegmentInfo
+// Column Segment Info
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
 	auto lock = GetSharedCheckpointLock();
 	return row_groups->GetColumnSegmentInfo();
+}
+
+//===--------------------------------------------------------------------===//
+// Index Constraint Creation
+//===--------------------------------------------------------------------===//
+void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
+                         const IndexConstraintType type, const IndexStorageInfo &index_info) {
+	if (!IsRoot()) {
+		throw TransactionException("cannot add an index to a table that has been altered!");
+	}
+
+	// Fetch the column types and create bound column reference expressions.
+	vector<column_t> physical_ids;
+	vector<unique_ptr<Expression>> expressions;
+
+	for (const auto column_index : column_indexes) {
+		auto binding = ColumnBinding(0, physical_ids.size());
+		auto &col = columns.GetColumn(column_index);
+		auto ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
+		expressions.push_back(std::move(ref));
+		physical_ids.push_back(col.Physical().index);
+	}
+
+	// Create an ART around the expressions.
+	auto &io_manager = TableIOManager::Get(*this);
+	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
+	                          index_info);
+	info->indexes.AddIndex(std::move(art));
 }
 
 } // namespace duckdb

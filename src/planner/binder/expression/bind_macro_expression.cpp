@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
@@ -26,12 +27,8 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 
 		if (!error_message.empty()) {
 			// Possibly a JSON function, replace both LHS and RHS.
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.lhs, [&](unique_ptr<ParsedExpression> &child) {
-				ReplaceMacroParameters(child, lambda_params);
-			});
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-				ReplaceMacroParameters(child, lambda_params);
-			});
+			ReplaceMacroParameters(lambda_expr.lhs, lambda_params);
+			ReplaceMacroParameters(lambda_expr.expr, lambda_params);
 			continue;
 		}
 
@@ -43,9 +40,7 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 		}
 
 		// Only replace in the RHS of the expression.
-		ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-			ReplaceMacroParameters(child, lambda_params);
-		});
+		ReplaceMacroParameters(lambda_expr.expr, lambda_params);
 
 		lambda_params.pop_back();
 	}

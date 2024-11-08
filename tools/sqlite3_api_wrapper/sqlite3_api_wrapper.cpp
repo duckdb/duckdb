@@ -34,7 +34,8 @@ using namespace duckdb;
 using namespace std;
 
 extern "C" {
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar);
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
+                            int columnar, char thousands, char decimal_sep);
 }
 
 static char *sqlite3_strdup(const char *str);
@@ -233,7 +234,8 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	}
 }
 
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar) {
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
+                            int columnar, char thousand_separator, char decimal_separator) {
 	try {
 		if (!pStmt) {
 			return nullptr;
@@ -277,6 +279,8 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_wid
 		if (columnar) {
 			config.render_mode = RenderMode::COLUMNS;
 		}
+		config.decimal_separator = decimal_separator;
+		config.thousand_separator = thousand_separator;
 		config.max_width = max_width;
 		BoxRenderer renderer(config);
 		auto result_rendering =
@@ -1741,7 +1745,6 @@ const void *sqlite3_value_blob(sqlite3_value *pVal) {
 
 double sqlite3_value_double(sqlite3_value *pVal) {
 	if (!pVal) {
-		pVal->db->errCode = SQLITE_MISUSE;
 		return 0.0;
 	}
 	switch (pVal->type) {
@@ -1774,7 +1777,6 @@ int sqlite3_value_int(sqlite3_value *pVal) {
 
 sqlite3_int64 sqlite3_value_int64(sqlite3_value *pVal) {
 	if (!pVal) {
-		pVal->db->errCode = SQLITE_MISUSE;
 		return 0;
 	}
 	int64_t res;
@@ -1805,7 +1807,6 @@ void *sqlite3_value_pointer(sqlite3_value *, const char *) {
 
 const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 	if (!pVal) {
-		pVal->db->errCode = SQLITE_MISUSE;
 		return nullptr;
 	}
 	if (pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB) {

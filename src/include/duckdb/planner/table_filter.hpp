@@ -28,7 +28,8 @@ enum class TableFilterType : uint8_t {
 	IS_NOT_NULL = 2,
 	CONJUNCTION_OR = 3,
 	CONJUNCTION_AND = 4,
-	STRUCT_EXTRACT = 5
+	STRUCT_EXTRACT = 5,
+	OPTIONAL_FILTER = 6
 };
 
 //! TableFilter represents a filter pushed down into the table scan.
@@ -45,6 +46,7 @@ public:
 	//! Returns true if the statistics indicate that the segment can contain values that satisfy that filter
 	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
 	virtual string ToString(const string &column_name) = 0;
+	string DebugToString();
 	virtual unique_ptr<TableFilter> Copy() const = 0;
 	virtual bool Equals(const TableFilter &other) const {
 		return filter_type != other.filter_type;

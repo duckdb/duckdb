@@ -22,7 +22,6 @@ void TableIndexList::RemoveIndex(const string &name) {
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-
 		if (index_entry->GetIndexName() == name) {
 			indexes.erase_at(index_idx);
 			break;
@@ -94,8 +93,7 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 			// Add the table to the binder
 			// We're not interested in the column_ids here, so just pass a dummy vector
 			vector<column_t> dummy_column_ids;
-			binder->bind_context.AddBaseTable(0, table_info.GetTableName(), column_names, column_types,
-			                                  dummy_column_ids, &table);
+			binder->bind_context.AddBaseTable(0, string(), column_names, column_types, dummy_column_ids, table);
 
 			// Create an IndexBinder to bind the index
 			IndexBinder idx_binder(*binder, context);

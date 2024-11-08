@@ -1,0 +1,11 @@
+# name: benchmark/taxi/q04.benchmark
+# description: Run query 04 from the taxi benchmark
+# group: [taxi]
+
+template benchmark/taxi/taxi.benchmark.in
+QUERY_NUMBER=4
+QUERY_NUMBER_PADDED=04
+RESULT_QUERY=SELECT passenger_count, DATE_PART('year', pickup_datetime) AS year, ROUND(trip_distance) AS distance, COUNT(*) FROM trips GROUP BY passenger_count, year, distance ORDER BY ALL;
+
+
+

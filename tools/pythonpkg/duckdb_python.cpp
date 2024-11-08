@@ -1078,7 +1078,11 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
 	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
-	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
+	m.def("default_connection", &DuckDBPyConnection::DefaultConnection,
+	      "Retrieve the connection currently registered as the default to be used by the module");
+	m.def("set_default_connection", &DuckDBPyConnection::SetDefaultConnection,
+	      "Register the provided connection as the default to be used by the module",
+	      py::arg("connection").none(false));
 	m.attr("apilevel") = "2.0";
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";

@@ -261,7 +261,9 @@ string ChangeColumnTypeInfo::ToString() const {
 	result += " ALTER COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
 	result += " TYPE ";
-	result += target_type.ToString(); // FIXME: ToSQLString ?
+	if (target_type.IsValid()) {
+		result += target_type.ToString();
+	}
 	auto extra_type_info = target_type.AuxInfo();
 	if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
 		auto &string_info = extra_type_info->Cast<StringTypeInfo>();
@@ -441,6 +443,32 @@ string RenameViewInfo::ToString() const {
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
 	result += KeywordHelper::WriteOptionallyQuoted(new_view_name);
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// AddConstraintInfo
+//===--------------------------------------------------------------------===//
+AddConstraintInfo::AddConstraintInfo() : AlterTableInfo(AlterTableType::ADD_CONSTRAINT) {
+}
+
+AddConstraintInfo::AddConstraintInfo(AlterEntryData data, unique_ptr<Constraint> constraint_p)
+    : AlterTableInfo(AlterTableType::ADD_CONSTRAINT, std::move(data)), constraint(std::move(constraint_p)) {
+}
+
+AddConstraintInfo::~AddConstraintInfo() {
+}
+
+unique_ptr<AlterInfo> AddConstraintInfo::Copy() const {
+	return make_uniq_base<AlterInfo, AddConstraintInfo>(GetAlterEntryData(), constraint->Copy());
+}
+
+string AddConstraintInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " ADD ";
+	result += constraint->ToString();
 	result += ";";
 	return result;
 }

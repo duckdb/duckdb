@@ -559,7 +559,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 		                                      "INT2",
 		                                      "SHORT",
 		                                      "TIME",
-		                                      "TIMESTAMPTZ	",
+		                                      "TIMESTAMPTZ",
 		                                      "TIMESTAMP",
 		                                      "DATETIME",
 		                                      "TINYINT",
