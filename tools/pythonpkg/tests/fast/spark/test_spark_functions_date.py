@@ -140,3 +140,9 @@ class TestsSparkFunctionsDate(object):
         result = df.select(F.second("dt").alias("second_num")).collect()
 
         assert result[0].second_num == 45
+
+    def test_last_day(self, spark):
+        df = spark.createDataFrame([('1997-02-10',)], ['d'])
+
+        res = df.select(F.last_day(df.d.cast("date")).alias('date')).collect()
+        assert res == [Row(date=date(1997, 2, 28))]

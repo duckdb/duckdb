@@ -1301,6 +1301,35 @@ def array_remove(col: "ColumnOrName", element: Any) -> Column:
     return _invoke_function("list_filter", _to_column_expr(col), LambdaExpression("x", ColumnExpression("x") != ConstantExpression(element)))
 
 
+def last_day(date: "ColumnOrName") -> Column:
+    """
+    Returns the last day of the month which the given date belongs to.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    date : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        last day of the month.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('1997-02-10',)], ['d'])
+    >>> df.select(last_day(df.d).alias('date')).collect()
+    [Row(date=datetime.date(1997, 2, 28))]
+    """
+    return _invoke_function("last_day", _to_column_expr(date))
+
+
+
 def sqrt(col: "ColumnOrName") -> Column:
     """
     Computes the square root of the specified float value.
