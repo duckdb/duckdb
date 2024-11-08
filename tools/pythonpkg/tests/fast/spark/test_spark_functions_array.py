@@ -96,3 +96,9 @@ class TestSparkFunctionsArray:
 
         res = df.select(F.array_compact(df.data).alias("v")).collect()
         assert [Row(v=[1, 2, 3]), Row(v=[4, 5, 4])]
+
+    def test_array_remove(self, spark):
+        df = spark.createDataFrame([([1, 2, 3, 1, 1],), ([],)], ['data'])
+
+        res = df.select(F.array_remove(df.data, 1).alias("v")).collect()
+        assert res == [Row(v=[2, 3]), Row(v=[])]

@@ -1271,6 +1271,36 @@ def array_compact(col: "ColumnOrName") -> Column:
     )
 
 
+def array_remove(col: "ColumnOrName", element: Any) -> Column:
+    """
+    Collection function: Remove all elements that equal to element from the given array.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+    element :
+        element to be removed from the array
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array excluding given value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([1, 2, 3, 1, 1],), ([],)], ['data'])
+    >>> df.select(array_remove(df.data, 1)).collect()
+    [Row(array_remove(data, 1)=[2, 3]), Row(array_remove(data, 1)=[])]
+    """
+    return _invoke_function("list_filter", _to_column_expr(col), LambdaExpression("x", ColumnExpression("x") != ConstantExpression(element)))
+
+
 def sqrt(col: "ColumnOrName") -> Column:
     """
     Computes the square root of the specified float value.
