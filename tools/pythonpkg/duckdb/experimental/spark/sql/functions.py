@@ -1003,6 +1003,30 @@ def lower(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("lower", col)
 
 
+def lcase(str: "ColumnOrName") -> Column:
+    """
+    Returns `str` with all characters changed to lowercase.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        Input column or strings.
+
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.range(1).select(sf.lcase(sf.lit("Spark"))).show()
+    +------------+
+    |lcase(Spark)|
+    +------------+
+    |       spark|
+    +------------+
+    """
+    return lower(str)
+
+
 def ceil(col: "ColumnOrName") -> Column:
     """
     Computes the ceiling of the given value.

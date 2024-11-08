@@ -47,6 +47,19 @@ class TestSparkFunctionsString(object):
             Row(lower="2ndrowfirstcolumn"),
         ]
 
+    def test_lcase(self, spark):
+        data = [
+            ("firstRowFirstColumn",),
+            ("2ndRowFirstColumn",),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("lower", F.lcase(F.col("firstColumn")))
+        res = df.select("lower").collect()
+        assert res == [
+            Row(lower="firstrowfirstcolumn"),
+            Row(lower="2ndrowfirstcolumn"),
+        ]
+
     def test_trim(self, spark):
         data = [
             (" firstRowFirstColumn ",),
