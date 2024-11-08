@@ -32,6 +32,12 @@ void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info)
 	vector<string> variants = StringUtil::Split(function.parameters, '\1');
 	vector<string> descriptions = StringUtil::Split(function.description, '\1');
 	vector<string> examples = StringUtil::Split(function.example, '\1');
+
+	// add single variant for functions that take no arguments
+	if (variants.size() == 0) {
+		variants.push_back("");
+	}
+
 	for (idx_t variant_index = 0; variant_index < variants.size(); variant_index++) {
 		FunctionDescription function_description;
 		// parameter_names and parameter_types
