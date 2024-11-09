@@ -1150,7 +1150,7 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 					             const py::object &row_group_size,
 								 const py::object &overwrite, const py::object &per_thread_output,
 								 const py::object &use_tmp_file,
-								 const py::object &partition_by, const py::object &write_partition_columns) {
+								 const py::object &partition_by, const py::object &write_partition_columns, const py::object &append) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(compression)) {
@@ -1211,6 +1211,13 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 			throw InvalidInputException("to_parquet only accepts 'write_partition_columns' as a boolean");
 		}
 		options["write_partition_columns"] = {Value::BOOLEAN(py::bool_(write_partition_columns))};
+	}
+
+	if (!py::none().is(append)) {
+		if (!py::isinstance<py::bool_>(append)) {
+			throw InvalidInputException("to_parquet only accepts 'append' as a boolean");
+		}
+		options["append"] = {Value::BOOLEAN(py::bool_(append))};
 	}
 
 	if (!py::none().is(overwrite)) {

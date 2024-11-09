@@ -142,6 +142,37 @@ class TestToParquet(object):
             }
         )
         rel = duckdb.from_df(df)
-        rel.to_parquet(temp_file_name,per_thread_output=True)
+        rel.to_parquet(temp_file_name, per_thread_output=True)
         result = duckdb.read_parquet(f'{temp_file_name}/*.parquet')
         assert rel.execute().fetchall() == result.execute().fetchall()
+
+    def test_append(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame(
+            {
+                "name": ["rei", "shinji", "asuka", "kaworu"],
+                "float": [321.0, 123.0, 23.0, 340.0],
+                "category": ['a', 'a', 'b', 'c'],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_parquet(temp_file_name, partition_by=['category'])
+        df_to_append = pd.DataFrame(
+            {
+                "name": ["random"],
+                "float": [420],
+                "category": ['a'],
+            }
+        )
+        rel_to_append = duckdb.from_df(df_to_append)
+        rel_to_append.to_parquet(temp_file_name, partition_by=['category'], append=True)
+        result = duckdb.sql(f"FROM read_parquet('{temp_file_name}/*/*.parquet', hive_partitioning=TRUE) ORDER BY name")
+        result.show()
+        expected = [
+            ('asuka', 23.0, 'b'),
+            ('kaworu', 340.0, 'c'),
+            ('random', 420.0, 'a'),
+            ('rei', 321.0, 'a'),
+            ('shinji', 123.0, 'a'),
+        ]
+        assert result.execute().fetchall() == expected
