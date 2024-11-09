@@ -1,5 +1,5 @@
 diff --git a/src/to_substrait.cpp b/src/to_substrait.cpp
-index a466fb2..44a9923 100644
+index a466fb2..0dd0766 100644
 --- a/src/to_substrait.cpp
 +++ b/src/to_substrait.cpp
 @@ -1296,6 +1296,17 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
@@ -20,3 +20,12 @@ index a466fb2..44a9923 100644
  	if (!dget.table_filters.filters.empty()) {
  		// Pushdown filter
  		auto filter = CreateConjunction(dget.table_filters.filters,
+@@ -1317,7 +1328,7 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
+ 		auto &column_ids = dget.GetColumnIds();
+ 		for (auto col_idx : dget.projection_ids) {
+ 			auto struct_item = select->add_struct_items();
+-			struct_item->set_field(static_cast<int32_t>(column_ids[col_idx]));
++			struct_item->set_field(static_cast<int32_t>(column_ids[col_idx].GetPrimaryIndex()));
+ 			// FIXME do we need to set the child? if yes, to what?
+ 		}
+ 		projection->set_allocated_select(select);

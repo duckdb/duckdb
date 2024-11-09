@@ -68,7 +68,7 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	D_ASSERT(select_list.size() == column_ids.size());
 	D_ASSERT(info.columns.size() == column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		vacuum.column_id_map[i] = table.GetColumns().LogicalToPhysical(LogicalIndex(column_ids[i])).index;
+		vacuum.column_id_map[i] = table.GetColumns().LogicalToPhysical(column_ids[i].ToLogical()).index;
 	}
 
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));

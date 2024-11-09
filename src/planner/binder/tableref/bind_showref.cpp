@@ -34,7 +34,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 		}
 		result.table = table;
 		auto base_column_id = get.GetColumnIds()[binding.column_index];
-		result.column = &table->GetColumn(LogicalIndex(base_column_id));
+		result.column = &table->GetColumn(LogicalIndex(base_column_id.GetPrimaryIndex()));
 		return result;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {

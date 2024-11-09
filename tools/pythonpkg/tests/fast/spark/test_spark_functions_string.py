@@ -1,6 +1,8 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
+
+from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 
@@ -109,3 +111,56 @@ class TestSparkFunctionsString(object):
             Row(startswith=False),
             Row(startswith=True),
         ]
+
+    def test_ascii(self, spark):
+        df = spark.createDataFrame([("Spark",), ("PySpark",), ("Pandas API",)], ["value"])
+
+        res = df.select(F.ascii("value").alias("a")).collect()
+        assert res == [Row(a=83), Row(a=80), Row(a=80)]
+
+    def test_btrim(self, spark):
+        df = spark.createDataFrame(
+            [
+                (
+                    "SSparkSQLS",
+                    "SL",
+                )
+            ],
+            ['a', 'b'],
+        )
+
+        res = df.select(F.btrim(df.a, df.b).alias('r')).collect()
+        assert res == [Row(r='parkSQ')]
+
+        df = spark.createDataFrame([("    SparkSQL   ",)], ['a'])
+        res = df.select(F.btrim(df.a).alias('r')).collect()
+        assert res == [Row(r='SparkSQL')]
+
+    def test_char(self, spark):
+        df = spark.createDataFrame(
+            [(65,), (65 + 256,), (66 + 256,)],
+            [
+                'a',
+            ],
+        )
+
+        res = df.select(F.char(df.a).alias('ch')).collect()
+        assert res == [Row(ch='A'), Row(ch='A'), Row(ch='B')]
+
+    def test_encode(self, spark):
+        df = spark.createDataFrame([('abcd',)], ['c'])
+
+        res = df.select(F.encode("c", "UTF-8").alias("encoded")).collect()
+        # FIXME: Should return the same type
+        if USE_ACTUAL_SPARK:
+            assert res == [Row(encoded=bytearray(b'abcd'))]
+        else:
+            assert res == [Row(encoded=b'abcd')]
+
+    def test_find_in_set(self, spark):
+        string_array = "abc,b,ab,c,def"
+        df = spark.createDataFrame([("ab", string_array), ("b,c", string_array), ("z", string_array)], ['a', 'b'])
+
+        res = df.select(F.find_in_set(df.a, df.b).alias('r')).collect()
+
+        assert res == [Row(r=3), Row(r=0), Row(r=0)]

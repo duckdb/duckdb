@@ -1,8 +1,30 @@
 diff --git a/src/functions/delta_scan.cpp b/src/functions/delta_scan.cpp
-index 23482f1..968f116 100644
+index 65eb34f..9b45db2 100644
 --- a/src/functions/delta_scan.cpp
 +++ b/src/functions/delta_scan.cpp
-@@ -599,12 +599,12 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
+@@ -464,7 +464,11 @@ unique_ptr<MultiFileList> DeltaSnapshot::ComplexFilterPushdown(ClientContext &co
+     for (const auto &filter : filters) {
+         combiner.AddFilter(filter->Copy());
+     }
+-    auto filterstmp = combiner.GenerateTableScanFilters(info.column_ids);
++    vector<ColumnIndex> column_indexes;
++    for(auto column_id : info.column_ids) {
++    	column_indexes.emplace_back(column_id);
++    }
++    auto filterstmp = combiner.GenerateTableScanFilters(column_indexes);
+ 
+     // TODO: can/should we figure out if this filtered anything?
+     auto filtered_list = make_uniq<DeltaSnapshot>(context, paths[0]);
+@@ -529,7 +533,7 @@ unique_ptr<NodeStatistics> DeltaSnapshot::GetCardinality(ClientContext &context)
+     return nullptr;
+ }
+ 
+-unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance() {
++unique_ptr<MultiFileReader> DeltaMultiFileReader::CreateInstance(const TableFunction &table_function) {
+     return std::move(make_uniq<DeltaMultiFileReader>());
+ }
+ 
+@@ -618,12 +622,12 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
      }
  }
  
@@ -18,12 +40,15 @@ index 23482f1..968f116 100644
  
  // Generate the correct Selection Vector Based on the Raw delta KernelBoolSlice dv and the row_id_column
 diff --git a/src/include/functions/delta_scan.hpp b/src/include/functions/delta_scan.hpp
-index 23c937d..84220f9 100644
+index aac35cc..84220f9 100644
 --- a/src/include/functions/delta_scan.hpp
 +++ b/src/include/functions/delta_scan.hpp
-@@ -105,7 +105,7 @@ struct DeltaMultiFileReaderGlobalState : public MultiFileReaderGlobalState {
+@@ -103,9 +103,9 @@ struct DeltaMultiFileReaderGlobalState : public MultiFileReaderGlobalState {
+ };
+ 
  struct DeltaMultiFileReader : public MultiFileReader {
-     static unique_ptr<MultiFileReader> CreateInstance(const TableFunction &table_function);
+-    static unique_ptr<MultiFileReader> CreateInstance();
++    static unique_ptr<MultiFileReader> CreateInstance(const TableFunction &table_function);
      //! Return a DeltaSnapshot
 -    unique_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
 +    shared_ptr<MultiFileList> CreateFileList(ClientContext &context, const vector<string> &paths,
