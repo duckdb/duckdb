@@ -1145,9 +1145,12 @@ static Value NestedDictToStruct(const py::object &dictionary) {
 	return Value::STRUCT(std::move(children));
 }
 
-void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression, const py::object &field_ids,
-                                 const py::object &row_group_size_bytes, const py::object &row_group_size, const py::object &partition_by,
-                                 const py::object &write_partition_columns) {
+void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression,
+					             const py::object &field_ids, const py::object &row_group_size_bytes,
+					             const py::object &row_group_size,
+								 const py::object &overwrite, const py::object &per_thread_output,
+								 const py::object &use_tmp_file,
+								 const py::object &partition_by, const py::object &write_partition_columns) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(compression)) {
@@ -1208,6 +1211,27 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 			throw InvalidInputException("to_parquet only accepts 'write_partition_columns' as a boolean");
 		}
 		options["write_partition_columns"] = {Value::BOOLEAN(py::bool_(write_partition_columns))};
+	}
+
+	if (!py::none().is(overwrite)) {
+		if (!py::isinstance<py::bool_>(overwrite)) {
+			throw InvalidInputException("to_parquet only accepts 'overwrite' as a boolean");
+		}
+		options["overwrite_or_ignore"] = {Value::BOOLEAN(py::bool_(overwrite))};
+	}
+
+	if (!py::none().is(per_thread_output)) {
+		if (!py::isinstance<py::bool_>(per_thread_output)) {
+			throw InvalidInputException("to_parquet only accepts 'per_thread_output' as a boolean");
+		}
+		options["per_thread_output"] = {Value::BOOLEAN(py::bool_(per_thread_output))};
+	}
+
+	if (!py::none().is(use_tmp_file)) {
+		if (!py::isinstance<py::bool_>(use_tmp_file)) {
+			throw InvalidInputException("to_parquet only accepts 'use_tmp_file' as a boolean");
+		}
+		options["use_tmp_file"] = {Value::BOOLEAN(py::bool_(use_tmp_file))};
 	}
 
 	auto write_parquet = rel->WriteParquetRel(filename, std::move(options));

@@ -34,6 +34,7 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	             "Write the relation object to a Parquet file in 'file_name'", py::arg("file_name"), py::kw_only(),
 	             py::arg("compression") = py::none(), py::arg("field_ids") = py::none(),
 	             py::arg("row_group_size_bytes") = py::none(), py::arg("row_group_size") = py::none(),
+	             py::arg("overwrite") = py::none(), py::arg("per_thread_output") = py::none(), py::arg("use_tmp_file") = py::none(),
 	             py::arg("partition_by") = py::none(), py::arg("write_partition_columns") = py::none());
 
 	DefineMethod(
