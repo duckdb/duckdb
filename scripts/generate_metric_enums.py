@@ -25,6 +25,7 @@ metrics = [
     "RESULT_SET_SIZE",
     "LATENCY",
     "ROWS_RETURNED",
+    "OPERATOR_NAME",
 ]
 
 phase_timing_metrics = [
