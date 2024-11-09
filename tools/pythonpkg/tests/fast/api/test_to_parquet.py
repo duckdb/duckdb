@@ -72,3 +72,39 @@ class TestToParquet(object):
         rel.to_parquet(temp_file_name, row_group_size=122880)
         parquet_rel = duckdb.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == parquet_rel.execute().fetchall()
+
+    def test_partition(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame({
+                "name": ["rei", "shinji", "asuka", "kaworu"],
+                "float": [321.0, 123.0, 23.0, 340.0],
+                "category": ['a', 'a', 'b', 'c'],
+        })
+        rel = duckdb.from_df(df)
+        rel.to_parquet(temp_file_name, partition_by=["category"])
+        result = duckdb.sql(f"FROM read_parquet('{temp_file_name}/*/*.parquet', hive_partitioning=TRUE)")
+        expected = [
+            ("rei", 321.0, "a"),
+            ("shinji", 123.0, "a"),
+            ("asuka", 23.0, "b"),
+            ("kaworu", 340.0, "c")
+        ]
+        assert result.execute().fetchall() == expected
+
+    def test_partition_with_columns(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        df = pd.DataFrame({
+                "name": ["rei", "shinji", "asuka", "kaworu"],
+                "float": [321.0, 123.0, 23.0, 340.0],
+                "category": ['a', 'a', 'b', 'c'],
+        })
+        rel = duckdb.from_df(df)
+        rel.to_parquet(temp_file_name, partition_by=["category"],  write_partition_columns=True)
+        result = duckdb.sql(f"FROM read_parquet('{temp_file_name}/*/*.parquet', hive_partitioning=TRUE)")
+        expected = [
+            ("rei", 321.0, "a"),
+            ("shinji", 123.0, "a"),
+            ("asuka", 23.0, "b"),
+            ("kaworu", 340.0, "c")
+        ]
+        assert result.execute().fetchall() == expected
