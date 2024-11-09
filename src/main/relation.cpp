@@ -354,6 +354,8 @@ void Relation::Update(const string &update, const string &condition) {
 
 void Relation::Update(vector<string> column_names, vector<unique_ptr<ParsedExpression>> &&update,
                       unique_ptr<ParsedExpression> condition) {
+	(void)column_names;
+	(void)update;
 	throw InvalidInputException("UPDATE can only be used on base tables!");
 }
 
