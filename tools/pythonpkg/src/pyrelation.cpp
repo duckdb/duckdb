@@ -1146,7 +1146,8 @@ static Value NestedDictToStruct(const py::object &dictionary) {
 }
 
 void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression, const py::object &field_ids,
-                                 const py::object &row_group_size_bytes, const py::object &row_group_size) {
+                                 const py::object &row_group_size_bytes, const py::object &row_group_size, const py::object &partition_by,
+                                 const py::object &write_partition_columns) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(compression)) {
@@ -1185,6 +1186,28 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 		}
 		int64_t row_group_size_int = py::int_(row_group_size);
 		options["row_group_size"] = {Value(row_group_size_int)};
+	}
+
+	if (!py::none().is(partition_by)) {
+		if (!py::isinstance<py::list>(partition_by)) {
+			throw InvalidInputException("to_parquet only accepts 'partition_by' as a list of strings");
+		}
+		vector<Value> partition_by_values;
+		const py::list &partition_fields = partition_by;
+		for (auto &field : partition_fields) {
+			if (!py::isinstance<py::str>(field)) {
+				throw InvalidInputException("to_parquet only accepts 'partition_by' as a list of strings");
+			}
+			partition_by_values.emplace_back(Value(py::str(field)));
+		}
+		options["partition_by"] = {partition_by_values};
+	}
+
+	if (!py::none().is(write_partition_columns)) {
+		if (!py::isinstance<py::bool_>(write_partition_columns)) {
+			throw InvalidInputException("to_parquet only accepts 'write_partition_columns' as a boolean");
+		}
+		options["write_partition_columns"] = {Value::BOOLEAN(py::bool_(write_partition_columns))};
 	}
 
 	auto write_parquet = rel->WriteParquetRel(filename, std::move(options));
