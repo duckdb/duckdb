@@ -1145,12 +1145,11 @@ static Value NestedDictToStruct(const py::object &dictionary) {
 	return Value::STRUCT(std::move(children));
 }
 
-void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression,
-					             const py::object &field_ids, const py::object &row_group_size_bytes,
-					             const py::object &row_group_size,
-								 const py::object &overwrite, const py::object &per_thread_output,
-								 const py::object &use_tmp_file,
-								 const py::object &partition_by, const py::object &write_partition_columns, const py::object &append) {
+void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression, const py::object &field_ids,
+                                 const py::object &row_group_size_bytes, const py::object &row_group_size,
+                                 const py::object &overwrite, const py::object &per_thread_output,
+                                 const py::object &use_tmp_file, const py::object &partition_by,
+                                 const py::object &write_partition_columns, const py::object &append) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(compression)) {

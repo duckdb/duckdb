@@ -81,20 +81,17 @@ class TestToParquet(object):
     @pytest.mark.parametrize('write_columns', [None, True, False])
     def test_partition(self, pd, write_columns):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
-        df = pd.DataFrame({
+        df = pd.DataFrame(
+            {
                 "name": ["rei", "shinji", "asuka", "kaworu"],
                 "float": [321.0, 123.0, 23.0, 340.0],
                 "category": ['a', 'a', 'b', 'c'],
-        })
+            }
+        )
         rel = duckdb.from_df(df)
         rel.to_parquet(temp_file_name, partition_by=["category"], write_partition_columns=write_columns)
         result = duckdb.sql(f"FROM read_parquet('{temp_file_name}/*/*.parquet', hive_partitioning=TRUE)")
-        expected = [
-            ("rei", 321.0, "a"),
-            ("shinji", 123.0, "a"),
-            ("asuka", 23.0, "b"),
-            ("kaworu", 340.0, "c")
-        ]
+        expected = [("rei", 321.0, "a"), ("shinji", 123.0, "a"), ("asuka", 23.0, "b"), ("kaworu", 340.0, "c")]
         assert result.execute().fetchall() == expected
 
     @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
@@ -112,12 +109,7 @@ class TestToParquet(object):
         rel.to_parquet(temp_file_name, partition_by=["category"], write_partition_columns=write_columns)
         rel.to_parquet(temp_file_name, partition_by=["category"], overwrite=True, write_partition_columns=write_columns)
         result = duckdb.sql(f"FROM read_parquet('{temp_file_name}/*/*.parquet', hive_partitioning=TRUE)")
-        expected = [
-            ("rei", 321.0, "a"),
-            ("shinji", 123.0, "a"),
-            ("asuka", 23.0, "b"),
-            ("kaworu", 340.0, "c")
-        ]
+        expected = [("rei", 321.0, "a"), ("shinji", 123.0, "a"), ("asuka", 23.0, "b"), ("kaworu", 340.0, "c")]
 
         assert result.execute().fetchall() == expected
 
@@ -133,7 +125,7 @@ class TestToParquet(object):
         )
         rel = duckdb.from_df(df)
         rel.to_parquet(temp_file_name)
-        rel.to_parquet(temp_file_name,  use_tmp_file=True)
+        rel.to_parquet(temp_file_name, use_tmp_file=True)
         result = duckdb.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == result.execute().fetchall()
 
