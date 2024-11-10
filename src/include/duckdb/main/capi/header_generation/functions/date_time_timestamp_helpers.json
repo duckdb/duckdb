@@ -175,6 +175,40 @@
                 },
                 "return_value": "True if the timestamp is finite, false if it is \u00b1infinity."
             }
+        },
+        {
+            "name": "duckdb_from_timestamp_s",
+            "return_type": "duckdb_timestamp_struct",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_s",
+                    "name": "ts_s"
+                }
+            ],
+            "comment": {
+                "description": "Decompose a `duckdb_timestamp_s` object into a `duckdb_timestamp_struct`.\n\n",
+                "param_comments": {
+                    "ts": "The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column."
+                },
+                "return_value": "The `duckdb_timestamp_struct` with the decomposed elements."
+            }
+        },
+        {
+            "name": "duckdb_to_timestamp_s",
+            "return_type": "duckdb_timestamp_s",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_struct",
+                    "name": "ts"
+                }
+            ],
+            "comment": {
+                "description": "Re-compose a `duckdb_timestamp_s` from a duckdb_timestamp_struct.\n\n",
+                "param_comments": {
+                    "ts": "The de-composed elements in a `duckdb_timestamp_struct`."
+                },
+                "return_value": "The `duckdb_timestamp_s` element."
+            }
         }
     ]
 }

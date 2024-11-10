@@ -214,6 +214,14 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
+	duckdb_bind_timestamp_s(stmt, 1, duckdb_to_timestamp_s(ts));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "1992-09-03 12:22:33");
+	duckdb_free(value);
+	duckdb_destroy_result(&res);
+
 	duckdb_interval interval;
 	interval.months = 3;
 	interval.days = 0;

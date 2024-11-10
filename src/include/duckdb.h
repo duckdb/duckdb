@@ -297,6 +297,28 @@ typedef struct {
 	int64_t micros;
 } duckdb_interval;
 
+//! TIMESTAMP_S is stored as seconds since 1970-01-01
+typedef struct {
+	int64_t seconds;
+} duckdb_timestamp_s;
+
+//! TIMESTAMP_MS is stored as milliseconds since 1970-01-01
+typedef struct {
+	int64_t millis;
+} duckdb_timestamp_ms;
+
+//! TIMESTAMP_NS is stored as nanoseconds since 1970-01-01
+typedef struct {
+	int64_t nanos;
+} duckdb_timestamp_ns;
+
+//! Used by duckdb_from_timestamp_ns/duckdb_to_timestamp_ns
+typedef struct {
+	duckdb_date_struct date;
+	duckdb_time_struct time;
+	int32_t nanos;
+} duckdb_timestamp_ns_struct;
+
 //! Hugeints are composed of a (lower, upper) component
 //! The value of the hugeint is upper * 2^64 + lower
 //! For easy usage, the functions duckdb_hugeint_to_double/duckdb_double_to_hugeint are recommended
@@ -1328,6 +1350,21 @@ Test a `duckdb_timestamp` to see if it is a finite value.
 */
 DUCKDB_API bool duckdb_is_finite_timestamp(duckdb_timestamp ts);
 
+/*!
+Decompose a `duckdb_timestamp_s` object into a `duckdb_timestamp_struct`.
+
+* @return The `duckdb_timestamp_struct` with the decomposed elements.
+*/
+DUCKDB_API duckdb_timestamp_struct duckdb_from_timestamp_s(duckdb_timestamp_s ts_s);
+
+/*!
+Re-compose a `duckdb_timestamp_s` from a duckdb_timestamp_struct.
+
+* @param ts The de-composed elements in a `duckdb_timestamp_struct`.
+* @return The `duckdb_timestamp_s` element.
+*/
+DUCKDB_API duckdb_timestamp_s duckdb_to_timestamp_s(duckdb_timestamp_struct ts);
+
 //===--------------------------------------------------------------------===//
 // Hugeint Helpers
 //===--------------------------------------------------------------------===//
@@ -1609,6 +1646,12 @@ Binds a duckdb_timestamp value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_timestamp_tz(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                                  duckdb_timestamp val);
+
+/*!
+Binds a duckdb_timestamp_s value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_timestamp_s(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                                duckdb_timestamp_s val);
 
 /*!
 Binds a duckdb_interval value to the prepared statement at the specified index.

@@ -99,3 +99,30 @@ duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct ts) {
 bool duckdb_is_finite_timestamp(duckdb_timestamp ts) {
 	return Timestamp::IsFinite(timestamp_t(ts.micros));
 }
+
+duckdb_timestamp_struct duckdb_from_timestamp_s(duckdb_timestamp_s ts_s) {
+	date_t date;
+	dtime_t time;
+	timestamp_t ts_us = Timestamp::FromEpochSecondsPossiblyInfinite(ts_s.seconds);
+	Timestamp::Convert(ts_us, date, time);
+
+	duckdb_date ddate;
+	ddate.days = date.days;
+
+	duckdb_time dtime;
+	dtime.micros = time.micros;
+
+	duckdb_timestamp_struct result;
+	result.date = duckdb_from_date(ddate);
+	result.time = duckdb_from_time(dtime);
+	return result;
+}
+
+duckdb_timestamp_s duckdb_to_timestamp_s(duckdb_timestamp_struct ts) {
+	date_t date = date_t(duckdb_to_date(ts.date).days);
+	dtime_t time = dtime_t(duckdb_to_time(ts.time).micros);
+
+	duckdb_timestamp_s result;
+	result.seconds = Timestamp::GetEpochSeconds(Timestamp::FromDatetime(date, time));
+	return result;
+}

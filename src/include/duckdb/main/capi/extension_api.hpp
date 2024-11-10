@@ -439,6 +439,10 @@ typedef struct {
 	duckdb_value (*duckdb_create_enum_value)(duckdb_logical_type type, uint64_t value);
 	uint64_t (*duckdb_get_enum_value)(duckdb_value value);
 	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
+	duckdb_timestamp_struct (*duckdb_from_timestamp_s)(duckdb_timestamp_s ts_s);
+	duckdb_timestamp_s (*duckdb_to_timestamp_s)(duckdb_timestamp_struct ts);
+	duckdb_state (*duckdb_bind_timestamp_s)(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+	                                        duckdb_timestamp_s val);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -828,6 +832,9 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_create_enum_value = duckdb_create_enum_value;
 	result.duckdb_get_enum_value = duckdb_get_enum_value;
 	result.duckdb_get_struct_child = duckdb_get_struct_child;
+	result.duckdb_from_timestamp_s = duckdb_from_timestamp_s;
+	result.duckdb_to_timestamp_s = duckdb_to_timestamp_s;
+	result.duckdb_bind_timestamp_s = duckdb_bind_timestamp_s;
 	return result;
 }
 

@@ -294,6 +294,28 @@ typedef struct {
 	int64_t micros;
 } duckdb_interval;
 
+//! TIMESTAMP_S is stored as seconds since 1970-01-01
+typedef struct {
+	int64_t seconds;
+} duckdb_timestamp_s;
+
+//! TIMESTAMP_MS is stored as milliseconds since 1970-01-01
+typedef struct {
+	int64_t millis;
+} duckdb_timestamp_ms;
+
+//! TIMESTAMP_NS is stored as nanoseconds since 1970-01-01
+typedef struct {
+	int64_t nanos;
+} duckdb_timestamp_ns;
+
+//! Used by duckdb_from_timestamp_ns/duckdb_to_timestamp_ns
+typedef struct {
+	duckdb_date_struct date;
+	duckdb_time_struct time;
+	int32_t nanos;
+} duckdb_timestamp_ns_struct;
+
 //! Hugeints are composed of a (lower, upper) component
 //! The value of the hugeint is upper * 2^64 + lower
 //! For easy usage, the functions duckdb_hugeint_to_double/duckdb_double_to_hugeint are recommended
