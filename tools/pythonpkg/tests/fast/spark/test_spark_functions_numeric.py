@@ -315,3 +315,9 @@ class TestSparkFunctionsNumeric(object):
 
         res = df.select(F.e().alias("e")).collect()
         assert pytest.approx(res[0].e) == math.e
+
+    def test_pi(self, spark):
+        df = spark.createDataFrame([("value",)], ["value"])
+
+        res = df.select(F.pi().alias("pi")).collect()
+        assert pytest.approx(res[0].pi) == math.pi

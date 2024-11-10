@@ -1790,6 +1790,23 @@ def e() -> Column:
     return lit(2.718281828459045)
 
 
+def pi() -> Column:
+    """Returns Pi.
+
+    .. versionadded:: 3.5.0
+
+    Examples
+    --------
+    >>> spark.range(1).select(pi()).show()
+    +-----------------+
+    |             PI()|
+    +-----------------+
+    |3.141592653589793|
+    +-----------------+
+    """
+    return _invoke_function("pi")
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set
