@@ -45,6 +45,11 @@ class TestsSparkFunctionsNull(object):
             Row(nvl_value=4),
         ]
 
+    def test_nullif(self, spark):
+        df = spark.createDataFrame([(None, None,), (1, 9,)], ["a", "b"])
+        res = df.select(F.nullif(df.a, df.b).alias('r')).collect()
+        assert res == [Row(r=None), Row(r=1)]
+
     def test_isnull(self, spark):
         df = spark.createDataFrame([(1, None), (None, 2)], ("a", "b"))
 

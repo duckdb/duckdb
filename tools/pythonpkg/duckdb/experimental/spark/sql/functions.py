@@ -2365,6 +2365,26 @@ def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     return coalesce(col1, col2)
 
 
+def nullif(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Returns null if `col1` equals to `col2`, or `col1` otherwise.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+    col2 : :class:`~pyspark.sql.Column` or str
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None, None,), (1, 9,)], ["a", "b"])
+    >>> df.select(nullif(df.a, df.b).alias('r')).collect()
+    [Row(r=None), Row(r=1)]
+    """
+    return _invoke_function_over_columns("nullif", col1, col2)
+
+
 def md5(col: "ColumnOrName") -> Column:
     """Calculates the MD5 digest and returns the value as a 32 character hex string.
 
