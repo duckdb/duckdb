@@ -489,6 +489,39 @@ def levenshtein(
         return Column(CaseExpression(distance <= ConstantExpression(threshold), distance).otherwise(ConstantExpression(-1)))
 
 
+def lpad(col: "ColumnOrName", len: int, pad: str) -> Column:
+    """
+    Left-pad the string column to width `len` with `pad`.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    len : int
+        length of the final string.
+    pad : str
+        chars to prepend.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        left padded result.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('abcd',)], ['s',])
+    >>> df.select(lpad(df.s, 6, '#').alias('s')).collect()
+    [Row(s='##abcd')]
+    """
+    return _invoke_function("lpad", _to_column_expr(col), ConstantExpression(len), ConstantExpression(pad))
+
+
+
 def ascii(col: "ColumnOrName") -> Column:
     """
     Computes the numeric value of the first character of the string column.

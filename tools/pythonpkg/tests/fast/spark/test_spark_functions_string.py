@@ -214,3 +214,9 @@ class TestSparkFunctionsString(object):
 
         res = df.select(F.levenshtein(df.a, df.b).alias('r'), F.levenshtein(df.a, df.b, 3).alias('r_th')).collect()
         assert res == [Row(r=3, r_th=3), Row(r=4, r_th=-1)]
+
+    def test_lpad(self, spark):
+        df = spark.createDataFrame([('abcd',)], ['s',])
+
+        res = df.select(F.lpad(df.s, 6, '#').alias('s')).collect()
+        assert res == [Row(s='##abcd')]
