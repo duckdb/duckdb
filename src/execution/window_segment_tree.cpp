@@ -1555,7 +1555,7 @@ public:
 	//! Tasks launched
 	idx_t total_tasks = 0;
 	//! Tasks launched
-	idx_t tasks_assigned = 0;
+	mutable atomic<idx_t> tasks_assigned;
 	//! Tasks landed
 	mutable atomic<idx_t> tasks_completed;
 
@@ -1586,7 +1586,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
                                                                          const WindowDistinctAggregator &aggregator,
                                                                          idx_t group_count)
     : WindowAggregatorGlobalState(context, aggregator, group_count), context(aggregator.context),
-      stage(PartitionSortStage::INIT), tasks_completed(0), merge_sort_tree(*this, group_count),
+      stage(PartitionSortStage::INIT), tasks_assigned(0), tasks_completed(0), merge_sort_tree(*this, group_count),
       levels_flat_native(aggr) {
 	payload_types.emplace_back(LogicalType::UBIGINT);
 
@@ -1694,9 +1694,6 @@ WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
 	InitSubFrames(frames, gastate.aggregator.exclude_mode);
 	payload_chunk.Initialize(Allocator::DefaultAllocator(), gastate.payload_types);
 
-	auto &global_sort = gastate.global_sort;
-	local_sort.Initialize(*global_sort, global_sort->buffer_manager);
-
 	sort_chunk.Initialize(Allocator::DefaultAllocator(), gastate.sort_types);
 	sort_chunk.data.back().Reference(payload_chunk.data[0]);
 
@@ -1741,6 +1738,12 @@ void WindowDistinctAggregatorLocalState::Sink(DataChunk &sink_chunk, DataChunk &
 	if (filter_sel) {
 		sort_chunk.Slice(*filter_sel, filtered);
 		payload_chunk.Slice(*filter_sel, filtered);
+	}
+
+	auto &global_sort = gastate.global_sort;
+	if (!local_sort.initialized) {
+		local_sort.Initialize(*global_sort, global_sort->buffer_manager);
+		++gastate.tasks_assigned;
 	}
 
 	local_sort.SinkChunk(sort_chunk, payload_chunk);
@@ -1796,7 +1799,7 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 	switch (stage.load()) {
 	case PartitionSortStage::INIT:
 		// Wait for all the local sorts to be processed
-		if (tasks_completed < locals) {
+		if (tasks_completed < tasks_assigned) {
 			return false;
 		}
 		global_sort->PrepareMergePhase();

@@ -2,9 +2,6 @@
 # description: Windowed distinct aggregates at scale
 # group: [window]
 
-# FIXME - deadlock causing CI issues
-mode skip
-
 require tpch
 
 statement ok
