@@ -2342,6 +2342,30 @@ def nvl(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     return coalesce(col1, col2)
 
 
+def nvl2(col1: "ColumnOrName", col2: "ColumnOrName", col3: "ColumnOrName") -> Column:
+    """
+    Returns `col2` if `col1` is not null, or `col3` otherwise.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+    col2 : :class:`~pyspark.sql.Column` or str
+    col3 : :class:`~pyspark.sql.Column` or str
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None, 8, 6,), (1, 9, 9,)], ["a", "b", "c"])
+    >>> df.select(nvl2(df.a, df.b, df.c).alias('r')).collect()
+    [Row(r=6), Row(r=9)]
+    """
+    col1 = _to_column_expr(col1)
+    col2 = _to_column_expr(col2)
+    col3 = _to_column_expr(col3)
+    return Column(CaseExpression(col1.isnull(), col3).otherwise(col2))
+
+
 def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     """
     Returns `col2` if `col1` is null, or `col1` otherwise.
