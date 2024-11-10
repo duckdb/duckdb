@@ -352,9 +352,8 @@ void Relation::Update(const string &update, const string &condition) {
 	throw InvalidInputException("UPDATE can only be used on base tables!");
 }
 
-void Relation::Update(vector<string> column_names, vector<unique_ptr<ParsedExpression>> &&update,
+void Relation::Update(vector<string>, vector<unique_ptr<ParsedExpression>> &&update,
                       unique_ptr<ParsedExpression> condition) {
-	(void)std::move(column_names);
 	(void)std::move(update);
 	(void)std::move(condition);
 	throw InvalidInputException("UPDATE can only be used on base tables!");
