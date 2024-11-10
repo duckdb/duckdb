@@ -415,7 +415,6 @@ def left(str: "ColumnOrName", len: "ColumnOrName") -> Column:
     )
 
 
-
 def right(str: "ColumnOrName", len: "ColumnOrName") -> Column:
     """
     Returns the rightmost `len`(`len` can be string type) characters from the string `str`,
@@ -445,6 +444,49 @@ def right(str: "ColumnOrName", len: "ColumnOrName") -> Column:
         )
     )
 
+
+def levenshtein(
+    left: "ColumnOrName", right: "ColumnOrName", threshold: Optional[int] = None
+) -> Column:
+    """Computes the Levenshtein distance of the two given strings.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    left : :class:`~pyspark.sql.Column` or str
+        first column value.
+    right : :class:`~pyspark.sql.Column` or str
+        second column value.
+    threshold : int, optional
+        if set when the levenshtein distance of the two given strings
+        less than or equal to a given threshold then return result distance, or -1
+
+        .. versionchanged: 3.5.0
+            Added ``threshold`` argument.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        Levenshtein distance as integer value.
+
+    Examples
+    --------
+    >>> df0 = spark.createDataFrame([('kitten', 'sitting',)], ['l', 'r'])
+    >>> df0.select(levenshtein('l', 'r').alias('d')).collect()
+    [Row(d=3)]
+    >>> df0.select(levenshtein('l', 'r', 2).alias('d')).collect()
+    [Row(d=-1)]
+    """
+    distance = _invoke_function_over_columns("levenshtein", left, right)
+    if threshold is None:
+        return distance
+    else:
+        distance = _to_column_expr(distance)
+        return Column(CaseExpression(distance <= ConstantExpression(threshold), distance).otherwise(ConstantExpression(-1)))
 
 
 def ascii(col: "ColumnOrName") -> Column:

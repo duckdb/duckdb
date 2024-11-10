@@ -203,8 +203,14 @@ class TestSparkFunctionsString(object):
         res = df.select(F.left(df.a, df.b).alias('r')).collect()
         assert res == [Row(r='Spa'), Row(r=''), Row(r='')]
 
-    def test_left(self, spark):
+    def test_right(self, spark):
         df = spark.createDataFrame([("Spark SQL", 3,), ("Spark SQL", 0,), ("Spark SQL", -3,)], ['a', 'b'])
 
         res = df.select(F.right(df.a, df.b).alias('r')).collect()
         assert res == [Row(r='SQL'), Row(r=''), Row(r='')]
+
+    def test_levenshtein(self, spark):
+        df = spark.createDataFrame([("kitten", "sitting"), ("saturdays", "sunday")], ['a', 'b'])
+
+        res = df.select(F.levenshtein(df.a, df.b).alias('r'), F.levenshtein(df.a, df.b, 3).alias('r_th')).collect()
+        assert res == [Row(r=3, r_th=3), Row(r=4, r_th=-1)]
