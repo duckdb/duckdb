@@ -28,3 +28,8 @@ class TestsSparkFunctionsMiscellaneous:
             Row(abs_value=1),
             Row(abs_value=4),
         ]
+
+    def test_octet_length(self, spark):
+        df = spark.createDataFrame([('cat',)], ['c1'])
+        res = df.select(F.octet_length('c1').alias("o")).collect()
+        assert res == [Row(o=3)]

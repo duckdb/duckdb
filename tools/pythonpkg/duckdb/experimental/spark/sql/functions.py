@@ -3662,6 +3662,34 @@ def initcap(col: "ColumnOrName") -> Column:
     )
 
 
+def octet_length(col: "ColumnOrName") -> Column:
+    """
+    Calculates the byte length for the specified string column.
+
+    .. versionadded:: 3.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        Source column or strings
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        Byte length of the col
+
+    Examples
+    --------
+    >>> from pyspark.sql.functions import octet_length
+    >>> spark.createDataFrame([('cat',), ( '\U0001F408',)], ['cat']) \\
+    ...      .select(octet_length('cat')).collect()
+        [Row(octet_length(cat)=3), Row(octet_length(cat)=4)]
+    """
+    return _invoke_function("octet_length", _to_column_expr(col).cast("blob"))
+
 
 def hex(col: "ColumnOrName") -> Column:
     """
