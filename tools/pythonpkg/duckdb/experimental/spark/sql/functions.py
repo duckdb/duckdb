@@ -521,6 +521,37 @@ def lpad(col: "ColumnOrName", len: int, pad: str) -> Column:
     return _invoke_function("lpad", _to_column_expr(col), ConstantExpression(len), ConstantExpression(pad))
 
 
+def rpad(col: "ColumnOrName", len: int, pad: str) -> Column:
+    """
+    Right-pad the string column to width `len` with `pad`.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    len : int
+        length of the final string.
+    pad : str
+        chars to append.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        right padded result.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('abcd',)], ['s',])
+    >>> df.select(rpad(df.s, 6, '#').alias('s')).collect()
+    [Row(s='abcd##')]
+    """
+    return _invoke_function("rpad", _to_column_expr(col), ConstantExpression(len), ConstantExpression(pad))
+
 
 def ascii(col: "ColumnOrName") -> Column:
     """

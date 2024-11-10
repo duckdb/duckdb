@@ -220,3 +220,9 @@ class TestSparkFunctionsString(object):
 
         res = df.select(F.lpad(df.s, 6, '#').alias('s')).collect()
         assert res == [Row(s='##abcd')]
+
+    def test_rpad(self, spark):
+        df = spark.createDataFrame([('abcd',)], ['s',])
+
+        res = df.select(F.rpad(df.s, 6, '#').alias('s')).collect()
+        assert res == [Row(s='abcd##')]
