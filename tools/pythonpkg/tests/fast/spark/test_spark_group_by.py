@@ -22,6 +22,7 @@ from spark_namespace.sql.functions import (
     max,
     min,
     mean,
+    median,
     count,
     any_value,
     approx_count_distinct,
@@ -178,3 +179,14 @@ class TestDataFrameGroupBy(object):
         )
 
         assert res == [Row(name='Alice', first_age=None, last_age=2), Row(name='Bob', first_age=5, last_age=5)]
+
+    def test_group_by_mean(self, spark):
+        df = spark.createDataFrame([
+        ("Java", 2012, 20000), ("dotNET", 2012, 5000),
+        ("Java", 2012, 22000), ("dotNET", 2012, 10000),
+        ("dotNET", 2013, 48000), ("Java", 2013, 30000)],
+        schema=("course", "year", "earnings"))
+
+        res = df.groupBy("course").agg(median("earnings").alias("m")).collect()
+
+        assert sorted(res, key=lambda x: x.course) == [Row(course='Java', m=22000), Row(course='dotNET', m=10000)]
