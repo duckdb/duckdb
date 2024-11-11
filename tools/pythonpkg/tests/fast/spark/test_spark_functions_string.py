@@ -252,3 +252,12 @@ class TestSparkFunctionsString(object):
         )
         res = df.select(F.regexp('str', F.col("regexp")).alias("m")).collect()
         assert res[0].m is True
+
+    def test_regexp_count(self, spark):
+        df = spark.createDataFrame([("1a 2b 14m", r"\d+")], ["str", "regexp"])
+        res = df.select(F.regexp_count('str', F.lit(r'\d+')).alias('d')).collect()
+        assert res == [Row(d=3)]
+        res = df.select(F.regexp_count('str', F.lit(r'mmm')).alias('d')).collect()
+        assert res == [Row(d=0)]
+        res = df.select(F.regexp_count("str", F.col("regexp")).alias('d')).collect()
+        assert res == [Row(d=3)]
