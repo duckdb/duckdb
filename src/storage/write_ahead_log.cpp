@@ -52,6 +52,7 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 
 //! Gets the total bytes written to the WAL since startup
 idx_t WriteAheadLog::GetWALSize() const {
+	D_ASSERT(init_state != WALInitState::NO_WAL || wal_size == 0);
 	return wal_size;
 }
 
@@ -63,6 +64,10 @@ idx_t WriteAheadLog::GetTotalWritten() const {
 }
 
 void WriteAheadLog::Truncate(idx_t size) {
+	if (init_state == WALInitState::NO_WAL) {
+		// no WAL to truncate
+		return;
+	}
 	if (!Initialized()) {
 		init_state = WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
 		wal_size = size;
