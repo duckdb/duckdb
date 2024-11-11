@@ -194,11 +194,12 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	double penalty;
 	idx_t average_length = state.total_size / state.count;
 	auto overflow_string_threshold = StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize());
-	if (average_length < overflow_string_threshold) {
-		average_length = MaxValue<idx_t>(average_length, 200);
-		penalty =
-		    5.0 +
-		    (((double)overflow_string_threshold - (double)average_length) / (double)overflow_string_threshold) * 25.0;
+	if (average_length < 100) {
+		penalty = 2.0;
+	} else if (average_length <= 3000) {
+		penalty = 2.0 + ((double)(average_length - 100) * (15.0 - 2.0)) / (double)(3000 - 100);
+	} else if (average_length < overflow_string_threshold) {
+		penalty = 15.0 - ((double)(average_length - 3000) * (15.0 - 1.8)) / (double)(4000 - 3000);
 	} else {
 		// From this point on, ZSTD starts to beat Uncompressed scan speed by about 5x, increasing rapidly (4096 is 5x,
 		// 8000 is 15x)
@@ -543,8 +544,7 @@ public:
 			segment_block_size = info.GetBlockSize();
 		}
 
-		state.FlushSegment(std::move(segment), segment_block_size);
-		segment_handle.Destroy();
+		state.FlushSegment(std::move(segment), std::move(segment_handle), segment_block_size);
 		segment_count++;
 		vector_in_segment_count = 0;
 	}

@@ -140,18 +140,21 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 		output.SetValue(col_idx++, count, Value::BOOLEAN(entry.persistent));
 		// block_id
 		// block_offset
-		// additional_block_ids
 		if (entry.persistent) {
 			output.SetValue(col_idx++, count, Value::BIGINT(entry.block_id));
 			output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.block_offset)));
-			output.SetValue(col_idx++, count, ValueFromBlockIdList(entry.additional_blocks));
 		} else {
-			output.SetValue(col_idx++, count, Value());
 			output.SetValue(col_idx++, count, Value());
 			output.SetValue(col_idx++, count, Value());
 		}
 		// segment_info
 		output.SetValue(col_idx++, count, Value(entry.segment_info));
+		// additional_block_ids
+		if (entry.persistent) {
+			output.SetValue(col_idx++, count, ValueFromBlockIdList(entry.additional_blocks));
+		} else {
+			output.SetValue(col_idx++, count, Value());
+		}
 		count++;
 	}
 	output.SetCardinality(count);
