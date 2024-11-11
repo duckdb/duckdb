@@ -727,8 +727,7 @@ TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
 		failed = false;
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		auto msg = error.Message();
-		REQUIRE(msg.find("the column must exist in the table") != std::string::npos);
+		REQUIRE(error.Message().find("the column must exist in the table") != std::string::npos);
 		failed = true;
 	}
 	REQUIRE(failed);
@@ -740,6 +739,17 @@ TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("cannot add a generated column to the appender") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+
+	// Cannot add the same column twice.
+	try {
+		appender.AddColumn("j");
+		failed = false;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("cannot add the same column twice") != std::string::npos);
 		failed = true;
 	}
 	REQUIRE(failed);

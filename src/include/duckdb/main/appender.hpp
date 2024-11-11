@@ -35,13 +35,13 @@ protected:
 	//! The allocator for the column data collection.
 	Allocator &allocator;
 	//! The column types of the associated table.
-	vector<LogicalType> table_types; // TODO: revert rename
+	vector<LogicalType> types;
 	//! The active column types.
 	vector<LogicalType> active_types;
 	//! The buffered to-be-appended data.
 	unique_ptr<ColumnDataCollection> collection;
 	//! The active chunk for row-based appends.
-	DataChunk chunkk; // TODO: rename back
+	DataChunk chunk;
 	//! The currently active column of row-based appends.
 	idx_t column = 0;
 	//! The type of the appender.
@@ -82,8 +82,11 @@ public:
 	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
 	DUCKDB_API void Close();
 
-	vector<LogicalType> &GetTypes() {
-		return table_types;
+	vector<LogicalType> &GetTypess() {
+		return types;
+	}
+	vector<LogicalType> &GetActiveTypes() {
+		return active_types;
 	}
 	idx_t CurrentColumn() const {
 		return column;
@@ -129,7 +132,7 @@ class Appender : public BaseAppender {
 	//! The table description including the column names.
 	unique_ptr<TableDescription> description;
 	//! All table default values.
-	unordered_map<column_t, Value> table_default_values; // TODO: revert rename
+	unordered_map<column_t, Value> default_values;
 
 	//! If not empty, then this holds all columns provided by the appender.
 	//! Any other columns default to NULL, or their default values.
