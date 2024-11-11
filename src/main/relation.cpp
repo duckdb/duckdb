@@ -352,10 +352,9 @@ void Relation::Update(const string &update, const string &condition) {
 	throw InvalidInputException("UPDATE can only be used on base tables!");
 }
 
-void Relation::Update(
-    vector<string>,
-    vector<unique_ptr<ParsedExpression>> &&update, // NOLINT: unused variable / copied on every invocation ...
-    unique_ptr<ParsedExpression> condition) {      // NOLINT: unused variable
+void Relation::Update(vector<string>, // NOLINT: unused variable / copied on every invocation ...
+                      vector<unique_ptr<ParsedExpression>> &&update, // NOLINT: unused variable
+                      unique_ptr<ParsedExpression> condition) {      // NOLINT: unused variable
 	(void)std::move(update);
 	(void)std::move(condition);
 	throw InvalidInputException("UPDATE can only be used on base tables!");
