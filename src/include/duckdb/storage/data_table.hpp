@@ -57,7 +57,7 @@ public:
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
-	          const vector<column_t> &bound_columns, Expression &cast_expr);
+	          const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
 	DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint);
 
@@ -74,7 +74,7 @@ public:
 	vector<LogicalType> GetTypes();
 	const vector<ColumnDefinition> &Columns() const;
 
-	void InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
+	void InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<StorageIndex> &column_ids,
 	                    TableFilterSet *table_filters = nullptr);
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
@@ -89,7 +89,7 @@ public:
 	void Scan(DuckTransaction &transaction, DataChunk &result, TableScanState &state);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
+	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_ids, idx_t fetch_count, ColumnFetchState &state);
 
 	//! Initializes an append to transaction-local storage
@@ -247,7 +247,7 @@ private:
 	void VerifyDeleteConstraints(TableDeleteState &state, ClientContext &context, DataChunk &chunk);
 
 	void InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
-	                              const vector<column_t> &column_ids, idx_t start_row, idx_t end_row);
+	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
 
 	void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
 	                                VerifyExistenceType verify_type);

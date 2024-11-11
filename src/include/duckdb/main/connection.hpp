@@ -135,6 +135,7 @@ public:
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values);
 	//! Returns a relation that produces values
 	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values);
+	DUCKDB_API shared_ptr<Relation> Values(vector<vector<unique_ptr<ParsedExpression>>> &&values);
 	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values, const vector<string> &column_names,
 	                                       const string &alias = "values");
 	DUCKDB_API shared_ptr<Relation> Values(const string &values);

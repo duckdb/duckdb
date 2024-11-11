@@ -440,8 +440,8 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	// Create a binder to bind the parsed expressions.
-	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
+	vector<ColumnIndex> column_indexes;
+	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_indexes, table);
 	IndexBinder idx_binder(*binder, context);
 
 	// Bind the parsed expressions to create unbound expressions.
@@ -451,6 +451,11 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 		auto &col = column_list.GetColumn(logical_index);
 		unique_ptr<ParsedExpression> parsed = make_uniq<ColumnRefExpression>(col.GetName(), table_info.name);
 		unbound_expressions.push_back(idx_binder.Bind(parsed));
+	}
+
+	vector<column_t> column_ids;
+	for (auto &column_index : column_indexes) {
+		column_ids.push_back(column_index.GetPrimaryIndex());
 	}
 
 	auto &storage = table.GetStorage();
@@ -656,8 +661,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 		column_names.push_back(col.Name());
 	}
 
-	// Create a binder to bind the parsed expressions.
-	vector<column_t> column_ids;
+	// create a binder to bind the parsed expressions
+	vector<ColumnIndex> column_ids;
 	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_ids, table);
 	IndexBinder idx_binder(*binder, context);
 

@@ -59,6 +59,7 @@
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/statement/load_statement.hpp"
+#include "duckdb_python/expression/pyexpression.hpp"
 
 #include <random>
 
@@ -210,7 +211,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("unregister", &DuckDBPyConnection::UnregisterPythonObject, "Unregister the view name", py::arg("view_name"));
 	m.def("table", &DuckDBPyConnection::Table, "Create a relation object for the named table", py::arg("table_name"));
 	m.def("view", &DuckDBPyConnection::View, "Create a relation object for the named view", py::arg("view_name"));
-	m.def("values", &DuckDBPyConnection::Values, "Create a relation object from the passed values", py::arg("values"));
+	m.def("values", &DuckDBPyConnection::Values, "Create a relation object from the passed values");
 	m.def("table_function", &DuckDBPyConnection::TableFunction,
 	      "Create a relation object from the named table function with given parameters", py::arg("name"),
 	      py::arg("parameters") = py::none());
@@ -1502,16 +1503,74 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	}
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
+static vector<unique_ptr<ParsedExpression>> ValueListFromExpressions(const py::args &expressions) {
+	vector<unique_ptr<ParsedExpression>> result;
+	auto arg_count = expressions.size();
+	if (arg_count == 0) {
+		throw InvalidInputException("Please provide a non-empty tuple");
+	}
+
+	for (idx_t i = 0; i < arg_count; i++) {
+		py::handle arg = expressions[i];
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+			throw InvalidInputException("Please provide arguments of type Expression!");
+		}
+		auto expr = py_expr->GetExpression().Copy();
+		result.push_back(std::move(expr));
+	}
+	return result;
+}
+
+static vector<vector<unique_ptr<ParsedExpression>>> ValueListsFromTuples(const py::args &tuples) {
+	auto arg_count = tuples.size();
+	if (arg_count == 0) {
+		throw InvalidInputException("Please provide a non-empty tuple");
+	}
+
+	idx_t expected_length = 0;
+	vector<vector<unique_ptr<ParsedExpression>>> result;
+	for (idx_t i = 0; i < arg_count; i++) {
+		py::handle arg = tuples[i];
+		if (!py::isinstance<py::tuple>(arg)) {
+			string actual_type = py::str(arg.get_type());
+			throw InvalidInputException("Expected objects of type tuple, not %s", actual_type);
+		}
+		auto expressions = py::cast<py::args>(arg);
+		auto value_list = ValueListFromExpressions(expressions);
+		if (i && value_list.size() != expected_length) {
+			throw InvalidInputException("Mismatch between length of tuples in input, expected %d but found %d",
+			                            expected_length, value_list.size());
+		}
+		expected_length = value_list.size();
+		result.push_back(std::move(value_list));
+	}
+	return result;
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(const py::args &args) {
 	auto &connection = con.GetConnection();
-	if (params.is_none()) {
-		params = py::list();
+
+	auto arg_count = args.size();
+	if (arg_count == 0) {
+		throw InvalidInputException("Could not create a ValueRelation without any inputs");
 	}
-	if (!py::hasattr(params, "__len__")) {
-		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
+
+	D_ASSERT(py::gil_check());
+	py::handle first_arg = args[0];
+	if (arg_count == 1 && py::isinstance<py::list>(first_arg)) {
+		vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(first_arg)};
+		return make_uniq<DuckDBPyRelation>(connection.Values(values));
+	} else {
+		vector<vector<unique_ptr<ParsedExpression>>> expressions;
+		if (py::isinstance<py::tuple>(first_arg)) {
+			expressions = ValueListsFromTuples(args);
+		} else {
+			auto values = ValueListFromExpressions(args);
+			expressions.push_back(std::move(values));
+		}
+		return make_uniq<DuckDBPyRelation>(connection.Values(std::move(expressions)));
 	}
-	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(params)};
-	return make_uniq<DuckDBPyRelation>(connection.Values(values));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
