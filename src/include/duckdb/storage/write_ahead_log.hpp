@@ -38,7 +38,7 @@ class TransactionManager;
 class WriteAheadLogDeserializer;
 struct PersistentCollectionData;
 
-enum class WALInitState { UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
+enum class WALInitState { NO_WAL, UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -48,7 +48,7 @@ class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
 	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size = 0ULL,
-	                       WALInitState state = WALInitState::UNINITIALIZED);
+	                       WALInitState state = WALInitState::NO_WAL);
 	virtual ~WriteAheadLog();
 
 public:
@@ -58,7 +58,7 @@ public:
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetWALSize() const;
 	//! Gets the total bytes written to the WAL since startup
-	idx_t GetTotalWritten();
+	idx_t GetTotalWritten() const;
 
 	//! A WAL is initialized, if a writer to a file exists.
 	bool Initialized() const;
