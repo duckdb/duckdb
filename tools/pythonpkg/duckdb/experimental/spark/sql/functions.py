@@ -2286,6 +2286,41 @@ def sequence(
         return _invoke_function_over_columns("generate_series", start, stop, step)
 
 
+def sign(col: "ColumnOrName") -> Column:
+    """
+    Computes the signum of the given value.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.range(1).select(
+    ...     sf.sign(sf.lit(-5)),
+    ...     sf.sign(sf.lit(6))
+    ... ).show()
+    +--------+-------+
+    |sign(-5)|sign(6)|
+    +--------+-------+
+    |    -1.0|    1.0|
+    +--------+-------+
+    """
+    return _invoke_function_over_columns("sign", col)
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set
