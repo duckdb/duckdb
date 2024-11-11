@@ -233,3 +233,22 @@ class TestSparkFunctionsString(object):
         )
         res = df.select(F.printf("a", "b", "c").alias("r")).collect()
         assert res == [Row(r='aa123cc')]
+
+    def test_regexp(self, spark):
+        df = spark.createDataFrame(
+            [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
+        )
+        res = df.select(F.regexp('str', F.lit(r'(\d+)')).alias("m")).collect()
+        assert res[0].m is True
+
+        df = spark.createDataFrame(
+            [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
+        )
+        res = df.select(F.regexp('str', F.lit(r'\d{2}b')).alias("m")).collect()
+        assert res[0].m is False
+
+        df = spark.createDataFrame(
+            [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
+        )
+        res = df.select(F.regexp('str', F.col("regexp")).alias("m")).collect()
+        assert res[0].m is True
