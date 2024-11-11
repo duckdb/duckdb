@@ -572,7 +572,8 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, Value(OP::GetFunctionType()));
 
 	// function_description, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(function_description.description));
+	output.SetValue(col++, output_offset,
+	                (function_description.description.empty()) ? Value() : Value(function_description.description));
 
 	// comment, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, entry.comment);
