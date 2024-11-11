@@ -289,3 +289,15 @@ class TestSparkFunctionsString(object):
 
         res = df.select(F.regexp_extract_all('str', F.col("regexp")).alias('d')).collect()
         assert res == [Row(d=['100', '300'])]
+
+    def test_regexp_substr(self, spark):
+        df = spark.createDataFrame([("1a 2b 14m", r"\d+")], ["str", "regexp"])
+
+        res = df.select(F.regexp_substr('str', F.lit(r'\d+')).alias('d')).collect()
+        assert res == [Row(d='1')]
+
+        res = df.select(F.regexp_substr('str', F.lit(r'mmm')).alias('d')).collect()
+        assert res == [Row(d=None)]
+
+        res = df.select(F.regexp_substr("str", F.col("regexp")).alias('d')).collect()
+        assert res == [Row(d='1')]
