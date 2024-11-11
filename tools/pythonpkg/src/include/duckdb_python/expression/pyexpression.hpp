@@ -61,7 +61,10 @@ public:
 	shared_ptr<DuckDBPyExpression> SetAlias(const string &alias) const;
 	shared_ptr<DuckDBPyExpression> When(const DuckDBPyExpression &condition, const DuckDBPyExpression &value);
 	shared_ptr<DuckDBPyExpression> Else(const DuckDBPyExpression &value);
+
 	shared_ptr<DuckDBPyExpression> Cast(const DuckDBPyType &type) const;
+	shared_ptr<DuckDBPyExpression> Between(const DuckDBPyExpression &lower, const DuckDBPyExpression &upper);
+	shared_ptr<DuckDBPyExpression> Collate(const string &collation);
 
 	// AND, OR and NOT
 

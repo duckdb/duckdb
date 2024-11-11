@@ -397,6 +397,70 @@ class TestExpression(object):
         res = rel2.fetchall()
         assert res == [(25,)]
 
+    def test_between_expression(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select
+                5 as a,
+                2 as b,
+                3 as c
+        """
+        )
+        a = ColumnExpression('a')
+        b = ColumnExpression('b')
+        c = ColumnExpression('c')
+
+        # 5 BETWEEN 2 AND 3 -> false
+        assert rel.select(a.between(b, c)).fetchall() == [(False,)]
+
+        # 2 BETWEEN 5 AND 3 -> false
+        assert rel.select(b.between(a, c)).fetchall() == [(False,)]
+
+        # 3 BETWEEN 5 AND 2 -> false
+        assert rel.select(c.between(a, b)).fetchall() == [(False,)]
+
+        # 3 BETWEEN 2 AND 5 -> true
+        assert rel.select(c.between(b, a)).fetchall() == [(True,)]
+
+    def test_collate_expression(self):
+        con = duckdb.connect()
+        rel = con.sql(
+            """
+            select
+                'a' as c0,
+                'A' as c1
+            """
+        )
+
+        col1 = ColumnExpression('c0')
+        col2 = ColumnExpression('c1')
+
+        lower_a = ConstantExpression('a')
+        upper_a = ConstantExpression('A')
+
+        # SELECT c0 LIKE 'a' == True
+        assert rel.select(FunctionExpression('~~', col1, lower_a)).fetchall() == [(True,)]
+
+        # SELECT c0 LIKE 'A' == False
+        assert rel.select(FunctionExpression('~~', col1, upper_a)).fetchall() == [(False,)]
+
+        # SELECT c0 LIKE 'A' COLLATE NOCASE == True
+        assert rel.select(FunctionExpression('~~', col1, upper_a.collate('NOCASE'))).fetchall() == [(True,)]
+
+        # SELECT c1 LIKE 'a' == False
+        assert rel.select(FunctionExpression('~~', col2, lower_a)).fetchall() == [(False,)]
+
+        # SELECT c1 LIKE 'a' COLLATE NOCASE == True
+        assert rel.select(FunctionExpression('~~', col2, lower_a.collate('NOCASE'))).fetchall() == [(True,)]
+
+        with pytest.raises(duckdb.BinderException, match='collations are only supported for type varchar'):
+            rel.select(FunctionExpression('~~', col2, lower_a).collate('NOCASE'))
+
+        with pytest.raises(duckdb.CatalogException, match='Collation with name non-existant does not exist'):
+            rel.select(FunctionExpression('~~', col2, lower_a.collate('non-existant')))
+
     def test_equality_expression(self):
         con = duckdb.connect()
 

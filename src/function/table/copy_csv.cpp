@@ -318,7 +318,8 @@ static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const
 		// force quote is disabled: check if we need to add quotes anyway
 		force_quote = RequiresQuotes(csv_data, str, len);
 	}
-	if (force_quote) {
+	// If a quote is set to none (i.e., null-terminator) we skip the quotation
+	if (force_quote && options.dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		// quoting is enabled: we might need to escape things in the string
 		bool requires_escape = false;
 		// simple CSV
