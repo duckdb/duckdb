@@ -152,28 +152,28 @@ duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
 	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP>(val).value};
 }
 duckdb_value duckdb_create_timestamp_tz(duckdb_timestamp input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP_TZ(duckdb::timestamp_t(input.micros))));
+	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_t(input.micros))));
 }
 duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val) {
 	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP_TZ>(val).value};
 }
 duckdb_value duckdb_create_timestamp_s(duckdb_timestamp_s input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP_SEC(duckdb::timestamp_t(input.seconds))));
+	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMPSEC(duckdb::timestamp_t(input.seconds))));
 }
 duckdb_timestamp_s duckdb_get_timestamp_s(duckdb_value val) {
-	return {CAPIGetValue<uint64_t, LogicalTypeId::TIMESTAMP_SEC>(val).value}
+	return {CAPIGetValue<int64_t, LogicalTypeId::TIMESTAMP_SEC>(val)};
 }
 duckdb_value duckdb_create_timestamp_ms(duckdb_timestamp_ms input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP_MS(duckdb::timestamp_t(input.millis))));
+	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMPMS(duckdb::timestamp_t(input.millis))));
 }
 duckdb_timestamp_ms duckdb_get_timestamp_ms(duckdb_value val) {
-	return {CAPIGetValue<uint64_t, LogicalTypeId::TIMESTAMP_MS>(val).value};
+	return {CAPIGetValue<int64_t, LogicalTypeId::TIMESTAMP_MS>(val)};
 }
 duckdb_value duckdb_create_timestamp_ns(duckdb_timestamp_ns input) {
-	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMP_NS(duckdb::timestamp_t(input.nanos))));
+	return WrapValue(new duckdb::Value(duckdb::Value::TIMESTAMPNS(duckdb::timestamp_t(input.nanos))));
 }
 duckdb_timestamp_ns duckdb_get_timestamp_ns(duckdb_value val) {
-	return {CAPIGetValue<uint64_t, LogicalTypeId::TIMESTAMP_NS>(val).value};
+	return {CAPIGetValue<int64_t, LogicalTypeId::TIMESTAMP_NS>(val)};
 }
 duckdb_value duckdb_create_interval(duckdb_interval input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(input.months, input.days, input.micros)));
