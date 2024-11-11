@@ -174,8 +174,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		if (!lock) {
 			// we could not manage to get the lock - cancel
 			throw TransactionException(
-			    "Cannot CHECKPOINT: there are other write transactions active. Use FORCE CHECKPOINT to abort "
-			    "the other transactions and force a checkpoint");
+			    "Cannot CHECKPOINT: there are other write transactions active. Try using FORCE CHECKPOINT to wait until all active transactions are finished");
 		}
 
 	} else {
