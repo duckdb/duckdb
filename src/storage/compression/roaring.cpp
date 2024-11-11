@@ -41,11 +41,11 @@ public:
 		if (is_run) {
 			data.run_container.is_run = 1;
 			data.run_container.number_of_runs = value;
-			data.run_container.free_real_estate = 0;
+			data.run_container.unused = 0;
 		} else {
 			data.non_run_container.is_run = 0;
 			data.non_run_container.cardinality = value;
-			data.non_run_container.free_real_estate = 0;
+			data.non_run_container.unused = 0;
 		}
 	}
 
@@ -65,15 +65,16 @@ public:
 private:
 	union {
 		struct {
-			uint16_t is_run : 1;           // 1 bit to indicate if this is a run container
-			uint16_t number_of_runs : 11;  // 11 bits for the number of runs
-			uint16_t free_real_estate : 4; // 4 bits of free space
+			uint16_t unused : 3;          //! Currently unused bits
+			uint16_t is_run : 1;          //! Indicate if this is a run container
+			uint16_t unused2 : 1;         //! Currently unused bits
+			uint16_t number_of_runs : 11; //! The number of runs
 		} run_container;
 
 		struct {
-			uint16_t is_run : 1;           // 1 bit to indicate if this is not a run container
-			uint16_t cardinality : 12;     // 12 bits for cardinality
-			uint16_t free_real_estate : 3; // 3 bits of free space
+			uint16_t unused : 3;       //! Currently unused bits
+			uint16_t is_run : 1;       //! Indicate if this is a run container
+			uint16_t cardinality : 12; //! How many values are set
 		} non_run_container;
 	} data;
 };
@@ -86,8 +87,8 @@ struct RunContainerRLEPair {
 enum class ContainerType : uint8_t { RUN_CONTAINER, ARRAY_CONTAINER, BITSET_CONTAINER };
 
 struct ContainerCompressionState {
-	constexpr uint16_t MAX_RUN_IDX = 2047;
-	constexpr uint16_t MAX_ARRAY_IDX = 4095;
+	static constexpr uint16_t MAX_RUN_IDX = 2047;
+	static constexpr uint16_t MAX_ARRAY_IDX = 4095;
 
 public:
 	struct Result {
@@ -100,6 +101,7 @@ public:
 
 public:
 	ContainerCompressionState() {
+		Reset();
 	}
 
 public:
@@ -158,8 +160,8 @@ public:
 			// Can not efficiently encode at all, write it uncompressed
 			return Result {ContainerType::BITSET_CONTAINER, true, count};
 		}
-		uint16_t lowest_array_cost = MinValue<uint16_t>(array_idx[0], array_idx[1]);
-		uint16_t lowest_run_cost = MinValue<uint16_t>(run_idx[0], run_idx[1]) * 2;
+		uint16_t lowest_array_cost = duckdb::MinValue<uint16_t>(array_idx[0], array_idx[1]);
+		uint16_t lowest_run_cost = duckdb::MinValue<uint16_t>(run_idx[0], run_idx[1]) * 2;
 
 		if (lowest_array_cost <= lowest_run_cost) {
 			if (array_idx[0] < array_idx[1]) {
@@ -220,13 +222,16 @@ public:
 public:
 	void Analyze(Vector &input, idx_t count) {
 		UnifiedVectorFormat unified;
-		input.ToUnifiedFormat(unified, count);
+		input.ToUnifiedFormat(count, unified);
 		auto &validity = unified.validity;
 
-		if (validity_mask.AllValid())
-			for (idx_t i = 0; i < count; i++) {
-				validity.IsInvalid
-			}
+		if (validity.AllValid()) {
+			// Fast path for all non-null ?
+			return;
+		}
+		for (idx_t i = 0; i < count; i++) {
+			validity.RowIsValidUnsafe(i);
+		}
 	}
 
 public:
