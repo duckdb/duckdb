@@ -173,8 +173,8 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		lock = checkpoint_lock.TryGetExclusiveLock();
 		if (!lock) {
 			// we could not manage to get the lock - cancel
-			throw TransactionException(
-			    "Cannot CHECKPOINT: there are other write transactions active. Try using FORCE CHECKPOINT to wait until all active transactions are finished");
+			throw TransactionException("Cannot CHECKPOINT: there are other write transactions active. Try using FORCE "
+			                           "CHECKPOINT to wait until all active transactions are finished");
 		}
 
 	} else {
