@@ -2092,6 +2092,45 @@ def regexp_extract(str: "ColumnOrName", pattern: str, idx: int) -> Column:
     return _invoke_function("regexp_extract", _to_column_expr(str), ConstantExpression(pattern), ConstantExpression(idx))
 
 
+def regexp_extract_all(
+    str: "ColumnOrName", regexp: "ColumnOrName", idx: Optional[Union[int, Column]] = None
+) -> Column:
+    r"""Extract all strings in the `str` that match the Java regex `regexp`
+    and corresponding to the regex group index.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    regexp : :class:`~pyspark.sql.Column` or str
+        regex pattern to apply.
+    idx : int
+        matched group id.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        all strings in the `str` that match a Java regex and corresponding to the regex group index.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("100-200, 300-400", r"(\d+)-(\d+)")], ["str", "regexp"])
+    >>> df.select(regexp_extract_all('str', lit(r'(\d+)-(\d+)')).alias('d')).collect()
+    [Row(d=['100', '300'])]
+    >>> df.select(regexp_extract_all('str', lit(r'(\d+)-(\d+)'), 1).alias('d')).collect()
+    [Row(d=['100', '300'])]
+    >>> df.select(regexp_extract_all('str', lit(r'(\d+)-(\d+)'), 2).alias('d')).collect()
+    [Row(d=['200', '400'])]
+    >>> df.select(regexp_extract_all('str', col("regexp")).alias('d')).collect()
+    [Row(d=['100', '300'])]
+    """
+    if idx is None:
+        idx = 1
+    return _invoke_function("regexp_extract_all", _to_column_expr(str), _to_column_expr(regexp), ConstantExpression(idx))
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set
