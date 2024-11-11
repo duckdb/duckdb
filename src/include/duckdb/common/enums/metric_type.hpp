@@ -33,6 +33,7 @@ enum class MetricsType : uint8_t {
     RESULT_SET_SIZE,
     LATENCY,
     ROWS_RETURNED,
+    OPERATOR_NAME,
     ALL_OPTIMIZERS,
     CUMULATIVE_OPTIMIZER_TIMING,
     PLANNER,
