@@ -2385,6 +2385,34 @@ def sin(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("sin", col)
 
 
+def skewness(col: "ColumnOrName") -> Column:
+    """
+    Aggregate function: returns the skewness of the values in a group.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        skewness of given column.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([[1],[1],[2]], ["c"])
+    >>> df.select(skewness(df.c)).first()
+    Row(skewness(c)=0.70710...)
+    """
+    return _invoke_function_over_columns("skewness", col)
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set

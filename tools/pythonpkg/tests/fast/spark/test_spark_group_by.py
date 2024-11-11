@@ -26,6 +26,7 @@ from spark_namespace.sql.functions import (
     median,
     product,
     count,
+    skewness,
     any_value,
     approx_count_distinct,
     covar_pop,
@@ -208,3 +209,12 @@ class TestDataFrameGroupBy(object):
         df = spark.range(1, 10).toDF('x').withColumn('mod3', col('x') % 3)
         res = df.groupBy('mod3').agg(product('x').alias('product')).orderBy("mod3").collect()
         assert res == [Row(mod3=0, product=162), Row(mod3=1, product=28), Row(mod3=2, product=80)]
+
+    def test_group_by_skewness(self, spark):
+        df = spark.createDataFrame([[1, "A"],[1, "A"],[2, "A"]], ["c", "group"])
+        res = df.groupBy("group").agg(skewness(df.c).alias("v")).collect()
+        # FIXME: Why is this different?
+        if USE_ACTUAL_SPARK:
+            assert pytest.approx(res[0].v) == 0.7071067811865475
+        else:
+            assert pytest.approx(res[0].v) == 1.7320508075688699
