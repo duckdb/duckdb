@@ -1838,6 +1838,37 @@ def positive(col: "ColumnOrName") -> Column:
     return Column(_to_column_expr(col))
 
 
+def pow(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) -> Column:
+    """
+    Returns the value of the first argument raised to the power of the second argument.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col1 : str, :class:`~pyspark.sql.Column` or float
+        the base number.
+    col2 : str, :class:`~pyspark.sql.Column` or float
+        the exponent number.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the base rased to the power the argument.
+
+    Examples
+    --------
+    >>> df = spark.range(1)
+    >>> df.select(pow(lit(3), lit(2))).first()
+    Row(POWER(3, 2)=9.0)
+    """
+    return _invoke_function_over_columns("pow", col1, col2)
+
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set

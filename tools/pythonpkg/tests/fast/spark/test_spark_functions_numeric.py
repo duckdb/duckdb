@@ -321,3 +321,9 @@ class TestSparkFunctionsNumeric(object):
 
         res = df.select(F.pi().alias("pi")).collect()
         assert pytest.approx(res[0].pi) == math.pi
+
+    def test_pow(self, spark):
+        df = spark.createDataFrame([(2, 3)], ["a", "b"])
+
+        res = df.select(F.pow(df["a"], df["b"]).alias("pow")).collect()
+        assert res[0].pow == 8
