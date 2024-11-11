@@ -301,3 +301,8 @@ class TestSparkFunctionsString(object):
 
         res = df.select(F.regexp_substr("str", F.col("regexp")).alias('d')).collect()
         assert res == [Row(d='1')]
+
+    def test_repeat(self, spark):
+        df = spark.createDataFrame([('ab',)], ['s',])
+        res = df.select(F.repeat(df.s, 3).alias('s')).collect()
+        assert res == [Row(s='ababab')]

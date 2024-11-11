@@ -2214,6 +2214,36 @@ def regexp_substr(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
     return Column(FunctionExpression("nullif", FunctionExpression("regexp_extract", _to_column_expr(str), _to_column_expr(regexp)), ConstantExpression("")))
 
 
+def repeat(col: "ColumnOrName", n: int) -> Column:
+    """
+    Repeats a string column n times, and returns it as a new string column.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    n : int
+        number of times to repeat value.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        string with repeated values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('ab',)], ['s',])
+    >>> df.select(repeat(df.s, 3).alias('s')).collect()
+    [Row(s='ababab')]
+    """
+    return _invoke_function("repeat", _to_column_expr(col), ConstantExpression(n))
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set
