@@ -464,13 +464,27 @@ class DuckDBPyRelation:
             timestamp_format: Optional[str] = None,
             quoting: Optional[str | int] = None,
             encoding: Optional[str] = None,
-            compression: Optional[str] = None
+            compression: Optional[str] = None,
+            write_partition_columns: Optional[bool] = None,
+            overwrite: Optional[bool] = None,
+            per_thread_output: Optional[bool] = None,
+            use_tmp_file: Optional[bool] = None,
+            partition_by: Optional[List[str]] = None
     ) -> None: ...
     def to_df(self, *args, **kwargs) -> pandas.DataFrame: ...
     def to_parquet(
             self,
             file_name: str,
-            compression: Optional[str] = None
+            compression: Optional[str] = None,
+            field_ids: Optional[dict | str] = None,
+            row_group_size_bytes: Optional[int | str] = None,
+            row_group_size: Optional[int] = None,
+            partition_by: Optional[List[str]] = None,
+            write_partition_columns: Optional[bool] = None,
+            overwrite: Optional[bool] = None,
+            per_thread_output: Optional[bool] = None,
+            use_tmp_file: Optional[bool] = None,
+            append: Optional[bool] = None
     ) -> None: ...
     def fetch_df_chunk(self, vectors_per_chunk: int = 1, *, date_as_object: bool = False) -> pandas.DataFrame: ...
     def to_table(self, table_name: str) -> None: ...
@@ -492,6 +506,7 @@ class DuckDBPyRelation:
             quoting: Optional[str | int] = None,
             encoding: Optional[str] = None,
             compression: Optional[str] = None,
+            write_partition_columns: Optional[bool] = None,
             overwrite: Optional[bool] = None,
             per_thread_output: Optional[bool] = None,
             use_tmp_file: Optional[bool] = None,
@@ -503,7 +518,13 @@ class DuckDBPyRelation:
             compression: Optional[str] = None,
             field_ids: Optional[dict | str] = None,
             row_group_size_bytes: Optional[int | str] = None,
-            row_group_size: Optional[int] = None
+            row_group_size: Optional[int] = None,
+            partition_by: Optional[List[str]] = None,
+            write_partition_columns: Optional[bool] = None,
+            overwrite: Optional[bool] = None,
+            per_thread_output: Optional[bool] = None,
+            use_tmp_file: Optional[bool] = None,
+            append: Optional[bool] = None
     ) -> None: ...
     def __len__(self) -> int: ...
     @property
