@@ -196,14 +196,13 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto overflow_string_threshold = StringUncompressed::GetStringBlockLimit(state.info.GetBlockSize());
 	if (average_length < 100) {
 		penalty = 2.0;
-	} else if (average_length <= 3000) {
-		penalty = 2.0 + ((double)(average_length - 100) * (15.0 - 2.0)) / (double)(3000 - 100);
-	} else if (average_length < overflow_string_threshold) {
-		penalty = 15.0 - ((double)(average_length - 3000) * (15.0 - 1.8)) / (double)(4000 - 3000);
-	} else {
+	} else if (average_length >= overflow_string_threshold) {
 		// From this point on, ZSTD starts to beat Uncompressed scan speed by about 5x, increasing rapidly (4096 is 5x,
 		// 8000 is 15x)
 		penalty = 1.0;
+	} else {
+		// Inbetween these two points you're better off using uncompressed or a different compression algorithm.
+		return NumericLimits<idx_t>::Maximum();
 	}
 
 	auto expected_compressed_size = (double)state.total_size / 2.0;
