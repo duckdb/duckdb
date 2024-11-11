@@ -3571,10 +3571,11 @@ DUCKDB_API duckdb_state duckdb_appender_create_ext(duckdb_connection connection,
                                                    duckdb_appender *out_appender);
 
 /*!
-Returns the number of columns in the table that belongs to the appender.
+Returns the number of columns that belong to the appender.
+If there is no custom column configuration, then this equals the table's physical columns.
 
 * @param appender The appender to get the column count from.
-* @return The number of columns in the table.
+* @return The number of columns in the data chunks.
 */
 DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
 
