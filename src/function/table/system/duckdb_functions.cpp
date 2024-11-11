@@ -461,9 +461,9 @@ static vector<Value> ToValueVector(vector<string> &string_vector) {
 	return result;
 }
 
-static vector<LogicalType> ToLogicalTypeVector(vector<Value> &value_vector) {
+static vector<LogicalType> ToLogicalTypeVector(const vector<Value> &value_vector) {
 	vector<LogicalType> result;
-	for (Value &value : value_vector) {
+	for (auto &value : value_vector) {
 		result.emplace_back(value.type());
 	}
 	return result;
@@ -474,12 +474,13 @@ static vector<Value> GetParameterNames(FunctionEntry &entry, idx_t function_idx,
                                        FunctionDescription &function_description, Value &parameter_types) {
 	vector<Value> parameter_names;
 	if (function_description.parameter_names.size() > 0) {
-		parameter_names = ToValueVector(function_description.parameter_names);
-		vector<Value> parameter_types_vector = ListValue::GetChildren(parameter_types);
-		for (idx_t i = parameter_names.size(); i < parameter_types_vector.size(); i++) {
-			parameter_names.emplace_back("col" + to_string(i));
+		for (idx_t param_idx = 0; param_idx < ListValue::GetChildren(parameter_types).size(); param_idx++) {
+			if (param_idx < function_description.parameter_names.size()) {
+				parameter_names.emplace_back(function_description.parameter_names[param_idx]);
+			} else {
+				parameter_names.emplace_back("col" + to_string(param_idx));
+			}
 		}
-
 	} else {
 		// fallback
 		auto &function = entry.Cast<T>();
@@ -504,19 +505,19 @@ static int CalcDescriptionSpecificity(FunctionDescription &description, const ve
 }
 
 /*
-Find description object with matching number of arguments and types
+Find FunctionDescription object with matching number of arguments and types
 return -1: no description matches the overload
 return >= 0: index of best matching description
 */
 static int GetFunctionDescriptionIndex(vector<FunctionDescription> &function_descriptions,
                                        duckdb::Value &parameter_types) {
-	vector<Value> types_to_match = ListValue::GetChildren(parameter_types);
+	vector<LogicalType> types_to_match = ToLogicalTypeVector(ListValue::GetChildren(parameter_types));
 
 	int best_description_index = -1;
 	if (function_descriptions.size() == 1) {
 		// one description, use it even if nr of parameters don't match
 		best_description_index = 0;
-		vector<duckdb::LogicalType> logic_types_to_match = ToLogicalTypeVector(types_to_match);
+		vector<duckdb::LogicalType> logic_types_to_match = types_to_match;
 		idx_t nr_function_parameters = logic_types_to_match.size();
 		for (idx_t i = 0; i < function_descriptions[0].parameter_types.size(); i++) {
 			if (i < nr_function_parameters && function_descriptions[0].parameter_types[i] != LogicalTypeId::ANY &&
@@ -525,16 +526,16 @@ static int GetFunctionDescriptionIndex(vector<FunctionDescription> &function_des
 			}
 		}
 	} else {
-		// multiple options, search best match
-		//  -1: no match; 0: perfect match; N: match by using N <ANY> values
+		// multiple descriptions, search best match
+
+		//  -1: no match; 0: exact match with explicit types; N: match by using N <ANY> values
 		int best_specificity_score = -1;
 		int specificity_score;
 
 		for (idx_t descr_idx = 0; descr_idx < function_descriptions.size(); descr_idx++) {
 			specificity_score = -1;
 			if (types_to_match.size() == function_descriptions[descr_idx].parameter_types.size()) {
-				specificity_score =
-				    CalcDescriptionSpecificity(function_descriptions[descr_idx], ToLogicalTypeVector(types_to_match));
+				specificity_score = CalcDescriptionSpecificity(function_descriptions[descr_idx], types_to_match);
 			}
 			if (specificity_score >= 0 && (best_specificity_score < 0 || specificity_score < best_specificity_score)) {
 				best_specificity_score = specificity_score;
