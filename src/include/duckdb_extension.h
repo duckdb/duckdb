@@ -505,6 +505,14 @@ typedef struct {
 	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
 	duckdb_timestamp_struct (*duckdb_from_timestamp_s)(duckdb_timestamp_s ts_s);
 	duckdb_timestamp_s (*duckdb_to_timestamp_s)(duckdb_timestamp_struct ts);
+	duckdb_value (*duckdb_create_timestamp_tz)(duckdb_timestamp input);
+	duckdb_value (*duckdb_create_timestamp_s)(duckdb_timestamp_s input);
+	duckdb_value (*duckdb_create_timestamp_ms)(duckdb_timestamp_ms input);
+	duckdb_value (*duckdb_create_timestamp_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp (*duckdb_get_timestamp_tz)(duckdb_value val);
+	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
+	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
 	duckdb_state (*duckdb_bind_timestamp_s)(duckdb_prepared_statement prepared_statement, idx_t param_idx,
 	                                        duckdb_timestamp_s val);
 #endif
@@ -893,6 +901,14 @@ typedef struct {
 #define duckdb_to_timestamp_s                    duckdb_ext_api.duckdb_to_timestamp_s
 #define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
 #define duckdb_bind_timestamp_s                  duckdb_ext_api.duckdb_bind_timestamp_s
+#define duckdb_create_timestamp_tz               duckdb_ext_api.duckdb_create_timestamp_tz
+#define duckdb_create_timestamp_s                duckdb_ext_api.duckdb_create_timestamp_s
+#define duckdb_create_timestamp_ms               duckdb_ext_api.duckdb_create_timestamp_ms
+#define duckdb_create_timestamp_ns               duckdb_ext_api.duckdb_create_timestamp_ns
+#define duckdb_get_timestamp_tz                  duckdb_ext_api.duckdb_get_timestamp_tz
+#define duckdb_get_timestamp_s                   duckdb_ext_api.duckdb_get_timestamp_s
+#define duckdb_get_timestamp_ms                  duckdb_ext_api.duckdb_get_timestamp_ms
+#define duckdb_get_timestamp_ns                  duckdb_ext_api.duckdb_get_timestamp_ns
 #define duckdb_is_null_value                     duckdb_ext_api.duckdb_is_null_value
 #define duckdb_create_null_value                 duckdb_ext_api.duckdb_create_null_value
 #define duckdb_get_list_size                     duckdb_ext_api.duckdb_get_list_size

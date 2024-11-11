@@ -441,6 +441,14 @@ typedef struct {
 	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
 	duckdb_timestamp_struct (*duckdb_from_timestamp_s)(duckdb_timestamp_s ts_s);
 	duckdb_timestamp_s (*duckdb_to_timestamp_s)(duckdb_timestamp_struct ts);
+	duckdb_value (*duckdb_create_timestamp_tz)(duckdb_timestamp input);
+	duckdb_value (*duckdb_create_timestamp_s)(duckdb_timestamp_s input);
+	duckdb_value (*duckdb_create_timestamp_ms)(duckdb_timestamp_ms input);
+	duckdb_value (*duckdb_create_timestamp_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp (*duckdb_get_timestamp_tz)(duckdb_value val);
+	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
+	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
 	duckdb_state (*duckdb_bind_timestamp_s)(duckdb_prepared_statement prepared_statement, idx_t param_idx,
 	                                        duckdb_timestamp_s val);
 } duckdb_ext_api_v0;
@@ -834,6 +842,14 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_get_struct_child = duckdb_get_struct_child;
 	result.duckdb_from_timestamp_s = duckdb_from_timestamp_s;
 	result.duckdb_to_timestamp_s = duckdb_to_timestamp_s;
+	result.duckdb_create_timestamp_tz = duckdb_create_timestamp_tz;
+	result.duckdb_create_timestamp_s = duckdb_create_timestamp_s;
+	result.duckdb_create_timestamp_ms = duckdb_create_timestamp_ms;
+	result.duckdb_create_timestamp_ns = duckdb_create_timestamp_ns;
+	result.duckdb_get_timestamp_tz = duckdb_get_timestamp_tz;
+	result.duckdb_get_timestamp_s = duckdb_get_timestamp_s;
+	result.duckdb_get_timestamp_ms = duckdb_get_timestamp_ms;
+	result.duckdb_get_timestamp_ns = duckdb_get_timestamp_ns;
 	result.duckdb_bind_timestamp_s = duckdb_bind_timestamp_s;
 	return result;
 }
