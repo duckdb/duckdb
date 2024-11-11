@@ -2243,6 +2243,38 @@ Returns the MAP value at index as a duckdb_value.
 */
 DUCKDB_API duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index);
 
+/*!
+Returns whether the specified value is null value or not.
+
+* @param value The value to check.
+* @return True if the value is null, otherwise false.
+*/
+DUCKDB_API bool duckdb_is_null_value(duckdb_value value);
+
+/*!
+Creates a value representing a NULL value.
+
+* @return The duckdb_value that represents NULL. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_null_value();
+
+/*!
+Returns the number of elements in a LIST value.
+
+* @param value The LIST value.
+* @return The number of elements in the list.
+*/
+DUCKDB_API idx_t duckdb_get_list_size(duckdb_value value);
+
+/*!
+Returns the LIST child at index as a duckdb_value.
+
+* @param value The LIST value.
+* @param index The index of the child.
+* @return The child as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index);
+
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
 //===--------------------------------------------------------------------===//

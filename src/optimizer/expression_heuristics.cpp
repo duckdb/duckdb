@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
+
 #include "duckdb/planner/expression/list.hpp"
 
 namespace duckdb {
@@ -40,6 +41,13 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 			return cost < p.cost;
 		}
 	};
+
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		if (expressions[i]->CanThrow()) {
+			// do not allow reordering if an expression can throw
+			return;
+		}
+	}
 
 	vector<ExpressionCosts> expression_costs;
 	expression_costs.reserve(expressions.size());

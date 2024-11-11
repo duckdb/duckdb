@@ -11,7 +11,7 @@ namespace duckdb {
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
-                                     vector<column_t> column_ids_p, vector<idx_t> projection_ids_p,
+                                     vector<ColumnIndex> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
                                      idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
                                      vector<Value> parameters_p)
@@ -156,7 +156,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		if (function.filter_prune) {
 			string projections;
 			for (idx_t i = 0; i < projection_ids.size(); i++) {
-				const auto &column_id = column_ids[projection_ids[i]];
+				auto column_id = column_ids[projection_ids[i]].GetPrimaryIndex();
 				if (column_id < names.size()) {
 					if (i > 0) {
 						projections += "\n";
@@ -168,7 +168,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		} else {
 			string projections;
 			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column_id = column_ids[i];
+				auto column_id = column_ids[i].GetPrimaryIndex();
 				if (column_id < names.size()) {
 					if (i > 0) {
 						projections += "\n";
@@ -190,7 +190,8 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 					filters_info += "\n";
 				}
 				first_item = false;
-				filters_info += filter->ToString(names[column_ids[column_index]]);
+				auto &col_name = names[column_ids[column_index].GetPrimaryIndex()];
+				filters_info += filter->ToString(col_name);
 			}
 		}
 		result["Filters"] = filters_info;

@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -96,10 +97,14 @@ struct ColumnScanState {
 	vector<unique_ptr<SegmentScanState>> previous_states;
 	//! The last read offset in the child state (used for LIST columns only)
 	idx_t last_offset = 0;
+	//! Whether or not we should scan a specific child column
+	vector<bool> scan_child_column;
 	//! Contains TableScan level config for scanning
 	optional_ptr<TableScanOptions> scan_options;
 
 public:
+	void Initialize(const LogicalType &type, const vector<StorageIndex> &children,
+	                optional_ptr<TableScanOptions> options);
 	void Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
@@ -117,7 +122,7 @@ struct ColumnFetchState {
 };
 
 struct ScanFilter {
-	ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter);
+	ScanFilter(idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter);
 
 	idx_t scan_column_index;
 	idx_t table_column_index;
@@ -133,7 +138,7 @@ class ScanFilterInfo {
 public:
 	~ScanFilterInfo();
 
-	void Initialize(TableFilterSet &filters, const vector<column_t> &column_ids);
+	void Initialize(TableFilterSet &filters, const vector<StorageIndex> &column_ids);
 
 	const vector<ScanFilter> &GetFilterList() const {
 		return filter_list;
@@ -195,7 +200,7 @@ public:
 
 public:
 	void Initialize(const vector<LogicalType> &types);
-	const vector<storage_t> &GetColumnIds();
+	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
 	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
@@ -247,10 +252,10 @@ public:
 	ScanSamplingInfo sampling_info;
 
 public:
-	void Initialize(vector<storage_t> column_ids, optional_ptr<TableFilterSet> table_filters = nullptr,
+	void Initialize(vector<StorageIndex> column_ids, optional_ptr<TableFilterSet> table_filters = nullptr,
 	                optional_ptr<SampleOptions> table_sampling = nullptr);
 
-	const vector<storage_t> &GetColumnIds();
+	const vector<StorageIndex> &GetColumnIds();
 
 	ScanFilterInfo &GetFilterInfo();
 
@@ -258,7 +263,7 @@ public:
 
 private:
 	//! The column identifiers of the scan
-	vector<storage_t> column_ids;
+	vector<StorageIndex> column_ids;
 };
 
 struct ParallelCollectionScanState {
