@@ -234,23 +234,24 @@ class TestSparkFunctionsString(object):
         res = df.select(F.printf("a", "b", "c").alias("r")).collect()
         assert res == [Row(r='aa123cc')]
 
-    def test_regexp(self, spark):
+    @pytest.mark.parametrize("regexp_func", [F.regexp, F.regexp_like])
+    def test_regexp_and_regexp_like(self, spark, regexp_func):
         df = spark.createDataFrame(
             [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
         )
-        res = df.select(F.regexp('str', F.lit(r'(\d+)')).alias("m")).collect()
+        res = df.select(regexp_func('str', F.lit(r'(\d+)')).alias("m")).collect()
         assert res[0].m is True
 
         df = spark.createDataFrame(
             [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
         )
-        res = df.select(F.regexp('str', F.lit(r'\d{2}b')).alias("m")).collect()
+        res = df.select(regexp_func('str', F.lit(r'\d{2}b')).alias("m")).collect()
         assert res[0].m is False
 
         df = spark.createDataFrame(
             [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
         )
-        res = df.select(F.regexp('str', F.col("regexp")).alias("m")).collect()
+        res = df.select(regexp_func('str', F.col("regexp")).alias("m")).collect()
         assert res[0].m is True
 
     def test_regexp_count(self, spark):

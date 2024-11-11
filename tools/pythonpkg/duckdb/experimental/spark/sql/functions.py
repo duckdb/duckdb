@@ -2131,6 +2131,58 @@ def regexp_extract_all(
     return _invoke_function("regexp_extract_all", _to_column_expr(str), _to_column_expr(regexp), ConstantExpression(idx))
 
 
+def regexp_like(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
+    r"""Returns true if `str` matches the Java regex `regexp`, or false otherwise.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    regexp : :class:`~pyspark.sql.Column` or str
+        regex pattern to apply.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        true if `str` matches a Java regex, or false otherwise.
+
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.createDataFrame(
+    ...     [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
+    ... ).select(sf.regexp_like('str', sf.lit(r'(\d+)'))).show()
+    +-----------------------+
+    |REGEXP_LIKE(str, (\d+))|
+    +-----------------------+
+    |                   true|
+    +-----------------------+
+
+    >>> import pyspark.sql.functions as sf
+    >>> spark.createDataFrame(
+    ...     [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
+    ... ).select(sf.regexp_like('str', sf.lit(r'\d{2}b'))).show()
+    +------------------------+
+    |REGEXP_LIKE(str, \d{2}b)|
+    +------------------------+
+    |                   false|
+    +------------------------+
+
+    >>> import pyspark.sql.functions as sf
+    >>> spark.createDataFrame(
+    ...     [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
+    ... ).select(sf.regexp_like('str', sf.col("regexp"))).show()
+    +------------------------+
+    |REGEXP_LIKE(str, regexp)|
+    +------------------------+
+    |                    true|
+    +------------------------+
+    """
+    return _invoke_function_over_columns("regexp_matches", str, regexp)
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set
