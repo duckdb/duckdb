@@ -14,6 +14,14 @@
         "duckdb_get_struct_child",
         "duckdb_from_timestamp_s",
         "duckdb_to_timestamp_s",
+        "duckdb_create_timestamp_tz",
+        "duckdb_create_timestamp_s",
+        "duckdb_create_timestamp_ms",
+        "duckdb_create_timestamp_ns",
+        "duckdb_get_timestamp_tz",
+        "duckdb_get_timestamp_s",
+        "duckdb_get_timestamp_ms",
+        "duckdb_get_timestamp_ns",
         "duckdb_bind_timestamp_s"
     ]
 }
