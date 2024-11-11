@@ -403,6 +403,34 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 	}
 
 	{
+		auto val = duckdb_create_timestamp_tz({1});
+		auto result = duckdb_get_timestamp_tz(val);
+		REQUIRE(result.micros == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_timestamp_s({1});
+		auto result = duckdb_get_timestamp_s(val);
+		REQUIRE(result.seconds == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_timestamp_ms({1});
+		auto result = duckdb_get_timestamp_ms(val);
+		REQUIRE(result.millis == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_timestamp_ns({1});
+		auto result = duckdb_get_timestamp_ns(val);
+		REQUIRE(result.nanos == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
 		auto val = duckdb_create_interval({1, 1, 1});
 		auto result = duckdb_get_interval(val);
 		REQUIRE(result.months == 1);
