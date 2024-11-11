@@ -985,10 +985,9 @@ void IngestionSample::Destroy() {
 	destroyed = true;
 }
 
-unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset,
-                                                                   idx_t theoretical_chunk_length) {
+void IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length) {
 	idx_t remaining = theoretical_chunk_length;
-	unordered_map<idx_t, idx_t> ret;
+	replacement_indexes.clear();
 	idx_t sample_chunk_index = 0;
 
 	idx_t base_offset = 0;
@@ -999,11 +998,10 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
-			return ret;
+			return;
 		}
 		// in this chunk! replace the element
-		// ret[index_in_new_chunk] = index_in_sample_chunk (the sample chunk offset will be applied later)
-		ret[base_offset + offset] = sample_chunk_index;
+		replacement_indexes[base_offset + offset] = sample_chunk_index;
 		double r2 = base_reservoir_sample->random.NextRandom(base_reservoir_sample->min_weight_threshold, 1);
 		// replace element in our max_hep
 		// sample_chunk_offset + sample_chunk_index
@@ -1128,7 +1126,8 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		base_reservoir_sample->InitializeReservoirWeights(assigned_weights, assigned_weights, num_weights_assigned);
 	}
 
-	auto sample_chunk_ind_to_data_chunk_index = GetReplacementIndexes(sample_chunk->size(), chunk.size());
+	GetReplacementIndexes(sample_chunk->size(), chunk.size());
+	auto &sample_chunk_ind_to_data_chunk_index = replacement_indexes;
 	if (sample_chunk_ind_to_data_chunk_index.empty()) {
 		// not adding any samples
 		return;
