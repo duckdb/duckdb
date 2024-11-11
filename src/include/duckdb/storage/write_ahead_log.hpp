@@ -38,6 +38,8 @@ class TransactionManager;
 class WriteAheadLogDeserializer;
 struct PersistentCollectionData;
 
+enum class WALInitState { UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
+
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
 //! the database to the log, which can then be replayed upon startup in case the
@@ -45,22 +47,21 @@ struct PersistentCollectionData;
 class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
-	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path);
+	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size = 0ULL,
+	                       WALInitState state = WALInitState::UNINITIALIZED);
 	virtual ~WriteAheadLog();
 
 public:
-	//! Replay the WAL
-	static bool Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle);
+	//! Replay and initialize the WAL
+	static unique_ptr<WriteAheadLog> Replay(FileSystem &fs, AttachedDatabase &database, const string &wal_path);
 
 	//! Gets the total bytes written to the WAL since startup
-	idx_t GetWALSize();
+	idx_t GetWALSize() const;
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
 	//! A WAL is initialized, if a writer to a file exists.
-	bool Initialized() {
-		return initialized;
-	}
+	bool Initialized() const;
 	//! Initializes the file of the WAL by creating the file writer.
 	BufferedFileWriter &Initialize();
 
@@ -117,12 +118,15 @@ public:
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:
+	static unique_ptr<WriteAheadLog> ReplayInternal(AttachedDatabase &database, unique_ptr<FileHandle> handle);
+
+protected:
 	AttachedDatabase &database;
 	mutex wal_lock;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
 	atomic<idx_t> wal_size;
-	atomic<bool> initialized;
+	atomic<WALInitState> init_state;
 };
 
 } // namespace duckdb
