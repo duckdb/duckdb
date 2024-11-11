@@ -44,6 +44,8 @@ CompressionType CompressionTypeFromString(const string &str) {
 		return CompressionType::COMPRESSION_ALP;
 	} else if (compression == "alprd") {
 		return CompressionType::COMPRESSION_ALPRD;
+	} else if (compression == "roaring") {
+		return CompressionType::COMPRESSION_ROARING;
 	} else {
 		return CompressionType::COMPRESSION_AUTO;
 	}
@@ -75,6 +77,8 @@ string CompressionTypeToString(CompressionType type) {
 		return "ALP";
 	case CompressionType::COMPRESSION_ALPRD:
 		return "ALPRD";
+	case CompressionType::COMPRESSION_ROARING:
+		return "Roaring";
 	default:
 		throw InternalException("Unrecognized compression type!");
 	}

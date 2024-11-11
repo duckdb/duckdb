@@ -10,12 +10,35 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
+/*
+Data layout per segment:
++--------------------------------------------+
+|            Vector Metadata                 |
+|   +------------------------------------+   |
+|   |   int64_t  page_id[]               |   |
+|   |   uint32_t page_offset[]           |   |
+|   |   uint64_t uncompressed_size[]     |   |
+|   |   uint64_t compressed_size[]       |   |
+|   +------------------------------------+   |
+|                                            |
++--------------------------------------------+
+|              [Vector Data]+                |
+|   +------------------------------------+   |
+|   |   uint32_t lengths[]               |   |
+|   |   void    *compressed_data         |   |
+|   +------------------------------------+   |
+|                                            |
++--------------------------------------------+
+*/
+
 namespace {
 
-class ContainerMetadata {
+struct ContainerMetadata {
 public:
+	ContainerMetadata() {
+	}
 	ContainerMetadata(bool is_run, uint16_t value) {
-		if (isRun) {
+		if (is_run) {
 			data.run_container.is_run = 1;
 			data.run_container.number_of_runs = value;
 			data.run_container.free_real_estate = 0;
@@ -55,6 +78,133 @@ private:
 	} data;
 };
 
+struct RunContainerRLEPair {
+	uint16_t start;
+	uint16_t length;
+};
+
+enum class ContainerType : uint8_t { RUN_CONTAINER, ARRAY_CONTAINER, BITSET_CONTAINER };
+
+struct ContainerCompressionState {
+	constexpr uint16_t MAX_RUN_IDX = 2047;
+	constexpr uint16_t MAX_ARRAY_IDX = 4095;
+
+public:
+	struct Result {
+		ContainerType container_type;
+		//! Whether nulls are being encoded or non-nulls
+		bool nulls;
+		//! The amount of runs / size of the final array (dependent on the container type)
+		idx_t count;
+	};
+
+public:
+	ContainerCompressionState() {
+	}
+
+public:
+	void Append(bool null) {
+		// Adjust the runs
+		auto &current_run_idx = run_idx[null ? 0 : 1];
+		auto &last_run_idx = run_idx[last_is_null ? 0 : 1];
+
+		if (count && null != last_is_null && last_run_idx < MAX_RUN_IDX) {
+			auto &last_run = runs[last_is_null ? 0 : 1][last_run_idx];
+			// End the last run
+			last_run.length = (count - last_run.start);
+			last_run_idx++;
+		}
+		if (!count || (null != last_is_null && current_run_idx < MAX_RUN_IDX)) {
+			auto &current_run = runs[null ? 0 : 1][current_run_idx];
+			// Initialize the new run
+			current_run.start = count;
+		}
+
+		// Add to the array
+		auto &current_array_idx = array_idx[null ? 0 : 1];
+		if (current_array_idx < MAX_ARRAY_IDX) {
+			arrays[null ? 0 : 1][current_array_idx] = count;
+			current_array_idx++;
+		}
+
+		last_is_null = null;
+		null_count += !null;
+		count++;
+	}
+
+	void Finalize() {
+		D_ASSERT(!finalized);
+		auto &last_run_idx = run_idx[last_is_null ? 0 : 1];
+		if (count && last_run_idx < MAX_RUN_IDX) {
+			auto &last_run = runs[last_is_null ? 0 : 1][last_run_idx];
+			// End the last run
+			last_run.length = (count - last_run.start);
+			last_run_idx++;
+		}
+		finalized = true;
+	}
+
+	Result GetResult() {
+		D_ASSERT(finalized);
+		const bool can_use_null_array = array_idx[0] < MAX_ARRAY_IDX;
+		const bool can_use_non_null_array = array_idx[1] < MAX_ARRAY_IDX;
+
+		const bool can_use_null_run = run_idx[0] < MAX_RUN_IDX;
+		const bool can_use_non_null_run = run_idx[1] < MAX_RUN_IDX;
+
+		const bool can_use_array = can_use_null_array || can_use_non_null_array;
+		const bool can_use_run = can_use_null_run || can_use_non_null_run;
+		if (!can_use_array && !can_use_run) {
+			// Can not efficiently encode at all, write it uncompressed
+			return Result {ContainerType::BITSET_CONTAINER, true, count};
+		}
+		uint16_t lowest_array_cost = MinValue<uint16_t>(array_idx[0], array_idx[1]);
+		uint16_t lowest_run_cost = MinValue<uint16_t>(run_idx[0], run_idx[1]) * 2;
+
+		if (lowest_array_cost <= lowest_run_cost) {
+			if (array_idx[0] < array_idx[1]) {
+				return Result {ContainerType::ARRAY_CONTAINER, true, array_idx[0]};
+			} else {
+				return Result {ContainerType::ARRAY_CONTAINER, false, array_idx[1]};
+			}
+		} else {
+			if (run_idx[0] < run_idx[1]) {
+				return Result {ContainerType::RUN_CONTAINER, true, run_idx[0]};
+			} else {
+				return Result {ContainerType::RUN_CONTAINER, false, run_idx[1]};
+			}
+		}
+	}
+
+	void Reset() {
+		count = 0;
+		null_count = 0;
+		run_idx[false] = 0;
+		run_idx[true] = 0;
+		array_idx[false] = 0;
+		array_idx[true] = 0;
+		finalized = false;
+	}
+
+public:
+	//! Total amount of values covered by the container
+	idx_t count = 0;
+	//! How many of the total are null
+	idx_t null_count = 0;
+	bool last_is_null;
+
+	//! The runs (for sequential nulls | sequential non-nulls)
+	RunContainerRLEPair runs[2][MAX_RUN_IDX];
+	//! The indices (for nulls | non-nulls)
+	uint16_t arrays[2][MAX_ARRAY_IDX];
+
+	uint16_t run_idx[2];
+	uint16_t array_idx[2];
+
+	//! Whether the state has been finalized
+	bool finalized = false;
+};
+
 } // namespace
 
 namespace duckdb {
@@ -64,7 +214,30 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <class T>
 struct RoaringAnalyzeState : public AnalyzeState {
+public:
 	explicit RoaringAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {};
+
+public:
+	void Analyze(Vector &input, idx_t count) {
+		UnifiedVectorFormat unified;
+		input.ToUnifiedFormat(unified, count);
+		auto &validity = unified.validity;
+
+		if (validity_mask.AllValid())
+			for (idx_t i = 0; i < count; i++) {
+				validity.IsInvalid
+			}
+	}
+
+public:
+	//! The space used by the current segment
+	idx_t spaced_used = 0;
+	//! The total amount of segments to write
+	idx_t segment_count = 0;
+	//! The amount of values in the current segment;
+	idx_t current_count = 0;
+	//! The total amount of data to serialize
+	idx_t count = 0;
 };
 
 template <class T>
@@ -85,6 +258,8 @@ bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	// During analyze, we want to walk through the data, for every 8kB we determine which container type should be used,
 	// we save that in the analyze state this only costs us 16 bits per container, this will simultaneously be used in
 	// the compression stage as the container metadata written to disk
+
+	analyze_state.Analyze(input, count);
 	return true;
 }
 
