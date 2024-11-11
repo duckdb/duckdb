@@ -64,6 +64,7 @@ public:
 
 	shared_ptr<DuckDBPyExpression> Cast(const DuckDBPyType &type) const;
 	shared_ptr<DuckDBPyExpression> Between(const DuckDBPyExpression &lower, const DuckDBPyExpression &upper);
+	shared_ptr<DuckDBPyExpression> Collate(const string &collation);
 
 	// AND, OR and NOT
 

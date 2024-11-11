@@ -567,10 +567,12 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<double *>(target_data);
 	if (!idata.validity.AllValid()) {
+		bool requires_mask = false;
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				requires_mask = true;
 				target_mask[offset] = true;
 			} else {
 				out_ptr[offset] =
@@ -579,7 +581,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 				target_mask[offset] = false;
 			}
 		}
-		return true;
+		return requires_mask;
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);

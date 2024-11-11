@@ -73,7 +73,7 @@ public:
 	unordered_set<column_t> conflict_target;
 
 	// Column ids from the original table to fetch
-	vector<column_t> columns_to_fetch;
+	vector<StorageIndex> columns_to_fetch;
 	// Matching types to the column ids to fetch
 	vector<LogicalType> types_to_fetch;
 
