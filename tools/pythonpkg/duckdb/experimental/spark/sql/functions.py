@@ -1896,6 +1896,41 @@ def printf(format: "ColumnOrName", *cols: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("printf", format, *cols)
 
 
+def product(col: "ColumnOrName") -> Column:
+    """
+    Aggregate function: returns the product of the values in a group.
+
+    .. versionadded:: 3.2.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : str, :class:`Column`
+        column containing values to be multiplied together
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> df = spark.range(1, 10).toDF('x').withColumn('mod3', col('x') % 3)
+    >>> prods = df.groupBy('mod3').agg(product('x').alias('product'))
+    >>> prods.orderBy('mod3').show()
+    +----+-------+
+    |mod3|product|
+    +----+-------+
+    |   0|  162.0|
+    |   1|   28.0|
+    |   2|   80.0|
+    +----+-------+
+    """
+    return _invoke_function_over_columns("product", col)
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set

@@ -24,6 +24,7 @@ from spark_namespace.sql.functions import (
     mean,
     mode,
     median,
+    product,
     count,
     any_value,
     approx_count_distinct,
@@ -202,3 +203,8 @@ class TestDataFrameGroupBy(object):
         res = df.groupby("course").agg(mode("year").alias("mode")).collect()
 
         assert sorted(res, key=lambda x: x.course) == [Row(course='Java', mode=2012), Row(course='dotNET', mode=2012)]
+
+    def test_group_by_product(self, spark):
+        df = spark.range(1, 10).toDF('x').withColumn('mod3', col('x') % 3)
+        res = df.groupBy('mod3').agg(product('x').alias('product')).orderBy("mod3").collect()
+        assert res == [Row(mod3=0, product=162), Row(mod3=1, product=28), Row(mod3=2, product=80)]
