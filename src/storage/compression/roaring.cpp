@@ -31,6 +31,9 @@ Data layout per segment:
 +--------------------------------------------+
 */
 
+//! The amount of values that are encoded per container
+static constexpr idx_t ROARING_CONTAINER_SIZE = 65536;
+
 namespace {
 
 struct ContainerMetadata {
@@ -186,6 +189,7 @@ public:
 		array_idx[false] = 0;
 		array_idx[true] = 0;
 		finalized = false;
+		last_is_null = false;
 	}
 
 public:
@@ -193,7 +197,7 @@ public:
 	idx_t count = 0;
 	//! How many of the total are null
 	idx_t null_count = 0;
-	bool last_is_null;
+	bool last_is_null = false;
 
 	//! The runs (for sequential nulls | sequential non-nulls)
 	RunContainerRLEPair runs[2][MAX_RUN_IDX];
@@ -227,14 +231,22 @@ public:
 
 		if (validity.AllValid()) {
 			// Fast path for all non-null ?
+			throw NotImplementedException("THIS SHOULD BE OPTIMIZED");
 			return;
 		}
-		for (idx_t i = 0; i < count; i++) {
-			validity.RowIsValidUnsafe(i);
+		idx_t appended = 0;
+		while (appended < count) {
+			idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
+			for (idx_t i = 0; i < to_append; i++) {
+				auto is_null = validity.RowIsValidUnsafe(appended + i);
+				container_state.Append(!is_null);
+			}
+			appended += to_append;
 		}
 	}
 
 public:
+	ContainerCompressionState container_state;
 	//! The space used by the current segment
 	idx_t spaced_used = 0;
 	//! The total amount of segments to write
@@ -271,6 +283,7 @@ bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 template <class T>
 idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 	auto &roaring_state = state.Cast<RoaringAnalyzeState<T>>();
+	roaring_state.container_state.Finalize();
 	// TODO: implement
 	return DConstants::INVALID_INDEX;
 }
