@@ -198,13 +198,45 @@ class TestSparkFunctionsString(object):
         assert res == [Row(v='Ab Cd')]
 
     def test_left(self, spark):
-        df = spark.createDataFrame([("Spark SQL", 3,), ("Spark SQL", 0,), ("Spark SQL", -3,)], ['a', 'b'])
+        df = spark.createDataFrame(
+            [
+                (
+                    "Spark SQL",
+                    3,
+                ),
+                (
+                    "Spark SQL",
+                    0,
+                ),
+                (
+                    "Spark SQL",
+                    -3,
+                ),
+            ],
+            ['a', 'b'],
+        )
 
         res = df.select(F.left(df.a, df.b).alias('r')).collect()
         assert res == [Row(r='Spa'), Row(r=''), Row(r='')]
 
     def test_right(self, spark):
-        df = spark.createDataFrame([("Spark SQL", 3,), ("Spark SQL", 0,), ("Spark SQL", -3,)], ['a', 'b'])
+        df = spark.createDataFrame(
+            [
+                (
+                    "Spark SQL",
+                    3,
+                ),
+                (
+                    "Spark SQL",
+                    0,
+                ),
+                (
+                    "Spark SQL",
+                    -3,
+                ),
+            ],
+            ['a', 'b'],
+        )
 
         res = df.select(F.right(df.a, df.b).alias('r')).collect()
         assert res == [Row(r='SQL'), Row(r=''), Row(r='')]
@@ -216,41 +248,52 @@ class TestSparkFunctionsString(object):
         assert res == [Row(r=3, r_th=3), Row(r=4, r_th=-1)]
 
     def test_lpad(self, spark):
-        df = spark.createDataFrame([('abcd',)], ['s',])
+        df = spark.createDataFrame(
+            [('abcd',)],
+            [
+                's',
+            ],
+        )
 
         res = df.select(F.lpad(df.s, 6, '#').alias('s')).collect()
         assert res == [Row(s='##abcd')]
 
     def test_rpad(self, spark):
-        df = spark.createDataFrame([('abcd',)], ['s',])
+        df = spark.createDataFrame(
+            [('abcd',)],
+            [
+                's',
+            ],
+        )
 
         res = df.select(F.rpad(df.s, 6, '#').alias('s')).collect()
         assert res == [Row(s='abcd##')]
 
     def test_printf(self, spark):
         df = spark.createDataFrame(
-            [("aa%d%s", 123, "cc",)], ["a", "b", "c"]
+            [
+                (
+                    "aa%d%s",
+                    123,
+                    "cc",
+                )
+            ],
+            ["a", "b", "c"],
         )
         res = df.select(F.printf("a", "b", "c").alias("r")).collect()
         assert res == [Row(r='aa123cc')]
 
     @pytest.mark.parametrize("regexp_func", [F.regexp, F.regexp_like])
     def test_regexp_and_regexp_like(self, spark, regexp_func):
-        df = spark.createDataFrame(
-            [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
-        )
+        df = spark.createDataFrame([("1a 2b 14m", r"(\d+)")], ["str", "regexp"])
         res = df.select(regexp_func('str', F.lit(r'(\d+)')).alias("m")).collect()
         assert res[0].m is True
 
-        df = spark.createDataFrame(
-            [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
-        )
+        df = spark.createDataFrame([("1a 2b 14m", r"(\d+)")], ["str", "regexp"])
         res = df.select(regexp_func('str', F.lit(r'\d{2}b')).alias("m")).collect()
         assert res[0].m is False
 
-        df = spark.createDataFrame(
-            [("1a 2b 14m", r"(\d+)")], ["str", "regexp"]
-        )
+        df = spark.createDataFrame([("1a 2b 14m", r"(\d+)")], ["str", "regexp"])
         res = df.select(regexp_func('str', F.col("regexp")).alias("m")).collect()
         assert res[0].m is True
 
@@ -303,6 +346,11 @@ class TestSparkFunctionsString(object):
         assert res == [Row(d='1')]
 
     def test_repeat(self, spark):
-        df = spark.createDataFrame([('ab',)], ['s',])
+        df = spark.createDataFrame(
+            [('ab',)],
+            [
+                's',
+            ],
+        )
         res = df.select(F.repeat(df.s, 3).alias('s')).collect()
         assert res == [Row(s='ababab')]

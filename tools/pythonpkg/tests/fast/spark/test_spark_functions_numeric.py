@@ -340,14 +340,9 @@ class TestSparkFunctionsNumeric(object):
 
     @pytest.mark.parametrize("sign_func", [F.sign, F.signum])
     def test_sign(self, spark, sign_func):
-        df = spark.range(1).select(
-             sign_func(F.lit(-5).alias("v1")),
-             sign_func(F.lit(6).alias("v2"))
-         )
+        df = spark.range(1).select(sign_func(F.lit(-5).alias("v1")), sign_func(F.lit(6).alias("v2")))
         res = df.collect()
-        assert res == [
-            Row(v1=-1.0, v2=1.0)
-        ]
+        assert res == [Row(v1=-1.0, v2=1.0)]
 
     def test_sin(self, spark):
         df = spark.range(1)

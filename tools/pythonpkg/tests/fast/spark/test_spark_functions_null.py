@@ -33,7 +33,21 @@ class TestsSparkFunctionsNull(object):
         ]
 
     def test_nvl2(self, spark):
-        df = spark.createDataFrame([(None, 8, 6,), (1, 9, 9,)], ["a", "b", "c"])
+        df = spark.createDataFrame(
+            [
+                (
+                    None,
+                    8,
+                    6,
+                ),
+                (
+                    1,
+                    9,
+                    9,
+                ),
+            ],
+            ["a", "b", "c"],
+        )
         res = df.select(F.nvl2(df.a, df.b, df.c).alias('r')).collect()
         assert res == [Row(r=6), Row(r=9)]
 
@@ -51,7 +65,19 @@ class TestsSparkFunctionsNull(object):
         ]
 
     def test_nullif(self, spark):
-        df = spark.createDataFrame([(None, None,), (1, 9,)], ["a", "b"])
+        df = spark.createDataFrame(
+            [
+                (
+                    None,
+                    None,
+                ),
+                (
+                    1,
+                    9,
+                ),
+            ],
+            ["a", "b"],
+        )
         res = df.select(F.nullif(df.a, df.b).alias('r')).collect()
         assert res == [Row(r=None), Row(r=1)]
 
