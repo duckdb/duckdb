@@ -15,7 +15,9 @@ static void FillFunctionParameters(FunctionDescription &function_description, st
 			function_description.parameter_types.push_back(LogicalType::ANY);
 		} else if (parameter_name_type.size() == 2) {
 			function_description.parameter_names.push_back(std::move(parameter_name_type[0]));
-			LogicalType type = DefaultTypeGenerator::GetDefaultType(parameter_name_type[1]);
+			LogicalType type = (StringUtil::CIEquals(parameter_name_type[1], "ANY"))
+			                       ? LogicalType::ANY
+			                       : DefaultTypeGenerator::GetDefaultType(parameter_name_type[1]);
 			if (type != LogicalType::INVALID) {
 				function_description.parameter_types.push_back(type);
 			} else {
