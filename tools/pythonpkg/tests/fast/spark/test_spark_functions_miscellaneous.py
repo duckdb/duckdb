@@ -33,3 +33,8 @@ class TestsSparkFunctionsMiscellaneous:
         df = spark.createDataFrame([('cat',)], ['c1'])
         res = df.select(F.octet_length('c1').alias("o")).collect()
         assert res == [Row(o=3)]
+
+    def test_positive(self, spark):
+        df = spark.createDataFrame([(-1,), (0,), (1,)], ['v'])
+        res = df.select(F.positive("v").alias("p")).collect()
+        assert res == [Row(p=-1), Row(p=0), Row(p=1)]
