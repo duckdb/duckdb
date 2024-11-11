@@ -2054,6 +2054,44 @@ def regexp_count(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("len", _invoke_function_over_columns("regexp_extract_all", str, regexp))
 
 
+def regexp_extract(str: "ColumnOrName", pattern: str, idx: int) -> Column:
+    r"""Extract a specific group matched by the Java regex `regexp`, from the specified string column.
+    If the regex did not match, or the specified group did not match, an empty string is returned.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    pattern : str
+        regex pattern to apply.
+    idx : int
+        matched group id.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        matched value specified by `idx` group id.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('100-200',)], ['str'])
+    >>> df.select(regexp_extract('str', r'(\d+)-(\d+)', 1).alias('d')).collect()
+    [Row(d='100')]
+    >>> df = spark.createDataFrame([('foo',)], ['str'])
+    >>> df.select(regexp_extract('str', r'(\d+)', 1).alias('d')).collect()
+    [Row(d='')]
+    >>> df = spark.createDataFrame([('aaaac',)], ['str'])
+    >>> df.select(regexp_extract('str', '(a+)(b)?(c)', 2).alias('d')).collect()
+    [Row(d='')]
+    """
+    return _invoke_function("regexp_extract", _to_column_expr(str), ConstantExpression(pattern), ConstantExpression(idx))
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set

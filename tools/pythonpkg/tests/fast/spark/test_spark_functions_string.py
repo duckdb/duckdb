@@ -261,3 +261,16 @@ class TestSparkFunctionsString(object):
         assert res == [Row(d=0)]
         res = df.select(F.regexp_count("str", F.col("regexp")).alias('d')).collect()
         assert res == [Row(d=3)]
+
+    def test_regexp_extract(self, spark):
+        df = spark.createDataFrame([('100-200',)], ['str'])
+        res = df.select(F.regexp_extract('str', r'(\d+)-(\d+)', 1).alias('d')).collect()
+        assert res == [Row(d='100')]
+
+        df = spark.createDataFrame([('foo',)], ['str'])
+        res = df.select(F.regexp_extract('str', r'(\d+)', 1).alias('d')).collect()
+        assert res == [Row(d='')]
+
+        df = spark.createDataFrame([('aaaac',)], ['str'])
+        res = df.select(F.regexp_extract('str', '(a+)(b)?(c)', 2).alias('d')).collect()
+        assert res == [Row(d='')]
