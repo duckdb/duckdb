@@ -1,5 +1,5 @@
-# name: test/issues/general/test_14286.test
-# description: Issue 14540 - INTERNAL Error: Failed to bind column reference(a unnest rewriter fail) 
+# name: test/issues/general/test_14540.test
+# description: Issue 14540 - INTERNAL Error: Failed to bind column reference(a unnest rewriter fail)
 # group: [general]
 
 statement ok
