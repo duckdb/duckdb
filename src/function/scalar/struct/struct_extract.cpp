@@ -5,24 +5,9 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/function/scalar/struct_utils.hpp"
 
 namespace duckdb {
-
-struct StructExtractBindData : public FunctionData {
-	explicit StructExtractBindData(idx_t index) : index(index) {
-	}
-
-	idx_t index;
-
-public:
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<StructExtractBindData>(index);
-	}
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<StructExtractBindData>();
-		return index == other.index;
-	}
-};
 
 static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();

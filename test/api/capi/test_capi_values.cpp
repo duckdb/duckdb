@@ -24,3 +24,40 @@ TEST_CASE("Test MAP getters", "[capi]") {
 
 	duckdb_destroy_value(&uint_val);
 }
+
+TEST_CASE("Test LIST getters", "[capi]") {
+	duckdb_value list_vals[2];
+	list_vals[0] = duckdb_create_uint64(42);
+	list_vals[1] = duckdb_create_uint64(43);
+	duckdb_logical_type uint64_type = duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT);
+	duckdb_value list_value = duckdb_create_list_value(uint64_type, list_vals, 2);
+	duckdb_destroy_value(&list_vals[0]);
+	duckdb_destroy_value(&list_vals[1]);
+	duckdb_destroy_logical_type(&uint64_type);
+
+	auto size = duckdb_get_list_size(nullptr);
+	REQUIRE(size == 0);
+
+	size = duckdb_get_list_size(list_value);
+	REQUIRE(size == 2);
+
+	auto val = duckdb_get_list_child(nullptr, 0);
+	REQUIRE(!val);
+	duckdb_destroy_value(&val);
+
+	val = duckdb_get_list_child(list_value, 0);
+	REQUIRE(val);
+	REQUIRE(duckdb_get_uint64(val) == 42);
+	duckdb_destroy_value(&val);
+
+	val = duckdb_get_list_child(list_value, 1);
+	REQUIRE(val);
+	REQUIRE(duckdb_get_uint64(val) == 43);
+	duckdb_destroy_value(&val);
+
+	val = duckdb_get_list_child(list_value, 2);
+	REQUIRE(!val);
+	duckdb_destroy_value(&val);
+
+	duckdb_destroy_value(&list_value);
+}

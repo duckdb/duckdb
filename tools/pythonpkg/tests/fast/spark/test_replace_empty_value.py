@@ -33,21 +33,12 @@ class TestReplaceEmpty(object):
         assert df2.columns == ['name', 'state']
         key_f = lambda x: x.name or x.state
         res = df2.sort("name", "state").collect()
-        # FIXME: Null-handling in sort is different in DuckDB and Spark
-        if USE_ACTUAL_SPARK:
-            expected_res = [
-                Row(name=None, state='CA'),
-                Row(name=None, state='NJ'),
-                Row(name='Julia', state=None),
-                Row(name='Robert', state=None),
-            ]
-        else:
-            expected_res = [
-                Row(name='Julia', state=None),
-                Row(name='Robert', state=None),
-                Row(name=None, state='CA'),
-                Row(name=None, state='NJ'),
-            ]
+        expected_res = [
+            Row(name=None, state='CA'),
+            Row(name=None, state='NJ'),
+            Row(name='Julia', state=None),
+            Row(name='Robert', state=None),
+        ]
         assert res == expected_res
 
         # On selection of columns
