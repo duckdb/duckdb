@@ -2321,6 +2321,41 @@ def sign(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("sign", col)
 
 
+def signum(col: "ColumnOrName") -> Column:
+    """
+    Computes the signum of the given value.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for computed results.
+
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.range(1).select(
+    ...     sf.signum(sf.lit(-5)),
+    ...     sf.signum(sf.lit(6))
+    ... ).show()
+    +----------+---------+
+    |SIGNUM(-5)|SIGNUM(6)|
+    +----------+---------+
+    |      -1.0|      1.0|
+    +----------+---------+
+    """
+    return sign(col)
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set
