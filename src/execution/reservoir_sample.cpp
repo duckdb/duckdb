@@ -998,6 +998,15 @@ void IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset, idx_t the
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
+			vector<idx_t> wat;
+			wat.resize(replacement_indexes.size());
+			wat.reserve(replacement_indexes.size());
+			for (auto pair : replacement_indexes) {
+				wat[pair.second] = pair.first;
+			}
+			for (idx_t i = 0; i < wat.size(); i++) {
+				Printer::Print(to_string(wat[i]));
+			}
 			return;
 		}
 		// in this chunk! replace the element
