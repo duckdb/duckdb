@@ -2356,6 +2356,35 @@ def signum(col: "ColumnOrName") -> Column:
     return sign(col)
 
 
+def sin(col: "ColumnOrName") -> Column:
+    """
+    Computes sine of the input column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        sine of the angle, as if computed by `java.lang.Math.sin()`
+
+    Examples
+    --------
+    >>> import math
+    >>> df = spark.range(1)
+    >>> df.select(sin(lit(math.radians(90)))).first()
+    Row(SIN(1.57079...)=1.0)
+    """
+    return _invoke_function_over_columns("sin", col)
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set

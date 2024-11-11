@@ -348,3 +348,8 @@ class TestSparkFunctionsNumeric(object):
         assert res == [
             Row(v1=-1.0, v2=1.0)
         ]
+
+    def test_sin(self, spark):
+        df = spark.range(1)
+        res = df.select(F.sin(F.lit(math.radians(90))).alias("v")).collect()
+        assert res == [Row(v=1.0)]
