@@ -327,3 +327,13 @@ class TestSparkFunctionsNumeric(object):
 
         res = df.select(F.pow(df["a"], df["b"]).alias("pow")).collect()
         assert res[0].pow == 8
+
+    def test_random(self, spark):
+        df = spark.range(0, 2, 1)
+        res = df.withColumn('rand', F.rand()).collect()
+
+        assert isinstance(res[0].rand, float)
+        assert res[0].rand >= 0 and res[0].rand < 1
+
+        assert isinstance(res[1].rand, float)
+        assert res[1].rand >= 0 and res[1].rand < 1

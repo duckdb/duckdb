@@ -1931,6 +1931,46 @@ def product(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("product", col)
 
 
+def rand(seed: Optional[int] = None) -> Column:
+    """Generates a random column with independent and identically distributed (i.i.d.) samples
+    uniformly distributed in [0.0, 1.0).
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Notes
+    -----
+    The function is non-deterministic in general case.
+
+    Parameters
+    ----------
+    seed : int (default: None)
+        seed value for random generator.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        random values.
+
+    Examples
+    --------
+    >>> from pyspark.sql import functions as sf
+    >>> spark.range(0, 2, 1, 1).withColumn('rand', sf.rand(seed=42) * 3).show()
+    +---+------------------+
+    | id|              rand|
+    +---+------------------+
+    |  0|1.8575681106759028|
+    |  1|1.5288056527339444|
+    +---+------------------+
+    """
+    if seed is not None:
+        # Maybe call setseed just before but how do we know when it is executed?
+        raise ContributionsAcceptedError("Seed is not yet implemented")
+    return _invoke_function("random")
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set
