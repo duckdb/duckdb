@@ -2244,6 +2244,48 @@ def repeat(col: "ColumnOrName", n: int) -> Column:
     return _invoke_function("repeat", _to_column_expr(col), ConstantExpression(n))
 
 
+def sequence(
+    start: "ColumnOrName", stop: "ColumnOrName", step: Optional["ColumnOrName"] = None
+) -> Column:
+    """
+    Generate a sequence of integers from `start` to `stop`, incrementing by `step`.
+    If `step` is not set, incrementing by 1 if `start` is less than or equal to `stop`,
+    otherwise -1.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    start : :class:`~pyspark.sql.Column` or str
+        starting value (inclusive)
+    stop : :class:`~pyspark.sql.Column` or str
+        last values (inclusive)
+    step : :class:`~pyspark.sql.Column` or str, optional
+        value to add to current to get next element (default is 1)
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of sequence values
+
+    Examples
+    --------
+    >>> df1 = spark.createDataFrame([(-2, 2)], ('C1', 'C2'))
+    >>> df1.select(sequence('C1', 'C2').alias('r')).collect()
+    [Row(r=[-2, -1, 0, 1, 2])]
+    >>> df2 = spark.createDataFrame([(4, -4, -2)], ('C1', 'C2', 'C3'))
+    >>> df2.select(sequence('C1', 'C2', 'C3').alias('r')).collect()
+    [Row(r=[4, 2, 0, -2, -4])]
+    """
+    if step is None:
+        return _invoke_function_over_columns("generate_series", start, stop)
+    else:
+        return _invoke_function_over_columns("generate_series", start, stop, step)
+
+
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """
     Computes the first argument into a binary from a string using the provided character set

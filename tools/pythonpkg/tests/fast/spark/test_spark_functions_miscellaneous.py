@@ -38,3 +38,12 @@ class TestsSparkFunctionsMiscellaneous:
         df = spark.createDataFrame([(-1,), (0,), (1,)], ['v'])
         res = df.select(F.positive("v").alias("p")).collect()
         assert res == [Row(p=-1), Row(p=0), Row(p=1)]
+
+    def test_sequence(self, spark):
+        df1 = spark.createDataFrame([(-2, 2)], ('C1', 'C2'))
+        res = df1.select(F.sequence('C1', 'C2').alias('r')).collect()
+        assert res == [Row(r=[-2, -1, 0, 1, 2])]
+
+        df2 = spark.createDataFrame([(4, -4, -2)], ('C1', 'C2', 'C3'))
+        res = df2.select(F.sequence('C1', 'C2', 'C3').alias('r')).collect()
+        assert res == [Row(r=[4, 2, 0, -2, -4])]
