@@ -1868,6 +1868,33 @@ def pow(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) 
     return _invoke_function_over_columns("pow", col1, col2)
 
 
+def printf(format: "ColumnOrName", *cols: "ColumnOrName") -> Column:
+    """
+    Formats the arguments in printf-style and returns the result as a string column.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    format : :class:`~pyspark.sql.Column` or str
+        string that can contain embedded format tags and used as result column's value
+    cols : :class:`~pyspark.sql.Column` or str
+        column names or :class:`~pyspark.sql.Column`\\s to be used in formatting
+
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.createDataFrame(
+    ...     [("aa%d%s", 123, "cc",)], ["a", "b", "c"]
+    ... ).select(sf.printf("a", "b", "c")).show()
+    +---------------+
+    |printf(a, b, c)|
+    +---------------+
+    |        aa123cc|
+    +---------------+
+    """
+    return _invoke_function_over_columns("printf", format, *cols)
+
 
 def encode(col: "ColumnOrName", charset: str) -> Column:
     """

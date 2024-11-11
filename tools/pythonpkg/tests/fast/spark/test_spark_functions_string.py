@@ -226,3 +226,10 @@ class TestSparkFunctionsString(object):
 
         res = df.select(F.rpad(df.s, 6, '#').alias('s')).collect()
         assert res == [Row(s='abcd##')]
+
+    def test_printf(self, spark):
+        df = spark.createDataFrame(
+            [("aa%d%s", 123, "cc",)], ["a", "b", "c"]
+        )
+        res = df.select(F.printf("a", "b", "c").alias("r")).collect()
+        assert res == [Row(r='aa123cc')]
