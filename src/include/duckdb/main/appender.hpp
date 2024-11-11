@@ -81,13 +81,9 @@ public:
 	DUCKDB_API void Flush();
 	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
 	DUCKDB_API void Close();
+	//! Returns the active types of the appender.
+	const vector<LogicalType> &GetActiveTypes() const;
 
-	vector<LogicalType> &GetTypess() {
-		return types;
-	}
-	vector<LogicalType> &GetActiveTypes() {
-		return active_types;
-	}
 	idx_t CurrentColumn() const {
 		return column;
 	}
@@ -151,6 +147,9 @@ public:
 	void AppendDefault();
 	void AddColumn(const string &name) override;
 	void ClearColumns() override;
+
+	//! Returns the default values of the appender.
+	const unordered_map<column_t, Value> &GetDefaultValues() const;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;

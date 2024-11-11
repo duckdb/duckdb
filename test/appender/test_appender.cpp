@@ -503,8 +503,8 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	bool failed;
 
 	try {
-		Appender appender_invalid(con, "invalid_database", "main", "tbl");
 		failed = false;
+		Appender appender_invalid(con, "invalid_database", "main", "tbl");
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("Catalog Error") != std::string::npos);
@@ -513,8 +513,8 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	REQUIRE(failed);
 
 	try {
-		Appender appender_invalid(con, "append_to_other", "invalid_schema", "tbl");
 		failed = false;
+		Appender appender_invalid(con, "append_to_other", "invalid_schema", "tbl");
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("Catalog Error") != std::string::npos);
@@ -527,8 +527,8 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query(attach_query + " (readonly)"));
 
 	try {
-		Appender appender_readonly(con, "append_to_other", "main", "tbl");
 		failed = false;
+		Appender appender_readonly(con, "append_to_other", "main", "tbl");
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("Cannot append to a readonly database") != std::string::npos);
@@ -560,8 +560,8 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 
 	bool failed;
 	try {
-		appender.Close();
 		failed = false;
+		appender.Close();
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("a single transaction can only write to a single attached database") !=
@@ -723,8 +723,8 @@ TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
 	bool failed;
 	// Cannot add columns that do not exist.
 	try {
-		appender.AddColumn("hello");
 		failed = false;
+		appender.AddColumn("hello");
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("the column must exist in the table") != std::string::npos);
@@ -734,8 +734,8 @@ TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
 
 	// Cannot add generated columns.
 	try {
-		appender.AddColumn("l");
 		failed = false;
+		appender.AddColumn("l");
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("cannot add a generated column to the appender") != std::string::npos);
@@ -745,8 +745,8 @@ TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
 
 	// Cannot add the same column twice.
 	try {
-		appender.AddColumn("j");
 		failed = false;
+		appender.AddColumn("j");
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("cannot add the same column twice") != std::string::npos);
