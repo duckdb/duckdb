@@ -3,31 +3,32 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/check_binder.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/storage/table/standard_column_data.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/update_state.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/planner/expression_binder/constant_binder.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -867,30 +868,33 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
                             const vector<unique_ptr<BoundConstraint>> &bound_constraints,
-                            optional_ptr<const case_insensitive_set_t> active_columns) {
+                            optional_ptr<const vector<string>> active_columns) {
 	if (!active_columns || active_columns->empty()) {
 		return LocalAppend(table, context, collection, bound_constraints);
 	}
 
+	auto &column_list = table.GetColumns();
+	map<PhysicalIndex, unique_ptr<Expression>> active_expressions;
+	for (idx_t i = 0; i < active_columns->size(); i++) {
+		auto &col = column_list.GetColumn((*active_columns)[i]);
+		auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
+		active_expressions.insert({col.Physical(), std::move(expr)});
+	}
+
 	auto binder = Binder::CreateBinder(context);
 	ConstantBinder default_binder(*binder, context, "DEFAULT value");
-
-	auto &column_list = table.GetColumns();
 	vector<unique_ptr<Expression>> expressions;
-	vector<column_t> null_columns;
-
 	for (idx_t i = 0; i < column_list.PhysicalColumnCount(); i++) {
-		auto &col = column_list.GetColumn(PhysicalIndex(i));
-		if (active_columns->find(col.Name()) != active_columns->end()) {
-			auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
-			expressions.push_back(std::move(expr));
+		auto expr = active_expressions.find(PhysicalIndex(i));
+		if (expr != active_expressions.end()) {
+			expressions.push_back(std::move(expr->second));
 			continue;
 		}
 
+		auto &col = column_list.GetColumn(PhysicalIndex(i));
 		if (!col.HasDefaultValue()) {
-			null_columns.push_back(i);
-			auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
-			expressions.push_back(std::move(expr));
+			auto null_expr = make_uniq<BoundConstantExpression>(Value(col.Type()));
+			expressions.push_back(std::move(null_expr));
 			continue;
 		}
 
@@ -908,12 +912,6 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 	for (auto &chunk : collection.Chunks()) {
-		for (const auto i : null_columns) {
-			auto &null_vec = chunk.data[i];
-			auto &mask = FlatVector::Validity(null_vec);
-			mask.SetAllInvalid(chunk.size());
-		}
-
 		expression_executor.Execute(chunk, result);
 		storage.LocalAppend(append_state, table, context, result);
 		result.Reset();

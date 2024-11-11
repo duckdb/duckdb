@@ -572,6 +572,12 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("COMMIT TRANSACTION"));
 }
 
+void setDataChunkInt32(DataChunk &chunk, idx_t col_idx, idx_t row_idx, int32_t value) {
+	auto &col_i = chunk.data[col_idx];
+	auto col_i_data = reinterpret_cast<int32_t *>(col_i.GetData());
+	col_i_data[row_idx] = value;
+}
+
 TEST_CASE("Test appending with an active default column", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -579,16 +585,14 @@ TEST_CASE("Test appending with an active default column", "[appender]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
 	Appender appender(con, "main", "tbl");
-	appender.SetColumn("i");
+	appender.AddColumn("i");
 
 	DataChunk chunk;
-	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
+	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER};
 	chunk.Initialize(*con.context, types);
 
-	auto &col_i = chunk.data[0];
-	auto col_i_data = reinterpret_cast<int32_t *>(col_i.GetData());
-	col_i_data[0] = 42;
-	col_i_data[1] = 43;
+	setDataChunkInt32(chunk, 0, 0, 42);
+	setDataChunkInt32(chunk, 0, 1, 43);
 
 	chunk.SetCardinality(2);
 	appender.AppendDataChunk(chunk);
@@ -614,14 +618,14 @@ TEST_CASE("Test appending with an active normal column", "[appender]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
 	Appender appender(con, "main", "tbl");
-	appender.SetColumn("j");
+	appender.AddColumn("j");
 
 	DataChunk chunk;
-	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
+	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER};
 	chunk.Initialize(*con.context, types);
 
 	for (idx_t i = 0; i < 4; i++) {
-		auto &col_j = chunk.data[1];
+		auto &col_j = chunk.data[0];
 		auto col_j_data = reinterpret_cast<int32_t *>(col_j.GetData());
 
 		auto offset = i * STANDARD_VECTOR_SIZE;
@@ -651,48 +655,58 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 
 	// Create a data chunk with all three columns filled.
 
-	DataChunk chunk;
-	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
-	chunk.Initialize(*con.context, types);
+	DataChunk chunk_all_types;
+	const duckdb::vector<LogicalType> all_types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
+	chunk_all_types.Initialize(*con.context, all_types);
 
-	auto &col_i = chunk.data[0];
-	auto col_i_data = reinterpret_cast<int32_t *>(col_i.GetData());
-	col_i_data[0] = 42;
+	setDataChunkInt32(chunk_all_types, 0, 0, 42);
+	setDataChunkInt32(chunk_all_types, 1, 0, 111);
+	setDataChunkInt32(chunk_all_types, 2, 0, 50);
 
-	auto &col_j = chunk.data[1];
-	auto col_j_data = reinterpret_cast<int32_t *>(col_j.GetData());
-	col_j_data[0] = 111;
+	chunk_all_types.SetCardinality(1);
+	appender.AppendDataChunk(chunk_all_types);
 
-	auto &col_k = chunk.data[2];
-	auto col_k_data = reinterpret_cast<int32_t *>(col_k.GetData());
-	col_k_data[0] = 50;
+	appender.AddColumn("j");
+	appender.AddColumn("i");
 
-	chunk.SetCardinality(1);
-	appender.AppendDataChunk(chunk);
+	DataChunk chunk_j_i;
+	const duckdb::vector<LogicalType> types_j_i = {LogicalType::INTEGER, LogicalType::INTEGER};
+	chunk_j_i.Initialize(*con.context, types_j_i);
 
-	appender.SetColumn("j");
-	appender.SetColumn("i");
-	appender.AppendDataChunk(chunk);
+	setDataChunkInt32(chunk_j_i, 0, 0, 111);
+	setDataChunkInt32(chunk_j_i, 1, 0, 42);
 
-	appender.ResetColumn("i");
-	appender.AppendDataChunk(chunk);
+	chunk_j_i.SetCardinality(1);
+	appender.AppendDataChunk(chunk_j_i);
 
-	appender.SetColumn("i");
-	appender.SetColumn("k");
-	appender.AppendDataChunk(chunk);
+	appender.ClearColumns();
+	appender.AppendDataChunk(chunk_all_types);
 
-	appender.ResetColumn("i");
-	appender.AppendDataChunk(chunk);
+	appender.AddColumn("k");
 
-	appender.ResetColumn("j");
-	appender.ResetColumn("k");
-	appender.AppendDataChunk(chunk);
+	DataChunk chunk_k;
+	const duckdb::vector<LogicalType> types_k = {LogicalType::INTEGER};
+	chunk_k.Initialize(*con.context, types_k);
+
+	setDataChunkInt32(chunk_k, 0, 0, 50);
+
+	chunk_k.SetCardinality(1);
+	appender.AppendDataChunk(chunk_k);
 	appender.Close();
 
 	result = con.Query("SELECT i, j, k FROM tbl");
-	REQUIRE(CHECK_COLUMN(result, 0, {42, 42, 4, 42, 4, 42}));
-	REQUIRE(CHECK_COLUMN(result, 1, {111, 111, 111, 111, 111, 111}));
-	REQUIRE(CHECK_COLUMN(result, 2, {50, 30, 30, 50, 50, 50}));
+	REQUIRE(CHECK_COLUMN(result, 0, {42, 42, 42, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {50, 30, 50, 50}));
+
+	// Test that column 1 is [111, 111, 111, NULL].
+	auto result_chunk = result->Fetch();
+	auto &null_result_vec = result_chunk->data[1];
+	UnifiedVectorFormat result_format;
+	null_result_vec.ToUnifiedFormat(result_chunk->size(), result_format);
+	REQUIRE(null_result_vec.GetValue(0).GetValue<int32_t>() == 111);
+	REQUIRE(null_result_vec.GetValue(1).GetValue<int32_t>() == 111);
+	REQUIRE(null_result_vec.GetValue(2).GetValue<int32_t>() == 111);
+	REQUIRE(!result_format.validity.RowIsValid(3));
 }
 
 TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
@@ -703,29 +717,31 @@ TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (2 * j))"));
 	Appender appender(con, "main", "tbl");
 
-	appender.SetColumn("i");
-	appender.SetColumn("j");
-	// Ignore columns that do not exist.
-	appender.ResetColumn("hello");
-	appender.SetColumn("world");
-	// Ignore generated columns as default values.
-	appender.SetColumn("l");
+	appender.AddColumn("i");
+	appender.AddColumn("j");
 
-	DataChunk chunk;
-	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
-	chunk.Initialize(*con.context, types);
+	bool failed;
+	// Cannot add columns that do not exist.
+	try {
+		appender.AddColumn("hello");
+		failed = false;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		auto msg = error.Message();
+		REQUIRE(msg.find("the column must exist in the table") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
 
-	auto &col_i = chunk.data[0];
-	auto col_i_data = reinterpret_cast<int32_t *>(col_i.GetData());
-	col_i_data[0] = 42;
-	col_i_data[1] = 43;
-
-	auto &col_j = chunk.data[1];
-	auto col_j_data = reinterpret_cast<int32_t *>(col_j.GetData());
-	col_j_data[0] = 111;
-	col_j_data[1] = 112;
-
-	chunk.SetCardinality(2);
-	appender.AppendDataChunk(chunk);
+	// Cannot add generated columns.
+	try {
+		appender.AddColumn("l");
+		failed = false;
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("cannot add a generated column to the appender") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
 	appender.Close();
 }

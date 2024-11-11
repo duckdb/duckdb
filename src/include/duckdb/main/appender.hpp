@@ -28,28 +28,31 @@ enum class AppenderType : uint8_t {
 //! The Appender class can be used to append elements to a table.
 class BaseAppender {
 public:
-	//! The amount of tuples that will be gathered in the column data collection before flushing
+	//! The amount of tuples that are gathered in the column data collection before flushing.
 	static constexpr const idx_t DEFAULT_FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100ULL;
 
 protected:
+	//! The allocator for the column data collection.
 	Allocator &allocator;
-	//! The append types
-	vector<LogicalType> types;
-	//! The buffered data for the append
+	//! The column types of the associated table.
+	vector<LogicalType> table_types; // TODO: revert rename
+	//! The active column types.
+	vector<LogicalType> active_types;
+	//! The buffered to-be-appended data.
 	unique_ptr<ColumnDataCollection> collection;
-	//! Internal chunk used for appends
-	DataChunk chunk;
-	//! The current column to append to
+	//! The active chunk for row-based appends.
+	DataChunk chunkk; // TODO: rename back
+	//! The currently active column of row-based appends.
 	idx_t column = 0;
-	//! The type of the appender
+	//! The type of the appender.
 	AppenderType appender_type;
-	//! The amount of rows after which we flush the appender automatically
+	//! The amount of rows after which the appender flushes automatically.
 	idx_t flush_count = DEFAULT_FLUSH_COUNT;
 
 protected:
-	DUCKDB_API BaseAppender(Allocator &allocator, AppenderType type);
-	DUCKDB_API BaseAppender(Allocator &allocator, vector<LogicalType> types, AppenderType type,
-	                        idx_t flush_count = DEFAULT_FLUSH_COUNT);
+	DUCKDB_API BaseAppender(Allocator &allocator, const AppenderType type);
+	DUCKDB_API BaseAppender(Allocator &allocator, vector<LogicalType> types, const AppenderType type,
+	                        const idx_t flush_count = DEFAULT_FLUSH_COUNT);
 
 public:
 	DUCKDB_API virtual ~BaseAppender();
@@ -80,19 +83,19 @@ public:
 	DUCKDB_API void Close();
 
 	vector<LogicalType> &GetTypes() {
-		return types;
+		return table_types;
 	}
 	idx_t CurrentColumn() const {
 		return column;
 	}
 	DUCKDB_API void AppendDataChunk(DataChunk &value);
 
-	//! Adds a column to the active column list.
+	//! Appends a column to the active column list.
 	//! Immediately flushes all previous data.
-	virtual void SetColumn(const string &name) = 0;
-	//! Removes a column from the active column list.
+	virtual void AddColumn(const string &name) = 0;
+	//! Removes all columns from the active column list.
 	//! Immediately flushes all previous data.
-	virtual void ResetColumn(const string &name) = 0;
+	virtual void ClearColumns() = 0;
 
 protected:
 	void Destructor();
@@ -121,16 +124,18 @@ protected:
 };
 
 class Appender : public BaseAppender {
-	//! A reference to a database connection that created this appender
+	//! A shared pointer to the context of this appender.
 	shared_ptr<ClientContext> context;
-	//! The table description (including column names)
+	//! The table description including the column names.
 	unique_ptr<TableDescription> description;
+	//! All table default values.
+	unordered_map<column_t, Value> table_default_values; // TODO: revert rename
 
-	//! The default expressions.
-	unordered_map<column_t, Value> default_values;
 	//! If not empty, then this holds all columns provided by the appender.
 	//! Any other columns default to NULL, or their default values.
-	case_insensitive_set_t active_columns;
+	vector<string> active_columns;
+	//! The active default values.
+	unordered_map<column_t, Value> active_default_values;
 
 public:
 	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
@@ -141,8 +146,8 @@ public:
 
 public:
 	void AppendDefault();
-	void SetColumn(const string &name) override;
-	void ResetColumn(const string &name) override;
+	void AddColumn(const string &name) override;
+	void ClearColumns() override;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
@@ -156,13 +161,13 @@ class InternalAppender : public BaseAppender {
 
 public:
 	DUCKDB_API InternalAppender(ClientContext &context, TableCatalogEntry &table,
-	                            idx_t flush_count = DEFAULT_FLUSH_COUNT);
+	                            const idx_t flush_count = DEFAULT_FLUSH_COUNT);
 	DUCKDB_API ~InternalAppender() override;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
-	void SetColumn(const string &name) override;
-	void ResetColumn(const string &name) override;
+	void AddColumn(const string &name) override;
+	void ClearColumns() override;
 };
 
 template <>

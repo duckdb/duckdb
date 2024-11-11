@@ -18,14 +18,15 @@
 
 namespace duckdb {
 
-BaseAppender::BaseAppender(Allocator &allocator, AppenderType type_p)
+BaseAppender::BaseAppender(Allocator &allocator, const AppenderType type_p)
     : allocator(allocator), column(0), appender_type(type_p) {
 }
 
-BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, AppenderType type_p,
-                           idx_t flush_count_p)
-    : allocator(allocator_p), types(std::move(types_p)), collection(make_uniq<ColumnDataCollection>(allocator, types)),
-      column(0), appender_type(type_p), flush_count(flush_count_p) {
+BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, const AppenderType type_p,
+                           const idx_t flush_count_p)
+    : allocator(allocator_p), table_types(std::move(types_p)),
+      collection(make_uniq<ColumnDataCollection>(allocator, table_types)), column(0), appender_type(type_p),
+      flush_count(flush_count_p) {
 	InitializeChunk();
 }
 
@@ -36,15 +37,15 @@ void BaseAppender::Destructor() {
 	if (Exception::UncaughtException()) {
 		return;
 	}
-	// flush any remaining chunks, but only if we are not cleaning up the appender as part of an exception stack unwind
-	// wrapped in a try/catch because Close() can throw if the table was dropped in the meantime
+	// Flush any remaining chunks, if we are not cleaning up as part of an exception stack unwind wrapped in a
+	// try/catch. Close() can throw if the table was dropped in the meantime.
 	try {
 		Close();
 	} catch (...) { // NOLINT
 	}
 }
 
-InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p, idx_t flush_count_p)
+InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p, const idx_t flush_count_p)
     : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes(), AppenderType::PHYSICAL, flush_count_p),
       context(context_p), table(table_p) {
 }
@@ -69,19 +70,19 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 		if (column.Generated()) {
 			continue;
 		}
-		types.push_back(column.Type());
+		table_types.push_back(column.Type());
 		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
 	}
 
 	auto binder = Binder::CreateBinder(*context);
 	context->RunFunctionInTransaction([&]() {
-		for (idx_t i = 0; i < types.size(); i++) {
-			auto &type = types[i];
+		for (idx_t i = 0; i < table_types.size(); i++) {
+			auto &type = table_types[i];
 			auto &expr = defaults[i];
 
 			if (!expr) {
 				// The default value is NULL.
-				default_values[i] = Value(type);
+				table_default_values[i] = Value(type);
 				continue;
 			}
 
@@ -92,20 +93,24 @@ Appender::Appender(Connection &con, const string &database_name, const string &s
 			default_binder.target_type = type;
 			auto bound_default = default_binder.Bind(default_copy);
 
-			Value result_value;
-			if (bound_default->IsFoldable()) {
-				auto eval_success = ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value);
-				if (eval_success) {
-					// Insert the default Value.
-					default_values[i] = result_value;
-				}
+			if (!bound_default->IsFoldable()) {
+				// Not supported yet.
+				continue;
 			}
-			// All other cases are not supported currently.
+
+			Value result_value;
+			auto eval_success = ExpressionExecutor::TryEvaluateScalar(*context, *bound_default, result_value);
+			// Insert the default Value.
+			if (eval_success) {
+				table_default_values[i] = result_value;
+			}
 		}
 	});
 
+	active_types = table_types;
+	active_default_values = table_default_values;
 	InitializeChunk();
-	collection = make_uniq<ColumnDataCollection>(allocator, types);
+	collection = make_uniq<ColumnDataCollection>(allocator, active_types);
 }
 
 Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
@@ -121,27 +126,27 @@ Appender::~Appender() {
 }
 
 void BaseAppender::InitializeChunk() {
-	chunk.Initialize(allocator, types);
+	chunkk.Initialize(allocator, active_types);
 }
 
 void BaseAppender::BeginRow() {
 }
 
 void BaseAppender::EndRow() {
-	// check that all rows have been appended to
-	if (column != chunk.ColumnCount()) {
+	// Ensure that all columns have been appended to.
+	if (column != chunkk.ColumnCount()) {
 		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
-	chunk.SetCardinality(chunk.size() + 1);
-	if (chunk.size() >= STANDARD_VECTOR_SIZE) {
+	chunkk.SetCardinality(chunkk.size() + 1);
+	if (chunkk.size() >= STANDARD_VECTOR_SIZE) {
 		FlushChunk();
 	}
 }
 
 template <class SRC, class DST>
 void BaseAppender::AppendValueInternal(Vector &col, SRC input) {
-	FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
+	FlatVector::GetData<DST>(col)[chunkk.size()] = Cast::Operation<SRC, DST>(input);
 }
 
 template <class SRC, class DST>
@@ -153,8 +158,8 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
 		CastParameters parameters;
-		TryCastToDecimal::Operation<SRC, DST>(input, FlatVector::GetData<DST>(col)[chunk.size()], parameters, width,
-		                                      scale);
+		auto &result = FlatVector::GetData<DST>(col)[chunkk.size()];
+		TryCastToDecimal::Operation<SRC, DST>(input, result, parameters, width, scale);
 		return;
 	}
 	case AppenderType::PHYSICAL: {
@@ -168,10 +173,10 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 
 template <class T>
 void BaseAppender::AppendValueInternal(T input) {
-	if (column >= types.size()) {
+	if (column >= active_types.size()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
-	auto &col = chunk.data[column];
+	auto &col = chunkk.data[column];
 	switch (col.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		AppendValueInternal<T, bool>(col, input);
@@ -247,7 +252,7 @@ void BaseAppender::AppendValueInternal(T input) {
 		AppendValueInternal<T, interval_t>(col, input);
 		break;
 	case LogicalTypeId::VARCHAR:
-		FlatVector::GetData<string_t>(col)[chunk.size()] = StringCast::Operation<T>(input, col);
+		FlatVector::GetData<string_t>(col)[chunkk.size()] = StringCast::Operation<T>(input, col);
 		break;
 	default:
 		AppendValue(Value::CreateValue<T>(input));
@@ -356,8 +361,8 @@ void BaseAppender::Append(interval_t value) {
 }
 
 template <>
-void BaseAppender::Append(Value value) { // NOLINT: template shtuff
-	if (column >= chunk.ColumnCount()) {
+void BaseAppender::Append(Value value) { // NOLINT: template stuff
+	if (column >= chunkk.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
 	AppendValue(value);
@@ -365,15 +370,15 @@ void BaseAppender::Append(Value value) { // NOLINT: template shtuff
 
 template <>
 void BaseAppender::Append(std::nullptr_t value) {
-	if (column >= chunk.ColumnCount()) {
+	if (column >= chunkk.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
-	auto &col = chunk.data[column++];
-	FlatVector::SetNull(col, chunk.size(), true);
+	auto &col = chunkk.data[column++];
+	FlatVector::SetNull(col, chunkk.size(), true);
 }
 
 void BaseAppender::AppendValue(const Value &value) {
-	chunk.SetValue(column, chunk.size(), value);
+	chunkk.SetValue(column, chunkk.size(), value);
 	column++;
 }
 
@@ -381,7 +386,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	auto chunk_types = chunk_p.GetTypes();
 
 	// Early-out, if types match.
-	if (chunk_types == types) {
+	if (chunk_types == active_types) {
 		collection->Append(chunk_p);
 		if (collection->Count() >= flush_count) {
 			Flush();
@@ -390,19 +395,19 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	}
 
 	auto count = chunk_p.ColumnCount();
-	if (count != types.size()) {
-		throw InvalidInputException("incorrect column count in AppendDataChunk, expected %d, got %d", types.size(),
-		                            count);
+	if (count != active_types.size()) {
+		throw InvalidInputException("incorrect column count in AppendDataChunk, expected %d, got %d",
+		                            active_types.size(), count);
 	}
 
 	// We try to cast the chunk.
 	auto size = chunk_p.size();
 	DataChunk cast_chunk;
-	cast_chunk.Initialize(allocator, types);
+	cast_chunk.Initialize(allocator, active_types);
 	cast_chunk.SetCardinality(size);
 
 	for (idx_t i = 0; i < count; i++) {
-		if (chunk_p.data[i].GetType() == types[i]) {
+		if (chunk_p.data[i].GetType() == active_types[i]) {
 			cast_chunk.data[i].Reference(chunk_p.data[i]);
 			continue;
 		}
@@ -411,7 +416,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 		auto success = VectorOperations::DefaultTryCast(chunk_p.data[i], cast_chunk.data[i], size, &error_msg);
 		if (!success) {
 			throw InvalidInputException("type mismatch in AppendDataChunk, expected %s, got %s for column %d",
-			                            types[i].ToString(), chunk_p.data[i].GetType().ToString(), i);
+			                            active_types[i].ToString(), chunk_p.data[i].GetType().ToString(), i);
 		}
 	}
 
@@ -422,11 +427,11 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 }
 
 void BaseAppender::FlushChunk() {
-	if (chunk.size() == 0) {
+	if (chunkk.size() == 0) {
 		return;
 	}
-	collection->Append(chunk);
-	chunk.Reset();
+	collection->Append(chunkk);
+	chunkk.Reset();
 	if (collection->Count() >= flush_count) {
 		Flush();
 	}
@@ -453,25 +458,60 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void Appender::AppendDefault() {
-	auto it = default_values.find(column);
-	auto &column_def = description->columns[column];
-	if (it == default_values.end()) {
+	auto it = active_default_values.find(column);
+	if (it == active_default_values.end()) {
 		throw NotImplementedException(
 		    "AppendDefault is currently not supported for column \"%s\" because default expression is not foldable.",
-		    column_def.Name());
+		    active_columns[column]);
 	}
 	auto &default_value = it->second;
 	Append(default_value);
 }
 
-void Appender::SetColumn(const string &name) {
+void Appender::AddColumn(const string &name) {
 	Flush();
-	active_columns.insert(name);
+	auto exists = false;
+	for (const auto &col_def : description->columns) {
+		if (col_def.Name() == name) {
+			if (col_def.Generated()) {
+				throw InvalidInputException("cannot add a generated column to the appender");
+			}
+			exists = true;
+			break;
+		}
+	}
+	if (!exists) {
+		throw InvalidInputException("the column must exist in the table");
+	}
+
+	active_columns.push_back(name);
+	active_types.clear();
+	active_default_values.clear();
+
+	for (idx_t active_idx = 0; active_idx < active_columns.size(); active_idx++) {
+		for (idx_t col_idx = 0; col_idx < description->columns.size(); col_idx++) {
+			auto &col_def = description->columns[col_idx];
+			if (col_def.Name() == active_columns[active_idx]) {
+				active_types.push_back(col_def.Type());
+				active_default_values.insert({active_idx, table_default_values[col_idx]});
+			}
+		}
+	}
+
+	chunkk.Destroy();
+	InitializeChunk();
+	collection = make_uniq<ColumnDataCollection>(allocator, active_types);
 }
 
-void Appender::ResetColumn(const string &name) {
+void Appender::ClearColumns() {
 	Flush();
-	active_columns.erase(name);
+	active_columns.clear();
+	active_types = table_types;
+	active_default_values = table_default_values;
+
+	chunkk.Destroy();
+	InitializeChunk();
+	collection = make_uniq<ColumnDataCollection>(allocator, active_types);
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
@@ -480,16 +520,16 @@ void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	table.GetStorage().LocalAppend(table, context, collection, bound_constraints);
 }
 
-void InternalAppender::SetColumn(const string &name) {
-	throw InternalException("SetColumn not implemented for InternalAppender");
+void InternalAppender::AddColumn(const string &name) {
+	throw InternalException("AddColumn not implemented for InternalAppender");
 }
 
-void InternalAppender::ResetColumn(const string &name) {
-	throw InternalException("ResetColumn not implemented for InternalAppender");
+void InternalAppender::ClearColumns() {
+	throw InternalException("ClearColumns not implemented for InternalAppender");
 }
 
 void BaseAppender::Close() {
-	if (column == 0 || column == types.size()) {
+	if (column == 0 || column == active_types.size()) {
 		Flush();
 	}
 }
