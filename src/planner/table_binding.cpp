@@ -255,8 +255,9 @@ optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 }
 
 ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
-	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
-	                                                           alias.GetAlias(), column_name));
+	auto candidate_message = StringUtil::CandidatesErrorMessage(names, column_name, "Candidate bindings: ");
+	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table \"%s\" does not have a column named \"%s\"\n%s",
+	                                                           alias.GetAlias(), column_name, candidate_message));
 }
 
 DummyBinding::DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name)
