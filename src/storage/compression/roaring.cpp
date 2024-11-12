@@ -33,8 +33,11 @@ Data layout per segment:
 
 //! The amount of values that are encoded per container
 static constexpr idx_t ROARING_CONTAINER_SIZE = 65536;
+static constexpr idx_t ROARING_VECTOR_SIZE = 2048;
 static constexpr bool NULLS = true;
 static constexpr bool NON_NULLS = false;
+static constexpr uint16_t MAX_RUN_IDX = 2047;
+static constexpr uint16_t MAX_ARRAY_IDX = 4095;
 
 namespace {
 
@@ -60,6 +63,10 @@ public:
 		return data.run_container.is_run;
 	}
 
+	bool IsUncompressed() const {
+		!data.non_run_container.is_run &&data.non_run_container.cardinality == MAX_ARRAY_IDX + 1;
+	}
+
 	bool IsInverted() const {
 		return data.run_container.is_inverted;
 	}
@@ -72,21 +79,21 @@ public:
 		return data.non_run_container.cardinality;
 	}
 
-private:
+public:
 	union {
 		struct {
-			uint16_t unused : 2;          //! Currently unused bits
+			uint16_t unused : 1;          //! Currently unused bits
 			uint16_t is_inverted : 1;     //! Indicate if this maps nulls or non-nulls
 			uint16_t is_run : 1;          //! Indicate if this is a run container
-			uint16_t unused2 : 1;         //! Currently unused bits
+			uint16_t unused2 : 2;         //! Currently unused bits
 			uint16_t number_of_runs : 11; //! The number of runs
 		} run_container;
 
 		struct {
-			uint16_t unused : 2;       //! Currently unused bits
+			uint16_t unused : 1;       //! Currently unused bits
 			uint16_t is_inverted : 1;  //! Indicate if this maps nulls or non-nulls
 			uint16_t is_run : 1;       //! Indicate if this is a run container
-			uint16_t cardinality : 12; //! How many values are set
+			uint16_t cardinality : 13; //! How many values are set (4096)
 		} non_run_container;
 	} data;
 };
@@ -99,9 +106,6 @@ struct RunContainerRLEPair {
 enum class ContainerType : uint8_t { RUN_CONTAINER, ARRAY_CONTAINER, BITSET_CONTAINER };
 
 struct ContainerCompressionState {
-	static constexpr uint16_t MAX_RUN_IDX = 2047;
-	static constexpr uint16_t MAX_ARRAY_IDX = 4095;
-
 public:
 	struct Result {
 	public:
@@ -129,6 +133,10 @@ public:
 		}
 
 	public:
+		ContainerMetadata GetMetadata() const {
+			return ContainerMetadata(nulls, container_type == ContainerType::RUN_CONTAINER,
+			                         container_type == ContainerType::BITSET_CONTAINER ? MAX_ARRAY_IDX + 1 : count);
+		}
 		idx_t GetByteSize() const {
 			idx_t res = 0;
 			res += sizeof(ContainerMetadata);
@@ -172,7 +180,7 @@ public:
 		if (count && null != last_is_null && last_run_idx < MAX_RUN_IDX) {
 			auto &last_run = runs[last_is_null][last_run_idx];
 			// End the last run
-			last_run.length = (count - last_run.start);
+			last_run.length = (count - last_run.start) - 1;
 			last_run_idx++;
 		}
 		if (!count || (null != last_is_null && current_run_idx < MAX_RUN_IDX)) {
@@ -184,8 +192,10 @@ public:
 		// Add to the array
 		auto &current_array_idx = array_idx[null];
 		if (current_array_idx < MAX_ARRAY_IDX) {
-			for (idx_t i = 0; i < amount; i++) {
-				arrays[null][current_array_idx + i] = count + i;
+			if (current_array_idx + amount <= MAX_ARRAY_IDX) {
+				for (idx_t i = 0; i < amount; i++) {
+					arrays[null][current_array_idx + i] = count + i;
+				}
 			}
 			current_array_idx += amount;
 		}
@@ -197,6 +207,13 @@ public:
 
 	bool IsFull() const {
 		return count == ROARING_CONTAINER_SIZE;
+	}
+
+	void OverrideArray(duckdb::data_ptr_t destination, bool nulls) {
+		arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
+	}
+	void OverrideRun(duckdb::data_ptr_t destination, bool nulls) {
+		runs[nulls] = reinterpret_cast<RunContainerRLEPair *>(destination);
 	}
 
 	void Finalize() {
@@ -258,6 +275,13 @@ public:
 		array_idx[NULLS] = 0;
 		finalized = false;
 		last_is_null = false;
+
+		// Reset the arrays + runs
+		arrays[NULLS] = base_arrays[NULLS];
+		arrays[NON_NULLS] = base_arrays[NON_NULLS];
+
+		runs[NULLS] = base_runs[NULLS];
+		runs[NON_NULLS] = base_runs[NON_NULLS];
 	}
 
 public:
@@ -267,10 +291,13 @@ public:
 	idx_t null_count = 0;
 	bool last_is_null = false;
 
+	RunContainerRLEPair *runs[2];
+	uint16_t *arrays[2];
+
 	//! The runs (for sequential nulls | sequential non-nulls)
-	RunContainerRLEPair runs[2][MAX_RUN_IDX];
+	RunContainerRLEPair base_runs[2][MAX_RUN_IDX];
 	//! The indices (for nulls | non-nulls)
-	uint16_t arrays[2][MAX_ARRAY_IDX];
+	uint16_t base_arrays[2][MAX_ARRAY_IDX];
 
 	uint16_t run_idx[2];
 	uint16_t array_idx[2];
@@ -286,7 +313,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
-template <class T>
 struct RoaringAnalyzeState : public AnalyzeState {
 public:
 	explicit RoaringAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {};
@@ -318,6 +344,7 @@ public:
 		}
 		container_state.Finalize();
 		auto res = container_state.GetResult();
+		container_metadata.push_back(res.GetMetadata());
 		auto required_space = res.GetByteSize();
 		if (!HasEnoughSpaceInSegment(required_space)) {
 			FlushSegment();
@@ -372,6 +399,8 @@ public:
 
 	//! The total amount of bytes used to compress the whole segment
 	idx_t total_size = 0;
+	//! The container metadata, determining the type of each container to use during compression
+	vector<ContainerMetadata> container_metadata;
 };
 
 template <class T>
@@ -379,27 +408,21 @@ unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType t
 	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
 
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
-	auto state = make_uniq<RoaringAnalyzeState<T>>(info);
+	auto state = make_uniq<RoaringAnalyzeState>(info);
 
 	return std::move(state);
 }
 
 template <class T>
 bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &analyze_state = state.Cast<RoaringAnalyzeState<T>>();
-
-	// TODO: implement
-	// During analyze, we want to walk through the data, for every 8kB we determine which container type should be used,
-	// we save that in the analyze state this only costs us 16 bits per container, this will simultaneously be used in
-	// the compression stage as the container metadata written to disk
-
+	auto &analyze_state = state.Cast<RoaringAnalyzeState>();
 	analyze_state.Analyze(input, count);
 	return true;
 }
 
 template <class T>
 idx_t RoaringFinalAnalyze(AnalyzeState &state) {
-	auto &roaring_state = state.Cast<RoaringAnalyzeState<T>>();
+	auto &roaring_state = state.Cast<RoaringAnalyzeState>();
 	roaring_state.FlushContainer();
 	roaring_state.FlushSegment();
 	return roaring_state.total_size;
@@ -411,11 +434,22 @@ idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 template <class T>
 struct RoaringCompressState : public CompressionState {
 public:
-	explicit RoaringCompressState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
-	    : CompressionState(info), checkpointer(checkpointer),
+	explicit RoaringCompressState(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> analyze_state_p)
+	    : CompressionState(analyze_state_p->info), owned_analyze_state(std::move(analyze_state_p)),
+	      analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()),
+	      container_state(analyze_state.container_state), container_metadata(analyze_state.container_metadata),
+	      checkpointer(checkpointer),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
+
+		InitializeContainer();
 	}
+
+	unique_ptr<AnalyzeState> owned_analyze_state;
+	RoaringAnalyzeState &analyze_state;
+
+	ContainerCompressionState &container_state;
+	vector<ContainerMetadata> &container_metadata;
 
 	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction &function;
@@ -424,10 +458,65 @@ public:
 
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
-	// Ptr to next free spot for storing bitwidths and frame-of-references (growing downwards).
+	// Ptr to next free spot for storing
 	data_ptr_t metadata_ptr;
+	//! The amount of values already compressed
+	idx_t count;
+	//! Whether the current container is uncompressed
+	bool is_uncompressed = false;
 
 public:
+	inline idx_t GetContainerIndex() {
+		idx_t index = count / ROARING_CONTAINER_SIZE;
+		return index;
+	}
+
+	idx_t GetRemainingSpace() {
+		return metadata_ptr - data_ptr;
+	}
+
+	void InitializeContainer() {
+		auto container_index = GetContainerIndex();
+		D_ASSERT(container_index < container_metadata.size());
+		auto &metadata = container_metadata[container_index];
+
+		is_uncompressed = metadata.IsUncompressed();
+		idx_t required_space = sizeof(uint16_t);
+		if (is_uncompressed) {
+			idx_t container_size =
+			    duckdb::AlignValue<idx_t, 8>(MinValue<idx_t>(analyze_state.count - count, ROARING_CONTAINER_SIZE)) / 8;
+			required_space += container_size;
+		} else if (metadata.IsRun()) {
+			required_space += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
+		} else {
+			required_space += sizeof(uint16_t) * metadata.Cardinality();
+		}
+
+		// We can check before writing anything whether there is room for this container on the current segment
+		if (GetRemainingSpace() < required_space) {
+			idx_t row_start = current_segment->start + current_segment->count;
+			FlushSegment();
+			CreateEmptySegment(row_start);
+		}
+
+		metadata_ptr -= sizeof(ContainerMetadata);
+		duckdb::Store<ContainerMetadata>(metadata, metadata_ptr);
+
+		container_state.Reset();
+		if (is_uncompressed) {
+			return;
+		}
+
+		// Override the pointer to write directly into the block
+		if (metadata.IsRun()) {
+			container_state.OverrideRun(data_ptr, metadata.IsInverted());
+			data_ptr += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
+		} else {
+			container_state.OverrideArray(data_ptr, metadata.IsInverted());
+			data_ptr += sizeof(uint16_t) * metadata.Cardinality();
+		}
+	}
+
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
@@ -446,31 +535,82 @@ public:
 		auto &state = checkpointer.GetCheckpointState();
 		auto base_ptr = handle.Ptr();
 
-		// TODO: implement
+		idx_t unaligned_offset = NumericCast<idx_t>(data_ptr - base_ptr);
+		idx_t metadata_offset = AlignValue(unaligned_offset);
+		idx_t metadata_size = NumericCast<idx_t>(base_ptr + info.GetBlockSize() - metadata_ptr);
+		idx_t total_segment_size = metadata_offset + metadata_size;
 
-		idx_t total_segment_size = 0;
 		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
 	void Finalize() {
-		// TODO: implement
+		FlushContainer();
 		FlushSegment();
 		current_segment.reset();
+	}
+
+	void FlushContainer() {
+		if (!container_state.count) {
+			return;
+		}
+		count += container_state.count;
+		if (is_uncompressed) {
+			throw NotImplementedException("TODO");
+		}
+	}
+
+	void NextContainer() {
+		FlushContainer();
+		InitializeContainer();
+	}
+
+	void Compress(Vector &input, idx_t count) {
+		UnifiedVectorFormat unified;
+		input.ToUnifiedFormat(count, unified);
+		auto &validity = unified.validity;
+
+		if (is_uncompressed) {
+			// TODO: could be complicated because of alignment issues
+			throw NotImplementedException("TODO");
+		}
+
+		if (validity.AllValid()) {
+			idx_t appended = 0;
+			while (appended < count) {
+				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
+				container_state.Append(false, to_append);
+				if (container_state.IsFull()) {
+					NextContainer();
+				}
+				appended += to_append;
+			}
+		} else {
+			idx_t appended = 0;
+			while (appended < count) {
+				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
+				for (idx_t i = 0; i < to_append; i++) {
+					auto is_null = validity.RowIsValidUnsafe(appended + i);
+					container_state.Append(!is_null);
+				}
+				if (container_state.IsFull()) {
+					NextContainer();
+				}
+				appended += to_append;
+			}
+		}
 	}
 };
 
 template <class T>
 unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointer &checkpointer,
                                                     unique_ptr<AnalyzeState> state) {
-	return make_uniq<RoaringCompressState<T>>(checkpointer, state->info);
+	return make_uniq<RoaringCompressState<T>>(checkpointer, std::move(state));
 }
 
 template <class T>
 void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = state_p.Cast<RoaringCompressState<T>>();
-	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(count, vdata);
-	// TODO: implement
+	state.Compress(scan_vector, count);
 }
 
 template <class T>
