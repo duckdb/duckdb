@@ -22,7 +22,8 @@ struct date_t;     // NOLINT
 struct dtime_t;    // NOLINT
 struct dtime_tz_t; // NOLINT
 
-//! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
+//! Type used to represent timestamps.s
+//! Its value holds seconds, microseconds, milliseconds or nanoseconds since 1970-01-01.
 struct timestamp_t { // NOLINT
 	int64_t value;
 
@@ -79,19 +80,30 @@ struct timestamp_t { // NOLINT
 	} // NOLINT
 };
 
-struct timestamp_tz_t : public timestamp_t { // NOLINT
-};
-struct timestamp_ns_t : public timestamp_t { // NOLINT
+struct timestamp_sec_t : public timestamp_t { // NOLINT
+	timestamp_sec_t() = default;
+	explicit inline constexpr timestamp_sec_t(int64_t value_p) : timestamp_t(value_p) {
+	}
 };
 struct timestamp_ms_t : public timestamp_t { // NOLINT
+	timestamp_ms_t() = default;
+	explicit inline constexpr timestamp_ms_t(int64_t value_p) : timestamp_t(value_p) {
+	}
 };
-struct timestamp_sec_t : public timestamp_t { // NOLINT
+struct timestamp_ns_t : public timestamp_t { // NOLINT
+	timestamp_ns_t() = default;
+	explicit inline constexpr timestamp_ns_t(int64_t value_p) : timestamp_t(value_p) {
+	}
+};
+struct timestamp_tz_t : public timestamp_t { // NOLINT
+	timestamp_tz_t() = default;
+	explicit inline constexpr timestamp_tz_t(int64_t value_p) : timestamp_t(value_p) {
+	}
 };
 
 enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE };
 
-//! The Timestamp class is a static class that holds helper functions for the Timestamp
-//! type.
+//! The static Timestamp class holds helper functions for the timestamp types.
 class Timestamp {
 public:
 	// min timestamp is 290308-12-22 (BC)
@@ -160,10 +172,6 @@ public:
 
 	//! Try convert a timestamp to epoch (in nanoseconds)
 	DUCKDB_API static bool TryGetEpochNanoSeconds(timestamp_t timestamp, int64_t &result);
-	//! Convert the epoch (in seconds) to a timestamp
-	DUCKDB_API static int64_t GetEpochSeconds(timestamp_t timestamp);
-	//! Convert the epoch (in ms) to a timestamp
-	DUCKDB_API static int64_t GetEpochMs(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in microseconds)
 	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in nanoseconds)

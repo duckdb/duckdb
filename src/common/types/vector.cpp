@@ -608,13 +608,13 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(reinterpret_cast<timestamp_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(reinterpret_cast<timestamp_t *>(data)[index]);
+		return Value::TIMESTAMPNS(reinterpret_cast<timestamp_ns_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(reinterpret_cast<timestamp_t *>(data)[index]);
+		return Value::TIMESTAMPMS(reinterpret_cast<timestamp_ms_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMPSEC(reinterpret_cast<timestamp_t *>(data)[index]);
+		return Value::TIMESTAMPSEC(reinterpret_cast<timestamp_sec_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(reinterpret_cast<timestamp_t *>(data)[index]);
+		return Value::TIMESTAMPTZ(reinterpret_cast<timestamp_tz_t *>(data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(reinterpret_cast<hugeint_t *>(data)[index]);
 	case LogicalTypeId::UHUGEINT:
