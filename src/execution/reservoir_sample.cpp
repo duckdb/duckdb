@@ -987,9 +987,12 @@ void IngestionSample::Destroy() {
 	destroyed = true;
 }
 
-unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t theoretical_chunk_length) {
+unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sample_chunk_offset,
+                                                                       idx_t theoretical_chunk_length) {
 	idx_t cur_reservoir_weights_size = base_reservoir_sample->reservoir_weights.size();
-	idx_t num_to_pop = static_cast<idx_t>((static_cast<double>(theoretical_chunk_length) / (theoretical_chunk_length + base_reservoir_sample->num_entries_seen_total)) * theoretical_chunk_length);
+	idx_t num_to_pop = static_cast<idx_t>((static_cast<double>(theoretical_chunk_length) /
+	                                       (theoretical_chunk_length + base_reservoir_sample->num_entries_seen_total)) *
+	                                      theoretical_chunk_length);
 
 	unordered_map<idx_t, idx_t> replacement_indexes;
 	replacement_indexes.reserve(num_to_pop);
@@ -1015,7 +1018,6 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sam
 		indexes[i] = tmp;
 	}
 
-
 	for (idx_t i = 0; i < num_to_pop; i++) {
 		replacement_indexes[indexes[i]] = i;
 		double r2 = base_reservoir_sample->random.NextRandom(min_weighted_index, 1);
@@ -1029,7 +1031,7 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sam
 }
 
 unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset,
-																   idx_t theoretical_chunk_length) {
+                                                                   idx_t theoretical_chunk_length) {
 	idx_t remaining = theoretical_chunk_length;
 	unordered_map<idx_t, idx_t> ret;
 	idx_t sample_chunk_index = 0;
@@ -1038,7 +1040,7 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 
 	while (true) {
 		idx_t offset =
-			base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
+		    base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;

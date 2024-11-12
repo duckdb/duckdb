@@ -13,14 +13,14 @@ statement ok
 create table materialized_range as select * from range(5000000);
 
 statement ok
-create table integers_1 as (select (range + 5)::VARCHAR a, range b, get_current_time() as time from materialized_range);
+create table integers_1 as (select (range + 5) a, range b, get_current_time() as time from materialized_range);
 
 query II nosort result_1
 select a::INT, b from pragma_table_sample('integers_1') order by all;
 ----
 
 statement ok
-create table integers_2 as (select (range + 5)::VARCHAR a, range b, get_current_time() as time from materialized_range);
+create table integers_2 as (select (range + 5) a, range b, get_current_time() as time from materialized_range);
 
 # samples should be the same given the same table and the same contents.
 query II nosort result_1
@@ -28,10 +28,10 @@ select a::INT, b from pragma_table_sample('integers_2') order by all;
 ----
 
 statement ok
-create or replace table integers_1 as (select (range + 5)::VARCHAR a, range b from materialized_range);
+create or replace table integers_1 as (select (range + 5) a, range b from materialized_range);
 
 statement ok
-create or replace table integers_2 as (select (range + 5)::VARCHAR a, range b from materialized_range);
+create or replace table integers_2 as (select (range + 5) a, range b from materialized_range);
 
 # sample only has values in the table it was sampled from
 query I
@@ -58,38 +58,35 @@ select count(*) from pragma_table_sample('integers_2');
 2048
 
 
-mode skip
-
-
-#query II
-#select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
-#----
-#0	213
-#1	420
-#2	418
-#3	418
-#4	417
-#5	162
+query II
+select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
+----
+0	203
+1	410
+2	407
+3	415
+4	408
+5	205
 
 
 # adding another interval should subtract an equal number from the rest of the intervals
 statement ok
-insert into integers_1 (select (range + 5)::VARCHAR a, range b from range(5000000,6000000));
+insert into integers_1 (select (range + 5) a, range b from range(5000000,6000000));
 
-#query II
-#select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
-#----
-#0	172
-#1	333
-#2	336
-#3	336
-#4	336
-#5	334
-#6	201
+query II
+select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
+----
+0	169
+1	344
+2	343
+3	345
+4	335
+5	338
+6	174
 
 # If double the table count is appended, around half the sample should account for the new values.
 statement ok
-insert into integers_1 (select '-1', -1 from range(6000000));
+insert into integers_1 (select -1, -1 from range(6000000));
 
 query I
 select count(*) from integers_1;
@@ -99,18 +96,18 @@ select count(*) from integers_1;
 # about half of the samples should have the pair '-1', 1. TODO: Figure out
 # why the sample prefers values from later on.
 query I
-select count(*) from pragma_table_sample('integers_1') where a = '-1' and b = -1;
+select count(*) from pragma_table_sample('integers_1') where a = -1 and b = -1;
 ----
-945
+814
 
 
 restart
 
 # updated sample is also newly serialized
 query I
-select count(*) from pragma_table_sample('integers_1') where a = '-1' and b = -1;
+select count(*) from pragma_table_sample('integers_1') where a = -1 and b = -1;
 ----
-1250
+814
 
 
 # create a view on top of the sample
@@ -120,30 +117,30 @@ create view sample_view as select * from pragma_table_sample('integers_1');
 
 # update the sample
 statement ok
-insert into integers_1 (select '-2', -2 from range(6000000));
+insert into integers_1 (select -2, -2 from range(6000000));
 
 # 2048 / 3 = 682 (666 is good enough)
 query I
-select count(*) from sample_view where a = '-2' and b = -2;
+select count(*) from sample_view where a = -2 and b = -2;
 ----
-779
+578
 
 restart
 
 query I
-select count(*) from sample_view where a = '-2' and b = -2;
+select count(*) from sample_view where a = -2 and b = -2;
 ----
-779
+578
 
 # currently have 18_000_000 values in the table.
 # to try and get 1 value in the sample, we should add
-# 18000000 / 2048 = 8789 values. 8500 is good for now.
+# 18000000 / 2048 = 8789 values. For some reason we need 10000
 
 statement ok
-insert into integers_1 (select '-3', -3 from range(8500));
+insert into integers_1 (select -3, -3 from range(10000));
 
 # 1 value makes it
 query I
-select count(*) from sample_view where a = '-3' and b = -3;
+select count(*) from sample_view where a = -3 and b = -3;
 ----
 1
