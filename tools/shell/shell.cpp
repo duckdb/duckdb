@@ -2809,6 +2809,12 @@ static void printDatabaseError(const char *zErr) {
 		return;
 	}
 	vector<duckdb::SimplifiedToken> tokens;
+	string error_type;
+	auto error_location = duckdb::StringUtil::Find(error_msg, "Error: ");
+	if (error_location.IsValid()) {
+		error_type = error_msg.substr(0, error_location.GetIndex() + 6);
+		error_msg = error_msg.substr(error_location.GetIndex() + 7);
+	}
 	try {
 		tokens = duckdb::Parser::TokenizeError(error_msg);
 	} catch (...) {
@@ -2827,6 +2833,9 @@ static void printDatabaseError(const char *zErr) {
 		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
 		new_token.start = 0;
 		tokens.push_back(new_token);
+	}
+	if (!error_type.empty()) {
+		PrintText(error_type + "\n", PrintOutput::STDERR, PrintColor::RED, PrintIntensity::BOLD);
 	}
 	for (idx_t i = 0; i < tokens.size(); i++) {
 		auto color = PrintColor::STANDARD;

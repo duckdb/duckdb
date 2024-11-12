@@ -154,7 +154,7 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 
 	// now first print the error message plus the current line (or a subset of the line)
 	string result = error_message;
-	result += "\n" + line_indicator + begin_trunc + query.substr(start_pos, end_pos - start_pos) + end_trunc;
+	result += "\n\n" + line_indicator + begin_trunc + query.substr(start_pos, end_pos - start_pos) + end_trunc;
 	// print an arrow pointing at the error location
 	result += "\n" + string(error_render_width, ' ') + "^";
 	return result;
