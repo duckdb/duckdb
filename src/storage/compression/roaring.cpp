@@ -64,7 +64,7 @@ public:
 	}
 
 	bool IsUncompressed() const {
-		!data.non_run_container.is_run &&data.non_run_container.cardinality == MAX_ARRAY_IDX + 1;
+		return !data.non_run_container.is_run && data.non_run_container.cardinality == MAX_ARRAY_IDX + 1;
 	}
 
 	bool IsInverted() const {
@@ -403,7 +403,6 @@ public:
 	vector<ContainerMetadata> container_metadata;
 };
 
-template <class T>
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
 
@@ -413,14 +412,12 @@ unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType t
 	return std::move(state);
 }
 
-template <class T>
 bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = state.Cast<RoaringAnalyzeState>();
 	analyze_state.Analyze(input, count);
 	return true;
 }
 
-template <class T>
 idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 	auto &roaring_state = state.Cast<RoaringAnalyzeState>();
 	roaring_state.FlushContainer();
@@ -431,7 +428,6 @@ idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-template <class T>
 struct RoaringCompressState : public CompressionState {
 public:
 	explicit RoaringCompressState(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> analyze_state_p)
@@ -461,7 +457,7 @@ public:
 	// Ptr to next free spot for storing
 	data_ptr_t metadata_ptr;
 	//! The amount of values already compressed
-	idx_t count;
+	idx_t count = 0;
 	//! Whether the current container is uncompressed
 	bool is_uncompressed = false;
 
@@ -540,6 +536,10 @@ public:
 		idx_t metadata_size = NumericCast<idx_t>(base_ptr + info.GetBlockSize() - metadata_ptr);
 		idx_t total_segment_size = metadata_offset + metadata_size;
 
+		if (total_segment_size == 0) {
+			return;
+		}
+
 		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
@@ -601,21 +601,18 @@ public:
 	}
 };
 
-template <class T>
 unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointer &checkpointer,
                                                     unique_ptr<AnalyzeState> state) {
-	return make_uniq<RoaringCompressState<T>>(checkpointer, std::move(state));
+	return make_uniq<RoaringCompressState>(checkpointer, std::move(state));
 }
 
-template <class T>
 void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = state_p.Cast<RoaringCompressState<T>>();
+	auto &state = state_p.Cast<RoaringCompressState>();
 	state.Compress(scan_vector, count);
 }
 
-template <class T>
 void RoaringFinalizeCompress(CompressionState &state_p) {
-	auto &state = state_p.Cast<RoaringCompressState<T>>();
+	auto &state = state_p.Cast<RoaringCompressState>();
 	state.Finalize();
 }
 
@@ -623,82 +620,248 @@ void RoaringFinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 
-template <class T>
-struct RoaringScanState : public SegmentScanState {
+struct ContainerScanState {
 public:
-	explicit RoaringScanState(ColumnSegment &segment) : current_segment(segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		handle = buffer_manager.Pin(segment.block);
-		auto data_ptr = handle.Ptr();
-
-		// TODO: implement
+	ContainerScanState(idx_t container_index_p, idx_t container_size)
+	    : container_index(container_index_p), container_size(container_size) {
+	}
+	virtual ~ContainerScanState() {
 	}
 
-	BufferHandle handle;
-	ColumnSegment &current_segment;
+public:
+	virtual void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) = 0;
 
 public:
-	void Skip(ColumnSegment &segment, idx_t skip_count) {
-		// TODO: implement
-	}
+	//! The index of the container
+	idx_t container_index;
+	//! The size of the container (how many values does it hold)
+	idx_t container_size;
+	//! How much of the container is already consumed
+	idx_t scanned_count = 0;
 };
 
-template <class T>
+struct RunContainerScanState : public ContainerScanState {
+public:
+	RunContainerScanState(idx_t container_index, idx_t container_size, RunContainerRLEPair *runs, idx_t count)
+	    : ContainerScanState(container_index, container_size), runs(runs), count(count) {
+	}
+
+public:
+	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
+		throw NotImplementedException("TODO");
+	}
+
+public:
+	RunContainerRLEPair *runs;
+	idx_t count;
+	idx_t run_index = 0;
+};
+
+struct ArrayContainerScanState : public ContainerScanState {
+public:
+	ArrayContainerScanState(idx_t container_index, idx_t container_size, uint16_t *array, idx_t count)
+	    : ContainerScanState(container_index, container_size), array(array), count(count) {
+	}
+
+public:
+	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
+		throw NotImplementedException("TODO");
+	}
+
+public:
+	uint16_t *array;
+	idx_t count;
+	idx_t array_index = 0;
+};
+
+struct BitsetContainerScanState : public ContainerScanState {
+public:
+	BitsetContainerScanState(idx_t container_index, idx_t count, uint8_t *bitset)
+	    : ContainerScanState(container_index, count), bitset(bitset) {
+	}
+
+public:
+	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
+		throw NotImplementedException("TODO");
+	}
+
+public:
+	// FIXME: should this use a ValidityMask ?
+	uint8_t *bitset;
+	idx_t byte_index = 0;
+	idx_t bit_index = 0;
+};
+
+struct RoaringScanState : public SegmentScanState {
+public:
+	explicit RoaringScanState(ColumnSegment &segment) : segment(segment) {
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		handle = buffer_manager.Pin(segment.block);
+		data_ptr = handle.Ptr() + segment.GetBlockOffset();
+		// TODO: write where the metadata starts, so we can compact the block if not enough space is used
+
+		// Deserialize the container metadata for this segment
+		// auto metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
+		idx_t metadata_offset = segment.SegmentSize();
+		auto metadata_ptr = data_ptr + segment.GetBlockOffset() + metadata_offset - sizeof(ContainerMetadata);
+
+		auto segment_count = segment.count.load();
+		auto container_count = segment_count / ROARING_CONTAINER_SIZE;
+		if (segment_count % ROARING_CONTAINER_SIZE != 0) {
+			container_count++;
+		}
+		container_metadata.reserve(container_count);
+		for (idx_t i = 0; i < container_count; i++) {
+			container_metadata.push_back(duckdb::Load<ContainerMetadata>(metadata_ptr));
+			metadata_ptr -= sizeof(ContainerMetadata);
+		}
+	}
+
+public:
+	bool UseContainerStateCache(idx_t container_index, idx_t internal_offset) {
+		if (!current_container) {
+			// No container loaded yet
+			return false;
+		}
+		if (current_container->container_index != container_index) {
+			// Not the same container
+			return false;
+		}
+		if (current_container->scanned_count != internal_offset) {
+			// Not the same scan offset
+			return false;
+		}
+		return true;
+	}
+
+	ContainerMetadata GetContainerMetadata(idx_t container_index) {
+		// TODO: We probably want to load all the container metadata into a vector in InitScan
+		throw NotImplementedException("TODO");
+	}
+
+	data_ptr_t GetStartOfContainerData(idx_t container_index) {
+		// TODO: keep the start position of the highest seen container index
+		// that gets updated here
+		if (!container_index) {
+			return data_ptr;
+		}
+		throw NotImplementedException("TODO");
+	}
+
+	ContainerScanState &LoadContainer(idx_t container_index, idx_t internal_offset) {
+		if (UseContainerStateCache(container_index, internal_offset)) {
+			return *current_container;
+		}
+		auto metadata = GetContainerMetadata(container_index);
+		auto data_ptr = GetStartOfContainerData(container_index);
+
+		auto segment_count = segment.count.load();
+		auto start_of_container = container_index * ROARING_CONTAINER_SIZE;
+		auto container_size = MinValue<idx_t>(segment_count - start_of_container, ROARING_CONTAINER_SIZE);
+		if (metadata.IsUncompressed()) {
+			current_container = make_uniq<BitsetContainerScanState>(container_index, container_size,
+			                                                        reinterpret_cast<uint8_t *>(data_ptr));
+		} else if (metadata.IsRun()) {
+			current_container = make_uniq<RunContainerScanState>(container_index, container_size,
+			                                                     reinterpret_cast<RunContainerRLEPair *>(data_ptr),
+			                                                     metadata.NumberOfRuns());
+		} else {
+			current_container = make_uniq<ArrayContainerScanState>(
+			    container_index, container_size, reinterpret_cast<uint16_t *>(data_ptr), metadata.Cardinality());
+		}
+
+		auto &scan_state = *current_container;
+		if (internal_offset) {
+			Skip(scan_state, internal_offset);
+		}
+		return *current_container;
+	}
+
+	void ScanInternal(ContainerScanState &scan_state, idx_t to_scan, Vector &result, idx_t offset) {
+		throw NotImplementedException("TODO");
+	}
+
+	idx_t GetContainerIndex(idx_t start_index, idx_t &offset) {
+		idx_t container_index = start_index / ROARING_CONTAINER_SIZE;
+		offset = start_index % ROARING_CONTAINER_SIZE;
+		return container_index;
+	}
+
+	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count) {
+		idx_t remaining = count;
+		idx_t scanned = 0;
+		while (remaining) {
+			idx_t internal_offset;
+			idx_t vector_idx = GetContainerIndex(start_idx + scanned, internal_offset);
+			auto &scan_state = LoadContainer(vector_idx, internal_offset);
+			idx_t remaining_in_container = scan_state.container_size - scan_state.scanned_count;
+			idx_t to_scan = MinValue<idx_t>(remaining, remaining_in_container);
+			ScanInternal(scan_state, to_scan, result, offset + scanned);
+			remaining -= to_scan;
+			scanned += to_scan;
+		}
+		D_ASSERT(scanned == count);
+	}
+
+	void Skip(ContainerScanState &scan_state, idx_t skip_count) {
+		// TODO: implement
+	}
+
+public:
+	BufferHandle handle;
+	ColumnSegment &segment;
+	unique_ptr<ContainerScanState> current_container;
+	data_ptr_t data_ptr;
+	vector<ContainerMetadata> container_metadata;
+};
+
 unique_ptr<SegmentScanState> RoaringInitScan(ColumnSegment &segment) {
-	auto result = make_uniq<RoaringScanState<T>>(segment);
+	auto result = make_uniq<RoaringScanState>(segment);
 	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-template <class T>
 void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
-	auto &scan_state = state.scan_state->Cast<RoaringScanState<T>>();
+	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
+	auto start = segment.GetRelativeIndex(state.row_index);
 
-	T *result_data = FlatVector::GetData<T>(result);
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-
-	// TODO: implement
+	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
 
-template <class T>
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	RoaringScanPartial<T>(segment, state, scan_count, result, 0);
+	RoaringScanPartial(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-template <class T>
 void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	RoaringScanState<T> scan_state(segment);
+	RoaringScanState scan_state(segment);
 
 	// TODO: implement
 }
 
-template <class T>
 void RoaringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	auto &scan_state = static_cast<RoaringScanState<T> &>(*state.scan_state);
-	scan_state.Skip(segment, skip_count);
+	// We skip inside scan instead, if the container boundary gets crossed we can avoid a bunch of work anyways
+	return;
 }
 
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
-template <class T>
 CompressionFunction GetCompressionFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, RoaringInitAnalyze<T>,
-	                           RoaringAnalyze<T>, RoaringFinalAnalyze<T>, RoaringInitCompression<T>, RoaringCompress<T>,
-	                           RoaringFinalizeCompress<T>, RoaringInitScan<T>, RoaringScan<T>, RoaringScanPartial<T>,
-	                           RoaringFetchRow<T>, RoaringSkip<T>);
+	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, RoaringInitAnalyze, RoaringAnalyze,
+	                           RoaringFinalAnalyze, RoaringInitCompression, RoaringCompress, RoaringFinalizeCompress,
+	                           RoaringInitScan, RoaringScan, RoaringScanPartial, RoaringFetchRow, RoaringSkip);
 }
 
 CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BIT:
-		return GetCompressionFunction<validity_t>(type);
+		return GetCompressionFunction(type);
 	default:
 		throw InternalException("Unsupported type for Roaring");
 	}
