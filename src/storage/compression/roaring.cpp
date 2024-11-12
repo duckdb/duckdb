@@ -42,7 +42,8 @@ struct ContainerMetadata {
 public:
 	ContainerMetadata() {
 	}
-	ContainerMetadata(bool is_run, uint16_t value) {
+	ContainerMetadata(bool is_inverted, bool is_run, uint16_t value) {
+		data.run_container.is_inverted = is_inverted;
 		if (is_run) {
 			data.run_container.is_run = 1;
 			data.run_container.number_of_runs = value;
@@ -59,6 +60,10 @@ public:
 		return data.run_container.is_run;
 	}
 
+	bool IsInverted() const {
+		return data.run_container.is_inverted;
+	}
+
 	uint16_t NumberOfRuns() const {
 		return data.run_container.number_of_runs;
 	}
@@ -70,14 +75,16 @@ public:
 private:
 	union {
 		struct {
-			uint16_t unused : 3;          //! Currently unused bits
+			uint16_t unused : 2;          //! Currently unused bits
+			uint16_t is_inverted : 1;     //! Indicate if this maps nulls or non-nulls
 			uint16_t is_run : 1;          //! Indicate if this is a run container
 			uint16_t unused2 : 1;         //! Currently unused bits
 			uint16_t number_of_runs : 11; //! The number of runs
 		} run_container;
 
 		struct {
-			uint16_t unused : 3;       //! Currently unused bits
+			uint16_t unused : 2;       //! Currently unused bits
+			uint16_t is_inverted : 1;  //! Indicate if this maps nulls or non-nulls
 			uint16_t is_run : 1;       //! Indicate if this is a run container
 			uint16_t cardinality : 12; //! How many values are set
 		} non_run_container;
@@ -97,11 +104,58 @@ struct ContainerCompressionState {
 
 public:
 	struct Result {
+	public:
+		static Result RunContainer(idx_t runs, bool nulls) {
+			auto res = Result();
+			res.container_type = ContainerType::RUN_CONTAINER;
+			res.nulls = nulls;
+			res.count = runs;
+			return res;
+		}
+
+		static Result ArrayContainer(idx_t array_size, bool nulls) {
+			auto res = Result();
+			res.container_type = ContainerType::ARRAY_CONTAINER;
+			res.nulls = nulls;
+			res.count = array_size;
+			return res;
+		}
+
+		static Result BitsetContainer(idx_t container_size) {
+			auto res = Result();
+			res.container_type = ContainerType::BITSET_CONTAINER;
+			res.count = container_size;
+			return res;
+		}
+
+	public:
+		idx_t GetByteSize() const {
+			idx_t res = 0;
+			res += sizeof(ContainerMetadata);
+			switch (container_type) {
+			case ContainerType::BITSET_CONTAINER:
+				res += duckdb::AlignValue<idx_t, 8>(count) / 8;
+				break;
+			case ContainerType::RUN_CONTAINER:
+				res += count * sizeof(RunContainerRLEPair);
+				break;
+			case ContainerType::ARRAY_CONTAINER:
+				res += count * sizeof(uint16_t);
+				break;
+			}
+			return res;
+		}
+
+	public:
 		ContainerType container_type;
 		//! Whether nulls are being encoded or non-nulls
 		bool nulls;
-		//! The amount of runs / size of the final array (dependent on the container type)
+		//! The amount (meaning depends on container_type)
 		idx_t count;
+
+	private:
+		Result() {
+		}
 	};
 
 public:
@@ -110,7 +164,7 @@ public:
 	}
 
 public:
-	void Append(bool null) {
+	void Append(bool null, idx_t amount = 1) {
 		// Adjust the runs
 		auto &current_run_idx = run_idx[null];
 		auto &last_run_idx = run_idx[last_is_null];
@@ -130,13 +184,19 @@ public:
 		// Add to the array
 		auto &current_array_idx = array_idx[null];
 		if (current_array_idx < MAX_ARRAY_IDX) {
-			arrays[null][current_array_idx] = count;
-			current_array_idx++;
+			for (idx_t i = 0; i < amount; i++) {
+				arrays[null][current_array_idx + i] = count + i;
+			}
+			current_array_idx += amount;
 		}
 
 		last_is_null = null;
-		null_count += null;
-		count++;
+		null_count += null * amount;
+		count += amount;
+	}
+
+	bool IsFull() const {
+		return count == ROARING_CONTAINER_SIZE;
 	}
 
 	void Finalize() {
@@ -163,22 +223,28 @@ public:
 		const bool can_use_run = can_use_null_run || can_use_non_null_run;
 		if (!can_use_array && !can_use_run) {
 			// Can not efficiently encode at all, write it uncompressed
-			return Result {ContainerType::BITSET_CONTAINER, true, count};
+			return Result::BitsetContainer(count);
 		}
 		uint16_t lowest_array_cost = duckdb::MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]);
 		uint16_t lowest_run_cost = duckdb::MinValue<uint16_t>(run_idx[NON_NULLS], run_idx[NULLS]) * 2;
+		if (duckdb::MinValue<uint16_t>(lowest_array_cost, lowest_run_cost) >
+		    duckdb::AlignValue<uint16_t, 8>(count) / 8) {
+			// The amount of values is too small, better off using uncompressed
+			// we can detect this at decompression because we know how many values are left
+			return Result::BitsetContainer(count);
+		}
 
 		if (lowest_array_cost <= lowest_run_cost) {
 			if (array_idx[NULLS] < array_idx[NON_NULLS]) {
-				return Result {ContainerType::ARRAY_CONTAINER, NULLS, array_idx[NULLS]};
+				return Result::ArrayContainer(array_idx[NULLS], NULLS);
 			} else {
-				return Result {ContainerType::ARRAY_CONTAINER, NON_NULLS, array_idx[NON_NULLS]};
+				return Result::ArrayContainer(array_idx[NON_NULLS], NON_NULLS);
 			}
 		} else {
 			if (run_idx[NULLS] < run_idx[NON_NULLS]) {
-				return Result {ContainerType::RUN_CONTAINER, NULLS, run_idx[NULLS]};
+				return Result::RunContainer(run_idx[NULLS], NULLS);
 			} else {
-				return Result {ContainerType::RUN_CONTAINER, NON_NULLS, run_idx[NON_NULLS]};
+				return Result::RunContainer(run_idx[NON_NULLS], NON_NULLS);
 			}
 		}
 	}
@@ -226,24 +292,69 @@ public:
 	explicit RoaringAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {};
 
 public:
+	bool HasEnoughSpaceInSegment(idx_t required_space) {
+		D_ASSERT(space_used <= info.GetBlockSize());
+		idx_t remaining_space = info.GetBlockSize() - space_used;
+		if (required_space > remaining_space) {
+			return false;
+		}
+		return true;
+	}
+
+	void FlushSegment() {
+		if (!current_count) {
+			D_ASSERT(!space_used);
+			return;
+		}
+		total_size += space_used;
+		space_used = 0;
+		current_count = 0;
+		segment_count++;
+	}
+
+	void FlushContainer() {
+		if (!container_state.count) {
+			return;
+		}
+		container_state.Finalize();
+		auto res = container_state.GetResult();
+		auto required_space = res.GetByteSize();
+		if (!HasEnoughSpaceInSegment(required_space)) {
+			FlushSegment();
+		}
+		space_used += required_space;
+		current_count += container_state.count;
+		container_state.Reset();
+	}
+
 	void Analyze(Vector &input, idx_t count) {
 		UnifiedVectorFormat unified;
 		input.ToUnifiedFormat(count, unified);
 		auto &validity = unified.validity;
 
 		if (validity.AllValid()) {
-			// Fast path for all non-null ?
-			throw NotImplementedException("THIS SHOULD BE OPTIMIZED");
-			return;
-		}
-		idx_t appended = 0;
-		while (appended < count) {
-			idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
-			for (idx_t i = 0; i < to_append; i++) {
-				auto is_null = validity.RowIsValidUnsafe(appended + i);
-				container_state.Append(!is_null);
+			idx_t appended = 0;
+			while (appended < count) {
+				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
+				container_state.Append(false, to_append);
+				if (container_state.IsFull()) {
+					FlushContainer();
+				}
+				appended += to_append;
 			}
-			appended += to_append;
+		} else {
+			idx_t appended = 0;
+			while (appended < count) {
+				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
+				for (idx_t i = 0; i < to_append; i++) {
+					auto is_null = validity.RowIsValidUnsafe(appended + i);
+					container_state.Append(!is_null);
+				}
+				if (container_state.IsFull()) {
+					FlushContainer();
+				}
+				appended += to_append;
+			}
 		}
 		this->count += count;
 	}
@@ -251,13 +362,16 @@ public:
 public:
 	ContainerCompressionState container_state;
 	//! The space used by the current segment
-	idx_t spaced_used = 0;
+	idx_t space_used = 0;
 	//! The total amount of segments to write
 	idx_t segment_count = 0;
 	//! The amount of values in the current segment;
 	idx_t current_count = 0;
 	//! The total amount of data to serialize
 	idx_t count = 0;
+
+	//! The total amount of bytes used to compress the whole segment
+	idx_t total_size = 0;
 };
 
 template <class T>
@@ -286,10 +400,9 @@ bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 template <class T>
 idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 	auto &roaring_state = state.Cast<RoaringAnalyzeState<T>>();
-	roaring_state.container_state.Finalize();
-	auto res = roaring_state.container_state.GetResult();
-	// TODO: implement
-	return DConstants::INVALID_INDEX;
+	roaring_state.FlushContainer();
+	roaring_state.FlushSegment();
+	return roaring_state.total_size;
 }
 
 //===--------------------------------------------------------------------===//
