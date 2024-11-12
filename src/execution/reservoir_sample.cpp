@@ -985,32 +985,33 @@ void IngestionSample::Destroy() {
 	destroyed = true;
 }
 
-void IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length) {
+vector<idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length) {
 	idx_t remaining = theoretical_chunk_length;
-	replacement_indexes.clear();
 	idx_t sample_chunk_index = 0;
 
 	idx_t base_offset = 0;
-
+	vector<idx_t> sample_chunk_index_to_chunk_index;
 	while (true) {
 		idx_t offset =
 		    base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
-			vector<idx_t> wat;
-			wat.resize(replacement_indexes.size());
-			wat.reserve(replacement_indexes.size());
-			for (auto pair : replacement_indexes) {
-				wat[pair.second] = pair.first;
-			}
-			for (idx_t i = 0; i < wat.size(); i++) {
-				Printer::Print(to_string(wat[i]));
-			}
-			return;
+			// vector<idx_t> wat;
+			// wat.resize(replacement_indexes.size());
+			// wat.reserve(replacement_indexes.size());
+			// for (auto pair : replacement_indexes) {
+			// 	wat[pair.second] = pair.first;
+			// }
+			// for (idx_t i = 0; i < wat.size(); i++) {
+			// 	Printer::Print(to_string(wat[i]));
+			// }
+			return sample_chunk_index_to_chunk_index;
 		}
 		// in this chunk! replace the element
-		replacement_indexes[base_offset + offset] = sample_chunk_index;
+		D_ASSERT(sample_chunk_index == sample_chunk_index_to_chunk_index.size());
+		sample_chunk_index_to_chunk_index.push_back(base_offset + offset);
+		// replacement_indexes[base_offset + offset] = sample_chunk_index;
 		double r2 = base_reservoir_sample->random.NextRandom(base_reservoir_sample->min_weight_threshold, 1);
 		// replace element in our max_hep
 		// sample_chunk_offset + sample_chunk_index
@@ -1135,18 +1136,18 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		base_reservoir_sample->InitializeReservoirWeights(assigned_weights, assigned_weights, num_weights_assigned);
 	}
 
-	GetReplacementIndexes(sample_chunk->size(), chunk.size());
+	auto sweetness = GetReplacementIndexes(sample_chunk->size(), chunk.size());
 	auto &sample_chunk_ind_to_data_chunk_index = replacement_indexes;
-	if (sample_chunk_ind_to_data_chunk_index.empty()) {
+	if (sweetness.empty()) {
 		// not adding any samples
 		return;
 	}
-	idx_t size = sample_chunk_ind_to_data_chunk_index.size();
+	idx_t size = sweetness.size();
 	D_ASSERT(size <= chunk.size());
 	SelectionVector sel(size);
-	for (auto &input_idx_res_idx : sample_chunk_ind_to_data_chunk_index) {
-		auto ind_in_input_chunk = input_idx_res_idx.first;
-		auto ind_in_sample_chunk = input_idx_res_idx.second;
+	for (idx_t i = 0; i < sweetness.size(); i++) {
+		auto ind_in_input_chunk = sweetness[i];
+		auto ind_in_sample_chunk = i;
 		sel.set_index(ind_in_sample_chunk, ind_in_input_chunk);
 	}
 	const SelectionVector const_sel(sel);

@@ -292,7 +292,7 @@ public:
 	// map is index in input chunk -> index in sample chunk
 	// this data can then be used to make a selection vector to copy over the
 	// samples from the input chunk to the sample chunk
-	void GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
+	vector<idx_t> GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
 
 	idx_t sample_count;
 	Allocator &allocator;
