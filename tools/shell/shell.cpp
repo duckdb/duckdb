@@ -2808,7 +2808,14 @@ static void printDatabaseError(const char *zErr) {
 	if (error_msg.empty()) {
 		return;
 	}
-	auto tokens = duckdb::Parser::TokenizeError(error_msg);
+	vector<duckdb::SimplifiedToken> tokens;
+	try {
+		tokens = duckdb::Parser::TokenizeError(error_msg);
+	} catch (...) {
+		// fallback
+		utf8_printf(stderr, "%s\n", zErr);
+		return;
+	}
 	if (!tokens.empty() && tokens[0].start > 0) {
 		duckdb::SimplifiedToken new_token;
 		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
