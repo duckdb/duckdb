@@ -37,7 +37,7 @@ public:
 
 	void SetNextEntry();
 
-	void ReplaceElementWithIndex(idx_t entry_index, double with_weight);
+	void ReplaceElementWithIndex(idx_t entry_index, double with_weight, bool pop = true);
 	void ReplaceElement(double with_weight = -1);
 
 	void IncreaseNumEntriesSeenTotal(idx_t count);
@@ -289,10 +289,14 @@ public:
 	// when replacing samples in the chunk, it's possible
 	// that an index gets replaced twice because the new weight assigned
 	// is relatively low. This function loops through the max heap that holds the sample index
-	// map is index in input chunk -> index in sample chunk
+	// map is [index in input chunk] -> [index in sample chunk]. Both are zero-based
+	// index in sample chunk is incremented by 1
+	// index in input chunk is incremented in random amounts.
+	// The base_reservoir_sampling gets updated however, so the indexes point to sample_chunk_offset + (index_in_sample_chunk)
 	// this data can then be used to make a selection vector to copy over the
 	// samples from the input chunk to the sample chunk
 	unordered_map<idx_t, idx_t> GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
+	unordered_map<idx_t, idx_t> GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
 
 	idx_t sample_count;
 	Allocator &allocator;

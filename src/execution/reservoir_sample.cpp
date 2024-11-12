@@ -93,9 +93,11 @@ void BaseReservoirSampling::SetNextEntry() {
 	num_entries_to_skip_b4_next_sample = 0;
 }
 
-void BaseReservoirSampling::ReplaceElementWithIndex(duckdb::idx_t entry_index, double with_weight) {
+void BaseReservoirSampling::ReplaceElementWithIndex(idx_t entry_index, double with_weight, bool pop) {
 
-	reservoir_weights.pop();
+	if (pop) {
+		reservoir_weights.pop();
+	}
 	double r2 = with_weight;
 	//! now we insert the new weight into the reservoir
 	reservoir_weights.emplace(-r2, entry_index);
@@ -985,8 +987,49 @@ void IngestionSample::Destroy() {
 	destroyed = true;
 }
 
+unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t theoretical_chunk_length) {
+	idx_t cur_reservoir_weights_size = base_reservoir_sample->reservoir_weights.size();
+	idx_t num_to_pop = static_cast<idx_t>((static_cast<double>(theoretical_chunk_length) / (theoretical_chunk_length + base_reservoir_sample->num_entries_seen_total)) * theoretical_chunk_length);
+
+	unordered_map<idx_t, idx_t> replacement_indexes;
+	replacement_indexes.reserve(num_to_pop);
+	vector<idx_t> indexes;
+
+	// first pop the number of samples that should be popped.
+	// (hopefully this happens fast)
+	for (idx_t i = 0; i < num_to_pop; i++) {
+		base_reservoir_sample->reservoir_weights.pop();
+	}
+
+	// get the new min weighted index.
+	double min_weighted_index = -base_reservoir_sample->reservoir_weights.top().first;
+
+	// randomize the possible indexes to sample from the theoretical chunk length
+	for (idx_t i = 0; i < theoretical_chunk_length; i++) {
+		indexes.push_back(i);
+	}
+	for (idx_t i = 0; i < num_to_pop; i++) {
+		idx_t switch_index = base_reservoir_sample->random.NextRandomInteger(i, num_to_pop);
+		idx_t tmp = indexes[switch_index];
+		indexes[switch_index] = indexes[i];
+		indexes[i] = tmp;
+	}
+
+
+	for (idx_t i = 0; i < num_to_pop; i++) {
+		replacement_indexes[indexes[i]] = i;
+		double r2 = base_reservoir_sample->random.NextRandom(min_weighted_index, 1);
+		// replace element in our max_hep
+		// sample_chunk_offset + sample_chunk_index
+		base_reservoir_sample->ReplaceElementWithIndex(sample_chunk_offset + i, r2, false);
+		min_weighted_index = base_reservoir_sample->min_weight_threshold;
+	}
+	D_ASSERT(cur_reservoir_weights_size == base_reservoir_sample->reservoir_weights.size());
+	return replacement_indexes;
+}
+
 unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset,
-                                                                   idx_t theoretical_chunk_length) {
+																   idx_t theoretical_chunk_length) {
 	idx_t remaining = theoretical_chunk_length;
 	unordered_map<idx_t, idx_t> ret;
 	idx_t sample_chunk_index = 0;
@@ -995,7 +1038,7 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 
 	while (true) {
 		idx_t offset =
-		    base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
+			base_reservoir_sample->next_index_to_sample - base_reservoir_sample->num_entries_to_skip_b4_next_sample;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
@@ -1003,6 +1046,7 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 		}
 		// in this chunk! replace the element
 		// ret[index_in_new_chunk] = index_in_sample_chunk (the sample chunk offset will be applied later)
+		// D_ASSERT(sample_chunk_index == ret.size());
 		ret[base_offset + offset] = sample_chunk_index;
 		double r2 = base_reservoir_sample->random.NextRandom(base_reservoir_sample->min_weight_threshold, 1);
 		// replace element in our max_hep
@@ -1128,7 +1172,12 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		base_reservoir_sample->InitializeReservoirWeights(assigned_weights, assigned_weights, num_weights_assigned);
 	}
 
-	auto sample_chunk_ind_to_data_chunk_index = GetReplacementIndexes(sample_chunk->size(), chunk.size());
+	unordered_map<idx_t, idx_t> sample_chunk_ind_to_data_chunk_index;
+	if (base_reservoir_sample->num_entries_seen_total <= FIXED_SAMPLE_SIZE * 20) {
+		sample_chunk_ind_to_data_chunk_index = GetReplacementIndexesFast(sample_chunk->size(), chunk.size());
+	} else {
+		sample_chunk_ind_to_data_chunk_index = GetReplacementIndexes(sample_chunk->size(), chunk.size());
+	}
 	if (sample_chunk_ind_to_data_chunk_index.empty()) {
 		// not adding any samples
 		return;
