@@ -505,6 +505,13 @@ typedef struct {
 	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
 	duckdb_timestamp_struct (*duckdb_from_timestamp_s)(duckdb_timestamp_s ts_s);
 	duckdb_timestamp_s (*duckdb_to_timestamp_s)(duckdb_timestamp_struct ts);
+	bool (*duckdb_is_finite_timestamp_s)(duckdb_timestamp_s ts_s);
+	duckdb_timestamp_struct (*duckdb_from_timestamp_ms)(duckdb_timestamp_ms ts_ms);
+	duckdb_timestamp_ms (*duckdb_to_timestamp_ms)(duckdb_timestamp_struct ts);
+	bool (*duckdb_is_finite_timestamp_ms)(duckdb_timestamp_ms ts_ms);
+	duckdb_timestamp_ns_struct (*duckdb_from_timestamp_ns)(duckdb_timestamp_ns ts_ns);
+	duckdb_timestamp_ns (*duckdb_to_timestamp_ns)(duckdb_timestamp_ns_struct ts);
+	bool (*duckdb_is_finite_timestamp_ns)(duckdb_timestamp_ns ts_ns);
 	duckdb_value (*duckdb_create_timestamp_tz)(duckdb_timestamp input);
 	duckdb_value (*duckdb_create_timestamp_s)(duckdb_timestamp_s input);
 	duckdb_value (*duckdb_create_timestamp_ms)(duckdb_timestamp_ms input);
@@ -899,6 +906,13 @@ typedef struct {
 // Version dev
 #define duckdb_from_timestamp_s                  duckdb_ext_api.duckdb_from_timestamp_s
 #define duckdb_to_timestamp_s                    duckdb_ext_api.duckdb_to_timestamp_s
+#define duckdb_is_finite_timestamp_s             duckdb_ext_api.duckdb_is_finite_timestamp_s
+#define duckdb_from_timestamp_ms                 duckdb_ext_api.duckdb_from_timestamp_ms
+#define duckdb_to_timestamp_ms                   duckdb_ext_api.duckdb_to_timestamp_ms
+#define duckdb_is_finite_timestamp_ms            duckdb_ext_api.duckdb_is_finite_timestamp_ms
+#define duckdb_from_timestamp_ns                 duckdb_ext_api.duckdb_from_timestamp_ns
+#define duckdb_to_timestamp_ns                   duckdb_ext_api.duckdb_to_timestamp_ns
+#define duckdb_is_finite_timestamp_ns            duckdb_ext_api.duckdb_is_finite_timestamp_ns
 #define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
 #define duckdb_bind_timestamp_s                  duckdb_ext_api.duckdb_bind_timestamp_s
 #define duckdb_create_timestamp_tz               duckdb_ext_api.duckdb_create_timestamp_tz

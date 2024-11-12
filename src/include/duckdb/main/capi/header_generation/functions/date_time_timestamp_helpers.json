@@ -209,6 +209,125 @@
                 },
                 "return_value": "The `duckdb_timestamp_s` element."
             }
+        },
+        {
+            "name": "duckdb_is_finite_timestamp_s",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_s",
+                    "name": "ts_s"
+                }
+            ],
+            "comment": {
+                "description": "Test a `duckdb_timestamp_s` to see if it is a finite value.\n\n",
+                "param_comments": {
+                    "ts": "The timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column."
+                },
+                "return_value": "True if the timestamp is finite, false if it is \u00b1infinity."
+            }
+        },
+        {
+            "name": "duckdb_from_timestamp_ms",
+            "return_type": "duckdb_timestamp_struct",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_ms",
+                    "name": "ts_ms"
+                }
+            ],
+            "comment": {
+                "description": "Decompose a `duckdb_timestamp_ms` object into a `duckdb_timestamp_struct`.\n\n",
+                "param_comments": {
+                    "ts": "The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column."
+                },
+                "return_value": "The `duckdb_timestamp_struct` with the decomposed elements."
+            }
+        },
+        {
+            "name": "duckdb_to_timestamp_ms",
+            "return_type": "duckdb_timestamp_ms",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_struct",
+                    "name": "ts"
+                }
+            ],
+            "comment": {
+                "description": "Re-compose a `duckdb_timestamp_ms` from a duckdb_timestamp_struct.\n\n",
+                "param_comments": {
+                    "ts": "The de-composed elements in a `duckdb_timestamp_struct`."
+                },
+                "return_value": "The `duckdb_timestamp_ms` element."
+            }
+        },
+        {
+            "name": "duckdb_is_finite_timestamp_ms",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_ms",
+                    "name": "ts_ms"
+                }
+            ],
+            "comment": {
+                "description": "Test a `duckdb_timestamp_ms` to see if it is a finite value.\n\n",
+                "param_comments": {
+                    "ts": "The timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column."
+                },
+                "return_value": "True if the timestamp is finite, false if it is \u00b1infinity."
+            }
+        },
+        {
+            "name": "duckdb_from_timestamp_ns",
+            "return_type": "duckdb_timestamp_ns_struct",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_ns",
+                    "name": "ts_ns"
+                }
+            ],
+            "comment": {
+                "description": "Decompose a `duckdb_timestamp_ns` object into a `duckdb_timestamp_ns_struct`.\n\n",
+                "param_comments": {
+                    "ts": "The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column."
+                },
+                "return_value": "The `duckdb_timestamp_ns_struct` with the decomposed elements."
+            }
+        },
+        {
+            "name": "duckdb_to_timestamp_ns",
+            "return_type": "duckdb_timestamp_ns",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_ns_struct",
+                    "name": "ts"
+                }
+            ],
+            "comment": {
+                "description": "Re-compose a `duckdb_timestamp_ns` from a duckdb_timestamp_ns_struct.\n\n",
+                "param_comments": {
+                    "ts": "The de-composed elements in a `duckdb_timestamp_ns_struct`."
+                },
+                "return_value": "The `duckdb_timestamp_ns` element."
+            }
+        },
+        {
+            "name": "duckdb_is_finite_timestamp_ns",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_ns",
+                    "name": "ts_ns"
+                }
+            ],
+            "comment": {
+                "description": "Test a `duckdb_timestamp_ns` to see if it is a finite value.\n\n",
+                "param_comments": {
+                    "ts": "The timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column."
+                },
+                "return_value": "True if the timestamp is finite, false if it is \u00b1infinity."
+            }
         }
     ]
 }

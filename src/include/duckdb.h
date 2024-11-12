@@ -1365,6 +1365,57 @@ Re-compose a `duckdb_timestamp_s` from a duckdb_timestamp_struct.
 */
 DUCKDB_API duckdb_timestamp_s duckdb_to_timestamp_s(duckdb_timestamp_struct ts);
 
+/*!
+Test a `duckdb_timestamp_s` to see if it is a finite value.
+
+* @return True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp_s(duckdb_timestamp_s ts_s);
+
+/*!
+Decompose a `duckdb_timestamp_ms` object into a `duckdb_timestamp_struct`.
+
+* @return The `duckdb_timestamp_struct` with the decomposed elements.
+*/
+DUCKDB_API duckdb_timestamp_struct duckdb_from_timestamp_ms(duckdb_timestamp_ms ts_ms);
+
+/*!
+Re-compose a `duckdb_timestamp_ms` from a duckdb_timestamp_struct.
+
+* @param ts The de-composed elements in a `duckdb_timestamp_struct`.
+* @return The `duckdb_timestamp_ms` element.
+*/
+DUCKDB_API duckdb_timestamp_ms duckdb_to_timestamp_ms(duckdb_timestamp_struct ts);
+
+/*!
+Test a `duckdb_timestamp_ms` to see if it is a finite value.
+
+* @return True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp_ms(duckdb_timestamp_ms ts_ms);
+
+/*!
+Decompose a `duckdb_timestamp_ns` object into a `duckdb_timestamp_ns_struct`.
+
+* @return The `duckdb_timestamp_ns_struct` with the decomposed elements.
+*/
+DUCKDB_API duckdb_timestamp_ns_struct duckdb_from_timestamp_ns(duckdb_timestamp_ns ts_ns);
+
+/*!
+Re-compose a `duckdb_timestamp_ns` from a duckdb_timestamp_ns_struct.
+
+* @param ts The de-composed elements in a `duckdb_timestamp_ns_struct`.
+* @return The `duckdb_timestamp_ns` element.
+*/
+DUCKDB_API duckdb_timestamp_ns duckdb_to_timestamp_ns(duckdb_timestamp_ns_struct ts);
+
+/*!
+Test a `duckdb_timestamp_ns` to see if it is a finite value.
+
+* @return True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp_ns(duckdb_timestamp_ns ts_ns);
+
 //===--------------------------------------------------------------------===//
 // Hugeint Helpers
 //===--------------------------------------------------------------------===//

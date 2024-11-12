@@ -10,6 +10,9 @@ using duckdb::Timestamp;
 
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::timestamp_ms_t;
+using duckdb::timestamp_ns_t;
+using duckdb::timestamp_sec_t;
 using duckdb::timestamp_t;
 
 duckdb_date_struct duckdb_from_date(duckdb_date date) {
@@ -125,4 +128,79 @@ duckdb_timestamp_s duckdb_to_timestamp_s(duckdb_timestamp_struct ts) {
 	duckdb_timestamp_s result;
 	result.seconds = Timestamp::GetEpochSeconds(Timestamp::FromDatetime(date, time));
 	return result;
+}
+
+bool duckdb_is_finite_timestamp_s(duckdb_timestamp_s ts_s) {
+	return Timestamp::IsFinite(timestamp_t(ts_s.seconds));
+}
+
+duckdb_timestamp_struct duckdb_from_timestamp_ms(duckdb_timestamp_ms ts_ms) {
+	date_t date;
+	dtime_t time;
+	timestamp_t ts_us = Timestamp::FromEpochMsPossiblyInfinite(ts_ms.millis);
+	Timestamp::Convert(ts_us, date, time);
+
+	duckdb_date ddate;
+	ddate.days = date.days;
+
+	duckdb_time dtime;
+	dtime.micros = time.micros;
+
+	duckdb_timestamp_struct result;
+	result.date = duckdb_from_date(ddate);
+	result.time = duckdb_from_time(dtime);
+	return result;
+}
+
+duckdb_timestamp_ms duckdb_to_timestamp_ms(duckdb_timestamp_struct ts) {
+	date_t date = date_t(duckdb_to_date(ts.date).days);
+	dtime_t time = dtime_t(duckdb_to_time(ts.time).micros);
+
+	duckdb_timestamp_ms result;
+	result.millis = Timestamp::GetEpochMs(Timestamp::FromDatetime(date, time));
+	return result;
+}
+
+bool duckdb_is_finite_timestamp_ms(duckdb_timestamp_ms ts_ms) {
+	return Timestamp::IsFinite(timestamp_t(ts_ms.millis));
+}
+
+duckdb_timestamp_ns_struct duckdb_from_timestamp_ns(duckdb_timestamp_ns ts_ns) {
+	date_t date;
+	dtime_t time;
+	int32_t nanos;
+	timestamp_ns_t ts_ns_t;
+	ts_ns_t.value = ts_ns.nanos;
+	Timestamp::Convert(ts_ns_t, date, time, nanos);
+
+	duckdb_date ddate;
+	ddate.days = date.days;
+
+	duckdb_time dtime;
+	dtime.micros = time.micros;
+
+	duckdb_timestamp_ns_struct result;
+	result.date = duckdb_from_date(ddate);
+	result.time = duckdb_from_time(dtime);
+	result.nanos = nanos;
+	return result;
+}
+
+duckdb_timestamp_ns duckdb_to_timestamp_ns(duckdb_timestamp_ns_struct ts) {
+	date_t date = date_t(duckdb_to_date(ts.date).days);
+	dtime_t time = dtime_t(duckdb_to_time(ts.time).micros);
+	int32_t nanos = ts.nanos;
+
+	timestamp_ns_t ts_ns;
+	if (!Timestamp::TryFromTimestampNanos(Timestamp::FromDatetime(date, time), nanos, ts_ns)) {
+		throw duckdb::ConversionException("Overflow exception in date/time -> timestamp conversion");
+	}
+
+	duckdb_timestamp_ns result;
+	result.nanos = ts_ns.value;
+	return result;
+}
+
+bool duckdb_is_finite_timestamp_ns(duckdb_timestamp_ns ts_ns) {
+	return Timestamp::IsFinite(timestamp_t(ts_ns.nanos));
 }
