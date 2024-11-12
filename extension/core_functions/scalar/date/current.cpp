@@ -29,7 +29,7 @@ static void CurrentDateFunction(DataChunk &input, ExpressionState &state, Vector
 static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 0);
 
-	auto val = Value::TIMESTAMPTZ(GetTransactionTimestamp(state));
+	auto val = Value::TIMESTAMPTZ(timestamp_tz_t(GetTransactionTimestamp(state).value));
 	result.Reference(val);
 }
 
