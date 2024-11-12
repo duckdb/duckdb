@@ -116,7 +116,7 @@ class TestRuntimeError(object):
     def test_conn_prepared_statement_error(self):
         conn = duckdb.connect()
         conn.execute("create table integers (a integer, b integer)")
-        with pytest.raises(duckdb.InvalidInputException, match='Prepared statement needs 2 parameters, 1 given'):
+        with pytest.raises(duckdb.InvalidInputException, match='Values were not provided for the following prepared statement parameters: 2'):
             conn.execute("select * from integers where a =? and b=?", [1])
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])

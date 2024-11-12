@@ -219,7 +219,6 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 			}
 			stmt->prepared = std::move(prepared);
 		} else {
-			printf("EAGEREAGEREAGER\n");
 			// Use eager execution: there are no parameters so we can safely create a PendingQuery here
 			auto pending = db->con->PendingQuery(std::move(statements.back()), false);
 			if (pending->HasError()) {
