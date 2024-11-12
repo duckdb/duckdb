@@ -225,92 +225,6 @@ static void setTextMode(FILE *file, int isOutput) {
 #define setTextMode(X, Y)
 #endif
 
-enum class PrintOutput { STDOUT, STDERR };
-
-enum class PrintColor { STANDARD, RED, YELLOW, GREEN, GRAY };
-
-enum class PrintIntensity { STANDARD, BOLD, UNDERLINE };
-
-/*
-** Output text to the console in a font that attracts extra attention.
-*/
-#ifdef _WIN32
-static void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
-	HANDLE out = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-	CONSOLE_SCREEN_BUFFER_INFO defaultScreenInfo;
-	GetConsoleScreenBufferInfo(out, &defaultScreenInfo);
-	WORD wAttributes = 0;
-
-	switch (intensity) {
-	case PrintIntensity::BOLD:
-		wAttributes |= FOREGROUND_INTENSITY;
-		break;
-	default:
-		break;
-	}
-	switch (color) {
-	case PrintColor::RED:
-		wAttributes |= FOREGROUND_RED;
-		break;
-	case PrintColor::GREEN:
-		wAttributes |= FOREGROUND_GREEN;
-		break;
-	case PrintColor::YELLOW:
-		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN;
-		break;
-	case PrintColor::GRAY:
-		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
-		break;
-	default:
-		break;
-	}
-	if (wAttributes != 0) {
-		SetConsoleTextAttribute(out, wAttributes);
-	}
-
-	utf8_printf(output == PrintOutput::STDOUT ? stdout : stderr, "%s", text.c_str());
-
-	SetConsoleTextAttribute(out, defaultScreenInfo.wAttributes);
-}
-#else
-static void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
-	const char *bold_prefix = "";
-	const char *color_prefix = "";
-	const char *suffix = "";
-	switch (intensity) {
-	case PrintIntensity::BOLD:
-		bold_prefix = "\033[1m";
-		break;
-	case PrintIntensity::UNDERLINE:
-		bold_prefix = "\033[4m";
-		break;
-	default:
-		break;
-	}
-	switch (color) {
-	case PrintColor::RED:
-		color_prefix = "\033[31m";
-		break;
-	case PrintColor::GREEN:
-		color_prefix = "\033[32m";
-		break;
-	case PrintColor::YELLOW:
-		color_prefix = "\033[33m";
-		break;
-	case PrintColor::GRAY:
-		color_prefix = "\033[90m";
-		break;
-	default:
-		break;
-	}
-	if (*color_prefix || *bold_prefix) {
-		suffix = "\033[0m";
-	}
-	fprintf(output == PrintOutput::STDOUT ? stdout : stderr, "%s%s%s%s", bold_prefix, color_prefix, text.c_str(),
-	        suffix);
-}
-#endif
-
 /* True if the timer is enabled */
 static bool enableTimer = false;
 
@@ -556,6 +470,92 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 }
 #elif !defined(utf8_printf)
 #define utf8_printf fprintf
+#endif
+
+enum class PrintOutput { STDOUT, STDERR };
+
+enum class PrintColor { STANDARD, RED, YELLOW, GREEN, GRAY };
+
+enum class PrintIntensity { STANDARD, BOLD, UNDERLINE };
+
+/*
+** Output text to the console in a font that attracts extra attention.
+*/
+#ifdef _WIN32
+static void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
+	HANDLE out = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO defaultScreenInfo;
+	GetConsoleScreenBufferInfo(out, &defaultScreenInfo);
+	WORD wAttributes = 0;
+
+	switch (intensity) {
+	case PrintIntensity::BOLD:
+		wAttributes |= FOREGROUND_INTENSITY;
+		break;
+	default:
+		break;
+	}
+	switch (color) {
+	case PrintColor::RED:
+		wAttributes |= FOREGROUND_RED;
+		break;
+	case PrintColor::GREEN:
+		wAttributes |= FOREGROUND_GREEN;
+		break;
+	case PrintColor::YELLOW:
+		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN;
+		break;
+	case PrintColor::GRAY:
+		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+		break;
+	default:
+		break;
+	}
+	if (wAttributes != 0) {
+		SetConsoleTextAttribute(out, wAttributes);
+	}
+
+	utf8_printf(output == PrintOutput::STDOUT ? stdout : stderr, "%s", text.c_str());
+
+	SetConsoleTextAttribute(out, defaultScreenInfo.wAttributes);
+}
+#else
+static void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
+	const char *bold_prefix = "";
+	const char *color_prefix = "";
+	const char *suffix = "";
+	switch (intensity) {
+	case PrintIntensity::BOLD:
+		bold_prefix = "\033[1m";
+		break;
+	case PrintIntensity::UNDERLINE:
+		bold_prefix = "\033[4m";
+		break;
+	default:
+		break;
+	}
+	switch (color) {
+	case PrintColor::RED:
+		color_prefix = "\033[31m";
+		break;
+	case PrintColor::GREEN:
+		color_prefix = "\033[32m";
+		break;
+	case PrintColor::YELLOW:
+		color_prefix = "\033[33m";
+		break;
+	case PrintColor::GRAY:
+		color_prefix = "\033[90m";
+		break;
+	default:
+		break;
+	}
+	if (*color_prefix || *bold_prefix) {
+		suffix = "\033[0m";
+	}
+	fprintf(output == PrintOutput::STDOUT ? stdout : stderr, "%s%s%s%s", bold_prefix, color_prefix, text.c_str(),
+	        suffix);
+}
 #endif
 
 /*
