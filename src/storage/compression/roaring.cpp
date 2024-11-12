@@ -10,27 +10,6 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
-/*
-Data layout per segment:
-+--------------------------------------------+
-|            Vector Metadata                 |
-|   +------------------------------------+   |
-|   |   int64_t  page_id[]               |   |
-|   |   uint32_t page_offset[]           |   |
-|   |   uint64_t uncompressed_size[]     |   |
-|   |   uint64_t compressed_size[]       |   |
-|   +------------------------------------+   |
-|                                            |
-+--------------------------------------------+
-|              [Vector Data]+                |
-|   +------------------------------------+   |
-|   |   uint32_t lengths[]               |   |
-|   |   void    *compressed_data         |   |
-|   +------------------------------------+   |
-|                                            |
-+--------------------------------------------+
-*/
-
 //! The amount of values that are encoded per container
 static constexpr idx_t ROARING_CONTAINER_SIZE = 65536;
 static constexpr idx_t ROARING_VECTOR_SIZE = 2048;
@@ -441,26 +420,6 @@ public:
 		InitializeContainer();
 	}
 
-	unique_ptr<AnalyzeState> owned_analyze_state;
-	RoaringAnalyzeState &analyze_state;
-
-	ContainerCompressionState &container_state;
-	vector<ContainerMetadata> &container_metadata;
-
-	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction &function;
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
-
-	// Ptr to next free spot in segment;
-	data_ptr_t data_ptr;
-	// Ptr to next free spot for storing
-	data_ptr_t metadata_ptr;
-	//! The amount of values already compressed
-	idx_t count = 0;
-	//! Whether the current container is uncompressed
-	bool is_uncompressed = false;
-
 public:
 	inline idx_t GetContainerIndex() {
 		idx_t index = count / ROARING_CONTAINER_SIZE;
@@ -524,22 +483,37 @@ public:
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
+		data_ptr = handle.Ptr();
+		data_ptr += sizeof(idx_t);
 		metadata_ptr = handle.Ptr() + info.GetBlockSize();
 	}
 
 	void FlushSegment() {
 		auto &state = checkpointer.GetCheckpointState();
 		auto base_ptr = handle.Ptr();
+		base_ptr += sizeof(idx_t);
 
 		idx_t unaligned_offset = NumericCast<idx_t>(data_ptr - base_ptr);
 		idx_t metadata_offset = AlignValue(unaligned_offset);
-		idx_t metadata_size = NumericCast<idx_t>(base_ptr + info.GetBlockSize() - metadata_ptr);
-		idx_t total_segment_size = metadata_offset + metadata_size;
+		idx_t metadata_size = NumericCast<idx_t>(handle.Ptr() + info.GetBlockSize() - metadata_ptr);
+		idx_t total_segment_size;
 
-		if (total_segment_size == 0) {
+		if (current_segment->count.load() == 0) {
 			return;
 		}
 
+		auto gap = metadata_ptr - data_ptr;
+		double percentage_of_block = (double)gap / ((double)info.GetBlockSize() / 100.0);
+		if (percentage_of_block > 0.25) {
+			// Move the metadata, to close the gap between the data and the metadata
+			std::memmove(base_ptr + metadata_offset, metadata_ptr, metadata_size);
+			metadata_ptr = data_ptr;
+			total_segment_size = sizeof(idx_t) + metadata_offset + metadata_size;
+		} else {
+			total_segment_size = info.GetBlockSize();
+		}
+		auto metadata_start = (metadata_ptr + metadata_size) - handle.Ptr();
+		duckdb::Store<idx_t>(metadata_start, handle.Ptr());
 		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
@@ -554,6 +528,7 @@ public:
 			return;
 		}
 		count += container_state.count;
+		current_segment->count += container_state.count;
 		if (is_uncompressed) {
 			throw NotImplementedException("TODO");
 		}
@@ -599,6 +574,27 @@ public:
 			}
 		}
 	}
+
+public:
+	unique_ptr<AnalyzeState> owned_analyze_state;
+	RoaringAnalyzeState &analyze_state;
+
+	ContainerCompressionState &container_state;
+	vector<ContainerMetadata> &container_metadata;
+
+	ColumnDataCheckpointer &checkpointer;
+	CompressionFunction &function;
+	unique_ptr<ColumnSegment> current_segment;
+	BufferHandle handle;
+
+	// Ptr to next free spot in segment;
+	data_ptr_t data_ptr;
+	// Ptr to next free spot for storing
+	data_ptr_t metadata_ptr;
+	//! The amount of values already compressed
+	idx_t count = 0;
+	//! Whether the current container is uncompressed
+	bool is_uncompressed = false;
 };
 
 unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointer &checkpointer,
@@ -697,13 +693,12 @@ public:
 	explicit RoaringScanState(ColumnSegment &segment) : segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
-		data_ptr = handle.Ptr() + segment.GetBlockOffset();
-		// TODO: write where the metadata starts, so we can compact the block if not enough space is used
+		auto base_ptr = handle.Ptr() + segment.GetBlockOffset();
+		data_ptr = base_ptr + sizeof(idx_t);
 
 		// Deserialize the container metadata for this segment
-		// auto metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
-		idx_t metadata_offset = segment.SegmentSize();
-		auto metadata_ptr = data_ptr + segment.GetBlockOffset() + metadata_offset - sizeof(ContainerMetadata);
+		auto metadata_offset = Load<idx_t>(base_ptr + segment.GetBlockOffset());
+		auto metadata_ptr = base_ptr + metadata_offset - sizeof(ContainerMetadata);
 
 		auto segment_count = segment.count.load();
 		auto container_count = segment_count / ROARING_CONTAINER_SIZE;
@@ -735,8 +730,7 @@ public:
 	}
 
 	ContainerMetadata GetContainerMetadata(idx_t container_index) {
-		// TODO: We probably want to load all the container metadata into a vector in InitScan
-		throw NotImplementedException("TODO");
+		return container_metadata[container_index];
 	}
 
 	data_ptr_t GetStartOfContainerData(idx_t container_index) {
@@ -778,7 +772,7 @@ public:
 	}
 
 	void ScanInternal(ContainerScanState &scan_state, idx_t to_scan, Vector &result, idx_t offset) {
-		throw NotImplementedException("TODO");
+		scan_state.ScanPartial(result, offset, to_scan);
 	}
 
 	idx_t GetContainerIndex(idx_t start_index, idx_t &offset) {
