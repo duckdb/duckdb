@@ -514,6 +514,11 @@ static const char *program_name;
 static bool safe_mode = false;
 
 /*
+** Whether or not we are highlighting errors
+*/
+static bool highlight_errors = true;
+
+/*
 ** Prompt strings. Initialized in main. Settable with
 **   .prompt main continue
 */
@@ -2100,6 +2105,7 @@ static const char *azHelp[] = {
 #ifdef HAVE_LINENOISE
     ".highlight [on|off]      Toggle syntax highlighting in the shell on/off",
 #endif
+    ".highlight_errors [on|off] Toggle highlighting of errors in the shell on/off",
     ".import FILE TABLE       Import data from FILE into TABLE",
     "   Options:",
     "     --ascii               Use \\037 and \\036 as column and row separators",
@@ -2794,7 +2800,7 @@ void ShellState::ResetOutput() {
 }
 
 static void printDatabaseError(const char *zErr) {
-	if (!stderr_is_console) {
+	if (!highlight_errors) {
 		utf8_printf(stderr, "%s\n", zErr);
 		return;
 	}
@@ -3106,6 +3112,11 @@ MetadataResult ExitProcess(ShellState &state, const char **azArg, idx_t nArg) {
 MetadataResult ToggleHeaders(ShellState &state, const char **azArg, idx_t nArg) {
 	state.showHeader = booleanValue(azArg[1]);
 	state.shellFlgs |= SHFLG_HeaderSet;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleHighlighErrors(ShellState &state, const char **azArg, idx_t nArg) {
+	highlight_errors = booleanValue(azArg[1]);
 	return MetadataResult::SUCCESS;
 }
 
@@ -4079,6 +4090,7 @@ static const MetadataCommand metadata_commands[] = {
     {"fullschema", 0, nullptr, "", "", 0},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0},
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
+    {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0},
 
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
@@ -4670,6 +4682,10 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	stdin_is_interactive = isatty(0);
 	stdout_is_console = isatty(1);
 	stderr_is_console = isatty(2);
+
+	if (!stderr_is_console) {
+		highlight_errors = false;
+	}
 
 #if USE_SYSTEM_SQLITE + 0 != 1
 	if (strncmp(sqlite3_sourceid(), SQLITE_SOURCE_ID, 60) != 0) {
