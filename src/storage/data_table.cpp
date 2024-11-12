@@ -878,7 +878,7 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 	for (idx_t i = 0; i < active_columns->size(); i++) {
 		auto &col = column_list.GetColumn((*active_columns)[i]);
 		auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
-		active_expressions.insert({col.Physical(), std::move(expr)});
+		active_expressions[col.Physical()] = std::move(expr);
 	}
 
 	auto binder = Binder::CreateBinder(context);
