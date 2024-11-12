@@ -80,6 +80,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include "duckdb_shell_wrapper.h"
+#include "duckdb/parser/parser.hpp"
 #include "sqlite3.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
@@ -222,6 +223,92 @@ static void setTextMode(FILE *file, int isOutput) {
 #else
 #define setBinaryMode(X, Y)
 #define setTextMode(X, Y)
+#endif
+
+enum class PrintOutput { STDOUT, STDERR };
+
+enum class PrintColor { STANDARD, RED, YELLOW, GREEN, GRAY };
+
+enum class PrintIntensity { STANDARD, BOLD, UNDERLINE };
+
+/*
+** Output text to the console in a font that attracts extra attention.
+*/
+#ifdef _WIN32
+static void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
+	HANDLE out = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO defaultScreenInfo;
+	GetConsoleScreenBufferInfo(out, &defaultScreenInfo);
+	WORD wAttributes = 0;
+
+	switch (intensity) {
+	case PrintIntensity::BOLD:
+		wAttributes |= FOREGROUND_INTENSITY;
+		break;
+	default:
+		break;
+	}
+	switch (color) {
+	case PrintColor::RED:
+		wAttributes |= FOREGROUND_RED;
+		break;
+	case PrintColor::GREEN:
+		wAttributes |= FOREGROUND_GREEN;
+		break;
+	case PrintColor::YELLOW:
+		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN;
+		break;
+	case PrintColor::GRAY:
+		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+		break;
+	default:
+		break;
+	}
+	if (wAttributes != 0) {
+		SetConsoleTextAttribute(out, wAttributes);
+	}
+
+	utf8_printf(output == PrintOutput::STDOUT ? stdout : stderr, "%s", text.c_str());
+
+	SetConsoleTextAttribute(out, defaultScreenInfo.wAttributes);
+}
+#else
+static void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
+	const char *bold_prefix = "";
+	const char *color_prefix = "";
+	const char *suffix = "";
+	switch (intensity) {
+	case PrintIntensity::BOLD:
+		bold_prefix = "\033[1m";
+		break;
+	case PrintIntensity::UNDERLINE:
+		bold_prefix = "\033[4m";
+		break;
+	default:
+		break;
+	}
+	switch (color) {
+	case PrintColor::RED:
+		color_prefix = "\033[31m";
+		break;
+	case PrintColor::GREEN:
+		color_prefix = "\033[32m";
+		break;
+	case PrintColor::YELLOW:
+		color_prefix = "\033[33m";
+		break;
+	case PrintColor::GRAY:
+		color_prefix = "\033[90m";
+		break;
+	default:
+		break;
+	}
+	if (*color_prefix || *bold_prefix) {
+		suffix = "\033[0m";
+	}
+	fprintf(output == PrintOutput::STDOUT ? stdout : stderr, "%s%s%s%s", bold_prefix, color_prefix, text.c_str(),
+	        suffix);
+}
 #endif
 
 /* True if the timer is enabled */
@@ -401,6 +488,7 @@ static bool stdin_is_interactive = true;
 ** true if translation is required.
 */
 static bool stdout_is_console = true;
+static bool stderr_is_console = true;
 
 /*
 ** The following is the open SQLite database.  We make a pointer
@@ -2706,11 +2794,58 @@ void ShellState::ResetOutput() {
 }
 
 static void printDatabaseError(const char *zErr) {
-	if (strstr(zErr, "Error: ")) {
+	if (!stderr_is_console) {
 		utf8_printf(stderr, "%s\n", zErr);
-	} else {
-		utf8_printf(stderr, "Error: %s\n", zErr);
+		return;
 	}
+	string error_msg(zErr);
+	if (error_msg.empty()) {
+		return;
+	}
+	auto tokens = duckdb::Parser::TokenizeError(error_msg);
+	if (!tokens.empty() && tokens[0].start > 0) {
+		duckdb::SimplifiedToken new_token;
+		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		new_token.start = 0;
+		tokens.insert(tokens.begin(), new_token);
+	}
+	if (tokens.empty() && !error_msg.empty()) {
+		duckdb::SimplifiedToken new_token;
+		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		new_token.start = 0;
+		tokens.push_back(new_token);
+	}
+	for (idx_t i = 0; i < tokens.size(); i++) {
+		auto color = PrintColor::STANDARD;
+		auto intensity = PrintIntensity::STANDARD;
+		switch (tokens[i].type) {
+		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+			break;
+		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR:
+			color = PrintColor::RED;
+			intensity = PrintIntensity::BOLD;
+			break;
+		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
+			color = PrintColor::YELLOW;
+			break;
+		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
+			break;
+		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
+			color = PrintColor::GREEN;
+			break;
+		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
+			intensity = PrintIntensity::BOLD;
+			break;
+		}
+		idx_t start = tokens[i].start;
+		idx_t end = i + 1 == tokens.size() ? error_msg.size() : tokens[i + 1].start;
+		if (end - start > 0) {
+			string error_print = error_msg.substr(tokens[i].start, end - start);
+			PrintText(error_print, PrintOutput::STDERR, color, intensity);
+		}
+	}
+	PrintText("\n", PrintOutput::STDERR, PrintColor::STANDARD, PrintIntensity::STANDARD);
 }
 
 /*
@@ -4491,28 +4626,6 @@ static void main_init(ShellState *data) {
 }
 
 /*
-** Output text to the console in a font that attracts extra attention.
-*/
-#ifdef _WIN32
-static void printBold(const char *zText) {
-#if !SQLITE_OS_WINRT
-	HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
-	CONSOLE_SCREEN_BUFFER_INFO defaultScreenInfo;
-	GetConsoleScreenBufferInfo(out, &defaultScreenInfo);
-	SetConsoleTextAttribute(out, FOREGROUND_RED | FOREGROUND_INTENSITY);
-#endif
-	printf("%s", zText);
-#if !SQLITE_OS_WINRT
-	SetConsoleTextAttribute(out, defaultScreenInfo.wAttributes);
-#endif
-}
-#else
-static void printBold(const char *zText) {
-	printf("\033[1m%s\033[0m", zText);
-}
-#endif
-
-/*
 ** Get the argument to an --option.  Throw an error and die if no argument
 ** is available.
 */
@@ -4556,6 +4669,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	setvbuf(stderr, 0, _IONBF, 0); /* Make sure stderr is unbuffered */
 	stdin_is_interactive = isatty(0);
 	stdout_is_console = isatty(1);
+	stderr_is_console = isatty(2);
 
 #if USE_SYSTEM_SQLITE + 0 != 1
 	if (strncmp(sqlite3_sourceid(), SQLITE_SOURCE_ID, 60) != 0) {
@@ -4871,7 +4985,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			       sqlite3_libversion(), sqlite3_sourceid());
 			if (warnInmemoryDb) {
 				printf("Connected to a ");
-				printBold("transient in-memory database");
+				PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
+				          PrintIntensity::BOLD);
 				printf(".\nUse \".open FILENAME\" to reopen on a "
 				       "persistent database.\n");
 			}
