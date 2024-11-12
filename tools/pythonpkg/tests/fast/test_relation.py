@@ -194,6 +194,35 @@ class TestRelation(object):
             (4, 'four'),
         ]
 
+    def test_update_relation(self, duckdb_cursor):
+        duckdb_cursor.sql("create table tbl (a varchar default 'test', b int)")
+        duckdb_cursor.table('tbl').insert(['hello', 21])
+        duckdb_cursor.table('tbl').insert(['hello', 42])
+        # UPDATE tbl SET a = DEFAULT where b = 42
+        duckdb_cursor.table('tbl').update(
+            {'a': duckdb.DefaultExpression()}, condition=duckdb.ColumnExpression('b') == 42
+        )
+        assert duckdb_cursor.table('tbl').fetchall() == [('hello', 21), ('test', 42)]
+
+        rel = duckdb_cursor.table('tbl')
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide at least one set expression'):
+            rel.update({})
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Please provide the column name as the key of the dictionary'
+        ):
+            rel.update({1: 21})
+        with pytest.raises(duckdb.BinderException, match='Referenced update column c not found in table!'):
+            rel.update({'c': 21})
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Please provide 'set' as a dictionary of column name to Expression"
+        ):
+            rel.update(21)
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Please provide an object of type Expression as the value, not <class 'set'>",
+        ):
+            rel.update({'a': {21}})
+
     def test_value_relation(self, duckdb_cursor):
         # Needs at least one input
         with pytest.raises(duckdb.InvalidInputException, match='Could not create a ValueRelation without any inputs'):

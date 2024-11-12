@@ -178,6 +178,8 @@ public:
 
 	//! Update a table, can only be used on a TableRelation
 	DUCKDB_API virtual void Update(const string &update, const string &condition = string());
+	DUCKDB_API virtual void Update(vector<string> column_names, vector<unique_ptr<ParsedExpression>> &&update,
+	                               unique_ptr<ParsedExpression> condition = nullptr);
 	//! Delete from a table, can only be used on a TableRelation
 	DUCKDB_API virtual void Delete(const string &condition = string());
 	//! Create a relation from calling a table in/out function on the input relation
