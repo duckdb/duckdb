@@ -33,6 +33,8 @@ Data layout per segment:
 
 //! The amount of values that are encoded per container
 static constexpr idx_t ROARING_CONTAINER_SIZE = 65536;
+static constexpr bool NULLS = true;
+static constexpr bool NON_NULLS = false;
 
 namespace {
 
@@ -110,38 +112,38 @@ public:
 public:
 	void Append(bool null) {
 		// Adjust the runs
-		auto &current_run_idx = run_idx[null ? 0 : 1];
-		auto &last_run_idx = run_idx[last_is_null ? 0 : 1];
+		auto &current_run_idx = run_idx[null];
+		auto &last_run_idx = run_idx[last_is_null];
 
 		if (count && null != last_is_null && last_run_idx < MAX_RUN_IDX) {
-			auto &last_run = runs[last_is_null ? 0 : 1][last_run_idx];
+			auto &last_run = runs[last_is_null][last_run_idx];
 			// End the last run
 			last_run.length = (count - last_run.start);
 			last_run_idx++;
 		}
 		if (!count || (null != last_is_null && current_run_idx < MAX_RUN_IDX)) {
-			auto &current_run = runs[null ? 0 : 1][current_run_idx];
+			auto &current_run = runs[null][current_run_idx];
 			// Initialize the new run
 			current_run.start = count;
 		}
 
 		// Add to the array
-		auto &current_array_idx = array_idx[null ? 0 : 1];
+		auto &current_array_idx = array_idx[null];
 		if (current_array_idx < MAX_ARRAY_IDX) {
-			arrays[null ? 0 : 1][current_array_idx] = count;
+			arrays[null][current_array_idx] = count;
 			current_array_idx++;
 		}
 
 		last_is_null = null;
-		null_count += !null;
+		null_count += null;
 		count++;
 	}
 
 	void Finalize() {
 		D_ASSERT(!finalized);
-		auto &last_run_idx = run_idx[last_is_null ? 0 : 1];
+		auto &last_run_idx = run_idx[last_is_null];
 		if (count && last_run_idx < MAX_RUN_IDX) {
-			auto &last_run = runs[last_is_null ? 0 : 1][last_run_idx];
+			auto &last_run = runs[last_is_null][last_run_idx];
 			// End the last run
 			last_run.length = (count - last_run.start);
 			last_run_idx++;
@@ -151,11 +153,11 @@ public:
 
 	Result GetResult() {
 		D_ASSERT(finalized);
-		const bool can_use_null_array = array_idx[0] < MAX_ARRAY_IDX;
-		const bool can_use_non_null_array = array_idx[1] < MAX_ARRAY_IDX;
+		const bool can_use_null_array = array_idx[NON_NULLS] < MAX_ARRAY_IDX;
+		const bool can_use_non_null_array = array_idx[NULLS] < MAX_ARRAY_IDX;
 
-		const bool can_use_null_run = run_idx[0] < MAX_RUN_IDX;
-		const bool can_use_non_null_run = run_idx[1] < MAX_RUN_IDX;
+		const bool can_use_null_run = run_idx[NON_NULLS] < MAX_RUN_IDX;
+		const bool can_use_non_null_run = run_idx[NULLS] < MAX_RUN_IDX;
 
 		const bool can_use_array = can_use_null_array || can_use_non_null_array;
 		const bool can_use_run = can_use_null_run || can_use_non_null_run;
@@ -163,20 +165,20 @@ public:
 			// Can not efficiently encode at all, write it uncompressed
 			return Result {ContainerType::BITSET_CONTAINER, true, count};
 		}
-		uint16_t lowest_array_cost = duckdb::MinValue<uint16_t>(array_idx[0], array_idx[1]);
-		uint16_t lowest_run_cost = duckdb::MinValue<uint16_t>(run_idx[0], run_idx[1]) * 2;
+		uint16_t lowest_array_cost = duckdb::MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]);
+		uint16_t lowest_run_cost = duckdb::MinValue<uint16_t>(run_idx[NON_NULLS], run_idx[NULLS]) * 2;
 
 		if (lowest_array_cost <= lowest_run_cost) {
-			if (array_idx[0] < array_idx[1]) {
-				return Result {ContainerType::ARRAY_CONTAINER, true, array_idx[0]};
+			if (array_idx[NULLS] < array_idx[NON_NULLS]) {
+				return Result {ContainerType::ARRAY_CONTAINER, NULLS, array_idx[NULLS]};
 			} else {
-				return Result {ContainerType::ARRAY_CONTAINER, false, array_idx[1]};
+				return Result {ContainerType::ARRAY_CONTAINER, NON_NULLS, array_idx[NON_NULLS]};
 			}
 		} else {
-			if (run_idx[0] < run_idx[1]) {
-				return Result {ContainerType::RUN_CONTAINER, true, run_idx[0]};
+			if (run_idx[NULLS] < run_idx[NON_NULLS]) {
+				return Result {ContainerType::RUN_CONTAINER, NULLS, run_idx[NULLS]};
 			} else {
-				return Result {ContainerType::RUN_CONTAINER, false, run_idx[1]};
+				return Result {ContainerType::RUN_CONTAINER, NON_NULLS, run_idx[NON_NULLS]};
 			}
 		}
 	}
@@ -184,10 +186,10 @@ public:
 	void Reset() {
 		count = 0;
 		null_count = 0;
-		run_idx[false] = 0;
-		run_idx[true] = 0;
-		array_idx[false] = 0;
-		array_idx[true] = 0;
+		run_idx[NON_NULLS] = 0;
+		run_idx[NULLS] = 0;
+		array_idx[NON_NULLS] = 0;
+		array_idx[NULLS] = 0;
 		finalized = false;
 		last_is_null = false;
 	}
@@ -243,6 +245,7 @@ public:
 			}
 			appended += to_append;
 		}
+		this->count += count;
 	}
 
 public:
@@ -284,6 +287,7 @@ template <class T>
 idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 	auto &roaring_state = state.Cast<RoaringAnalyzeState<T>>();
 	roaring_state.container_state.Finalize();
+	auto res = roaring_state.container_state.GetResult();
 	// TODO: implement
 	return DConstants::INVALID_INDEX;
 }
