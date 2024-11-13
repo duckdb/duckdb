@@ -719,8 +719,8 @@ public:
 
 				// FIXME: this could be optimized to group the "SetInvalid" operations, they will be sequential in many
 				// cases
-				for (idx_t i = 0; i < to_scan && array_index < count; i++) {
-					if (scanned_count + i < array[array_index]) {
+				for (idx_t i = 0; i < to_scan; i++) {
+					if (array_index >= count || scanned_count + i != array[array_index]) {
 						result_mask.SetInvalid(i);
 					} else {
 						D_ASSERT(scanned_count + i == array[array_index]);
