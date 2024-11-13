@@ -281,4 +281,4 @@ bool ShellHighlight::SetColor(const char *element_type, const char *color, const
 	return true;
 }
 
-}; // namespace duckdb_shell
+} // namespace duckdb_shell
