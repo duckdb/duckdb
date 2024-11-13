@@ -215,8 +215,6 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 }
 
 void TopNHeap::Combine(TopNHeap &other) {
-	other.Finalize();
-
 	// FIXME: heaps can be merged directly instead of doing it like this
 	// that only really speeds things up if heaps are very large, however
 	TopNScanState state;
@@ -336,6 +334,8 @@ SinkResultType PhysicalTopN::Sink(ExecutionContext &context, DataChunk &chunk, O
 SinkCombineResultType PhysicalTopN::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<TopNGlobalState>();
 	auto &lstate = input.local_state.Cast<TopNLocalState>();
+
+	lstate.heap.Finalize();
 
 	// scan the local top N and append it to the global heap
 	lock_guard<mutex> glock(gstate.lock);
