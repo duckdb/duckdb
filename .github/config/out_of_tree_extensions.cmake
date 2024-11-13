@@ -163,3 +163,12 @@ if (NOT MINGW)
             GIT_TAG f2a15013fb4559e1591e977c1c023aa0a369c6f3
             )
 endif()
+
+################# FTS
+duckdb_extension_load(fts
+        LOAD_TESTS
+        DONT_LINK
+        GIT_URL https://github.com/duckdb/duckdb_fts
+        GIT_TAG a1639ff445089e4c3787d6b86edc51a4baee7b45
+        TEST_DIR test/sql
+)
