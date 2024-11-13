@@ -919,9 +919,9 @@ typedef struct {
 // through
 #define DUCKDB_EXTENSION_ENTRYPOINT                                                                                    \
 	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
-	    duckdb_connection connection, duckdb_extension_info info, duckdb_extension_access * access);                   \
+	    duckdb_connection connection, duckdb_extension_info info, struct duckdb_extension_access * access);            \
 	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(                              \
-	    DUCKDB_EXTENSION_NAME, _init_c_api)(duckdb_extension_info info, duckdb_extension_access * access) {            \
+	    DUCKDB_EXTENSION_NAME, _init_c_api)(duckdb_extension_info info, struct duckdb_extension_access * access) {     \
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);                                  \
 		duckdb_database *db = access->get_database(info);                                                              \
 		duckdb_connection conn;                                                                                        \
@@ -929,7 +929,7 @@ typedef struct {
 			access->set_error(info, "Failed to open connection to database");                                          \
 			return false;                                                                                              \
 		}                                                                                                              \
-		auto init_result = DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(conn, info, access);     \
+		bool init_result = DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(conn, info, access);     \
 		duckdb_disconnect(&conn);                                                                                      \
 		return init_result;                                                                                            \
 	}                                                                                                                  \
@@ -938,9 +938,9 @@ typedef struct {
 // Custom entrypoint: just forwards the info and access
 #define DUCKDB_EXTENSION_ENTRYPOINT_CUSTOM                                                                             \
 	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
-	    duckdb_extension_info info, duckdb_extension_access * access);                                                 \
+	    duckdb_extension_info info, struct duckdb_extension_access * access);                                          \
 	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(                              \
-	    DUCKDB_EXTENSION_NAME, _init_c_api)(duckdb_extension_info info, duckdb_extension_access * access) {            \
+	    DUCKDB_EXTENSION_NAME, _init_c_api)(duckdb_extension_info info, struct duckdb_extension_access * access) {     \
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);                                  \
 		return DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(info, access);                       \
 	}                                                                                                                  \
