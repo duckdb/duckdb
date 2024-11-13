@@ -86,7 +86,6 @@ typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
 typedef unsigned char u8;
 #include <ctype.h>
-#include <stdarg.h>
 
 #if !defined(_WIN32) && !defined(WIN32)
 #include <signal.h>
@@ -144,7 +143,6 @@ typedef unsigned char u8;
 
 #include "shell_renderer.hpp"
 #include "shell_highlight.hpp"
-#include "shell_print.hpp"
 #include "shell_state.hpp"
 
 using namespace duckdb_shell;
@@ -448,6 +446,38 @@ static char continuePrompt[20];         /* Continuation prompt. default: "   ...
 static char continuePromptSelected[20]; /* Selected continuation prompt. default: "   ...> " */
 
 /*
+** Render output like fprintf().  Except, if the output is going to the
+** console and if this is running on a Windows machine, translate the
+** output from UTF-8 into MBCS.
+*/
+#if defined(_WIN32) || defined(WIN32)
+static int win_utf8_mode = 0;
+
+void utf8_printf(FILE *out, const char *zFormat, ...) {
+	va_list ap;
+	va_start(ap, zFormat);
+	if (stdout_is_console && (out == stdout || out == stderr)) {
+		char *z1 = sqlite3_vmprintf(zFormat, ap);
+		if (win_utf8_mode && SetConsoleOutputCP(CP_UTF8)) {
+			// we can write UTF8 directly
+			fputs(z1, out);
+		} else {
+			// fallback to writing old style windows unicode
+			char *z2 = sqlite3_win32_utf8_to_mbcs_v2(z1, 0);
+			fputs(z2, out);
+			sqlite3_free(z2);
+		}
+		sqlite3_free(z1);
+	} else {
+		vfprintf(out, zFormat, ap);
+	}
+	va_end(ap);
+}
+#elif !defined(utf8_printf)
+#define utf8_printf fprintf
+#endif
+
+/*
 ** Render output like fprintf().  This should not be used on anything that
 ** includes string formatting (e.g. "%s").
 */
@@ -461,12 +491,21 @@ static void shell_out_of_memory(void) {
 	exit(1);
 }
 
+void ShellState::Print(PrintOutput output, const char *str) {
+	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
+}
+
+void ShellState::Print(PrintOutput output, const string &str) {
+	Print(output, str.c_str());
+}
+
 void ShellState::Print(const char *str) {
+	Print(PrintOutput::STDOUT, str);
 	utf8_printf(out, "%s", str);
 }
 
 void ShellState::Print(const string &str) {
-	utf8_printf(out, "%s", str.c_str());
+	Print(PrintOutput::STDOUT, str.c_str());
 }
 
 void ShellState::PrintValue(const char *str) {
@@ -1515,7 +1554,8 @@ extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t m
 
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
 public:
-	DuckBoxRenderer(bool highlight) : output(PrintOutput::STDOUT), highlight(highlight) {
+	DuckBoxRenderer(ShellState &state, bool highlight)
+	    : shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
 	}
 
 	void RenderLayout(const string &text) override {
@@ -1550,13 +1590,14 @@ public:
 
 	void PrintText(const string &text, HighlightElementType element_type) {
 		if (highlight) {
-			ShellHighlight::PrintText(text, output, element_type);
+			shell_highlight.PrintText(text, output, element_type);
 		} else {
 			utf8_printf(stdout, "%s", text.c_str());
 		}
 	}
 
 private:
+	ShellHighlight shell_highlight;
 	PrintOutput output;
 	bool highlight = true;
 };
@@ -1569,7 +1610,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
 		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
-		DuckBoxRenderer renderer(highlight_results);
+		DuckBoxRenderer renderer(*this, highlight_results);
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
 		                      decimal_separator, &renderer);
 		return;
@@ -2735,20 +2776,21 @@ void ShellState::ResetOutput() {
 	out = stdout;
 }
 
-static void printDatabaseError(const char *zErr) {
+void ShellState::PrintDatabaseError(const char *zErr) {
 	if (!highlight_errors) {
 		utf8_printf(stderr, "%s\n", zErr);
 		return;
 	}
-	ShellHighlight::PrintError(zErr);
+	ShellHighlight shell_highlight(*this);
+	shell_highlight.PrintError(zErr);
 }
 
 /*
 ** Print the current sqlite3_errmsg() value to stderr and return 1.
 */
-static int shellDatabaseError(sqlite3 *db) {
+int ShellState::ShellDatabaseError(sqlite3 *db) {
 	const char *zErr = sqlite3_errmsg(db);
-	printDatabaseError(zErr);
+	PrintDatabaseError(zErr);
 	return 1;
 }
 
@@ -2892,7 +2934,7 @@ MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) 
 	renderer->col_sep = ": ";
 	sqlite3_exec(state.db, "SELECT name, file FROM pragma_database_list", callback, renderer.get(), &zErrMsg);
 	if (zErrMsg) {
-		printDatabaseError(zErrMsg);
+		state.PrintDatabaseError(zErrMsg);
 		sqlite3_free(zErrMsg);
 		return MetadataResult::FAIL;
 	}
@@ -3008,7 +3050,8 @@ MetadataResult SetHighlightColors(ShellState &state, const char **azArg, idx_t n
 	if (nArg < 3 || nArg > 4) {
 		return MetadataResult::PRINT_USAGE;
 	}
-	if (!ShellHighlight::SetColor(state, azArg[1], azArg[2], nArg == 3 ? nullptr : azArg[3])) {
+	ShellHighlight highlighter(state);
+	if (!highlighter.SetColor(azArg[1], azArg[2], nArg == 3 ? nullptr : azArg[3])) {
 		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
@@ -3342,7 +3385,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	if (rc) {
 		if (pStmt)
 			sqlite3_finalize(pStmt);
-		shellDatabaseError(db);
+		ShellDatabaseError(db);
 		import_cleanup(&sCtx);
 		return false;
 	}
@@ -3370,7 +3413,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
 	sqlite3_free(zSql);
 	if (rc) {
-		shellDatabaseError(db);
+		ShellDatabaseError(db);
 		if (pStmt)
 			sqlite3_finalize(pStmt);
 		import_cleanup(&sCtx);
@@ -3757,7 +3800,7 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 		}
 	}
 	if (zErrMsg) {
-		printDatabaseError(zErrMsg);
+		PrintDatabaseError(zErrMsg);
 		sqlite3_free(zErrMsg);
 		return false;
 	} else if (rc != SQLITE_OK) {
@@ -3924,7 +3967,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 		nRow++;
 	}
 	if (sqlite3_finalize(pStmt) != SQLITE_OK) {
-		rc = shellDatabaseError(db);
+		rc = ShellDatabaseError(db);
 	}
 
 	/* Pretty-print the contents of array azResult[] to the output */
@@ -4121,7 +4164,7 @@ int ShellState::DoMetaCommand(char *zLine) {
 		const char *error = NULL;
 		if (linenoiseParseOption((const char **)azArg, nArg, &error)) {
 			if (error) {
-				printDatabaseError(error);
+				PrintDatabaseError(error);
 				rc = 1;
 			}
 		} else {
@@ -4221,11 +4264,11 @@ int ShellState::RunOneSqlLine(char *zSql) {
 	END_TIMER;
 	if (rc || zErrMsg) {
 		if (zErrMsg != 0) {
-			printDatabaseError(zErrMsg);
+			PrintDatabaseError(zErrMsg);
 			sqlite3_free(zErrMsg);
 			zErrMsg = 0;
 		} else {
-			shellDatabaseError(db);
+			ShellDatabaseError(db);
 		}
 		return 1;
 	} else if (ShellHasFlag(SHFLG_CountChanges)) {
@@ -4845,7 +4888,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				data.OpenDB(0);
 				rc = data.ExecuteSQL(z, &zErrMsg);
 				if (zErrMsg != 0) {
-					printDatabaseError(zErrMsg);
+					data.PrintDatabaseError(zErrMsg);
 					sqlite3_free(zErrMsg);
 					if (bail_on_error) {
 						free(azCmd);
@@ -4886,7 +4929,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				data.OpenDB(0);
 				rc = data.ExecuteSQL(azCmd[i], &zErrMsg);
 				if (zErrMsg != 0) {
-					printDatabaseError(zErrMsg);
+					data.PrintDatabaseError(zErrMsg);
 					sqlite3_free(zErrMsg);
 					free(azCmd);
 					return rc != 0 ? rc : 1;
@@ -4910,8 +4953,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			       sqlite3_libversion(), sqlite3_sourceid());
 			if (warnInmemoryDb) {
 				printf("Connected to a ");
-				ShellHighlight::PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
-				                          PrintIntensity::BOLD);
+				ShellHighlight highlighter(data);
+				highlighter.PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
+				                      PrintIntensity::BOLD);
 				printf(".\nUse \".open FILENAME\" to reopen on a "
 				       "persistent database.\n");
 			}

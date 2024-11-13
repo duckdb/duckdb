@@ -12,8 +12,6 @@
 
 namespace duckdb_shell {
 
-enum class PrintOutput { STDOUT, STDERR };
-
 enum class PrintColor { STANDARD, RED, YELLOW, GREEN, GRAY, BLUE, MAGENTA, CYAN, WHITE };
 
 enum class PrintIntensity { STANDARD, BOLD, UNDERLINE };
@@ -36,12 +34,17 @@ enum class HighlightElementType : uint32_t {
 };
 
 struct ShellHighlight {
-	static void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity);
-	static void PrintText(const string &text, PrintOutput output, HighlightElementType type);
+	explicit ShellHighlight(ShellState &state);
 
-	static void PrintError(string error_msg);
+	void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity);
+	void PrintText(const string &text, PrintOutput output, HighlightElementType type);
 
-	static bool SetColor(ShellState &state, const char *element_type, const char *color, const char *intensity);
+	void PrintError(string error_msg);
+
+	bool SetColor(const char *element_type, const char *color, const char *intensity);
+
+private:
+	ShellState &state;
 };
 
 } // namespace duckdb_shell

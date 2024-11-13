@@ -1,5 +1,4 @@
 #include "shell_highlight.hpp"
-#include "shell_print.hpp"
 #include "shell_state.hpp"
 #include "duckdb/parser/parser.hpp"
 
@@ -37,6 +36,9 @@ static const HighlightColors highlight_colors[] = {{"standard", PrintColor::STAN
                                                    {"gray", PrintColor::GRAY},         {"blue", PrintColor::BLUE},
                                                    {"magenta", PrintColor::MAGENTA},   {"cyan", PrintColor::CYAN},
                                                    {"white", PrintColor::WHITE},       {nullptr, PrintColor::STANDARD}};
+
+ShellHighlight::ShellHighlight(ShellState &state) : state(state) {
+}
 
 /*
 ** Output text to the console in a font that attracts extra attention.
@@ -87,7 +89,7 @@ void ShellHighlight::PrintText(const string &text, PrintOutput output, PrintColo
 		SetConsoleTextAttribute(out, wAttributes);
 	}
 
-	utf8_printf(output == PrintOutput::STDOUT ? stdout : stderr, "%s", text.c_str());
+	state.Print(output, text);
 
 	SetConsoleTextAttribute(out, defaultScreenInfo.wAttributes);
 }
@@ -167,7 +169,8 @@ void ShellHighlight::PrintError(string error_msg) {
 		tokens = duckdb::Parser::TokenizeError(error_msg);
 	} catch (...) {
 		// fallback
-		utf8_printf(stderr, "%s\n", error_msg.c_str());
+		state.Print(PrintOutput::STDERR, error_msg.c_str());
+		state.Print(PrintOutput::STDERR, "\n");
 		return;
 	}
 	if (!tokens.empty() && tokens[0].start > 0) {
@@ -218,7 +221,7 @@ void ShellHighlight::PrintError(string error_msg) {
 	PrintText("\n", PrintOutput::STDERR, PrintColor::STANDARD, PrintIntensity::STANDARD);
 }
 
-bool ShellHighlight::SetColor(ShellState &state, const char *element_type, const char *color, const char *intensity) {
+bool ShellHighlight::SetColor(const char *element_type, const char *color, const char *intensity) {
 	idx_t i;
 	for (i = 0; highlight_elements[i].name; i++) {
 		if (duckdb::StringUtil::CIEquals(element_type, highlight_elements[i].name)) {
@@ -234,8 +237,8 @@ bool ShellHighlight::SetColor(ShellState &state, const char *element_type, const
 			}
 			supported_options += highlight_elements[i].name;
 		}
-		utf8_printf(state.out, "Unknown element '%s', supported options: %s\n", element_type,
-		            supported_options.c_str());
+		state.Print(PrintOutput::STDERR, duckdb::StringUtil::Format("Unknown element '%s', supported options: %s\n",
+		                                                            element_type, supported_options.c_str()));
 		return false;
 	}
 
@@ -255,7 +258,8 @@ bool ShellHighlight::SetColor(ShellState &state, const char *element_type, const
 			}
 			supported_options += highlight_colors[c].name;
 		}
-		utf8_printf(state.out, "Unknown color '%s', supported options: %s\n", color, supported_options.c_str());
+		state.Print(PrintOutput::STDERR, duckdb::StringUtil::Format("Unknown color '%s', supported options: %s\n",
+		                                                            color, supported_options.c_str()));
 		return false;
 	}
 	highlight_elements[i].color = highlight_colors[c].color;
@@ -268,7 +272,9 @@ bool ShellHighlight::SetColor(ShellState &state, const char *element_type, const
 		} else if (duckdb::StringUtil::CIEquals(intensity, "underline")) {
 			highlight_elements[i].intensity = PrintIntensity::UNDERLINE;
 		} else {
-			utf8_printf(state.out, "Unknown intensity '%s', supported options: standard, bold, underline\n", intensity);
+			state.Print(PrintOutput::STDERR,
+			            duckdb::StringUtil::Format(
+			                "Unknown intensity '%s', supported options: standard, bold, underline\n", intensity));
 			return false;
 		}
 	}
