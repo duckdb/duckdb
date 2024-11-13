@@ -491,6 +491,10 @@ static void shell_out_of_memory(void) {
 	exit(1);
 }
 
+ShellState::ShellState() {
+	nullValue = "NULL";
+}
+
 void ShellState::Print(PrintOutput output, const char *str) {
 	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
 }

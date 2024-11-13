@@ -76,6 +76,9 @@ enum class PrintOutput { STDOUT, STDERR };
 ** instance of the following structure.
 */
 struct ShellState {
+public:
+	ShellState();
+
 	sqlite3 *db = nullptr;                    /* The database */
 	uint8_t openMode = 0;                     /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
 	uint8_t doXdgOpen = 0;                    /* Invoke start/open/xdg-open in output_reset() */
