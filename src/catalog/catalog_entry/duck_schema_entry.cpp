@@ -369,6 +369,11 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::GetEntry(CatalogTransaction transact
 	return GetCatalogSet(type).GetEntry(transaction, name);
 }
 
+CatalogSet::EntryLookup DuckSchemaEntry::GetEntryDetailed(CatalogTransaction transaction, CatalogType type,
+                                                          const string &name) {
+	return GetCatalogSet(type).GetEntryDetailed(transaction, name);
+}
+
 SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
                                                      const string &name) {
 	return GetCatalogSet(type).SimilarEntry(transaction, name);
