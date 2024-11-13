@@ -81,6 +81,7 @@
 #include <assert.h>
 #include "duckdb_shell_wrapper.h"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/common/box_renderer.hpp"
 #include "sqlite3.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
@@ -474,9 +475,59 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 
 enum class PrintOutput { STDOUT, STDERR };
 
-enum class PrintColor { STANDARD, RED, YELLOW, GREEN, GRAY };
+enum class PrintColor { STANDARD, RED, YELLOW, GREEN, GRAY, BLUE, MAGENTA, CYAN, WHITE };
 
 enum class PrintIntensity { STANDARD, BOLD, UNDERLINE };
+
+struct HighlightElement {
+	const char *name;
+	PrintColor color;
+	PrintIntensity intensity;
+};
+
+static HighlightElement highlight_elements[] = {{"error", PrintColor::RED, PrintIntensity::BOLD},
+                                                {"keyword", PrintColor::GREEN, PrintIntensity::STANDARD},
+                                                {"numeric_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
+                                                {"string_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
+                                                {"line_indicator", PrintColor::STANDARD, PrintIntensity::BOLD},
+                                                {"column_name", PrintColor::STANDARD, PrintIntensity::BOLD},
+                                                {"column_type", PrintColor::STANDARD, PrintIntensity::STANDARD},
+                                                {"numeric_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
+                                                {"string_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
+                                                {"temporal_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
+                                                {"null_value", PrintColor::GRAY, PrintIntensity::STANDARD},
+                                                {"footer", PrintColor::STANDARD, PrintIntensity::STANDARD},
+                                                {"layout", PrintColor::GRAY, PrintIntensity::STANDARD},
+                                                {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
+                                                {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD}};
+
+struct HighlightColors {
+	const char *name;
+	PrintColor color;
+};
+
+static const HighlightColors highlight_colors[] = {{"standard", PrintColor::STANDARD}, {"red", PrintColor::RED},
+                                                   {"yellow", PrintColor::YELLOW},     {"green", PrintColor::GREEN},
+                                                   {"gray", PrintColor::GRAY},         {"blue", PrintColor::BLUE},
+                                                   {"magenta", PrintColor::MAGENTA},   {"cyan", PrintColor::CYAN},
+                                                   {"white", PrintColor::WHITE},       {nullptr, PrintColor::STANDARD}};
+
+enum class HighlightElementType : uint32_t {
+	ERROR = 0,
+	KEYWORD,
+	NUMERIC_CONSTANT,
+	STRING_CONSTANT,
+	LINE_INDICATOR,
+	COLUMN_NAME,
+	COLUMN_TYPE,
+	NUMERIC_VALUE,
+	STRING_VALUE,
+	TEMPORAL_VALUE,
+	NULL_VALUE,
+	FOOTER,
+	LAYOUT,
+	NONE
+};
 
 /*
 ** Output text to the console in a font that attracts extra attention.
@@ -502,11 +553,23 @@ static void PrintText(const string &text, PrintOutput output, PrintColor color, 
 	case PrintColor::GREEN:
 		wAttributes |= FOREGROUND_GREEN;
 		break;
+	case PrintColor::BLUE:
+		wAttributes |= FOREGROUND_BLUE;
+		break;
 	case PrintColor::YELLOW:
 		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN;
 		break;
 	case PrintColor::GRAY:
 		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+		break;
+	case PrintColor::MAGENTA:
+		wAttributes |= FOREGROUND_BLUE | FOREGROUND_RED;
+		break;
+	case PrintColor::CYAN:
+		wAttributes |= FOREGROUND_BLUE | FOREGROUND_GREEN;
+		break;
+	case PrintColor::WHITE:
+		wAttributes |= FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
 		break;
 	default:
 		break;
@@ -547,6 +610,18 @@ static void PrintText(const string &text, PrintOutput output, PrintColor color, 
 	case PrintColor::GRAY:
 		color_prefix = "\033[90m";
 		break;
+	case PrintColor::BLUE:
+		color_prefix = "\033[34m";
+		break;
+	case PrintColor::MAGENTA:
+		color_prefix = "\033[35m";
+		break;
+	case PrintColor::CYAN:
+		color_prefix = "\033[36m";
+		break;
+	case PrintColor::WHITE:
+		color_prefix = "\033[37m";
+		break;
 	default:
 		break;
 	}
@@ -557,6 +632,16 @@ static void PrintText(const string &text, PrintOutput output, PrintColor color, 
 	        suffix);
 }
 #endif
+
+static void PrintText(const string &text, PrintOutput output, HighlightElementType type) {
+	auto index = static_cast<uint32_t>(type);
+	auto max_index = static_cast<uint32_t>(HighlightElementType::NONE);
+	if (index > max_index) {
+		index = max_index;
+	}
+	auto highlight_info = highlight_elements[index];
+	PrintText(text, output, highlight_info.color, highlight_info.intensity);
+}
 
 /*
 ** Render output like fprintf().  This should not be used on anything that
@@ -1620,9 +1705,48 @@ columnar_end:
 }
 
 extern "C" {
-extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                                   int columns, char thousands, char decimal);
+extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
+                                  int columns, char thousands, char decimal, duckdb::BaseResultRenderer *renderer);
 }
+
+class DuckBoxRenderer : public duckdb::BaseResultRenderer {
+public:
+	DuckBoxRenderer() : output(PrintOutput::STDOUT) {
+	}
+
+	void RenderLayout(const string &text) override {
+		PrintText(text, output, HighlightElementType::LAYOUT);
+	}
+
+	void RenderColumnName(const string &text) override {
+		PrintText(text, output, HighlightElementType::COLUMN_NAME);
+	}
+
+	void RenderType(const string &text) override {
+		PrintText(text, output, HighlightElementType::COLUMN_TYPE);
+	}
+
+	void RenderValue(const string &text, const duckdb::LogicalType &type) override {
+		if (type.IsNumeric()) {
+			PrintText(text, output, HighlightElementType::NUMERIC_VALUE);
+		} else if (type.IsTemporal()) {
+			PrintText(text, output, HighlightElementType::TEMPORAL_VALUE);
+		} else {
+			PrintText(text, output, HighlightElementType::STRING_VALUE);
+		}
+	}
+
+	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
+		PrintText(text, output, HighlightElementType::NULL_VALUE);
+	}
+
+	void RenderFooter(const string &text) override {
+		PrintText(text, output, HighlightElementType::FOOTER);
+	}
+
+private:
+	PrintOutput output;
+};
 
 /*
 ** Run a prepared statement
@@ -1632,12 +1756,9 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
 		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
-		char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
-		                                  decimal_separator);
-		if (str) {
-			utf8_printf(out, "%s", str);
-			sqlite3_free(str);
-		}
+		DuckBoxRenderer renderer;
+		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
+		                      decimal_separator, &renderer);
 		return;
 	}
 
@@ -2105,6 +2226,7 @@ static const char *azHelp[] = {
 #ifdef HAVE_LINENOISE
     ".highlight [on|off]      Toggle syntax highlighting in the shell on/off",
 #endif
+    ".highlight_colors [element] [color]  ([bold])? Configure highlighting colors",
     ".highlight_errors [on|off] Toggle highlighting of errors in the shell on/off",
     ".import FILE TABLE       Import data from FILE into TABLE",
     "   Options:",
@@ -2835,36 +2957,36 @@ static void printDatabaseError(const char *zErr) {
 		tokens.push_back(new_token);
 	}
 	if (!error_type.empty()) {
-		PrintText(error_type + "\n", PrintOutput::STDERR, PrintColor::RED, PrintIntensity::BOLD);
+		PrintText(error_type + "\n", PrintOutput::STDERR, HighlightElementType::ERROR);
 	}
 	for (idx_t i = 0; i < tokens.size(); i++) {
-		auto color = PrintColor::STANDARD;
-		auto intensity = PrintIntensity::STANDARD;
+		HighlightElementType element_type = HighlightElementType::NONE;
 		switch (tokens[i].type) {
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR:
-			color = PrintColor::RED;
-			intensity = PrintIntensity::BOLD;
+			element_type = HighlightElementType::ERROR;
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
+			element_type = HighlightElementType::NUMERIC_VALUE;
+			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
-			color = PrintColor::YELLOW;
+			element_type = HighlightElementType::STRING_VALUE;
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
-			color = PrintColor::GREEN;
+			element_type = HighlightElementType::KEYWORD;
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
-			intensity = PrintIntensity::BOLD;
+			element_type = HighlightElementType::LINE_INDICATOR;
 			break;
 		}
 		idx_t start = tokens[i].start;
 		idx_t end = i + 1 == tokens.size() ? error_msg.size() : tokens[i + 1].start;
 		if (end - start > 0) {
 			string error_print = error_msg.substr(tokens[i].start, end - start);
-			PrintText(error_print, PrintOutput::STDERR, color, intensity);
+			PrintText(error_print, PrintOutput::STDERR, element_type);
 		}
 	}
 	PrintText("\n", PrintOutput::STDERR, PrintColor::STANDARD, PrintIntensity::STANDARD);
@@ -3128,6 +3250,65 @@ MetadataResult ExitProcess(ShellState &state, const char **azArg, idx_t nArg) {
 MetadataResult ToggleHeaders(ShellState &state, const char **azArg, idx_t nArg) {
 	state.showHeader = booleanValue(azArg[1]);
 	state.shellFlgs |= SHFLG_HeaderSet;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetHighlightColors(ShellState &state, const char **azArg, idx_t nArg) {
+	if (nArg < 3 || nArg > 4) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	idx_t i;
+	for (i = 0; highlight_elements[i].name; i++) {
+		if (duckdb::StringUtil::CIEquals(azArg[1], highlight_elements[i].name)) {
+			break;
+		}
+	}
+	if (!highlight_elements[i].name) {
+		// element not found
+		string supported_options;
+		for (i = 0; highlight_elements[i].name; i++) {
+			if (!supported_options.empty()) {
+				supported_options += ", ";
+			}
+			supported_options += highlight_elements[i].name;
+		}
+		utf8_printf(state.out, "Unknown element '%s', supported options: %s\n", azArg[1], supported_options.c_str());
+		return MetadataResult::FAIL;
+	}
+
+	// found the element - parse the color
+	idx_t c;
+	for (c = 0; highlight_colors[c].name; c++) {
+		if (duckdb::StringUtil::CIEquals(azArg[2], highlight_colors[c].name)) {
+			break;
+		}
+	}
+	if (!highlight_colors[c].name) {
+		// color not found
+		string supported_options;
+		for (c = 0; highlight_colors[c].name; c++) {
+			if (!supported_options.empty()) {
+				supported_options += ", ";
+			}
+			supported_options += highlight_colors[c].name;
+		}
+		utf8_printf(state.out, "Unknown color '%s', supported options: %s\n", azArg[2], supported_options.c_str());
+		return MetadataResult::FAIL;
+	}
+	highlight_elements[i].color = highlight_colors[c].color;
+	highlight_elements[i].intensity = PrintIntensity::STANDARD;
+	if (nArg == 4) {
+		if (duckdb::StringUtil::CIEquals(azArg[3], "standard")) {
+			highlight_elements[i].intensity = PrintIntensity::STANDARD;
+		} else if (duckdb::StringUtil::CIEquals(azArg[3], "bold")) {
+			highlight_elements[i].intensity = PrintIntensity::BOLD;
+		} else if (duckdb::StringUtil::CIEquals(azArg[3], "underline")) {
+			highlight_elements[i].intensity = PrintIntensity::UNDERLINE;
+		} else {
+			utf8_printf(state.out, "Unknown intensity '%s', supported options: standard, bold, underline\n", azArg[3]);
+			return MetadataResult::FAIL;
+		}
+	}
 	return MetadataResult::SUCCESS;
 }
 
@@ -4106,6 +4287,7 @@ static const MetadataCommand metadata_commands[] = {
     {"fullschema", 0, nullptr, "", "", 0},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0},
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
+    {"highlight_colors", 0, SetHighlightColors, "[element] [color] ([bold])?", "Configure highlighting colors", 0},
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0},
 
