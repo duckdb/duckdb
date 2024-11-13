@@ -15,9 +15,8 @@ PRAGMA force_compression='roaring'
 statement ok
 CREATE TABLE test (a BIGINT);
 
-# TODO: create a null/non-null pattern that benefits from RLE
-#statement ok
-#INSERT INTO test SELECT case when i%25=0 then null else 1337 end FROM range(0,10000) tbl(i);
+statement ok
+INSERT INTO test SELECT case when i % 600 != 0 and (i % 600) < 350 then null else 1337 end FROM range(0,10000) tbl(i);
 
 statement ok
 checkpoint
@@ -26,10 +25,15 @@ query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
 ----
 
+query I
+select count(*) from test WHERE a IS NOT NULL;
+----
+4067
+
 query III
 select sum(a), min(a), max(a) from test;
 ----
-12835200	1337	1337
+5437579	1337	1337
 
 statement ok
 DROP TABLE test;

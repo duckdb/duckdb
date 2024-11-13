@@ -10,6 +10,10 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
+namespace duckdb {
+
+namespace roaring {
+
 //! The amount of values that are encoded per container
 static constexpr idx_t ROARING_CONTAINER_SIZE = 65536;
 static constexpr idx_t ROARING_VECTOR_SIZE = 2048;
@@ -17,8 +21,6 @@ static constexpr bool NULLS = true;
 static constexpr bool NON_NULLS = false;
 static constexpr uint16_t MAX_RUN_IDX = 2047;
 static constexpr uint16_t MAX_ARRAY_IDX = 4095;
-
-namespace {
 
 struct ContainerMetadata {
 public:
@@ -121,7 +123,7 @@ public:
 			res += sizeof(ContainerMetadata);
 			switch (container_type) {
 			case ContainerType::BITSET_CONTAINER:
-				res += duckdb::AlignValue<idx_t, 8>(count) / 8;
+				res += AlignValue<idx_t, 8>(count) / 8;
 				break;
 			case ContainerType::RUN_CONTAINER:
 				res += count * sizeof(RunContainerRLEPair);
@@ -188,10 +190,10 @@ public:
 		return count == ROARING_CONTAINER_SIZE;
 	}
 
-	void OverrideArray(duckdb::data_ptr_t destination, bool nulls) {
+	void OverrideArray(data_ptr_t destination, bool nulls) {
 		arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
 	}
-	void OverrideRun(duckdb::data_ptr_t destination, bool nulls) {
+	void OverrideRun(data_ptr_t destination, bool nulls) {
 		runs[nulls] = reinterpret_cast<RunContainerRLEPair *>(destination);
 	}
 
@@ -221,10 +223,9 @@ public:
 			// Can not efficiently encode at all, write it uncompressed
 			return Result::BitsetContainer(count);
 		}
-		uint16_t lowest_array_cost = duckdb::MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]);
-		uint16_t lowest_run_cost = duckdb::MinValue<uint16_t>(run_idx[NON_NULLS], run_idx[NULLS]) * 2;
-		if (duckdb::MinValue<uint16_t>(lowest_array_cost, lowest_run_cost) >
-		    duckdb::AlignValue<uint16_t, 8>(count) / 8) {
+		uint16_t lowest_array_cost = MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]);
+		uint16_t lowest_run_cost = MinValue<uint16_t>(run_idx[NON_NULLS], run_idx[NULLS]) * 2;
+		if (MinValue<uint16_t>(lowest_array_cost, lowest_run_cost) > AlignValue<uint16_t, 8>(count) / 8) {
 			// The amount of values is too small, better off using uncompressed
 			// we can detect this at decompression because we know how many values are left
 			return Result::BitsetContainer(count);
@@ -284,10 +285,6 @@ public:
 	//! Whether the state has been finalized
 	bool finalized = false;
 };
-
-} // namespace
-
-namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Analyze
@@ -439,7 +436,7 @@ public:
 		idx_t required_space = sizeof(uint16_t);
 		if (is_uncompressed) {
 			idx_t container_size =
-			    duckdb::AlignValue<idx_t, 8>(MinValue<idx_t>(analyze_state.count - count, ROARING_CONTAINER_SIZE)) / 8;
+			    AlignValue<idx_t, 8>(MinValue<idx_t>(analyze_state.count - count, ROARING_CONTAINER_SIZE)) / 8;
 			required_space += container_size;
 		} else if (metadata.IsRun()) {
 			required_space += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
@@ -455,7 +452,7 @@ public:
 		}
 
 		metadata_ptr -= sizeof(ContainerMetadata);
-		duckdb::Store<ContainerMetadata>(metadata, metadata_ptr);
+		Store<ContainerMetadata>(metadata, metadata_ptr);
 
 		container_state.Reset();
 		if (is_uncompressed) {
@@ -507,13 +504,13 @@ public:
 		if (percentage_of_block > 0.25) {
 			// Move the metadata, to close the gap between the data and the metadata
 			std::memmove(base_ptr + metadata_offset, metadata_ptr, metadata_size);
-			metadata_ptr = data_ptr;
+			metadata_ptr = base_ptr + metadata_offset;
 			total_segment_size = sizeof(idx_t) + metadata_offset + metadata_size;
 		} else {
 			total_segment_size = info.GetBlockSize();
 		}
-		auto metadata_start = (metadata_ptr + metadata_size) - handle.Ptr();
-		duckdb::Store<idx_t>(metadata_start, handle.Ptr());
+		auto metadata_start = (metadata_ptr - handle.Ptr()) + metadata_size;
+		Store<idx_t>(metadata_start, handle.Ptr());
 		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
@@ -646,9 +643,45 @@ public:
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
 		auto &result_mask = FlatVector::Validity(result);
-		for (idx_t i = 0; i < to_scan; i++) {
+
+		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
+		// scanned.
+
+		if (INVERTED) {
+			do {
+				if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
+					// The run does not cover these entries, no action required
+					break;
+				}
+				idx_t result_idx = 0;
+				while (run_index < count && result_idx < to_scan) {
+					auto run = runs[run_index];
+
+					idx_t to_skip = 0;
+					if (run.start > scanned_count + result_idx) {
+						to_skip = MinValue(run.start - (scanned_count + result_idx), to_scan - result_idx);
+						// These entries are set, no action required
+					}
+					result_idx += to_skip;
+					idx_t total = MinValue<idx_t>(1 + run.length, to_scan - result_idx);
+					if (!to_skip) {
+						total -= (scanned_count + result_idx - run.start);
+					}
+
+					// Process the run
+					for (idx_t i = 0; i < total; i++) {
+						result_mask.SetInvalid(result_idx++);
+					}
+					if (scanned_count + result_idx == run.start + 1 + run.length) {
+						// Fully processed the current run
+						run_index++;
+					}
+				}
+			} while (false);
+			scanned_count += to_scan;
+		} else {
+			throw NotImplementedException("TODO");
 		}
-		throw NotImplementedException("TODO");
 	}
 
 public:
@@ -775,7 +808,7 @@ public:
 		}
 		container_metadata.reserve(container_count);
 		for (idx_t i = 0; i < container_count; i++) {
-			container_metadata.push_back(duckdb::Load<ContainerMetadata>(metadata_ptr));
+			container_metadata.push_back(Load<ContainerMetadata>(metadata_ptr));
 			metadata_ptr -= sizeof(ContainerMetadata);
 		}
 	}
@@ -923,13 +956,17 @@ void RoaringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_coun
 	return;
 }
 
+} // namespace roaring
+
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction GetCompressionFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, RoaringInitAnalyze, RoaringAnalyze,
-	                           RoaringFinalAnalyze, RoaringInitCompression, RoaringCompress, RoaringFinalizeCompress,
-	                           RoaringInitScan, RoaringScan, RoaringScanPartial, RoaringFetchRow, RoaringSkip);
+	return CompressionFunction(CompressionType::COMPRESSION_ROARING, data_type, roaring::RoaringInitAnalyze,
+	                           roaring::RoaringAnalyze, roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression,
+	                           roaring::RoaringCompress, roaring::RoaringFinalizeCompress, roaring::RoaringInitScan,
+	                           roaring::RoaringScan, roaring::RoaringScanPartial, roaring::RoaringFetchRow,
+	                           roaring::RoaringSkip);
 }
 
 CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {
