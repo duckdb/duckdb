@@ -17,7 +17,7 @@ enum class PrintColor { STANDARD, RED, YELLOW, GREEN, GRAY, BLUE, MAGENTA, CYAN,
 enum class PrintIntensity { STANDARD, BOLD, UNDERLINE, BOLD_UNDERLINE };
 
 enum class HighlightElementType : uint32_t {
-	ERROR = 0,
+	ERROR_TOKEN = 0,
 	KEYWORD,
 	NUMERIC_CONSTANT,
 	STRING_CONSTANT,

@@ -194,7 +194,7 @@ void ShellHighlight::PrintError(string error_msg) {
 		tokens.push_back(new_token);
 	}
 	if (!error_type.empty()) {
-		PrintText(error_type + "\n", PrintOutput::STDERR, HighlightElementType::ERROR);
+		PrintText(error_type + "\n", PrintOutput::STDERR, HighlightElementType::ERROR_TOKEN);
 	}
 	for (idx_t i = 0; i < tokens.size(); i++) {
 		HighlightElementType element_type = HighlightElementType::NONE;
@@ -202,7 +202,7 @@ void ShellHighlight::PrintError(string error_msg) {
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR:
-			element_type = HighlightElementType::ERROR;
+			element_type = HighlightElementType::ERROR_TOKEN;
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
 			element_type = HighlightElementType::NUMERIC_CONSTANT;
