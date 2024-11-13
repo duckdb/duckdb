@@ -42,6 +42,11 @@ public:
 
 	void IncreaseNumEntriesSeenTotal(idx_t count);
 
+	//! Go from the naive sampling to the reservoir sampling
+	//! Naive samping will not collect weights, but when we serialize
+	//! we need to serialize weights again.
+	void FillWeights(vector<idx_t> &actual_sample_indexes);
+
 	unique_ptr<BaseReservoirSampling> Copy();
 	// BaseReservoirSampling Copy2();
 	//! The random generator
@@ -305,6 +310,51 @@ public:
 	idx_t FillReservoir(DataChunk &chunk);
 
 	unique_ptr<DataChunk> sample_chunk;
+
+	vector<idx_t> actual_sample_indexes;
+};
+
+static unordered_map<idx_t, double> tuples_to_min_weight_map = {
+	{1, 0.232},
+	{2, 0.234234},
+	{3, 0.54345},
+	{4, 0.5},
+	{5, 0.5},
+	{6, 0.5},
+	{7, 0.5},
+	{8, 0.5},
+	{9, 0.5},
+	{10, 0.5},
+	{11, 0.5},
+	{12, 0.5},
+	{13, 0.5},
+	{14, 0.5},
+	{15, 0.5},
+	{16, 0.5},
+	{17, 0.5},
+	{18, 0.5},
+	{19, 0.5},
+	{20, 0.5},
+	{21, 0.5},
+	{22, 0.5},
+	{23, 0.5},
+	{24, 0.5},
+	{25, 0.5},
+	{26, 0.5},
+	{27, 0.5},
+	{28, 0.5},
+	{29, 0.5},
+	{30, 0.5},
+	{31, 0.5},
+	{32, 0.5},
+	{33, 0.5},
+	{34, 0.5},
+	{35, 0.5},
+	{36, 0.5},
+	{37, 0.5},
+	{38, 0.5},
+	{39, 0.5},
+	{40, 0.5}
 };
 
 } // namespace duckdb
