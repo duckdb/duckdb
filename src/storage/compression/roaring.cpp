@@ -636,6 +636,7 @@ public:
 	idx_t scanned_count = 0;
 };
 
+template <bool INVERTED>
 struct RunContainerScanState : public ContainerScanState {
 public:
 	RunContainerScanState(idx_t container_index, idx_t container_size, RunContainerRLEPair *runs, idx_t count)
@@ -644,6 +645,9 @@ public:
 
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
+		auto &result_mask = FlatVector::Validity(result);
+		for (idx_t i = 0; i < to_scan; i++) {
+		}
 		throw NotImplementedException("TODO");
 	}
 
@@ -653,6 +657,7 @@ public:
 	idx_t run_index = 0;
 };
 
+template <bool INVERTED>
 struct ArrayContainerScanState : public ContainerScanState {
 public:
 	ArrayContainerScanState(idx_t container_index, idx_t container_size, uint16_t *array, idx_t count)
@@ -661,12 +666,75 @@ public:
 
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
-		throw NotImplementedException("TODO");
+		auto &result_mask = FlatVector::Validity(result);
+		idx_t input_index = scanned_count;
+
+		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
+		// scanned.
+
+		if (INVERTED) {
+			// We are mapping nulls, not non-nulls
+			do {
+				if (array_index >= count || scanned_count + to_scan < array[array_index]) {
+					// None of the bits we're scanning are 0, no action required
+					break;
+				}
+
+#if false
+				// TODO: optimization
+				if (array_index + to_scan < count && array[array_index] == scanned_count && array[array_index + to_scan] == scanned_count + to_scan) {
+					throw NotImplementedException("INVERTED=TRUE, SET ALL BITS TO 0");
+					// All entries are present in the array, can set all bits to 0 directly
+				}
+#endif
+
+				// At least one of the entries to scan is set
+				for (; array_index < count; array_index++) {
+					if (array[array_index] >= scanned_count + to_scan) {
+						break;
+					}
+					if (array[array_index] < scanned_count) {
+						continue;
+					}
+					auto index = array[array_index] - scanned_count;
+					result_mask.SetInvalid(index);
+				}
+			} while (false);
+			scanned_count += to_scan;
+		} else {
+			// We are mapping non-nulls
+			do {
+				if (array_index >= count || scanned_count + to_scan < array[array_index]) {
+					// None of the bits we're scanning are set, set everything to 0 directly
+					throw NotImplementedException("INVERTED=FALSE, SET ALL BITS TO 0");
+					// TODO: implement the logic ..., then break
+					break;
+				}
+
+				if (array_index + to_scan < count && array[array_index] == scanned_count &&
+				    array[array_index + to_scan] == scanned_count + to_scan) {
+					// All bits are set, no action required
+					break;
+				}
+
+				// FIXME: this could be optimized to group the "SetInvalid" operations, they will be sequential in many
+				// cases
+				for (idx_t i = 0; i < to_scan && array_index < count; i++) {
+					if (scanned_count + i < array[array_index]) {
+						result_mask.SetInvalid(i);
+					} else {
+						D_ASSERT(scanned_count + i == array[array_index]);
+						array_index++;
+					}
+				}
+			} while (false);
+			scanned_count += to_scan;
+		}
 	}
 
 public:
 	uint16_t *array;
-	idx_t count;
+	const idx_t count;
 	idx_t array_index = 0;
 };
 
@@ -756,12 +824,23 @@ public:
 			current_container = make_uniq<BitsetContainerScanState>(container_index, container_size,
 			                                                        reinterpret_cast<uint8_t *>(data_ptr));
 		} else if (metadata.IsRun()) {
-			current_container = make_uniq<RunContainerScanState>(container_index, container_size,
-			                                                     reinterpret_cast<RunContainerRLEPair *>(data_ptr),
-			                                                     metadata.NumberOfRuns());
+			if (metadata.IsInverted()) {
+				current_container = make_uniq<RunContainerScanState<NULLS>>(
+				    container_index, container_size, reinterpret_cast<RunContainerRLEPair *>(data_ptr),
+				    metadata.NumberOfRuns());
+			} else {
+				current_container = make_uniq<RunContainerScanState<NON_NULLS>>(
+				    container_index, container_size, reinterpret_cast<RunContainerRLEPair *>(data_ptr),
+				    metadata.NumberOfRuns());
+			}
 		} else {
-			current_container = make_uniq<ArrayContainerScanState>(
-			    container_index, container_size, reinterpret_cast<uint16_t *>(data_ptr), metadata.Cardinality());
+			if (metadata.IsInverted()) {
+				current_container = make_uniq<ArrayContainerScanState<NULLS>>(
+				    container_index, container_size, reinterpret_cast<uint16_t *>(data_ptr), metadata.Cardinality());
+			} else {
+				current_container = make_uniq<ArrayContainerScanState<NON_NULLS>>(
+				    container_index, container_size, reinterpret_cast<uint16_t *>(data_ptr), metadata.Cardinality());
+			}
 		}
 
 		auto &scan_state = *current_container;
@@ -782,6 +861,7 @@ public:
 	}
 
 	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count) {
+		result.Flatten(count);
 		idx_t remaining = count;
 		idx_t scanned = 0;
 		while (remaining) {
