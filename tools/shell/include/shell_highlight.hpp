@@ -43,7 +43,7 @@ struct ShellHighlight {
 
 	bool SetColor(const char *element_type, const char *color, const char *intensity);
 
-private:
+public:
 	ShellState &state;
 };
 

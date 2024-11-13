@@ -143,7 +143,7 @@ void ShellHighlight::PrintText(const string &text, PrintOutput output, PrintColo
 	if (*color_prefix || *bold_prefix) {
 		suffix = "\033[0m";
 	}
-	fprintf(output == PrintOutput::STDOUT ? stdout : stderr, "%s%s%s%s", bold_prefix, color_prefix, text.c_str(),
+	fprintf(output == PrintOutput::STDOUT ? state.out : stderr, "%s%s%s%s", bold_prefix, color_prefix, text.c_str(),
 	        suffix);
 }
 #endif

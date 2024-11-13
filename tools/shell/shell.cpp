@@ -422,6 +422,12 @@ static volatile int seenInterrupt = 0;
 */
 static const char *program_name;
 
+enum class OptionType {
+	DEFAULT,
+	ON,
+	OFF
+};
+
 /*
 ** Whether or not we are running in safe mode
 */
@@ -430,12 +436,26 @@ static bool safe_mode = false;
 /*
 ** Whether or not we are highlighting errors
 */
-static bool highlight_errors = true;
+static OptionType highlight_errors = OptionType::DEFAULT;
+
+static bool HighlightErrors() {
+	if (highlight_errors == OptionType::DEFAULT) {
+		return stderr_is_console;
+	}
+	return highlight_errors == OptionType::ON;
+}
 
 /*
 ** Whether or not we are highlighting results
 */
-static bool highlight_results = true;
+static OptionType highlight_results = OptionType::DEFAULT;
+
+static bool HighlightResults() {
+	if (highlight_results == OptionType::DEFAULT) {
+		return stdout_is_console;
+	}
+	return highlight_results == OptionType::ON;
+}
 
 /*
 ** Prompt strings. Initialized in main. Settable with
@@ -505,7 +525,6 @@ void ShellState::Print(PrintOutput output, const string &str) {
 
 void ShellState::Print(const char *str) {
 	Print(PrintOutput::STDOUT, str);
-	utf8_printf(out, "%s", str);
 }
 
 void ShellState::Print(const string &str) {
@@ -1596,7 +1615,7 @@ public:
 		if (highlight) {
 			shell_highlight.PrintText(text, output, element_type);
 		} else {
-			utf8_printf(stdout, "%s", text.c_str());
+			utf8_printf(shell_highlight.state.out, "%s", text.c_str());
 		}
 	}
 
@@ -1614,7 +1633,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
 		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
-		DuckBoxRenderer renderer(*this, highlight_results);
+		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
 		                      decimal_separator, &renderer);
 		return;
@@ -2778,10 +2797,11 @@ void ShellState::ResetOutput() {
 	}
 	outfile = string();
 	out = stdout;
+	stdout_is_console = true;
 }
 
 void ShellState::PrintDatabaseError(const char *zErr) {
-	if (!highlight_errors) {
+	if (!HighlightErrors()) {
 		utf8_printf(stderr, "%s\n", zErr);
 		return;
 	}
@@ -3062,12 +3082,12 @@ MetadataResult SetHighlightColors(ShellState &state, const char **azArg, idx_t n
 }
 
 MetadataResult ToggleHighlighErrors(ShellState &state, const char **azArg, idx_t nArg) {
-	highlight_errors = booleanValue(azArg[1]);
+	highlight_errors = booleanValue(azArg[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult ToggleHighlightResult(ShellState &state, const char **azArg, idx_t nArg) {
-	highlight_results = booleanValue(azArg[1]);
+	highlight_results = booleanValue(azArg[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
 }
 
@@ -3699,6 +3719,7 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 			outfile = zFile;
 		}
 	}
+	stdout_is_console = false;
 	return true;
 }
 
@@ -4635,13 +4656,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	stdin_is_interactive = isatty(0);
 	stdout_is_console = isatty(1);
 	stderr_is_console = isatty(2);
-
-	if (!stdout_is_console) {
-		highlight_results = false;
-	}
-	if (!stderr_is_console) {
-		highlight_errors = false;
-	}
 
 #if USE_SYSTEM_SQLITE + 0 != 1
 	if (strncmp(sqlite3_sourceid(), SQLITE_SOURCE_ID, 60) != 0) {
