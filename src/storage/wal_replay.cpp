@@ -162,13 +162,29 @@ private:
 //===--------------------------------------------------------------------===//
 // Replay
 //===--------------------------------------------------------------------===//
-bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle) {
+unique_ptr<WriteAheadLog> WriteAheadLog::Replay(FileSystem &fs, AttachedDatabase &db, const string &wal_path) {
+	auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+	if (!handle) {
+		// WAL does not exist - instantiate an empty WAL
+		return make_uniq<WriteAheadLog>(db, wal_path);
+	}
+	auto wal_handle = ReplayInternal(db, std::move(handle));
+	if (wal_handle) {
+		return wal_handle;
+	}
+	// replay returning NULL indicates we can nuke the WAL entirely - but only if this is not a read-only connection
+	if (!db.IsReadOnly()) {
+		fs.RemoveFile(wal_path);
+	}
+	return make_uniq<WriteAheadLog>(db, wal_path);
+}
+unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &database, unique_ptr<FileHandle> handle) {
 	Connection con(database.GetDatabase());
 	auto wal_path = handle->GetPath();
 	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));
 	if (reader.Finished()) {
-		// WAL is empty
-		return false;
+		// WAL file exists but it is empty - we can delete the file
+		return nullptr;
 	}
 
 	con.BeginTransaction();
@@ -203,7 +219,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
 			// the contents of the WAL have already been checkpointed
 			// we can safely truncate the WAL and ignore its contents
-			return true;
+			return nullptr;
 		}
 	}
 
@@ -216,15 +232,19 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 	// replay the WAL
 	// note that everything is wrapped inside a try/catch block here
 	// there can be errors in WAL replay because of a corrupt WAL file
+	idx_t successful_offset = 0;
+	bool all_succeeded = false;
 	try {
 		while (true) {
 			// read the current entry
 			auto deserializer = WriteAheadLogDeserializer::Open(state, reader);
 			if (deserializer.ReplayEntry()) {
 				con.Commit();
+				successful_offset = reader.offset;
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
+					all_succeeded = true;
 					break;
 				}
 				con.BeginTransaction();
@@ -246,7 +266,8 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, unique_ptr<FileHandle> ha
 		con.Query("ROLLBACK");
 		throw;
 	} // LCOV_EXCL_STOP
-	return false;
+	auto init_state = all_succeeded ? WALInitState::UNINITIALIZED : WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
+	return make_uniq<WriteAheadLog>(database, wal_path, successful_offset, init_state);
 }
 
 //===--------------------------------------------------------------------===//

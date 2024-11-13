@@ -1455,6 +1455,50 @@ static bool IsAcceptedInsertRelationType(const Relation &relation) {
 	return relation.type == RelationType::TABLE_RELATION;
 }
 
+void DuckDBPyRelation::Update(const py::object &set_p, const py::object &where) {
+	AssertRelation();
+	unique_ptr<ParsedExpression> condition;
+	if (!py::none().is(where)) {
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(where, py_expr)) {
+			throw InvalidInputException("Please provide an Expression to 'condition'");
+		}
+		condition = py_expr->GetExpression().Copy();
+	}
+
+	if (!py::is_dict_like(set_p)) {
+		throw InvalidInputException("Please provide 'set' as a dictionary of column name to Expression");
+	}
+
+	vector<string> names;
+	vector<unique_ptr<ParsedExpression>> expressions;
+
+	py::dict set = py::dict(set_p);
+	auto arg_count = set.size();
+	if (arg_count == 0) {
+		throw InvalidInputException("Please provide at least one set expression");
+	}
+
+	for (auto item : set) {
+		py::object item_key = item.first.cast<py::object>();
+		py::object item_value = item.second.cast<py::object>();
+
+		if (!py::isinstance<py::str>(item_key)) {
+			throw InvalidInputException("Please provide the column name as the key of the dictionary");
+		}
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(item_value, py_expr)) {
+			string actual_type = py::str(item_value.get_type());
+			throw InvalidInputException("Please provide an object of type Expression as the value, not %s",
+			                            actual_type);
+		}
+		names.push_back(std::string(py::str(item_key)));
+		expressions.push_back(py_expr->GetExpression().Copy());
+	}
+
+	return rel->Update(std::move(names), std::move(expressions), std::move(condition));
+}
+
 void DuckDBPyRelation::Insert(const py::object &params) {
 	AssertRelation();
 	if (!IsAcceptedInsertRelationType(*this->rel)) {
