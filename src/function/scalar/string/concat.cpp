@@ -361,6 +361,7 @@ ScalarFunction ConcatFun::GetFunction() {
 ScalarFunction ConcatOperatorFun::GetFunction() {
 	ScalarFunction concat_op = ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
 	                                          ConcatFunction, BindConcatOperator);
+	concat_op.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return concat_op;
 }
 

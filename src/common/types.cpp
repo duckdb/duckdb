@@ -13,6 +13,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -24,11 +25,12 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/main/config.hpp"
+
 #include <cmath>
 
 namespace duckdb {
@@ -675,7 +677,23 @@ bool LogicalType::IsTemporal() const {
 }
 
 bool LogicalType::IsValid() const {
-	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
+	return !TypeVisitor::Contains(*this, [](const LogicalType &type) {
+		switch (type.id()) {
+		case LogicalTypeId::INVALID:
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::ANY:
+			return true;
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::MAP:
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::UNION:
+		case LogicalTypeId::ARRAY:
+		case LogicalTypeId::DECIMAL:
+			return type.AuxInfo() == nullptr;
+		default:
+			return false;
+		}
+	});
 }
 
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
