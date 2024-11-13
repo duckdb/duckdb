@@ -52,6 +52,7 @@ void ShellHighlight::PrintText(const string &text, PrintOutput output, PrintColo
 
 	switch (intensity) {
 	case PrintIntensity::BOLD:
+	case PrintIntensity::BOLD_UNDERLINE:
 		wAttributes |= FOREGROUND_INTENSITY;
 		break;
 	default:
@@ -104,6 +105,9 @@ void ShellHighlight::PrintText(const string &text, PrintOutput output, PrintColo
 		break;
 	case PrintIntensity::UNDERLINE:
 		bold_prefix = "\033[4m";
+		break;
+	case PrintIntensity::BOLD_UNDERLINE:
+		bold_prefix = "\033[1m\033[4m";
 		break;
 	default:
 		break;
@@ -271,6 +275,8 @@ bool ShellHighlight::SetColor(const char *element_type, const char *color, const
 			highlight_elements[i].intensity = PrintIntensity::BOLD;
 		} else if (duckdb::StringUtil::CIEquals(intensity, "underline")) {
 			highlight_elements[i].intensity = PrintIntensity::UNDERLINE;
+		} else if (duckdb::StringUtil::CIEquals(intensity, "bold_underline")) {
+			highlight_elements[i].intensity = PrintIntensity::BOLD_UNDERLINE;
 		} else {
 			state.Print(PrintOutput::STDERR,
 			            duckdb::StringUtil::Format(

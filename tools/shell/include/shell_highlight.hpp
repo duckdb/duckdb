@@ -14,7 +14,7 @@ namespace duckdb_shell {
 
 enum class PrintColor { STANDARD, RED, YELLOW, GREEN, GRAY, BLUE, MAGENTA, CYAN, WHITE };
 
-enum class PrintIntensity { STANDARD, BOLD, UNDERLINE };
+enum class PrintIntensity { STANDARD, BOLD, UNDERLINE, BOLD_UNDERLINE };
 
 enum class HighlightElementType : uint32_t {
 	ERROR = 0,
