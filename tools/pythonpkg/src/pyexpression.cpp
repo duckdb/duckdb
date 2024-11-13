@@ -7,6 +7,7 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/default_expression.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 
 namespace duckdb {
@@ -317,6 +318,10 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string
 		return StarExpression();
 	}
 	return make_shared_ptr<DuckDBPyExpression>(InternalColumnExpression(column_name));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::DefaultExpression() {
+	return make_shared_ptr<DuckDBPyExpression>(make_uniq<duckdb::DefaultExpression>());
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ConstantExpression(const py::object &value) {

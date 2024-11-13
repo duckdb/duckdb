@@ -35,6 +35,7 @@ SELECT unnest(res) FROM (
 "EXTRA_INFO": "true"
 "LATENCY": "true"
 "OPERATOR_CARDINALITY": "true"
+"OPERATOR_NAME": "true"
 "OPERATOR_ROWS_SCANNED": "true"
 "OPERATOR_TIMING": "true"
 "OPERATOR_TYPE": "true"

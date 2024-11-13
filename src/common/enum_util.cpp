@@ -2181,6 +2181,7 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
 		{ static_cast<uint32_t>(MetricsType::LATENCY), "LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::ROWS_RETURNED), "ROWS_RETURNED" },
+		{ static_cast<uint32_t>(MetricsType::OPERATOR_NAME), "OPERATOR_NAME" },
 		{ static_cast<uint32_t>(MetricsType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricsType::PLANNER), "PLANNER" },
@@ -2220,12 +2221,12 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
-	return StringUtil::EnumToString(GetMetricsTypeValues(), 46, "MetricsType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricsTypeValues(), 47, "MetricsType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
-	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 46, "MetricsType", value));
+	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 47, "MetricsType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {
@@ -3241,19 +3242,20 @@ const StringUtil::EnumStringLiteral *GetSimplifiedTokenTypeValues() {
 		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT), "SIMPLIFIED_TOKEN_STRING_CONSTANT" },
 		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR), "SIMPLIFIED_TOKEN_OPERATOR" },
 		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD), "SIMPLIFIED_TOKEN_KEYWORD" },
-		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT), "SIMPLIFIED_TOKEN_COMMENT" }
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT), "SIMPLIFIED_TOKEN_COMMENT" },
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR), "SIMPLIFIED_TOKEN_ERROR" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<SimplifiedTokenType>(SimplifiedTokenType value) {
-	return StringUtil::EnumToString(GetSimplifiedTokenTypeValues(), 6, "SimplifiedTokenType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSimplifiedTokenTypeValues(), 7, "SimplifiedTokenType", static_cast<uint32_t>(value));
 }
 
 template<>
 SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value) {
-	return static_cast<SimplifiedTokenType>(StringUtil::StringToEnum(GetSimplifiedTokenTypeValues(), 6, "SimplifiedTokenType", value));
+	return static_cast<SimplifiedTokenType>(StringUtil::StringToEnum(GetSimplifiedTokenTypeValues(), 7, "SimplifiedTokenType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSinkCombineResultTypeValues() {

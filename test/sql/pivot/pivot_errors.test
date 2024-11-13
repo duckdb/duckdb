@@ -19,7 +19,7 @@ SET pivot_filter_threshold=0
 statement error
 PIVOT test ON j IN ('a', 'b') USING current_date();
 ----
-current_date is not an aggregate function
+no aggregates were found
 
 statement ok
 SET pivot_filter_threshold=100
@@ -27,12 +27,12 @@ SET pivot_filter_threshold=100
 statement error
 PIVOT test ON j IN ('a', 'b') USING current_date();
 ----
-current_date is not an aggregate function
+no aggregates were found
 
 statement error
 PIVOT test ON j IN ('a', 'b') USING sum(41) over ();
 ----
-must be an aggregate
+cannot contain window functions
 
 statement error
 PIVOT test ON j IN ('a', 'b') USING sum(sum(41) over ());
