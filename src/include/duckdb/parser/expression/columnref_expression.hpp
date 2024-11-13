@@ -41,8 +41,6 @@ public:
 		return false;
 	}
 
-	void ReplaceOrRemoveTableName(const string &replacement = "");
-
 	string GetName() const override;
 	string ToString() const override;
 
@@ -55,7 +53,6 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 private:
-	optional_idx GetTableNameIndex() const;
 	ColumnRefExpression();
 };
 } // namespace duckdb
