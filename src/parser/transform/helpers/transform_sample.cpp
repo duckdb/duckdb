@@ -55,6 +55,7 @@ unique_ptr<SampleOptions> Transformer::TransformSampleOptions(optional_ptr<duckd
 	}
 	if (sample_options.has_seed && sample_options.seed >= 0) {
 		result->seed = static_cast<idx_t>(sample_options.seed);
+		result->repeatable = true;
 	}
 	return result;
 }
