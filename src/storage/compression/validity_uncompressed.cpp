@@ -235,7 +235,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_start, Ve
 	// the bitwise ops we use below don't work if the vector size is too small
 	ValidityMask source_mask(input_data);
 	for (idx_t i = 0; i < scan_count; i++) {
-		if (!source_mask.RowIsValid(start + i)) {
+		if (!source_mask.RowIsValid(input_start + i)) {
 			if (result_mask.AllValid()) {
 				result_mask.Initialize(result_mask.TargetCount());
 			}
@@ -265,6 +265,16 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_start, Ve
 
 		// construct the mask to AND together with the result
 		if (result_idx < input_idx) {
+			//         +======================================+
+			// input:  |xxxxxxxxx|                            |
+			//         +======================================+
+			//
+			//         +======================================+
+			// result: |                xxxxxxxxx|            |
+			//         +======================================+
+			// 1. We shift (>>) 'input' to line up with 'result'
+			// 2. We set the bits we shifted to 1
+
 			// we have to shift the input RIGHT if the result_idx is smaller than the input_idx
 			auto shift_amount = input_idx - result_idx;
 			D_ASSERT(shift_amount > 0 && shift_amount <= ValidityMask::BITS_PER_VALUE);
@@ -282,6 +292,17 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_start, Ve
 			input_idx = 0;
 			result_idx += offset;
 		} else if (result_idx > input_idx) {
+			//         +======================================+
+			// input:  |                xxxxxxxxx|            |
+			//         +======================================+
+			//
+			//         +======================================+
+			// result: |xxxxxxxxx|                            |
+			//         +======================================+
+			// 1. We set the bits to the left of the relevant bits (x) to 0
+			// 1. We shift (<<) 'input' to line up with 'result'
+			// 2. We set the bits that we zeroed to the right of the relevant bits (x) to 1
+
 			// we have to shift the input LEFT if the result_idx is bigger than the input_idx
 			auto shift_amount = result_idx - input_idx;
 			D_ASSERT(shift_amount > 0 && shift_amount <= ValidityMask::BITS_PER_VALUE);
@@ -311,6 +332,13 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_start, Ve
 		// OR if we need to mask from the right side
 		pos += offset;
 		if (pos > scan_count) {
+			//        +======================================+
+			// mask:  |            |xxxxxxxxxxxxxxxxxxxxxxxxx|
+			//        +======================================+
+			//
+			// The bits on the right side of the relevant bits (x) need to stay 1, to be adjusted by later scans
+			// so we adjust the mask to clear out any 0s that might be present on the right side.
+
 			// we need to set any bits that are past the scan_count on the right-side to 1
 			// this is required so we don't influence any bits that are not part of the scan
 			input_mask |= ValidityUncompressed::UPPER_MASKS[pos - scan_count];
@@ -346,6 +374,7 @@ void ValidityUncompressed::AlignedScan(data_ptr_t input, idx_t input_start, Vect
 	auto result_data = result_mask.GetData();
 	idx_t start_offset = input_start / ValidityMask::BITS_PER_VALUE;
 	idx_t entry_scan_count = (scan_count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
+	idx_t result_offset = 0;
 	for (idx_t i = 0; i < entry_scan_count; i++) {
 		auto input_entry = input_data[start_offset + i];
 		if (!result_data && input_entry == ValidityMask::ValidityBuffer::MAX_ENTRY) {
@@ -355,7 +384,7 @@ void ValidityUncompressed::AlignedScan(data_ptr_t input, idx_t input_start, Vect
 			result_mask.Initialize(result_mask.TargetCount());
 			result_data = result_mask.GetData();
 		}
-		result_data[i] = input_entry;
+		result_data[result_offset + i] = input_entry;
 	}
 }
 
