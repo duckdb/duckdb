@@ -98,7 +98,7 @@ static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate 
 	vector<column_t> base_columns;
 	for (const auto &partition_idx : partition_columns) {
 		auto col_idx = partition_idx;
-		col_idx = table_scan.column_ids[col_idx];
+		col_idx = table_scan.column_ids[col_idx].GetPrimaryIndex();
 		base_columns.push_back(col_idx);
 	}
 	// check if the source operator is partitioned by the grouping columns

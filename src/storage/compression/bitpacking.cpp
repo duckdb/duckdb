@@ -552,9 +552,8 @@ public:
 
 		// Store the offset of the metadata of the first group (which is at the highest address).
 		Store<idx_t>(metadata_offset + metadata_size, base_ptr);
-		handle.Destroy();
 
-		state.FlushSegment(std::move(current_segment), total_segment_size);
+		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
 	void Finalize() {

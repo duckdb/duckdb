@@ -64,6 +64,7 @@ public:
 
 	shared_ptr<DuckDBPyExpression> Cast(const DuckDBPyType &type) const;
 	shared_ptr<DuckDBPyExpression> Between(const DuckDBPyExpression &lower, const DuckDBPyExpression &upper);
+	shared_ptr<DuckDBPyExpression> Collate(const string &collation);
 
 	// AND, OR and NOT
 
@@ -98,6 +99,7 @@ public:
 public:
 	static shared_ptr<DuckDBPyExpression> StarExpression(py::object exclude = py::none());
 	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &column_name);
+	static shared_ptr<DuckDBPyExpression> DefaultExpression();
 	static shared_ptr<DuckDBPyExpression> ConstantExpression(const py::object &value);
 	static shared_ptr<DuckDBPyExpression> LambdaExpression(const py::object &lhs, const DuckDBPyExpression &rhs);
 	static shared_ptr<DuckDBPyExpression> CaseExpression(const DuckDBPyExpression &condition,

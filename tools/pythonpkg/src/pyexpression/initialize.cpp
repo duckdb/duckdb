@@ -17,6 +17,10 @@ void InitializeStaticMethods(py::module_ &m) {
 	docs = "Create a column reference from the provided column name";
 	m.def("ColumnExpression", &DuckDBPyExpression::ColumnExpression, py::arg("name"), docs);
 
+	// Default Expression
+	docs = "";
+	m.def("DefaultExpression", &DuckDBPyExpression::DefaultExpression, docs);
+
 	// Case Expression
 	docs = "";
 	m.def("CaseExpression", &DuckDBPyExpression::CaseExpression, py::arg("condition"), py::arg("value"), docs);
@@ -394,6 +398,9 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 
 	docs = "";
 	expression.def("between", &DuckDBPyExpression::Between, py::arg("lower"), py::arg("upper"), docs);
+
+	docs = "";
+	expression.def("collate", &DuckDBPyExpression::Collate, py::arg("collation"), docs);
 }
 
 } // namespace duckdb

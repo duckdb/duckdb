@@ -542,6 +542,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	}
 	if (rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 		RebindPreparedStatement(lock, query, prepared, parameters);
+		CheckIfPreparedStatementIsExecutable(*prepared); // rerun this too as modified_databases might have changed
 	}
 	return PendingPreparedStatementInternal(lock, prepared, parameters);
 }

@@ -500,3 +500,15 @@ TEST_CASE("Test prepared statements with SET", "[api]") {
 	// this works
 	REQUIRE_NO_FAIL(prepare->Execute("NULLS FIRST"));
 }
+
+TEST_CASE("Test prepared statements that require rebind", "[api]") {
+	DuckDB db(nullptr);
+	Connection con1(db);
+	con1.EnableQueryVerification();
+
+	auto prepared = con1.Prepare("DROP TABLE IF EXISTS t1");
+
+	Connection con2(db);
+	REQUIRE_NO_FAIL(con2.Query("CREATE OR REPLACE TABLE t1 (c1 varchar)"));
+	REQUIRE_NO_FAIL(prepared->Execute());
+}

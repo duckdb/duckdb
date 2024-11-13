@@ -61,7 +61,13 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 		auto binding = *binding_ptr;
 		for (auto &name : binding.names) {
 			double distance = StringUtil::SimilarityRating(name, column_name);
-			scores.emplace_back(binding.GetAlias() + "." + name, distance);
+			// check if we need to qualify the column
+			auto matching_bindings = GetMatchingBindings(name);
+			if (matching_bindings.size() > 1) {
+				scores.emplace_back(binding.GetAlias() + "." + name, distance);
+			} else {
+				scores.emplace_back(name, distance);
+			}
 		}
 	}
 	return StringUtil::TopNStrings(scores);
@@ -599,20 +605,20 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
-                               const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
+                               const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                StandardEntry &entry, bool add_row_id) {
 	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, add_row_id));
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
-                               const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
+                               const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                const string &table_name) {
 	AddBinding(make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr,
 	                                   index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
-                                   const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
+                                   const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                    optional_ptr<StandardEntry> entry) {
 	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index));
 }

@@ -264,6 +264,11 @@ shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values) {
 	return Values(values, column_names);
 }
 
+shared_ptr<Relation> Connection::Values(vector<vector<unique_ptr<ParsedExpression>>> &&expressions) {
+	vector<string> column_names;
+	return make_shared_ptr<ValueRelation>(context, std::move(expressions), column_names);
+}
+
 shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values, const vector<string> &column_names,
                                         const string &alias) {
 	return make_shared_ptr<ValueRelation>(context, values, column_names, alias);
