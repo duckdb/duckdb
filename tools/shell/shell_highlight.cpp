@@ -201,10 +201,10 @@ void ShellHighlight::PrintError(string error_msg) {
 			element_type = HighlightElementType::ERROR;
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
-			element_type = HighlightElementType::NUMERIC_VALUE;
+			element_type = HighlightElementType::NUMERIC_CONSTANT;
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
-			element_type = HighlightElementType::STRING_VALUE;
+			element_type = HighlightElementType::STRING_CONSTANT;
 			break;
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
 			break;

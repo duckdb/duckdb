@@ -422,11 +422,7 @@ static volatile int seenInterrupt = 0;
 */
 static const char *program_name;
 
-enum class OptionType {
-	DEFAULT,
-	ON,
-	OFF
-};
+enum class OptionType { DEFAULT, ON, OFF };
 
 /*
 ** Whether or not we are running in safe mode
