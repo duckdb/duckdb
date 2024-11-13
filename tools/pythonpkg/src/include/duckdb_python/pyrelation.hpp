@@ -236,6 +236,7 @@ public:
 	void InsertInto(const string &table);
 
 	void Insert(const py::object &params = py::list());
+	void Update(const py::object &set, const py::object &where = py::none());
 
 	void Create(const string &table);
 
