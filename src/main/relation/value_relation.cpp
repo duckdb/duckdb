@@ -24,6 +24,24 @@ ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const vec
 	TryBindRelation(columns);
 }
 
+ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context,
+                             vector<vector<unique_ptr<ParsedExpression>>> &&expressions_p, vector<string> names_p,
+                             string alias_p)
+    : Relation(context, RelationType::VALUE_LIST_RELATION) {
+	D_ASSERT(!expressions_p.empty());
+	if (names_p.empty()) {
+		auto &first_list = expressions_p[0];
+		for (auto &expr : first_list) {
+			names_p.push_back(expr->GetName());
+		}
+	}
+	names = std::move(names_p);
+	alias = std::move(alias_p);
+	expressions = std::move(expressions_p);
+	QueryResult::DeduplicateColumns(names);
+	TryBindRelation(columns);
+}
+
 ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const string &values_list,
                              vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {

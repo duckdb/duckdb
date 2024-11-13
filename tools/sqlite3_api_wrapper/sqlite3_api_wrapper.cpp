@@ -1745,7 +1745,6 @@ const void *sqlite3_value_blob(sqlite3_value *pVal) {
 
 double sqlite3_value_double(sqlite3_value *pVal) {
 	if (!pVal) {
-		pVal->db->errCode = SQLITE_MISUSE;
 		return 0.0;
 	}
 	switch (pVal->type) {
@@ -1778,7 +1777,6 @@ int sqlite3_value_int(sqlite3_value *pVal) {
 
 sqlite3_int64 sqlite3_value_int64(sqlite3_value *pVal) {
 	if (!pVal) {
-		pVal->db->errCode = SQLITE_MISUSE;
 		return 0;
 	}
 	int64_t res;
@@ -1809,7 +1807,6 @@ void *sqlite3_value_pointer(sqlite3_value *, const char *) {
 
 const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 	if (!pVal) {
-		pVal->db->errCode = SQLITE_MISUSE;
 		return nullptr;
 	}
 	if (pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB) {

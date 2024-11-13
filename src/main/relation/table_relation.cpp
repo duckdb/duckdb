@@ -56,6 +56,17 @@ static unique_ptr<ParsedExpression> ParseCondition(ClientContext &context, const
 	}
 }
 
+void TableRelation::Update(vector<string> names, vector<unique_ptr<ParsedExpression>> &&update,
+                           unique_ptr<ParsedExpression> condition) {
+	vector<string> update_columns = std::move(names);
+	vector<unique_ptr<ParsedExpression>> expressions = std::move(update);
+
+	auto update_relation =
+	    make_shared_ptr<UpdateRelation>(context, std::move(condition), description->schema, description->table,
+	                                    std::move(update_columns), std::move(expressions));
+	update_relation->Execute();
+}
+
 void TableRelation::Update(const string &update_list, const string &condition) {
 	vector<string> update_columns;
 	vector<unique_ptr<ParsedExpression>> expressions;

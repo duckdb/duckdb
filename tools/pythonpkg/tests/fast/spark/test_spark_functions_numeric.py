@@ -1,6 +1,10 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
+
+import math
+import numpy as np
+from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 
@@ -83,6 +87,17 @@ class TestSparkFunctionsNumeric(object):
             Row(sqrt_value=2.0),
             Row(sqrt_value=3.0),
         ]
+
+    def test_cbrt(self, spark):
+        data = [
+            (8,),
+            (27,),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("cbrt_value", F.cbrt(F.col("firstColumn")))
+        res = df.select("cbrt_value").collect()
+        assert pytest.approx(res[0].cbrt_value) == 2.0
+        assert pytest.approx(res[1].cbrt_value) == 3.0
 
     def test_cos(self, spark):
         data = [
@@ -264,3 +279,39 @@ class TestSparkFunctionsNumeric(object):
             Row(round_value=3, round_value_1=2.9, round_value_minus_1=0),
             Row(round_value=2, round_value_1=2.5, round_value_minus_1=0),
         ]
+
+    def test_asin(self, spark):
+        df = spark.createDataFrame([(0,), (2,)], ["value"])
+
+        df = df.withColumn("asin_value", F.asin("value"))
+        res = df.select("asin_value").collect()
+
+        assert res[0].asin_value == 0
+        if USE_ACTUAL_SPARK:
+            assert np.isnan(res[1].asin_value)
+        else:
+            # FIXME: DuckDB should return NaN here. Reason is that
+            # ConstantExpression(float("nan")) gives NULL and not NaN
+            assert res[1].asin_value is None
+
+    def test_corr(self, spark):
+        N = 20
+        a = range(N)
+        b = [2 * x for x in range(N)]
+        # Have to use a groupby to test this as agg is not yet implemented without
+        df = spark.createDataFrame(zip(a, b, ["group1"] * N), ["a", "b", "g"])
+
+        res = df.groupBy("g").agg(F.corr("a", "b").alias('c')).collect()
+        assert pytest.approx(res[0].c) == 1
+
+    def test_cot(self, spark):
+        df = spark.createDataFrame([(math.radians(45),)], ["value"])
+
+        res = df.select(F.cot(df["value"]).alias("cot")).collect()
+        assert pytest.approx(res[0].cot) == 1
+
+    def test_e(self, spark):
+        df = spark.createDataFrame([("value",)], ["value"])
+
+        res = df.select(F.e().alias("e")).collect()
+        assert pytest.approx(res[0].e) == math.e
