@@ -61,7 +61,13 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 		auto binding = *binding_ptr;
 		for (auto &name : binding.names) {
 			double distance = StringUtil::SimilarityRating(name, column_name);
-			scores.emplace_back(binding.GetAlias() + "." + name, distance);
+			// check if we need to qualify the column
+			auto matching_bindings = GetMatchingBindings(name);
+			if (matching_bindings.size() > 1) {
+				scores.emplace_back(binding.GetAlias() + "." + name, distance);
+			} else {
+				scores.emplace_back(name, distance);
+			}
 		}
 	}
 	return StringUtil::TopNStrings(scores);
