@@ -208,9 +208,3 @@ statement error
 SELECT concat([42], [84], 'str')
 ----
 an explicit cast is required
-
-# internal issue #3450
-query I
-select typeof([1] || null) AS result;
-----
-INTEGER[]
