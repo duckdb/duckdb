@@ -435,6 +435,11 @@ static bool safe_mode = false;
 static bool highlight_errors = true;
 
 /*
+** Whether or not we are highlighting results
+*/
+static bool highlight_results = true;
+
+/*
 ** Prompt strings. Initialized in main. Settable with
 **   .prompt main continue
 */
@@ -1510,41 +1515,50 @@ extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t m
 
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
 public:
-	DuckBoxRenderer() : output(PrintOutput::STDOUT) {
+	DuckBoxRenderer(bool highlight) : output(PrintOutput::STDOUT), highlight(highlight) {
 	}
 
 	void RenderLayout(const string &text) override {
-		ShellHighlight::PrintText(text, output, HighlightElementType::LAYOUT);
+		PrintText(text, HighlightElementType::LAYOUT);
 	}
 
 	void RenderColumnName(const string &text) override {
-		ShellHighlight::PrintText(text, output, HighlightElementType::COLUMN_NAME);
+		PrintText(text, HighlightElementType::COLUMN_NAME);
 	}
 
 	void RenderType(const string &text) override {
-		ShellHighlight::PrintText(text, output, HighlightElementType::COLUMN_TYPE);
+		PrintText(text, HighlightElementType::COLUMN_TYPE);
 	}
 
 	void RenderValue(const string &text, const duckdb::LogicalType &type) override {
 		if (type.IsNumeric()) {
-			ShellHighlight::PrintText(text, output, HighlightElementType::NUMERIC_VALUE);
+			PrintText(text, HighlightElementType::NUMERIC_VALUE);
 		} else if (type.IsTemporal()) {
-			ShellHighlight::PrintText(text, output, HighlightElementType::TEMPORAL_VALUE);
+			PrintText(text, HighlightElementType::TEMPORAL_VALUE);
 		} else {
-			ShellHighlight::PrintText(text, output, HighlightElementType::STRING_VALUE);
+			PrintText(text, HighlightElementType::STRING_VALUE);
 		}
 	}
 
 	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
-		ShellHighlight::PrintText(text, output, HighlightElementType::NULL_VALUE);
+		PrintText(text, HighlightElementType::NULL_VALUE);
 	}
 
 	void RenderFooter(const string &text) override {
-		ShellHighlight::PrintText(text, output, HighlightElementType::FOOTER);
+		PrintText(text, HighlightElementType::FOOTER);
+	}
+
+	void PrintText(const string &text, HighlightElementType element_type) {
+		if (highlight) {
+			ShellHighlight::PrintText(text, output, element_type);
+		} else {
+			utf8_printf(stdout, "%s", text.c_str());
+		}
 	}
 
 private:
 	PrintOutput output;
+	bool highlight = true;
 };
 
 /*
@@ -1555,7 +1569,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
 		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
-		DuckBoxRenderer renderer;
+		DuckBoxRenderer renderer(highlight_results);
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
 		                      decimal_separator, &renderer);
 		return;
@@ -2027,6 +2041,7 @@ static const char *azHelp[] = {
 #endif
     ".highlight_colors [element] [color]  ([bold])? Configure highlighting colors",
     ".highlight_errors [on|off] Toggle highlighting of errors in the shell on/off",
+    ".highlight_results [on|off] Toggle highlighting of results in the shell on/off",
     ".import FILE TABLE       Import data from FILE into TABLE",
     "   Options:",
     "     --ascii               Use \\037 and \\036 as column and row separators",
@@ -3004,6 +3019,11 @@ MetadataResult ToggleHighlighErrors(ShellState &state, const char **azArg, idx_t
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult ToggleHighlightResult(ShellState &state, const char **azArg, idx_t nArg) {
+	highlight_results = booleanValue(azArg[1]);
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ShowHelp(ShellState &state, const char **azArg, idx_t nArg) {
 	if (nArg >= 2) {
 		int n = showHelp(state.out, azArg[1]);
@@ -3976,6 +3996,7 @@ static const MetadataCommand metadata_commands[] = {
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
     {"highlight_colors", 0, SetHighlightColors, "[element] [color] ([bold])?", "Configure highlighting colors", 0},
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0},
+    {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0},
 
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
@@ -4568,6 +4589,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	stdout_is_console = isatty(1);
 	stderr_is_console = isatty(2);
 
+	if (!stdout_is_console) {
+		highlight_results = false;
+	}
 	if (!stderr_is_console) {
 		highlight_errors = false;
 	}
