@@ -154,6 +154,11 @@ struct ScalarFunctionExtractor {
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
+	static vector<LogicalType> GetParameterLogicalTypes(ScalarFunctionCatalogEntry &entry, idx_t offset) {
+		auto fun = entry.functions.GetFunctionByOffset(offset);
+		return fun.arguments;
+	}
+
 	static Value GetVarArgs(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		auto fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.varargs.ToString());
@@ -200,6 +205,11 @@ struct AggregateFunctionExtractor {
 			results.emplace_back(fun.arguments[i].ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
+	}
+
+	static vector<LogicalType> GetParameterLogicalTypes(AggregateFunctionCatalogEntry &entry, idx_t offset) {
+		auto fun = entry.functions.GetFunctionByOffset(offset);
+		return fun.arguments;
 	}
 
 	static Value GetVarArgs(AggregateFunctionCatalogEntry &entry, idx_t offset) {
@@ -259,6 +269,18 @@ struct MacroExtractor {
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
+	static vector<LogicalType> GetParameterLogicalTypes(ScalarMacroCatalogEntry &entry, idx_t offset) {
+		vector<LogicalType> results;
+		auto &macro_entry = *entry.macros[offset];
+		for (idx_t i = 0; i < macro_entry.parameters.size(); i++) {
+			results.emplace_back(LogicalType::VARCHAR);
+		}
+		for (idx_t i = 0; i < macro_entry.default_parameters.size(); i++) {
+			results.emplace_back(LogicalType::VARCHAR);
+		}
+		return results;
+	}
+
 	static Value GetVarArgs(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
@@ -316,6 +338,18 @@ struct TableMacroExtractor {
 			results.emplace_back(LogicalType::VARCHAR);
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
+	}
+
+	static vector<LogicalType> GetParameterLogicalTypes(TableMacroCatalogEntry &entry, idx_t offset) {
+		vector<LogicalType> results;
+		auto &macro_entry = *entry.macros[offset];
+		for (idx_t i = 0; i < macro_entry.parameters.size(); i++) {
+			results.emplace_back(LogicalType::VARCHAR);
+		}
+		for (idx_t i = 0; i < macro_entry.default_parameters.size(); i++) {
+			results.emplace_back(LogicalType::VARCHAR);
+		}
+		return results;
 	}
 
 	static Value GetVarArgs(TableMacroCatalogEntry &entry, idx_t offset) {
@@ -378,6 +412,11 @@ struct TableFunctionExtractor {
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
+	static vector<LogicalType> GetParameterLogicalTypes(TableFunctionCatalogEntry &entry, idx_t offset) {
+		auto fun = entry.functions.GetFunctionByOffset(offset);
+		return fun.arguments;
+	}
+
 	static Value GetVarArgs(TableFunctionCatalogEntry &entry, idx_t offset) {
 		auto fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.varargs.ToString());
@@ -435,6 +474,11 @@ struct PragmaFunctionExtractor {
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
+	static vector<LogicalType> GetParameterLogicalTypes(PragmaFunctionCatalogEntry &entry, idx_t offset) {
+		auto fun = entry.functions.GetFunctionByOffset(offset);
+		return fun.arguments;
+	}
+
 	static Value GetVarArgs(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		auto fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.varargs.ToString());
@@ -457,14 +501,6 @@ static vector<Value> ToValueVector(vector<string> &string_vector) {
 	vector<Value> result;
 	for (string &str : string_vector) {
 		result.emplace_back(Value(str));
-	}
-	return result;
-}
-
-static vector<LogicalType> ToLogicalTypeVector(const vector<Value> &value_vector) {
-	vector<LogicalType> result;
-	for (auto &value : value_vector) {
-		result.emplace_back(value.type());
 	}
 	return result;
 }
@@ -495,10 +531,12 @@ static int CalcDescriptionSpecificity(FunctionDescription &description, const ve
 	int any_count = 0;
 
 	for (idx_t i = 0; i < description.parameter_types.size(); i++) {
+		if (description.parameter_types[i] != parameter_types[i] &&
+		    description.parameter_types[i].id() != LogicalTypeId::ANY) {
+			return -1;
+		}
 		if (description.parameter_types[i].id() == LogicalTypeId::ANY) {
 			any_count++;
-		} else if (!description.parameter_types[i].EqualTypeInfo(parameter_types[i])) {
-			return -1;
 		}
 	}
 	return any_count;
@@ -510,19 +548,16 @@ return -1: no description matches the overload
 return >= 0: index of best matching description
 */
 static int GetFunctionDescriptionIndex(vector<FunctionDescription> &function_descriptions,
-                                       duckdb::Value &parameter_types) {
-	vector<LogicalType> types_to_match = ToLogicalTypeVector(ListValue::GetChildren(parameter_types));
-
-	int best_description_index = -1;
+                                       vector<LogicalType> &function_parameter_types) {
+	int best_description_idx = -1;
 	if (function_descriptions.size() == 1) {
 		// one description, use it even if nr of parameters don't match
-		best_description_index = 0;
-		vector<duckdb::LogicalType> logic_types_to_match = types_to_match;
-		idx_t nr_function_parameters = logic_types_to_match.size();
+		best_description_idx = 0;
+		idx_t nr_function_parameters = function_parameter_types.size();
 		for (idx_t i = 0; i < function_descriptions[0].parameter_types.size(); i++) {
 			if (i < nr_function_parameters && function_descriptions[0].parameter_types[i] != LogicalTypeId::ANY &&
-			    !function_descriptions[0].parameter_types[i].EqualTypeInfo(logic_types_to_match[i])) {
-				best_description_index = -1;
+			    function_descriptions[0].parameter_types[i] != function_parameter_types[i]) {
+				best_description_idx = -1;
 			}
 		}
 	} else {
@@ -534,27 +569,30 @@ static int GetFunctionDescriptionIndex(vector<FunctionDescription> &function_des
 
 		for (idx_t descr_idx = 0; descr_idx < function_descriptions.size(); descr_idx++) {
 			specificity_score = -1;
-			if (types_to_match.size() == function_descriptions[descr_idx].parameter_types.size()) {
-				specificity_score = CalcDescriptionSpecificity(function_descriptions[descr_idx], types_to_match);
+			if (function_parameter_types.size() == function_descriptions[descr_idx].parameter_types.size()) {
+				specificity_score =
+				    CalcDescriptionSpecificity(function_descriptions[descr_idx], function_parameter_types);
 			}
 			if (specificity_score >= 0 && (best_specificity_score < 0 || specificity_score < best_specificity_score)) {
 				best_specificity_score = specificity_score;
-				best_description_index = static_cast<int>(descr_idx);
+				best_description_idx = static_cast<int>(descr_idx);
 			}
 		}
 	}
-
-	return best_description_index;
+	return best_description_idx;
 }
 
 template <class T, class OP>
 bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &output, idx_t output_offset) {
 	auto &function = entry.Cast<T>();
-	idx_t col = 0;
-	Value parameter_types = OP::GetParameterTypes(function, function_idx);
-	int description_idx = GetFunctionDescriptionIndex(entry.descriptions, parameter_types);
+	vector<LogicalType> parameter_types_vector = OP::GetParameterLogicalTypes(function, function_idx);
+
+	Value parameter_types_value = OP::GetParameterTypes(function, function_idx);
+
+	int description_idx = GetFunctionDescriptionIndex(entry.descriptions, parameter_types_vector);
 	FunctionDescription function_description =
 	    (description_idx >= 0) ? entry.descriptions[static_cast<idx_t>(description_idx)] : FunctionDescription();
+	idx_t col = 0;
 
 	// database_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.schema.catalog.GetName()));
@@ -585,12 +623,13 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, OP::GetReturnType(function, function_idx));
 
 	// parameters, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset,
-	                Value::LIST(LogicalType::VARCHAR, GetParameterNames<T, OP>(function, function_idx,
-	                                                                           function_description, parameter_types)));
+	output.SetValue(
+	    col++, output_offset,
+	    Value::LIST(LogicalType::VARCHAR,
+	                GetParameterNames<T, OP>(function, function_idx, function_description, parameter_types_value)));
 
 	// parameter_types, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, parameter_types);
+	output.SetValue(col++, output_offset, parameter_types_value);
 
 	// varargs, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, OP::GetVarArgs(function, function_idx));

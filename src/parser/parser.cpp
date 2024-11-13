@@ -1,5 +1,6 @@
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
@@ -478,6 +479,15 @@ ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions opti
 	}
 	auto &info = create.info->Cast<CreateTableInfo>();
 	return std::move(info.columns);
+}
+
+LogicalType Parser::ParseLogicalType(const string &type, ParserOptions options) {
+	const auto expr_list = ParseExpressionList("CAST(NULL AS " + type + ")", options);
+	if (expr_list.size() != 1) {
+		throw ParserException("Expected a single expression");
+	}
+	CastExpression &cast_expr = expr_list.back()->Cast<CastExpression>();
+	return cast_expr.cast_type;
 }
 
 } // namespace duckdb

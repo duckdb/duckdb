@@ -3,6 +3,7 @@
 #include "duckdb/function/function_list.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,7 @@ static void FillFunctionParameters(FunctionDescription &function_description, st
 			function_description.parameter_names.push_back(std::move(parameter_name_type[0]));
 			LogicalType type = (StringUtil::CIEquals(parameter_name_type[1], "ANY"))
 			                       ? LogicalType::ANY
-			                       : DefaultTypeGenerator::GetDefaultType(parameter_name_type[1]);
+			                       : Parser::ParseLogicalType(parameter_name_type[1]);
 			if (type != LogicalType::INVALID) {
 				function_description.parameter_types.push_back(type);
 			} else {
