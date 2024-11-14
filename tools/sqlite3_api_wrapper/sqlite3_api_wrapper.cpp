@@ -34,8 +34,8 @@ using namespace duckdb;
 using namespace std;
 
 extern "C" {
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                            int columnar);
+void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value, int columnar,
+                           char thousands, char decimal_sep, duckdb::BaseResultRenderer *renderer);
 }
 
 static char *sqlite3_strdup(const char *str);
@@ -234,26 +234,27 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	}
 }
 
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                            int columnar) {
+void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value, int columnar,
+                           char thousand_separator, char decimal_separator,
+                           duckdb::BaseResultRenderer *result_renderer) {
 	try {
 		if (!pStmt) {
-			return nullptr;
+			return;
 		}
 		if (!pStmt->prepared) {
 			pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
-			return nullptr;
+			return;
 		}
 		if (pStmt->result) {
 			pStmt->db->last_error = ErrorData("Statement has already been executed");
-			return nullptr;
+			return;
 		}
 		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
 		if (pStmt->result->HasError()) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->GetErrorObject();
 			pStmt->prepared = nullptr;
-			return nullptr;
+			return;
 		}
 		auto &materialized = (MaterializedQueryResult &)*pStmt->result;
 		auto properties = pStmt->prepared->GetStatementProperties();
@@ -267,7 +268,7 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_wid
 		}
 		if (properties.return_type != StatementReturnType::QUERY_RESULT) {
 			// only SELECT statements return results
-			return nullptr;
+			return;
 		}
 		BoxRendererConfig config;
 		if (max_rows != 0) {
@@ -279,14 +280,14 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_wid
 		if (columnar) {
 			config.render_mode = RenderMode::COLUMNS;
 		}
+		config.decimal_separator = decimal_separator;
+		config.thousand_separator = thousand_separator;
 		config.max_width = max_width;
 		BoxRenderer renderer(config);
-		auto result_rendering =
-		    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());
-		return sqlite3_strdup(result_rendering.c_str());
+		renderer.Render(*pStmt->db->con->context, pStmt->result->names, materialized.Collection(), *result_renderer);
 	} catch (std::exception &ex) {
 		string error_str = ErrorData(ex).Message() + "\n";
-		return sqlite3_strdup(error_str.c_str());
+		result_renderer->RenderLayout(error_str);
 	}
 }
 
@@ -1743,7 +1744,6 @@ const void *sqlite3_value_blob(sqlite3_value *pVal) {
 
 double sqlite3_value_double(sqlite3_value *pVal) {
 	if (!pVal) {
-		pVal->db->errCode = SQLITE_MISUSE;
 		return 0.0;
 	}
 	switch (pVal->type) {
@@ -1776,7 +1776,6 @@ int sqlite3_value_int(sqlite3_value *pVal) {
 
 sqlite3_int64 sqlite3_value_int64(sqlite3_value *pVal) {
 	if (!pVal) {
-		pVal->db->errCode = SQLITE_MISUSE;
 		return 0;
 	}
 	int64_t res;
@@ -1807,7 +1806,6 @@ void *sqlite3_value_pointer(sqlite3_value *, const char *) {
 
 const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 	if (!pVal) {
-		pVal->db->errCode = SQLITE_MISUSE;
 		return nullptr;
 	}
 	if (pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB) {

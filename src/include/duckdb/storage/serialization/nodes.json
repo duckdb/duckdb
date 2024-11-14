@@ -809,6 +809,15 @@
       {"id": 138,
         "name": "dialect_options.rows_until_header",
         "type": "idx_t"
+      },
+      {"id": 139,
+        "name": "encoding",
+        "type": "string"
+      }
+      ,
+      {"id": 140,
+        "name": "dialect_options.state_machine_options.rfc_4180",
+        "type": "CSVOption<bool>"
       }
     ],
     "pointer_type": "none"
@@ -995,6 +1004,25 @@
         "id": 5,
         "name": "not_null_columns",
         "type": "vector<string>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ColumnIndex",
+    "includes": [
+      "duckdb/common/column_index.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "index",
+        "type": "idx_t"
+      },
+      {
+        "id": 2,
+        "name": "child_indexes",
+        "type": "vector<ColumnIndex>"
       }
     ],
     "pointer_type": "none"

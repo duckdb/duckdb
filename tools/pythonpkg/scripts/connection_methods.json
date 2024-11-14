@@ -513,8 +513,8 @@
 		"docs": "Create a relation object from the passed values",
 		"args": [
 			{
-				"name": "values",
-				"type": "List[Any]"
+				"name": "*args",
+				"type": "Union[List[Any],Expression, Tuple[Expression]]"
 			}
 		],
 		"return": "DuckDBPyRelation"

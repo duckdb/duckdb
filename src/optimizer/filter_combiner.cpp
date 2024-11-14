@@ -399,7 +399,7 @@ bool FilterCombiner::HasFilters() {
 
 // Try to extract a column index from a bound column ref expression, or a column ref recursively nested
 // inside of a struct_extract call. If the expression is not a column ref (or nested column ref), return false.
-static bool TryGetBoundColumnIndex(const vector<idx_t> &column_ids, const Expression &expr, idx_t &result) {
+static bool TryGetBoundColumnIndex(const vector<ColumnIndex> &column_ids, const Expression &expr, ColumnIndex &result) {
 	switch (expr.type) {
 	case ExpressionType::BOUND_COLUMN_REF: {
 		auto &ref = expr.Cast<BoundColumnRefExpression>();
@@ -436,7 +436,7 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	return inner_filter;
 }
 
-TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &column_ids) {
+TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids) {
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
@@ -462,11 +462,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 
 				// Try to get the column index, either from bound column ref, or a column ref nested inside of a
 				// struct_extract call
-				idx_t column_index;
+				ColumnIndex column_index;
 				if (!TryGetBoundColumnIndex(column_ids, expr, column_index)) {
 					continue;
 				}
-				if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+				if (column_index.IsRowIdColumn()) {
 					break;
 				}
 
@@ -499,7 +499,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				if (like_string.empty()) {
 					continue;
 				}
-				auto column_index = column_ids[column_ref.binding.column_index];
+				auto &column_index = column_ids[column_ref.binding.column_index];
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
 				auto lower_bound =
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(like_string));
@@ -514,7 +514,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				//! This is a like function.
 				auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 				auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
-				auto column_index = column_ids[column_ref.binding.column_index];
+				auto &column_index = column_ids[column_ref.binding.column_index];
 				// constant value expr can sometimes be null. if so, push is not null filter, which will
 				// make the filter unsatisfiable and return no results.
 				if (constant_value_expr.value.IsNull()) {
@@ -560,8 +560,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				continue;
 			}
 			auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
-			auto column_index = column_ids[column_ref.binding.column_index];
-			if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
+			auto &column_index = column_ids[column_ref.binding.column_index];
+			if (column_index.IsRowIdColumn()) {
 				break;
 			}
 			//! check if all children are const expr
@@ -678,11 +678,12 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 					}
 
 					if (!column_id.IsValid()) {
-						if (IsRowIdColumnId(column_ids[column_ref->binding.column_index])) {
+						auto &col_id = column_ids[column_ref->binding.column_index];
+						if (col_id.IsRowIdColumn()) {
 							break;
 						}
-						column_id = column_ids[column_ref->binding.column_index];
-					} else if (column_id.GetIndex() != column_ids[column_ref->binding.column_index]) {
+						column_id = col_id.GetPrimaryIndex();
+					} else if (column_id.GetIndex() != column_ids[column_ref->binding.column_index].GetPrimaryIndex()) {
 						column_id.SetInvalid();
 						break;
 					}
@@ -697,7 +698,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<idx_t> &col
 				}
 				if (column_id.IsValid()) {
 					optional_filter->child_filter = std::move(conj_filter);
-					table_filters.PushFilter(column_id.GetIndex(), std::move(optional_filter));
+					table_filters.PushFilter(ColumnIndex(column_id.GetIndex()), std::move(optional_filter));
 				}
 			}
 		}

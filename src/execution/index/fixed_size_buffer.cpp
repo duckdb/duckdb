@@ -117,10 +117,12 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		allocation.partial_block = std::move(p_block_for_index);
 	}
 
-	partial_block_manager.RegisterPartialBlock(std::move(allocation));
-
 	// resetting this buffer
 	buffer_handle.Destroy();
+
+	// register the partial block
+	partial_block_manager.RegisterPartialBlock(std::move(allocation));
+
 	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 

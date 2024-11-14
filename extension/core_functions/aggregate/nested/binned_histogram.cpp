@@ -249,7 +249,7 @@ static Value OtherBucketValue(const LogicalType &type) {
 		return Value::STRUCT(std::move(child_list));
 	}
 	case LogicalTypeId::LIST:
-		return Value::EMPTYLIST(ListType::GetChildType(type));
+		return Value::LIST(ListType::GetChildType(type), vector<Value>());
 	default:
 		throw InternalException("Unsupported type for other bucket");
 	}
