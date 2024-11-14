@@ -222,6 +222,27 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
+	duckdb_bind_timestamp_ms(stmt, 1, duckdb_to_timestamp_ms(ts));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "1992-09-03 12:22:33.123");
+	duckdb_free(value);
+	duckdb_destroy_result(&res);
+
+	duckdb_timestamp_ns_struct ts_ns;
+	ts_ns.date = date_struct;
+	ts_ns.time = time_struct;
+	ts_ns.nanos = 789;
+
+	duckdb_bind_timestamp_ns(stmt, 1, duckdb_to_timestamp_ns(ts_ns));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "1992-09-03 12:22:33.123400789");
+	duckdb_free(value);
+	duckdb_destroy_result(&res);
+
 	duckdb_interval interval;
 	interval.months = 3;
 	interval.days = 0;

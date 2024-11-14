@@ -444,6 +444,48 @@
             }
         },
         {
+            "name": "duckdb_bind_timestamp_ms",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_timestamp_ms",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a duckdb_timestamp_ms value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_timestamp_ns",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_timestamp_ns",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a duckdb_timestamp_ns value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
             "name": "duckdb_bind_interval",
             "return_type": "duckdb_state",
             "params": [

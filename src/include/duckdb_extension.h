@@ -522,6 +522,10 @@ typedef struct {
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
 	duckdb_state (*duckdb_bind_timestamp_s)(duckdb_prepared_statement prepared_statement, idx_t param_idx,
 	                                        duckdb_timestamp_s val);
+	duckdb_state (*duckdb_bind_timestamp_ms)(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+	                                         duckdb_timestamp_ms val);
+	duckdb_state (*duckdb_bind_timestamp_ns)(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+	                                         duckdb_timestamp_ns val);
 #endif
 
 } duckdb_ext_api_v0;
@@ -915,6 +919,8 @@ typedef struct {
 #define duckdb_is_finite_timestamp_ns            duckdb_ext_api.duckdb_is_finite_timestamp_ns
 #define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
 #define duckdb_bind_timestamp_s                  duckdb_ext_api.duckdb_bind_timestamp_s
+#define duckdb_bind_timestamp_ms                 duckdb_ext_api.duckdb_bind_timestamp_ms
+#define duckdb_bind_timestamp_ns                 duckdb_ext_api.duckdb_bind_timestamp_ns
 #define duckdb_create_timestamp_tz               duckdb_ext_api.duckdb_create_timestamp_tz
 #define duckdb_create_timestamp_s                duckdb_ext_api.duckdb_create_timestamp_s
 #define duckdb_create_timestamp_ms               duckdb_ext_api.duckdb_create_timestamp_ms

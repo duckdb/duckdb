@@ -1705,6 +1705,18 @@ DUCKDB_API duckdb_state duckdb_bind_timestamp_s(duckdb_prepared_statement prepar
                                                 duckdb_timestamp_s val);
 
 /*!
+Binds a duckdb_timestamp_ms value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_timestamp_ms(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                                 duckdb_timestamp_ms val);
+
+/*!
+Binds a duckdb_timestamp_ns value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_timestamp_ns(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                                 duckdb_timestamp_ns val);
+
+/*!
 Binds a duckdb_interval value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx,

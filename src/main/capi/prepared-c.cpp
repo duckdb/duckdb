@@ -305,6 +305,18 @@ duckdb_state duckdb_bind_timestamp_s(duckdb_prepared_statement prepared_statemen
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
+duckdb_state duckdb_bind_timestamp_ms(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                     duckdb_timestamp_ms val) {
+	auto value = Value::TIMESTAMPMS(timestamp_t(val.millis));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
+}
+
+duckdb_state duckdb_bind_timestamp_ns(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                     duckdb_timestamp_ns val) {
+	auto value = Value::TIMESTAMPNS(timestamp_t(val.nanos));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
+}
+
 duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_interval val) {
 	auto value = Value::INTERVAL(val.months, val.days, val.micros);
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
