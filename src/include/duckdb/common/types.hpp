@@ -338,12 +338,13 @@ struct LogicalType {
 	DUCKDB_API static LogicalType NormalizeType(const LogicalType &type);
 
 
-		//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
+	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
 
 	DUCKDB_API void Verify() const;
 
 	DUCKDB_API bool IsValid() const;
+	DUCKDB_API bool IsValidRecursive() const;
 
 
 private:

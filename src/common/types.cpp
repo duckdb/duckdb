@@ -677,23 +677,25 @@ bool LogicalType::IsTemporal() const {
 }
 
 bool LogicalType::IsValid() const {
-	return !TypeVisitor::Contains(*this, [](const LogicalType &type) {
-		switch (type.id()) {
-		case LogicalTypeId::INVALID:
-		case LogicalTypeId::UNKNOWN:
-		case LogicalTypeId::ANY:
-			return true;
-		case LogicalTypeId::LIST:
-		case LogicalTypeId::MAP:
-		case LogicalTypeId::STRUCT:
-		case LogicalTypeId::UNION:
-		case LogicalTypeId::ARRAY:
-		case LogicalTypeId::DECIMAL:
-			return type.AuxInfo() == nullptr;
-		default:
-			return false;
-		}
-	});
+	switch (id()) {
+	case LogicalTypeId::INVALID:
+	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::ANY:
+		return false;
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::DECIMAL:
+		return AuxInfo() != nullptr;
+	default:
+		return true;
+	}
+}
+
+bool LogicalType::IsValidRecursive() const {
+	return !TypeVisitor::Contains(*this, [](const LogicalType &type) { return !type.IsValid(); });
 }
 
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
