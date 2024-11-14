@@ -52,8 +52,11 @@ struct sqlite3_stmt {
 	sqlite3 *db;
 	//! The query string
 	string query_string;
+
 	//! The prepared statement object, if successfully prepared
 	duckdb::unique_ptr<PreparedStatement> prepared;
+	//! Alternatively, the query could be executed right away to avoid potential rebinding
+	duckdb::unique_ptr<PendingQueryResult> pending;
 	//! The result object, if successfully executed
 	duckdb::unique_ptr<QueryResult> result;
 	//! The current chunk that we are iterating over
@@ -201,23 +204,38 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 			}
 		}
 
-		// now prepare the query
-		auto prepared = db->con->Prepare(std::move(statements.back()));
-		if (prepared->HasError()) {
-			// failed to prepare: set the error message
-			db->last_error = prepared->error;
-			return SQLITE_ERROR;
-		}
-
 		// create the statement entry
 		duckdb::unique_ptr<sqlite3_stmt> stmt = make_uniq<sqlite3_stmt>();
 		stmt->db = db;
 		stmt->query_string = query;
-		stmt->prepared = std::move(prepared);
+
+		if (!statements.back()->named_param_map.empty()) {
+			// Use Prepare: there are parameters
+			auto prepared = db->con->Prepare(std::move(statements.back()));
+			if (prepared->HasError()) {
+				// failed to prepare: set the error message
+				db->last_error = prepared->error;
+				return SQLITE_ERROR;
+			}
+			stmt->prepared = std::move(prepared);
+		} else {
+			// Use eager execution: there are no parameters so we can safely create a PendingQuery here
+			auto pending = db->con->PendingQuery(std::move(statements.back()), false);
+			if (pending->HasError()) {
+				// failed to prepare: set the error message
+				db->last_error = pending->GetErrorObject();
+				return SQLITE_ERROR;
+			}
+			stmt->pending = std::move(pending);
+		}
+
 		stmt->current_row = -1;
-		for (idx_t i = 0; i < stmt->prepared->named_param_map.size(); i++) {
-			stmt->bound_names.push_back("$" + to_string(i + 1));
-			stmt->bound_values.push_back(Value());
+
+		if (stmt->prepared) {
+			for (idx_t i = 0; i < stmt->prepared->named_param_map.size(); i++) {
+				stmt->bound_names.push_back("$" + to_string(i + 1));
+				stmt->bound_values.push_back(Value());
+			}
 		}
 
 		// extract the remainder of the query and assign it to the pzTail
@@ -241,23 +259,30 @@ void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_widt
 		if (!pStmt) {
 			return;
 		}
-		if (!pStmt->prepared) {
-			pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
-			return;
-		}
 		if (pStmt->result) {
 			pStmt->db->last_error = ErrorData("Statement has already been executed");
 			return;
 		}
-		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
+
+		if (pStmt->prepared) {
+			pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
+		} else if (pStmt->pending) {
+			pStmt->result = pStmt->pending->Execute();
+		} else {
+			throw InternalException("Neither a prepared statement nor pending query result were found while executing "
+			                        "sqlite3_print_duckbox");
+		}
+
 		if (pStmt->result->HasError()) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->GetErrorObject();
 			pStmt->prepared = nullptr;
+			pStmt->pending = nullptr;
 			return;
 		}
 		auto &materialized = (MaterializedQueryResult &)*pStmt->result;
-		auto properties = pStmt->prepared->GetStatementProperties();
+
+		auto properties = pStmt->result->properties;
 		if (properties.return_type == StatementReturnType::CHANGED_ROWS && materialized.RowCount() > 0) {
 			// update total changes
 			auto row_changes = materialized.Collection().GetRows().GetValue(0, 0);
@@ -296,29 +321,43 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	if (!pStmt) {
 		return SQLITE_MISUSE;
 	}
-	if (!pStmt->prepared) {
+	if (!pStmt->prepared && !pStmt->pending) {
 		pStmt->db->last_error = ErrorData("Attempting sqlite3_step() on a non-successfully prepared statement");
 		return SQLITE_ERROR;
 	}
 	pStmt->current_text = nullptr;
 	if (!pStmt->result) {
 		// no result yet! call Execute()
-		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
+
+		if (pStmt->prepared) {
+			pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
+		} else if (pStmt->pending) {
+			pStmt->result = pStmt->pending->Execute();
+		}
+
 		if (pStmt->result->HasError()) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->GetErrorObject();
 			pStmt->prepared = nullptr;
+			pStmt->pending = nullptr;
 			return SQLITE_ERROR;
 		}
 		// fetch a chunk
 		if (!pStmt->result->TryFetch(pStmt->current_chunk, pStmt->db->last_error)) {
 			pStmt->prepared = nullptr;
+			pStmt->pending = nullptr;
 			return SQLITE_ERROR;
 		}
 
 		pStmt->current_row = -1;
 
-		auto properties = pStmt->prepared->GetStatementProperties();
+		StatementProperties properties;
+		if (pStmt->prepared) {
+			properties = pStmt->prepared->GetStatementProperties();
+		} else if (pStmt->pending) {
+			properties = pStmt->pending->properties;
+		}
+
 		if (properties.return_type == StatementReturnType::CHANGED_ROWS && pStmt->current_chunk &&
 		    pStmt->current_chunk->size() > 0) {
 			// update total changes
@@ -342,6 +381,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		pStmt->current_row = 0;
 		if (!pStmt->result->TryFetch(pStmt->current_chunk, pStmt->db->last_error)) {
 			pStmt->prepared = nullptr;
+			pStmt->pending = nullptr;
 			return SQLITE_ERROR;
 		}
 		if (!pStmt->current_chunk || pStmt->current_chunk->size() == 0) {
@@ -465,10 +505,16 @@ const char *sqlite3_sql(sqlite3_stmt *pStmt) {
 }
 
 int sqlite3_column_count(sqlite3_stmt *pStmt) {
-	if (!pStmt || !pStmt->prepared) {
+	if (!pStmt) {
 		return 0;
 	}
-	return (int)pStmt->prepared->ColumnCount();
+	if (pStmt->prepared) {
+		return (int)pStmt->prepared->ColumnCount();
+	}
+	if (pStmt->pending) {
+		return (int)pStmt->pending->ColumnCount();
+	}
+	return 0;
 }
 
 ////////////////////////////
@@ -521,10 +567,16 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 }
 
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
-	if (!pStmt || !pStmt->prepared) {
+	if (!pStmt) {
 		return nullptr;
 	}
-	return pStmt->prepared->GetNames()[N].c_str();
+	if (pStmt->prepared) {
+		return pStmt->prepared->GetNames()[N].c_str();
+	}
+	if (pStmt->pending) {
+		return pStmt->pending->names[N].c_str();
+	}
+	return nullptr;
 }
 
 static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType target_type, Value &val) {
@@ -623,16 +675,25 @@ const void *sqlite3_column_blob(sqlite3_stmt *pStmt, int iCol) {
 ////////////////////////////
 //      sqlite3_bind      //
 ////////////////////////////
-int sqlite3_bind_parameter_count(sqlite3_stmt *stmt) {
-	if (!stmt) {
+int sqlite3_bind_parameter_count(sqlite3_stmt *pStmt) {
+	if (!pStmt) {
 		return 0;
 	}
-	return stmt->prepared->named_param_map.size();
+	if (pStmt->prepared) {
+		return (int)pStmt->prepared->named_param_map.size();
+	}
+	if (pStmt->pending) {
+		return (int)pStmt->pending->properties.parameter_count;
+	}
+	return 0;
 }
 
 const char *sqlite3_bind_parameter_name(sqlite3_stmt *stmt, int idx) {
 	if (!stmt) {
 		return nullptr;
+	}
+	if (!stmt->prepared) {
+		throw InternalException("Called sqlite3_bind_parameter_name on a eagerly executed prepared query");
 	}
 	if (idx < 1 || idx > (int)stmt->prepared->named_param_map.size()) {
 		return nullptr;
@@ -1154,29 +1215,43 @@ int sqlite3_table_column_metadata(sqlite3 *db,             /* Connection handle 
 }
 
 const char *sqlite3_column_table_name(sqlite3_stmt *pStmt, int iCol) {
-	if (!pStmt || !pStmt->prepared) {
+	if (!pStmt) {
 		return nullptr;
 	}
 
-	auto &&names = pStmt->prepared->GetNames();
-	if (iCol < 0 || names.size() <= static_cast<size_t>(iCol)) {
+	const duckdb::vector<string> *names;
+	if (pStmt->prepared) {
+		names = &pStmt->prepared->GetNames();
+	} else if (pStmt->pending) {
+		names = &pStmt->pending->names;
+	} else {
 		return nullptr;
 	}
 
-	return names[iCol].c_str();
+	if (iCol < 0 || names->size() <= static_cast<size_t>(iCol)) {
+		return nullptr;
+	}
+	return (*names)[iCol].c_str();
 }
 
 const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
-	if (!pStmt || !pStmt->prepared) {
+	if (!pStmt) {
 		return nullptr;
 	}
 
-	auto &&types = pStmt->prepared->GetTypes();
-	if (iCol < 0 || types.size() <= static_cast<size_t>(iCol)) {
+	const duckdb::vector<LogicalType> *types;
+	if (pStmt->prepared) {
+		types = &pStmt->prepared->GetTypes();
+	} else if (pStmt->pending) {
+		types = &pStmt->pending->types;
+	} else {
+		return nullptr;
+	}
+	if (iCol < 0 || types->size() <= static_cast<size_t>(iCol)) {
 		return nullptr;
 	}
 
-	auto column_type = types[iCol];
+	auto column_type = (*types)[iCol];
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";
@@ -1924,10 +1999,16 @@ SQLITE_API void sqlite3_progress_handler(sqlite3 *, int, int (*)(void *), void *
 }
 
 SQLITE_API int sqlite3_stmt_isexplain(sqlite3_stmt *pStmt) {
-	if (!pStmt || !pStmt->prepared) {
+	if (!pStmt) {
 		return 0;
 	}
-	return pStmt->prepared->GetStatementType() == StatementType::EXPLAIN_STATEMENT;
+	if (pStmt->prepared) {
+		return pStmt->prepared->GetStatementType() == StatementType::EXPLAIN_STATEMENT;
+	}
+	if (pStmt->pending) {
+		return pStmt->pending->statement_type == StatementType::EXPLAIN_STATEMENT;
+	}
+	return 0;
 }
 
 SQLITE_API int sqlite3_vtab_config(sqlite3 *, int op, ...) {
