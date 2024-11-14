@@ -28,6 +28,8 @@ public:
 		if (aggr.filter) {
 			// 	Start with all invalid and set the ones that pass
 			filter_mask.Initialize(group_count, false);
+		} else {
+			filter_mask.InitializeEmpty(group_count);
 		}
 	}
 
@@ -581,7 +583,7 @@ void WindowCustomAggregator::Finalize(WindowAggregatorState &gstate, WindowAggre
 	}
 	auto &filter_mask = gcsink.filter_mask;
 	auto &filter_packed = gcsink.filter_packed;
-	filter_mask.Pack(filter_packed, filter_mask.target_count);
+	filter_mask.Pack(filter_packed, filter_mask.Capacity());
 
 	gcsink.partition_input =
 	    make_uniq<WindowPartitionInput>(gcsink.context, inputs, count, child_idx, all_valids, filter_packed, stats);

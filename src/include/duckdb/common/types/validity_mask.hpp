@@ -377,10 +377,17 @@ struct ValidityArray {
 	}
 
 	inline void Initialize(idx_t count, bool initial = true) {
-		target_count = count;
+		capacity = count;
 		validity_data = make_unsafe_uniq_array<bool>(count);
 		validity_mask = validity_data.get();
 		memset(validity_mask, initial, sizeof(bool) * count);
+	}
+	inline void InitializeEmpty(idx_t count) {
+		capacity = count;
+	}
+
+	const idx_t Capacity() const {
+		return capacity;
 	}
 
 	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a
@@ -392,6 +399,10 @@ struct ValidityArray {
 
 	//! Returns true if a row is valid (i.e. not null), false otherwise
 	inline bool RowIsValid(idx_t row_idx) const {
+		if (row_idx >= capacity) {
+			throw InternalException("ValidityData::RowIsValid - row_idx %d is out-of-range for mask with capacity %llu",
+						row_idx, capacity);
+		}
 		if (!validity_mask) {
 			return true;
 		}
@@ -406,6 +417,10 @@ struct ValidityArray {
 
 	//! Marks the entry at the specified row index as valid (i.e. not-null)
 	inline void SetValid(idx_t row_idx) {
+		if (row_idx >= capacity) {
+			throw InternalException("ValidityData::SetValid - row_idx %d is out-of-range for mask with capacity %llu",
+						row_idx, capacity);
+		}
 		if (!validity_mask) {
 			// if AllValid() we don't need to do anything
 			// the row is already valid
@@ -417,7 +432,7 @@ struct ValidityArray {
 
 	inline void Pack(ValidityMask &mask, const idx_t count) const {
 		if (AllValid()) {
-			mask.Reset();
+			mask.Reset(count);
 			return;
 		}
 		mask.Initialize(count);
@@ -446,9 +461,10 @@ struct ValidityArray {
 		}
 	}
 
+private:
 	bool *validity_mask = nullptr;
 	unsafe_unique_array<bool> validity_data;
-	idx_t target_count = 0;
+	idx_t capacity = 0;
 };
 
 } // namespace duckdb
