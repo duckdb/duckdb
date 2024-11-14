@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-static void FillFunctionParameters(FunctionDescription &function_description, string function_name,
+static void FillFunctionParameters(FunctionDescription &function_description, const char *function_name,
                                    vector<string> &parameters, vector<string> &descriptions, vector<string> &examples) {
 	for (string &parameter : parameters) {
 		vector<string> parameter_name_type = StringUtil::Split(parameter, "::");
@@ -44,7 +44,7 @@ void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info)
 	for (idx_t variant_index = 0; variant_index < variants.size(); variant_index++) {
 		FunctionDescription function_description;
 		// parameter_names and parameter_types
-		vector<string> parameters = StringUtil::Split(variants[variant_index], ',');
+		vector<string> parameters = StringUtil::SplitWithParentheses(variants[variant_index], ',');
 		FillFunctionParameters(function_description, function.name, parameters, descriptions, examples);
 		// description
 		if (descriptions.size() == variants.size()) {

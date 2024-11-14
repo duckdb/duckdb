@@ -586,12 +586,12 @@ template <class T, class OP>
 bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &output, idx_t output_offset) {
 	auto &function = entry.Cast<T>();
 	vector<LogicalType> parameter_types_vector = OP::GetParameterLogicalTypes(function, function_idx);
-
 	Value parameter_types_value = OP::GetParameterTypes(function, function_idx);
 
 	int description_idx = GetFunctionDescriptionIndex(entry.descriptions, parameter_types_vector);
 	FunctionDescription function_description =
 	    (description_idx >= 0) ? entry.descriptions[static_cast<idx_t>(description_idx)] : FunctionDescription();
+
 	idx_t col = 0;
 
 	// database_name, LogicalType::VARCHAR

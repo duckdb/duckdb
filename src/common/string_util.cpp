@@ -16,6 +16,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <random>
+#include <stack>
 
 #include "yyjson.hpp"
 
@@ -148,6 +149,42 @@ vector<string> StringUtil::SplitWithQuote(const string &str, char delimiter, cha
 	}
 
 	return entries;
+}
+
+vector<string> StringUtil::SplitWithParentheses(const string &str, char delimiter, char par_open, char par_close) {
+	vector<string> result;
+	string current;
+	std::stack<char> parentheses;
+
+	for (size_t i = 0; i < str.size(); ++i) {
+		char ch = str[i];
+
+		// stack to keep track if we are within parentheses
+		if (ch == par_open) {
+			parentheses.push(ch);
+		}
+		if (ch == par_close) {
+			if (!parentheses.empty()) {
+				parentheses.pop();
+			} else {
+				throw InternalException("Encountered closing parenthesis without open parenthesis in string: '%s'",
+				                        str);
+			}
+		}
+
+		// split if not within parentheses
+		if (parentheses.empty() && ch == delimiter) {
+			result.push_back(current);
+			current.clear();
+		} else {
+			current += ch;
+		}
+	}
+	// Add the last segment
+	if (!current.empty()) {
+		result.push_back(current);
+	}
+	return result;
 }
 
 string StringUtil::Join(const vector<string> &input, const string &separator) {
