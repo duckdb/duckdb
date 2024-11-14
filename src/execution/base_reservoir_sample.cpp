@@ -2,7 +2,12 @@
 
 namespace duckdb {
 
-
+unordered_map<idx_t, double> BaseReservoirSampling::tuples_to_min_weight_map = {
+    {1, 0.232}, {2, 0.234234}, {3, 0.54345}, {4, 0.5},  {5, 0.5},  {6, 0.5},  {7, 0.5},  {8, 0.5},
+    {9, 0.5},   {10, 0.5},     {11, 0.5},    {12, 0.5}, {13, 0.5}, {14, 0.5}, {15, 0.5}, {16, 0.5},
+    {17, 0.5},  {18, 0.5},     {19, 0.5},    {20, 0.5}, {21, 0.5}, {22, 0.5}, {23, 0.5}, {24, 0.5},
+    {25, 0.5},  {26, 0.5},     {27, 0.5},    {28, 0.5}, {29, 0.5}, {30, 0.5}, {31, 0.5}, {32, 0.5},
+    {33, 0.5},  {34, 0.5},     {35, 0.5},    {36, 0.5}, {37, 0.5}, {38, 0.5}, {39, 0.5}, {40, 0.5}};
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
     : BlockingSample(seed), allocator(allocator), sample_count(sample_count) {
@@ -107,15 +112,15 @@ void BaseReservoirSampling::ReplaceElement(double with_weight) {
 
 void BaseReservoirSampling::FillWeights(vector<idx_t> &actual_sample_indexes) {
 	D_ASSERT(actual_sample_indexes.size() == FIXED_SAMPLE_SIZE);
-	D_ASSERT(reservoir_weights.size() == 0);
+	D_ASSERT(reservoir_weights.empty());
 	auto min_weight_index = num_entries_seen_total / FIXED_SAMPLE_SIZE;
 	auto min_weight = tuples_to_min_weight_map[min_weight_index];
 	for (auto &index : actual_sample_indexes) {
 		auto weight = random.NextRandom(min_weight, 1);
-		reservoir_weights.emplace(weight, index);
+		reservoir_weights.emplace(-weight, index);
 	}
 	D_ASSERT(reservoir_weights.size() == FIXED_SAMPLE_SIZE);
+	SetNextEntry();
 }
 
-
-}
+} // namespace duckdb

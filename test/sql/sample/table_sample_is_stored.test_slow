@@ -61,11 +61,11 @@ select count(*) from pragma_table_sample('integers_2');
 query II
 select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
 ----
-0	203
-1	410
-2	407
+0	202
+1	403
+2	404
 3	415
-4	408
+4	419
 5	205
 
 
@@ -76,13 +76,13 @@ insert into integers_1 (select (range + 5) a, range b from range(5000000,6000000
 query II
 select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
 ----
-0	169
-1	344
-2	343
-3	345
-4	335
-5	338
-6	174
+0	162
+1	320
+2	320
+3	329
+4	334
+5	372
+6	211
 
 # If double the table count is appended, around half the sample should account for the new values.
 statement ok
@@ -98,7 +98,7 @@ select count(*) from integers_1;
 query I
 select count(*) from pragma_table_sample('integers_1') where a = -1 and b = -1;
 ----
-814
+952
 
 
 restart
@@ -107,7 +107,7 @@ restart
 query I
 select count(*) from pragma_table_sample('integers_1') where a = -1 and b = -1;
 ----
-814
+952
 
 
 # create a view on top of the sample
@@ -119,25 +119,25 @@ create view sample_view as select * from pragma_table_sample('integers_1');
 statement ok
 insert into integers_1 (select -2, -2 from range(6000000));
 
-# 2048 / 3 = 682 (666 is good enough)
+# 2048 / 3 = 682 (643 is good enough)
 query I
 select count(*) from sample_view where a = -2 and b = -2;
 ----
-578
+643
 
 restart
 
 query I
 select count(*) from sample_view where a = -2 and b = -2;
 ----
-578
+643
 
 # currently have 18_000_000 values in the table.
 # to try and get 1 value in the sample, we should add
 # 18000000 / 2048 = 8789 values. For some reason we need 10000
 
 statement ok
-insert into integers_1 (select -3, -3 from range(10000));
+insert into integers_1 (select -3, -3 from range(11000));
 
 # 1 value makes it
 query I

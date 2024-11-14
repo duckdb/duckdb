@@ -70,6 +70,7 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BaseReservoirSampling> Deserialize(Deserializer &deserializer);
 
+	static unordered_map<idx_t, double> tuples_to_min_weight_map;
 	// Blocking sample is a virtual class. It should be allowed to see the weights and
 	// of tuples in the sample. The blocking sample can then easily maintain statisitcal properties
 	// from the sample point of view.
@@ -251,6 +252,7 @@ public:
 	static constexpr const SampleType TYPE = SampleType::INGESTION_SAMPLE;
 
 	constexpr static idx_t FIXED_SAMPLE_SIZE_MULTIPLIER = 10;
+	constexpr static idx_t FAST_TO_SLOW_THRESHOLD = 20;
 	// how much of every chunk we consider for sampling.
 	// This can be lowered to improve ingestion performance.
 	constexpr static double CHUNK_SAMPLE_PERCENTAGE = 1.00;
@@ -261,17 +263,30 @@ public:
 	// TODO: this will need more info to initiliaze the correct sample type
 	unique_ptr<BlockingSample> ConvertToReservoirSampleToSerialize();
 
+	//! Shrink the Ingestion Sample to only contain the tuples that are in the
+	//! reservoir weights or are in the "actual_indexes"
 	void Shrink();
 
-	void PrintWeightsInOrder();
+	void SimpleMerge(IngestionSample &other);
+
+	// Helper methods for Shrink().
+	// Shrink has different logic depending on if the IngestionSample is still in
+	// "Fast" mode or in "Slow" mode
+	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types);
+	SelectionVector CreateSelectionVectorFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const;
+	static SelectionVector CreateSelectionVectorFromSimpleVector(vector<idx_t> &actual_indexes);
 
 	unique_ptr<BlockingSample> Copy() const override;
 	unique_ptr<BlockingSample> Copy(bool for_serialization) const;
 	void Merge(unique_ptr<BlockingSample> other);
 
+	//! Update the sample by pushing new sample rows to the end of the sample_chunk.
+	//! The new sample rows are the tuples rows resulting from applying sel to other
 	void UpdateSampleAppend(DataChunk &other, SelectionVector &sel, idx_t sel_count);
+	//! Actually appends the new tuples. TODO: rename function to AppendToSample
 	void UpdateSampleWithTypes(DataChunk &other, SelectionVector &sel, idx_t source_count, idx_t source_offset,
 	                           idx_t target_offset);
+	//! ??? Honestly don't know what the difference between this function and UpdateSampleWithTypes is.
 	void UpdateSampleCopy(DataChunk &other, SelectionVector &sel, idx_t source_offset, idx_t target_offset, idx_t size);
 
 	idx_t GetTuplesSeen();
@@ -286,10 +301,9 @@ public:
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Destroy() override;
 	void Finalize() override;
-	void Verify();
 
-	// what is this?
-	void Clear();
+	void PrintWeightsInOrder();
+	void Verify();
 
 	// when replacing samples in the chunk, it's possible
 	// that an index gets replaced twice because the new weight assigned
@@ -312,49 +326,6 @@ public:
 	unique_ptr<DataChunk> sample_chunk;
 
 	vector<idx_t> actual_sample_indexes;
-};
-
-static unordered_map<idx_t, double> tuples_to_min_weight_map = {
-	{1, 0.232},
-	{2, 0.234234},
-	{3, 0.54345},
-	{4, 0.5},
-	{5, 0.5},
-	{6, 0.5},
-	{7, 0.5},
-	{8, 0.5},
-	{9, 0.5},
-	{10, 0.5},
-	{11, 0.5},
-	{12, 0.5},
-	{13, 0.5},
-	{14, 0.5},
-	{15, 0.5},
-	{16, 0.5},
-	{17, 0.5},
-	{18, 0.5},
-	{19, 0.5},
-	{20, 0.5},
-	{21, 0.5},
-	{22, 0.5},
-	{23, 0.5},
-	{24, 0.5},
-	{25, 0.5},
-	{26, 0.5},
-	{27, 0.5},
-	{28, 0.5},
-	{29, 0.5},
-	{30, 0.5},
-	{31, 0.5},
-	{32, 0.5},
-	{33, 0.5},
-	{34, 0.5},
-	{35, 0.5},
-	{36, 0.5},
-	{37, 0.5},
-	{38, 0.5},
-	{39, 0.5},
-	{40, 0.5}
 };
 
 } // namespace duckdb
