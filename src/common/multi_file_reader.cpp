@@ -325,7 +325,8 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 			continue;
 		}
 		// not constant - look up the column in the name map
-		auto global_id = global_column_ids[i].GetPrimaryIndex();
+		auto &global_idx = global_column_ids[i];
+		auto global_id = global_idx.GetPrimaryIndex();
 		if (global_id >= global_types.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
@@ -353,13 +354,17 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		D_ASSERT(local_id < local_types.size());
 		auto &global_type = global_types[global_id];
 		auto &local_type = local_types[local_id];
+		ColumnIndex local_index(local_id);
 		if (global_type != local_type) {
+			// the types are not the same - add a cast
 			reader_data.cast_map[local_id] = global_type;
+		} else {
+			local_index = ColumnIndex(local_id, global_idx.GetChildIndexes());
 		}
-		// the types are the same - create the mapping
+		// create the mapping
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
-		reader_data.column_indexes.emplace_back(local_id);
+		reader_data.column_indexes.push_back(std::move(local_index));
 	}
 
 	reader_data.empty_columns = reader_data.column_indexes.empty();
