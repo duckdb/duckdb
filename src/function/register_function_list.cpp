@@ -7,6 +7,29 @@
 
 namespace duckdb {
 
+static LogicalType GetLogicalType(string &logical_type_string) {
+	LogicalType type;
+	if (StringUtil::Contains(logical_type_string, "ANY")) {
+		if (StringUtil::CIEquals(logical_type_string, "ANY")) {
+			type = LogicalType::ANY;
+		} else if (StringUtil::CIEquals(logical_type_string, "ANY[]")) {
+			type = LogicalType::LIST(LogicalType::ANY);
+		} else if (StringUtil::CIEquals(logical_type_string, "ANY[][]")) {
+			type = LogicalType::LIST(LogicalType::LIST(LogicalType::ANY));
+		} else if (StringUtil::CIEquals(logical_type_string, "MAP(ANY,ANY)")) {
+			type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
+		} else {
+			throw InternalException("Unsupported type: '%s'", logical_type_string);
+		}
+	} else {
+		type = Parser::ParseLogicalType(logical_type_string);
+	}
+	if (type == LogicalType::INVALID) {
+		throw InternalException("Failed to convert string '%s' to LogicalType", logical_type_string);
+	}
+	return type;
+}
+
 static void FillFunctionParameters(FunctionDescription &function_description, const char *function_name,
                                    vector<string> &parameters, vector<string> &descriptions, vector<string> &examples) {
 	for (string &parameter : parameters) {
@@ -16,16 +39,9 @@ static void FillFunctionParameters(FunctionDescription &function_description, co
 			function_description.parameter_types.push_back(LogicalType::ANY);
 		} else if (parameter_name_type.size() == 2) {
 			function_description.parameter_names.push_back(std::move(parameter_name_type[0]));
-			LogicalType type = (StringUtil::CIEquals(parameter_name_type[1], "ANY"))
-			                       ? LogicalType::ANY
-			                       : Parser::ParseLogicalType(parameter_name_type[1]);
-			if (type != LogicalType::INVALID) {
-				function_description.parameter_types.push_back(type);
-			} else {
-				throw InternalException("Unsupported type in function variant for function '%s'!", function_name);
-			}
+			function_description.parameter_types.push_back(GetLogicalType(parameter_name_type[1]));
 		} else {
-			throw InternalException("Ill formed function variant for function '%s'!", function_name);
+			throw InternalException("Ill formed function variant for function '%s'", function_name);
 		}
 	}
 }
@@ -52,7 +68,7 @@ void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info)
 		} else if (descriptions.size() == 1) {
 			function_description.description = descriptions[0];
 		} else if (descriptions.size() != 0) {
-			throw InternalException("Incorrect number of function descriptions for function '%s'!", function.name);
+			throw InternalException("Incorrect number of function descriptions for function '%s'", function.name);
 		}
 		// examples
 		if (examples.size() == variants.size()) {
@@ -60,7 +76,7 @@ void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info)
 		} else if (examples.size() == 1) {
 			function_description.examples = StringUtil::Split(examples[0], '\2');
 		} else if (examples.size() != 0) {
-			throw InternalException("Incorrect number of function examples for function '%s'!", function.name);
+			throw InternalException("Incorrect number of function examples for function '%s'", function.name);
 		}
 		info.descriptions.push_back(std::move(function_description));
 	}
