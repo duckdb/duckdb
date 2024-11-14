@@ -191,10 +191,12 @@ public:
 
 	//! Returns true if a row is valid (i.e. not null), false otherwise
 	inline bool RowIsValid(idx_t row_idx) const {
+#ifdef DEBUG
 		if (row_idx >= capacity) {
 			throw InternalException("ValidityMask::RowIsValid - row_idx %d is out-of-range for mask with capacity %llu",
 			                        row_idx, capacity);
 		}
+#endif
 		if (!validity_mask) {
 			return true;
 		}
@@ -211,10 +213,12 @@ public:
 
 	//! Marks the entry at the specified row index as valid (i.e. not-null)
 	inline void SetValid(idx_t row_idx) {
+#ifdef DEBUG
 		if (row_idx >= capacity) {
 			throw InternalException("ValidityMask::SetValid - row_idx %d is out-of-range for mask with capacity %llu",
 			                        row_idx, capacity);
 		}
+#endif
 		if (!validity_mask) {
 			// if AllValid() we don't need to do anything
 			// the row is already valid
@@ -238,10 +242,12 @@ public:
 
 	//! Marks the entry at the specified row index as invalid (i.e. null)
 	inline void SetInvalid(idx_t row_idx) {
+#ifdef DEBUG
 		if (row_idx >= capacity) {
 			throw InternalException("ValidityMask::SetInvalid - row_idx %d is out-of-range for mask with capacity %llu",
 			                        row_idx, capacity);
 		}
+#endif
 		if (!validity_mask) {
 			Initialize(capacity);
 		}
@@ -399,10 +405,12 @@ struct ValidityArray {
 
 	//! Returns true if a row is valid (i.e. not null), false otherwise
 	inline bool RowIsValid(idx_t row_idx) const {
+#ifdef DEBUG
 		if (row_idx >= capacity) {
 			throw InternalException("ValidityData::RowIsValid - row_idx %d is out-of-range for mask with capacity %llu",
-						row_idx, capacity);
+			                        row_idx, capacity);
 		}
+#endif
 		if (!validity_mask) {
 			return true;
 		}
@@ -417,10 +425,12 @@ struct ValidityArray {
 
 	//! Marks the entry at the specified row index as valid (i.e. not-null)
 	inline void SetValid(idx_t row_idx) {
+#ifdef DEBUG
 		if (row_idx >= capacity) {
 			throw InternalException("ValidityData::SetValid - row_idx %d is out-of-range for mask with capacity %llu",
-						row_idx, capacity);
+			                        row_idx, capacity);
 		}
+#endif
 		if (!validity_mask) {
 			// if AllValid() we don't need to do anything
 			// the row is already valid
