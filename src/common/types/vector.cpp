@@ -1269,10 +1269,11 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
 
 	auto &validity = FlatVector::Validity(*this);
-	validity.Reset();
+	auto validity_count = MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE);
+	validity.Reset(validity_count);
 	const auto has_validity_mask = deserializer.ReadProperty<bool>(100, "has_validity_mask");
 	if (has_validity_mask) {
-		validity.Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
+		validity.Initialize(validity_count);
 		deserializer.ReadProperty(101, "validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 
