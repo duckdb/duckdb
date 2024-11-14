@@ -209,7 +209,7 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	for (auto &reader : gstate.json_readers) {
 		MultiFileReader().FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
 		                               reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
-		                               input.column_ids, reader->reader_data, context, nullptr);
+		                               input.column_indexes, reader->reader_data, context, nullptr);
 	}
 
 	return std::move(result);

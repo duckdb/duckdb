@@ -93,6 +93,8 @@ struct MultiFileConstantEntry {
 struct MultiFileReaderData {
 	//! The column ids to read from the file
 	vector<idx_t> column_ids;
+	//! The column indexes to read from the file
+	vector<ColumnIndex> column_indexes;
 	//! The mapping of column id -> result column id
 	//! The result chunk will be filled as follows: chunk.data[column_mapping[i]] = ReadColumn(column_ids[i]);
 	vector<idx_t> column_mapping;
@@ -167,21 +169,21 @@ struct MultiFileReader {
 	InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
 	                      const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
 	                      const vector<LogicalType> &global_types, const vector<string> &global_names,
-	                      const vector<column_t> &global_column_ids);
+	                      const vector<ColumnIndex> &global_column_ids);
 
 	//! Finalize the bind phase of the multi-file reader after we know (1) the required (output) columns, and (2) the
 	//! pushed down table filters
 	DUCKDB_API virtual void FinalizeBind(const MultiFileReaderOptions &file_options,
 	                                     const MultiFileReaderBindData &options, const string &filename,
 	                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
-	                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                                     const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
 	                                     MultiFileReaderData &reader_data, ClientContext &context,
 	                                     optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Create all required mappings from the global types/names to the file-local types/names
 	DUCKDB_API virtual void CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
 	                                      const vector<string> &local_names, const vector<LogicalType> &global_types,
-	                                      const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                                      const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
 	                                      optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
 	                                      const string &initial_file, const MultiFileReaderBindData &options,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
@@ -248,7 +250,7 @@ struct MultiFileReader {
 	template <class READER_CLASS>
 	void InitializeReader(READER_CLASS &reader, const MultiFileReaderOptions &options,
 	                      const MultiFileReaderBindData &bind_data, const vector<LogicalType> &global_types,
-	                      const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                      const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
 	                      optional_ptr<TableFilterSet> table_filters, const string &initial_file,
 	                      ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 		FinalizeBind(options, bind_data, reader.GetFileName(), reader.GetNames(), global_types, global_names,
@@ -302,7 +304,7 @@ struct MultiFileReader {
 protected:
 	virtual void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
 	                               const vector<string> &local_names, const vector<LogicalType> &global_types,
-	                               const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                               const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
 	                               MultiFileReaderData &reader_data, const string &initial_file,
 	                               optional_ptr<MultiFileReaderGlobalState> global_state);
 

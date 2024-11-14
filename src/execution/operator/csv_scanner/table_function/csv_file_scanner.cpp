@@ -10,7 +10,7 @@ CSVUnionData::~CSVUnionData() {
 
 CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
                          shared_ptr<CSVStateMachine> state_machine_p, const CSVReaderOptions &options_p,
-                         const ReadCSVData &bind_data, const vector<column_t> &column_ids, CSVSchema &file_schema)
+                         const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids, CSVSchema &file_schema)
     : file_path(options_p.file_path), file_idx(0), buffer_manager(std::move(buffer_manager_p)),
       state_machine(std::move(state_machine_p)), file_size(buffer_manager->file_handle->FileSize()),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
@@ -60,7 +60,7 @@ void CSVFileScan::SetStart() {
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
-                         const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<column_t> &column_ids,
+                         const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids,
                          CSVSchema &file_schema, bool per_file_single_threaded)
     : file_path(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {

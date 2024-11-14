@@ -235,7 +235,7 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
                                    const string &filename, const vector<string> &local_names,
                                    const vector<LogicalType> &global_types, const vector<string> &global_names,
-                                   const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
+                                   const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
                                    ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 
 	// create a map of name -> column index
@@ -246,12 +246,13 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 		}
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		auto column_id = global_column_ids[i];
-		if (IsRowIdColumnId(column_id)) {
+		auto col_idx = global_column_ids[i];
+		if (col_idx.IsRowIdColumn()) {
 			// row-id
 			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
 			continue;
 		}
+		auto column_id = col_idx.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
 			// filename
 			reader_data.constant_map.emplace_back(i, Value(filename));
@@ -292,14 +293,14 @@ unique_ptr<MultiFileReaderGlobalState>
 MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
                                        const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
                                        const vector<LogicalType> &global_types, const vector<string> &global_names,
-                                       const vector<column_t> &global_column_ids) {
+                                       const vector<ColumnIndex> &global_column_ids) {
 	// By default, the multifilereader does not require any global state
 	return nullptr;
 }
 
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                        const vector<string> &global_names, const vector<column_t> &global_column_ids,
+                                        const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
                                         MultiFileReaderData &reader_data, const string &initial_file,
                                         optional_ptr<MultiFileReaderGlobalState> global_state) {
 	D_ASSERT(global_types.size() == global_names.size());
@@ -323,7 +324,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 			continue;
 		}
 		// not constant - look up the column in the name map
-		auto global_id = global_column_ids[i];
+		auto global_id = global_column_ids[i].GetPrimaryIndex();
 		if (global_id >= global_types.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
@@ -364,7 +365,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 
 void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                    const vector<string> &global_names, const vector<column_t> &global_column_ids,
+                                    const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
                                     const string &initial_file, const MultiFileReaderBindData &options,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
