@@ -386,7 +386,7 @@ struct ValidityArray {
 		capacity = count;
 	}
 
-	const idx_t Capacity() const {
+	idx_t Capacity() const {
 		return capacity;
 	}
 
