@@ -21,10 +21,7 @@ VALUES (1, {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': tru
 statement ok
 COPY test_structs TO '__TEST_DIR__/test_structs.parquet'
 
-statement ok
-CREATE VIEW test_struct_view AS FROM '__TEST_DIR__/test_structs.parquet'
-
-foreach source test_structs test_struct_view
+foreach source test_structs read_parquet('__TEST_DIR__/test_structs.parquet')
 
 query I
 SELECT s.nested_struct FROM ${source}
@@ -104,10 +101,7 @@ VALUES (1, {'s': {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b
 statement ok
 COPY test_structs_nested TO '__TEST_DIR__/test_structs.parquet'
 
-statement ok
-CREATE VIEW test_struct_nested_view AS FROM '__TEST_DIR__/test_structs.parquet'
-
-foreach source test_structs_nested test_struct_nested_view
+foreach source test_structs_nested read_parquet('__TEST_DIR__/test_structs.parquet')
 
 query I
 SELECT base.s.nested_struct FROM ${source}
