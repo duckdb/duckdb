@@ -681,6 +681,21 @@ public:
 			scanned_count += to_scan;
 		} else {
 			do {
+				if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
+					// The run does not cover these entries
+					// set all the bits to 0
+					for (idx_t i = 0; i < to_scan; i++) {
+						result_mask.SetInvalid(result_offset + i);
+					}
+					break;
+				}
+				if (run_index < count && runs[run_index].start <= scanned_count + to_scan &&
+				    runs[run_index].start + runs[run_index].length + 1 >= scanned_count + to_scan) {
+					// The current run covers the entire scan range, meaning all these bits are set
+					// no action required
+					break;
+				}
+
 				idx_t i = 0;
 				while (i < to_scan) {
 					// Determine the next valid position within the scan range, if available
