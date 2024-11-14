@@ -188,9 +188,18 @@
     },
     {
         "name": "make_date",
-        "parameters": "year,month,day",
-        "description": "The date for the given parts",
-        "example": "make_date(1992, 9, 20)",
+        "variants": [
+            {
+                "parameters": "year,month,day",
+                "description": "The date for the given parts",
+                "example": "make_date(1992, 9, 20)"
+            },
+            {
+                "parameters": "date-struct::STRUCT(year BIGINT, month BIGINT, day BIGINT)",
+                "description": "The date for the given struct.",
+                "example": "make_date({'year': 2024, 'month': 11, 'day': 14})"
+            }
+        ],
         "type": "scalar_function_set"
     },
     {
