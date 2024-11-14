@@ -124,7 +124,7 @@ public:
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
 	//! Appends a DataChunk and its default columns to the specified table.
 	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection,
-	                       optional_ptr<const vector<string>> active_columns = nullptr);
+	                       optional_ptr<const vector<LogicalIndex>> column_ids = nullptr);
 
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns

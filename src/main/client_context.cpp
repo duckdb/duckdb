@@ -1134,7 +1134,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 }
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection,
-                           optional_ptr<const vector<string>> active_columns) {
+                           optional_ptr<const vector<LogicalIndex>> column_ids) {
 
 	RunFunctionInTransaction([&]() {
 		auto &table_entry =
@@ -1157,7 +1157,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		auto binder = Binder::CreateBinder(*this);
 		auto bound_constraints = binder->BindConstraints(table_entry);
 		MetaTransaction::Get(*this).ModifyDatabase(table_entry.ParentCatalog().GetAttached());
-		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints, active_columns);
+		table_entry.GetStorage().LocalAppend(table_entry, *this, collection, bound_constraints, column_ids);
 	});
 }
 

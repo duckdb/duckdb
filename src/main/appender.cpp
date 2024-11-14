@@ -130,6 +130,7 @@ Appender::~Appender() {
 }
 
 void BaseAppender::InitializeChunk() {
+	chunk.Destroy();
 	chunk.Initialize(allocator, GetActiveTypes());
 }
 
@@ -459,16 +460,16 @@ void BaseAppender::Flush() {
 }
 
 void Appender::FlushInternal(ColumnDataCollection &collection) {
-	context->Append(*description, collection, &active_columns);
+	context->Append(*description, collection, &column_ids);
 }
 
 void Appender::AppendDefault() {
-	auto &values = GetDefaultValues();
-	auto it = values.find(column);
-	if (it == values.end()) {
+	auto index = column_ids.empty() ? column : column_ids[column].index;
+	auto it = default_values.find(index);
+	if (it == default_values.end()) {
+		auto &name = description->columns[index].Name();
 		throw NotImplementedException(
-		    "AppendDefault is currently not supported for column \"%s\" because default expression is not foldable.",
-		    active_columns[column]);
+		    "AppendDefault is not supported for column \"%s\": not a foldable default expressions.", name);
 	}
 	auto &value = it->second;
 	Append(value);
@@ -477,60 +478,51 @@ void Appender::AppendDefault() {
 void Appender::AddColumn(const string &name) {
 	Flush();
 
-	for (const auto &column_name : active_columns) {
-		if (name == column_name) {
-			throw InvalidInputException("cannot add the same column twice");
-		}
-	}
-
 	auto exists = false;
 	for (idx_t col_idx = 0; col_idx < description->columns.size(); col_idx++) {
 		auto &col_def = description->columns[col_idx];
-		if (col_def.Name() == name) {
-			if (col_def.Generated()) {
-				throw InvalidInputException("cannot add a generated column to the appender");
-			}
-			auto def_it = default_values.find(col_idx);
-			if (def_it != default_values.end()) {
-				active_default_values.insert({active_types.size(), def_it->second});
-			}
-			active_types.push_back(col_def.Type());
-			active_columns.push_back(name);
-			exists = true;
-			break;
+		if (col_def.Name() != name) {
+			continue;
 		}
+
+		// Ensure that we are not adding a generated column.
+		if (col_def.Generated()) {
+			throw InvalidInputException("cannot add a generated column to the appender");
+		}
+
+		// Ensure that we haven't added this column before.
+		for (const auto &column_id : column_ids) {
+			if (column_id == col_def.Logical()) {
+				throw InvalidInputException("cannot add the same column twice");
+			}
+		}
+
+		active_types.push_back(col_def.Type());
+		column_ids.push_back(col_def.Logical());
+		exists = true;
+		break;
 	}
 	if (!exists) {
 		throw InvalidInputException("the column must exist in the table");
 	}
 
-	chunk.Destroy();
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 }
 
 void Appender::ClearColumns() {
 	Flush();
-	active_columns.clear();
+	column_ids.clear();
 	active_types.clear();
-	active_default_values.clear();
 
-	chunk.Destroy();
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
-}
-
-const unordered_map<column_t, Value> &Appender::GetDefaultValues() const {
-	if (active_types.empty()) {
-		return default_values;
-	}
-	return active_default_values;
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(table);
-	table.GetStorage().LocalAppend(table, context, collection, bound_constraints);
+	table.GetStorage().LocalAppend(table, context, collection, bound_constraints, nullptr);
 }
 
 void InternalAppender::AddColumn(const string &name) {

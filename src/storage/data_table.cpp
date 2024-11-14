@@ -856,27 +856,25 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Da
 }
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
-                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+                            optional_ptr<const vector<LogicalIndex>> column_ids) {
+
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
-	for (auto &chunk : collection.Chunks()) {
-		storage.LocalAppend(append_state, table, context, chunk);
-	}
-	storage.FinalizeLocalAppend(append_state);
-}
 
-void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
-                            const vector<unique_ptr<BoundConstraint>> &bound_constraints,
-                            optional_ptr<const vector<string>> active_columns) {
-	if (!active_columns || active_columns->empty()) {
-		return LocalAppend(table, context, collection, bound_constraints);
+	if (!column_ids || column_ids->empty()) {
+		for (auto &chunk : collection.Chunks()) {
+			storage.LocalAppend(append_state, table, context, chunk);
+		}
+		storage.FinalizeLocalAppend(append_state);
+		return;
 	}
 
 	auto &column_list = table.GetColumns();
 	map<PhysicalIndex, unique_ptr<Expression>> active_expressions;
-	for (idx_t i = 0; i < active_columns->size(); i++) {
-		auto &col = column_list.GetColumn((*active_columns)[i]);
+	for (idx_t i = 0; i < column_ids->size(); i++) {
+		auto &col = column_list.GetColumn((*column_ids)[i]);
 		auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
 		active_expressions[col.Physical()] = std::move(expr);
 	}
@@ -908,9 +906,6 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 	DataChunk result;
 	result.Initialize(context, table.GetTypes());
 
-	LocalAppendState append_state;
-	auto &storage = table.GetStorage();
-	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 	for (auto &chunk : collection.Chunks()) {
 		expression_executor.Execute(chunk, result);
 		storage.LocalAppend(append_state, table, context, result);

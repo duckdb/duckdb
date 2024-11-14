@@ -130,11 +130,9 @@ class Appender : public BaseAppender {
 	//! All table default values.
 	unordered_map<column_t, Value> default_values;
 
-	//! If not empty, then this holds all columns provided by the appender.
+	//! If not empty, then this holds all logical column IDs of columns provided by the appender.
 	//! Any other columns default to NULL, or their default values.
-	vector<string> active_columns;
-	//! The active default values.
-	unordered_map<column_t, Value> active_default_values;
+	vector<LogicalIndex> column_ids;
 
 public:
 	DUCKDB_API Appender(Connection &con, const string &database_name, const string &schema_name,
@@ -147,9 +145,6 @@ public:
 	void AppendDefault();
 	void AddColumn(const string &name) override;
 	void ClearColumns() override;
-
-	//! Returns the default values of the appender.
-	const unordered_map<column_t, Value> &GetDefaultValues() const;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
