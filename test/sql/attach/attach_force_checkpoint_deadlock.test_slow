@@ -17,10 +17,8 @@ create table ${dbname}.${dbname}(foo bigint)
 statement ok
 insert into ${dbname}.${dbname} select sum(i) from range(1000000) t(i)
 
-statement maybe
+statement ok
 force checkpoint ${dbname}
-----
-another thread is running FORCE CHECKPOINT
 
 statement ok
 select

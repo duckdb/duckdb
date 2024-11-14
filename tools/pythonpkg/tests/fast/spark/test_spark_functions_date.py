@@ -5,6 +5,7 @@ from datetime import date, datetime
 
 from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
+from spark_namespace.sql.functions import col
 
 
 class TestsSparkFunctionsDate(object):
@@ -146,3 +147,16 @@ class TestsSparkFunctionsDate(object):
 
         res = df.select(F.last_day(df.d.cast("date")).alias('date')).collect()
         assert res == [Row(date=date(1997, 2, 28))]
+
+    def test_add_months(self, spark):
+        df = spark.createDataFrame([(datetime(2024, 5, 12, 13, 30, 45), 2)], ["dt", "months"])
+
+        result = df.select(
+            F.add_months("dt", 1).alias("with_literal"),
+            F.add_months("dt", "months").alias("with_str"),
+            F.add_months(col("dt"), df["months"]).alias("with_col"),
+        ).collect()
+
+        assert result[0].with_literal == date(2024, 6, 12)
+        assert result[0].with_str == date(2024, 7, 12)
+        assert result[0].with_col == date(2024, 7, 12)

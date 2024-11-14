@@ -1,4 +1,5 @@
-from typing import Any, Callable, Union, overload, Optional
+import warnings
+from typing import Any, Callable, Union, overload, Optional, List, Tuple
 
 from duckdb import (
     CaseExpression,
@@ -105,6 +106,44 @@ def struct(*cols: Column) -> Column:
     )
 
 
+def array(
+    *cols: Union["ColumnOrName", Union[List["ColumnOrName"], Tuple["ColumnOrName", ...]]]
+) -> Column:
+    """Creates a new array column.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    cols : :class:`~pyspark.sql.Column` or str
+        column names or :class:`~pyspark.sql.Column`\\s that have
+        the same data type.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a column of array type.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5)], ("name", "age"))
+    >>> df.select(array('age', 'age').alias("arr")).collect()
+    [Row(arr=[2, 2]), Row(arr=[5, 5])]
+    >>> df.select(array([df.age, df.age]).alias("arr")).collect()
+    [Row(arr=[2, 2]), Row(arr=[5, 5])]
+    >>> df.select(array('age', 'age').alias("col")).printSchema()
+    root
+     |-- col: array (nullable = false)
+     |    |-- element: long (containsNull = true)
+    """
+    if len(cols) == 1 and isinstance(cols[0], (list, set)):
+        cols = cols[0]
+    return _invoke_function_over_columns("list_value", *cols)
+
+
 def lit(col: Any) -> Column:
     return col if isinstance(col, Column) else Column(ConstantExpression(col))
 
@@ -142,6 +181,8 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
         ConstantExpression(replacement),
         ConstantExpression("g"),
     )
+
+
 
 
 def asc(col: "ColumnOrName") -> Column:
@@ -620,6 +661,170 @@ def asin(col: "ColumnOrName") -> Column:
     col = _to_column_expr(col)
     # FIXME: ConstantExpression(float("nan")) gives NULL and not NaN
     return Column(CaseExpression((col < -1.0) | (col > 1.0), ConstantExpression(float("nan"))).otherwise(FunctionExpression("asin", col)))
+
+
+
+def array_agg(col: "ColumnOrName") -> Column:
+    """
+    Aggregate function: returns a list of objects with duplicates.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        list of objects with duplicates.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([[1],[1],[2]], ["c"])
+    >>> df.agg(array_agg('c').alias('r')).collect()
+    [Row(r=[1, 1, 2])]
+    """
+    return _invoke_function_over_columns("list", col)
+
+
+def array_append(col: "ColumnOrName", value: Any) -> Column:
+    """
+    Collection function: returns an array of the elements in col1 along
+    with the added element in col2 at the last of the array.
+
+    .. versionadded:: 3.4.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+    value :
+        a literal value, or a :class:`~pyspark.sql.Column` expression.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of values from first array along with the element.
+
+    Notes
+    -----
+    Supports Spark Connect.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([Row(c1=["b", "a", "c"], c2="c")])
+    >>> df.select(array_append(df.c1, df.c2)).collect()
+    [Row(array_append(c1, c2)=['b', 'a', 'c', 'c'])]
+    >>> df.select(array_append(df.c1, 'x')).collect()
+    [Row(array_append(c1, x)=['b', 'a', 'c', 'x'])]
+    """
+    return _invoke_function("list_append", _to_column_expr(col), _get_expr(value))
+
+
+def array_insert(
+    arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Any
+) -> Column:
+    """
+    Collection function: adds an item into a given array at a specified array index.
+    Array indices start at 1, or start from the end if index is negative.
+    Index above array size appends the array, or prepends the array if index is negative,
+    with 'null' elements.
+
+    .. versionadded:: 3.4.0
+
+    Parameters
+    ----------
+    arr : :class:`~pyspark.sql.Column` or str
+        name of column containing an array
+    pos : :class:`~pyspark.sql.Column` or str or int
+        name of Numeric type column indicating position of insertion
+        (starting at index 1, negative position is a start from the back of the array)
+    value :
+        a literal value, or a :class:`~pyspark.sql.Column` expression.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of values, including the new specified value
+
+    Notes
+    -----
+    Supports Spark Connect.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(
+    ...     [(['a', 'b', 'c'], 2, 'd'), (['c', 'b', 'a'], -2, 'd')],
+    ...     ['data', 'pos', 'val']
+    ... )
+    >>> df.select(array_insert(df.data, df.pos.cast('integer'), df.val).alias('data')).collect()
+    [Row(data=['a', 'd', 'b', 'c']), Row(data=['c', 'b', 'd', 'a'])]
+    >>> df.select(array_insert(df.data, 5, 'hello').alias('data')).collect()
+    [Row(data=['a', 'b', 'c', None, 'hello']), Row(data=['c', 'b', 'a', None, 'hello'])]
+    """
+    pos = _get_expr(pos)
+    arr = _to_column_expr(arr)
+    # Depending on if the position is positive or not, we need to interpret it differently.
+    # This is because negative numbers are relative to the end of the NEW list.
+    # For example, if it's -2, it's expected that the inserted value is at the second position
+    # in the NEW list.
+    pos_is_positive = pos > 0
+
+    list_length_plus_1 = FunctionExpression("add", FunctionExpression("len", arr), 1)
+
+    # If the position is above the list size plus 1, first extend the list with the
+    # relevant number of nulls to get the list to the size of (pos - 1).
+    list_ = CaseExpression(
+        pos > list_length_plus_1,
+        FunctionExpression("list_resize", arr, FunctionExpression("subtract", pos, 1)),
+    ).otherwise(
+        CaseExpression(
+            (pos < 0) & (FunctionExpression("abs", pos) > list_length_plus_1),
+            FunctionExpression(
+                "list_concat",
+                FunctionExpression(
+                    "list_resize",
+                    FunctionExpression("list_value", None),
+                    FunctionExpression(
+                        "subtract", FunctionExpression("abs", pos), list_length_plus_1
+                    ),
+                ),
+                arr,
+            ),
+        ).otherwise(arr)
+    )
+
+    # We slice the array into two parts, insert the value in between and concatenate the two parts
+    # together again.
+    return _invoke_function(
+        "list_concat",
+        FunctionExpression(
+            "list_concat",
+            # First part of the list
+            FunctionExpression(
+                "list_slice",
+                list_,
+                1,
+                CaseExpression(
+                    pos_is_positive, FunctionExpression("subtract", pos, 1)
+                ).otherwise(pos),
+            ),
+            # Here we insert the value at the specified position
+            FunctionExpression("list_value", _get_expr(value)),
+        ),
+        # The remainder of the list
+        FunctionExpression(
+            "list_slice",
+            list_,
+            CaseExpression(pos_is_positive, pos).otherwise(
+                FunctionExpression("add", pos, 1)
+            ),
+            -1,
+        ),
+    )
 
 
 def array_contains(col: "ColumnOrName", value: Any) -> Column:
@@ -1138,6 +1343,18 @@ def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> C
     return _invoke_function_over_columns("approx_count_distinct", col)
 
 
+def approxCountDistinct(col: "ColumnOrName", rsd: Optional[float] = None) -> Column:
+    """
+    .. versionadded:: 1.3.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    .. deprecated:: 2.1.0
+        Use :func:`approx_count_distinct` instead.
+    """
+    warnings.warn("Deprecated in 2.1, use approx_count_distinct instead.", FutureWarning)
+    return approx_count_distinct(col, rsd)
 
 
 @overload
@@ -4438,3 +4655,336 @@ def unbase64(col: "ColumnOrName") -> Column:
     +--------------------+
     """
     return _invoke_function_over_columns("from_base64", col)
+
+
+def add_months(start: "ColumnOrName", months: Union["ColumnOrName", int]) -> Column:
+    """
+    Returns the date that is `months` months after `start`. If `months` is a negative value
+    then these amount of months will be deducted from the `start`.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    start : :class:`~pyspark.sql.Column` or str
+        date column to work on.
+    months : :class:`~pyspark.sql.Column` or str or int
+        how many months after the given date to calculate.
+        Accepts negative value as well to calculate backwards.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a date after/before given number of months.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08', 2)], ['dt', 'add'])
+    >>> df.select(add_months(df.dt, 1).alias('next_month')).collect()
+    [Row(next_month=datetime.date(2015, 5, 8))]
+    >>> df.select(add_months(df.dt, df.add.cast('integer')).alias('next_month')).collect()
+    [Row(next_month=datetime.date(2015, 6, 8))]
+    >>> df.select(add_months('dt', -2).alias('prev_month')).collect()
+    [Row(prev_month=datetime.date(2015, 2, 8))]
+    """
+    months = ConstantExpression(months) if isinstance(months, int) else _to_column_expr(months)
+    return _invoke_function("date_add", _to_column_expr(start), FunctionExpression("to_months", months)).cast("date")
+
+
+def array_join(
+    col: "ColumnOrName", delimiter: str, null_replacement: Optional[str] = None
+) -> Column:
+    """
+    Concatenates the elements of `column` using the `delimiter`. Null values are replaced with
+    `null_replacement` if set, otherwise they are ignored.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    delimiter : str
+        delimiter used to concatenate elements
+    null_replacement : str, optional
+        if set then null values will be replaced by this value
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a column of string type. Concatenated values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(["a", "b", "c"],), (["a", None],)], ['data'])
+    >>> df.select(array_join(df.data, ",").alias("joined")).collect()
+    [Row(joined='a,b,c'), Row(joined='a')]
+    >>> df.select(array_join(df.data, ",", "NULL").alias("joined")).collect()
+    [Row(joined='a,b,c'), Row(joined='a,NULL')]
+    """
+    if null_replacement is not None:
+        raise ContributionsAcceptedError("null_replacement is not yet supported")
+    return _invoke_function("array_to_string", _to_column_expr(col), ConstantExpression(delimiter))
+
+
+def array_position(col: "ColumnOrName", value: Any) -> Column:
+    """
+    Collection function: Locates the position of the first occurrence of the given value
+    in the given array. Returns null if either of the arguments are null.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Notes
+    -----
+    The position is not zero based, but 1 based index. Returns 0 if the given
+    value could not be found in the array.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    value : Any
+        value to look for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        position of the value in the given array if found and 0 otherwise.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(["c", "b", "a"],), ([],)], ['data'])
+    >>> df.select(array_position(df.data, "a")).collect()
+    [Row(array_position(data, a)=3), Row(array_position(data, a)=0)]
+    """
+    return Column(CoalesceOperator(_to_column_expr(_invoke_function_over_columns("list_position", col, lit(value))), ConstantExpression(0)))
+
+
+def array_prepend(col: "ColumnOrName", value: Any) -> Column:
+    """
+    Collection function: Returns an array containing element as
+    well as all elements from array. The new element is positioned
+    at the beginning of the array.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+    value :
+        a literal value, or a :class:`~pyspark.sql.Column` expression.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array excluding given value.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([2, 3, 4],), ([],)], ['data'])
+    >>> df.select(array_prepend(df.data, 1)).collect()
+    [Row(array_prepend(data, 1)=[1, 2, 3, 4]), Row(array_prepend(data, 1)=[1])]
+    """
+    return _invoke_function_over_columns("list_prepend", lit(value), col)
+
+
+def array_repeat(col: "ColumnOrName", count: Union["ColumnOrName", int]) -> Column:
+    """
+    Collection function: creates an array containing a column repeated count times.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column name or column that contains the element to be repeated
+    count : :class:`~pyspark.sql.Column` or str or int
+        column name, column, or int containing the number of times to repeat the first argument
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        an array of repeated elements.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('ab',)], ['data'])
+    >>> df.select(array_repeat(df.data, 3).alias('r')).collect()
+    [Row(r=['ab', 'ab', 'ab'])]
+    """
+    count = lit(count) if isinstance(count, int) else count
+
+    return _invoke_function_over_columns("list_resize", _invoke_function_over_columns("list_value", col), count, col)
+
+
+def array_size(col: "ColumnOrName") -> Column:
+    """
+    Returns the total number of elements in the array. The function returns null for null input.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        total number of elements in the array.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([2, 1, 3],), (None,)], ['data'])
+    >>> df.select(array_size(df.data).alias('r')).collect()
+    [Row(r=3), Row(r=None)]
+    """
+    return _invoke_function_over_columns("len", col)
+
+def array_sort(
+    col: "ColumnOrName", comparator: Optional[Callable[[Column, Column], Column]] = None
+) -> Column:
+    """
+    Collection function: sorts the input array in ascending order. The elements of the input array
+    must be orderable. Null elements will be placed at the end of the returned array.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Can take a `comparator` function.
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+    comparator : callable, optional
+        A binary ``(Column, Column) -> Column: ...``.
+        The comparator will take two
+        arguments representing two elements of the array. It returns a negative integer, 0, or a
+        positive integer as the first element is less than, equal to, or greater than the second
+        element. If the comparator function returns null, the function will fail and raise an error.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        sorted array.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([2, 1, None, 3],),([1],),([],)], ['data'])
+    >>> df.select(array_sort(df.data).alias('r')).collect()
+    [Row(r=[1, 2, 3, None]), Row(r=[1]), Row(r=[])]
+    >>> df = spark.createDataFrame([(["foo", "foobar", None, "bar"],),(["foo"],),([],)], ['data'])
+    >>> df.select(array_sort(
+    ...     "data",
+    ...     lambda x, y: when(x.isNull() | y.isNull(), lit(0)).otherwise(length(y) - length(x))
+    ... ).alias("r")).collect()
+    [Row(r=['foobar', 'foo', None, 'bar']), Row(r=['foo']), Row(r=[])]
+    """
+    if comparator is not None:
+        raise ContributionsAcceptedError("comparator is not yet supported")
+    else:
+        return _invoke_function_over_columns("list_sort", col, lit("ASC"), lit("NULLS LAST"))
+
+
+def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
+    """
+    Collection function: returns true if the arrays contain any common non-null element; if not,
+    returns null if both the arrays are non-empty and any of them contains a null element; returns
+    false otherwise.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a column of Boolean type.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(["a", "b"], ["b", "c"]), (["a"], ["b", "c"])], ['x', 'y'])
+    >>> df.select(arrays_overlap(df.x, df.y).alias("overlap")).collect()
+    [Row(overlap=True), Row(overlap=False)]
+    """
+    a1 = _to_column_expr(a1)
+    a2 = _to_column_expr(a2)
+
+    # FIXME: Hacky way to check if the array contains null as we can't write a lambda function
+    # with the expression API or use list comprehensions. Else, we could for example filter
+    # the list to remove nulls and then check if the length of the list has changed.
+    def list_contains_null(a: ColumnExpression) -> Expression:
+        return FunctionExpression("len", FunctionExpression("regexp_extract_all", FunctionExpression("array_to_string", a, ConstantExpression('|')), ConstantExpression('\|'))) < (FunctionExpression("len", a) - 1)
+
+    a1_has_null = list_contains_null(a1)
+    a2_has_null = list_contains_null(a2)
+
+    return Column(
+        CaseExpression(
+            FunctionExpression("list_has_any", a1, a2), ConstantExpression(True)
+        ).otherwise(
+            CaseExpression(
+                (FunctionExpression("len", a1) > 0) & (FunctionExpression("len", a2) > 0) & (a1_has_null | a2_has_null), ConstantExpression(None)
+                ).otherwise(ConstantExpression(False)))
+    )
+
+
+def arrays_zip(*cols: "ColumnOrName") -> Column:
+    """
+    Collection function: Returns a merged array of structs in which the N-th struct contains all
+    N-th values of input arrays. If one of the arrays is shorter than others then
+    resulting struct type value will be a `null` for missing elements.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    cols : :class:`~pyspark.sql.Column` or str
+        columns of arrays to be merged.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        merged array of entries.
+
+    Examples
+    --------
+    >>> from pyspark.sql.functions import arrays_zip
+    >>> df = spark.createDataFrame([([1, 2, 3], [2, 4, 6], [3, 6])], ['vals1', 'vals2', 'vals3'])
+    >>> df = df.select(arrays_zip(df.vals1, df.vals2, df.vals3).alias('zipped'))
+    >>> df.show(truncate=False)
+    +------------------------------------+
+    |zipped                              |
+    +------------------------------------+
+    |[{1, 2, 3}, {2, 4, 6}, {3, 6, NULL}]|
+    +------------------------------------+
+    >>> df.printSchema()
+    root
+     |-- zipped: array (nullable = true)
+     |    |-- element: struct (containsNull = false)
+     |    |    |-- vals1: long (nullable = true)
+     |    |    |-- vals2: long (nullable = true)
+     |    |    |-- vals3: long (nullable = true)
+    """
+    return _invoke_function_over_columns("list_zip", *cols)

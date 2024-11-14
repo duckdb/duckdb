@@ -22,17 +22,18 @@
 
 namespace duckdb {
 
-const uint64_t WAL_VERSION_NUMBER = 2;
+constexpr uint64_t WAL_VERSION_NUMBER = 2;
 
-WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path)
-    : database(database), wal_path(wal_path), wal_size(0), initialized(false) {
+WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size,
+                             WALInitState init_state)
+    : database(database), wal_path(wal_path), wal_size(wal_size), init_state(init_state) {
 }
 
 WriteAheadLog::~WriteAheadLog() {
 }
 
 BufferedFileWriter &WriteAheadLog::Initialize() {
-	if (initialized) {
+	if (Initialized()) {
 		return *writer;
 	}
 	lock_guard<mutex> lock(wal_lock);
@@ -40,25 +41,22 @@ BufferedFileWriter &WriteAheadLog::Initialize() {
 		writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), wal_path,
 		                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 		                                           FileFlags::FILE_FLAGS_APPEND);
+		if (init_state == WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE) {
+			writer->Truncate(wal_size);
+		}
 		wal_size = writer->GetFileSize();
-		initialized = true;
+		init_state = WALInitState::INITIALIZED;
 	}
 	return *writer;
 }
 
 //! Gets the total bytes written to the WAL since startup
-idx_t WriteAheadLog::GetWALSize() {
-	if (!Initialized()) {
-		auto &fs = FileSystem::Get(database);
-		if (!fs.FileExists(wal_path)) {
-			return 0;
-		}
-		Initialize();
-	}
+idx_t WriteAheadLog::GetWALSize() const {
+	D_ASSERT(init_state != WALInitState::NO_WAL || wal_size == 0);
 	return wal_size;
 }
 
-idx_t WriteAheadLog::GetTotalWritten() {
+idx_t WriteAheadLog::GetTotalWritten() const {
 	if (!Initialized()) {
 		return 0;
 	}
@@ -66,20 +64,32 @@ idx_t WriteAheadLog::GetTotalWritten() {
 }
 
 void WriteAheadLog::Truncate(idx_t size) {
+	if (init_state == WALInitState::NO_WAL) {
+		// no WAL to truncate
+		return;
+	}
 	if (!Initialized()) {
+		init_state = WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
+		wal_size = size;
 		return;
 	}
 	writer->Truncate(size);
 	wal_size = writer->GetFileSize();
 }
 
+bool WriteAheadLog::Initialized() const {
+	return init_state == WALInitState::INITIALIZED;
+}
+
 void WriteAheadLog::Delete() {
-	if (!Initialized()) {
+	if (init_state == WALInitState::NO_WAL) {
+		// no WAL to delete
 		return;
 	}
 	writer.reset();
 	auto &fs = FileSystem::Get(database);
 	fs.RemoveFile(wal_path);
+	init_state = WALInitState::NO_WAL;
 	wal_size = 0;
 }
 

@@ -10,6 +10,7 @@ string SampleMethodToString(SampleMethod method) {
 }
 
 SampleOptions::SampleOptions(int64_t seed_) {
+	repeatable = false;
 	if (seed_ >= 0) {
 		seed = static_cast<idx_t>(seed_);
 	}
@@ -24,6 +25,7 @@ unique_ptr<SampleOptions> SampleOptions::Copy() {
 	result->is_percentage = is_percentage;
 	result->method = method;
 	result->seed = seed;
+	result->repeatable = repeatable;
 	return result;
 }
 

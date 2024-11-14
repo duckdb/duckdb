@@ -51,7 +51,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &transaction = DuckTransaction::Get(context.client, table.db);
 	auto &row_identifiers = chunk.data[row_id_index];
 
-	vector<column_t> column_ids;
+	vector<StorageIndex> column_ids;
 	for (idx_t i = 0; i < table.ColumnCount(); i++) {
 		column_ids.emplace_back(i);
 	};

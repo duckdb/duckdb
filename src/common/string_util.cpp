@@ -36,7 +36,15 @@ string StringUtil::GenerateRandomName(idx_t length) {
 }
 
 bool StringUtil::Contains(const string &haystack, const string &needle) {
-	return (haystack.find(needle) != string::npos);
+	return Find(haystack, needle).IsValid();
+}
+
+optional_idx StringUtil::Find(const string &haystack, const string &needle) {
+	auto index = haystack.find(needle);
+	if (index == string::npos) {
+		return optional_idx();
+	}
+	return optional_idx(index);
 }
 
 void StringUtil::LTrim(string &str) {

@@ -194,6 +194,92 @@ class TestRelation(object):
             (4, 'four'),
         ]
 
+    def test_update_relation(self, duckdb_cursor):
+        duckdb_cursor.sql("create table tbl (a varchar default 'test', b int)")
+        duckdb_cursor.table('tbl').insert(['hello', 21])
+        duckdb_cursor.table('tbl').insert(['hello', 42])
+        # UPDATE tbl SET a = DEFAULT where b = 42
+        duckdb_cursor.table('tbl').update(
+            {'a': duckdb.DefaultExpression()}, condition=duckdb.ColumnExpression('b') == 42
+        )
+        assert duckdb_cursor.table('tbl').fetchall() == [('hello', 21), ('test', 42)]
+
+        rel = duckdb_cursor.table('tbl')
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide at least one set expression'):
+            rel.update({})
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Please provide the column name as the key of the dictionary'
+        ):
+            rel.update({1: 21})
+        with pytest.raises(duckdb.BinderException, match='Referenced update column c not found in table!'):
+            rel.update({'c': 21})
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Please provide 'set' as a dictionary of column name to Expression"
+        ):
+            rel.update(21)
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Please provide an object of type Expression as the value, not <class 'set'>",
+        ):
+            rel.update({'a': {21}})
+
+    def test_value_relation(self, duckdb_cursor):
+        # Needs at least one input
+        with pytest.raises(duckdb.InvalidInputException, match='Could not create a ValueRelation without any inputs'):
+            duckdb_cursor.values()
+
+        # From a list of (python) values
+        rel = duckdb_cursor.values([1, 2, 3])
+        assert rel.fetchall() == [(1, 2, 3)]
+
+        # From an Expression
+        rel = duckdb_cursor.values(duckdb.ConstantExpression('test'))
+        assert rel.fetchall() == [('test',)]
+
+        # From multiple Expressions
+        rel = duckdb_cursor.values(
+            duckdb.ConstantExpression('1'), duckdb.ConstantExpression('2'), duckdb.ConstantExpression('3')
+        )
+        assert rel.fetchall() == [('1', '2', '3')]
+
+        # From Expressions mixed with random values
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide arguments of type Expression!'):
+            rel = duckdb_cursor.values(
+                duckdb.ConstantExpression('1'),
+                {'test'},
+                duckdb.ConstantExpression('3'),
+            )
+
+        # From Expressions mixed with values that *can* be autocast to Expression
+        rel = duckdb_cursor.values(
+            duckdb.ConstantExpression('1'),
+            2,
+            duckdb.ConstantExpression('3'),
+        )
+
+        const = duckdb.ConstantExpression
+        # From a tuple of Expressions
+        rel = duckdb_cursor.values((const(1), const(2), const(3)))
+        assert rel.fetchall() == [(1, 2, 3)]
+
+        # From mismatching tuples of Expressions
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Mismatch between length of tuples in input, expected 3 but found 2'
+        ):
+            rel = duckdb_cursor.values((const(1), const(2), const(3)), (const(5), const(4)))
+
+        # From an empty tuple
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide a non-empty tuple'):
+            rel = duckdb_cursor.values(())
+
+        # Mixing tuples with Expressions
+        with pytest.raises(duckdb.InvalidInputException, match='Expected objects of type tuple'):
+            rel = duckdb_cursor.values((const(1), const(2), const(3)), const(4))
+
+        # Using Expressions that can't be resolved:
+        with pytest.raises(duckdb.BinderException, match='Referenced column "a" not found in FROM clause!'):
+            duckdb_cursor.values(duckdb.ColumnExpression('a'))
+
     def test_insert_into_operator(self):
         conn = duckdb.connect()
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
