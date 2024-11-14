@@ -15,12 +15,11 @@ namespace duckdb {
 namespace roaring {
 
 //! The amount of values that are encoded per container
-static constexpr idx_t ROARING_CONTAINER_SIZE = 65536;
-static constexpr idx_t ROARING_VECTOR_SIZE = 2048;
+static constexpr idx_t ROARING_CONTAINER_SIZE = 2048;
 static constexpr bool NULLS = true;
 static constexpr bool NON_NULLS = false;
-static constexpr uint16_t MAX_RUN_IDX = 2047;
-static constexpr uint16_t MAX_ARRAY_IDX = 4095;
+static constexpr uint16_t MAX_RUN_IDX = 63;
+static constexpr uint16_t MAX_ARRAY_IDX = 127;
 
 struct ContainerMetadata {
 public:
@@ -109,6 +108,7 @@ public:
 		static Result BitsetContainer(idx_t container_size) {
 			auto res = Result();
 			res.container_type = ContainerType::BITSET_CONTAINER;
+			res.nulls = true;
 			res.count = container_size;
 			return res;
 		}
@@ -232,13 +232,13 @@ public:
 		}
 
 		if (lowest_array_cost <= lowest_run_cost) {
-			if (array_idx[NULLS] < array_idx[NON_NULLS]) {
+			if (array_idx[NULLS] <= array_idx[NON_NULLS]) {
 				return Result::ArrayContainer(array_idx[NULLS], NULLS);
 			} else {
 				return Result::ArrayContainer(array_idx[NON_NULLS], NON_NULLS);
 			}
 		} else {
-			if (run_idx[NULLS] < run_idx[NON_NULLS]) {
+			if (run_idx[NULLS] <= run_idx[NON_NULLS]) {
 				return Result::RunContainer(run_idx[NULLS], NULLS);
 			} else {
 				return Result::RunContainer(run_idx[NON_NULLS], NON_NULLS);
@@ -670,7 +670,7 @@ public:
 
 					// Process the run
 					for (idx_t i = 0; i < total; i++) {
-						result_mask.SetInvalid(result_idx++);
+						result_mask.SetInvalid(result_offset + result_idx++);
 					}
 					if (scanned_count + result_idx == run.start + 1 + run.length) {
 						// Fully processed the current run
@@ -716,8 +716,11 @@ public:
 #if false
 				// TODO: optimization
 				if (array_index + to_scan < count && array[array_index] == scanned_count && array[array_index + to_scan] == scanned_count + to_scan) {
-					throw NotImplementedException("INVERTED=TRUE, SET ALL BITS TO 0");
 					// All entries are present in the array, can set all bits to 0 directly
+					for (idx_t i = 0; i < to_scan; i++) {
+						result_mask.SetInvalid(result_offset + i);
+					}
+					break;
 				}
 #endif
 
@@ -730,7 +733,7 @@ public:
 						continue;
 					}
 					auto index = array[array_index] - scanned_count;
-					result_mask.SetInvalid(index);
+					result_mask.SetInvalid(result_offset + index);
 				}
 			} while (false);
 			scanned_count += to_scan;
@@ -739,8 +742,9 @@ public:
 			do {
 				if (array_index >= count || scanned_count + to_scan < array[array_index]) {
 					// None of the bits we're scanning are set, set everything to 0 directly
-					throw NotImplementedException("INVERTED=FALSE, SET ALL BITS TO 0");
-					// TODO: implement the logic ..., then break
+					for (idx_t i = 0; i < to_scan; i++) {
+						result_mask.SetInvalid(result_offset + i);
+					}
 					break;
 				}
 
@@ -750,13 +754,25 @@ public:
 					break;
 				}
 
-				// FIXME: this could be optimized to group the "SetInvalid" operations, they will be sequential in many
-				// cases
-				for (idx_t i = 0; i < to_scan; i++) {
-					if (array_index >= count || scanned_count + i != array[array_index]) {
-						result_mask.SetInvalid(i);
-					} else {
-						D_ASSERT(scanned_count + i == array[array_index]);
+				idx_t i = 0;
+				while (i < to_scan) {
+					// Determine the next valid position within the scan range, if available
+					idx_t valid_pos = (array_index < count) ? array[array_index] : scanned_count + to_scan;
+					idx_t valid_start = valid_pos - scanned_count;
+
+					if (i < valid_start) {
+						// FIXME: optimize this to group the SetInvalid calls
+						// These bits are all set to 0
+						idx_t invalid_end = MinValue<idx_t>(valid_start, to_scan);
+						for (idx_t j = i; j < invalid_end; j++) {
+							result_mask.SetInvalid(result_offset + j);
+						}
+						i = invalid_end;
+					}
+
+					if (i == valid_start && i < to_scan && array_index < count) {
+						// This bit is already set, no action required
+						i++;
 						array_index++;
 					}
 				}
@@ -807,13 +823,29 @@ public:
 			container_count++;
 		}
 		container_metadata.reserve(container_count);
+		data_start_position.reserve(container_count);
+		idx_t position = 0;
 		for (idx_t i = 0; i < container_count; i++) {
-			container_metadata.push_back(Load<ContainerMetadata>(metadata_ptr));
+			auto metadata = Load<ContainerMetadata>(metadata_ptr);
+			container_metadata.push_back(metadata);
 			metadata_ptr -= sizeof(ContainerMetadata);
+			data_start_position.push_back(position);
+			position += SkipVector(metadata);
 		}
 	}
 
 public:
+	idx_t SkipVector(const ContainerMetadata &metadata) {
+		if (metadata.IsRun()) {
+			return sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
+		}
+		if (metadata.IsUncompressed()) {
+			// NOTE: this doesn't care about smaller containers, since only the last container can be smaller
+			return ROARING_CONTAINER_SIZE / ValidityMask::BITS_PER_VALUE;
+		}
+		return sizeof(uint16_t) * metadata.Cardinality();
+	}
+
 	bool UseContainerStateCache(idx_t container_index, idx_t internal_offset) {
 		if (!current_container) {
 			// No container loaded yet
@@ -835,12 +867,7 @@ public:
 	}
 
 	data_ptr_t GetStartOfContainerData(idx_t container_index) {
-		// TODO: keep the start position of the highest seen container index
-		// that gets updated here
-		if (!container_index) {
-			return data_ptr;
-		}
-		throw NotImplementedException("TODO");
+		return data_ptr + data_start_position[container_index];
 	}
 
 	ContainerScanState &LoadContainer(idx_t container_index, idx_t internal_offset) {
@@ -920,6 +947,7 @@ public:
 	unique_ptr<ContainerScanState> current_container;
 	data_ptr_t data_ptr;
 	vector<ContainerMetadata> container_metadata;
+	vector<idx_t> data_start_position;
 };
 
 unique_ptr<SegmentScanState> RoaringInitScan(ColumnSegment &segment) {

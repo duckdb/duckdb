@@ -16,7 +16,7 @@ statement ok
 CREATE TABLE test (a BIGINT);
 
 statement ok
-INSERT INTO test SELECT case when i % 600 != 0 and (i % 600) < 350 then null else 1337 end FROM range(0,10000) tbl(i);
+INSERT INTO test SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then 1337 else null end FROM range(0,10000) tbl(i);
 
 statement ok
 checkpoint
@@ -28,12 +28,12 @@ SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VA
 query I
 select count(*) from test WHERE a IS NOT NULL;
 ----
-4067
+8062
 
 query III
 select sum(a), min(a), max(a) from test;
 ----
-5437579	1337	1337
+10778894	1337	1337
 
 statement ok
 DROP TABLE test;
