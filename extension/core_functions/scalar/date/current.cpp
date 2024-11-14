@@ -1,10 +1,10 @@
 #include "core_functions/scalar/date_functions.hpp"
-
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
@@ -29,7 +29,9 @@ static void CurrentDateFunction(DataChunk &input, ExpressionState &state, Vector
 static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 0);
 
-	auto val = Value::TIMESTAMPTZ(timestamp_tz_t(GetTransactionTimestamp(state).value));
+	auto ts = GetTransactionTimestamp(state);
+	auto ts_tz = Cast::Operation<timestamp_t, timestamp_tz_t>(ts);
+	auto val = Value::TIMESTAMPTZ(ts_tz);
 	result.Reference(val);
 }
 
