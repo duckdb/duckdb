@@ -506,8 +506,8 @@ static vector<Value> ToValueVector(vector<string> &string_vector) {
 }
 
 template <class T, class OP>
-static vector<Value> GetParameterNames(FunctionEntry &entry, idx_t function_idx,
-                                       FunctionDescription &function_description, Value &parameter_types) {
+static Value GetParameterNames(FunctionEntry &entry, idx_t function_idx, FunctionDescription &function_description,
+                               Value &parameter_types) {
 	vector<Value> parameter_names;
 	if (function_description.parameter_names.size() > 0) {
 		for (idx_t param_idx = 0; param_idx < ListValue::GetChildren(parameter_types).size(); param_idx++) {
@@ -522,7 +522,7 @@ static vector<Value> GetParameterNames(FunctionEntry &entry, idx_t function_idx,
 		auto &function = entry.Cast<T>();
 		parameter_names = OP::GetParameters(function, function_idx);
 	}
-	return parameter_names;
+	return Value::LIST(LogicalType::VARCHAR, parameter_names);
 }
 
 // returns values:
@@ -623,10 +623,8 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, OP::GetReturnType(function, function_idx));
 
 	// parameters, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(
-	    col++, output_offset,
-	    Value::LIST(LogicalType::VARCHAR,
-	                GetParameterNames<T, OP>(function, function_idx, function_description, parameter_types_value)));
+	output.SetValue(col++, output_offset,
+	                GetParameterNames<T, OP>(function, function_idx, function_description, parameter_types_value));
 
 	// parameter_types, LogicalType::LIST(LogicalType::VARCHAR)
 	output.SetValue(col++, output_offset, parameter_types_value);
