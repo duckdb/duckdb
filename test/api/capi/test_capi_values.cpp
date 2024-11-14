@@ -66,7 +66,7 @@ TEST_CASE("Test ENUM getters", "[capi]") {
 	const char *mnames[5] = {"apple", "banana", "cherry", "orange", "elderberry"};
 	duckdb_logical_type enum_type = duckdb_create_enum_type(mnames, 5);
 
-	duckdb_value enum_val = duckdb_create_enum(enum_type, 2);
+	duckdb_value enum_val = duckdb_create_enum_value(enum_type, 2);
 	REQUIRE(enum_val);
 
 	auto val = duckdb_get_enum_value(nullptr);
@@ -77,7 +77,7 @@ TEST_CASE("Test ENUM getters", "[capi]") {
 
 	duckdb_destroy_value(&enum_val);
 
-	enum_val = duckdb_create_enum(enum_type, 4);
+	enum_val = duckdb_create_enum_value(enum_type, 4);
 	REQUIRE(enum_val);
 
 	val = duckdb_get_enum_value(enum_val);
@@ -85,10 +85,10 @@ TEST_CASE("Test ENUM getters", "[capi]") {
 
 	duckdb_destroy_value(&enum_val);
 
-	enum_val = duckdb_create_enum(enum_type, 5);
+	enum_val = duckdb_create_enum_value(enum_type, 5);
 	REQUIRE(!enum_val);
 
-	enum_val = duckdb_create_enum(enum_type, 6);
+	enum_val = duckdb_create_enum_value(enum_type, 6);
 	REQUIRE(!enum_val);
 
 	duckdb_destroy_value(&enum_val);
@@ -125,9 +125,6 @@ TEST_CASE("Test STRUCT getters", "[capi]") {
 
 	val = duckdb_get_struct_child(struct_val, 2);
 	REQUIRE(!val);
-
-	REQUIRE(duckdb_get_struct_child_count(nullptr) == 0);
-	REQUIRE(duckdb_get_struct_child_count(struct_val) == 2);
 
 	duckdb_destroy_value(&struct_val);
 }

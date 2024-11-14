@@ -945,7 +945,7 @@
             }
         },
         {
-            "name": "duckdb_create_enum",
+            "name": "duckdb_create_enum_value",
             "return_type": "duckdb_value",
             "params": [
                 {
@@ -981,23 +981,6 @@
                     "value": "A duckdb_value containing an enum"
                 },
                 "return_value": "A uint64_t, or MinValue<uint64> if the value cannot be converted"
-            }
-        },
-        {
-            "name": "duckdb_get_struct_child_count",
-            "return_type": "idx_t",
-            "params": [
-                {
-                    "type": "duckdb_value",
-                    "name": "value"
-                }
-            ],
-            "comment": {
-                "description": "Returns the number of children in a STRUCT value.\n\n",
-                "param_comments": {
-                    "value": "The STRUCT value."
-                },
-                "return_value": "The number of children in the struct."
             }
         },
         {

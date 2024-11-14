@@ -9,9 +9,8 @@
         "duckdb_create_null_value",
         "duckdb_get_list_size",
         "duckdb_get_list_child",
-        "duckdb_create_enum",
+        "duckdb_create_enum_value",
         "duckdb_get_enum_value",
-        "duckdb_get_struct_child_count",
         "duckdb_get_struct_child"
     ]
 }

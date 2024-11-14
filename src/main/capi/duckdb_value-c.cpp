@@ -370,7 +370,7 @@ duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index) {
 	return WrapValue(new duckdb::Value(children[index]));
 }
 
-duckdb_value duckdb_create_enum(duckdb_logical_type type, uint64_t value) {
+duckdb_value duckdb_create_enum_value(duckdb_logical_type type, uint64_t value) {
 	if (!type) {
 		return nullptr;
 	}
@@ -398,20 +398,6 @@ uint64_t duckdb_get_enum_value(duckdb_value value) {
 	}
 
 	return val.GetValue<uint64_t>();
-}
-
-idx_t duckdb_get_struct_child_count(duckdb_value value) {
-	if (!value) {
-		return 0;
-	}
-
-	auto val = UnwrapValue(value);
-	if (val.type().id() != LogicalTypeId::STRUCT || val.IsNull()) {
-		return 0;
-	}
-
-	auto &children = duckdb::StructValue::GetChildren(val);
-	return children.size();
 }
 
 duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index) {
