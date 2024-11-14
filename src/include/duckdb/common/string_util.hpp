@@ -138,7 +138,7 @@ public:
 	//! Split the input string based on newline char
 	DUCKDB_API static vector<string> Split(const string &str, char delimiter);
 
-	//! Split the input string, ignore delimiters within parentheses
+	//! Split the input string, ignore delimiters within parentheses. Note: leading/trailing spaces are NOT stripped
 	DUCKDB_API static vector<string> SplitWithParentheses(const string &str, char delimiter = ',', char par_open = '(',
 	                                                      char par_close = ')');
 

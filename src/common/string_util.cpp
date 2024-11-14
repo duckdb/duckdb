@@ -168,11 +168,9 @@ vector<string> StringUtil::SplitWithParentheses(const string &str, char delimite
 			if (!parentheses.empty()) {
 				parentheses.pop();
 			} else {
-				throw InternalException("Encountered closing parenthesis without open parenthesis in string: '%s'",
-				                        str);
+				throw InternalException("Incongruent parentheses in string: '%s'", str);
 			}
 		}
-
 		// split if not within parentheses
 		if (parentheses.empty() && ch == delimiter) {
 			result.push_back(current);
@@ -184,6 +182,9 @@ vector<string> StringUtil::SplitWithParentheses(const string &str, char delimite
 	// Add the last segment
 	if (!current.empty()) {
 		result.push_back(current);
+	}
+	if (!parentheses.empty()) {
+		throw InternalException("Incongruent parentheses in string: '%s'", str);
 	}
 	return result;
 }
