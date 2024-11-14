@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/stack.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -154,7 +155,7 @@ vector<string> StringUtil::SplitWithQuote(const string &str, char delimiter, cha
 vector<string> StringUtil::SplitWithParentheses(const string &str, char delimiter, char par_open, char par_close) {
 	vector<string> result;
 	string current;
-	std::stack<char> parentheses;
+	stack<char> parentheses;
 
 	for (size_t i = 0; i < str.size(); ++i) {
 		char ch = str[i];
