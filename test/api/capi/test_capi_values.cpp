@@ -61,3 +61,73 @@ TEST_CASE("Test LIST getters", "[capi]") {
 
 	duckdb_destroy_value(&list_value);
 }
+
+TEST_CASE("Test ENUM getters", "[capi]") {
+	const char *mnames[5] = {"apple", "banana", "cherry", "orange", "elderberry"};
+	duckdb_logical_type enum_type = duckdb_create_enum_type(mnames, 5);
+
+	duckdb_value enum_val = duckdb_create_enum(enum_type, 2);
+	REQUIRE(enum_val);
+
+	auto val = duckdb_get_enum_value(nullptr);
+	REQUIRE(val == 0);
+
+	val = duckdb_get_enum_value(enum_val);
+	REQUIRE(val == 2);
+
+	duckdb_destroy_value(&enum_val);
+
+	enum_val = duckdb_create_enum(enum_type, 4);
+	REQUIRE(enum_val);
+
+	val = duckdb_get_enum_value(enum_val);
+	REQUIRE(val == 4);
+
+	duckdb_destroy_value(&enum_val);
+
+	enum_val = duckdb_create_enum(enum_type, 5);
+	REQUIRE(!enum_val);
+
+	enum_val = duckdb_create_enum(enum_type, 6);
+	REQUIRE(!enum_val);
+
+	duckdb_destroy_value(&enum_val);
+
+	duckdb_destroy_logical_type(&enum_type);
+}
+
+TEST_CASE("Test STRUCT getters", "[capi]") {
+	duckdb_logical_type mtypes[2] = {duckdb_create_logical_type(DUCKDB_TYPE_UBIGINT),
+	                                 duckdb_create_logical_type(DUCKDB_TYPE_BIGINT)};
+	const char *mnames[2] = {"a", "b"};
+	duckdb_logical_type struct_type = duckdb_create_struct_type(mtypes, mnames, 2);
+	duckdb_destroy_logical_type(&mtypes[0]);
+	duckdb_destroy_logical_type(&mtypes[1]);
+
+	duckdb_value svals[2] = {duckdb_create_uint64(42), duckdb_create_int64(-42)};
+	duckdb_value struct_val = duckdb_create_struct_value(struct_type, svals);
+	duckdb_destroy_logical_type(&struct_type);
+	duckdb_destroy_value(&svals[0]);
+	duckdb_destroy_value(&svals[1]);
+
+	auto val = duckdb_get_struct_child(nullptr, 0);
+	REQUIRE(!val);
+
+	val = duckdb_get_struct_child(struct_val, 0);
+	REQUIRE(val);
+	REQUIRE(duckdb_get_uint64(val) == 42);
+	duckdb_destroy_value(&val);
+
+	val = duckdb_get_struct_child(struct_val, 1);
+	REQUIRE(val);
+	REQUIRE(duckdb_get_int64(val) == -42);
+	duckdb_destroy_value(&val);
+
+	val = duckdb_get_struct_child(struct_val, 2);
+	REQUIRE(!val);
+
+	REQUIRE(duckdb_get_struct_child_count(nullptr) == 0);
+	REQUIRE(duckdb_get_struct_child_count(struct_val) == 2);
+
+	duckdb_destroy_value(&struct_val);
+}
