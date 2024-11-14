@@ -154,6 +154,14 @@ struct TableFunctionPartitionInput {
 	const vector<column_t> &partition_ids;
 };
 
+struct TableFunctionToStringInput {
+	TableFunctionToStringInput(const TableFunction &table_function_p, optional_ptr<const FunctionData> bind_data_p)
+	    : table_function(table_function_p), bind_data(bind_data_p) {
+	}
+	const TableFunction &table_function;
+	optional_ptr<const FunctionData> bind_data;
+};
+
 struct TableFunctionGetPartitionInput {
 public:
 	TableFunctionGetPartitionInput(optional_ptr<const FunctionData> bind_data_p,
@@ -253,7 +261,7 @@ typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
-typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
+typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
