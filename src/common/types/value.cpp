@@ -229,14 +229,12 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_SEC: {
 		// Get the minimum timestamp and cast it to timestamp_sec_t.
 		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		// TODO: do we need Timestamp::GetEpochSeconds?
 		const auto ts = Cast::Operation<timestamp_t, timestamp_sec_t>(min_ts);
 		return Value::TIMESTAMPSEC(ts);
 	}
 	case LogicalTypeId::TIMESTAMP_MS: {
 		// Get the minimum timestamp and cast it to timestamp_ms_t.
 		const auto min_ts = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		// TODO: do we need Timestamp::GetEpochMs?
 		const auto ts = Cast::Operation<timestamp_t, timestamp_ms_t>(min_ts);
 		return Value::TIMESTAMPMS(ts);
 	}
@@ -325,14 +323,12 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_SEC: {
 		// Get the maximum timestamp and cast it to timestamp_s_t.
 		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		// TODO: do we need Timestamp::GetEpochSeconds?
 		const auto ts = Cast::Operation<timestamp_t, timestamp_sec_t>(max_ts);
 		return Value::TIMESTAMPSEC(ts);
 	}
 	case LogicalTypeId::TIMESTAMP_MS: {
 		// Get the maximum timestamp and cast it to timestamp_ms_t.
 		const auto max_ts = MaximumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
-		// TODO: do we need Timestamp::GetEpochMs?
 		const auto ts = Cast::Operation<timestamp_t, timestamp_ms_t>(max_ts);
 		return Value::TIMESTAMPMS(ts);
 	}
@@ -384,17 +380,15 @@ Value Value::Infinity(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(date_t::infinity());
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t::infinity());
+		return Value::TIMESTAMP(timestamp_t(timestamp_t::infinity()));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		// TODO: should they have their own ninfinity functions?
-		// TODO: should we inherit here? or maybe return int64t instead of timestamp_t?
-		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::infinity().value));
+		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::infinity()));
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::infinity().value));
+		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::infinity()));
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::infinity().value));
+		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::infinity()));
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity().value));
+		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity()));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:
@@ -409,17 +403,15 @@ Value Value::NegativeInfinity(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(date_t::ninfinity());
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t::ninfinity());
+		return Value::TIMESTAMP(timestamp_t(timestamp_t::ninfinity()));
 	case LogicalTypeId::TIMESTAMP_SEC:
-		// TODO: should they have their own ninfinity functions?
-		// TODO: should we inherit here? or maybe return int64t instead of timestamp_t?
-		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::ninfinity().value));
+		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::ninfinity()));
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::ninfinity().value));
+		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::ninfinity()));
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::ninfinity().value));
+		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::ninfinity()));
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity().value));
+		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity()));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(-std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:

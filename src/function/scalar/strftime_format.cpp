@@ -1461,9 +1461,9 @@ bool StrpTimeFormat::ParseResult::TryToTime(dtime_t &result) {
 timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
 	if (is_special) {
 		if (special == date_t::infinity()) {
-			return timestamp_t::infinity();
+			return timestamp_t(timestamp_t::infinity());
 		} else if (special == date_t::ninfinity()) {
-			return timestamp_t::ninfinity();
+			return timestamp_t(timestamp_t::ninfinity());
 		}
 		return Timestamp::FromDatetime(special, dtime_t(0));
 	}
@@ -1486,9 +1486,9 @@ timestamp_ns_t StrpTimeFormat::ParseResult::ToTimestampNS() {
 	timestamp_ns_t result;
 	if (is_special) {
 		if (special == date_t::infinity()) {
-			result.value = timestamp_t::infinity().value;
+			result.value = timestamp_t::infinity();
 		} else if (special == date_t::ninfinity()) {
-			result.value = timestamp_t::ninfinity().value;
+			result.value = timestamp_t::ninfinity();
 		} else {
 			result.value = special.days * Interval::NANOS_PER_DAY;
 		}

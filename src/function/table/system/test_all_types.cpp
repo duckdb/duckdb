@@ -1,7 +1,8 @@
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 
 #include <cmath>
@@ -122,19 +123,22 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 
 	auto timestamp_list_type = LogicalType::LIST(LogicalType::TIMESTAMP);
 	auto empty_timestamp_list = Value::LIST(LogicalType::TIMESTAMP, vector<Value>());
+	auto infinity = timestamp_t::infinity();
+	auto ninfinity = timestamp_t::ninfinity();
+	auto ts = Timestamp::FromString("2022-05-12 16:23:45");
 	auto timestamp_list =
-	    Value::LIST(LogicalType::TIMESTAMP, {Value::TIMESTAMP(timestamp_t()), Value::TIMESTAMP(timestamp_t::infinity()),
-	                                         Value::TIMESTAMP(timestamp_t::ninfinity()), Value(LogicalType::TIMESTAMP),
-	                                         Value::TIMESTAMP(Timestamp::FromString("2022-05-12 16:23:45"))});
+	    Value::LIST(LogicalType::TIMESTAMP,
+	                {Value::TIMESTAMP(timestamp_t()), Value::TIMESTAMP(timestamp_t(infinity)),
+	                 Value::TIMESTAMP(timestamp_t(ninfinity)), Value(LogicalType::TIMESTAMP), Value::TIMESTAMP(ts)});
 	result.emplace_back(timestamp_list_type, "timestamp_array", empty_timestamp_list, timestamp_list);
 
 	auto timestamptz_list_type = LogicalType::LIST(LogicalType::TIMESTAMP_TZ);
 	auto empty_timestamptz_list = Value::LIST(LogicalType::TIMESTAMP_TZ, vector<Value>());
+	auto ts_tz = Cast::Operation<timestamp_t, timestamp_tz_t>(ts);
 	auto timestamptz_list = Value::LIST(
 	    LogicalType::TIMESTAMP_TZ,
-	    {Value::TIMESTAMPTZ(timestamp_tz_t()), Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity().value)),
-	     Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity().value)), Value(LogicalType::TIMESTAMP_TZ),
-	     Value::TIMESTAMPTZ(timestamp_tz_t(Timestamp::FromString("2022-05-12 16:23:45-07").value))});
+	    {Value::TIMESTAMPTZ(timestamp_tz_t()), Value::TIMESTAMPTZ(timestamp_tz_t(infinity)),
+	     Value::TIMESTAMPTZ(timestamp_tz_t(ninfinity)), Value(LogicalType::TIMESTAMP_TZ), Value::TIMESTAMPTZ(ts_tz)});
 	result.emplace_back(timestamptz_list_type, "timestamptz_array", empty_timestamptz_list, timestamptz_list);
 
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);

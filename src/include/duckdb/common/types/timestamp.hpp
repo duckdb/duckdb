@@ -22,7 +22,7 @@ struct date_t;     // NOLINT
 struct dtime_t;    // NOLINT
 struct dtime_tz_t; // NOLINT
 
-//! Type used to represent timestamps.s
+//! Type used to represent timestamps.
 //! Its value holds seconds, microseconds, milliseconds or nanoseconds since 1970-01-01.
 struct timestamp_t { // NOLINT
 	int64_t value;
@@ -69,11 +69,11 @@ struct timestamp_t { // NOLINT
 	timestamp_t &operator-=(const int64_t &delta);
 
 	// special values
-	static constexpr timestamp_t infinity() { // NOLINT
-		return timestamp_t(NumericLimits<int64_t>::Maximum());
-	}                                          // NOLINT
-	static constexpr timestamp_t ninfinity() { // NOLINT
-		return timestamp_t(-NumericLimits<int64_t>::Maximum());
+	static constexpr int64_t infinity() { // NOLINT
+		return NumericLimits<int64_t>::Maximum();
+	}                                      // NOLINT
+	static constexpr int64_t ninfinity() { // NOLINT
+		return -NumericLimits<int64_t>::Maximum();
 	}                                             // NOLINT
 	static constexpr inline timestamp_t epoch() { // NOLINT
 		return timestamp_t(0);
@@ -142,9 +142,9 @@ public:
 		       c == '-';
 	}
 
-	//! Is the timestamp finite or infinite?
+	//! True, if the timestamp is finite, else false.
 	static inline bool IsFinite(timestamp_t timestamp) {
-		return timestamp != timestamp_t::infinity() && timestamp != timestamp_t::ninfinity();
+		return timestamp.value != timestamp_t::infinity() && timestamp.value != timestamp_t::ninfinity();
 	}
 
 	//! Extract the date and time from a given timestamp object
