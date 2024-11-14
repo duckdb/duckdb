@@ -1179,12 +1179,11 @@ StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 }
 
-ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
-	D_ASSERT(child_idx < child_readers.size());
+ColumnReader &StructColumnReader::GetChildReader(idx_t child_idx) {
 	if (!child_readers[child_idx]) {
 		throw InternalException("StructColumnReader::GetChildReader(%d) - but this child reader is not set", child_idx);
 	}
-	return child_readers[child_idx].get();
+	return *child_readers[child_idx].get();
 }
 
 void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
