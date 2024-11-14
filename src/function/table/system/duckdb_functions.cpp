@@ -509,7 +509,7 @@ template <class T, class OP>
 static Value GetParameterNames(FunctionEntry &entry, idx_t function_idx, FunctionDescription &function_description,
                                Value &parameter_types) {
 	vector<Value> parameter_names;
-	if (function_description.parameter_names.size() > 0) {
+	if (!function_description.parameter_names.empty()) {
 		for (idx_t param_idx = 0; param_idx < ListValue::GetChildren(parameter_types).size(); param_idx++) {
 			if (param_idx < function_description.parameter_names.size()) {
 				parameter_names.emplace_back(function_description.parameter_names[param_idx]);

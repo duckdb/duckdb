@@ -53,7 +53,7 @@ void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info)
 	vector<string> examples = StringUtil::Split(function.example, '\1');
 
 	// add single variant for functions that take no arguments
-	if (variants.size() == 0) {
+	if (variants.empty()) {
 		variants.push_back("");
 	}
 
@@ -67,7 +67,7 @@ void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info)
 			function_description.description = descriptions[variant_index];
 		} else if (descriptions.size() == 1) {
 			function_description.description = descriptions[0];
-		} else if (descriptions.size() != 0) {
+		} else if (!descriptions.empty()) {
 			throw InternalException("Incorrect number of function descriptions for function '%s'", function.name);
 		}
 		// examples
@@ -75,7 +75,7 @@ void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info)
 			function_description.examples = StringUtil::Split(examples[variant_index], '\2');
 		} else if (examples.size() == 1) {
 			function_description.examples = StringUtil::Split(examples[0], '\2');
-		} else if (examples.size() != 0) {
+		} else if (!examples.empty()) {
 			throw InternalException("Incorrect number of function examples for function '%s'", function.name);
 		}
 		info.descriptions.push_back(std::move(function_description));
