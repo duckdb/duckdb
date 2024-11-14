@@ -295,9 +295,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 	return DeriveLogicalType(s_ele, parquet_options.binary_as_string);
 }
 
-unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context, idx_t depth, idx_t max_define,
-                                                              idx_t max_repeat, idx_t &next_schema_idx,
-                                                              idx_t &next_file_idx) {
+unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context,
+                                                              const vector<ColumnIndex> &indexes, idx_t depth,
+                                                              idx_t max_define, idx_t max_repeat,
+                                                              idx_t &next_schema_idx, idx_t &next_file_idx) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
@@ -327,6 +328,12 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
 		child_list_t<LogicalType> child_types;
 		vector<unique_ptr<ColumnReader>> child_readers;
+		// this type is a nested type - it has child columns specified
+		// create a mapping for which column readers we should create
+		unordered_map<idx_t, vector<ColumnIndex>> required_readers;
+		for (auto &index : indexes) {
+			required_readers.insert(make_pair(index.GetPrimaryIndex(), index.GetChildIndexes()));
+		}
 
 		idx_t c_idx = 0;
 		while (c_idx < (idx_t)s_ele.num_children) {
@@ -334,10 +341,23 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 
 			auto &child_ele = file_meta_data->schema[next_schema_idx];
 
-			auto child_reader =
-			    CreateReaderRecursive(context, depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx);
+			// figure out which child columns we should read of this child column
+			vector<ColumnIndex> child_indexes;
+			auto entry = required_readers.find(c_idx);
+			if (entry != required_readers.end()) {
+				child_indexes = entry->second;
+			}
+			auto child_reader = CreateReaderRecursive(context, child_indexes, depth + 1, max_define, max_repeat,
+			                                          next_schema_idx, next_file_idx);
 			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
-			child_readers.push_back(std::move(child_reader));
+			if (indexes.empty() || entry != required_readers.end()) {
+				// either (1) indexes is empty, meaning we need to read all child columns, or (2) we need to read this
+				// column
+				child_readers.push_back(std::move(child_reader));
+			} else {
+				// this column was explicitly not required - push an empty child reader here
+				child_readers.push_back(nullptr);
+			}
 
 			c_idx++;
 		}
@@ -435,7 +455,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	if (file_meta_data->schema[0].num_children == 0) {
 		throw IOException("Parquet reader: root schema element has no children");
 	}
-	auto ret = CreateReaderRecursive(context, 0, 0, 0, next_schema_idx, next_file_idx);
+	auto ret = CreateReaderRecursive(context, reader_data.column_indexes, 0, 0, 0, next_schema_idx, next_file_idx);
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InvalidInputException("Root element of Parquet file must be a struct");
 	}

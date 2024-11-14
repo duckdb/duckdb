@@ -246,7 +246,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 		}
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		auto col_idx = global_column_ids[i];
+		auto &col_idx = global_column_ids[i];
 		if (col_idx.IsRowIdColumn()) {
 			// row-id
 			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
@@ -300,8 +300,9 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileRe
 
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                        const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
-                                        MultiFileReaderData &reader_data, const string &initial_file,
+                                        const vector<string> &global_names,
+                                        const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+                                        const string &initial_file,
                                         optional_ptr<MultiFileReaderGlobalState> global_state) {
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
@@ -358,9 +359,10 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		// the types are the same - create the mapping
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
+		reader_data.column_indexes.emplace_back(local_id);
 	}
 
-	reader_data.empty_columns = reader_data.column_ids.empty();
+	reader_data.empty_columns = reader_data.column_indexes.empty();
 }
 
 void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &local_types,

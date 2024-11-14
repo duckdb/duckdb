@@ -176,14 +176,15 @@ struct MultiFileReader {
 	DUCKDB_API virtual void FinalizeBind(const MultiFileReaderOptions &file_options,
 	                                     const MultiFileReaderBindData &options, const string &filename,
 	                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
-	                                     const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
-	                                     MultiFileReaderData &reader_data, ClientContext &context,
-	                                     optional_ptr<MultiFileReaderGlobalState> global_state);
+	                                     const vector<string> &global_names,
+	                                     const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+	                                     ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Create all required mappings from the global types/names to the file-local types/names
 	DUCKDB_API virtual void CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
 	                                      const vector<string> &local_names, const vector<LogicalType> &global_types,
-	                                      const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
+	                                      const vector<string> &global_names,
+	                                      const vector<ColumnIndex> &global_column_ids,
 	                                      optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
 	                                      const string &initial_file, const MultiFileReaderBindData &options,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);

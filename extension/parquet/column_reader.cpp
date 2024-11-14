@@ -1181,12 +1181,18 @@ StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p
 
 ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
 	D_ASSERT(child_idx < child_readers.size());
+	if (!child_readers[child_idx]) {
+		throw InternalException("StructColumnReader::GetChildReader(%d) - but this child reader is not set", child_idx);
+	}
 	return child_readers[child_idx].get();
 }
 
 void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
                                         TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
 		child->InitializeRead(row_group_idx_p, columns, protocol_p);
 	}
 }
@@ -1200,34 +1206,51 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, da
 		ApplyPendingSkips(pending_skips);
 	}
 
-	idx_t read_count = num_values;
-	for (idx_t i = 0; i < struct_entries.size(); i++) {
-		auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
-		if (i == 0) {
+	optional_idx read_count;
+	for (idx_t i = 0; i < child_readers.size(); i++) {
+		auto &child = child_readers[i];
+		auto &target_vector = *struct_entries[i];
+		if (!child) {
+			// if we are not scanning this vector - set it to NULL
+			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(target_vector, true);
+			continue;
+		}
+		auto child_num_values = child->Read(num_values, filter, define_out, repeat_out, target_vector);
+		if (!read_count.IsValid()) {
 			read_count = child_num_values;
-		} else if (read_count != child_num_values) {
+		} else if (read_count.GetIndex() != child_num_values) {
 			throw std::runtime_error("Struct child row count mismatch");
 		}
 	}
+	if (!read_count.IsValid()) {
+		read_count = num_values;
+	}
 	// set the validity mask for this level
 	auto &validity = FlatVector::Validity(result);
-	for (idx_t i = 0; i < read_count; i++) {
+	for (idx_t i = 0; i < read_count.GetIndex(); i++) {
 		if (define_out[i] < max_define) {
 			validity.SetInvalid(i);
 		}
 	}
 
-	return read_count;
+	return read_count.GetIndex();
 }
 
 void StructColumnReader::Skip(idx_t num_values) {
-	for (auto &child_reader : child_readers) {
-		child_reader->Skip(num_values);
+	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
+		child->Skip(num_values);
 	}
 }
 
 void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
 		child->RegisterPrefetch(transport, allow_merge);
 	}
 }
@@ -1235,6 +1258,9 @@ void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool a
 uint64_t StructColumnReader::TotalCompressedSize() {
 	uint64_t size = 0;
 	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
 		size += child->TotalCompressedSize();
 	}
 	return size;
