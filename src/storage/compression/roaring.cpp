@@ -433,7 +433,7 @@ public:
 	      checkpointer(checkpointer),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
-
+		count = 0;
 		InitializeContainer();
 	}
 
@@ -466,6 +466,10 @@ public:
 	}
 
 	void InitializeContainer() {
+		if (count == analyze_state.count) {
+			// No more vectors left
+			return;
+		}
 		auto container_index = GetContainerIndex();
 		D_ASSERT(container_index < container_metadata.size());
 		auto &metadata = container_metadata[container_index];
@@ -480,8 +484,6 @@ public:
 
 		metadata_ptr -= sizeof(ContainerMetadata);
 		Store<ContainerMetadata>(metadata, metadata_ptr);
-
-		container_state.Reset();
 
 		// Override the pointer to write directly into the block
 		if (metadata.IsUncompressed()) {
@@ -555,6 +557,7 @@ public:
 		}
 		count += container_state.count;
 		current_segment->count += container_state.count;
+		container_state.Reset();
 	}
 
 	void NextContainer() {
