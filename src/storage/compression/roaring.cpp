@@ -225,7 +225,10 @@ public:
 		}
 		uint16_t lowest_array_cost = MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]);
 		uint16_t lowest_run_cost = MinValue<uint16_t>(run_idx[NON_NULLS], run_idx[NULLS]) * 2;
-		if (MinValue<uint16_t>(lowest_array_cost, lowest_run_cost) > AlignValue<uint16_t, 8>(count) / 8) {
+		uint16_t uncompressed_cost =
+		    (AlignValue<uint16_t, ValidityMask::BITS_PER_VALUE>(count) / ValidityMask::BITS_PER_VALUE) *
+		    sizeof(validity_t);
+		if (MinValue<uint16_t>(lowest_array_cost, lowest_run_cost) > uncompressed_cost) {
 			// The amount of values is too small, better off using uncompressed
 			// we can detect this at decompression because we know how many values are left
 			return Result::BitsetContainer(count);
@@ -435,8 +438,9 @@ public:
 		is_uncompressed = metadata.IsUncompressed();
 		idx_t required_space = sizeof(uint16_t);
 		if (is_uncompressed) {
-			idx_t container_size =
-			    AlignValue<idx_t, 8>(MinValue<idx_t>(analyze_state.count - count, ROARING_CONTAINER_SIZE)) / 8;
+			idx_t container_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(
+			                           MinValue<idx_t>(analyze_state.count - count, ROARING_CONTAINER_SIZE)) /
+			                       ValidityMask::BITS_PER_VALUE;
 			required_space += container_size;
 		} else if (metadata.IsRun()) {
 			required_space += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
@@ -829,7 +833,7 @@ public:
 
 struct BitsetContainerScanState : public ContainerScanState {
 public:
-	BitsetContainerScanState(idx_t container_index, idx_t count, uint8_t *bitset)
+	BitsetContainerScanState(idx_t container_index, idx_t count, validity_t *bitset)
 	    : ContainerScanState(container_index, count), bitset(bitset) {
 	}
 
@@ -839,8 +843,7 @@ public:
 	}
 
 public:
-	// FIXME: should this use a ValidityMask ?
-	uint8_t *bitset;
+	validity_t *bitset;
 	idx_t byte_index = 0;
 	idx_t bit_index = 0;
 };
@@ -922,7 +925,7 @@ public:
 		auto container_size = MinValue<idx_t>(segment_count - start_of_container, ROARING_CONTAINER_SIZE);
 		if (metadata.IsUncompressed()) {
 			current_container = make_uniq<BitsetContainerScanState>(container_index, container_size,
-			                                                        reinterpret_cast<uint8_t *>(data_ptr));
+			                                                        reinterpret_cast<validity_t *>(data_ptr));
 		} else if (metadata.IsRun()) {
 			if (metadata.IsInverted()) {
 				current_container = make_uniq<RunContainerScanState<NULLS>>(
