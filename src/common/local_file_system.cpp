@@ -19,7 +19,7 @@
 #include <sys/clonefile.h>
 #endif
 
-#ifdef LINUX
+#ifdef __linux__
 #include <linux/fs.h>
 #include <sys/ioctl.h>
 #endif
@@ -1360,7 +1360,7 @@ void LocalFileSystem::CopyFile(const string &source, const string &target, uniqu
   int src_fd = src_handle->Cast<UnixFileHandle>().fd;
   fclonefileat(src_fd, AT_FDCWD, target.c_str(), 0);
 }
-#elif LINUX
+#elif __linux__
 void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
     int dst_fd = dst_handle->Cast<UnixFileHandle>().fd;
     int src_fd = src_handle->Cast<UnixFileHandle>().fd;
