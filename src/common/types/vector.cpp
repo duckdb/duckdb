@@ -304,8 +304,8 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 		}
 	}
 
-	if (capacity > validity.TargetCount()) {
-		validity.Resize(validity.TargetCount(), capacity);
+	if (capacity > validity.Capacity()) {
+		validity.Resize(capacity);
 	}
 }
 
@@ -362,7 +362,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 	for (auto &resize_info_entry : resize_infos) {
 		// Resize the validity mask.
 		auto new_validity_size = new_size * resize_info_entry.multiplier;
-		resize_info_entry.vec.validity.Resize(current_size, new_validity_size);
+		resize_info_entry.vec.validity.Resize(new_validity_size);
 
 		// For nested data types, we only need to resize the validity mask.
 		if (!resize_info_entry.data) {
