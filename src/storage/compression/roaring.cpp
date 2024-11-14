@@ -9,6 +9,8 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/common/fast_mem.hpp"
 
 namespace duckdb {
 
@@ -154,6 +156,17 @@ public:
 
 public:
 	void Append(bool null, idx_t amount = 1) {
+		if (uncompressed) {
+			if (null) {
+				ValidityMask mask(uncompressed);
+				for (idx_t i = 0; i < amount; i++) {
+					mask.SetInvalidUnsafe(count + i);
+				}
+			}
+			count += amount;
+			return;
+		}
+
 		// Adjust the runs
 		auto &current_run_idx = run_idx[null];
 		auto &last_run_idx = run_idx[last_is_null];
@@ -195,6 +208,9 @@ public:
 	}
 	void OverrideRun(data_ptr_t destination, bool nulls) {
 		runs[nulls] = reinterpret_cast<RunContainerRLEPair *>(destination);
+	}
+	void OverrideUncompressed(data_ptr_t destination) {
+		uncompressed = reinterpret_cast<validity_t *>(destination);
 	}
 
 	void Finalize() {
@@ -265,6 +281,8 @@ public:
 
 		runs[NULLS] = base_runs[NULLS];
 		runs[NON_NULLS] = base_runs[NON_NULLS];
+
+		uncompressed = nullptr;
 	}
 
 public:
@@ -285,6 +303,7 @@ public:
 	uint16_t run_idx[2];
 	uint16_t array_idx[2];
 
+	validity_t *uncompressed = nullptr;
 	//! Whether the state has been finalized
 	bool finalized = false;
 };
@@ -383,8 +402,6 @@ public:
 };
 
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
-
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	auto state = make_uniq<RoaringAnalyzeState>(info);
 
@@ -430,26 +447,32 @@ public:
 		return metadata_ptr - data_ptr;
 	}
 
-	void InitializeContainer() {
-		auto container_index = GetContainerIndex();
-		D_ASSERT(container_index < container_metadata.size());
-		auto &metadata = container_metadata[container_index];
-
-		is_uncompressed = metadata.IsUncompressed();
-		idx_t required_space = sizeof(uint16_t);
-		if (is_uncompressed) {
-			idx_t container_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(
-			                           MinValue<idx_t>(analyze_state.count - count, ROARING_CONTAINER_SIZE)) /
-			                       ValidityMask::BITS_PER_VALUE;
-			required_space += container_size;
+	bool CanStore(idx_t container_size, const ContainerMetadata &metadata) {
+		idx_t required_space = sizeof(ContainerMetadata);
+		if (metadata.IsUncompressed()) {
+			// Account for the alignment we might need for this container
+			required_space += (AlignValue<idx_t>((idx_t)data_ptr)) - (idx_t)data_ptr;
+			required_space += (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
 		} else if (metadata.IsRun()) {
 			required_space += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
 		} else {
 			required_space += sizeof(uint16_t) * metadata.Cardinality();
 		}
 
-		// We can check before writing anything whether there is room for this container on the current segment
-		if (GetRemainingSpace() < required_space) {
+		if (required_space > GetRemainingSpace()) {
+			return false;
+		}
+		return true;
+	}
+
+	void InitializeContainer() {
+		auto container_index = GetContainerIndex();
+		D_ASSERT(container_index < container_metadata.size());
+		auto &metadata = container_metadata[container_index];
+
+		idx_t container_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(
+		    MinValue<idx_t>(analyze_state.count - count, ROARING_CONTAINER_SIZE));
+		if (!CanStore(container_size, metadata)) {
 			idx_t row_start = current_segment->start + current_segment->count;
 			FlushSegment();
 			CreateEmptySegment(row_start);
@@ -459,12 +482,14 @@ public:
 		Store<ContainerMetadata>(metadata, metadata_ptr);
 
 		container_state.Reset();
-		if (is_uncompressed) {
-			return;
-		}
 
 		// Override the pointer to write directly into the block
-		if (metadata.IsRun()) {
+		if (metadata.IsUncompressed()) {
+			data_ptr = (data_ptr_t)(AlignValue<idx_t>((idx_t)(data_ptr)));
+			FastMemset(data_ptr, (uint32_t)-1, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
+			container_state.OverrideUncompressed(data_ptr);
+			data_ptr += (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
+		} else if (metadata.IsRun()) {
 			container_state.OverrideRun(data_ptr, metadata.IsInverted());
 			data_ptr += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
 		} else {
@@ -530,9 +555,6 @@ public:
 		}
 		count += container_state.count;
 		current_segment->count += container_state.count;
-		if (is_uncompressed) {
-			throw NotImplementedException("TODO");
-		}
 	}
 
 	void NextContainer() {
@@ -544,11 +566,6 @@ public:
 		UnifiedVectorFormat unified;
 		input.ToUnifiedFormat(count, unified);
 		auto &validity = unified.validity;
-
-		if (is_uncompressed) {
-			// TODO: could be complicated because of alignment issues
-			throw NotImplementedException("TODO");
-		}
 
 		if (validity.AllValid()) {
 			idx_t appended = 0;
@@ -565,7 +582,8 @@ public:
 			while (appended < count) {
 				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
 				for (idx_t i = 0; i < to_append; i++) {
-					auto is_null = validity.RowIsValidUnsafe(appended + i);
+					auto idx = unified.sel->get_index(appended + i);
+					auto is_null = validity.RowIsValidUnsafe(idx);
 					container_state.Append(!is_null);
 				}
 				if (container_state.IsFull()) {
@@ -594,8 +612,6 @@ public:
 	data_ptr_t metadata_ptr;
 	//! The amount of values already compressed
 	idx_t count = 0;
-	//! Whether the current container is uncompressed
-	bool is_uncompressed = false;
 };
 
 unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointer &checkpointer,
@@ -744,7 +760,6 @@ public:
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
 		auto &result_mask = FlatVector::Validity(result);
-		idx_t input_index = scanned_count;
 
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 		// scanned.
@@ -839,13 +854,16 @@ public:
 
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
-		throw NotImplementedException("TODO");
+		if (!result_offset && scanned_count % ValidityMask::BITS_PER_VALUE == 0) {
+			ValidityUncompressed::AlignedScan((data_ptr_t)bitset, scanned_count, result, to_scan);
+		} else {
+			ValidityUncompressed::UnalignedScan((data_ptr_t)bitset, scanned_count, result, result_offset, to_scan);
+		}
+		scanned_count += to_scan;
 	}
 
 public:
 	validity_t *bitset;
-	idx_t byte_index = 0;
-	idx_t bit_index = 0;
 };
 
 struct RoaringScanState : public SegmentScanState {
@@ -872,6 +890,9 @@ public:
 			auto metadata = Load<ContainerMetadata>(metadata_ptr);
 			container_metadata.push_back(metadata);
 			metadata_ptr -= sizeof(ContainerMetadata);
+			if (metadata.IsUncompressed()) {
+				position = AlignValue<idx_t>(position);
+			}
 			data_start_position.push_back(position);
 			position += SkipVector(metadata);
 		}
@@ -884,7 +905,7 @@ public:
 		}
 		if (metadata.IsUncompressed()) {
 			// NOTE: this doesn't care about smaller containers, since only the last container can be smaller
-			return ROARING_CONTAINER_SIZE / ValidityMask::BITS_PER_VALUE;
+			return (ROARING_CONTAINER_SIZE / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
 		}
 		return sizeof(uint16_t) * metadata.Cardinality();
 	}
