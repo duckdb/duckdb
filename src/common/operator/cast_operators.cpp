@@ -1201,9 +1201,9 @@ timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
 
 template <>
 date_t CastTimestampNsToDate::Operation(timestamp_t input) {
-	if (input == timestamp_t(timestamp_t::infinity())) {
+	if (input == timestamp_t::infinity()) {
 		return date_t::infinity();
-	} else if (input == timestamp_t(timestamp_t::ninfinity())) {
+	} else if (input == timestamp_t::ninfinity()) {
 		return date_t::ninfinity();
 	}
 	const auto us = CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input);

@@ -380,15 +380,15 @@ Value Value::Infinity(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(date_t::infinity());
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t(timestamp_t::infinity()));
+		return Value::TIMESTAMP(timestamp_t::infinity());
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::infinity()));
+		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::infinity().value));
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::infinity()));
+		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::infinity().value));
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::infinity()));
+		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::infinity().value));
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity()));
+		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity().value));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:
@@ -403,15 +403,15 @@ Value Value::NegativeInfinity(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 		return Value::DATE(date_t::ninfinity());
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t(timestamp_t::ninfinity()));
+		return Value::TIMESTAMP(timestamp_t::ninfinity());
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::ninfinity()));
+		return Value::TIMESTAMPSEC(timestamp_sec_t(timestamp_t::ninfinity().value));
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::ninfinity()));
+		return Value::TIMESTAMPMS(timestamp_ms_t(timestamp_t::ninfinity().value));
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::ninfinity()));
+		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::ninfinity().value));
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity()));
+		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity().value));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(-std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:

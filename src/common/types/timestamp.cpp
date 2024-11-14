@@ -268,10 +268,10 @@ timestamp_t Timestamp::FromString(const string &str) {
 }
 
 string Timestamp::ToString(timestamp_t timestamp) {
-	if (timestamp == timestamp_t(timestamp_t::infinity())) {
+	if (timestamp == timestamp_t::infinity()) {
 		return Date::PINF;
 	}
-	if (timestamp == timestamp_t(timestamp_t::ninfinity())) {
+	if (timestamp == timestamp_t::ninfinity()) {
 		return Date::NINF;
 	}
 
@@ -282,10 +282,10 @@ string Timestamp::ToString(timestamp_t timestamp) {
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
-	if (DUCKDB_UNLIKELY(timestamp == timestamp_t(timestamp_t::infinity()))) {
+	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::infinity())) {
 		return date_t::infinity();
 	}
-	if (DUCKDB_UNLIKELY(timestamp == timestamp_t(timestamp_t::ninfinity()))) {
+	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::ninfinity())) {
 		return date_t::ninfinity();
 	}
 	return date_t(UnsafeNumericCast<int32_t>((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY -

@@ -51,9 +51,9 @@ date_t AddOperator::Operation(int32_t left, date_t right) {
 template <>
 timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
 	if (left == date_t::infinity()) {
-		return timestamp_t(timestamp_t::infinity());
+		return timestamp_t::infinity();
 	} else if (left == date_t::ninfinity()) {
-		return timestamp_t(timestamp_t::ninfinity());
+		return timestamp_t::ninfinity();
 	}
 	timestamp_t result;
 	if (!Timestamp::TryFromDatetime(left, right, result)) {
@@ -65,9 +65,9 @@ timestamp_t AddOperator::Operation(date_t left, dtime_t right) {
 template <>
 timestamp_t AddOperator::Operation(date_t left, dtime_tz_t right) {
 	if (left == date_t::infinity()) {
-		return timestamp_t(timestamp_t::infinity());
+		return timestamp_t::infinity();
 	} else if (left == date_t::ninfinity()) {
-		return timestamp_t(timestamp_t::ninfinity());
+		return timestamp_t::ninfinity();
 	}
 	timestamp_t result;
 	if (!Timestamp::TryFromDatetime(left, right, result)) {
@@ -89,10 +89,10 @@ timestamp_t AddOperator::Operation(dtime_tz_t left, date_t right) {
 template <>
 timestamp_t AddOperator::Operation(date_t left, interval_t right) {
 	if (left == date_t::infinity()) {
-		return timestamp_t(timestamp_t::infinity());
+		return timestamp_t::infinity();
 	}
 	if (left == date_t::ninfinity()) {
-		return timestamp_t(timestamp_t::ninfinity());
+		return timestamp_t::ninfinity();
 	}
 	return Interval::Add(Timestamp::FromDatetime(left, dtime_t(0)), right);
 }
