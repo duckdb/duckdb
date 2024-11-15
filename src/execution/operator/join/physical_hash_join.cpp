@@ -3,8 +3,8 @@
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -16,11 +16,14 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+
 
 namespace duckdb {
 
@@ -567,7 +570,9 @@ public:
 	}
 };
 
-void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate, const PhysicalOperator &op) const {
+void JoinFilterPushdownInfo::PushFilters(JoinHashTable &ht, JoinFilterGlobalState &gstate, const PhysicalOperator &op) const {
+	static constexpr idx_t ZONE_MAP_THRESHOLD = 100;
+
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
@@ -593,6 +598,39 @@ void JoinFilterPushdownInfo::PushFilters(JoinFilterGlobalState &gstate, const Ph
 				// hash table e.g. because they are part of a RIGHT join
 				continue;
 			}
+			// if the HT is small we can generate a complete "OR" filter instead of settling for min/max
+			// FIXME - we only need to do this if max-min is not a dense range (i.e. max - min > count)
+			if (ht.Count() > 1 && ht.Count() <= ZONE_MAP_THRESHOLD) {
+				// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
+				// first scan the entire vector at the probe side
+				// FIXME: this code is duplicated from PerfectHashJoinExecutor::FullScanHashTable
+				auto build_idx = join_condition[filter_idx];
+				auto &data_collection = ht.GetDataCollection();
+
+				Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
+
+				idx_t key_count = 0;
+				JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
+											  TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+
+
+				// Go through all the blocks and fill the keys addresses
+				key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
+
+				// Scan the build keys in the hash table
+				Vector build_vector(ht.layout.GetTypes()[build_idx], key_count);
+				RowOperations::FullScanColumn(ht.layout, tuples_addresses, build_vector, key_count, build_idx);
+
+				// generate the OR-clause
+				auto or_filter = make_uniq<ConjunctionOrFilter>();
+				for(idx_t k = 0; k < key_count; k++) {
+					auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, build_vector.GetValue(k));
+					or_filter->child_filters.push_back(std::move(constant_filter));
+				}
+				auto filter = make_uniq<OptionalFilter>(std::move(or_filter));
+				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+			}
+
 			if (Value::NotDistinctFrom(min_val, max_val)) {
 				// min = max - generate an equality filter
 				auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, std::move(min_val));
@@ -655,7 +693,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	ht.Unpartition();
 
 	if (filter_pushdown && ht.Count() > 0) {
-		filter_pushdown->PushFilters(*sink.global_filter_state, *this);
+		filter_pushdown->PushFilters(ht, *sink.global_filter_state, *this);
 	}
 
 	// check for possible perfect hash table
