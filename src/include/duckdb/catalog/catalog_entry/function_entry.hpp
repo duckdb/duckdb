@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-//! An aggregate function in the catalog
+//! A function in the catalog
 class FunctionEntry : public StandardEntry {
 public:
 	FunctionEntry(CatalogType type, Catalog &catalog, SchemaCatalogEntry &schema, CreateFunctionInfo &info)
