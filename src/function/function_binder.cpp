@@ -324,7 +324,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	// Some functions may have an invalid default return type, as they must be bound to infer the return type.
 	// In those cases, we default to SQLNULL.
 	const auto return_type_if_null =
-	    bound_function.return_type.IsValidRecursive() ? bound_function.return_type : LogicalType::SQLNULL;
+	    bound_function.return_type.IsComplete() ? bound_function.return_type : LogicalType::SQLNULL;
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {

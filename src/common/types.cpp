@@ -677,25 +677,55 @@ bool LogicalType::IsTemporal() const {
 }
 
 bool LogicalType::IsValid() const {
-	switch (id()) {
-	case LogicalTypeId::INVALID:
-	case LogicalTypeId::UNKNOWN:
-	case LogicalTypeId::ANY:
-		return false;
-	case LogicalTypeId::LIST:
-	case LogicalTypeId::MAP:
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::UNION:
-	case LogicalTypeId::ARRAY:
-	case LogicalTypeId::DECIMAL:
-		return AuxInfo() != nullptr;
-	default:
-		return true;
-	}
+	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
 }
 
-bool LogicalType::IsValidRecursive() const {
-	return !TypeVisitor::Contains(*this, [](const LogicalType &type) { return !type.IsValid(); });
+bool LogicalType::IsComplete() const {
+	// Check if type does not contain incomplete types
+	return !TypeVisitor::Contains(*this, [](const LogicalType &type) {
+		switch (type.id()) {
+		case LogicalTypeId::INVALID:
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::ANY:
+			return true; // These are incomplete by default
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::MAP:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::LIST_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::UNION:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::STRUCT_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::ARRAY:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::ARRAY_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::DECIMAL:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::DECIMAL_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		default:
+			return false;
+		}
+
+		// Type has type info, check if it is complete
+		D_ASSERT(type.AuxInfo());
+		switch (type.AuxInfo()->type) {
+		case ExtraTypeInfoType::STRUCT_TYPE_INFO:
+			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty(); // Cannot be empty
+		case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
+			return DecimalType::GetWidth(type) >= 1 && DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
+			       DecimalType::GetScale(type) >= 0 && DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
+		default:
+			return false; // Nested types are checked by TypeVisitor recursion
+		}
+	});
 }
 
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {

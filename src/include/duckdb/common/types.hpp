@@ -344,7 +344,7 @@ struct LogicalType {
 	DUCKDB_API void Verify() const;
 
 	DUCKDB_API bool IsValid() const;
-	DUCKDB_API bool IsValidRecursive() const;
+	DUCKDB_API bool IsComplete() const;
 
 
 private:
