@@ -253,7 +253,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(other->type == SampleType::INGESTION_SAMPLE);
 	auto &other_ingest = other->Cast<IngestionSample>();
 
-	// other has not collected sample
+	// if the other sample has not collected anything yet return
 	if (!other_ingest.sample_chunk) {
 		return;
 	}
@@ -270,30 +270,26 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	}
 
 	//! Both samples are still in "fast sampling" method
-	if (GetPriorityQueueSize() == 0 && other_ingest.GetPriorityQueueSize() == 0) {
+	if (SamplingMode() == SamplingMode::FAST && other_ingest.SamplingMode() == SamplingMode::FAST) {
 		SimpleMerge(other_ingest);
 		if (base_reservoir_sample->num_entries_seen_total >=
 		    FIXED_SAMPLE_SIZE * IngestionSample::FAST_TO_SLOW_THRESHOLD) {
 			base_reservoir_sample->FillWeights(actual_sample_indexes);
-			actual_sample_indexes.clear();
 		}
 		return;
 	}
 
 	// One or none of the samples are in "Fast Sampling" method.
 	// When this is the case, switch both to slow sampling.
-	if (GetPriorityQueueSize() == 0) {
+	if (SamplingMode() == SamplingMode::FAST) {
 		// make sure both samples have weights
 		base_reservoir_sample->FillWeights(actual_sample_indexes);
-		actual_sample_indexes.clear();
-	}
-
-	if (other_ingest.GetPriorityQueueSize() == 0) {
+	} else if (other_ingest.SamplingMode() == SamplingMode::FAST) {
 		// make sure both samples have weights
 		other_ingest.base_reservoir_sample->FillWeights(other_ingest.actual_sample_indexes);
-		other_ingest.actual_sample_indexes.clear();
 	}
 
+	D_ASSERT(SamplingMode() == SamplingMode::SLOW && other_ingest.SamplingMode() == SamplingMode::SLOW);
 	// we know both ingestion samples have collected samples,
 	// shrink both samples so merging is easier
 	Shrink();
@@ -310,6 +306,8 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	// if there are more than FIXED_SAMPLE_SIZE samples, we want to keep only the
 	// highest weighted FIXED_SAMPLE_SIZE samples
 
+	// pop from base base_reservoir samples and weights until there are num_samples_to_keep
+	// left.
 	for (idx_t i = num_samples_to_keep; i < total_samples; i++) {
 		auto min_weight_this = base_reservoir_sample->min_weight_threshold;
 		auto min_weight_other = other_ingest.base_reservoir_sample->min_weight_threshold;
@@ -339,8 +337,8 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	auto min_weight = base_reservoir_sample->min_weight_threshold;
 	auto min_weight_index = base_reservoir_sample->min_weighted_entry_index;
 
+	// Prepare a selection vector to copy data from the other sample chunk to this sample chunk
 	SelectionVector sel_other(other_ingest.GetPriorityQueueSize());
-
 	D_ASSERT(GetPriorityQueueSize() <= num_samples_to_keep);
 	idx_t chunk_offset = 0;
 	// now we are adding entries from the other base_reservoir_sampling object to this
@@ -372,7 +370,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	// fix, basically you only need to copy the required tuples from other and put them into this. You can
 	// save a number of the tuples in THIS.
 	UpdateSampleAppend(*other_ingest.sample_chunk, sel_other, chunk_offset);
-
 	Verify();
 }
 
@@ -532,6 +529,14 @@ void IngestionSample::Destroy() {
 	destroyed = true;
 }
 
+unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset,
+                                                                   idx_t theoretical_chunk_length) {
+	if (GetPriorityQueueSize() == 0 && GetTuplesSeen() <= FIXED_SAMPLE_SIZE * IngestionSample::FAST_TO_SLOW_THRESHOLD) {
+		return GetReplacementIndexesFast(sample_chunk_offset, theoretical_chunk_length);
+	}
+	return GetReplacementIndexesSlow(sample_chunk_offset, theoretical_chunk_length);
+}
+
 unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sample_chunk_offset,
                                                                        idx_t theoretical_chunk_length) {
 	idx_t num_to_pop = static_cast<idx_t>((static_cast<double>(theoretical_chunk_length) /
@@ -566,8 +571,8 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sam
 	return replacement_indexes;
 }
 
-unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset,
-                                                                   idx_t theoretical_chunk_length) {
+unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesSlow(idx_t sample_chunk_offset,
+                                                                       idx_t theoretical_chunk_length) {
 	idx_t remaining = theoretical_chunk_length;
 	unordered_map<idx_t, idx_t> ret;
 	idx_t sample_chunk_index = 0;
@@ -676,21 +681,7 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	// at this point our sample_chunk has at least FIXED SAMPLE SIZE samples.
 	D_ASSERT(sample_chunk->size() >= FIXED_SAMPLE_SIZE);
 
-	// make sure we have sampling weights
-	// assign weight to first FIXED SAMPLE SIZE
-	idx_t assigned_weights = 0;
-
-	unordered_map<idx_t, idx_t> sample_chunk_ind_to_data_chunk_index;
-	if (base_reservoir_sample->num_entries_seen_total <= FIXED_SAMPLE_SIZE * IngestionSample::FAST_TO_SLOW_THRESHOLD) {
-		sample_chunk_ind_to_data_chunk_index = GetReplacementIndexesFast(sample_chunk->size(), chunk.size());
-	} else {
-		if (GetPriorityQueueSize() == 0 && sample_chunk->size() >= FIXED_SAMPLE_SIZE) {
-			idx_t num_weights_assigned = 0;
-			assigned_weights = FIXED_SAMPLE_SIZE - num_weights_assigned;
-			base_reservoir_sample->InitializeReservoirWeights(assigned_weights, assigned_weights, num_weights_assigned);
-		}
-		sample_chunk_ind_to_data_chunk_index = GetReplacementIndexes(sample_chunk->size(), chunk.size());
-	}
+	auto sample_chunk_ind_to_data_chunk_index = GetReplacementIndexes(sample_chunk->size(), chunk.size());
 
 	if (sample_chunk_ind_to_data_chunk_index.empty()) {
 		// not adding any samples
@@ -714,6 +705,11 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	// sample_chunk->SetCardinality(sample_chunk_size_before_ingestion + sample_chunk_ind_to_data_chunk_index.size());
 
 	Verify();
+
+	// if we are over the threshold, we ned to swith to slow sampling.
+	if (SamplingMode() == SamplingMode::FAST && GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
+		base_reservoir_sample->FillWeights(actual_sample_indexes);
+	}
 	if (sample_chunk->size() >= FIXED_SAMPLE_SIZE * (FIXED_SAMPLE_SIZE_MULTIPLIER - 3)) {
 		Shrink();
 	}
@@ -726,7 +722,7 @@ void IngestionSample::Verify() {
 	}
 	if (GetPriorityQueueSize() == 0) {
 		D_ASSERT(actual_sample_indexes.size() <= FIXED_SAMPLE_SIZE);
-		D_ASSERT(base_reservoir_sample->num_entries_seen_total >= actual_sample_indexes.size());
+		D_ASSERT(GetTuplesSeen() >= actual_sample_indexes.size());
 		return;
 	}
 	if (NumSamplesCollected() > FIXED_SAMPLE_SIZE) {

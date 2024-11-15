@@ -27,6 +27,8 @@ enum class SampleType : uint8_t {
 	INGESTION_SAMPLE = 3
 };
 
+enum class SamplingMode : uint8_t { FAST = 0, SLOW = 1 };
+
 //! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
 class BaseReservoirSampling {
 public:
@@ -252,7 +254,7 @@ public:
 	static constexpr const SampleType TYPE = SampleType::INGESTION_SAMPLE;
 
 	constexpr static idx_t FIXED_SAMPLE_SIZE_MULTIPLIER = 10;
-	constexpr static idx_t FAST_TO_SLOW_THRESHOLD = 20;
+	constexpr static idx_t FAST_TO_SLOW_THRESHOLD = 60;
 	// how much of every chunk we consider for sampling.
 	// This can be lowered to improve ingestion performance.
 	constexpr static double CHUNK_SAMPLE_PERCENTAGE = 1.00;
@@ -262,6 +264,13 @@ public:
 
 	// TODO: this will need more info to initiliaze the correct sample type
 	unique_ptr<BlockingSample> ConvertToReservoirSampleToSerialize();
+
+	SamplingMode SamplingMode() const {
+		if (base_reservoir_sample->reservoir_weights.empty()) {
+			return SamplingMode::FAST;
+		}
+		return SamplingMode::SLOW;
+	}
 
 	//! Shrink the Ingestion Sample to only contain the tuples that are in the
 	//! reservoir weights or are in the "actual_indexes"
@@ -277,6 +286,8 @@ public:
 	static SelectionVector CreateSelectionVectorFromSimpleVector(vector<idx_t> &actual_indexes);
 
 	unique_ptr<BlockingSample> Copy() const override;
+	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for
+	//! future sampling values
 	unique_ptr<BlockingSample> Copy(bool for_serialization) const;
 	void Merge(unique_ptr<BlockingSample> other);
 
@@ -315,6 +326,7 @@ public:
 	// (index_in_sample_chunk) this data can then be used to make a selection vector to copy over the samples from the
 	// input chunk to the sample chunk
 	unordered_map<idx_t, idx_t> GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
+	unordered_map<idx_t, idx_t> GetReplacementIndexesSlow(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
 	unordered_map<idx_t, idx_t> GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
 
 	idx_t sample_count;
