@@ -721,7 +721,7 @@ bool LogicalType::IsComplete() const {
 			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty(); // Cannot be empty
 		case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
 			return DecimalType::GetWidth(type) >= 1 && DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
-			       DecimalType::GetScale(type) >= 0 && DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
+			       DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
 		default:
 			return false; // Nested types are checked by TypeVisitor recursion
 		}
