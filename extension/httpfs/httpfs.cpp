@@ -704,7 +704,9 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 			// HEAD request fail, use Range request for another try (read only one byte)
 			if (flags.OpenForReading() && res->code != 404) {
 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
-				res = std::move(range_res);
+				if (range_res->code != 206 && range_res->code != 200) {
+					throw IOException("Unable to connect to URL \"%s\": %d (%s)", path, res->code, res->error);
+				}
 				if (range_res->code == 206) {
 					auto range_find = range_res->headers["Content-Range"].find("/");
 					if (range_find == std::string::npos ||
@@ -717,9 +719,8 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 						throw IOException("Unknown total length of the document \"%s\": %d (%s)", path, res->code,
 						                  res->error);
 					}
-				} else if (range_res->code != 200) {
-					throw IOException("Unable to connect to URL \"%s\": %d (%s)", path, res->code, res->error);
 				}
+				res = std::move(range_res);
 			}
 		}
 	} else {
