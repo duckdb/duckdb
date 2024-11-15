@@ -253,6 +253,7 @@ unique_ptr<IngestionSample> ReservoirSample::ConvertToIngestionSample() {
 	}
 	D_ASSERT(chunk->size() <= FIXED_SAMPLE_SIZE);
 	idx_t num_chunks_added = 0;
+	// There should only be one chunk
 	while (chunk) {
 		num_chunks_added += 1;
 		ingestion_sample->AddToReservoir(*chunk);
