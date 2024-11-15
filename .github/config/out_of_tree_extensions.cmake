@@ -169,6 +169,6 @@ duckdb_extension_load(fts
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_fts
-        GIT_TAG c7aaf92744abde23a910d009a86ed379bebab8b9
+        GIT_TAG c713ba89c6973057c81a783b1f8166c550c0b758
         TEST_DIR test/sql
 )
