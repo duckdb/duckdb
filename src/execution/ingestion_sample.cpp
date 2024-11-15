@@ -270,7 +270,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	}
 
 	//! Both samples are still in "fast sampling" method
-	if (SamplingMode() == SamplingMode::FAST && other_ingest.SamplingMode() == SamplingMode::FAST) {
+	if (SamplingState() == SamplingMode::FAST && other_ingest.SamplingState() == SamplingMode::FAST) {
 		SimpleMerge(other_ingest);
 		if (base_reservoir_sample->num_entries_seen_total >=
 		    FIXED_SAMPLE_SIZE * IngestionSample::FAST_TO_SLOW_THRESHOLD) {
@@ -281,15 +281,15 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 
 	// One or none of the samples are in "Fast Sampling" method.
 	// When this is the case, switch both to slow sampling.
-	if (SamplingMode() == SamplingMode::FAST) {
+	if (SamplingState() == SamplingMode::FAST) {
 		// make sure both samples have weights
 		base_reservoir_sample->FillWeights(actual_sample_indexes);
-	} else if (other_ingest.SamplingMode() == SamplingMode::FAST) {
+	} else if (other_ingest.SamplingState() == SamplingMode::FAST) {
 		// make sure both samples have weights
 		other_ingest.base_reservoir_sample->FillWeights(other_ingest.actual_sample_indexes);
 	}
 
-	D_ASSERT(SamplingMode() == SamplingMode::SLOW && other_ingest.SamplingMode() == SamplingMode::SLOW);
+	D_ASSERT(SamplingState() == SamplingMode::SLOW && other_ingest.SamplingState() == SamplingMode::SLOW);
 	// we know both ingestion samples have collected samples,
 	// shrink both samples so merging is easier
 	Shrink();
@@ -707,7 +707,7 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	Verify();
 
 	// if we are over the threshold, we ned to swith to slow sampling.
-	if (SamplingMode() == SamplingMode::FAST && GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
+	if (SamplingState() == SamplingMode::FAST && GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
 		base_reservoir_sample->FillWeights(actual_sample_indexes);
 	}
 	if (sample_chunk->size() >= FIXED_SAMPLE_SIZE * (FIXED_SAMPLE_SIZE_MULTIPLIER - 3)) {

@@ -265,7 +265,7 @@ public:
 	// TODO: this will need more info to initiliaze the correct sample type
 	unique_ptr<BlockingSample> ConvertToReservoirSampleToSerialize();
 
-	SamplingMode SamplingMode() const {
+	SamplingMode SamplingState() const {
 		if (base_reservoir_sample->reservoir_weights.empty()) {
 			return SamplingMode::FAST;
 		}
