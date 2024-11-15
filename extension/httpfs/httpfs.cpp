@@ -704,27 +704,27 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 			// HEAD request fail, use Range request for another try (read only one byte)
 			if (flags.OpenForReading() && res->code != 404) {
 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
-				if (range_res->code != 206) {
+				res = std::move(range_res);
+				if (range_res->code == 206) {
+					auto range_find = range_res->headers["Content-Range"].find("/");
+					if (range_find == std::string::npos ||
+					    range_res->headers["Content-Range"].size() < range_find + 1) {
+						throw IOException("Unknown Content-Range Header \"The value of Content-Range Header\":  (%s)",
+						                  range_res->headers["Content-Range"]);
+					}
+					range_length = range_res->headers["Content-Range"].substr(range_find + 1);
+					if (range_length == "*") {
+						throw IOException("Unknown total length of the document \"%s\": %d (%s)", path, res->code,
+						                  res->error);
+					}
+				} else if (range_res->code != 200) {
 					throw IOException("Unable to connect to URL \"%s\": %d (%s)", path, res->code, res->error);
 				}
-				auto range_find = range_res->headers["Content-Range"].find("/");
-
-				if (range_find == std::string::npos || range_res->headers["Content-Range"].size() < range_find + 1) {
-					throw IOException("Unknown Content-Range Header \"The value of Content-Range Header\":  (%s)",
-					                  range_res->headers["Content-Range"]);
-				}
-
-				range_length = range_res->headers["Content-Range"].substr(range_find + 1);
-				if (range_length == "*") {
-					throw IOException("Unknown total length of the document \"%s\": %d (%s)", path, res->code,
-					                  res->error);
-				}
-				res = std::move(range_res);
-			} else {
-				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url,
-				                    to_string(res->code), res->error);
 			}
 		}
+	} else {
+		throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url, to_string(res->code),
+		                    res->error);
 	}
 
 	// Initialize the read buffer now that we know the file exists
@@ -762,7 +762,6 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 
 			// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
 			cached_file_handle->SetInitialized(length);
-
 			// We shouldn't write these to cache
 			should_write_cache = false;
 		} else {
