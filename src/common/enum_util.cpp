@@ -3020,6 +3020,24 @@ SampleType EnumUtil::FromString<SampleType>(const char *value) {
 	return static_cast<SampleType>(StringUtil::StringToEnum(GetSampleTypeValues(), 4, "SampleType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetSamplingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SamplingMode::FAST), "FAST" },
+		{ static_cast<uint32_t>(SamplingMode::SLOW), "SLOW" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SamplingMode>(SamplingMode value) {
+	return StringUtil::EnumToString(GetSamplingModeValues(), 2, "SamplingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+SamplingMode EnumUtil::FromString<SamplingMode>(const char *value) {
+	return static_cast<SamplingMode>(StringUtil::StringToEnum(GetSamplingModeValues(), 2, "SamplingMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ScanType::TABLE), "TABLE" },
