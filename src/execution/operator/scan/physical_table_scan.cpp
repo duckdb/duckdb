@@ -145,6 +145,22 @@ string PhysicalTableScan::GetName() const {
 	return StringUtil::Upper(function.name + " " + function.extra_info);
 }
 
+void AddProjectionNames(const ColumnIndex &index, const string &name, const LogicalType &type, string &result) {
+	if (!index.HasChildren()) {
+		// base case - no children projected out
+		if (!result.empty()) {
+			result += "\n";
+		}
+		result += name;
+		return;
+	}
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &child_index : index.GetChildIndexes()) {
+		auto &ele = child_types[child_index.GetPrimaryIndex()];
+		AddProjectionNames(child_index, name + "." + ele.first, ele.second, result);
+	}
+}
+
 InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
@@ -153,31 +169,18 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		result["Function"] = StringUtil::Upper(function.name);
 	}
 	if (function.projection_pushdown) {
-		if (function.filter_prune) {
-			string projections;
-			for (idx_t i = 0; i < projection_ids.size(); i++) {
-				auto column_id = column_ids[projection_ids[i]].GetPrimaryIndex();
-				if (column_id < names.size()) {
-					if (i > 0) {
-						projections += "\n";
-					}
-					projections += names[column_id];
-				}
+		string projections;
+		idx_t projected_column_count = function.filter_prune ? projection_ids.size() : column_ids.size();
+		for (idx_t i = 0; i < projected_column_count; i++) {
+			auto base_index = function.filter_prune ? projection_ids[i] : i;
+			auto &column_index = column_ids[base_index];
+			auto column_id = column_index.GetPrimaryIndex();
+			if (column_id >= names.size()) {
+				continue;
 			}
-			result["Projections"] = projections;
-		} else {
-			string projections;
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				auto column_id = column_ids[i].GetPrimaryIndex();
-				if (column_id < names.size()) {
-					if (i > 0) {
-						projections += "\n";
-					}
-					projections += names[column_id];
-				}
-			}
-			result["Projections"] = projections;
+			AddProjectionNames(column_index, names[column_id], returned_types[column_id], projections);
 		}
+		result["Projections"] = projections;
 	}
 	if (function.filter_pushdown && table_filters) {
 		string filters_info;
