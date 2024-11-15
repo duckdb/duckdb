@@ -13,7 +13,7 @@ idx_t IngestionSample::NumSamplesCollected() {
 }
 
 unique_ptr<DataChunk> IngestionSample::GetChunk(idx_t offset) {
-	Printer::Print("Get chunk called");
+	throw InternalException("Calling Get chunk on ingestion sample");
 	Shrink();
 	D_ASSERT(sample_chunk->size() <= 1);
 	auto ret = make_uniq<DataChunk>();
@@ -123,7 +123,6 @@ void IngestionSample::Shrink() {
 		// we will only keep one sample size of samples
 		vector<std::pair<double, idx_t>> weights_indexes;
 		D_ASSERT(num_samples_to_keep == base_reservoir_sample->reservoir_weights.size());
-		D_ASSERT(num_samples_to_keep <= FIXED_SAMPLE_SIZE);
 		for (idx_t i = 0; i < num_samples_to_keep; i++) {
 			weights_indexes.push_back(base_reservoir_sample->reservoir_weights.top());
 			base_reservoir_sample->reservoir_weights.pop();
@@ -290,10 +289,6 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	}
 
 	D_ASSERT(SamplingState() == SamplingMode::SLOW && other_ingest.SamplingState() == SamplingMode::SLOW);
-	// we know both ingestion samples have collected samples,
-	// shrink both samples so merging is easier
-	Shrink();
-	other_ingest.Shrink();
 
 	// make sure both ingestion samples only have 1 sample after the shrink
 	D_ASSERT(other_ingest.sample_chunk->size() > 0 && sample_chunk->size() > 0);
@@ -370,6 +365,11 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	// fix, basically you only need to copy the required tuples from other and put them into this. You can
 	// save a number of the tuples in THIS.
 	UpdateSampleAppend(*other_ingest.sample_chunk, sel_other, chunk_offset);
+
+	if (sample_chunk->size() > FIXED_SAMPLE_SIZE * (FIXED_SAMPLE_SIZE_MULTIPLIER - 3)) {
+		Shrink();
+	}
+
 	Verify();
 }
 

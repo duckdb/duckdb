@@ -68,6 +68,8 @@ public:
 	idx_t num_entries_seen_total;
 	//! Priority queue of [random element, index] for each of the elements in the sample
 	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
+	//! storage of all indexes for when IngestionSamples need to shrink.
+	vector<idx_t> all_indexes;
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BaseReservoirSampling> Deserialize(Deserializer &deserializer);
