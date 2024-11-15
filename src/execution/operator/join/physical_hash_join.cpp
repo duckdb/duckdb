@@ -617,7 +617,8 @@ void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &
 
 				// Scan the build keys in the hash table
 				Vector build_vector(ht.layout.GetTypes()[build_idx], key_count);
-				RowOperations::FullScanColumn(ht.layout, tuples_addresses, build_vector, key_count, build_idx);
+				data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count,
+				                       build_idx, build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
 
 				// generate the OR-clause
 				vector<Value> in_list;
