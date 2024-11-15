@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-OptionalFilter::OptionalFilter(unique_ptr<TableFilter> filter) : TableFilter(TableFilterType::OPTIONAL_FILTER), child_filter(std::move(filter)) {
+OptionalFilter::OptionalFilter(unique_ptr<TableFilter> filter)
+    : TableFilter(TableFilterType::OPTIONAL_FILTER), child_filter(std::move(filter)) {
 }
 
 FilterPropagateResult OptionalFilter::CheckStatistics(BaseStatistics &stats) {

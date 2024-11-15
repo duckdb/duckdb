@@ -15,15 +15,15 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
-
 
 namespace duckdb {
 
@@ -570,9 +570,8 @@ public:
 	}
 };
 
-void JoinFilterPushdownInfo::PushFilters(JoinHashTable &ht, JoinFilterGlobalState &gstate, const PhysicalOperator &op) const {
-	static constexpr idx_t ZONE_MAP_THRESHOLD = 100;
-
+void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
+                                         const PhysicalOperator &op) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
@@ -583,6 +582,7 @@ void JoinFilterPushdownInfo::PushFilters(JoinHashTable &ht, JoinFilterGlobalStat
 
 	gstate.global_aggregate_state->Finalize(final_min_max);
 
+	auto dynamic_or_filter_threshold = ClientConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
 		for (auto &info : probe_info) {
@@ -600,7 +600,7 @@ void JoinFilterPushdownInfo::PushFilters(JoinHashTable &ht, JoinFilterGlobalStat
 			}
 			// if the HT is small we can generate a complete "OR" filter instead of settling for min/max
 			// FIXME - we only need to do this if max-min is not a dense range (i.e. max - min > count)
-			if (ht.Count() > 1 && ht.Count() <= ZONE_MAP_THRESHOLD) {
+			if (ht.Count() > 1 && ht.Count() <= dynamic_or_filter_threshold) {
 				// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
 				// first scan the entire vector at the probe side
 				// FIXME: this code is duplicated from PerfectHashJoinExecutor::FullScanHashTable
@@ -609,24 +609,22 @@ void JoinFilterPushdownInfo::PushFilters(JoinHashTable &ht, JoinFilterGlobalStat
 
 				Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
 
-				idx_t key_count = 0;
 				JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
-											  TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-
+				                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 
 				// Go through all the blocks and fill the keys addresses
-				key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
+				idx_t key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
 
 				// Scan the build keys in the hash table
 				Vector build_vector(ht.layout.GetTypes()[build_idx], key_count);
 				RowOperations::FullScanColumn(ht.layout, tuples_addresses, build_vector, key_count, build_idx);
 
 				// generate the OR-clause
-				auto or_filter = make_uniq<ConjunctionOrFilter>();
-				for(idx_t k = 0; k < key_count; k++) {
-					auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, build_vector.GetValue(k));
-					or_filter->child_filters.push_back(std::move(constant_filter));
+				vector<Value> in_list;
+				for (idx_t k = 0; k < key_count; k++) {
+					in_list.push_back(build_vector.GetValue(k));
 				}
+				auto or_filter = make_uniq<InFilter>(std::move(in_list));
 				auto filter = make_uniq<OptionalFilter>(std::move(or_filter));
 				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 			}
@@ -693,7 +691,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	ht.Unpartition();
 
 	if (filter_pushdown && ht.Count() > 0) {
-		filter_pushdown->PushFilters(ht, *sink.global_filter_state, *this);
+		filter_pushdown->PushFilters(context, ht, *sink.global_filter_state, *this);
 	}
 
 	// check for possible perfect hash table

@@ -11,6 +11,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,9 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 		break;
 	case TableFilterType::CONSTANT_COMPARISON:
 		result = ConstantFilter::Deserialize(deserializer);
+		break;
+	case TableFilterType::IN_FILTER:
+		result = InFilter::Deserialize(deserializer);
 		break;
 	case TableFilterType::IS_NOT_NULL:
 		result = IsNotNullFilter::Deserialize(deserializer);
@@ -81,6 +85,17 @@ unique_ptr<TableFilter> ConstantFilter::Deserialize(Deserializer &deserializer) 
 	auto comparison_type = deserializer.ReadProperty<ExpressionType>(200, "comparison_type");
 	auto constant = deserializer.ReadProperty<Value>(201, "constant");
 	auto result = duckdb::unique_ptr<ConstantFilter>(new ConstantFilter(comparison_type, constant));
+	return std::move(result);
+}
+
+void InFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<Value>>(200, "values", values);
+}
+
+unique_ptr<TableFilter> InFilter::Deserialize(Deserializer &deserializer) {
+	auto values = deserializer.ReadPropertyWithDefault<vector<Value>>(200, "values");
+	auto result = duckdb::unique_ptr<InFilter>(new InFilter(std::move(values)));
 	return std::move(result);
 }
 

@@ -59,7 +59,8 @@ public:
 
 	void Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const;
 	void Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const;
-	void PushFilters(JoinHashTable &ht, JoinFilterGlobalState &gstate, const PhysicalOperator &op) const;
+	void PushFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
+	                 const PhysicalOperator &op) const;
 };
 
 } // namespace duckdb

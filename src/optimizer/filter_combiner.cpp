@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
@@ -634,14 +635,14 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 			// if we are still Integral, then we can push a zonemap filter.
 			else if (type.IsIntegral()) {
 				auto optional_filter = make_uniq<OptionalFilter>();
-				auto or_filter = make_uniq<ConjunctionOrFilter>();
+				vector<Value> in_list;
 				for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
 					D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
 					auto &const_val = func.children[in_val_idx]->Cast<BoundConstantExpression>();
-					auto const_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, const_val.value);
-					or_filter->child_filters.push_back(std::move(const_filter));
+					in_list.push_back(const_val.value);
 				}
-				optional_filter->child_filter = std::move(or_filter);
+				auto in_filter = make_uniq<InFilter>(std::move(in_list));
+				optional_filter->child_filter = std::move(in_filter);
 				table_filters.PushFilter(column_index, std::move(optional_filter));
 			}
 		}
