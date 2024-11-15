@@ -150,6 +150,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(StripAccentsFun),
 	DUCKDB_SCALAR_FUNCTION(StrlenFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrpTimeFun),
+	DUCKDB_SCALAR_FUNCTION(StructConcatFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StructExtractFun),
 	DUCKDB_SCALAR_FUNCTION(StructPackFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(SubstrFun),
