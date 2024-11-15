@@ -519,10 +519,21 @@ public:
 	void FlushSegment() {
 		auto &state = checkpointer.GetCheckpointState();
 		auto base_ptr = handle.Ptr();
+		// +======================================+
+		// |x|ddddddddddddddd|                |mmm|
+		// +======================================+
+
+		// x: metadata_offset (to the "right" of it)
+		// d: data of the containers
+		// m: metadata of the containers
+
+		// This is after 'x'
 		base_ptr += sizeof(idx_t);
 
-		idx_t unaligned_offset = NumericCast<idx_t>(data_ptr - base_ptr);
-		idx_t metadata_offset = AlignValue(unaligned_offset);
+		// Size of the 'd' segment
+		idx_t data_size = NumericCast<idx_t>(data_ptr - base_ptr);
+		data_size = AlignValue(data_size);
+		// Size of the 'm' segment
 		idx_t metadata_size = NumericCast<idx_t>(handle.Ptr() + info.GetBlockSize() - metadata_ptr);
 		idx_t total_segment_size;
 
@@ -534,13 +545,13 @@ public:
 		double percentage_of_block = (double)gap / ((double)info.GetBlockSize() / 100.0);
 		if (percentage_of_block > 0.25) {
 			// Move the metadata, to close the gap between the data and the metadata
-			std::memmove(base_ptr + metadata_offset, metadata_ptr, metadata_size);
-			metadata_ptr = base_ptr + metadata_offset;
-			total_segment_size = sizeof(idx_t) + metadata_offset + metadata_size;
+			std::memmove(base_ptr + data_size, metadata_ptr, metadata_size);
+			metadata_ptr = base_ptr + data_size;
+			total_segment_size = sizeof(idx_t) + data_size + metadata_size;
 		} else {
 			total_segment_size = info.GetBlockSize();
 		}
-		auto metadata_start = (metadata_ptr - handle.Ptr()) + metadata_size;
+		auto metadata_start = (metadata_ptr - base_ptr) + metadata_size;
 		Store<idx_t>(metadata_start, handle.Ptr());
 		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
@@ -646,6 +657,7 @@ public:
 
 public:
 	virtual void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) = 0;
+	virtual void Verify() const = 0;
 
 public:
 	//! The index of the container
@@ -664,7 +676,7 @@ public:
 	}
 
 public:
-	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
+	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
 		auto &result_mask = FlatVector::Validity(result);
 
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
@@ -747,6 +759,16 @@ public:
 		}
 	}
 
+	void Verify() const override {
+#ifdef DEBUG
+		idx_t index = 0;
+		for (idx_t i = 0; i < count; i++) {
+			D_ASSERT(runs[i].start >= index);
+			index = runs[i].start + 1 + runs[i].length;
+		}
+#endif
+	}
+
 public:
 	RunContainerRLEPair *runs;
 	idx_t count;
@@ -761,7 +783,7 @@ public:
 	}
 
 public:
-	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
+	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
 		auto &result_mask = FlatVector::Validity(result);
 
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
@@ -843,6 +865,16 @@ public:
 		}
 	}
 
+	void Verify() const override {
+#ifdef DEBUG
+		idx_t index = 0;
+		for (idx_t i = 0; i < count; i++) {
+			D_ASSERT(!i || array[i] > index);
+			index = array[i];
+		}
+#endif
+	}
+
 public:
 	uint16_t *array;
 	const idx_t count;
@@ -856,13 +888,18 @@ public:
 	}
 
 public:
-	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
+	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
 		if (!result_offset && scanned_count % ValidityMask::BITS_PER_VALUE == 0) {
 			ValidityUncompressed::AlignedScan((data_ptr_t)bitset, scanned_count, result, to_scan);
 		} else {
 			ValidityUncompressed::UnalignedScan((data_ptr_t)bitset, scanned_count, result, result_offset, to_scan);
 		}
 		scanned_count += to_scan;
+	}
+
+	void Verify() const override {
+		// uncompressed, nothing to verify
+		return;
 	}
 
 public:
@@ -878,8 +915,8 @@ public:
 		data_ptr = base_ptr + sizeof(idx_t);
 
 		// Deserialize the container metadata for this segment
-		auto metadata_offset = Load<idx_t>(base_ptr + segment.GetBlockOffset());
-		auto metadata_ptr = base_ptr + metadata_offset - sizeof(ContainerMetadata);
+		auto metadata_offset = Load<idx_t>(base_ptr);
+		auto metadata_ptr = data_ptr + metadata_offset - sizeof(ContainerMetadata);
 
 		auto segment_count = segment.count.load();
 		auto container_count = segment_count / ROARING_CONTAINER_SIZE;
@@ -969,6 +1006,8 @@ public:
 				    container_index, container_size, reinterpret_cast<uint16_t *>(data_ptr), metadata.Cardinality());
 			}
 		}
+
+		current_container->Verify();
 
 		auto &scan_state = *current_container;
 		if (internal_offset) {
