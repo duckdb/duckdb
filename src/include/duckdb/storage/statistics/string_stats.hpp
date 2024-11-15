@@ -14,6 +14,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/array_ptr.hpp"
 
 namespace duckdb {
 class BaseStatistics;
