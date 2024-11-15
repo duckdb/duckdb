@@ -58,3 +58,13 @@ statement error
 SELECT struct_concat({'a': 'first struct'}, {'a': 'second struct'});
 ----
 Invalid Input Error: struct_concat: Arguments contain duplicate STRUCT entry "a"
+
+statement error
+SELECT struct_concat({'a': 'named struct'}, row(10));
+----
+Invalid Input Error: struct_concat: Cannot mix named and unnamed STRUCTs
+
+query I
+SELECT struct_concat(row('a'), row('b'));
+----
+(a, b)

@@ -42,6 +42,8 @@ static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarF
 	child_list_t<LogicalType> combined_children;
 	case_insensitive_set_t name_set;
 
+	bool has_unnamed = false;
+
 	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
 		const auto &arg = arguments[arg_idx];
 		if (arg->return_type.id() != LogicalTypeId::STRUCT) {
@@ -50,13 +52,21 @@ static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarF
 
 		const auto &child_types = StructType::GetChildTypes(arg->return_type);
 		for (const auto &child : child_types) {
-			if (name_set.find(child.first) != name_set.end()) {
-				throw InvalidInputException("struct_concat: Arguments contain duplicate STRUCT entry \"%s\"",
-				                            child.first);
+			if (!child.first.empty()) {
+				if (name_set.find(child.first) != name_set.end()) {
+					throw InvalidInputException("struct_concat: Arguments contain duplicate STRUCT entry \"%s\"",
+					                            child.first);
+				}
+				name_set.insert(child.first);
+			} else {
+				has_unnamed = true;
 			}
-			name_set.insert(child.first);
 			combined_children.push_back(child);
 		}
+	}
+
+	if (has_unnamed && !name_set.empty()) {
+		throw InvalidInputException("struct_concat: Cannot mix named and unnamed STRUCTs");
 	}
 
 	bound_function.return_type = LogicalType::STRUCT(combined_children);
