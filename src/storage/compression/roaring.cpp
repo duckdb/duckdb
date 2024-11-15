@@ -567,6 +567,14 @@ public:
 			return;
 		}
 		count += container_state.count;
+		bool has_nulls = container_state.null_count != 0;
+		bool has_non_nulls = container_state.null_count != container_state.count;
+		if (has_nulls || container_state.uncompressed) {
+			current_segment->stats.statistics.SetHasNullFast();
+		}
+		if (has_non_nulls || container_state.uncompressed) {
+			current_segment->stats.statistics.SetHasNoNullFast();
+		}
 		current_segment->count += container_state.count;
 		container_state.Reset();
 	}
