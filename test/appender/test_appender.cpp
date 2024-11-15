@@ -573,9 +573,9 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 }
 
 void setDataChunkInt32(DataChunk &chunk, idx_t col_idx, idx_t row_idx, int32_t value) {
-	auto &col_i = chunk.data[col_idx];
-	auto col_i_data = reinterpret_cast<int32_t *>(col_i.GetData());
-	col_i_data[row_idx] = value;
+	auto &col = chunk.data[col_idx];
+	auto data = FlatVector::GetData<int32_t>(col);
+	data[row_idx] = value;
 }
 
 TEST_CASE("Test appending with an active default column", "[appender]") {
@@ -583,7 +583,8 @@ TEST_CASE("Test appending with an active default column", "[appender]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (random()))"));
 	Appender appender(con, "main", "tbl");
 	appender.AddColumn("i");
 
@@ -598,51 +599,50 @@ TEST_CASE("Test appending with an active default column", "[appender]") {
 	appender.AppendDataChunk(chunk);
 	appender.Close();
 
-	result = con.Query("SELECT i, j, k FROM tbl");
+	result = con.Query("SELECT i, j, k, l IS NOT NULL FROM tbl");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 2, {30, 30}));
-
-	// Test that column 1 is NULL.
-	auto result_chunk = result->Fetch();
-	auto &null_result_vec = result_chunk->data[1];
-	UnifiedVectorFormat result_format;
-	null_result_vec.ToUnifiedFormat(result_chunk->size(), result_format);
-	REQUIRE(!result_format.validity.RowIsValid(0));
-	REQUIRE(!result_format.validity.RowIsValid(1));
+	REQUIRE(CHECK_COLUMN(result, 3, {true, true}));
 }
 
-TEST_CASE("Test appending with an active normal column", "[appender]") {
+TEST_CASE("Test appending with two active normal columns", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (2 * j), m INT)"));
 	Appender appender(con, "main", "tbl");
 	appender.AddColumn("j");
+	appender.AddColumn("m");
 
 	DataChunk chunk;
-	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER};
+	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER};
 	chunk.Initialize(*con.context, types);
 
 	for (idx_t i = 0; i < 4; i++) {
-		auto &col_j = chunk.data[0];
-		auto col_j_data = reinterpret_cast<int32_t *>(col_j.GetData());
+		for (idx_t j = 0; j < 2; j++) {
+			auto &col = chunk.data[j];
+			auto col_data = FlatVector::GetData<int32_t>(col);
 
-		auto offset = i * STANDARD_VECTOR_SIZE;
-		for (idx_t j = 0; j < STANDARD_VECTOR_SIZE; j++) {
-			col_j_data[j] = int32_t(offset + j);
+			auto offset = i * STANDARD_VECTOR_SIZE;
+			for (idx_t k = 0; k < STANDARD_VECTOR_SIZE; k++) {
+				col_data[k] = int32_t(offset + k);
+			}
 		}
-
 		chunk.SetCardinality(STANDARD_VECTOR_SIZE);
 		appender.AppendDataChunk(chunk);
 		chunk.Reset();
 	}
 	appender.Close();
 
-	result = con.Query("SELECT SUM(i), SUM(j), SUM(k) FROM tbl");
+	result = con.Query("SELECT SUM(i), SUM(j), SUM(k), SUM(l), SUM(m) FROM tbl");
 	REQUIRE(CHECK_COLUMN(result, 0, {32768}));
 	REQUIRE(CHECK_COLUMN(result, 1, {33550336}));
 	REQUIRE(CHECK_COLUMN(result, 2, {245760}));
+	REQUIRE(CHECK_COLUMN(result, 3, {67100672}));
+	REQUIRE(CHECK_COLUMN(result, 4, {33550336}));
 }
 
 TEST_CASE("Test changing the active column configuration", "[appender]") {
@@ -696,17 +696,8 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 
 	result = con.Query("SELECT i, j, k FROM tbl");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 42, 42, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {111, 111, 111, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 2, {50, 30, 50, 50}));
-
-	// Test that column 1 is [111, 111, 111, NULL].
-	auto result_chunk = result->Fetch();
-	auto &null_result_vec = result_chunk->data[1];
-	UnifiedVectorFormat result_format;
-	null_result_vec.ToUnifiedFormat(result_chunk->size(), result_format);
-	REQUIRE(null_result_vec.GetValue(0).GetValue<int32_t>() == 111);
-	REQUIRE(null_result_vec.GetValue(1).GetValue<int32_t>() == 111);
-	REQUIRE(null_result_vec.GetValue(2).GetValue<int32_t>() == 111);
-	REQUIRE(!result_format.validity.RowIsValid(3));
 }
 
 TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
