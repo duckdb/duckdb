@@ -290,8 +290,8 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 
 	if (other_ingest.GetPriorityQueueSize() == 0) {
 		// make sure both samples have weights
-		other_ingest.base_reservoir_sample->FillWeights(actual_sample_indexes);
-		actual_sample_indexes.clear();
+		other_ingest.base_reservoir_sample->FillWeights(other_ingest.actual_sample_indexes);
+		other_ingest.actual_sample_indexes.clear();
 	}
 
 	// we know both ingestion samples have collected samples,
