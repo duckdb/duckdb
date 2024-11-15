@@ -53,6 +53,7 @@ def test_pragma(shell):
         .statement(".mode csv")
         .statement(".headers off")
         .statement(".sep |")
+        .statement('.nullvalue ""')
         .statement("CREATE TABLE t0(c0 INT);")
         .statement("PRAGMA table_info('t0');")
     )

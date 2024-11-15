@@ -80,13 +80,12 @@
 #include <stdio.h>
 #include <assert.h>
 #include "duckdb_shell_wrapper.h"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb/common/box_renderer.hpp"
 #include "sqlite3.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
 typedef unsigned char u8;
 #include <ctype.h>
-#include <stdarg.h>
 
 #if !defined(_WIN32) && !defined(WIN32)
 #include <signal.h>
@@ -143,6 +142,7 @@ typedef unsigned char u8;
 #endif
 
 #include "shell_renderer.hpp"
+#include "shell_highlight.hpp"
 #include "shell_state.hpp"
 
 using namespace duckdb_shell;
@@ -422,6 +422,8 @@ static volatile int seenInterrupt = 0;
 */
 static const char *program_name;
 
+enum class OptionType { DEFAULT, ON, OFF };
+
 /*
 ** Whether or not we are running in safe mode
 */
@@ -430,7 +432,26 @@ static bool safe_mode = false;
 /*
 ** Whether or not we are highlighting errors
 */
-static bool highlight_errors = true;
+static OptionType highlight_errors = OptionType::DEFAULT;
+
+static bool HighlightErrors() {
+	if (highlight_errors == OptionType::DEFAULT) {
+		return stderr_is_console;
+	}
+	return highlight_errors == OptionType::ON;
+}
+
+/*
+** Whether or not we are highlighting results
+*/
+static OptionType highlight_results = OptionType::DEFAULT;
+
+static bool HighlightResults() {
+	if (highlight_results == OptionType::DEFAULT) {
+		return stdout_is_console;
+	}
+	return highlight_results == OptionType::ON;
+}
 
 /*
 ** Prompt strings. Initialized in main. Settable with
@@ -472,92 +493,6 @@ void utf8_printf(FILE *out, const char *zFormat, ...) {
 #define utf8_printf fprintf
 #endif
 
-enum class PrintOutput { STDOUT, STDERR };
-
-enum class PrintColor { STANDARD, RED, YELLOW, GREEN, GRAY };
-
-enum class PrintIntensity { STANDARD, BOLD, UNDERLINE };
-
-/*
-** Output text to the console in a font that attracts extra attention.
-*/
-#ifdef _WIN32
-static void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
-	HANDLE out = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-	CONSOLE_SCREEN_BUFFER_INFO defaultScreenInfo;
-	GetConsoleScreenBufferInfo(out, &defaultScreenInfo);
-	WORD wAttributes = 0;
-
-	switch (intensity) {
-	case PrintIntensity::BOLD:
-		wAttributes |= FOREGROUND_INTENSITY;
-		break;
-	default:
-		break;
-	}
-	switch (color) {
-	case PrintColor::RED:
-		wAttributes |= FOREGROUND_RED;
-		break;
-	case PrintColor::GREEN:
-		wAttributes |= FOREGROUND_GREEN;
-		break;
-	case PrintColor::YELLOW:
-		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN;
-		break;
-	case PrintColor::GRAY:
-		wAttributes |= FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
-		break;
-	default:
-		break;
-	}
-	if (wAttributes != 0) {
-		SetConsoleTextAttribute(out, wAttributes);
-	}
-
-	utf8_printf(output == PrintOutput::STDOUT ? stdout : stderr, "%s", text.c_str());
-
-	SetConsoleTextAttribute(out, defaultScreenInfo.wAttributes);
-}
-#else
-static void PrintText(const string &text, PrintOutput output, PrintColor color, PrintIntensity intensity) {
-	const char *bold_prefix = "";
-	const char *color_prefix = "";
-	const char *suffix = "";
-	switch (intensity) {
-	case PrintIntensity::BOLD:
-		bold_prefix = "\033[1m";
-		break;
-	case PrintIntensity::UNDERLINE:
-		bold_prefix = "\033[4m";
-		break;
-	default:
-		break;
-	}
-	switch (color) {
-	case PrintColor::RED:
-		color_prefix = "\033[31m";
-		break;
-	case PrintColor::GREEN:
-		color_prefix = "\033[32m";
-		break;
-	case PrintColor::YELLOW:
-		color_prefix = "\033[33m";
-		break;
-	case PrintColor::GRAY:
-		color_prefix = "\033[90m";
-		break;
-	default:
-		break;
-	}
-	if (*color_prefix || *bold_prefix) {
-		suffix = "\033[0m";
-	}
-	fprintf(output == PrintOutput::STDOUT ? stdout : stderr, "%s%s%s%s", bold_prefix, color_prefix, text.c_str(),
-	        suffix);
-}
-#endif
-
 /*
 ** Render output like fprintf().  This should not be used on anything that
 ** includes string formatting (e.g. "%s").
@@ -572,12 +507,24 @@ static void shell_out_of_memory(void) {
 	exit(1);
 }
 
+ShellState::ShellState() {
+	nullValue = "NULL";
+}
+
+void ShellState::Print(PrintOutput output, const char *str) {
+	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
+}
+
+void ShellState::Print(PrintOutput output, const string &str) {
+	Print(output, str.c_str());
+}
+
 void ShellState::Print(const char *str) {
-	utf8_printf(out, "%s", str);
+	Print(PrintOutput::STDOUT, str);
 }
 
 void ShellState::Print(const string &str) {
-	utf8_printf(out, "%s", str.c_str());
+	Print(PrintOutput::STDOUT, str.c_str());
 }
 
 void ShellState::PrintValue(const char *str) {
@@ -1620,9 +1567,59 @@ columnar_end:
 }
 
 extern "C" {
-extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                                   int columns, char thousands, char decimal);
+extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
+                                  int columns, char thousands, char decimal, duckdb::BaseResultRenderer *renderer);
 }
+
+class DuckBoxRenderer : public duckdb::BaseResultRenderer {
+public:
+	DuckBoxRenderer(ShellState &state, bool highlight)
+	    : shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
+	}
+
+	void RenderLayout(const string &text) override {
+		PrintText(text, HighlightElementType::LAYOUT);
+	}
+
+	void RenderColumnName(const string &text) override {
+		PrintText(text, HighlightElementType::COLUMN_NAME);
+	}
+
+	void RenderType(const string &text) override {
+		PrintText(text, HighlightElementType::COLUMN_TYPE);
+	}
+
+	void RenderValue(const string &text, const duckdb::LogicalType &type) override {
+		if (type.IsNumeric()) {
+			PrintText(text, HighlightElementType::NUMERIC_VALUE);
+		} else if (type.IsTemporal()) {
+			PrintText(text, HighlightElementType::TEMPORAL_VALUE);
+		} else {
+			PrintText(text, HighlightElementType::STRING_VALUE);
+		}
+	}
+
+	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
+		PrintText(text, HighlightElementType::NULL_VALUE);
+	}
+
+	void RenderFooter(const string &text) override {
+		PrintText(text, HighlightElementType::FOOTER);
+	}
+
+	void PrintText(const string &text, HighlightElementType element_type) {
+		if (highlight) {
+			shell_highlight.PrintText(text, output, element_type);
+		} else {
+			utf8_printf(shell_highlight.state.out, "%s", text.c_str());
+		}
+	}
+
+private:
+	ShellHighlight shell_highlight;
+	PrintOutput output;
+	bool highlight = true;
+};
 
 /*
 ** Run a prepared statement
@@ -1632,12 +1629,9 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
 		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
-		char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
-		                                  decimal_separator);
-		if (str) {
-			utf8_printf(out, "%s", str);
-			sqlite3_free(str);
-		}
+		DuckBoxRenderer renderer(*this, HighlightResults());
+		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
+		                      decimal_separator, &renderer);
 		return;
 	}
 
@@ -2105,7 +2099,9 @@ static const char *azHelp[] = {
 #ifdef HAVE_LINENOISE
     ".highlight [on|off]      Toggle syntax highlighting in the shell on/off",
 #endif
+    ".highlight_colors [element] [color]  ([bold])? Configure highlighting colors",
     ".highlight_errors [on|off] Toggle highlighting of errors in the shell on/off",
+    ".highlight_results [on|off] Toggle highlighting of results in the shell on/off",
     ".import FILE TABLE       Import data from FILE into TABLE",
     "   Options:",
     "     --ascii               Use \\037 and \\036 as column and row separators",
@@ -2797,85 +2793,24 @@ void ShellState::ResetOutput() {
 	}
 	outfile = string();
 	out = stdout;
+	stdout_is_console = true;
 }
 
-static void printDatabaseError(const char *zErr) {
-	if (!highlight_errors) {
+void ShellState::PrintDatabaseError(const char *zErr) {
+	if (!HighlightErrors()) {
 		utf8_printf(stderr, "%s\n", zErr);
 		return;
 	}
-	string error_msg(zErr);
-	if (error_msg.empty()) {
-		return;
-	}
-	vector<duckdb::SimplifiedToken> tokens;
-	string error_type;
-	auto error_location = duckdb::StringUtil::Find(error_msg, "Error: ");
-	if (error_location.IsValid()) {
-		error_type = error_msg.substr(0, error_location.GetIndex() + 6);
-		error_msg = error_msg.substr(error_location.GetIndex() + 7);
-	}
-	try {
-		tokens = duckdb::Parser::TokenizeError(error_msg);
-	} catch (...) {
-		// fallback
-		utf8_printf(stderr, "%s\n", zErr);
-		return;
-	}
-	if (!tokens.empty() && tokens[0].start > 0) {
-		duckdb::SimplifiedToken new_token;
-		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
-		new_token.start = 0;
-		tokens.insert(tokens.begin(), new_token);
-	}
-	if (tokens.empty() && !error_msg.empty()) {
-		duckdb::SimplifiedToken new_token;
-		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
-		new_token.start = 0;
-		tokens.push_back(new_token);
-	}
-	if (!error_type.empty()) {
-		PrintText(error_type + "\n", PrintOutput::STDERR, PrintColor::RED, PrintIntensity::BOLD);
-	}
-	for (idx_t i = 0; i < tokens.size(); i++) {
-		auto color = PrintColor::STANDARD;
-		auto intensity = PrintIntensity::STANDARD;
-		switch (tokens[i].type) {
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
-			break;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR:
-			color = PrintColor::RED;
-			intensity = PrintIntensity::BOLD;
-			break;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
-			color = PrintColor::YELLOW;
-			break;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR:
-			break;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
-			color = PrintColor::GREEN;
-			break;
-		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
-			intensity = PrintIntensity::BOLD;
-			break;
-		}
-		idx_t start = tokens[i].start;
-		idx_t end = i + 1 == tokens.size() ? error_msg.size() : tokens[i + 1].start;
-		if (end - start > 0) {
-			string error_print = error_msg.substr(tokens[i].start, end - start);
-			PrintText(error_print, PrintOutput::STDERR, color, intensity);
-		}
-	}
-	PrintText("\n", PrintOutput::STDERR, PrintColor::STANDARD, PrintIntensity::STANDARD);
+	ShellHighlight shell_highlight(*this);
+	shell_highlight.PrintError(zErr);
 }
 
 /*
 ** Print the current sqlite3_errmsg() value to stderr and return 1.
 */
-static int shellDatabaseError(sqlite3 *db) {
+int ShellState::ShellDatabaseError(sqlite3 *db) {
 	const char *zErr = sqlite3_errmsg(db);
-	printDatabaseError(zErr);
+	PrintDatabaseError(zErr);
 	return 1;
 }
 
@@ -3019,7 +2954,7 @@ MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) 
 	renderer->col_sep = ": ";
 	sqlite3_exec(state.db, "SELECT name, file FROM pragma_database_list", callback, renderer.get(), &zErrMsg);
 	if (zErrMsg) {
-		printDatabaseError(zErrMsg);
+		state.PrintDatabaseError(zErrMsg);
 		sqlite3_free(zErrMsg);
 		return MetadataResult::FAIL;
 	}
@@ -3131,8 +3066,24 @@ MetadataResult ToggleHeaders(ShellState &state, const char **azArg, idx_t nArg) 
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SetHighlightColors(ShellState &state, const char **azArg, idx_t nArg) {
+	if (nArg < 3 || nArg > 4) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	ShellHighlight highlighter(state);
+	if (!highlighter.SetColor(azArg[1], azArg[2], nArg == 3 ? nullptr : azArg[3])) {
+		return MetadataResult::FAIL;
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ToggleHighlighErrors(ShellState &state, const char **azArg, idx_t nArg) {
-	highlight_errors = booleanValue(azArg[1]);
+	highlight_errors = booleanValue(azArg[1]) ? OptionType::ON : OptionType::OFF;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleHighlightResult(ShellState &state, const char **azArg, idx_t nArg) {
+	highlight_results = booleanValue(azArg[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
 }
 
@@ -3454,7 +3405,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	if (rc) {
 		if (pStmt)
 			sqlite3_finalize(pStmt);
-		shellDatabaseError(db);
+		ShellDatabaseError(db);
 		import_cleanup(&sCtx);
 		return false;
 	}
@@ -3482,7 +3433,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
 	sqlite3_free(zSql);
 	if (rc) {
-		shellDatabaseError(db);
+		ShellDatabaseError(db);
 		if (pStmt)
 			sqlite3_finalize(pStmt);
 		import_cleanup(&sCtx);
@@ -3764,6 +3715,7 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 			outfile = zFile;
 		}
 	}
+	stdout_is_console = false;
 	return true;
 }
 
@@ -3869,7 +3821,7 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 		}
 	}
 	if (zErrMsg) {
-		printDatabaseError(zErrMsg);
+		PrintDatabaseError(zErrMsg);
 		sqlite3_free(zErrMsg);
 		return false;
 	} else if (rc != SQLITE_OK) {
@@ -4036,7 +3988,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 		nRow++;
 	}
 	if (sqlite3_finalize(pStmt) != SQLITE_OK) {
-		rc = shellDatabaseError(db);
+		rc = ShellDatabaseError(db);
 	}
 
 	/* Pretty-print the contents of array azResult[] to the output */
@@ -4106,7 +4058,9 @@ static const MetadataCommand metadata_commands[] = {
     {"fullschema", 0, nullptr, "", "", 0},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0},
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
+    {"highlight_colors", 0, SetHighlightColors, "[element] [color] ([bold])?", "Configure highlighting colors", 0},
     {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0},
+    {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0},
 
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
@@ -4231,7 +4185,7 @@ int ShellState::DoMetaCommand(char *zLine) {
 		const char *error = NULL;
 		if (linenoiseParseOption((const char **)azArg, nArg, &error)) {
 			if (error) {
-				printDatabaseError(error);
+				PrintDatabaseError(error);
 				rc = 1;
 			}
 		} else {
@@ -4331,11 +4285,11 @@ int ShellState::RunOneSqlLine(char *zSql) {
 	END_TIMER;
 	if (rc || zErrMsg) {
 		if (zErrMsg != 0) {
-			printDatabaseError(zErrMsg);
+			PrintDatabaseError(zErrMsg);
 			sqlite3_free(zErrMsg);
 			zErrMsg = 0;
 		} else {
-			shellDatabaseError(db);
+			ShellDatabaseError(db);
 		}
 		return 1;
 	} else if (ShellHasFlag(SHFLG_CountChanges)) {
@@ -4699,10 +4653,6 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	stdout_is_console = isatty(1);
 	stderr_is_console = isatty(2);
 
-	if (!stderr_is_console) {
-		highlight_errors = false;
-	}
-
 #if USE_SYSTEM_SQLITE + 0 != 1
 	if (strncmp(sqlite3_sourceid(), SQLITE_SOURCE_ID, 60) != 0) {
 		utf8_printf(stderr, "SQLite header and source version mismatch\n%s\n%s\n", sqlite3_sourceid(),
@@ -4952,7 +4902,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				data.OpenDB(0);
 				rc = data.ExecuteSQL(z, &zErrMsg);
 				if (zErrMsg != 0) {
-					printDatabaseError(zErrMsg);
+					data.PrintDatabaseError(zErrMsg);
 					sqlite3_free(zErrMsg);
 					if (bail_on_error) {
 						free(azCmd);
@@ -4993,7 +4943,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				data.OpenDB(0);
 				rc = data.ExecuteSQL(azCmd[i], &zErrMsg);
 				if (zErrMsg != 0) {
-					printDatabaseError(zErrMsg);
+					data.PrintDatabaseError(zErrMsg);
 					sqlite3_free(zErrMsg);
 					free(azCmd);
 					return rc != 0 ? rc : 1;
@@ -5017,8 +4967,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			       sqlite3_libversion(), sqlite3_sourceid());
 			if (warnInmemoryDb) {
 				printf("Connected to a ");
-				PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
-				          PrintIntensity::BOLD);
+				ShellHighlight highlighter(data);
+				highlighter.PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
+				                      PrintIntensity::BOLD);
 				printf(".\nUse \".open FILENAME\" to reopen on a "
 				       "persistent database.\n");
 			}
