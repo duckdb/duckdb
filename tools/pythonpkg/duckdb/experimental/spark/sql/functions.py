@@ -14,6 +14,7 @@ from ..errors import PySparkTypeError
 from ..exception import ContributionsAcceptedError
 from ._typing import ColumnOrName
 from .column import Column, _get_expr
+from . import types as _types
 
 
 def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
@@ -4059,6 +4060,154 @@ def zeroifnull(col: "ColumnOrName") -> Column:
     +------+
     """
     return coalesce(col, lit(0))
+
+def _to_date_or_timestamp(col: "ColumnOrName", spark_datatype: _types.DataType, format: Optional[str] = None) -> Column:
+    if format is not None:
+        raise ContributionsAcceptedError(
+            "format is not yet supported as DuckDB and PySpark use a different way of specifying them."
+            + " As a workaround, you can use F.call_function('strptime', col, format)"
+        )
+    return Column(_to_column_expr(col)).cast(spark_datatype)
+
+
+def to_date(col: "ColumnOrName", format: Optional[str] = None) -> Column:
+    """Converts a :class:`~pyspark.sql.Column` into :class:`pyspark.sql.types.DateType`
+    using the optionally specified format. Specify formats according to `datetime pattern`_.
+    By default, it follows casting rules to :class:`pyspark.sql.types.DateType` if the format
+    is omitted. Equivalent to ``col.cast("date")``.
+
+    .. _datetime pattern: https://spark.apache.org/docs/latest/sql-ref-datetime-pattern.html
+
+    .. versionadded:: 2.2.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        input column of values to convert.
+    format: str, optional
+        format to use to convert date values.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        date value as :class:`pyspark.sql.types.DateType` type.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
+    >>> df.select(to_date(df.t).alias('date')).collect()
+    [Row(date=datetime.date(1997, 2, 28))]
+
+    >>> df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
+    >>> df.select(to_date(df.t, 'yyyy-MM-dd HH:mm:ss').alias('date')).collect()
+    [Row(date=datetime.date(1997, 2, 28))]
+    """
+    return _to_date_or_timestamp(col, _types.DateType(), format)
+
+
+def to_timestamp(col: "ColumnOrName", format: Optional[str] = None) -> Column:
+    """Converts a :class:`~pyspark.sql.Column` into :class:`pyspark.sql.types.TimestampType`
+    using the optionally specified format. Specify formats according to `datetime pattern`_.
+    By default, it follows casting rules to :class:`pyspark.sql.types.TimestampType` if the format
+    is omitted. Equivalent to ``col.cast("timestamp")``.
+
+    .. _datetime pattern: https://spark.apache.org/docs/latest/sql-ref-datetime-pattern.html
+
+    .. versionadded:: 2.2.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column values to convert.
+    format: str, optional
+        format to use to convert timestamp values.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        timestamp value as :class:`pyspark.sql.types.TimestampType` type.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
+    >>> df.select(to_timestamp(df.t).alias('dt')).collect()
+    [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
+
+    >>> df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
+    >>> df.select(to_timestamp(df.t, 'yyyy-MM-dd HH:mm:ss').alias('dt')).collect()
+    [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
+    """
+    return _to_date_or_timestamp(col, _types.TimestampType(), format)
+
+
+def to_timestamp_ltz(
+    timestamp: "ColumnOrName",
+    format: Optional["ColumnOrName"] = None,
+) -> Column:
+    """
+    Parses the `timestamp` with the `format` to a timestamp without time zone.
+    Returns null with invalid input.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    timestamp : :class:`~pyspark.sql.Column` or str
+        Input column or strings.
+    format : :class:`~pyspark.sql.Column` or str, optional
+        format to use to convert type `TimestampType` timestamp values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("2016-12-31",)], ["e"])
+    >>> df.select(to_timestamp_ltz(df.e, lit("yyyy-MM-dd")).alias('r')).collect()
+    ... # doctest: +SKIP
+    [Row(r=datetime.datetime(2016, 12, 31, 0, 0))]
+
+    >>> df = spark.createDataFrame([("2016-12-31",)], ["e"])
+    >>> df.select(to_timestamp_ltz(df.e).alias('r')).collect()
+    ... # doctest: +SKIP
+    [Row(r=datetime.datetime(2016, 12, 31, 0, 0))]
+    """
+    return _to_date_or_timestamp(timestamp, _types.TimestampType(), format)
+
+
+def to_timestamp_ntz(
+    timestamp: "ColumnOrName",
+    format: Optional["ColumnOrName"] = None,
+) -> Column:
+    """
+    Parses the `timestamp` with the `format` to a timestamp without time zone.
+    Returns null with invalid input.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    timestamp : :class:`~pyspark.sql.Column` or str
+        Input column or strings.
+    format : :class:`~pyspark.sql.Column` or str, optional
+        format to use to convert type `TimestampNTZType` timestamp values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("2016-04-08",)], ["e"])
+    >>> df.select(to_timestamp_ntz(df.e, lit("yyyy-MM-dd")).alias('r')).collect()
+    ... # doctest: +SKIP
+    [Row(r=datetime.datetime(2016, 4, 8, 0, 0))]
+
+    >>> df = spark.createDataFrame([("2016-04-08",)], ["e"])
+    >>> df.select(to_timestamp_ntz(df.e).alias('r')).collect()
+    ... # doctest: +SKIP
+    [Row(r=datetime.datetime(2016, 4, 8, 0, 0))]
+    """
+    return _to_date_or_timestamp(timestamp, _types.TimestampNTZType(), format)
 
 
 def substr(

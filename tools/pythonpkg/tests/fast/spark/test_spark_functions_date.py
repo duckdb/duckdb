@@ -1,8 +1,10 @@
+import warnings
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from datetime import date, datetime
+from datetime import date, datetime, UTC
 
+from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 from spark_namespace.sql.functions import col
@@ -166,6 +168,44 @@ class TestsSparkFunctionsDate(object):
         df = spark.createDataFrame([('2015-04-08',)], ['dt'])
         res = df.select(F.weekday(df.dt.cast("date")).alias('day')).collect()
         assert res == [Row(day=2)]
+
+    def test_to_date(self, spark):
+        df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
+        res = df.select(F.to_date(df.t).alias('date')).collect()
+        assert res == [Row(date=date(1997, 2, 28))]
+
+    def test_to_timestamp(self, spark):
+        df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
+        res = df.select(F.to_timestamp(df.t).alias('dt')).collect()
+        # FIXME: Fix difference between DuckDB and Spark
+        if USE_ACTUAL_SPARK:
+            assert res == [Row(dt=datetime(1997, 2, 28, 10, 30))]
+        else:
+            assert res == [Row(dt=datetime(1997, 2, 28, 10, 30, tzinfo=UTC))]
+
+    def test_to_timestamp_ltz(self, spark):
+        df = spark.createDataFrame([("2016-12-31",)], ["e"])
+        res = df.select(F.to_timestamp_ltz(df.e).alias('r')).collect()
+        # FIXME: Fix difference between DuckDB and Spark
+        if USE_ACTUAL_SPARK:
+            assert res == [Row(r=datetime(2016, 12, 31, 0, 0))]
+        else:
+            assert res == [Row(r=datetime(2016, 12, 31, 0, 0, tzinfo=UTC))]
+
+    def test_to_timestamp_ntz(self, spark):
+        df = spark.createDataFrame([("2016-04-08",)], ["e"])
+
+        # The DeprecationWarning is issued within PySpark. As we treat
+        # warnings as errors in the tests, we need to filter it out
+        # for this test to pass.
+        if USE_ACTUAL_SPARK:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=DeprecationWarning)
+                res = df.select(F.to_timestamp_ntz(df.e).alias('r')).collect()
+        else:
+            res = df.select(F.to_timestamp_ntz(df.e).alias('r')).collect()
+        assert res == [Row(r=datetime(2016, 4, 8, 0, 0))]
+
 
     def test_add_months(self, spark):
         df = spark.createDataFrame([(datetime(2024, 5, 12, 13, 30, 45), 2)], ["dt", "months"])
