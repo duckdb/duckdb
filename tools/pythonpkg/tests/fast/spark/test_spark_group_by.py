@@ -21,6 +21,10 @@ from spark_namespace.sql.functions import (
     avg,
     max,
     min,
+    stddev_samp,
+    stddev,
+    std,
+    stddev_pop,
     mean,
     count,
     any_value,
@@ -178,3 +182,26 @@ class TestDataFrameGroupBy(object):
         )
 
         assert res == [Row(name='Alice', first_age=None, last_age=2), Row(name='Bob', first_age=5, last_age=5)]
+
+    def test_standard_deviations(self, spark):
+        df = spark.createDataFrame(
+            [
+                (1, "a"),
+                (2, "a"),
+                (3, "a"),
+                (4, "a"),
+                (5, "a"),
+                (6, "a"),
+
+            ],
+            schema=["value", "group"],
+        )
+
+        res = df.groupBy("group").agg(stddev_samp("value").alias("stddev_samp"), stddev("value").alias("stddev"), std("value").alias("std"), stddev_pop("value").alias("stddev_pop")).collect()
+        r = res[0]
+
+        samp = 1.8708286933869
+        assert pytest.approx(r.stddev_samp) == samp
+        assert pytest.approx(r.stddev) == samp
+        assert pytest.approx(r.std) == samp
+        assert pytest.approx(r.stddev_pop) == 1.707825127659
