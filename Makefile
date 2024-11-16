@@ -468,7 +468,7 @@ generate-files:
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
-	python3 tools/pythonpkg/scripts/generate_functions_code.py
+	-@python3 tools/pythonpkg/scripts/generate_functions_code.py || echo "Warning: generate_functions_code.py failed, a duckdb build is required to perform this step"
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 

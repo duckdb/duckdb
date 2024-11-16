@@ -4,7 +4,7 @@
 from typing import List
 
 
-from duckdb import FunctionExpression, Expression
+from duckdb.duckdb import FunctionExpression, Expression
 
 
 class _UndefinedType:
@@ -38,6 +38,11 @@ def acos(x, /) -> Expression:
     return FunctionExpression("acos", x)
 
 
+def acosh(x, /) -> Expression:
+    """Computes the inverse hyperbolic cos of x"""
+    return FunctionExpression("acosh", x)
+
+
 def add(col0, col1=_UNDEFINED, /) -> Expression:
     """"""
     return FunctionExpression("add", *_remove_undefined_parameters(col0, col1))
@@ -63,9 +68,9 @@ def any_value(col0, /) -> Expression:
     return FunctionExpression("any_value", col0)
 
 
-def approx_count_distinct(x, /) -> Expression:
+def approx_count_distinct(any, /) -> Expression:
     """Computes the approximate count of distinct elements using HyperLogLog."""
-    return FunctionExpression("approx_count_distinct", x)
+    return FunctionExpression("approx_count_distinct", any)
 
 
 def approx_quantile(x, pos, /) -> Expression:
@@ -73,29 +78,48 @@ def approx_quantile(x, pos, /) -> Expression:
     return FunctionExpression("approx_quantile", x, pos)
 
 
+def approx_top_k(val, k, /) -> Expression:
+    """Finds the k approximately most occurring values in the data set"""
+    return FunctionExpression("approx_top_k", val, k)
+
+
 def arbitrary(col0, /) -> Expression:
     """"""
     return FunctionExpression("arbitrary", col0)
 
 
-def arg_max(arg, val, /) -> Expression:
+def arg_max(arg, val, col2=_UNDEFINED, /) -> Expression:
+    """Finds the row with the maximum val. Calculates the non-NULL arg expression at
+    that row."""
+    return FunctionExpression("arg_max", *_remove_undefined_parameters(arg, val, col2))
+
+
+def arg_max_null(arg, val, /) -> Expression:
     """Finds the row with the maximum val. Calculates the arg expression at that row."""
-    return FunctionExpression("arg_max", arg, val)
+    return FunctionExpression("arg_max_null", arg, val)
 
 
-def arg_min(arg, val, /) -> Expression:
+def arg_min(arg, val, col2=_UNDEFINED, /) -> Expression:
+    """Finds the row with the minimum val. Calculates the non-NULL arg expression at
+    that row."""
+    return FunctionExpression("arg_min", *_remove_undefined_parameters(arg, val, col2))
+
+
+def arg_min_null(arg, val, /) -> Expression:
     """Finds the row with the minimum val. Calculates the arg expression at that row."""
-    return FunctionExpression("arg_min", arg, val)
+    return FunctionExpression("arg_min_null", arg, val)
 
 
-def argmax(arg, val, /) -> Expression:
-    """Finds the row with the maximum val. Calculates the arg expression at that row."""
-    return FunctionExpression("argmax", arg, val)
+def argmax(arg, val, col2=_UNDEFINED, /) -> Expression:
+    """Finds the row with the maximum val. Calculates the non-NULL arg expression at
+    that row."""
+    return FunctionExpression("argmax", *_remove_undefined_parameters(arg, val, col2))
 
 
-def argmin(arg, val, /) -> Expression:
-    """Finds the row with the minimum val. Calculates the arg expression at that row."""
-    return FunctionExpression("argmin", arg, val)
+def argmin(arg, val, col2=_UNDEFINED, /) -> Expression:
+    """Finds the row with the minimum val. Calculates the non-NULL arg expression at
+    that row."""
+    return FunctionExpression("argmin", *_remove_undefined_parameters(arg, val, col2))
 
 
 def array_agg(arg, /) -> Expression:
@@ -133,15 +157,54 @@ def array_contains(col0, col1, /) -> Expression:
     return FunctionExpression("array_contains", col0, col1)
 
 
+def array_cosine_distance(array1, array2, /) -> Expression:
+    """Compute the cosine distance between two arrays of the same size. The array
+    elements can not be NULL. The arrays can have any size as long as the size
+    is the same for both arguments."""
+    return FunctionExpression("array_cosine_distance", array1, array2)
+
+
+def array_cosine_similarity(array1, array2, /) -> Expression:
+    """Compute the cosine similarity between two arrays of the same size. The array
+    elements can not be NULL. The arrays can have any size as long as the size
+    is the same for both arguments."""
+    return FunctionExpression("array_cosine_similarity", array1, array2)
+
+
+def array_cross_product(array1, array2, /) -> Expression:
+    """Compute the cross product of two arrays of size 3. The array elements can not be
+    NULL."""
+    return FunctionExpression("array_cross_product", array1, array2)
+
+
+def array_distance(array1, array2, /) -> Expression:
+    """Compute the distance between two arrays of the same size. The array elements can
+    not be NULL. The arrays can have any size as long as the size is the same
+    for both arguments."""
+    return FunctionExpression("array_distance", array1, array2)
+
+
 def array_distinct(list, /) -> Expression:
     """Removes all duplicates and NULLs from a list. Does not preserve the original
     order"""
     return FunctionExpression("array_distinct", list)
 
 
+def array_dot_product(array1, array2, /) -> Expression:
+    """Compute the inner product between two arrays of the same size. The array
+    elements can not be NULL. The arrays can have any size as long as the size
+    is the same for both arguments."""
+    return FunctionExpression("array_dot_product", array1, array2)
+
+
 def array_extract(col0, col1, /) -> Expression:
     """"""
     return FunctionExpression("array_extract", col0, col1)
+
+
+def array_grade_up(list, col1=_UNDEFINED, col2=_UNDEFINED, /) -> Expression:
+    """Returns the index of their sorted position."""
+    return FunctionExpression("array_grade_up", *_remove_undefined_parameters(list, col1, col2))
 
 
 def array_has(col0, col1, /) -> Expression:
@@ -150,18 +213,25 @@ def array_has(col0, col1, /) -> Expression:
 
 
 def array_has_all(l1, l2, /) -> Expression:
-    """"""
+    """Returns true if all elements of l2 are in l1. NULLs are ignored."""
     return FunctionExpression("array_has_all", l1, l2)
 
 
 def array_has_any(l1, l2, /) -> Expression:
-    """"""
+    """Returns true if the lists have any element in common. NULLs are ignored."""
     return FunctionExpression("array_has_any", l1, l2)
 
 
 def array_indexof(col0, col1, /) -> Expression:
     """"""
     return FunctionExpression("array_indexof", col0, col1)
+
+
+def array_inner_product(array1, array2, /) -> Expression:
+    """Compute the inner product between two arrays of the same size. The array
+    elements can not be NULL. The arrays can have any size as long as the size
+    is the same for both arguments."""
+    return FunctionExpression("array_inner_product", array1, array2)
 
 
 def array_intersect(l1, l2, /) -> Expression:
@@ -172,6 +242,20 @@ def array_intersect(l1, l2, /) -> Expression:
 def array_length(col0, col1=_UNDEFINED, /) -> Expression:
     """"""
     return FunctionExpression("array_length", *_remove_undefined_parameters(col0, col1))
+
+
+def array_negative_dot_product(array1, array2, /) -> Expression:
+    """Compute the negative inner product between two arrays of the same size. The
+    array elements can not be NULL. The arrays can have any size as long as the
+    size is the same for both arguments."""
+    return FunctionExpression("array_negative_dot_product", array1, array2)
+
+
+def array_negative_inner_product(array1, array2, /) -> Expression:
+    """Compute the negative inner product between two arrays of the same size. The
+    array elements can not be NULL. The arrays can have any size as long as the
+    size is the same for both arguments."""
+    return FunctionExpression("array_negative_inner_product", array1, array2)
 
 
 def array_pop_back(arr, /) -> Expression:
@@ -219,6 +303,11 @@ def array_reverse_sort(list, col1=_UNDEFINED, /) -> Expression:
     return FunctionExpression("array_reverse_sort", *_remove_undefined_parameters(list, col1))
 
 
+def array_select(col0, col1, /) -> Expression:
+    """"""
+    return FunctionExpression("array_select", col0, col1)
+
+
 def array_slice(list, begin, end, step=_UNDEFINED, /) -> Expression:
     """Extract a sublist using slice conventions. Negative values are accepted"""
     return FunctionExpression("array_slice", *_remove_undefined_parameters(list, begin, end, step))
@@ -239,9 +328,29 @@ def array_to_string(arr, sep, /) -> Expression:
     return FunctionExpression("array_to_string", arr, sep)
 
 
+def array_to_string_comma_default(arr, sep, /) -> Expression:
+    """"""
+    return FunctionExpression("array_to_string_comma_default", arr, sep)
+
+
 def array_unique(list, /) -> Expression:
     """Counts the unique elements of a list"""
     return FunctionExpression("array_unique", list)
+
+
+def array_value(*args) -> Expression:
+    """Create an ARRAY containing the argument values."""
+    return FunctionExpression("array_value", *args)
+
+
+def array_where(col0, col1, /) -> Expression:
+    """"""
+    return FunctionExpression("array_where", col0, col1)
+
+
+def array_zip(*args) -> Expression:
+    """"""
+    return FunctionExpression("array_zip", *args)
 
 
 def ascii(string, /) -> Expression:
@@ -255,6 +364,11 @@ def asin(x, /) -> Expression:
     return FunctionExpression("asin", x)
 
 
+def asinh(x, /) -> Expression:
+    """Computes the inverse hyperbolic sin of x"""
+    return FunctionExpression("asinh", x)
+
+
 def atan(x, /) -> Expression:
     """Computes the arctangent of x"""
     return FunctionExpression("atan", x)
@@ -263,6 +377,11 @@ def atan(x, /) -> Expression:
 def atan2(y, x, /) -> Expression:
     """Computes the arctangent (y, x)"""
     return FunctionExpression("atan2", y, x)
+
+
+def atanh(x, /) -> Expression:
+    """Computes the inverse hyperbolic tan of x"""
+    return FunctionExpression("atanh", x)
 
 
 def avg(x, /) -> Expression:
@@ -337,6 +456,11 @@ def bool_or(arg, /) -> Expression:
     return FunctionExpression("bool_or", arg)
 
 
+def can_cast_implicitly(source_type, target_type, /) -> Expression:
+    """Whether or not we can implicitly cast from the source type to the other type"""
+    return FunctionExpression("can_cast_implicitly", source_type, target_type)
+
+
 def cardinality(*args) -> Expression:
     """Returns the size of the map (or the number of entries in the map)"""
     return FunctionExpression("cardinality", *args)
@@ -366,11 +490,6 @@ def chr(code_point, /) -> Expression:
     """Returns a character which is corresponding the ASCII code value or Unicode code
     point"""
     return FunctionExpression("chr", code_point)
-
-
-def col_description(table_oid, column_number, /) -> Expression:
-    """"""
-    return FunctionExpression("col_description", table_oid, column_number)
 
 
 def combine(col0, col1, /) -> Expression:
@@ -408,6 +527,11 @@ def cos(x, /) -> Expression:
     return FunctionExpression("cos", x)
 
 
+def cosh(x, /) -> Expression:
+    """Computes the hyperbolic cos of x"""
+    return FunctionExpression("cosh", x)
+
+
 def cot(x, /) -> Expression:
     """Computes the cotangent of x"""
     return FunctionExpression("cot", x)
@@ -436,6 +560,12 @@ def covar_pop(y, x, /) -> Expression:
 def covar_samp(y, x, /) -> Expression:
     """Returns the sample covariance for non-null pairs in a group."""
     return FunctionExpression("covar_samp", y, x)
+
+
+def create_sort_key(*args) -> Expression:
+    """Constructs a binary-comparable sort key based on a set of input parameters and
+    sort qualifiers"""
+    return FunctionExpression("create_sort_key", *args)
 
 
 def current_catalog() -> Expression:
@@ -582,31 +712,6 @@ def decade(ts, /) -> Expression:
     return FunctionExpression("decade", ts)
 
 
-def decimal(col0, /) -> Expression:
-    """"""
-    return FunctionExpression("decimal", col0)
-
-
-def decimal_add(col0, col1, /) -> Expression:
-    """"""
-    return FunctionExpression("decimal_add", col0, col1)
-
-
-def decimal_cmp(col0, col1, /) -> Expression:
-    """"""
-    return FunctionExpression("decimal_cmp", col0, col1)
-
-
-def decimal_mul(col0, col1, /) -> Expression:
-    """"""
-    return FunctionExpression("decimal_mul", col0, col1)
-
-
-def decimal_sub(col0, col1, /) -> Expression:
-    """"""
-    return FunctionExpression("decimal_sub", col0, col1)
-
-
 def decode(blob, /) -> Expression:
     """Convert blob to varchar. Fails if blob is not valid utf-8"""
     return FunctionExpression("decode", blob)
@@ -704,6 +809,12 @@ def epoch_us(temporal, /) -> Expression:
     return FunctionExpression("epoch_us", temporal)
 
 
+def equi_width_bins(min, max, bin_count, nice_rounding, /) -> Expression:
+    """Generates bin_count equi-width bins between the min and max. If enabled
+    nice_rounding makes the numbers more readable/less jagged"""
+    return FunctionExpression("equi_width_bins", min, max, bin_count, nice_rounding)
+
+
 def era(ts, /) -> Expression:
     """Extract the era component from a date or timestamp"""
     return FunctionExpression("era", ts)
@@ -772,23 +883,18 @@ def format(*args) -> Expression:
 
 
 def formatReadableDecimalSize(bytes, /) -> Expression:
-    """Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)"""
+    """Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)"""
     return FunctionExpression("formatReadableDecimalSize", bytes)
 
 
+def formatReadableSize(bytes, /) -> Expression:
+    """Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)"""
+    return FunctionExpression("formatReadableSize", bytes)
+
+
 def format_bytes(bytes, /) -> Expression:
-    """Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)"""
+    """Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)"""
     return FunctionExpression("format_bytes", bytes)
-
-
-def format_pg_type(type_name, /) -> Expression:
-    """"""
-    return FunctionExpression("format_pg_type", type_name)
-
-
-def format_type(type_oid, typemod, /) -> Expression:
-    """"""
-    return FunctionExpression("format_type", type_oid, typemod)
 
 
 def from_base64(string, /) -> Expression:
@@ -861,6 +967,11 @@ def get_bit(bitstring, index, /) -> Expression:
     return FunctionExpression("get_bit", bitstring, index)
 
 
+def get_block_size(db_name, /) -> Expression:
+    """"""
+    return FunctionExpression("get_block_size", db_name)
+
+
 def get_current_time() -> Expression:
     """Returns the current time"""
     return FunctionExpression("get_current_time")
@@ -869,6 +980,21 @@ def get_current_time() -> Expression:
 def get_current_timestamp() -> Expression:
     """Returns the current timestamp"""
     return FunctionExpression("get_current_timestamp")
+
+
+def getenv(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("getenv", col0)
+
+
+def getvariable(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("getvariable", col0)
+
+
+def grade_up(list, col1=_UNDEFINED, col2=_UNDEFINED, /) -> Expression:
+    """Returns the index of their sorted position."""
+    return FunctionExpression("grade_up", *_remove_undefined_parameters(list, col1, col2))
 
 
 def greatest(*args) -> Expression:
@@ -892,61 +1018,6 @@ def hamming(str1, str2, /) -> Expression:
     return FunctionExpression("hamming", str1, str2)
 
 
-def has_any_column_privilege(table, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_any_column_privilege", table, privilege)
-
-
-def has_column_privilege(table, column, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_column_privilege", table, column, privilege)
-
-
-def has_database_privilege(database, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_database_privilege", database, privilege)
-
-
-def has_foreign_data_wrapper_privilege(fdw, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_foreign_data_wrapper_privilege", fdw, privilege)
-
-
-def has_function_privilege(function, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_function_privilege", function, privilege)
-
-
-def has_language_privilege(language, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_language_privilege", language, privilege)
-
-
-def has_schema_privilege(schema, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_schema_privilege", schema, privilege)
-
-
-def has_sequence_privilege(sequence, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_sequence_privilege", sequence, privilege)
-
-
-def has_server_privilege(server, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_server_privilege", server, privilege)
-
-
-def has_table_privilege(table, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_table_privilege", table, privilege)
-
-
-def has_tablespace_privilege(tablespace, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("has_tablespace_privilege", tablespace, privilege)
-
-
 def hash(*args) -> Expression:
     """Returns an integer with the hash of the value. Note that this is not a
     cryptographic hash"""
@@ -958,9 +1029,15 @@ def hex(value, /) -> Expression:
     return FunctionExpression("hex", value)
 
 
-def histogram(arg, /) -> Expression:
+def histogram(arg, col1=_UNDEFINED, /) -> Expression:
     """Returns a LIST of STRUCTs with the fields bucket and count."""
-    return FunctionExpression("histogram", arg)
+    return FunctionExpression("histogram", *_remove_undefined_parameters(arg, col1))
+
+
+def histogram_exact(arg, bins, /) -> Expression:
+    """Returns a LIST of STRUCTs with the fields bucket and count matching the buckets
+    exactly."""
+    return FunctionExpression("histogram_exact", arg, bins)
 
 
 def hour(ts, /) -> Expression:
@@ -968,34 +1045,664 @@ def hour(ts, /) -> Expression:
     return FunctionExpression("hour", ts)
 
 
+def icu_collate_af(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_af", col0)
+
+
+def icu_collate_am(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_am", col0)
+
+
+def icu_collate_ar(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ar", col0)
+
+
+def icu_collate_ar_sa(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ar_sa", col0)
+
+
+def icu_collate_as(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_as", col0)
+
+
+def icu_collate_az(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_az", col0)
+
+
+def icu_collate_be(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_be", col0)
+
+
+def icu_collate_bg(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_bg", col0)
+
+
+def icu_collate_bn(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_bn", col0)
+
+
+def icu_collate_bo(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_bo", col0)
+
+
+def icu_collate_br(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_br", col0)
+
+
+def icu_collate_bs(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_bs", col0)
+
+
+def icu_collate_ca(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ca", col0)
+
+
+def icu_collate_ceb(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ceb", col0)
+
+
+def icu_collate_chr(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_chr", col0)
+
+
+def icu_collate_cs(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_cs", col0)
+
+
+def icu_collate_cy(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_cy", col0)
+
+
+def icu_collate_da(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_da", col0)
+
+
+def icu_collate_de(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_de", col0)
+
+
+def icu_collate_de_at(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_de_at", col0)
+
+
+def icu_collate_dsb(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_dsb", col0)
+
+
+def icu_collate_dz(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_dz", col0)
+
+
+def icu_collate_ee(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ee", col0)
+
+
+def icu_collate_el(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_el", col0)
+
+
+def icu_collate_en(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_en", col0)
+
+
+def icu_collate_en_us(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_en_us", col0)
+
+
+def icu_collate_eo(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_eo", col0)
+
+
+def icu_collate_es(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_es", col0)
+
+
+def icu_collate_et(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_et", col0)
+
+
+def icu_collate_fa(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_fa", col0)
+
+
+def icu_collate_fa_af(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_fa_af", col0)
+
+
+def icu_collate_ff(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ff", col0)
+
+
+def icu_collate_fi(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_fi", col0)
+
+
+def icu_collate_fil(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_fil", col0)
+
+
+def icu_collate_fo(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_fo", col0)
+
+
+def icu_collate_fr(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_fr", col0)
+
+
+def icu_collate_fr_ca(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_fr_ca", col0)
+
+
+def icu_collate_fy(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_fy", col0)
+
+
+def icu_collate_ga(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ga", col0)
+
+
+def icu_collate_gl(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_gl", col0)
+
+
+def icu_collate_gu(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_gu", col0)
+
+
+def icu_collate_ha(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ha", col0)
+
+
+def icu_collate_haw(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_haw", col0)
+
+
+def icu_collate_he(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_he", col0)
+
+
+def icu_collate_he_il(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_he_il", col0)
+
+
+def icu_collate_hi(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_hi", col0)
+
+
+def icu_collate_hr(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_hr", col0)
+
+
+def icu_collate_hsb(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_hsb", col0)
+
+
+def icu_collate_hu(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_hu", col0)
+
+
+def icu_collate_hy(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_hy", col0)
+
+
+def icu_collate_id(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_id", col0)
+
+
+def icu_collate_id_id(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_id_id", col0)
+
+
+def icu_collate_ig(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ig", col0)
+
+
+def icu_collate_is(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_is", col0)
+
+
+def icu_collate_it(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_it", col0)
+
+
+def icu_collate_ja(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ja", col0)
+
+
+def icu_collate_ka(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ka", col0)
+
+
+def icu_collate_kk(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_kk", col0)
+
+
+def icu_collate_kl(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_kl", col0)
+
+
+def icu_collate_km(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_km", col0)
+
+
+def icu_collate_kn(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_kn", col0)
+
+
+def icu_collate_ko(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ko", col0)
+
+
+def icu_collate_kok(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_kok", col0)
+
+
+def icu_collate_ku(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ku", col0)
+
+
+def icu_collate_ky(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ky", col0)
+
+
+def icu_collate_lb(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_lb", col0)
+
+
+def icu_collate_lkt(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_lkt", col0)
+
+
+def icu_collate_ln(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ln", col0)
+
+
+def icu_collate_lo(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_lo", col0)
+
+
+def icu_collate_lt(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_lt", col0)
+
+
+def icu_collate_lv(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_lv", col0)
+
+
+def icu_collate_mk(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_mk", col0)
+
+
+def icu_collate_ml(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ml", col0)
+
+
+def icu_collate_mn(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_mn", col0)
+
+
+def icu_collate_mr(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_mr", col0)
+
+
+def icu_collate_ms(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ms", col0)
+
+
+def icu_collate_mt(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_mt", col0)
+
+
+def icu_collate_my(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_my", col0)
+
+
+def icu_collate_nb(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_nb", col0)
+
+
+def icu_collate_nb_no(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_nb_no", col0)
+
+
+def icu_collate_ne(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ne", col0)
+
+
+def icu_collate_nl(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_nl", col0)
+
+
+def icu_collate_nn(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_nn", col0)
+
+
+def icu_collate_noaccent(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_noaccent", col0)
+
+
+def icu_collate_om(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_om", col0)
+
+
+def icu_collate_or(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_or", col0)
+
+
+def icu_collate_pa(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_pa", col0)
+
+
+def icu_collate_pa_in(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_pa_in", col0)
+
+
+def icu_collate_pl(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_pl", col0)
+
+
+def icu_collate_ps(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ps", col0)
+
+
+def icu_collate_pt(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_pt", col0)
+
+
+def icu_collate_ro(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ro", col0)
+
+
+def icu_collate_ru(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ru", col0)
+
+
+def icu_collate_sa(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sa", col0)
+
+
+def icu_collate_se(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_se", col0)
+
+
+def icu_collate_si(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_si", col0)
+
+
+def icu_collate_sk(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sk", col0)
+
+
+def icu_collate_sl(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sl", col0)
+
+
+def icu_collate_smn(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_smn", col0)
+
+
+def icu_collate_sq(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sq", col0)
+
+
+def icu_collate_sr(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sr", col0)
+
+
+def icu_collate_sr_ba(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sr_ba", col0)
+
+
+def icu_collate_sr_me(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sr_me", col0)
+
+
+def icu_collate_sr_rs(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sr_rs", col0)
+
+
+def icu_collate_sv(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sv", col0)
+
+
+def icu_collate_sw(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_sw", col0)
+
+
+def icu_collate_ta(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ta", col0)
+
+
+def icu_collate_te(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_te", col0)
+
+
+def icu_collate_th(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_th", col0)
+
+
+def icu_collate_tk(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_tk", col0)
+
+
+def icu_collate_to(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_to", col0)
+
+
+def icu_collate_tr(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_tr", col0)
+
+
+def icu_collate_ug(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ug", col0)
+
+
+def icu_collate_uk(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_uk", col0)
+
+
+def icu_collate_ur(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_ur", col0)
+
+
+def icu_collate_uz(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_uz", col0)
+
+
+def icu_collate_vi(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_vi", col0)
+
+
+def icu_collate_wae(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_wae", col0)
+
+
+def icu_collate_wo(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_wo", col0)
+
+
+def icu_collate_xh(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_xh", col0)
+
+
+def icu_collate_yi(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_yi", col0)
+
+
+def icu_collate_yo(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_yo", col0)
+
+
+def icu_collate_yue(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_yue", col0)
+
+
+def icu_collate_yue_cn(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_yue_cn", col0)
+
+
+def icu_collate_zh(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_zh", col0)
+
+
+def icu_collate_zh_cn(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_zh_cn", col0)
+
+
+def icu_collate_zh_hk(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_zh_hk", col0)
+
+
+def icu_collate_zh_mo(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_zh_mo", col0)
+
+
+def icu_collate_zh_sg(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_zh_sg", col0)
+
+
+def icu_collate_zh_tw(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_zh_tw", col0)
+
+
+def icu_collate_zu(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("icu_collate_zu", col0)
+
+
 def icu_sort_key(col0, col1, /) -> Expression:
     """"""
     return FunctionExpression("icu_sort_key", col0, col1)
-
-
-def ieee754(col0, col1=_UNDEFINED, /) -> Expression:
-    """"""
-    return FunctionExpression("ieee754", *_remove_undefined_parameters(col0, col1))
-
-
-def ieee754_exponent(col0, /) -> Expression:
-    """"""
-    return FunctionExpression("ieee754_exponent", col0)
-
-
-def ieee754_from_blob(col0, /) -> Expression:
-    """"""
-    return FunctionExpression("ieee754_from_blob", col0)
-
-
-def ieee754_mantissa(col0, /) -> Expression:
-    """"""
-    return FunctionExpression("ieee754_mantissa", col0)
-
-
-def ieee754_to_blob(col0, /) -> Expression:
-    """"""
-    return FunctionExpression("ieee754_to_blob", col0)
 
 
 def ilike_escape(col0, col1, col2, /) -> Expression:
@@ -1008,30 +1715,16 @@ def in_search_path(database_name, schema_name, /) -> Expression:
     return FunctionExpression("in_search_path", database_name, schema_name)
 
 
-def inet_client_addr() -> Expression:
-    """"""
-    return FunctionExpression("inet_client_addr")
-
-
-def inet_client_port() -> Expression:
-    """"""
-    return FunctionExpression("inet_client_port")
-
-
-def inet_server_addr() -> Expression:
-    """"""
-    return FunctionExpression("inet_server_addr")
-
-
-def inet_server_port() -> Expression:
-    """"""
-    return FunctionExpression("inet_server_port")
-
-
 def instr(haystack, needle, /) -> Expression:
     """Returns location of first occurrence of needle in haystack, counting from 1.
     Returns 0 if no match found"""
     return FunctionExpression("instr", haystack, needle)
+
+
+def is_histogram_other_bin(val, /) -> Expression:
+    """Whether or not the provided value is the histogram "other" bin (used for values
+    not belonging to any provided bin)"""
+    return FunctionExpression("is_histogram_other_bin", val)
 
 
 def isfinite(x, /) -> Expression:
@@ -1102,6 +1795,11 @@ def json_deserialize_sql(col0, /) -> Expression:
     return FunctionExpression("json_deserialize_sql", col0)
 
 
+def json_exists(col0, col1, /) -> Expression:
+    """"""
+    return FunctionExpression("json_exists", col0, col1)
+
+
 def json_extract(col0, col1, /) -> Expression:
     """"""
     return FunctionExpression("json_extract", col0, col1)
@@ -1152,9 +1850,19 @@ def json_object(*args) -> Expression:
     return FunctionExpression("json_object", *args)
 
 
+def json_pretty(col0, /) -> Expression:
+    """"""
+    return FunctionExpression("json_pretty", col0)
+
+
 def json_quote(*args) -> Expression:
     """"""
     return FunctionExpression("json_quote", *args)
+
+
+def json_serialize_plan(col0, col1=_UNDEFINED, col2=_UNDEFINED, col3=_UNDEFINED, col4=_UNDEFINED, /) -> Expression:
+    """"""
+    return FunctionExpression("json_serialize_plan", *_remove_undefined_parameters(col0, col1, col2, col3, col4))
 
 
 def json_serialize_sql(col0, col1=_UNDEFINED, col2=_UNDEFINED, col3=_UNDEFINED, /) -> Expression:
@@ -1187,6 +1895,11 @@ def json_valid(col0, /) -> Expression:
     return FunctionExpression("json_valid", col0)
 
 
+def json_value(col0, col1, /) -> Expression:
+    """"""
+    return FunctionExpression("json_value", col0, col1)
+
+
 def julian(ts, /) -> Expression:
     """Extract the Julian Day number from a date or timestamp"""
     return FunctionExpression("julian", ts)
@@ -1201,6 +1914,12 @@ def kurtosis(x, /) -> Expression:
     """Returns the excess kurtosis (Fisher’s definition) of all input values, with a
     bias correction according to the sample size"""
     return FunctionExpression("kurtosis", x)
+
+
+def kurtosis_pop(x, /) -> Expression:
+    """Returns the excess kurtosis (Fisher’s definition) of all input values, without
+    bias correction"""
+    return FunctionExpression("kurtosis_pop", x)
 
 
 def last(col0, /) -> Expression:
@@ -1350,6 +2069,11 @@ def list_contains(col0, col1, /) -> Expression:
     return FunctionExpression("list_contains", col0, col1)
 
 
+def list_cosine_distance(list1, list2, /) -> Expression:
+    """Compute the cosine distance between two lists"""
+    return FunctionExpression("list_cosine_distance", list1, list2)
+
+
 def list_cosine_similarity(list1, list2, /) -> Expression:
     """Compute the cosine similarity between two lists"""
     return FunctionExpression("list_cosine_similarity", list1, list2)
@@ -1396,18 +2120,23 @@ def list_first(l, /) -> Expression:
     return FunctionExpression("list_first", l)
 
 
+def list_grade_up(list, col1=_UNDEFINED, col2=_UNDEFINED, /) -> Expression:
+    """Returns the index of their sorted position."""
+    return FunctionExpression("list_grade_up", *_remove_undefined_parameters(list, col1, col2))
+
+
 def list_has(col0, col1, /) -> Expression:
     """"""
     return FunctionExpression("list_has", col0, col1)
 
 
 def list_has_all(l1, l2, /) -> Expression:
-    """"""
+    """Returns true if all elements of l2 are in l1. NULLs are ignored."""
     return FunctionExpression("list_has_all", l1, l2)
 
 
 def list_has_any(l1, l2, /) -> Expression:
-    """"""
+    """Returns true if the lists have any element in common. NULLs are ignored."""
     return FunctionExpression("list_has_any", l1, l2)
 
 
@@ -1434,6 +2163,11 @@ def list_intersect(l1, l2, /) -> Expression:
 def list_kurtosis(l, /) -> Expression:
     """"""
     return FunctionExpression("list_kurtosis", l)
+
+
+def list_kurtosis_pop(l, /) -> Expression:
+    """"""
+    return FunctionExpression("list_kurtosis_pop", l)
 
 
 def list_last(l, /) -> Expression:
@@ -1464,6 +2198,16 @@ def list_min(l, /) -> Expression:
 def list_mode(l, /) -> Expression:
     """"""
     return FunctionExpression("list_mode", l)
+
+
+def list_negative_dot_product(list1, list2, /) -> Expression:
+    """Compute the negative inner product between two lists"""
+    return FunctionExpression("list_negative_dot_product", list1, list2)
+
+
+def list_negative_inner_product(list1, list2, /) -> Expression:
+    """Compute the negative inner product between two lists"""
+    return FunctionExpression("list_negative_inner_product", list1, list2)
 
 
 def list_pack(*args) -> Expression:
@@ -1499,6 +2243,11 @@ def list_reverse(l, /) -> Expression:
 def list_reverse_sort(list, col1=_UNDEFINED, /) -> Expression:
     """Sorts the elements of the list in reverse order"""
     return FunctionExpression("list_reverse_sort", *_remove_undefined_parameters(list, col1))
+
+
+def list_select(col0, col1, /) -> Expression:
+    """"""
+    return FunctionExpression("list_select", col0, col1)
 
 
 def list_sem(l, /) -> Expression:
@@ -1561,14 +2310,30 @@ def list_var_samp(l, /) -> Expression:
     return FunctionExpression("list_var_samp", l)
 
 
+def list_where(col0, col1, /) -> Expression:
+    """"""
+    return FunctionExpression("list_where", col0, col1)
+
+
+def list_zip(*args) -> Expression:
+    """"""
+    return FunctionExpression("list_zip", *args)
+
+
+def listagg(str, arg=_UNDEFINED, /) -> Expression:
+    """Concatenates the column string values with an optional separator."""
+    return FunctionExpression("listagg", *_remove_undefined_parameters(str, arg))
+
+
 def ln(x, /) -> Expression:
     """Computes the natural logarithm of x"""
     return FunctionExpression("ln", x)
 
 
-def log(x, /) -> Expression:
-    """Computes the 10-log of x"""
-    return FunctionExpression("log", x)
+def log(b, x=_UNDEFINED, /) -> Expression:
+    """Computes the logarithm of x to base b. b may be omitted, in which case the
+    default 10"""
+    return FunctionExpression("log", *_remove_undefined_parameters(b, x))
 
 
 def log10(x, /) -> Expression:
@@ -1639,6 +2404,21 @@ def map_concat(*args) -> Expression:
     return FunctionExpression("map_concat", *args)
 
 
+def map_contains(map, key, /) -> Expression:
+    """Returns true if the map contains the key, false otherwise"""
+    return FunctionExpression("map_contains", map, key)
+
+
+def map_contains_entry(map, key, value, /) -> Expression:
+    """"""
+    return FunctionExpression("map_contains_entry", map, key, value)
+
+
+def map_contains_value(map, value, /) -> Expression:
+    """"""
+    return FunctionExpression("map_contains_value", map, value)
+
+
 def map_entries(*args) -> Expression:
     """Returns the map entries as a list of keys/values"""
     return FunctionExpression("map_entries", *args)
@@ -1666,14 +2446,15 @@ def map_values(*args) -> Expression:
     return FunctionExpression("map_values", *args)
 
 
-def max(arg, /) -> Expression:
+def max(arg, col1=_UNDEFINED, /) -> Expression:
     """Returns the maximum value present in arg."""
-    return FunctionExpression("max", arg)
+    return FunctionExpression("max", *_remove_undefined_parameters(arg, col1))
 
 
-def max_by(arg, val, /) -> Expression:
-    """Finds the row with the maximum val. Calculates the arg expression at that row."""
-    return FunctionExpression("max_by", arg, val)
+def max_by(arg, val, col2=_UNDEFINED, /) -> Expression:
+    """Finds the row with the maximum val. Calculates the non-NULL arg expression at
+    that row."""
+    return FunctionExpression("max_by", *_remove_undefined_parameters(arg, val, col2))
 
 
 def md5(value, /) -> Expression:
@@ -1686,14 +2467,14 @@ def md5_number(value, /) -> Expression:
     return FunctionExpression("md5_number", value)
 
 
-def md5_number_lower(value, /) -> Expression:
-    """Returns the MD5 hash of the value as an INT128"""
-    return FunctionExpression("md5_number_lower", value)
+def md5_number_lower(param, /) -> Expression:
+    """"""
+    return FunctionExpression("md5_number_lower", param)
 
 
-def md5_number_upper(value, /) -> Expression:
-    """Returns the MD5 hash of the value as an INT128"""
-    return FunctionExpression("md5_number_upper", value)
+def md5_number_upper(param, /) -> Expression:
+    """"""
+    return FunctionExpression("md5_number_upper", param)
 
 
 def mean(x, /) -> Expression:
@@ -1703,8 +2484,8 @@ def mean(x, /) -> Expression:
 
 def median(x, /) -> Expression:
     """Returns the middle value of the set. NULL values are ignored. For even value
-    counts, quantitiative values are averaged and ordinal values return the
-    lower value."""
+    counts, quantitative values are averaged and ordinal values return the lower
+    value."""
     return FunctionExpression("median", x)
 
 
@@ -1723,14 +2504,15 @@ def millisecond(ts, /) -> Expression:
     return FunctionExpression("millisecond", ts)
 
 
-def min(arg, /) -> Expression:
+def min(arg, col1=_UNDEFINED, /) -> Expression:
     """Returns the minimum value present in arg."""
-    return FunctionExpression("min", arg)
+    return FunctionExpression("min", *_remove_undefined_parameters(arg, col1))
 
 
-def min_by(arg, val, /) -> Expression:
-    """Finds the row with the minimum val. Calculates the arg expression at that row."""
-    return FunctionExpression("min_by", arg, val)
+def min_by(arg, val, col2=_UNDEFINED, /) -> Expression:
+    """Finds the row with the minimum val. Calculates the non-NULL arg expression at
+    that row."""
+    return FunctionExpression("min_by", *_remove_undefined_parameters(arg, val, col2))
 
 
 def minute(ts, /) -> Expression:
@@ -1770,6 +2552,11 @@ def multiply(col0, col1, /) -> Expression:
     return FunctionExpression("multiply", col0, col1)
 
 
+def nanosecond(tsns, /) -> Expression:
+    """Extract the nanosecond component from a date or timestamp"""
+    return FunctionExpression("nanosecond", tsns)
+
+
 def nextafter(x, y, /) -> Expression:
     """Returns the next floating point value after x in the direction of y"""
     return FunctionExpression("nextafter", x, y)
@@ -1805,11 +2592,6 @@ def nullif(a, b, /) -> Expression:
     return FunctionExpression("nullif", a, b)
 
 
-def obj_description(object_oid, catalog_name, /) -> Expression:
-    """"""
-    return FunctionExpression("obj_description", object_oid, catalog_name)
-
-
 def octet_length(col0, /) -> Expression:
     """"""
     return FunctionExpression("octet_length", col0)
@@ -1820,114 +2602,31 @@ def ord(str, /) -> Expression:
     return FunctionExpression("ord", str)
 
 
-def pg_collation_is_visible(collation_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_collation_is_visible", collation_oid)
+def parse_dirname(string, separator=_UNDEFINED, /) -> Expression:
+    """Returns the top-level directory name. separator options: system, both_slash
+    (default), forward_slash, backslash"""
+    return FunctionExpression("parse_dirname", *_remove_undefined_parameters(string, separator))
 
 
-def pg_conf_load_time() -> Expression:
-    """"""
-    return FunctionExpression("pg_conf_load_time")
+def parse_dirpath(string, separator=_UNDEFINED, /) -> Expression:
+    """Returns the head of the path similarly to Python's os.path.dirname. separator
+    options: system, both_slash (default), forward_slash, backslash"""
+    return FunctionExpression("parse_dirpath", *_remove_undefined_parameters(string, separator))
 
 
-def pg_conversion_is_visible(conversion_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_conversion_is_visible", conversion_oid)
+def parse_filename(string, trim_extension=_UNDEFINED, separator=_UNDEFINED, /) -> Expression:
+    """Returns the last component of the path similarly to Python's os.path.basename.
+    If trim_extension is true, the file extension will be removed (it defaults
+    to false). separator options: system, both_slash (default), forward_slash,
+    backslash"""
+    return FunctionExpression("parse_filename", *_remove_undefined_parameters(string, trim_extension, separator))
 
 
-def pg_function_is_visible(function_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_function_is_visible", function_oid)
-
-
-def pg_get_constraintdef(constraint_oid, pretty_bool, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_get_constraintdef", constraint_oid, pretty_bool)
-
-
-def pg_get_expr(pg_node_tree, relation_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_get_expr", pg_node_tree, relation_oid)
-
-
-def pg_get_viewdef(oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_get_viewdef", oid)
-
-
-def pg_has_role(user, role, privilege, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_has_role", user, role, privilege)
-
-
-def pg_is_other_temp_schema(schema_id, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_is_other_temp_schema", schema_id)
-
-
-def pg_my_temp_schema() -> Expression:
-    """"""
-    return FunctionExpression("pg_my_temp_schema")
-
-
-def pg_opclass_is_visible(opclass_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_opclass_is_visible", opclass_oid)
-
-
-def pg_operator_is_visible(operator_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_operator_is_visible", operator_oid)
-
-
-def pg_opfamily_is_visible(opclass_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_opfamily_is_visible", opclass_oid)
-
-
-def pg_postmaster_start_time() -> Expression:
-    """"""
-    return FunctionExpression("pg_postmaster_start_time")
-
-
-def pg_size_pretty(bytes, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_size_pretty", bytes)
-
-
-def pg_table_is_visible(table_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_table_is_visible", table_oid)
-
-
-def pg_ts_config_is_visible(config_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_ts_config_is_visible", config_oid)
-
-
-def pg_ts_dict_is_visible(dict_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_ts_dict_is_visible", dict_oid)
-
-
-def pg_ts_parser_is_visible(parser_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_ts_parser_is_visible", parser_oid)
-
-
-def pg_ts_template_is_visible(template_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_ts_template_is_visible", template_oid)
-
-
-def pg_type_is_visible(type_oid, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_type_is_visible", type_oid)
-
-
-def pg_typeof(expression, /) -> Expression:
-    """"""
-    return FunctionExpression("pg_typeof", expression)
+def parse_path(string, separator=_UNDEFINED, /) -> Expression:
+    """Returns a list of the components (directories and filename) in the path
+    similarly to Python's pathlib.PurePath::parts. separator options: system,
+    both_slash (default), forward_slash, backslash"""
+    return FunctionExpression("parse_path", *_remove_undefined_parameters(string, separator))
 
 
 def pi() -> Expression:
@@ -1966,23 +2665,23 @@ def product(arg, /) -> Expression:
     return FunctionExpression("product", arg)
 
 
-def quantile(x, pos, /) -> Expression:
+def quantile(x, pos=_UNDEFINED, /) -> Expression:
     """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
     then the result is a LIST of the corresponding exact quantiles."""
-    return FunctionExpression("quantile", x, pos)
+    return FunctionExpression("quantile", *_remove_undefined_parameters(x, pos))
 
 
 def quantile_cont(x, pos, /) -> Expression:
-    """Returns the intepolated quantile number between 0 and 1 . If pos is a LIST of
-    FLOATs, then the result is a LIST of the corresponding intepolated
+    """Returns the interpolated quantile number between 0 and 1 . If pos is a LIST of
+    FLOATs, then the result is a LIST of the corresponding interpolated
     quantiles."""
     return FunctionExpression("quantile_cont", x, pos)
 
 
-def quantile_disc(x, pos, /) -> Expression:
+def quantile_disc(x, pos=_UNDEFINED, /) -> Expression:
     """Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs,
     then the result is a LIST of the corresponding exact quantiles."""
-    return FunctionExpression("quantile_disc", x, pos)
+    return FunctionExpression("quantile_disc", *_remove_undefined_parameters(x, pos))
 
 
 def quarter(ts, /) -> Expression:
@@ -2008,6 +2707,11 @@ def range(start, stop=_UNDEFINED, step=_UNDEFINED, /) -> Expression:
 def readfile(col0, /) -> Expression:
     """"""
     return FunctionExpression("readfile", col0)
+
+
+def regexp_escape(string, /) -> Expression:
+    """Escapes all potentially meaningful regexp characters in the input string"""
+    return FunctionExpression("regexp_escape", string)
 
 
 def regexp_extract(col0, col1, col2=_UNDEFINED, col3=_UNDEFINED, /) -> Expression:
@@ -2038,6 +2742,11 @@ def regexp_replace(col0, col1, col2, col3=_UNDEFINED, /) -> Expression:
 def regexp_split_to_array(string, separator, col2=_UNDEFINED, /) -> Expression:
     """Splits the string along the regex"""
     return FunctionExpression("regexp_split_to_array", *_remove_undefined_parameters(string, separator, col2))
+
+
+def regexp_split_to_table(text, pattern, /) -> Expression:
+    """"""
+    return FunctionExpression("regexp_split_to_table", text, pattern)
 
 
 def regr_avgx(y, x, /) -> Expression:
@@ -2181,6 +2890,11 @@ def setseed() -> Expression:
     return FunctionExpression("setseed")
 
 
+def sha1(value, /) -> Expression:
+    """Returns the SHA1 hash of the value"""
+    return FunctionExpression("sha1", value)
+
+
 def sha256(value, /) -> Expression:
     """Returns the SHA256 hash of the value"""
     return FunctionExpression("sha256", value)
@@ -2189,11 +2903,6 @@ def sha256(value, /) -> Expression:
 def sha3(col0, col1=_UNDEFINED, /) -> Expression:
     """"""
     return FunctionExpression("sha3", *_remove_undefined_parameters(col0, col1))
-
-
-def sha3_query(col0, col1=_UNDEFINED, /) -> Expression:
-    """"""
-    return FunctionExpression("sha3_query", *_remove_undefined_parameters(col0, col1))
 
 
 def shell_add_schema(col0, col1, col2, /) -> Expression:
@@ -2211,11 +2920,6 @@ def shell_idquote(col0, /) -> Expression:
     return FunctionExpression("shell_idquote", col0)
 
 
-def shell_int32(col0, col1, /) -> Expression:
-    """"""
-    return FunctionExpression("shell_int32", col0, col1)
-
-
 def shell_module_schema(col0, /) -> Expression:
     """"""
     return FunctionExpression("shell_module_schema", col0)
@@ -2224,11 +2928,6 @@ def shell_module_schema(col0, /) -> Expression:
 def shell_putsnl(col0, /) -> Expression:
     """"""
     return FunctionExpression("shell_putsnl", col0)
-
-
-def shobj_description(object_oid, catalog_name, /) -> Expression:
-    """"""
-    return FunctionExpression("shobj_description", object_oid, catalog_name)
 
 
 def sign(x, /) -> Expression:
@@ -2244,6 +2943,11 @@ def signbit(x, /) -> Expression:
 def sin(x, /) -> Expression:
     """Computes the sin of x"""
     return FunctionExpression("sin", x)
+
+
+def sinh(x, /) -> Expression:
+    """Computes the hyperbolic sin of x"""
+    return FunctionExpression("sinh", x)
 
 
 def skewness(x, /) -> Expression:
@@ -2290,6 +2994,11 @@ def stddev_pop(x, /) -> Expression:
 def stddev_samp(x, /) -> Expression:
     """Returns the sample standard deviation"""
     return FunctionExpression("stddev_samp", x)
+
+
+def stem(col0, col1, /) -> Expression:
+    """"""
+    return FunctionExpression("stem", col0, col1)
 
 
 def str_split(string, separator, /) -> Expression:
@@ -2397,7 +3106,8 @@ def sum(arg, /) -> Expression:
 
 
 def sum_no_overflow(arg, /) -> Expression:
-    """Calculates the sum value for all tuples in arg without overflow checks."""
+    """Internal only. Calculates the sum value for all tuples in arg without overflow
+    checks."""
     return FunctionExpression("sum_no_overflow", arg)
 
 
@@ -2411,12 +3121,22 @@ def tan(x, /) -> Expression:
     return FunctionExpression("tan", x)
 
 
+def tanh(x, /) -> Expression:
+    """Computes the hyperbolic tan of x"""
+    return FunctionExpression("tanh", x)
+
+
 def time_bucket(bucket_width, timestamp, origin=_UNDEFINED, /) -> Expression:
     """Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned
     relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03
     00:00:00+00 for buckets that do not include a month or year interval, and to
     2000-01-01 00:00:00+00 for month and year buckets"""
     return FunctionExpression("time_bucket", *_remove_undefined_parameters(bucket_width, timestamp, origin))
+
+
+def timetz_byte_comparable(time_tz, /) -> Expression:
+    """Converts a TIME WITH TIME ZONE to an integer sort key"""
+    return FunctionExpression("timetz_byte_comparable", time_tz)
 
 
 def timezone(ts, col1=_UNDEFINED, /) -> Expression:
@@ -2450,9 +3170,19 @@ def to_binary(value, /) -> Expression:
     return FunctionExpression("to_binary", value)
 
 
+def to_centuries(integer, /) -> Expression:
+    """Construct a century interval"""
+    return FunctionExpression("to_centuries", integer)
+
+
 def to_days(integer, /) -> Expression:
     """Construct a day interval"""
     return FunctionExpression("to_days", integer)
+
+
+def to_decades(integer, /) -> Expression:
+    """Construct a decade interval"""
+    return FunctionExpression("to_decades", integer)
 
 
 def to_hex(value, /) -> Expression:
@@ -2475,9 +3205,14 @@ def to_microseconds(integer, /) -> Expression:
     return FunctionExpression("to_microseconds", integer)
 
 
-def to_milliseconds(integer, /) -> Expression:
+def to_millennia(integer, /) -> Expression:
+    """Construct a millenium interval"""
+    return FunctionExpression("to_millennia", integer)
+
+
+def to_milliseconds(double, /) -> Expression:
     """Construct a millisecond interval"""
-    return FunctionExpression("to_milliseconds", integer)
+    return FunctionExpression("to_milliseconds", double)
 
 
 def to_minutes(integer, /) -> Expression:
@@ -2490,14 +3225,24 @@ def to_months(integer, /) -> Expression:
     return FunctionExpression("to_months", integer)
 
 
-def to_seconds(integer, /) -> Expression:
+def to_quarters(integer, /) -> Expression:
+    """Construct a quarter interval"""
+    return FunctionExpression("to_quarters", integer)
+
+
+def to_seconds(double, /) -> Expression:
     """Construct a second interval"""
-    return FunctionExpression("to_seconds", integer)
+    return FunctionExpression("to_seconds", double)
 
 
 def to_timestamp(sec, /) -> Expression:
     """Converts secs since epoch to a timestamp with time zone"""
     return FunctionExpression("to_timestamp", sec)
+
+
+def to_weeks(integer, /) -> Expression:
+    """Construct a week interval"""
+    return FunctionExpression("to_weeks", integer)
 
 
 def to_years(integer, /) -> Expression:
@@ -2586,9 +3331,26 @@ def union_value(*args) -> Expression:
     return FunctionExpression("union_value", *args)
 
 
+def unpivot_list(*args) -> Expression:
+    """Identical to list_value, but generated as part of unpivot for better error
+    messages"""
+    return FunctionExpression("unpivot_list", *args)
+
+
 def upper(col0, /) -> Expression:
     """"""
     return FunctionExpression("upper", col0)
+
+
+def url_decode(input, /) -> Expression:
+    """Unescapes the URL encoded input."""
+    return FunctionExpression("url_decode", input)
+
+
+def url_encode(input, /) -> Expression:
+    """Escapes the input string by encoding it so that it can be included in a URL
+    query parameter."""
+    return FunctionExpression("url_encode", input)
 
 
 def user() -> Expression:

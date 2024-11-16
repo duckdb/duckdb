@@ -20,9 +20,7 @@ def test_func():
             and name != "_UndefinedType"
         ):
             functions_to_test.append((name, func))
-    assert (
-        len(functions_to_test) > 100
-    ), "Something seems wrong with the discovery of the functions."
+    assert len(functions_to_test) > 100, "Something seems wrong with the discovery of the functions."
 
     for name, func in functions_to_test:
         parameters = inspect.signature(func).parameters
@@ -47,19 +45,13 @@ def test_example_query():
     for all of them.
     """
 
-    input_df = pd.DataFrame.from_dict(
-        {"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"], "k": [4, 3, 2, 1]}
-    )
+    input_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"], "k": [4, 3, 2, 1]})
     rel = duckdb.from_df(input_df)
 
     rel = rel.project(
-        duckdb.func.string_split(ColumnExpression("j"), ConstantExpression("r")).alias(
-            "j_split"
-        ),
+        duckdb.func.string_split(ColumnExpression("j"), ConstantExpression("r")).alias("j_split"),
         "i",
-        duckdb.func.greatest(ColumnExpression("i"), ColumnExpression("k")).alias(
-            "greatest_i_k"
-        ),
+        duckdb.func.greatest(ColumnExpression("i"), ColumnExpression("k")).alias("greatest_i_k"),
         duckdb.func.make_timestamp(ConstantExpression(2021)),
         duckdb.func.make_timestamp(
             ConstantExpression(2021),
