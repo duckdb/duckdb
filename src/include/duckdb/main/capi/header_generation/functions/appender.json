@@ -495,6 +495,57 @@
             }
         },
         {
+            "name": "duckdb_append_timestamp_s",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                },
+                {
+                    "type": "duckdb_timestamp_s",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Append a duckdb_timestamp_s value to the appender.\n"
+            }
+        },
+        {
+            "name": "duckdb_append_timestamp_ms",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                },
+                {
+                    "type": "duckdb_timestamp_ms",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Append a duckdb_timestamp_ms value to the appender.\n"
+            }
+        },
+        {
+            "name": "duckdb_append_timestamp_ns",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                },
+                {
+                    "type": "duckdb_timestamp_ns",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Append a duckdb_timestamp_ns value to the appender.\n"
+            }
+        },
+        {
             "name": "duckdb_append_interval",
             "return_type": "duckdb_state",
             "params": [

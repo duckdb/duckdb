@@ -167,6 +167,22 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 1, 1)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::TIME(1, 1, 1, 0)}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
+
+	// test non-standard timestamps
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE timestamps(ts_s TIMESTAMP_S, ts_ms TIMESTAMP_MS, ts_ns TIMESTAMP_NS)"));
+	// now append a bunch of values
+	{
+		Appender appender(con, "timestamps");
+		appender.AppendRow(
+			Value::TIMESTAMPSEC(timestamp_t(715522953)),
+			Value::TIMESTAMPMS(timestamp_t(715522953001)),
+			Value::TIMESTAMPNS(timestamp_t(715522953001234789))
+		);
+	}
+	result = con.Query("SELECT * FROM timestamps");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMPSEC(timestamp_t(715522953))}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::TIMESTAMPMS(timestamp_t(715522953001))}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMPNS(timestamp_t(715522953001234789))}));
 }
 
 TEST_CASE("Test appender with generated column", "[appender]") {

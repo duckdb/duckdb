@@ -676,6 +676,173 @@ TEST_CASE("Test append timestamp in C API", "[capi]") {
 	REQUIRE(result->Fetch<string>(0, 0) == "2022-04-09 15:56:37.544");
 }
 
+TEST_CASE("Test append timestamp_s in C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE test (t timestamp_s)");
+	duckdb_appender appender;
+
+	auto status = duckdb_appender_create_ext(tester.connection, nullptr, nullptr, "test", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	duckdb_date_struct date_struct_in;
+	date_struct_in.year = 1992;
+	date_struct_in.month = 9;
+	date_struct_in.day = 3;
+
+	duckdb_time_struct time_struct_in;
+	time_struct_in.hour = 12;
+	time_struct_in.min = 22;
+	time_struct_in.sec = 33;
+	time_struct_in.micros = 0;
+
+	duckdb_timestamp_struct ts_struct_in;
+	ts_struct_in.date = date_struct_in;
+	ts_struct_in.time = time_struct_in;
+
+	duckdb_timestamp_s ts_s_in = duckdb_to_timestamp_s(ts_struct_in);
+	REQUIRE(ts_s_in.seconds == 715522953);
+
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_timestamp_s(appender, ts_s_in) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	result = tester.Query("SELECT * FROM test");
+	REQUIRE_NO_FAIL(*result);
+	auto chunk = result->FetchChunk(0);
+	auto data = reinterpret_cast<duckdb_timestamp_s*>(chunk->GetData(0));
+	auto ts_s_out = data[0];
+	REQUIRE(ts_s_out.seconds == ts_s_in.seconds);
+
+	auto ts_struct_out = duckdb_from_timestamp_s(ts_s_out);
+	REQUIRE(ts_struct_out.date.year == ts_struct_in.date.year);
+	REQUIRE(ts_struct_out.date.month == ts_struct_in.date.month);
+	REQUIRE(ts_struct_out.date.day == ts_struct_in.date.day);
+	REQUIRE(ts_struct_out.time.hour == ts_struct_in.time.hour);
+	REQUIRE(ts_struct_out.time.min == ts_struct_in.time.min);
+	REQUIRE(ts_struct_out.time.sec == ts_struct_in.time.sec);
+	REQUIRE(ts_struct_out.time.micros == ts_struct_in.time.micros);
+}
+
+TEST_CASE("Test append timestamp_ms in C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE test (t timestamp_ms)");
+	duckdb_appender appender;
+
+	auto status = duckdb_appender_create_ext(tester.connection, nullptr, nullptr, "test", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	duckdb_date_struct date_struct_in;
+	date_struct_in.year = 1992;
+	date_struct_in.month = 9;
+	date_struct_in.day = 3;
+
+	duckdb_time_struct time_struct_in;
+	time_struct_in.hour = 12;
+	time_struct_in.min = 22;
+	time_struct_in.sec = 33;
+	time_struct_in.micros = 1000;
+
+	duckdb_timestamp_struct ts_struct_in;
+	ts_struct_in.date = date_struct_in;
+	ts_struct_in.time = time_struct_in;
+
+	duckdb_timestamp_ms ts_ms_in = duckdb_to_timestamp_ms(ts_struct_in);
+	REQUIRE(ts_ms_in.millis == 715522953001);
+
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_timestamp_ms(appender, ts_ms_in) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	result = tester.Query("SELECT * FROM test");
+	REQUIRE_NO_FAIL(*result);
+	auto chunk = result->FetchChunk(0);
+	auto data = reinterpret_cast<duckdb_timestamp_ms*>(chunk->GetData(0));
+	auto ts_ms_out = data[0];
+	REQUIRE(ts_ms_out.millis == ts_ms_in.millis);
+
+	auto ts_struct_out = duckdb_from_timestamp_ms(ts_ms_out);
+	REQUIRE(ts_struct_out.date.year == ts_struct_in.date.year);
+	REQUIRE(ts_struct_out.date.month == ts_struct_in.date.month);
+	REQUIRE(ts_struct_out.date.day == ts_struct_in.date.day);
+	REQUIRE(ts_struct_out.time.hour == ts_struct_in.time.hour);
+	REQUIRE(ts_struct_out.time.min == ts_struct_in.time.min);
+	REQUIRE(ts_struct_out.time.sec == ts_struct_in.time.sec);
+	REQUIRE(ts_struct_out.time.micros == ts_struct_in.time.micros);
+}
+
+TEST_CASE("Test append timestamp_ns in C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE test (t timestamp_ns)");
+	duckdb_appender appender;
+
+	auto status = duckdb_appender_create_ext(tester.connection, nullptr, nullptr, "test", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	duckdb_date_struct date_struct_in;
+	date_struct_in.year = 1992;
+	date_struct_in.month = 9;
+	date_struct_in.day = 3;
+
+	duckdb_time_struct time_struct_in;
+	time_struct_in.hour = 12;
+	time_struct_in.min = 22;
+	time_struct_in.sec = 33;
+	time_struct_in.micros = 1234;
+
+	duckdb_timestamp_ns_struct ts_struct_in;
+	ts_struct_in.date = date_struct_in;
+	ts_struct_in.time = time_struct_in;
+	ts_struct_in.nanos = 789;
+
+	duckdb_timestamp_ns ts_ns_in = duckdb_to_timestamp_ns(ts_struct_in);
+	REQUIRE(ts_ns_in.nanos == 715522953001234789);
+
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_append_timestamp_ns(appender, ts_ns_in) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	result = tester.Query("SELECT * FROM test");
+	REQUIRE_NO_FAIL(*result);
+	auto chunk = result->FetchChunk(0);
+	auto data = reinterpret_cast<duckdb_timestamp_ns*>(chunk->GetData(0));
+	auto ts_ns_out = data[0];
+	REQUIRE(ts_ns_out.nanos == ts_ns_in.nanos);
+
+	auto ts_struct_out = duckdb_from_timestamp_ns(ts_ns_out);
+	REQUIRE(ts_struct_out.date.year == ts_struct_in.date.year);
+	REQUIRE(ts_struct_out.date.month == ts_struct_in.date.month);
+	REQUIRE(ts_struct_out.date.day == ts_struct_in.date.day);
+	REQUIRE(ts_struct_out.time.hour == ts_struct_in.time.hour);
+	REQUIRE(ts_struct_out.time.min == ts_struct_in.time.min);
+	REQUIRE(ts_struct_out.time.sec == ts_struct_in.time.sec);
+	REQUIRE(ts_struct_out.time.micros == ts_struct_in.time.micros);
+	REQUIRE(ts_struct_out.nanos == ts_struct_in.nanos);
+}
+
 TEST_CASE("Test append to different catalog in C API") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));

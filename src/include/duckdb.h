@@ -3930,6 +3930,21 @@ Append a duckdb_timestamp value to the appender.
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
 
 /*!
+Append a duckdb_timestamp_s value to the appender.
+*/
+DUCKDB_API duckdb_state duckdb_append_timestamp_s(duckdb_appender appender, duckdb_timestamp_s value);
+
+/*!
+Append a duckdb_timestamp_ms value to the appender.
+*/
+DUCKDB_API duckdb_state duckdb_append_timestamp_ms(duckdb_appender appender, duckdb_timestamp_ms value);
+
+/*!
+Append a duckdb_timestamp_ns value to the appender.
+*/
+DUCKDB_API duckdb_state duckdb_append_timestamp_ns(duckdb_appender appender, duckdb_timestamp_ns value);
+
+/*!
 Append a duckdb_interval value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_interval(duckdb_appender appender, duckdb_interval value);

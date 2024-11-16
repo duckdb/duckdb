@@ -12,6 +12,7 @@ using duckdb::interval_t;
 using duckdb::string_t;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;
+using duckdb::Value;
 
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                     duckdb_appender *out_appender) {
@@ -205,6 +206,18 @@ duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value) {
 
 duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value) {
 	return duckdb_append_internal<timestamp_t>(appender, timestamp_t(value.micros));
+}
+
+duckdb_state duckdb_append_timestamp_s(duckdb_appender appender, duckdb_timestamp_s value) {
+	return duckdb_append_internal<Value>(appender, Value::TIMESTAMPSEC(timestamp_t(value.seconds)));
+}
+
+duckdb_state duckdb_append_timestamp_ms(duckdb_appender appender, duckdb_timestamp_ms value) {
+	return duckdb_append_internal<Value>(appender, Value::TIMESTAMPMS(timestamp_t(value.millis)));
+}
+
+duckdb_state duckdb_append_timestamp_ns(duckdb_appender appender, duckdb_timestamp_ns value) {
+	return duckdb_append_internal<Value>(appender, Value::TIMESTAMPNS(timestamp_t(value.nanos)));
 }
 
 duckdb_state duckdb_append_interval(duckdb_appender appender, duckdb_interval value) {
