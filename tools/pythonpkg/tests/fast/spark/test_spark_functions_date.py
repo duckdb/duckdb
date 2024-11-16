@@ -142,6 +142,26 @@ class TestsSparkFunctionsDate(object):
 
         assert result[0].second_num == 45
 
+    def test_unix_date(self, spark):
+        df = spark.createDataFrame([('1970-01-02',)], ['t'])
+        res = df.select(F.unix_date(df.t.cast("date")).alias('n')).collect()
+        assert res == [Row(n=1)]
+
+    def test_unix_micros(self, spark):
+        df = spark.createDataFrame([('2015-07-22 10:00:00+00:00',)], ['t'])
+        res = df.select(F.unix_micros(df.t.cast("timestamp")).alias('n')).collect()
+        assert res == [Row(n=1437559200000000)]
+
+    def test_unix_millis(self, spark):
+        df = spark.createDataFrame([('2015-07-22 10:00:00+00:00',)], ['t'])
+        res = df.select(F.unix_millis(df.t.cast("timestamp")).alias('n')).collect()
+        assert res == [Row(n=1437559200000)]
+
+    def test_unix_seconds(self, spark):
+        df = spark.createDataFrame([('2015-07-22 10:00:00+00:00',)], ['t'])
+        res = df.select(F.unix_seconds(df.t.cast("timestamp")).alias('n')).collect()
+        assert res == [Row(n=1437559200)]
+
     def test_add_months(self, spark):
         df = spark.createDataFrame([(datetime(2024, 5, 12, 13, 30, 45), 2)], ["dt", "months"])
 

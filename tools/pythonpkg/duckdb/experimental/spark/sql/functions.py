@@ -3961,6 +3961,75 @@ def substr(
         return _invoke_function_over_columns("substring", str, pos)
 
 
+def _unix_diff(col: "ColumnOrName", part: str) -> Column:
+    return _invoke_function_over_columns("date_diff", lit(part), lit("1970-01-01 00:00:00+00:00").cast("timestamptz"), col)
+
+def unix_date(col: "ColumnOrName") -> Column:
+    """Returns the number of days since 1970-01-01.
+
+    .. versionadded:: 3.5.0
+
+    Examples
+    --------
+    >>> spark.conf.set("spark.sql.session.timeZone", "America/Los_Angeles")
+    >>> df = spark.createDataFrame([('1970-01-02',)], ['t'])
+    >>> df.select(unix_date(to_date(df.t)).alias('n')).collect()
+    [Row(n=1)]
+    >>> spark.conf.unset("spark.sql.session.timeZone")
+    """
+    return _unix_diff(col, "days")
+
+
+def unix_micros(col: "ColumnOrName") -> Column:
+    """Returns the number of microseconds since 1970-01-01 00:00:00 UTC.
+
+    .. versionadded:: 3.5.0
+
+    Examples
+    --------
+    >>> spark.conf.set("spark.sql.session.timeZone", "America/Los_Angeles")
+    >>> df = spark.createDataFrame([('2015-07-22 10:00:00',)], ['t'])
+    >>> df.select(unix_micros(to_timestamp(df.t)).alias('n')).collect()
+    [Row(n=1437584400000000)]
+    >>> spark.conf.unset("spark.sql.session.timeZone")
+    """
+    return _unix_diff(col, "microseconds")
+
+
+def unix_millis(col: "ColumnOrName") -> Column:
+    """Returns the number of milliseconds since 1970-01-01 00:00:00 UTC.
+    Truncates higher levels of precision.
+
+    .. versionadded:: 3.5.0
+
+    Examples
+    --------
+    >>> spark.conf.set("spark.sql.session.timeZone", "America/Los_Angeles")
+    >>> df = spark.createDataFrame([('2015-07-22 10:00:00',)], ['t'])
+    >>> df.select(unix_millis(to_timestamp(df.t)).alias('n')).collect()
+    [Row(n=1437584400000)]
+    >>> spark.conf.unset("spark.sql.session.timeZone")
+    """
+    return _unix_diff(col, "milliseconds")
+
+
+def unix_seconds(col: "ColumnOrName") -> Column:
+    """Returns the number of seconds since 1970-01-01 00:00:00 UTC.
+    Truncates higher levels of precision.
+
+    .. versionadded:: 3.5.0
+
+    Examples
+    --------
+    >>> spark.conf.set("spark.sql.session.timeZone", "America/Los_Angeles")
+    >>> df = spark.createDataFrame([('2015-07-22 10:00:00',)], ['t'])
+    >>> df.select(unix_seconds(to_timestamp(df.t)).alias('n')).collect()
+    [Row(n=1437584400)]
+    >>> spark.conf.unset("spark.sql.session.timeZone")
+    """
+    return _unix_diff(col, "seconds")
+
+
 def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
     """
     Collection function: returns true if the arrays contain any common non-null element; if not,
