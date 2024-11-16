@@ -3666,6 +3666,48 @@ def array_sort(
         return _invoke_function_over_columns("list_sort", col, lit("ASC"), lit("NULLS LAST"))
 
 
+def sort_array(col: "ColumnOrName", asc: bool = True) -> Column:
+    """
+    Collection function: sorts the input array in ascending or descending order according
+    to the natural ordering of the array elements. Null elements will be placed at the beginning
+    of the returned array in ascending order or at the end of the returned array in descending
+    order.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+    asc : bool, optional
+        whether to sort in ascending or descending order. If `asc` is True (default)
+        then ascending and if False then descending.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        sorted array.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([2, 1, None, 3],),([1],),([],)], ['data'])
+    >>> df.select(sort_array(df.data).alias('r')).collect()
+    [Row(r=[None, 1, 2, 3]), Row(r=[1]), Row(r=[])]
+    >>> df.select(sort_array(df.data, asc=False).alias('r')).collect()
+    [Row(r=[3, 2, 1, None]), Row(r=[1]), Row(r=[])]
+    """
+    if asc:
+        order = "ASC"
+        null_order = "NULLS FIRST"
+    else:
+        order = "DESC"
+        null_order = "NULLS LAST"
+    return _invoke_function_over_columns("list_sort", col, lit(order), lit(null_order))
+
+
 def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
     """
     Collection function: returns true if the arrays contain any common non-null element; if not,

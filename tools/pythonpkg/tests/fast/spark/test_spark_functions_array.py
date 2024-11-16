@@ -111,6 +111,20 @@ class TestSparkFunctionsArray:
             Row(data=['hello', None, 'c', 'b', 'a']),
         ]
 
+    def test_slice(self, spark):
+        df = spark.createDataFrame([([1, 2, 3],), ([4, 5],)], ['x'])
+        res = df.select(F.slice(df.x, 2, 2).alias("sliced")).collect()
+        assert res == [Row(sliced=[2, 3]), Row(sliced=[5])]
+
+    def test_sort_array(self, spark):
+        df = spark.createDataFrame([([2, 1, None, 3],),([1],),([],)], ['data'])
+
+        res = df.select(F.sort_array(df.data).alias('r')).collect()
+        assert res == [Row(r=[None, 1, 2, 3]), Row(r=[1]), Row(r=[])]
+
+        res = df.select(F.sort_array(df.data, asc=False).alias('r')).collect()
+        assert res == [Row(r=[3, 2, 1, None]), Row(r=[1]), Row(r=[])]
+
     def test_array_join(self, spark):
         df = spark.createDataFrame([(["a", "b", "c"],), (["a", None],)], ['data'])
 
@@ -172,8 +186,3 @@ class TestSparkFunctionsArray:
             ]
         else:
             assert res == [Row(zipped=[(1, 2, 3), (2, 4, 6), (3, 6, None)])]
-
-    def test_slice(self, spark):
-        df = spark.createDataFrame([([1, 2, 3],), ([4, 5],)], ['x'])
-        res = df.select(F.slice(df.x, 2, 2).alias("sliced")).collect()
-        assert res == [Row(sliced=[2, 3]), Row(sliced=[5])]
