@@ -437,6 +437,30 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	return inner_filter;
 }
 
+bool FilterCombiner::IsDenseRange(vector<Value> &in_list) {
+	if (in_list.empty()) {
+		return true;
+	}
+	if (!in_list[0].type().IsIntegral()) {
+		return false;
+	}
+	// sort the input list
+	sort(in_list.begin(), in_list.end());
+
+	// check if the gap between each value is exactly one
+	hugeint_t prev_value = in_list[0].GetValue<hugeint_t>();
+	for(idx_t i = 1; i < in_list.size(); i++) {
+		hugeint_t current_value = in_list[i].GetValue<hugeint_t>();
+		if (current_value - prev_value != 1) {
+			// gap is not 1 - this is not a dense range
+			return false;
+		}
+		prev_value = current_value;
+	}
+	// dense range
+	return true;
+}
+
 TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex> &column_ids) {
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
@@ -555,7 +579,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 			}
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
 			auto &func = remaining_filter->Cast<BoundOperatorExpression>();
-			vector<hugeint_t> in_values;
 			D_ASSERT(func.children.size() > 1);
 			if (func.children[0]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
@@ -595,52 +618,32 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				continue;
 			}
 
-			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
-			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
-			bool can_simplify_in_to_range = true;
-			if (type.IsIntegral()) {
-				for (idx_t i = 1; i < func.children.size(); i++) {
-					auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
-					D_ASSERT(!const_value_expr.value.IsNull());
-					in_values.push_back(const_value_expr.value.GetValue<hugeint_t>());
-				}
-
-				if (in_values.empty()) {
-					continue;
-				}
-
-				sort(in_values.begin(), in_values.end());
-
-				for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
-					if (in_values[in_val_idx] - in_values[in_val_idx - 1] > 1) {
-						can_simplify_in_to_range = false;
-						break;
-					}
-				}
-			}
 			if (!type.IsIntegral()) {
 				continue;
 			}
-			if (can_simplify_in_to_range) {
+			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
+			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
+			vector<Value> in_list;
+			for (idx_t i = 1; i < func.children.size(); i++) {
+				auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
+				D_ASSERT(!const_value_expr.value.IsNull());
+				in_list.push_back(const_value_expr.value);
+			}
+			if (IsDenseRange(in_list)) {
+				// dense range! turn this into x >= min AND x <= max
+				// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
 				auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-				                                             Value::Numeric(type, in_values.front()));
+				                                             std::move(in_list.front()));
 				auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-				                                             Value::Numeric(type, in_values.back()));
+				                                             std::move(in_list.back()));
 				table_filters.PushFilter(column_index, std::move(lower_bound));
 				table_filters.PushFilter(column_index, std::move(upper_bound));
 				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
 				remaining_filters.erase_at(rem_fil_idx);
-			}
-			// if we are still Integral, then we can push a zonemap filter.
-			else if (type.IsIntegral()) {
+			} else {
+				// if this is not a dense range we can push a zone-map filter
 				auto optional_filter = make_uniq<OptionalFilter>();
-				vector<Value> in_list;
-				for (idx_t in_val_idx = 1; in_val_idx < func.children.size(); in_val_idx++) {
-					D_ASSERT(func.children[in_val_idx]->type == ExpressionType::VALUE_CONSTANT);
-					auto &const_val = func.children[in_val_idx]->Cast<BoundConstantExpression>();
-					in_list.push_back(const_val.value);
-				}
 				auto in_filter = make_uniq<InFilter>(std::move(in_list));
 				optional_filter->child_filter = std::move(in_filter);
 				table_filters.PushFilter(column_index, std::move(optional_filter));

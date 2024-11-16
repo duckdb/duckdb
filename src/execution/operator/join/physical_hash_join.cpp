@@ -24,6 +24,8 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/common/types/value_map.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
 
 namespace duckdb {
 
@@ -570,6 +572,47 @@ public:
 	}
 };
 
+void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx) const {
+	// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
+	// first scan the entire vector at the probe side
+	// FIXME: this code is duplicated from PerfectHashJoinExecutor::FullScanHashTable
+	auto build_idx = join_condition[filter_idx];
+	auto &data_collection = ht.GetDataCollection();
+
+	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
+
+	JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
+								  TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+
+	// Go through all the blocks and fill the keys addresses
+	idx_t key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
+
+	// Scan the build keys in the hash table
+	Vector build_vector(ht.layout.GetTypes()[build_idx], key_count);
+	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count,
+						   build_idx, build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
+
+	// generate the OR-clause - note that we only need to consider unique values here (so we use a seT)
+	value_set_t unique_ht_values;
+	for (idx_t k = 0; k < key_count; k++) {
+		unique_ht_values.insert(build_vector.GetValue(k));
+	}
+	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
+
+	// generating the OR filter only makes sense if the range is not dense
+	// i.e. if we have the values [0, 1, 2, 3, 4] - the min/max is fully equivalent to the OR filter
+	if (FilterCombiner::IsDenseRange(in_list)) {
+		return;
+	}
+
+	// generate the OR filter
+	auto or_filter = make_uniq<InFilter>(std::move(in_list));
+	// we push the OR filter as an OptionalFilter so that we can use it for zonemap pruning only
+	// the IN-list is expensive to execute otherwise
+	auto filter = make_uniq<OptionalFilter>(std::move(or_filter));
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+}
+
 void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
                                          const PhysicalOperator &op) const {
 	// finalize the min/max aggregates
@@ -598,36 +641,9 @@ void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &
 				// hash table e.g. because they are part of a RIGHT join
 				continue;
 			}
-			// if the HT is small we can generate a complete "OR" filter instead of settling for min/max
-			// FIXME - we only need to do this if max-min is not a dense range (i.e. max - min > count)
+			// if the HT is small we can generate a complete "OR" filter
 			if (ht.Count() > 1 && ht.Count() <= dynamic_or_filter_threshold) {
-				// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
-				// first scan the entire vector at the probe side
-				// FIXME: this code is duplicated from PerfectHashJoinExecutor::FullScanHashTable
-				auto build_idx = join_condition[filter_idx];
-				auto &data_collection = ht.GetDataCollection();
-
-				Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
-
-				JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
-				                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-
-				// Go through all the blocks and fill the keys addresses
-				idx_t key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
-
-				// Scan the build keys in the hash table
-				Vector build_vector(ht.layout.GetTypes()[build_idx], key_count);
-				data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count,
-				                       build_idx, build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
-
-				// generate the OR-clause
-				vector<Value> in_list;
-				for (idx_t k = 0; k < key_count; k++) {
-					in_list.push_back(build_vector.GetValue(k));
-				}
-				auto or_filter = make_uniq<InFilter>(std::move(in_list));
-				auto filter = make_uniq<OptionalFilter>(std::move(or_filter));
-				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+				PushInFilter(info, ht, op, filter_idx, filter_col_idx);
 			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {
