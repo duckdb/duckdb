@@ -206,7 +206,6 @@ class TestsSparkFunctionsDate(object):
             res = df.select(F.to_timestamp_ntz(df.e).alias('r')).collect()
         assert res == [Row(r=datetime(2016, 4, 8, 0, 0))]
 
-
     def test_add_months(self, spark):
         df = spark.createDataFrame([(datetime(2024, 5, 12, 13, 30, 45), 2)], ["dt", "months"])
 

@@ -195,12 +195,20 @@ class TestDataFrameGroupBy(object):
                 (4, "a"),
                 (5, "a"),
                 (6, "a"),
-
             ],
             schema=["value", "group"],
         )
 
-        res = df.groupBy("group").agg(stddev_samp("value").alias("stddev_samp"), stddev("value").alias("stddev"), std("value").alias("std"), stddev_pop("value").alias("stddev_pop")).collect()
+        res = (
+            df.groupBy("group")
+            .agg(
+                stddev_samp("value").alias("stddev_samp"),
+                stddev("value").alias("stddev"),
+                std("value").alias("std"),
+                stddev_pop("value").alias("stddev_pop"),
+            )
+            .collect()
+        )
         r = res[0]
 
         samp = 1.8708286933869
@@ -218,12 +226,19 @@ class TestDataFrameGroupBy(object):
                 (4, "a"),
                 (5, "a"),
                 (6, "a"),
-
             ],
             schema=["value", "group"],
         )
 
-        res = df.groupBy("group").agg(var_samp("value").alias("var_samp"), var_pop("value").alias("var_pop"), variance("value").alias("variance")).collect()
+        res = (
+            df.groupBy("group")
+            .agg(
+                var_samp("value").alias("var_samp"),
+                var_pop("value").alias("var_pop"),
+                variance("value").alias("variance"),
+            )
+            .collect()
+        )
         r = res[0]
 
         samp = 3.5

@@ -117,7 +117,7 @@ class TestSparkFunctionsArray:
         assert res == [Row(sliced=[2, 3]), Row(sliced=[5])]
 
     def test_sort_array(self, spark):
-        df = spark.createDataFrame([([2, 1, None, 3],),([1],),([],)], ['data'])
+        df = spark.createDataFrame([([2, 1, None, 3],), ([1],), ([],)], ['data'])
 
         res = df.select(F.sort_array(df.data).alias('r')).collect()
         assert res == [Row(r=[None, 1, 2, 3]), Row(r=[1]), Row(r=[])]
