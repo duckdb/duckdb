@@ -162,6 +162,11 @@ class TestsSparkFunctionsDate(object):
         res = df.select(F.unix_seconds(df.t.cast("timestamp")).alias('n')).collect()
         assert res == [Row(n=1437559200)]
 
+    def test_weekday(self, spark):
+        df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+        res = df.select(F.weekday(df.dt.cast("date")).alias('day')).collect()
+        assert res == [Row(day=2)]
+
     def test_add_months(self, spark):
         df = spark.createDataFrame([(datetime(2024, 5, 12, 13, 30, 45), 2)], ["dt", "months"])
 

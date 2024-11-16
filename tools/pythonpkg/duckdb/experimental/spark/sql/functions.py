@@ -4008,6 +4008,35 @@ def variance(col: "ColumnOrName") -> Column:
     return var_samp(col)
 
 
+def weekday(col: "ColumnOrName") -> Column:
+    """
+    Returns the day of the week for date/timestamp (0 = Monday, 1 = Tuesday, ..., 6 = Sunday).
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target date/timestamp column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        the day of the week for date/timestamp (0 = Monday, 1 = Tuesday, ..., 6 = Sunday).
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08',)], ['dt'])
+    >>> df.select(weekday('dt').alias('day')).show()
+    +---+
+    |day|
+    +---+
+    |  2|
+    +---+
+    """
+    return _invoke_function_over_columns("isodow", col) - 1
+
+
 def substr(
     str: "ColumnOrName", pos: "ColumnOrName", len: Optional["ColumnOrName"] = None
 ) -> Column:
