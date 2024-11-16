@@ -158,6 +158,44 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     )
 
 
+def slice(
+    x: "ColumnOrName", start: Union["ColumnOrName", int], length: Union["ColumnOrName", int]
+) -> Column:
+    """
+    Collection function: returns an array containing all the elements in `x` from index `start`
+    (array indices start at 1, or from the end if `start` is negative) with the specified `length`.
+
+    .. versionadded:: 2.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    x : :class:`~pyspark.sql.Column` or str
+        column name or column containing the array to be sliced
+    start : :class:`~pyspark.sql.Column` or str or int
+        column name, column, or int containing the starting index
+    length : :class:`~pyspark.sql.Column` or str or int
+        column name, column, or int containing the length of the slice
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a column of array type. Subset of array.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([([1, 2, 3],), ([4, 5],)], ['x'])
+    >>> df.select(slice(df.x, 2, 2).alias("sliced")).collect()
+    [Row(sliced=[2, 3]), Row(sliced=[5])]
+    """
+    start = ConstantExpression(start) if isinstance(start, int) else _to_column_expr(start)
+    length = ConstantExpression(length) if isinstance(length, int) else _to_column_expr(length)
+
+    end = start + length
+
+    return _invoke_function("list_slice", _to_column_expr(x), start, end)
 
 
 def asc(col: "ColumnOrName") -> Column:

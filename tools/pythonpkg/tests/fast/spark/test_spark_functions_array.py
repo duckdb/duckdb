@@ -172,3 +172,8 @@ class TestSparkFunctionsArray:
             ]
         else:
             assert res == [Row(zipped=[(1, 2, 3), (2, 4, 6), (3, 6, None)])]
+
+    def test_slice(self, spark):
+        df = spark.createDataFrame([([1, 2, 3],), ([4, 5],)], ['x'])
+        res = df.select(F.slice(df.x, 2, 2).alias("sliced")).collect()
+        assert res == [Row(sliced=[2, 3]), Row(sliced=[5])]
