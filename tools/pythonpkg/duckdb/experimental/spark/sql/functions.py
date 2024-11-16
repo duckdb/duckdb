@@ -3915,6 +3915,99 @@ def stddev_pop(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("stddev_pop", col)
 
 
+def var_pop(col: "ColumnOrName") -> Column:
+    """
+    Aggregate function: returns the population variance of the values in a group.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        variance of given column.
+
+    Examples
+    --------
+    >>> df = spark.range(6)
+    >>> df.select(var_pop(df.id)).first()
+    Row(var_pop(id)=2.91666...)
+    """
+    return _invoke_function_over_columns("var_pop", col)
+
+
+def var_samp(col: "ColumnOrName") -> Column:
+    """
+    Aggregate function: returns the unbiased sample variance of
+    the values in a group.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        variance of given column.
+
+    Examples
+    --------
+    >>> df = spark.range(6)
+    >>> df.select(var_samp(df.id)).show()
+    +------------+
+    |var_samp(id)|
+    +------------+
+    |         3.5|
+    +------------+
+    """
+    return _invoke_function_over_columns("var_samp", col)
+
+
+def variance(col: "ColumnOrName") -> Column:
+    """
+    Aggregate function: alias for var_samp
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        variance of given column.
+
+    Examples
+    --------
+    >>> df = spark.range(6)
+    >>> df.select(variance(df.id)).show()
+    +------------+
+    |var_samp(id)|
+    +------------+
+    |         3.5|
+    +------------+
+    """
+    return var_samp(col)
+
+
 def substr(
     str: "ColumnOrName", pos: "ColumnOrName", len: Optional["ColumnOrName"] = None
 ) -> Column:
