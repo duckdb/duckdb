@@ -117,6 +117,12 @@ struct SuffixFun {
 	static ScalarFunction GetFunction();
 };
 
+struct EndsWithFun {
+	using ALIAS = SuffixFun;
+
+	static constexpr const char *Name = "ends_with";
+};
+
 struct ContainsFun {
 	static constexpr const char *Name = "contains";
 	static constexpr const char *Parameters = "string,search_string";
