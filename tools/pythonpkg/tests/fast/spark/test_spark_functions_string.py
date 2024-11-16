@@ -189,6 +189,19 @@ class TestSparkFunctionsString(object):
         res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
         assert res == [Row(r='')]
 
+    def test_substr(self, spark):
+        df = spark.createDataFrame(
+             [("Spark SQL", 5, 1,)], ["a", "b", "c"]
+         )
+        res = df.select(F.substr("a", "b", "c").alias("s")).collect()
+        assert res == [Row(s='k')]
+
+        df = spark.createDataFrame(
+             [("Spark SQL", 5, 1,)], ["a", "b", "c"]
+         )
+        res = df.select(F.substr("a", "b").alias("s")).collect()
+        assert res == [Row(s='k SQL')]
+
     def test_find_in_set(self, spark):
         string_array = "abc,b,ab,c,def"
         df = spark.createDataFrame([("ab", string_array), ("b,c", string_array), ("z", string_array)], ['a', 'b'])
