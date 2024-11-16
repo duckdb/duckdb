@@ -17,6 +17,7 @@
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 
@@ -449,9 +450,14 @@ bool FilterCombiner::IsDenseRange(vector<Value> &in_list) {
 
 	// check if the gap between each value is exactly one
 	hugeint_t prev_value = in_list[0].GetValue<hugeint_t>();
-	for(idx_t i = 1; i < in_list.size(); i++) {
+	for (idx_t i = 1; i < in_list.size(); i++) {
 		hugeint_t current_value = in_list[i].GetValue<hugeint_t>();
-		if (current_value - prev_value != 1) {
+		hugeint_t diff;
+		if (!TrySubtractOperator::Operation(current_value, prev_value, diff)) {
+			// if subtract would overflow then it's certainly not 1
+			return false;
+		}
+		if (diff != 1) {
 			// gap is not 1 - this is not a dense range
 			return false;
 		}
@@ -632,10 +638,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 			if (IsDenseRange(in_list)) {
 				// dense range! turn this into x >= min AND x <= max
 				// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
-				auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-				                                             std::move(in_list.front()));
-				auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-				                                             std::move(in_list.back()));
+				auto lower_bound =
+				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(in_list.front()));
+				auto upper_bound =
+				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(in_list.back()));
 				table_filters.PushFilter(column_index, std::move(lower_bound));
 				table_filters.PushFilter(column_index, std::move(upper_bound));
 				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());

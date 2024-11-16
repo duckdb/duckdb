@@ -63,7 +63,8 @@ public:
 	                 const PhysicalOperator &op) const;
 
 private:
-	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx) const;
+	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
+	                  idx_t filter_idx, idx_t filter_col_idx) const;
 };
 
 } // namespace duckdb

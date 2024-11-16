@@ -572,7 +572,8 @@ public:
 	}
 };
 
-void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx) const {
+void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
+                                          const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx) const {
 	// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
 	// first scan the entire vector at the probe side
 	// FIXME: this code is duplicated from PerfectHashJoinExecutor::FullScanHashTable
@@ -582,15 +583,15 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
 
 	JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
-								  TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 
 	// Go through all the blocks and fill the keys addresses
 	idx_t key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
 
 	// Scan the build keys in the hash table
 	Vector build_vector(ht.layout.GetTypes()[build_idx], key_count);
-	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count,
-						   build_idx, build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
+	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count, build_idx,
+	                       build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
 
 	// generate the OR-clause - note that we only need to consider unique values here (so we use a seT)
 	value_set_t unique_ht_values;
