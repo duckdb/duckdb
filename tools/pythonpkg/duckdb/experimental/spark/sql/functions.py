@@ -3708,6 +3708,54 @@ def sort_array(col: "ColumnOrName", asc: bool = True) -> Column:
     return _invoke_function_over_columns("list_sort", col, lit(order), lit(null_order))
 
 
+def split(str: "ColumnOrName", pattern: str, limit: int = -1) -> Column:
+    """
+    Splits str around matches of the given pattern.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        a string expression to split
+    pattern : str
+        a string representing a regular expression. The regex string should be
+        a Java regular expression.
+    limit : int, optional
+        an integer which controls the number of times `pattern` is applied.
+
+        * ``limit > 0``: The resulting array's length will not be more than `limit`, and the
+                         resulting array's last entry will contain all input beyond the last
+                         matched pattern.
+        * ``limit <= 0``: `pattern` will be applied as many times as possible, and the resulting
+                          array can be of any size.
+
+        .. versionchanged:: 3.0
+           `split` now takes an optional `limit` field. If not provided, default limit value is -1.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        array of separated strings.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('oneAtwoBthreeC',)], ['s',])
+    >>> df.select(split(df.s, '[ABC]', 2).alias('s')).collect()
+    [Row(s=['one', 'twoBthreeC'])]
+    >>> df.select(split(df.s, '[ABC]', -1).alias('s')).collect()
+    [Row(s=['one', 'two', 'three', ''])]
+    """
+    if limit > 0:
+        # Unclear how to implement this in DuckDB as we'd need to map back from the split array
+        # to the original array which is tricky with regular expressions.
+        raise ContributionsAcceptedError("limit is not yet supported")
+    return _invoke_function_over_columns("regexp_split_to_array", str, lit(pattern))
+
+
 def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
     """
     Collection function: returns true if the arrays contain any common non-null element; if not,

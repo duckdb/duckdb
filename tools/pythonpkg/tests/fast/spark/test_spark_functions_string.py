@@ -157,6 +157,12 @@ class TestSparkFunctionsString(object):
         else:
             assert res == [Row(encoded=b'abcd')]
 
+    def test_split(self, spark):
+        df = spark.createDataFrame([('oneAtwoBthreeC',)], ['s',])
+
+        res = df.select(F.split(df.s, '[ABC]').alias('s')).collect()
+        assert res == [Row(s=['one', 'two', 'three', ''])]
+
     def test_find_in_set(self, spark):
         string_array = "abc,b,ab,c,def"
         df = spark.createDataFrame([("ab", string_array), ("b,c", string_array), ("z", string_array)], ['a', 'b'])
