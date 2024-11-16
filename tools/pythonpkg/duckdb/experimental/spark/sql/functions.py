@@ -4037,6 +4037,30 @@ def weekday(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("isodow", col) - 1
 
 
+def zeroifnull(col: "ColumnOrName") -> Column:
+    """
+    Returns zero if `col` is null, or `col` otherwise.
+
+    .. versionadded:: 4.0.0
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None,), (1,)], ["a"])
+    >>> df.select(zeroifnull(df.a).alias("result")).show()
+    +------+
+    |result|
+    +------+
+    |     0|
+    |     1|
+    +------+
+    """
+    return coalesce(col, lit(0))
+
+
 def substr(
     str: "ColumnOrName", pos: "ColumnOrName", len: Optional["ColumnOrName"] = None
 ) -> Column:

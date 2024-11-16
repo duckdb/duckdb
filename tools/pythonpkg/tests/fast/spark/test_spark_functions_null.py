@@ -32,6 +32,14 @@ class TestsSparkFunctionsNull(object):
             Row(nvl_value=4),
         ]
 
+    def test_zeroifnull(self, spark):
+        df = spark.createDataFrame([(None,), (1,)], ["a"])
+        res = df.select(F.zeroifnull(df.a).alias("result")).collect()
+        assert res == [
+            Row(result=0),
+            Row(result=1),
+        ]
+
     def test_ifnull(self, spark):
         data = [
             (None, 2),
