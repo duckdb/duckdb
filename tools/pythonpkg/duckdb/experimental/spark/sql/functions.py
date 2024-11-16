@@ -3756,6 +3756,39 @@ def split(str: "ColumnOrName", pattern: str, limit: int = -1) -> Column:
     return _invoke_function_over_columns("regexp_split_to_array", str, lit(pattern))
 
 
+def split_part(src: "ColumnOrName", delimiter: "ColumnOrName", partNum: "ColumnOrName") -> Column:
+    """
+    Splits `str` by delimiter and return requested part of the split (1-based).
+    If any input is null, returns null. if `partNum` is out of range of split parts,
+    returns empty string. If `partNum` is 0, throws an error. If `partNum` is negative,
+    the parts are counted backward from the end of the string.
+    If the `delimiter` is an empty string, the `str` is not split.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    src : :class:`~pyspark.sql.Column` or str
+        A column of string to be splited.
+    delimiter : :class:`~pyspark.sql.Column` or str
+        A column of string, the delimiter used for split.
+    partNum : :class:`~pyspark.sql.Column` or str
+        A column of string, requested part of the split (1-based).
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("11.12.13", ".", 3,)], ["a", "b", "c"])
+    >>> df.select(split_part(df.a, df.b, df.c).alias('r')).collect()
+    [Row(r='13')]
+    """
+    src = _to_column_expr(src)
+    delimiter = _to_column_expr(delimiter)
+    partNum = _to_column_expr(partNum)
+    part = FunctionExpression("split_part", src, delimiter, partNum)
+
+    return Column(CaseExpression(src.isnull() | delimiter.isnull() | partNum.isnull(), ConstantExpression(None)).otherwise(CaseExpression(delimiter == ConstantExpression(""), ConstantExpression("")).otherwise(part)))
+
+
 def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
     """
     Collection function: returns true if the arrays contain any common non-null element; if not,

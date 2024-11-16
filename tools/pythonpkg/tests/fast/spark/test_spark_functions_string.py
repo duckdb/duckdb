@@ -163,6 +163,32 @@ class TestSparkFunctionsString(object):
         res = df.select(F.split(df.s, '[ABC]').alias('s')).collect()
         assert res == [Row(s=['one', 'two', 'three', ''])]
 
+    def test_split_part(self, spark):
+        df = spark.createDataFrame([("11.12.13", ".", 3,)], ["a", "b", "c"])
+
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r='13')]
+
+        # If any input is null, should return null
+        df = spark.createDataFrame([("11.12.13", ".", None,), ("11.12.13", ".", 1,)], ["a", "b", "c"])
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r=None), Row(r='11')]
+
+        # If partNum is out of range, should return an empty string
+        df = spark.createDataFrame([("11.12.13", ".", 4,)], ["a", "b", "c"])
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r='')]
+
+        # If partNum is negative, parts are counted backwards
+        df = spark.createDataFrame([("11.12.13", ".", -1,)], ["a", "b", "c"])
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r='13')]
+
+        # If the delimiter is an empty string, the return should be empty
+        df = spark.createDataFrame([("11.12.13", "", 2,)], ["a", "b", "c"])
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r='')]
+
     def test_find_in_set(self, spark):
         string_array = "abc,b,ab,c,def"
         df = spark.createDataFrame([("ab", string_array), ("b,c", string_array), ("z", string_array)], ['a', 'b'])
