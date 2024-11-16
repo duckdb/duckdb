@@ -717,7 +717,7 @@ TEST_CASE("Test append timestamp_s in C API", "[capi]") {
 	result = tester.Query("SELECT * FROM test");
 	REQUIRE_NO_FAIL(*result);
 	auto chunk = result->FetchChunk(0);
-	auto data = reinterpret_cast<duckdb_timestamp_s*>(chunk->GetData(0));
+	auto data = reinterpret_cast<duckdb_timestamp_s *>(chunk->GetData(0));
 	auto ts_s_out = data[0];
 	REQUIRE(ts_s_out.seconds == ts_s_in.seconds);
 
@@ -772,7 +772,7 @@ TEST_CASE("Test append timestamp_ms in C API", "[capi]") {
 	result = tester.Query("SELECT * FROM test");
 	REQUIRE_NO_FAIL(*result);
 	auto chunk = result->FetchChunk(0);
-	auto data = reinterpret_cast<duckdb_timestamp_ms*>(chunk->GetData(0));
+	auto data = reinterpret_cast<duckdb_timestamp_ms *>(chunk->GetData(0));
 	auto ts_ms_out = data[0];
 	REQUIRE(ts_ms_out.millis == ts_ms_in.millis);
 
@@ -828,7 +828,7 @@ TEST_CASE("Test append timestamp_ns in C API", "[capi]") {
 	result = tester.Query("SELECT * FROM test");
 	REQUIRE_NO_FAIL(*result);
 	auto chunk = result->FetchChunk(0);
-	auto data = reinterpret_cast<duckdb_timestamp_ns*>(chunk->GetData(0));
+	auto data = reinterpret_cast<duckdb_timestamp_ns *>(chunk->GetData(0));
 	auto ts_ns_out = data[0];
 	REQUIRE(ts_ns_out.nanos == ts_ns_in.nanos);
 

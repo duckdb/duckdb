@@ -173,11 +173,8 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	// now append a bunch of values
 	{
 		Appender appender(con, "timestamps");
-		appender.AppendRow(
-			Value::TIMESTAMPSEC(timestamp_t(715522953)),
-			Value::TIMESTAMPMS(timestamp_t(715522953001)),
-			Value::TIMESTAMPNS(timestamp_t(715522953001234789))
-		);
+		appender.AppendRow(Value::TIMESTAMPSEC(timestamp_t(715522953)), Value::TIMESTAMPMS(timestamp_t(715522953001)),
+		                   Value::TIMESTAMPNS(timestamp_t(715522953001234789)));
 	}
 	result = con.Query("SELECT * FROM timestamps");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMPSEC(timestamp_t(715522953))}));
