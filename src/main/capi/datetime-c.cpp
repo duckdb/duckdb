@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
