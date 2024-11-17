@@ -1,4 +1,4 @@
-# name: test/optimizer/pushdown/test_pushdown_or.test
+# name: test/optimizer/pushdown/test_pushdown_or.test_slow
 # group: [pushdown]
 
 require tpch
