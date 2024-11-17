@@ -665,6 +665,7 @@ public:
 
 public:
 	virtual void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) = 0;
+	virtual void Skip(idx_t count) = 0;
 	virtual void Verify() const = 0;
 
 public:
@@ -699,22 +700,23 @@ public:
 				idx_t result_idx = 0;
 				while (run_index < count && result_idx < to_scan) {
 					auto run = runs[run_index];
+					// Either we are already inside a run, then 'valid_pos' will be scanned_count
+					// or we're skipping values until the run begins
+					auto valid_pos = MaxValue<idx_t>(MinValue<idx_t>(run.start, scanned_count + to_scan),
+					                                 scanned_count + result_idx);
+					idx_t valid_start = valid_pos - scanned_count;
 
-					idx_t to_skip = 0;
-					if (run.start > scanned_count + result_idx) {
-						to_skip = MinValue(run.start - (scanned_count + result_idx), to_scan - result_idx);
-						// These entries are set, no action required
-					}
-					result_idx += to_skip;
-					idx_t total = MinValue<idx_t>(1 + run.length, to_scan - result_idx);
-					if (!to_skip) {
-						total -= (scanned_count + result_idx - run.start);
-					}
+					result_idx = valid_pos - scanned_count;
+
+					// How much of the run are we covering?
+					auto run_end = MinValue<idx_t>(run.start + 1 + run.length, scanned_count + to_scan);
 
 					// Process the run
-					for (idx_t i = 0; i < total; i++) {
-						result_mask.SetInvalid(result_offset + result_idx++);
+					// FIXME: optimize this
+					for (idx_t i = 0; valid_pos + i < run_end; i++) {
+						result_mask.SetInvalid(result_offset + result_idx + i);
 					}
+					result_idx += run_end - valid_pos;
 					if (scanned_count + result_idx == run.start + 1 + run.length) {
 						// Fully processed the current run
 						run_index++;
@@ -727,15 +729,19 @@ public:
 				if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
 					// The run does not cover these entries
 					// set all the bits to 0
+					// FIXME: optimize this
 					for (idx_t i = 0; i < to_scan; i++) {
 						result_mask.SetInvalid(result_offset + i);
 					}
 					break;
 				}
-				if (run_index < count && runs[run_index].start <= scanned_count + to_scan &&
+				if (run_index < count && scanned_count >= runs[run_index].start &&
 				    runs[run_index].start + runs[run_index].length + 1 >= scanned_count + to_scan) {
 					// The current run covers the entire scan range, meaning all these bits are set
 					// no action required
+					if (runs[run_index].start + runs[run_index].length + 1 == scanned_count + to_scan) {
+						run_index++;
+					}
 					break;
 				}
 
@@ -743,6 +749,7 @@ public:
 				while (i < to_scan) {
 					// Determine the next valid position within the scan range, if available
 					idx_t valid_pos = (run_index < count) ? runs[run_index].start : scanned_count + to_scan;
+					valid_pos = MaxValue<idx_t>(valid_pos, scanned_count);
 					idx_t valid_start = valid_pos - scanned_count;
 
 					if (i < valid_start) {
@@ -765,6 +772,19 @@ public:
 			} while (false);
 			scanned_count += to_scan;
 		}
+	}
+
+	void Skip(idx_t to_skip) override {
+		idx_t end = scanned_count + to_skip;
+		while (scanned_count < end && run_index < count) {
+			idx_t run_end = runs[run_index].start + 1 + runs[run_index].length;
+			scanned_count = MinValue<idx_t>(run_end, end);
+			if (scanned_count == run_end) {
+				run_index++;
+			}
+		}
+		// In case run_index has already reached count
+		scanned_count = end;
 	}
 
 	void Verify() const override {
@@ -806,7 +826,7 @@ public:
 				}
 
 #if false
-				// TODO: optimization
+				// TODO: optimize this
 				if (array_index + to_scan < count && array[array_index] == scanned_count && array[array_index + to_scan] == scanned_count + to_scan) {
 					// All entries are present in the array, can set all bits to 0 directly
 					for (idx_t i = 0; i < to_scan; i++) {
@@ -834,6 +854,7 @@ public:
 			do {
 				if (array_index >= count || scanned_count + to_scan < array[array_index]) {
 					// None of the bits we're scanning are set, set everything to 0 directly
+					// FIXME: optimize this
 					for (idx_t i = 0; i < to_scan; i++) {
 						result_mask.SetInvalid(result_offset + i);
 					}
@@ -853,7 +874,7 @@ public:
 					idx_t valid_start = valid_pos - scanned_count;
 
 					if (i < valid_start) {
-						// FIXME: optimize this to group the SetInvalid calls
+						// FIXME: optimize this
 						// These bits are all set to 0
 						idx_t invalid_end = MinValue<idx_t>(valid_start, to_scan);
 						for (idx_t j = i; j < invalid_end; j++) {
@@ -871,6 +892,15 @@ public:
 			} while (false);
 			scanned_count += to_scan;
 		}
+	}
+
+	void Skip(idx_t to_skip) override {
+		idx_t end = scanned_count + to_skip;
+		while (array_index < count && array[array_index] < end) {
+			array_index++;
+		}
+		// In case array_index has already reached count
+		scanned_count = end;
 	}
 
 	void Verify() const override {
@@ -897,12 +927,17 @@ public:
 
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
-		if (!result_offset && scanned_count % ValidityMask::BITS_PER_VALUE == 0) {
+		if ((to_scan % ValidityMask::BITS_PER_VALUE) == 0 && (scanned_count % ValidityMask::BITS_PER_VALUE) == 0) {
 			ValidityUncompressed::AlignedScan((data_ptr_t)bitset, scanned_count, result, to_scan);
 		} else {
 			ValidityUncompressed::UnalignedScan((data_ptr_t)bitset, scanned_count, result, result_offset, to_scan);
 		}
 		scanned_count += to_scan;
+	}
+
+	void Skip(idx_t to_skip) override {
+		// NO OP: we only need to forward scanned_count
+		scanned_count += to_skip;
 	}
 
 	void Verify() const override {
@@ -1052,7 +1087,13 @@ public:
 	}
 
 	void Skip(ContainerScanState &scan_state, idx_t skip_count) {
-		// TODO: implement
+		D_ASSERT(scan_state.scanned_count + skip_count <= scan_state.container_size);
+		if (scan_state.scanned_count + skip_count == scan_state.container_size) {
+			scan_state.scanned_count = scan_state.container_size;
+			// This skips all remaining values covered by this container
+			return;
+		}
+		scan_state.Skip(skip_count);
 	}
 
 public:
@@ -1090,10 +1131,15 @@ void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_coun
 void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	RoaringScanState scan_state(segment);
 
-	// TODO: implement
+	idx_t internal_offset;
+	idx_t vector_idx = scan_state.GetContainerIndex(row_id, internal_offset);
+	auto &container_state = scan_state.LoadContainer(vector_idx, internal_offset);
+
+	scan_state.ScanInternal(container_state, 1, result, result_idx);
 }
 
 void RoaringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	// NO OP
 	// We skip inside scan instead, if the container boundary gets crossed we can avoid a bunch of work anyways
 	return;
 }
