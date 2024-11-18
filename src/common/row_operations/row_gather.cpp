@@ -35,7 +35,7 @@ static void TemplatedGatherLoop(Vector &rows, const SelectionVector &row_sel, Ve
 		auto row = ptrs[row_idx];
 		auto col_idx = col_sel.get_index(i);
 		data[col_idx] = Load<T>(row + col_offset);
-		ValidityBytes row_mask(row);
+		ValidityBytes row_mask(row, layout.ColumnCount());
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			if (build_size > STANDARD_VECTOR_SIZE && col_mask.AllValid()) {
 				//! We need to initialize the mask with the vector size.
@@ -67,7 +67,7 @@ static void GatherVarchar(Vector &rows, const SelectionVector &row_sel, Vector &
 		auto col_idx = col_sel.get_index(i);
 		auto col_ptr = row + col_offset;
 		data[col_idx] = Load<string_t>(col_ptr);
-		ValidityBytes row_mask(row);
+		ValidityBytes row_mask(row, layout.ColumnCount());
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			if (build_size > STANDARD_VECTOR_SIZE && col_mask.AllValid()) {
 				//! We need to initialize the mask with the vector size.
