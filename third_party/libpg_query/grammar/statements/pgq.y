@@ -757,18 +757,24 @@ FullElementSpec:
 			}
 		;
 
-/* we now do *not* allow spaces inside the arrows (we extended the DDB lexer in scan.l and grammar.y for this) */
+/* we allow spaces inside the arrows */
 Arrow:
         '-'
             {   $$ = "-"; }
     |
-        ARROW_LEFT
+        '<' '-'
             {   $$ = "<-";  }
     |
         LAMBDA_ARROW
             {   $$ = "->"; }
     |
-        ARROW_BOTH
+        '-' '>'
+            {   $$ = "->"; }
+    |
+        '<' LAMBDA_ARROW
+            {    $$ = "<->";  }
+    |
+        '<' '-' '>'
             {    $$ = "<->";  }
     |
         Op
@@ -793,7 +799,7 @@ ArrowLeft:
         '-' '['
             {   $$ = "-"; }
     |
-        ARROW_LEFT '['
+        '<' '-' '['
             {   $$ = "<-";  }
         ;
 

@@ -108,7 +108,7 @@
 %nonassoc	SET				/* see */
 %left		UNION EXCEPT
 %left		INTERSECT
-%left		LAMBDA_ARROW DOUBLE_ARROW ARROW_LEFT ARROW_BOTH
+%left		LAMBDA_ARROW DOUBLE_ARROW
 %left		OR
 %left		AND
 %right		NOT

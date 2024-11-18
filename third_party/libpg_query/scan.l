@@ -333,8 +333,6 @@ dot_dot			\.\.
 colon_equals	":="
 lambda_arrow	"->"
 double_arrow    "->>"
-arrow_left      "<-"
-arrow_both      "<->"
 power_of        "**"
 integer_div     "//"
 
@@ -826,16 +824,6 @@ other			.
 {lambda_arrow}	{
 					SET_YYLLOC();
 					return LAMBDA_ARROW;
-				}
-
-{arrow_left}	{
-					SET_YYLLOC();
-					return ARROW_LEFT;
-				}
-
-{arrow_both}	{
-					SET_YYLLOC();
-					return ARROW_BOTH;
 				}
 
 {double_arrow}  {
