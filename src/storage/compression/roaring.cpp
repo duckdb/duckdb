@@ -757,25 +757,23 @@ public:
 				idx_t result_idx = 0;
 				while (run_index < count && result_idx < to_scan) {
 					auto run = runs[run_index];
-					// Either we are already inside a run, then 'valid_pos' will be scanned_count
+					// Either we are already inside a run, then 'start_of_run' will be scanned_count
 					// or we're skipping values until the run begins
-					auto valid_pos = MaxValue<idx_t>(MinValue<idx_t>(run.start, scanned_count + to_scan),
-					                                 scanned_count + result_idx);
-					idx_t valid_start = valid_pos - scanned_count;
-
-					result_idx = valid_pos - scanned_count;
+					auto start_of_run = MaxValue<idx_t>(MinValue<idx_t>(run.start, scanned_count + to_scan),
+					                                    scanned_count + result_idx);
+					result_idx = start_of_run - scanned_count;
 
 					// How much of the run are we covering?
 					auto run_end = MinValue<idx_t>(run.start + 1 + run.length, scanned_count + to_scan);
 
 					// Process the run
-					D_ASSERT(run_end > valid_pos);
-					idx_t amount = run_end - valid_pos;
+					D_ASSERT(run_end > start_of_run);
+					idx_t amount = run_end - start_of_run;
 					idx_t start = result_offset + result_idx;
 					idx_t end = start + amount;
 					SetInvalidRange(result_mask, start, end);
 
-					result_idx += run_end - valid_pos;
+					result_idx += run_end - start_of_run;
 					if (scanned_count + result_idx == run.start + 1 + run.length) {
 						// Fully processed the current run
 						run_index++;
@@ -791,15 +789,6 @@ public:
 					idx_t start = result_offset;
 					idx_t end = start + to_scan;
 					SetInvalidRange(result_mask, start, end);
-					break;
-				}
-				if (run_index < count && scanned_count >= runs[run_index].start &&
-				    runs[run_index].start + runs[run_index].length + 1 >= scanned_count + to_scan) {
-					// The current run covers the entire scan range, meaning all these bits are set
-					// no action required
-					if (runs[run_index].start + runs[run_index].length + 1 == scanned_count + to_scan) {
-						run_index++;
-					}
 					break;
 				}
 
