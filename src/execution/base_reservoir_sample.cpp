@@ -141,7 +141,7 @@ void BaseReservoirSampling::ReplaceElement(double with_weight) {
 }
 
 void BaseReservoirSampling::FillWeights(vector<idx_t> &actual_sample_indexes) {
-	D_ASSERT(actual_sample_indexes.size() == FIXED_SAMPLE_SIZE);
+	D_ASSERT(actual_sample_indexes.size() <= FIXED_SAMPLE_SIZE);
 	D_ASSERT(reservoir_weights.empty());
 	auto min_weight_index = num_entries_seen_total / FIXED_SAMPLE_SIZE;
 	auto tuples_to_min_weight_map = TuplesToMinWeightMap();
