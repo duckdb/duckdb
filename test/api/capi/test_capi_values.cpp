@@ -141,4 +141,3 @@ TEST_CASE("Test NULL value", "[capi]") {
 	duckdb_destroy_value(&uint_val);
 	duckdb_destroy_value(&null_value);
 }
-
