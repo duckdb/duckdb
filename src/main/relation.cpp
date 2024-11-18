@@ -263,6 +263,13 @@ void Relation::Insert(const vector<vector<Value>> &values) {
 	rel->Insert(GetAlias());
 }
 
+void Relation::Insert(vector<vector<unique_ptr<ParsedExpression>>> &&expressions) {
+	vector<string> column_names;
+	auto rel = make_shared_ptr<ValueRelation>(context->GetContext(), std::move(expressions), std::move(column_names),
+	                                          "values");
+	rel->Insert(GetAlias());
+}
+
 shared_ptr<Relation> Relation::CreateRel(const string &schema_name, const string &table_name, bool temporary) {
 	return make_shared_ptr<CreateTableRelation>(shared_from_this(), schema_name, table_name, temporary);
 }
@@ -342,6 +349,14 @@ void Relation::TryBindRelation(vector<ColumnDefinition> &columns) {
 }
 
 void Relation::Update(const string &update, const string &condition) {
+	throw InvalidInputException("UPDATE can only be used on base tables!");
+}
+
+void Relation::Update(vector<string>, // NOLINT: unused variable / copied on every invocation ...
+                      vector<unique_ptr<ParsedExpression>> &&update, // NOLINT: unused variable
+                      unique_ptr<ParsedExpression> condition) {      // NOLINT: unused variable
+	(void)std::move(update);
+	(void)std::move(condition);
 	throw InvalidInputException("UPDATE can only be used on base tables!");
 }
 

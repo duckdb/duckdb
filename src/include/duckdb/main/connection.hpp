@@ -97,6 +97,16 @@ public:
 	//! Issues a query to the database and returns a Pending Query Result
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
 	                                                       bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
+	                                                       case_insensitive_map_t<BoundParameterData> &named_values,
+	                                                       bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
+	                                                       case_insensitive_map_t<BoundParameterData> &named_values,
+	                                                       bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, vector<Value> &values,
+	                                                       bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
+	                                                       bool allow_stream_result = false);
 
 	//! Prepare the specified query, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
@@ -135,6 +145,7 @@ public:
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values);
 	//! Returns a relation that produces values
 	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values);
+	DUCKDB_API shared_ptr<Relation> Values(vector<vector<unique_ptr<ParsedExpression>>> &&values);
 	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values, const vector<string> &column_names,
 	                                       const string &alias = "values");
 	DUCKDB_API shared_ptr<Relation> Values(const string &values);

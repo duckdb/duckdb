@@ -34,6 +34,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 
@@ -181,6 +182,8 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(136, "columns_set", columns_set, false);
 	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	serializer.WritePropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", dialect_options.rows_until_header);
+	serializer.WritePropertyWithDefault<string>(139, "encoding", encoding);
+	serializer.WriteProperty<CSVOption<bool>>(140, "dialect_options.state_machine_options.rfc_4180", dialect_options.state_machine_options.rfc_4180);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -224,6 +227,8 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithExplicitDefault<bool>(136, "columns_set", result.columns_set, false);
 	deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "dialect_options.state_machine_options.comment", result.dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	deserializer.ReadPropertyWithDefault<idx_t>(138, "dialect_options.rows_until_header", result.dialect_options.rows_until_header);
+	deserializer.ReadPropertyWithDefault<string>(139, "encoding", result.encoding);
+	deserializer.ReadProperty<CSVOption<bool>>(140, "dialect_options.state_machine_options.rfc_4180", result.dialect_options.state_machine_options.rfc_4180);
 	return result;
 }
 
@@ -270,6 +275,18 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<duckdb::CompressionType>(104, "compression_type", result.compression_type);
 	deserializer.ReadPropertyWithExplicitDefault<Value>(105, "comment", result.comment, Value());
 	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, string>>(106, "tags", result.tags, unordered_map<string, string>());
+	return result;
+}
+
+void ColumnIndex::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<idx_t>(1, "index", index);
+	serializer.WritePropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", child_indexes);
+}
+
+ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
+	ColumnIndex result;
+	deserializer.ReadPropertyWithDefault<idx_t>(1, "index", result.index);
+	deserializer.ReadPropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", result.child_indexes);
 	return result;
 }
 

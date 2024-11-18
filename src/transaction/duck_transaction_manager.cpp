@@ -173,9 +173,8 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		lock = checkpoint_lock.TryGetExclusiveLock();
 		if (!lock) {
 			// we could not manage to get the lock - cancel
-			throw TransactionException(
-			    "Cannot CHECKPOINT: there are other write transactions active. Use FORCE CHECKPOINT to abort "
-			    "the other transactions and force a checkpoint");
+			throw TransactionException("Cannot CHECKPOINT: there are other write transactions active. Try using FORCE "
+			                           "CHECKPOINT to wait until all active transactions are finished");
 		}
 
 	} else {
@@ -422,6 +421,10 @@ idx_t DuckTransactionManager::GetCatalogVersion(Transaction &transaction_p) {
 void DuckTransactionManager::PushCatalogEntry(Transaction &transaction_p, duckdb::CatalogEntry &entry,
                                               duckdb::data_ptr_t extra_data, duckdb::idx_t extra_data_size) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
+	if (!db.IsSystem() && !db.IsTemporary() && transaction.IsReadOnly()) {
+		throw InternalException("Attempting to do catalog changes on a transaction that is read-only - "
+		                        "this should not be possible");
+	}
 	transaction.catalog_version = ++last_uncommitted_catalog_version;
 	transaction.PushCatalogEntry(entry, extra_data, extra_data_size);
 }

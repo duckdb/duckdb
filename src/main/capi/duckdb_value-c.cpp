@@ -282,7 +282,7 @@ idx_t duckdb_get_map_size(duckdb_value value) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type().id() != LogicalTypeId::MAP) {
+	if (val.type().id() != LogicalTypeId::MAP || val.IsNull()) {
 		return 0;
 	}
 
@@ -296,7 +296,7 @@ duckdb_value duckdb_get_map_key(duckdb_value value, idx_t index) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type().id() != LogicalTypeId::MAP) {
+	if (val.type().id() != LogicalTypeId::MAP || val.IsNull()) {
 		return nullptr;
 	}
 
@@ -316,7 +316,7 @@ duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index) {
 	}
 
 	auto val = UnwrapValue(value);
-	if (val.type().id() != LogicalTypeId::MAP) {
+	if (val.type().id() != LogicalTypeId::MAP || val.IsNull()) {
 		return nullptr;
 	}
 
@@ -328,4 +328,92 @@ duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index) {
 	auto &child = children[index];
 	auto &child_struct = duckdb::StructValue::GetChildren(child);
 	return WrapValue(new duckdb::Value(child_struct[1]));
+}
+
+bool duckdb_is_null_value(duckdb_value value) {
+	return UnwrapValue(value).IsNull();
+}
+
+duckdb_value duckdb_create_null_value() {
+	return WrapValue(new duckdb::Value());
+}
+
+idx_t duckdb_get_list_size(duckdb_value value) {
+	if (!value) {
+		return 0;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::LIST || val.IsNull()) {
+		return 0;
+	}
+
+	auto &children = duckdb::ListValue::GetChildren(val);
+	return children.size();
+}
+
+duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index) {
+	if (!value) {
+		return nullptr;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::LIST || val.IsNull()) {
+		return nullptr;
+	}
+
+	auto &children = duckdb::ListValue::GetChildren(val);
+	if (index >= children.size()) {
+		return nullptr;
+	}
+
+	return WrapValue(new duckdb::Value(children[index]));
+}
+
+duckdb_value duckdb_create_enum_value(duckdb_logical_type type, uint64_t value) {
+	if (!type) {
+		return nullptr;
+	}
+
+	auto &logical_type = UnwrapType(type);
+	if (logical_type.id() != LogicalTypeId::ENUM) {
+		return nullptr;
+	}
+
+	if (value >= duckdb::EnumType::GetSize(logical_type)) {
+		return nullptr;
+	}
+
+	return WrapValue(new duckdb::Value(duckdb::Value::ENUM(value, logical_type)));
+}
+
+uint64_t duckdb_get_enum_value(duckdb_value value) {
+	if (!value) {
+		return 0;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::ENUM || val.IsNull()) {
+		return 0;
+	}
+
+	return val.GetValue<uint64_t>();
+}
+
+duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index) {
+	if (!value) {
+		return nullptr;
+	}
+
+	auto val = UnwrapValue(value);
+	if (val.type().id() != LogicalTypeId::STRUCT || val.IsNull()) {
+		return nullptr;
+	}
+
+	auto &children = duckdb::StructValue::GetChildren(val);
+	if (index >= children.size()) {
+		return nullptr;
+	}
+
+	return WrapValue(new duckdb::Value(children[index]));
 }

@@ -69,9 +69,9 @@ public:
 	void Reconnect();
 	void StartLoop(LoopDefinition loop);
 	void EndLoop();
-	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
-	static string LoopReplacement(string text, const vector<LoopDefinition> &loops);
-	static bool ForEachTokenReplace(const string &parameter, vector<string> &result);
+	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
+	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
+	bool ForEachTokenReplace(const string &parameter, vector<string> &result);
 
 private:
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);

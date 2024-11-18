@@ -45,6 +45,7 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_CARDINALITY));
 			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_ROWS_SCANNED));
 			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_TIMING));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_NAME));
 			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_TYPE));
 		} else {
 			REQUIRE(key_str != EnumUtil::ToString(MetricsType::QUERY_NAME));
@@ -54,6 +55,7 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 		}
 
 		if (key_str == EnumUtil::ToString(MetricsType::QUERY_NAME) ||
+		    key_str == EnumUtil::ToString(MetricsType::OPERATOR_NAME) ||
 		    key_str == EnumUtil::ToString(MetricsType::OPERATOR_TYPE) ||
 		    key_str == EnumUtil::ToString(MetricsType::EXTRA_INFO)) {
 			REQUIRE(!value_str.empty());

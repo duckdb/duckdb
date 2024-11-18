@@ -16,9 +16,9 @@
 namespace duckdb {
 
 bool ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> &source,
-                                     const LogicalType &sql_type) {
+                                     const LogicalType &sql_type, CollationType type) {
 	auto &collation_binding = CollationBinding::Get(context);
-	return collation_binding.PushCollation(context, source, sql_type);
+	return collation_binding.PushCollation(context, source, sql_type, type);
 }
 
 void ExpressionBinder::TestCollation(ClientContext &context, const string &collation) {

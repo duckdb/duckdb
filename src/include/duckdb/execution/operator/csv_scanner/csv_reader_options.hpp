@@ -113,6 +113,8 @@ struct CSVReaderOptions {
 	//! If we should attempt to run parallel scanning over one file
 	bool parallel = true;
 
+	//! By default, our encoding is always UTF-8
+	string encoding = "utf-8";
 	//! User defined parameters for the csv function concatenated on a string
 	string user_defined_parameters;
 
@@ -143,7 +145,6 @@ struct CSVReaderOptions {
 	void SetEscape(const string &escape);
 
 	idx_t GetSkipRows() const;
-
 	void SetSkipRows(int64_t rows);
 
 	void SetQuote(const string &quote);
@@ -158,6 +159,10 @@ struct CSVReaderOptions {
 
 	string GetNewline() const;
 	void SetNewline(const string &input);
+
+	bool GetRFC4180() const;
+	void SetRFC4180(bool rfc4180);
+
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
 	bool SetBaseOption(const string &loption, const Value &value, bool write_option = false);

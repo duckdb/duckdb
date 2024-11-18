@@ -72,15 +72,16 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	auto &get = plan->Cast<LogicalGet>();
 	auto &column_ids = get.GetColumnIds();
 	for (auto &column_id : column_ids) {
-		if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+		if (column_id.IsRowIdColumn()) {
 			throw BinderException("cannot create an index on the rowid");
 		}
-		create_index_info->scan_types.push_back(get.returned_types[column_id]);
+		auto col_id = column_id.GetPrimaryIndex();
+		create_index_info->column_ids.push_back(col_id);
+		create_index_info->scan_types.push_back(get.returned_types[col_id]);
 	}
 
 	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
 	create_index_info->names = get.names;
-	create_index_info->column_ids = column_ids;
 	create_index_info->schema = table_entry.schema.name;
 
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();

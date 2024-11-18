@@ -9,7 +9,7 @@ struct ReduceExecuteInfo {
 	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context)
 	    : left_slice(make_uniq<Vector>(*info.child_vector)) {
 		SelectionVector left_vector(info.row_count);
-		active_rows.Resize(0, info.row_count);
+		active_rows.Resize(info.row_count);
 		active_rows.SetAllValid(info.row_count);
 
 		left_sel.Initialize(info.row_count);

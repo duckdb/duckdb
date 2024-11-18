@@ -250,7 +250,7 @@ idx_t duckdb_appender_column_count(duckdb_appender appender) {
 		return 0;
 	}
 
-	return wrapper->appender->GetTypes().size();
+	return wrapper->appender->GetActiveTypes().size();
 }
 
 duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx) {
@@ -263,7 +263,8 @@ duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t 
 		return nullptr;
 	}
 
-	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(wrapper->appender->GetTypes()[col_idx]));
+	auto &logical_type = wrapper->appender->GetActiveTypes()[col_idx];
+	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(logical_type));
 }
 
 duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk) {

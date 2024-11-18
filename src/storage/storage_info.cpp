@@ -34,7 +34,7 @@ static const StorageVersionInfo storage_version_info[] = {
 // START OF SERIALIZATION VERSION INFO
 static const SerializationVersionInfo serialization_version_info[] = {
     {"v0.10.0", 1}, {"v0.10.1", 1}, {"v0.10.2", 1}, {"v0.10.3", 2}, {"v1.0.0", 2}, {"v1.1.0", 3},
-    {"v1.1.1", 3},  {"v1.1.2", 3},  {"v1.1.3", 3},  {"latest", 3},  {nullptr, 0}};
+    {"v1.1.1", 3},  {"v1.1.2", 3},  {"v1.1.3", 3},  {"v1.2.0", 4},  {"latest", 4}, {nullptr, 0}};
 // END OF SERIALIZATION VERSION INFO
 
 optional_idx GetStorageVersion(const char *version_string) {

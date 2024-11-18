@@ -573,19 +573,21 @@ const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 		{ static_cast<uint32_t>(CSVState::QUOTED_NEW_LINE), "QUOTED_NEW_LINE" },
 		{ static_cast<uint32_t>(CSVState::EMPTY_SPACE), "EMPTY_SPACE" },
 		{ static_cast<uint32_t>(CSVState::COMMENT), "COMMENT" },
-		{ static_cast<uint32_t>(CSVState::STANDARD_NEWLINE), "STANDARD_NEWLINE" }
+		{ static_cast<uint32_t>(CSVState::STANDARD_NEWLINE), "STANDARD_NEWLINE" },
+		{ static_cast<uint32_t>(CSVState::UNQUOTED_ESCAPE), "UNQUOTED_ESCAPE" },
+		{ static_cast<uint32_t>(CSVState::ESCAPED_RETURN), "ESCAPED_RETURN" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value) {
-	return StringUtil::EnumToString(GetCSVStateValues(), 13, "CSVState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCSVStateValues(), 15, "CSVState", static_cast<uint32_t>(value));
 }
 
 template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value) {
-	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 13, "CSVState", value));
+	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 15, "CSVState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCTEMaterializeValues() {
@@ -1659,6 +1661,25 @@ ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value) {
 	return static_cast<ForeignKeyType>(StringUtil::StringToEnum(GetForeignKeyTypeValues(), 3, "ForeignKeyType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetFunctionCollationHandlingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FunctionCollationHandling::PROPAGATE_COLLATIONS), "PROPAGATE_COLLATIONS" },
+		{ static_cast<uint32_t>(FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS), "PUSH_COMBINABLE_COLLATIONS" },
+		{ static_cast<uint32_t>(FunctionCollationHandling::IGNORE_COLLATIONS), "IGNORE_COLLATIONS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandling value) {
+	return StringUtil::EnumToString(GetFunctionCollationHandlingValues(), 3, "FunctionCollationHandling", static_cast<uint32_t>(value));
+}
+
+template<>
+FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const char *value) {
+	return static_cast<FunctionCollationHandling>(StringUtil::StringToEnum(GetFunctionCollationHandlingValues(), 3, "FunctionCollationHandling", value));
+}
+
 const StringUtil::EnumStringLiteral *GetFunctionNullHandlingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FunctionNullHandling::DEFAULT_NULL_HANDLING), "DEFAULT_NULL_HANDLING" },
@@ -2157,9 +2178,10 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_ROWS_SCANNED), "CUMULATIVE_ROWS_SCANNED" },
 		{ static_cast<uint32_t>(MetricsType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
 		{ static_cast<uint32_t>(MetricsType::OPERATOR_TIMING), "OPERATOR_TIMING" },
+		{ static_cast<uint32_t>(MetricsType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
 		{ static_cast<uint32_t>(MetricsType::LATENCY), "LATENCY" },
 		{ static_cast<uint32_t>(MetricsType::ROWS_RETURNED), "ROWS_RETURNED" },
-		{ static_cast<uint32_t>(MetricsType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
+		{ static_cast<uint32_t>(MetricsType::OPERATOR_NAME), "OPERATOR_NAME" },
 		{ static_cast<uint32_t>(MetricsType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricsType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricsType::PLANNER), "PLANNER" },
@@ -2171,6 +2193,7 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_EXPRESSION_REWRITER), "OPTIMIZER_EXPRESSION_REWRITER" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_FILTER_PULLUP), "OPTIMIZER_FILTER_PULLUP" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_FILTER_PUSHDOWN), "OPTIMIZER_FILTER_PUSHDOWN" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP), "OPTIMIZER_EMPTY_RESULT_PULLUP" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_CTE_FILTER_PUSHER), "OPTIMIZER_CTE_FILTER_PUSHER" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_REGEX_RANGE), "OPTIMIZER_REGEX_RANGE" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_IN_CLAUSE), "OPTIMIZER_IN_CLAUSE" },
@@ -2184,27 +2207,26 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_COLUMN_LIFETIME), "OPTIMIZER_COLUMN_LIFETIME" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE), "OPTIMIZER_BUILD_SIDE_PROBE_SIDE" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_LIMIT_PUSHDOWN), "OPTIMIZER_LIMIT_PUSHDOWN" },
-		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN), "OPTIMIZER_SAMPLING_PUSHDOWN" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_TOP_N), "OPTIMIZER_TOP_N" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION), "OPTIMIZER_COMPRESSED_MATERIALIZATION" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_DUPLICATE_GROUPS), "OPTIMIZER_DUPLICATE_GROUPS" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_REORDER_FILTER), "OPTIMIZER_REORDER_FILTER" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN), "OPTIMIZER_SAMPLING_PUSHDOWN" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN), "OPTIMIZER_JOIN_FILTER_PUSHDOWN" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_EXTENSION), "OPTIMIZER_EXTENSION" },
-		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_MATERIALIZED_CTE), "OPTIMIZER_MATERIALIZED_CTE" },
-		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP), "OPTIMIZER_EMPTY_RESULT_PULLUP" }
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_MATERIALIZED_CTE), "OPTIMIZER_MATERIALIZED_CTE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
-	return StringUtil::EnumToString(GetMetricsTypeValues(), 46, "MetricsType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricsTypeValues(), 47, "MetricsType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
-	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 46, "MetricsType", value));
+	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 47, "MetricsType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {
@@ -3239,19 +3261,20 @@ const StringUtil::EnumStringLiteral *GetSimplifiedTokenTypeValues() {
 		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT), "SIMPLIFIED_TOKEN_STRING_CONSTANT" },
 		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR), "SIMPLIFIED_TOKEN_OPERATOR" },
 		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD), "SIMPLIFIED_TOKEN_KEYWORD" },
-		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT), "SIMPLIFIED_TOKEN_COMMENT" }
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT), "SIMPLIFIED_TOKEN_COMMENT" },
+		{ static_cast<uint32_t>(SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR), "SIMPLIFIED_TOKEN_ERROR" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<SimplifiedTokenType>(SimplifiedTokenType value) {
-	return StringUtil::EnumToString(GetSimplifiedTokenTypeValues(), 6, "SimplifiedTokenType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSimplifiedTokenTypeValues(), 7, "SimplifiedTokenType", static_cast<uint32_t>(value));
 }
 
 template<>
 SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value) {
-	return static_cast<SimplifiedTokenType>(StringUtil::StringToEnum(GetSimplifiedTokenTypeValues(), 6, "SimplifiedTokenType", value));
+	return static_cast<SimplifiedTokenType>(StringUtil::StringToEnum(GetSimplifiedTokenTypeValues(), 7, "SimplifiedTokenType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSinkCombineResultTypeValues() {

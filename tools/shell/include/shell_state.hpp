@@ -52,6 +52,8 @@ enum class RenderMode : uint32_t {
 	DUCKBOX    /* Unicode box drawing - using DuckDB's own renderer */
 };
 
+enum class PrintOutput { STDOUT, STDERR };
+
 /*
 ** These are the allowed shellFlgs values
 */
@@ -74,6 +76,9 @@ enum class RenderMode : uint32_t {
 ** instance of the following structure.
 */
 struct ShellState {
+public:
+	ShellState();
+
 	sqlite3 *db = nullptr;                    /* The database */
 	uint8_t openMode = 0;                     /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
 	uint8_t doXdgOpen = 0;                    /* Invoke start/open/xdg-open in output_reset() */
@@ -106,6 +111,10 @@ struct ShellState {
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
 	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
+	//! Decimal separator (if any)
+	char decimal_separator = '\0';
+	//! Thousand separator (if any)
+	char thousand_separator = '\0';
 
 public:
 	void PushOutputMode();
@@ -142,6 +151,8 @@ public:
 	void SetTableName(const char *zName);
 	int RunTableDumpQuery(const char *zSelect);
 	void PrintValue(const char *str);
+	void Print(PrintOutput output, const char *str);
+	void Print(PrintOutput output, const string &str);
 	void Print(const char *str);
 	void Print(const string &str);
 	void PrintPadded(const char *str, idx_t len);
@@ -154,6 +165,9 @@ public:
 	void ExecutePreparedStatementColumnar(sqlite3_stmt *pStmt);
 	char **TableColumnList(const char *zTab);
 	void ExecutePreparedStatement(sqlite3_stmt *pStmt);
+
+	void PrintDatabaseError(const char *zErr);
+	int ShellDatabaseError(sqlite3 *db);
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
