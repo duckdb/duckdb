@@ -7,16 +7,16 @@ include_directories(include)
 # Configure extension: the minimum CAPI version where the extension still
 # compiles should be chosen here
 set(EXTENSION_NAME demo_capi)
-set(CAPI_MAJOR_VERSION 0)
-set(CAPI_MINOR_VERSION 0)
-set(CAPI_PATCH_VERSION 1)
+set(CAPI_MAJOR_VERSION 1)
+set(CAPI_MINOR_VERSION 2)
+set(CAPI_PATCH_VERSION 0)
 
 # Generate semver string
 set(CAPI_VERSION
     v${CAPI_MAJOR_VERSION}.${CAPI_MINOR_VERSION}.${CAPI_PATCH_VERSION})
 
 # Set the dev version to allow using the unstable API
-# add_definitions(-DDUCKDB_EXTENSION_API_VERSION_DEV)
+#add_definitions(-DDUCKDB_EXTENSION_API_VERSION_DEV)
 
 # Set the version definitions. These prevent compilation if a function is used
 # that is added in a version > CAPI_VERSION

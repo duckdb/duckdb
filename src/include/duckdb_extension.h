@@ -41,11 +41,12 @@
 // Versioning
 //===--------------------------------------------------------------------===//
 //! Set version to latest if no explicit version is defined
+
 #if !defined(DUCKDB_EXTENSION_API_VERSION_MAJOR) && !defined(DUCKDB_EXTENSION_API_VERSION_MINOR) &&                    \
     !defined(DUCKDB_EXTENSION_API_VERSION_PATCH)
-#define DUCKDB_EXTENSION_API_VERSION_MAJOR 0
-#define DUCKDB_EXTENSION_API_VERSION_MINOR 0
-#define DUCKDB_EXTENSION_API_VERSION_PATCH 1
+#define DUCKDB_EXTENSION_API_VERSION_MAJOR 1
+#define DUCKDB_EXTENSION_API_VERSION_MINOR 2
+#define DUCKDB_EXTENSION_API_VERSION_PATCH 0
 #elif !(defined(DUCKDB_EXTENSION_API_VERSION_MAJOR) && defined(DUCKDB_EXTENSION_API_VERSION_MINOR) &&                  \
         defined(DUCKDB_EXTENSION_API_VERSION_PATCH))
 #error "either all or none of the  DUCKDB_EXTENSION_API_VERSION_ defines should be defined"
@@ -60,15 +61,15 @@
 	                               DUCKDB_EXTENSION_API_VERSION_PATCH)
 #endif
 
-#if DUCKDB_EXTENSION_API_VERSION_MAJOR != 0
-#error "This version of the extension API header only supports API VERSION v0.x.x"
+#if DUCKDB_EXTENSION_API_VERSION_MAJOR != 1
+#error "This version of the extension API header only supports API VERSION v1.x.x"
 #endif
 
 //===--------------------------------------------------------------------===//
 // Function pointer struct
 //===--------------------------------------------------------------------===//
 typedef struct {
-#if DUCKDB_EXTENSION_API_VERSION_MINOR >= 0 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 1 // v0.0.1
+#if DUCKDB_EXTENSION_API_VERSION_MINOR >= 2 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 0 // v1.2.0
 	duckdb_state (*duckdb_open)(const char *path, duckdb_database *out_database);
 	duckdb_state (*duckdb_open_ext)(const char *path, duckdb_database *out_database, duckdb_config config,
 	                                char **out_error);
@@ -484,11 +485,6 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
-#endif
-
-#ifdef DUCKDB_EXTENSION_API_VERSION_DEV // dev
-	// WARNING! the functions below are not (yet) stable
-
 	duckdb_state (*duckdb_appender_create_ext)(duckdb_connection connection, const char *catalog, const char *schema,
 	                                           const char *table, duckdb_appender *out_appender);
 	duckdb_state (*duckdb_table_description_create_ext)(duckdb_connection connection, const char *catalog,
@@ -502,12 +498,12 @@ typedef struct {
 	duckdb_value (*duckdb_get_list_child)(duckdb_value value, idx_t index);
 #endif
 
-} duckdb_ext_api_v0;
+} duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
 // Typedefs mapping functions to struct entries
 //===--------------------------------------------------------------------===//
-// Version v0.0.1
+// Version v1.2.0
 #define duckdb_open                                    duckdb_ext_api.duckdb_open
 #define duckdb_open_ext                                duckdb_ext_api.duckdb_open_ext
 #define duckdb_close                                   duckdb_ext_api.duckdb_close
@@ -590,6 +586,7 @@ typedef struct {
 #define duckdb_nparams                                 duckdb_ext_api.duckdb_nparams
 #define duckdb_parameter_name                          duckdb_ext_api.duckdb_parameter_name
 #define duckdb_param_type                              duckdb_ext_api.duckdb_param_type
+#define duckdb_param_logical_type                      duckdb_ext_api.duckdb_param_logical_type
 #define duckdb_clear_bindings                          duckdb_ext_api.duckdb_clear_bindings
 #define duckdb_prepared_statement_type                 duckdb_ext_api.duckdb_prepared_statement_type
 #define duckdb_bind_value                              duckdb_ext_api.duckdb_bind_value
@@ -680,6 +677,10 @@ typedef struct {
 #define duckdb_get_map_size                            duckdb_ext_api.duckdb_get_map_size
 #define duckdb_get_map_key                             duckdb_ext_api.duckdb_get_map_key
 #define duckdb_get_map_value                           duckdb_ext_api.duckdb_get_map_value
+#define duckdb_is_null_value                           duckdb_ext_api.duckdb_is_null_value
+#define duckdb_create_null_value                       duckdb_ext_api.duckdb_create_null_value
+#define duckdb_get_list_size                           duckdb_ext_api.duckdb_get_list_size
+#define duckdb_get_list_child                          duckdb_ext_api.duckdb_get_list_child
 #define duckdb_create_logical_type                     duckdb_ext_api.duckdb_create_logical_type
 #define duckdb_logical_type_get_alias                  duckdb_ext_api.duckdb_logical_type_get_alias
 #define duckdb_logical_type_set_alias                  duckdb_ext_api.duckdb_logical_type_set_alias
@@ -809,6 +810,7 @@ typedef struct {
 #define duckdb_profiling_info_get_child_count       duckdb_ext_api.duckdb_profiling_info_get_child_count
 #define duckdb_profiling_info_get_child             duckdb_ext_api.duckdb_profiling_info_get_child
 #define duckdb_appender_create                      duckdb_ext_api.duckdb_appender_create
+#define duckdb_appender_create_ext                  duckdb_ext_api.duckdb_appender_create_ext
 #define duckdb_appender_column_count                duckdb_ext_api.duckdb_appender_column_count
 #define duckdb_appender_column_type                 duckdb_ext_api.duckdb_appender_column_type
 #define duckdb_appender_error                       duckdb_ext_api.duckdb_appender_error
@@ -841,9 +843,11 @@ typedef struct {
 #define duckdb_append_null                          duckdb_ext_api.duckdb_append_null
 #define duckdb_append_data_chunk                    duckdb_ext_api.duckdb_append_data_chunk
 #define duckdb_table_description_create             duckdb_ext_api.duckdb_table_description_create
+#define duckdb_table_description_create_ext         duckdb_ext_api.duckdb_table_description_create_ext
 #define duckdb_table_description_destroy            duckdb_ext_api.duckdb_table_description_destroy
 #define duckdb_table_description_error              duckdb_ext_api.duckdb_table_description_error
 #define duckdb_column_has_default                   duckdb_ext_api.duckdb_column_has_default
+#define duckdb_table_description_get_column_name    duckdb_ext_api.duckdb_table_description_get_column_name
 #define duckdb_query_arrow                          duckdb_ext_api.duckdb_query_arrow
 #define duckdb_query_arrow_schema                   duckdb_ext_api.duckdb_query_arrow_schema
 #define duckdb_prepared_arrow_schema                duckdb_ext_api.duckdb_prepared_arrow_schema
@@ -881,31 +885,21 @@ typedef struct {
 #define duckdb_register_cast_function               duckdb_ext_api.duckdb_register_cast_function
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
 
-// Version dev
-#define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
-#define duckdb_is_null_value                     duckdb_ext_api.duckdb_is_null_value
-#define duckdb_create_null_value                 duckdb_ext_api.duckdb_create_null_value
-#define duckdb_get_list_size                     duckdb_ext_api.duckdb_get_list_size
-#define duckdb_get_list_child                    duckdb_ext_api.duckdb_get_list_child
-#define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
-#define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
-#define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name
-
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
 //===--------------------------------------------------------------------===//
 // This goes in the c/c++ file containing the entrypoint (handle
-#define DUCKDB_EXTENSION_GLOBAL duckdb_ext_api_v0 duckdb_ext_api = {0};
+#define DUCKDB_EXTENSION_GLOBAL duckdb_ext_api_v1 duckdb_ext_api = {0};
 // Initializes the C Extension API: First thing to call in the extension entrypoint
 #define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)                                                   \
-	duckdb_ext_api_v0 *res = (duckdb_ext_api_v0 *)access->get_api(info, minimum_api_version);                          \
+	duckdb_ext_api_v1 *res = (duckdb_ext_api_v1 *)access->get_api(info, minimum_api_version);                          \
 	if (!res) {                                                                                                        \
 		return false;                                                                                                  \
 	};                                                                                                                 \
 	duckdb_ext_api = *res;
 
 // Place in global scope of any C/C++ file that needs to access the extension API
-#define DUCKDB_EXTENSION_EXTERN extern duckdb_ext_api_v0 duckdb_ext_api;
+#define DUCKDB_EXTENSION_EXTERN extern duckdb_ext_api_v1 duckdb_ext_api;
 
 //===--------------------------------------------------------------------===//
 // Entrypoint Macros

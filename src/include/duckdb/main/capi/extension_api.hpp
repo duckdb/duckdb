@@ -6,7 +6,7 @@
 // Function pointer struct
 //===--------------------------------------------------------------------===//
 typedef struct {
-	// v0.0.1
+	// v1.2.0
 	duckdb_state (*duckdb_open)(const char *path, duckdb_database *out_database);
 	duckdb_state (*duckdb_open_ext)(const char *path, duckdb_database *out_database, duckdb_config config,
 	                                char **out_error);
@@ -422,9 +422,6 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
-	// dev
-	// WARNING! the functions below are not (yet) stable
-
 	duckdb_state (*duckdb_appender_create_ext)(duckdb_connection connection, const char *catalog, const char *schema,
 	                                           const char *table, duckdb_appender *out_appender);
 	duckdb_state (*duckdb_table_description_create_ext)(duckdb_connection connection, const char *catalog,
@@ -436,13 +433,13 @@ typedef struct {
 	duckdb_value (*duckdb_create_null_value)();
 	idx_t (*duckdb_get_list_size)(duckdb_value value);
 	duckdb_value (*duckdb_get_list_child)(duckdb_value value, idx_t index);
-} duckdb_ext_api_v0;
+} duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
 // Struct Create Method
 //===--------------------------------------------------------------------===//
-inline duckdb_ext_api_v0 CreateAPIv0() {
-	duckdb_ext_api_v0 result;
+inline duckdb_ext_api_v1 CreateAPIv1() {
+	duckdb_ext_api_v1 result;
 	result.duckdb_open = duckdb_open;
 	result.duckdb_open_ext = duckdb_open_ext;
 	result.duckdb_close = duckdb_close;
@@ -825,7 +822,7 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	return result;
 }
 
-#define DUCKDB_EXTENSION_API_VERSION_MAJOR  0
-#define DUCKDB_EXTENSION_API_VERSION_MINOR  0
-#define DUCKDB_EXTENSION_API_VERSION_PATCH  1
-#define DUCKDB_EXTENSION_API_VERSION_STRING "v0.0.1"
+#define DUCKDB_EXTENSION_API_VERSION_MAJOR  1
+#define DUCKDB_EXTENSION_API_VERSION_MINOR  2
+#define DUCKDB_EXTENSION_API_VERSION_PATCH  0
+#define DUCKDB_EXTENSION_API_VERSION_STRING "v1.2.0"

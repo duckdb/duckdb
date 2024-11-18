@@ -48,7 +48,7 @@ struct DuckDBExtensionLoadState {
 
 	//! The function pointer struct passed to the extension. The extension is expected to copy this struct during
 	//! initialization
-	duckdb_ext_api_v0 api_struct;
+	duckdb_ext_api_v1 api_struct;
 
 	//! Error handling
 	bool has_error = false;
@@ -114,7 +114,7 @@ struct ExtensionAccess {
 			return nullptr;
 		}
 
-		load_state.api_struct = load_state.db.GetExtensionAPIV0();
+		load_state.api_struct = load_state.db.GetExtensionAPIV1();
 		return &load_state.api_struct;
 	}
 };

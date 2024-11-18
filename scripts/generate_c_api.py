@@ -26,13 +26,13 @@ DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE = 'src/include/duckdb/main/capi/extension_ap
 ALLOW_UNCOMMENTED_PARAMS = True
 
 DUCKDB_EXT_API_VAR_NAME = 'duckdb_ext_api'
-DUCKDB_EXT_API_STRUCT_TYPENAME = 'duckdb_ext_api_v0'
+DUCKDB_EXT_API_STRUCT_TYPENAME = 'duckdb_ext_api_v1'
 
 DEV_VERSION_TAG = 'dev'
 
 # Define the extension struct
-EXT_API_DEFINITION_PATTERN = 'src/include/duckdb/main/capi/header_generation/apis/v0/*/*.json'
-EXT_API_EXCLUSION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/v0/exclusion_list.json'
+EXT_API_DEFINITION_PATTERN = 'src/include/duckdb/main/capi/header_generation/apis/v1/*/*.json'
+EXT_API_EXCLUSION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/v1/exclusion_list.json'
 
 # The JSON files that define all available CAPI functions
 CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation/functions/**/*.json'
@@ -587,6 +587,7 @@ def create_duckdb_ext_h(
     # Create the versioning defines
     major, minor, patch = parse_semver(ext_api_version)
     versioning_defines = f"""//! Set version to latest if no explicit version is defined
+
 #if !defined(DUCKDB_EXTENSION_API_VERSION_MAJOR) && !defined(DUCKDB_EXTENSION_API_VERSION_MINOR) && !defined(DUCKDB_EXTENSION_API_VERSION_PATCH)
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR {major}
 #define DUCKDB_EXTENSION_API_VERSION_MINOR {minor}
@@ -680,7 +681,6 @@ def create_duckdb_ext_h(
     with open(file, 'w+') as f:
         f.write(duckdb_ext_h)
 
-
 # Create duckdb_extension_internal.hpp
 def create_duckdb_ext_internal_h(ext_api_version, function_groups, function_map, ext_api_definitions, exclusion_set):
     duckdb_ext_h = fetch_header_template_ext()
@@ -690,7 +690,7 @@ def create_duckdb_ext_internal_h(ext_api_version, function_groups, function_map,
         ext_api_definitions,
         exclusion_set,
         with_create_method=True,
-        create_method_name='CreateAPIv0',
+        create_method_name='CreateAPIv1',
     )
     duckdb_ext_h += create_version_defines(ext_api_version)
 
