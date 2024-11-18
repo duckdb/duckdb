@@ -826,7 +826,7 @@ public:
 				}
 
 #if false
-				// TODO: optimize this
+				// FIXME: optimize this
 				if (array_index + to_scan < count && array[array_index] == scanned_count && array[array_index + to_scan] == scanned_count + to_scan) {
 					// All entries are present in the array, can set all bits to 0 directly
 					for (idx_t i = 0; i < to_scan; i++) {
