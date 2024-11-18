@@ -1,5 +1,5 @@
 # name: benchmark/micro/compression/roaring/roaring_inverted_array_store.benchmark
-# description: Writing 250k tuples, with validity masks compressed with Roaring Bitmap Compression (Array Containers (inverted))
+# description: Writing 250m tuples, with validity masks compressed with Roaring Bitmap Compression (Array Containers (inverted))
 # group: [roaring]
 
 name Roaring Scan Array Container Inverted
