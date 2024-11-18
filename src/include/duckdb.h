@@ -3554,18 +3554,20 @@ DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profilin
 // Appender
 //===--------------------------------------------------------------------===//
 
-// Appenders are the most efficient way of loading data into DuckDB from within the C interface, and are recommended for
-// fast data loading. The appender is much faster than using prepared statements or individual `INSERT INTO` statements.
+// Appenders are the most efficient way of loading data into DuckDB from within the C API.
+// They are recommended for fast data loading as they perform better than prepared statements or individual `INSERT
+// INTO` statements.
 
-// Appends are made in row-wise format. For every column, a `duckdb_append_[type]` call should be made, after which
-// the row should be finished by calling `duckdb_appender_end_row`. After all rows have been appended,
-// `duckdb_appender_destroy` should be used to finalize the appender and clean up the resulting memory.
+// Appends are possible in row-wise format, and by appending entire data chunks.
 
-// Instead of appending rows with `duckdb_appender_end_row`, it is also possible to fill and append
-// chunks-at-a-time.
+// Row-wise: for every column, a `duckdb_append_[type]` call should be made. After finishing all appends to a row, call
+// `duckdb_appender_end_row`.
 
-// Note that `duckdb_appender_destroy` should always be called on the resulting appender, even if the function returns
-// `DuckDBError`.
+// Chunk-wise: Consecutively call `duckdb_append_data_chunk` until all chunks have been appended.
+
+// After all data has been appended, call `duckdb_appender_close` to finalize the appender followed by
+// `duckdb_appender_destroy` to clean up the memory.
+
 /*!
 Creates an appender object.
 
@@ -3598,7 +3600,7 @@ DUCKDB_API duckdb_state duckdb_appender_create_ext(duckdb_connection connection,
 
 /*!
 Returns the number of columns that belong to the appender.
-If there is no custom column configuration, then this equals the table's physical columns.
+If there is no active column list, then this equals the table's physical columns.
 
 * @param appender The appender to get the column count from.
 * @return The number of columns in the data chunks.
@@ -3606,13 +3608,14 @@ If there is no custom column configuration, then this equals the table's physica
 DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
 
 /*!
-Returns the type of the column at the specified index.
+Returns the type of the column at the specified index. This is either a type in the active column list, or the same type
+as a column in the receiving table.
 
-Note: The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+Note: The resulting type must be destroyed with `duckdb_destroy_logical_type`.
 
 * @param appender The appender to get the column type from.
 * @param col_idx The index of the column to get the type of.
-* @return The duckdb_logical_type of the column.
+* @return The `duckdb_logical_type` of the column.
 */
 DUCKDB_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
 
@@ -3660,6 +3663,26 @@ before destroying the appender, if you need insights into the specific error.
 * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_appender_destroy(duckdb_appender *appender);
+
+/*!
+Appends a column to the active column list of the appender. Immediately flushes all previous data.
+
+The active column list specifies all columns that are expected when flushing the data. Any non-active columns are filled
+with their default values, or NULL.
+
+* @param appender The appender to add the column to.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_appender_add_column(duckdb_appender appender, const char *name);
+
+/*!
+Removes all columns from the active column list of the appender, resetting the appender to treat all columns as active.
+Immediately flushes all previous data.
+
+* @param appender The appender to clear the columns from.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_appender_clear_columns(duckdb_appender appender);
 
 /*!
 A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
@@ -3786,14 +3809,11 @@ DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
 
 /*!
 Appends a pre-filled data chunk to the specified appender.
-
-The types of the data chunk must exactly match the types of the table, no casting is performed.
-If the types do not match or the appender is in an invalid state, DuckDBError is returned.
-If the append is successful, DuckDBSuccess is returned.
+ Attempts casting, if the data chunk types do not match the active appender types.
 
 * @param appender The appender to append to.
 * @param chunk The data chunk to append.
-* @return The return state.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk);
 

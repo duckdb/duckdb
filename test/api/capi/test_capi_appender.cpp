@@ -674,6 +674,7 @@ TEST_CASE("Test append timestamp in C API", "[capi]") {
 	result = tester.Query("SELECT * FROM test");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<string>(0, 0) == "2022-04-09 15:56:37.544");
+	tester.Cleanup();
 }
 
 TEST_CASE("Test append to different catalog in C API") {
@@ -703,5 +704,73 @@ TEST_CASE("Test append to different catalog in C API") {
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 400);
 
 	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+	tester.Cleanup();
+}
+
+TEST_CASE("Test appending with an active column list in the C API") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (random()))");
+	duckdb_appender appender;
+
+	auto status = duckdb_appender_create_ext(tester.connection, nullptr, nullptr, "tbl", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	REQUIRE(duckdb_appender_add_column(appender, "hello") == DuckDBError);
+	TestAppenderError(appender, "the column must exist in the table");
+	REQUIRE(duckdb_appender_add_column(appender, "j") == DuckDBSuccess);
+
+	duckdb_logical_type types[1];
+	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto data_chunk = duckdb_create_data_chunk(types, 1);
+
+	auto col = duckdb_data_chunk_get_vector(data_chunk, 0);
+	auto col_data = reinterpret_cast<int32_t *>(duckdb_vector_get_data(col));
+	col_data[0] = 15;
+	duckdb_data_chunk_set_size(data_chunk, 1);
+
+	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBSuccess);
+	duckdb_destroy_data_chunk(&data_chunk);
+	duckdb_destroy_logical_type(&types[0]);
+
+	REQUIRE(duckdb_appender_clear_columns(appender) == DuckDBSuccess);
+
+	duckdb_logical_type types_all[3];
+	types_all[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	types_all[1] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	types_all[2] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto data_chunk_all = duckdb_create_data_chunk(types_all, 3);
+
+	for (idx_t i = 0; i < 3; i++) {
+		col = duckdb_data_chunk_get_vector(data_chunk_all, i);
+		col_data = reinterpret_cast<int32_t *>(duckdb_vector_get_data(col));
+		col_data[0] = 42;
+	}
+	duckdb_data_chunk_set_size(data_chunk_all, 1);
+
+	REQUIRE(duckdb_append_data_chunk(appender, data_chunk_all) == DuckDBSuccess);
+	duckdb_destroy_data_chunk(&data_chunk_all);
+	duckdb_destroy_logical_type(&types_all[0]);
+	duckdb_destroy_logical_type(&types_all[0]);
+	duckdb_destroy_logical_type(&types_all[0]);
+
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	result = tester.Query("SELECT i, j, k, l IS NOT NULL FROM tbl");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int32_t>(0, 0) == 4);
+	REQUIRE(result->Fetch<int32_t>(1, 0) == 15);
+	REQUIRE(result->Fetch<int32_t>(2, 0) == 30);
+	REQUIRE(result->Fetch<bool>(3, 0) == true);
+	REQUIRE(result->Fetch<int32_t>(0, 1) == 42);
+	REQUIRE(result->Fetch<int32_t>(1, 1) == 42);
+	REQUIRE(result->Fetch<int32_t>(2, 1) == 42);
+	REQUIRE(result->Fetch<bool>(3, 1) == true);
+
 	tester.Cleanup();
 }

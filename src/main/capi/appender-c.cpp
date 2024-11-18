@@ -82,6 +82,14 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 	return DuckDBSuccess;
 }
 
+duckdb_state duckdb_appender_add_column(duckdb_appender appender, const char *name) {
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.AddColumn(name); });
+}
+
+duckdb_state duckdb_appender_clear_columns(duckdb_appender appender) {
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.ClearColumns(); });
+}
+
 const char *duckdb_appender_error(duckdb_appender appender) {
 	if (!appender) {
 		return nullptr;
