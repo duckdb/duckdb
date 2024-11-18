@@ -754,8 +754,8 @@ TEST_CASE("Test appending with an active column list in the C API") {
 	REQUIRE(duckdb_append_data_chunk(appender, data_chunk_all) == DuckDBSuccess);
 	duckdb_destroy_data_chunk(&data_chunk_all);
 	duckdb_destroy_logical_type(&types_all[0]);
-	duckdb_destroy_logical_type(&types_all[0]);
-	duckdb_destroy_logical_type(&types_all[0]);
+	duckdb_destroy_logical_type(&types_all[1]);
+	duckdb_destroy_logical_type(&types_all[2]);
 
 	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
 	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
