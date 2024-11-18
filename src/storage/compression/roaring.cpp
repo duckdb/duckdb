@@ -545,8 +545,7 @@ public:
 		// Override the pointer to write directly into the block
 		if (metadata.IsUncompressed()) {
 			data_ptr = reinterpret_cast<data_ptr_t>(AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr)));
-			FastMemset(data_ptr, static_cast<uint32_t>(-1),
-			           sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
+			FastMemset(data_ptr, ~0, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
 			container_state.OverrideUncompressed(data_ptr);
 			data_ptr += (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
 		} else if (metadata.IsRun()) {
