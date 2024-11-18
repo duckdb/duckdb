@@ -329,7 +329,6 @@ GraphTableStmt:
 			}
 		;
 
-/*
 ColumnSpec:
 		target_el					{ $$ = list_make2(makeInteger(PG_COLUMNSPEC_EXPR), $1); }
 		;
@@ -338,7 +337,6 @@ ColumnList:
 		|
 		ColumnList ',' ColumnSpec	{ $$ = lappend($1, $3); }
 		;
-*/
 
 KeepOptional:
 		KEEP PathPrefix				{ $$ = $2; }
@@ -742,36 +740,6 @@ IsOrColon:
 		':'
         ;
 
-/* LAMBDA_ARROW -> is a token already. Allow it to be parsed here */
-/* not to modify the lexer we allow spaces in arrows, e.g.  - >  */
-ArrowRight:
-		'-'                     	{ $$ = "-"; }
-	|
-		'-' '>'                 	{ $$ = "->"; }
-	|
-		LAMBDA_ARROW				{ $$ = "->"; }
-		;
-
-ArrowLeftBracket:
-		'-' '['                    	{ $$ = "-"; }
-	|
-		'<' '-' '['					{ $$ = "<-"; }
-		;
-
-AbbreviatedEdge:
-		'<' ArrowRight
-			{
-				char* dir = $2;
-				$$ = (dir[1] == '>')?PG_MATCH_EDGE_LEFT_RIGHT:PG_MATCH_EDGE_LEFT;
-			}
-	|
-		ArrowRight
-			{
-				char* dir = $1;
-				$$ = (dir[1] == '>')?PG_MATCH_EDGE_RIGHT:PG_MATCH_EDGE_ANY;
-			}
-		;
-
 VariableOptional:
 		PGQ_IDENT 						{ $$ = $1; }
 	|
@@ -789,48 +757,116 @@ FullElementSpec:
 			}
 		;
 
-EdgePattern:
-        AbbreviatedEdge KleeneOptional
-			{
-				PGSubPath *p = (PGSubPath*) $2;
-				PGPathElement *n = makeNode(PGPathElement);
-				n->label_expr = NULL;
-				n->element_var = NULL;
-				n->match_type = (PGMatchType) $1;
-				$$ = list_make1(n);
-				if (p->lower != 1 || !p->single_bind) {
-					/* return a subpath consisting of one edge (element) */
-					p->path = $$;
-					p->path_var = NULL;
-					$$ = list_make1(p);
-				}
-			}
-	|
-        ArrowLeftBracket FullElementSpec ']' ArrowRight KleeneOptional
-			{
-				char *left = $1, *right = $4;
-				PGPathInfo* i = (PGPathInfo*) $2;
-				PGSubPath *p = (PGSubPath*) $5;
-				PGPathElement *n = makeNode(PGPathElement);
+/* we now do *not* allow spaces inside the arrows (we extended the DDB lexer in scan.l and grammar.y for this) */
+Arrow:
+        '-'
+            {   $$ = "-"; }
+    |
+        ARROW_LEFT
+            {   $$ = "<-";  }
+    |
+        LAMBDA_ARROW
+            {   $$ = "->"; }
+    |
+        ARROW_BOTH
+            {    $$ = "<->";  }
+    |
+        Op
+            {   /* DDB lexer may concatenate an arrow with + or * into an "operator" */
+                char *op = $1, *ok = NULL;
+                /* only <-, <->, -, -> are ok */
+                if (op[0] == '<') op++; /* also accept <-> */
+                if (op[0] == '-') {
+                    ok = op + 1  + (op[1] == '>');
+                }
+                /* it may optionally be followed by a single * or + */
+                if (!ok || (ok[0] && (ok[0] != '*' || ok[0] != '+' || ok[1]))) {
+                    char msg[128];
+                    snprintf(msg, 128, "PGQ expected an arrow instead of %s operator.", $1);
+                    parser_yyerror(msg);
+                }
+                $$ = $1;
+            }
+        ;
 
-				n->match_type =
-					(right[1] == '>')?
-						((left[0] == '<')?PG_MATCH_EDGE_LEFT_RIGHT:PG_MATCH_EDGE_RIGHT):
-						((left[0] == '<')?PG_MATCH_EDGE_LEFT:PG_MATCH_EDGE_ANY);
-				n->element_var = i->var_name;
-				n->label_expr = i->label_expr;
-				$$ = list_make1(n);
-				if (i->where_clause || i->cost_expr || p->lower != 1 || !p->single_bind) {
-					/* return a subpath consisting of one edge (element) */
-					p->where_clause = i->where_clause;
-					p->cost_expr = i->cost_expr;
-					p->default_value = i->default_value;
-					p->path = $$;
-					p->path_var = NULL;
-					$$ = list_make1(p);
-				}
-			}
-		;
+ArrowLeft:
+        '-' '['
+            {   $$ = "-"; }
+    |
+        ARROW_LEFT '['
+            {   $$ = "<-";  }
+        ;
+
+ArrowKleeneOptional:
+        Arrow KleeneOptional
+            {
+                PGSubPath *p = (PGSubPath*) $2;
+                char *op = $1;
+                int len = strlen(op);
+                int plus = (op[len-1] == '+');
+                int star = (op[len-1] == '*');
+                if (plus || star) { /* + or * was glued to the end of the arrow */
+                    if (!p->single_bind || p->lower != 1 || p-> upper != 1) {
+                        parser_yyerror("PGQ cannot accept + or * followed by another quantifier.");
+                    } else {
+                        p->single_bind = 0;
+                        p->lower = plus;
+                        p->upper = (1<<30);
+                    }
+                }
+                p->path = (PGList*) op; /* return the arrow temporarily in 'path'.. */
+                $$ = (PGNode*) p;
+            }
+        ;
+
+EdgePattern:
+        ArrowLeft FullElementSpec ']' ArrowKleeneOptional
+            {
+                PGSubPath *p = (PGSubPath*) $4;
+                char *left = $1;
+                char *dash = (char*) p->path;
+                PGPathInfo* i = (PGPathInfo*) $2;
+                PGPathElement *n = makeNode(PGPathElement);
+                if (dash[0] == '<') { /* ArrowKleeneOptional accepts <- but that is not ok here */
+                    parser_yyerror("PGQ cannot accept < after ] edge pattern closing.");
+                }
+                n->match_type = (dash[1] == '>')?
+                                    ((left[0] == '<')?PG_MATCH_EDGE_LEFT_RIGHT:PG_MATCH_EDGE_RIGHT):
+                                    ((left[0] == '<')?PG_MATCH_EDGE_LEFT:PG_MATCH_EDGE_ANY);
+                n->element_var = i->var_name;
+                n->label_expr = i->label_expr;
+                $$ = list_make1(n);
+                if (i->where_clause || i->cost_expr || p->lower != 1 || !p->single_bind) {
+                    /* return a subpath consisting of one edge (element) */
+                    p->where_clause = i->where_clause;
+                    p->cost_expr = i->cost_expr;
+                    p->default_value = i->default_value;
+                    p->path = $$;
+                    p->path_var = NULL;
+                    $$ = list_make1(p);
+                }
+            }
+    |
+        ArrowKleeneOptional
+            {
+                PGSubPath *p = (PGSubPath*) $1;
+                char *left = (char*) p->path;
+                PGPathElement *n = makeNode(PGPathElement);;
+                char *dash = left + (left[0] == '<');
+                n->label_expr = NULL;
+                n->element_var = NULL;
+                n->match_type = (dash[1] == '>')?
+                                   ((left[0] == '<')?PG_MATCH_EDGE_LEFT_RIGHT:PG_MATCH_EDGE_RIGHT):
+                                   ((left[0] == '<')?PG_MATCH_EDGE_LEFT:PG_MATCH_EDGE_ANY);
+                $$ = list_make1(n);
+                if (p->lower != 1 || !p->single_bind) {
+                    /* return a subpath consisting of one edge (element) */
+                    p->path = $$;
+                    p->path_var = NULL;
+                    $$ = list_make1(p);
+                }
+            }
+        ;
 
 VertexPattern:
         '(' FullElementSpec')'

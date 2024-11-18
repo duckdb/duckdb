@@ -44,9 +44,9 @@
 %type <node> AndLabelExpression
 %type <node> OrLabelExpression
 %type <node> LabelExpressionOptional
-%type <str> ArrowRight
-%type <str> ArrowLeftBracket
-%type <ival> AbbreviatedEdge
+%type <str> Arrow
+%type <str> ArrowLeft
+%type <node> ArrowKleeneOptional
 %type <str> VariableOptional
 %type <node> FullElementSpec
 %type <list> EdgePattern
