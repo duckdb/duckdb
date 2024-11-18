@@ -481,13 +481,4 @@ ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions opti
 	return std::move(info.columns);
 }
 
-LogicalType Parser::ParseLogicalType(const string &type, ParserOptions options) {
-	const auto expr_list = ParseExpressionList("CAST(NULL AS " + type + ")", options);
-	if (expr_list.size() != 1) {
-		throw ParserException("Expected a single expression");
-	}
-	CastExpression &cast_expr = expr_list.back()->Cast<CastExpression>();
-	return cast_expr.cast_type;
-}
-
 } // namespace duckdb

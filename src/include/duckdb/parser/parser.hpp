@@ -66,9 +66,6 @@ public:
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
 	static ColumnList ParseColumnList(const string &column_list, ParserOptions options = ParserOptions());
 
-	//! Parses a string to logical type
-	static LogicalType ParseLogicalType(const string &type, ParserOptions options = ParserOptions());
-
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 
 private:
