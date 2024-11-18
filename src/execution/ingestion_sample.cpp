@@ -1,5 +1,6 @@
 
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/common/types/data_chunk.hpp"
 
