@@ -885,16 +885,6 @@ public:
 					break;
 				}
 
-				if (array_index + to_scan < count && array[array_index] == scanned_count &&
-				    array[array_index + to_scan - 1] == scanned_count + to_scan - 1) {
-					// All entries are present in the array, can set all bits to 0 directly
-					idx_t start = result_offset;
-					idx_t end = start + to_scan;
-					SetInvalidRange(result_mask, start, end);
-					array_index += to_scan;
-					break;
-				}
-
 				// At least one of the entries to scan is set
 				for (; array_index < count; array_index++) {
 					if (array[array_index] >= scanned_count + to_scan) {
