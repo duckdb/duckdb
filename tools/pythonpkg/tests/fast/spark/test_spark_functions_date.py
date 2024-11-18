@@ -142,6 +142,12 @@ class TestsSparkFunctionsDate(object):
 
         assert result[0].second_num == 45
 
+    def test_last_day(self, spark):
+        df = spark.createDataFrame([('1997-02-10',)], ['d'])
+
+        res = df.select(F.last_day(df.d.cast("date")).alias('date')).collect()
+        assert res == [Row(date=date(1997, 2, 28))]
+
     def test_add_months(self, spark):
         df = spark.createDataFrame([(datetime(2024, 5, 12, 13, 30, 45), 2)], ["dt", "months"])
 

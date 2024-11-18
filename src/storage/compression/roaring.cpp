@@ -158,7 +158,7 @@ public:
 	void Append(bool null, idx_t amount = 1) {
 		if (uncompressed) {
 			if (null) {
-				ValidityMask mask(uncompressed);
+				ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
 				for (idx_t i = 0; i < amount; i++) {
 					mask.SetInvalidUnsafe(count + i);
 				}

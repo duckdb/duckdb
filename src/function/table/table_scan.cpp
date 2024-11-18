@@ -386,9 +386,10 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	});
 }
 
-string TableScanToString(const FunctionData *bind_data_p) {
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	string result = bind_data.table.name;
+InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
+	InsertionOrderPreservingMap<string> result;
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
+	result["Table"] = bind_data.table.name;
 	return result;
 }
 

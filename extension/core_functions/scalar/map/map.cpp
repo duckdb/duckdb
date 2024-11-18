@@ -165,6 +165,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	result_key_vector.Flatten(offset);
 	result_value_vector.Slice(values_child_vector, sel_values, offset);
 	result_value_vector.Flatten(offset);
+	FlatVector::Validity(ListVector::GetEntry(result)).Resize(result_child_size);
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
