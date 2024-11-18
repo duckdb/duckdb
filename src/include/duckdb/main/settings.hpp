@@ -1092,6 +1092,17 @@ struct UsernameSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ZstdMinStringLengthSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "zstd_min_string_length";
+	static constexpr const char *Description =
+	    "The (average) length at which to enable ZSTD compression, defaults to ('default_block_size' / 4)";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 //===----------------------------------------------------------------------===//
 // End of the auto-generated list of settings structures
 //===--------------------------------------------------------------------===//

@@ -196,6 +196,8 @@ struct DBConfigOptions {
 	bool initialize_default_database = true;
 	//! The set of disabled optimizers (default empty)
 	set<OptimizerType> disabled_optimizers;
+	//! The average string length required to use ZSTD compression.
+	Value zstd_min_string_length;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method

@@ -159,6 +159,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
     DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
+    DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

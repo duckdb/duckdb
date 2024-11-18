@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 // This file will not be overwritten. To implement a custom function for
-// a new setting, enable 'custom_implementation' in 'settings.json'
+// a new setting, enable 'custom_implementation' in 'src/common/settings.json'
 // for this setting. The 'update_settings_definitions.py' may include new
 // setting methods' signatures that need to be implemented in this file. You
 // can check the functions declaration in 'settings.hpp' and what is
@@ -758,6 +758,21 @@ void FileSearchPathSetting::ResetLocal(ClientContext &context) {
 Value FileSearchPathSetting::GetSetting(const ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	return Value(client_data.file_search_path);
+}
+
+//===----------------------------------------------------------------------===//
+// ZSTD Threshold
+//===----------------------------------------------------------------------===//
+void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.zstd_min_string_length = input;
+}
+
+void ZstdMinStringLengthSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.zstd_min_string_length = Value(LogicalType::UBIGINT);
+}
+
+Value ZstdMinStringLengthSetting::GetSetting(const ClientContext &context) {
+	return context.db->config.options.zstd_min_string_length;
 }
 
 //===----------------------------------------------------------------------===//

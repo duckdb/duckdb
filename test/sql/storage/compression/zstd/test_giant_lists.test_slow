@@ -18,6 +18,9 @@ pragma force_compression='zstd';
 statement ok
 pragma checkpoint_threshold='1gb';
 
+statement ok
+set zstd_min_string_length=1;
+
 # With 1.2m values per segment, this roughly creates 25 segments
 statement ok
 create table tbl as
