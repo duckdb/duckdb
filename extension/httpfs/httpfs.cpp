@@ -721,11 +721,11 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 					}
 				}
 				res = std::move(range_res);
+			} else {
+				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url,
+				                    to_string(res->code), res->error);
 			}
 		}
-	} else {
-		throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url, to_string(res->code),
-		                    res->error);
 	}
 
 	// Initialize the read buffer now that we know the file exists
@@ -763,6 +763,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 
 			// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
 			cached_file_handle->SetInitialized(length);
+
 			// We shouldn't write these to cache
 			should_write_cache = false;
 		} else {
