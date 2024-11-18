@@ -500,6 +500,9 @@ typedef struct {
 	duckdb_value (*duckdb_create_null_value)();
 	idx_t (*duckdb_get_list_size)(duckdb_value value);
 	duckdb_value (*duckdb_get_list_child)(duckdb_value value, idx_t index);
+	duckdb_value (*duckdb_create_enum_value)(duckdb_logical_type type, uint64_t value);
+	uint64_t (*duckdb_get_enum_value)(duckdb_value value);
+	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
 #endif
 
 } duckdb_ext_api_v0;
@@ -887,6 +890,9 @@ typedef struct {
 #define duckdb_create_null_value                 duckdb_ext_api.duckdb_create_null_value
 #define duckdb_get_list_size                     duckdb_ext_api.duckdb_get_list_size
 #define duckdb_get_list_child                    duckdb_ext_api.duckdb_get_list_child
+#define duckdb_create_enum_value                 duckdb_ext_api.duckdb_create_enum_value
+#define duckdb_get_enum_value                    duckdb_ext_api.duckdb_get_enum_value
+#define duckdb_get_struct_child                  duckdb_ext_api.duckdb_get_struct_child
 #define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
 #define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
 #define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name

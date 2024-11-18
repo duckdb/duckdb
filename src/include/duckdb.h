@@ -2275,6 +2275,32 @@ Returns the LIST child at index as a duckdb_value.
 */
 DUCKDB_API duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index);
 
+/*!
+Creates an enum value from a type and a value. Must be destroyed with `duckdb_destroy_value`.
+
+* @param type The type of the enum
+* @param value The value for the enum
+* @return The enum value, or nullptr.
+*/
+DUCKDB_API duckdb_value duckdb_create_enum_value(duckdb_logical_type type, uint64_t value);
+
+/*!
+Returns the enum value of the given value.
+
+* @param value A duckdb_value containing an enum
+* @return A uint64_t, or MinValue<uint64> if the value cannot be converted
+*/
+DUCKDB_API uint64_t duckdb_get_enum_value(duckdb_value value);
+
+/*!
+Returns the STRUCT child at index as a duckdb_value.
+
+* @param value The STRUCT value.
+* @param index The index of the child.
+* @return The child as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index);
+
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
 //===--------------------------------------------------------------------===//
