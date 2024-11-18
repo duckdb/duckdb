@@ -1,8 +1,9 @@
 
-#include "duckdb/execution/reservoir_sample.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
+
+#include <sys/stat.h>
 
 namespace duckdb {
 
@@ -216,14 +217,39 @@ void IngestionSample::SimpleMerge(IngestionSample &other) {
 		return;
 	}
 
-	idx_t total_samples = other.actual_sample_indexes.size() + actual_sample_indexes.size();
-	idx_t size_after_merge = MinValue(static_cast<idx_t>(FIXED_SAMPLE_SIZE), total_samples);
 	idx_t total_seen =
 	    base_reservoir_sample->num_entries_seen_total + other.base_reservoir_sample->num_entries_seen_total;
 
-	auto keep_from_this = (base_reservoir_sample->num_entries_seen_total * size_after_merge) / total_seen;
-	auto keep_from_other = size_after_merge - keep_from_this;
+	auto weight_tuples_this =
+	    static_cast<double>(base_reservoir_sample->num_entries_seen_total) / static_cast<double>(total_seen);
+	auto weight_tuples_other =
+	    static_cast<double>(other.base_reservoir_sample->num_entries_seen_total) / static_cast<double>(total_seen);
 
+	// If weights don't add up to 1, most likely a simple merge occured and no new smaples were added.
+	// if that is the case, add the missing weight to the lower weighted sample to adjust.
+	if (weight_tuples_this + weight_tuples_other < 1) {
+		weight_tuples_other += MaxValue<double>(weight_tuples_other, weight_tuples_this) -
+		                       MinValue<double>(weight_tuples_other, weight_tuples_this);
+	}
+
+	idx_t keep_from_this = 0;
+	idx_t keep_from_other = 0;
+	if (weight_tuples_this > weight_tuples_other) {
+		keep_from_this = MinValue<idx_t>(static_cast<idx_t>(round(FIXED_SAMPLE_SIZE * weight_tuples_this)),
+		                                 actual_sample_indexes.size());
+		keep_from_other = MinValue<idx_t>(FIXED_SAMPLE_SIZE - keep_from_this, other.actual_sample_indexes.size());
+	} else {
+		keep_from_other = MinValue<idx_t>(static_cast<idx_t>(round(FIXED_SAMPLE_SIZE * weight_tuples_other)),
+		                                  other.actual_sample_indexes.size());
+		keep_from_this = MinValue<idx_t>(FIXED_SAMPLE_SIZE - keep_from_other, actual_sample_indexes.size());
+	}
+
+	D_ASSERT(keep_from_this <= actual_sample_indexes.size());
+	D_ASSERT(keep_from_other <= other.actual_sample_indexes.size());
+	D_ASSERT(keep_from_other + keep_from_this <= FIXED_SAMPLE_SIZE);
+	idx_t size_after_merge = MinValue<idx_t>(keep_from_other + keep_from_this, FIXED_SAMPLE_SIZE);
+
+	D_ASSERT(size_after_merge <= other.actual_sample_indexes.size() + actual_sample_indexes.size());
 	SelectionVector sel(keep_from_other);
 	auto offset = sample_chunk->size();
 	for (idx_t i = keep_from_this; i < size_after_merge; i++) {
@@ -242,6 +268,7 @@ void IngestionSample::SimpleMerge(IngestionSample &other) {
 	// save a number of the tuples in THIS.
 	UpdateSampleAppend(*other.sample_chunk, sel, keep_from_other);
 	base_reservoir_sample->num_entries_seen_total += other.base_reservoir_sample->num_entries_seen_total;
+	Verify();
 }
 
 void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
@@ -538,9 +565,10 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 
 unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sample_chunk_offset,
                                                                        idx_t theoretical_chunk_length) {
-	idx_t num_to_pop = static_cast<idx_t>((static_cast<double>(theoretical_chunk_length) /
-	                                       (theoretical_chunk_length + base_reservoir_sample->num_entries_seen_total)) *
-	                                      theoretical_chunk_length);
+	idx_t num_to_pop = static_cast<idx_t>(
+	    (static_cast<double>(theoretical_chunk_length) /
+	     static_cast<double>(theoretical_chunk_length + base_reservoir_sample->num_entries_seen_total)) *
+	    static_cast<double>(theoretical_chunk_length));
 
 	unordered_map<idx_t, idx_t> replacement_indexes;
 	replacement_indexes.reserve(num_to_pop);
