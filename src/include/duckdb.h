@@ -283,10 +283,7 @@ typedef struct {
 } duckdb_time_tz_struct;
 
 //! Timestamps are stored as microseconds since 1970-01-01.
-//! duckdb_timestamp also holds TIMESTAMP_S, TIMESTAMP_MS, and TIMESTAMP_NS information.
-//! In these cases, the micros field holds the respective seconds|milliseconds|nanoseconds since 1970-01-01.
-//! Use the duckdb_from_timestamp and duckdb_to_timestamp functions to extract individual information,
-//! if duckdb_timestamp stores microseconds.
+//! Use the duckdb_from_timestamp and duckdb_to_timestamp functions to extract individual information.
 typedef struct {
 	int64_t micros;
 } duckdb_timestamp;
@@ -2005,30 +2002,6 @@ Creates a TIMESTAMP value from a duckdb_timestamp
 DUCKDB_API duckdb_value duckdb_create_timestamp(duckdb_timestamp input);
 
 /*!
-Creates a TIMESTAMP_S value from a duckdb_timestamp
-
-* @param input The timestamp value
-* @return The value. This must be destroyed with `duckdb_destroy_value`.
-*/
-DUCKDB_API duckdb_value duckdb_create_timestamp_s(duckdb_timestamp input);
-
-/*!
-Creates a TIMESTAMP_MS value from a duckdb_timestamp
-
-* @param input The timestamp value
-* @return The value. This must be destroyed with `duckdb_destroy_value`.
-*/
-DUCKDB_API duckdb_value duckdb_create_timestamp_ms(duckdb_timestamp input);
-
-/*!
-Creates a TIMESTAMP_NS value from a duckdb_timestamp
-
-* @param input The timestamp value
-* @return The value. This must be destroyed with `duckdb_destroy_value`.
-*/
-DUCKDB_API duckdb_value duckdb_create_timestamp_ns(duckdb_timestamp input);
-
-/*!
 Creates a value from an interval
 
 * @param input The interval value
@@ -2180,30 +2153,6 @@ Returns the TIMESTAMP value of the given value.
 * @return A duckdb_timestamp, or MinValue<timestamp_t> if the value cannot be converted
 */
 DUCKDB_API duckdb_timestamp duckdb_get_timestamp(duckdb_value val);
-
-/*!
-Returns the TIMESTAMP_S value of the given value.
-
-* @param val A duckdb_value containing a TIMESTAMP_S
-* @return A duckdb_timestamp, or MinValue<timestamp_t> if the value cannot be converted
-*/
-DUCKDB_API duckdb_timestamp duckdb_get_timestamp_s(duckdb_value val);
-
-/*!
-Returns the TIMESTAMP_MS value of the given value.
-
-* @param val A duckdb_value containing a TIMESTAMP_MS
-* @return A duckdb_timestamp, or MinValue<timestamp_t> if the value cannot be converted
-*/
-DUCKDB_API duckdb_timestamp duckdb_get_timestamp_ms(duckdb_value val);
-
-/*!
-Returns the TIMESTAMP_NS value of the given value.
-
-* @param val A duckdb_value containing a TIMESTAMP_NS
-* @return A duckdb_timestamp, or MinValue<timestamp_t> if the value cannot be converted
-*/
-DUCKDB_API duckdb_timestamp duckdb_get_timestamp_ns(duckdb_value val);
 
 /*!
 Returns the interval value of the given value.
