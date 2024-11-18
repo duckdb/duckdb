@@ -1,7 +1,5 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/common/reference_map.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -112,13 +110,13 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	vector<string> names;
 	// positional parameters
 	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
-		types.emplace_back(LogicalType::SQLNULL);
+		types.emplace_back(LogicalTypeId::UNKNOWN);
 		auto &param = macro_def.parameters[i]->Cast<ColumnRefExpression>();
 		names.push_back(param.GetColumnName());
 	}
 	// default parameters
 	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {
-		types.emplace_back(LogicalType::SQLNULL);
+		types.emplace_back(LogicalTypeId::UNKNOWN);
 		names.push_back(it->first);
 		// now push the defaults into the positionals
 		positionals.push_back(std::move(defaults[it->first]));

@@ -82,11 +82,11 @@
                 }
             ],
             "comment": {
-                "description": "Returns the number of columns in the table that belongs to the appender.\n\n",
+                "description": "Returns the number of columns that belong to the appender. \nIf there is no custom column configuration, then this equals the table's physical columns. \n\n",
                 "param_comments": {
                     "appender": "The appender to get the column count from."
                 },
-                "return_value": "The number of columns in the table."
+                "return_value": "The number of columns in the data chunks."
             }
         },
         {

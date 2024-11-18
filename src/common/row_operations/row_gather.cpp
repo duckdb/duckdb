@@ -35,7 +35,7 @@ static void TemplatedGatherLoop(Vector &rows, const SelectionVector &row_sel, Ve
 		auto row = ptrs[row_idx];
 		auto col_idx = col_sel.get_index(i);
 		data[col_idx] = Load<T>(row + col_offset);
-		ValidityBytes row_mask(row);
+		ValidityBytes row_mask(row, layout.ColumnCount());
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			if (build_size > STANDARD_VECTOR_SIZE && col_mask.AllValid()) {
 				//! We need to initialize the mask with the vector size.
@@ -67,7 +67,7 @@ static void GatherVarchar(Vector &rows, const SelectionVector &row_sel, Vector &
 		auto col_idx = col_sel.get_index(i);
 		auto col_ptr = row + col_offset;
 		data[col_idx] = Load<string_t>(col_ptr);
-		ValidityBytes row_mask(row);
+		ValidityBytes row_mask(row, layout.ColumnCount());
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			if (build_size > STANDARD_VECTOR_SIZE && col_mask.AllValid()) {
 				//! We need to initialize the mask with the vector size.
@@ -179,7 +179,8 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 }
 
 template <class T>
-static void TemplatedFullScanLoop(Vector &rows, Vector &col, idx_t count, idx_t col_offset, idx_t col_no) {
+static void TemplatedFullScanLoop(Vector &rows, Vector &col, idx_t count, idx_t col_offset, idx_t col_no,
+                                  idx_t column_count) {
 	// Precompute mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
@@ -192,7 +193,7 @@ static void TemplatedFullScanLoop(Vector &rows, Vector &col, idx_t count, idx_t 
 	for (idx_t i = 0; i < count; i++) {
 		auto row = ptrs[i];
 		data[i] = Load<T>(row + col_offset);
-		ValidityBytes row_mask(row);
+		ValidityBytes row_mask(row, column_count);
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
 			throw InternalException("Null value comparisons not implemented for perfect hash table yet");
 			//			col_mask.SetInvalid(i);
@@ -206,28 +207,28 @@ void RowOperations::FullScanColumn(const TupleDataLayout &layout, Vector &rows, 
 	col.SetVectorType(VectorType::FLAT_VECTOR);
 	switch (col.GetType().InternalType()) {
 	case PhysicalType::UINT8:
-		TemplatedFullScanLoop<uint8_t>(rows, col, count, col_offset, col_no);
+		TemplatedFullScanLoop<uint8_t>(rows, col, count, col_offset, col_no, layout.ColumnCount());
 		break;
 	case PhysicalType::UINT16:
-		TemplatedFullScanLoop<uint16_t>(rows, col, count, col_offset, col_no);
+		TemplatedFullScanLoop<uint16_t>(rows, col, count, col_offset, col_no, layout.ColumnCount());
 		break;
 	case PhysicalType::UINT32:
-		TemplatedFullScanLoop<uint32_t>(rows, col, count, col_offset, col_no);
+		TemplatedFullScanLoop<uint32_t>(rows, col, count, col_offset, col_no, layout.ColumnCount());
 		break;
 	case PhysicalType::UINT64:
-		TemplatedFullScanLoop<uint64_t>(rows, col, count, col_offset, col_no);
+		TemplatedFullScanLoop<uint64_t>(rows, col, count, col_offset, col_no, layout.ColumnCount());
 		break;
 	case PhysicalType::INT8:
-		TemplatedFullScanLoop<int8_t>(rows, col, count, col_offset, col_no);
+		TemplatedFullScanLoop<int8_t>(rows, col, count, col_offset, col_no, layout.ColumnCount());
 		break;
 	case PhysicalType::INT16:
-		TemplatedFullScanLoop<int16_t>(rows, col, count, col_offset, col_no);
+		TemplatedFullScanLoop<int16_t>(rows, col, count, col_offset, col_no, layout.ColumnCount());
 		break;
 	case PhysicalType::INT32:
-		TemplatedFullScanLoop<int32_t>(rows, col, count, col_offset, col_no);
+		TemplatedFullScanLoop<int32_t>(rows, col, count, col_offset, col_no, layout.ColumnCount());
 		break;
 	case PhysicalType::INT64:
-		TemplatedFullScanLoop<int64_t>(rows, col, count, col_offset, col_no);
+		TemplatedFullScanLoop<int64_t>(rows, col, count, col_offset, col_no, layout.ColumnCount());
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for RowOperations::FullScanColumn");

@@ -943,6 +943,67 @@
                 },
                 "return_value": "The child as a duckdb_value."
             }
+        },
+        {
+            "name": "duckdb_create_enum_value",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "uint64_t",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Creates an enum value from a type and a value. Must be destroyed with `duckdb_destroy_value`.\n\n",
+                "param_comments": {
+                    "type": "The type of the enum",
+                    "value": "The value for the enum"
+                },
+                "return_value": "The enum value, or nullptr."
+            }
+        },
+        {
+            "name": "duckdb_get_enum_value",
+            "return_type": "uint64_t",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Returns the enum value of the given value.\n\n",
+                "param_comments": {
+                    "value": "A duckdb_value containing an enum"
+                },
+                "return_value": "A uint64_t, or MinValue<uint64> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_struct_child",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the STRUCT child at index as a duckdb_value.\n\n",
+                "param_comments": {
+                    "value": "The STRUCT value.",
+                    "index": "The index of the child."
+                },
+                "return_value": "The child as a duckdb_value."
+            }
         }
     ]
 }
