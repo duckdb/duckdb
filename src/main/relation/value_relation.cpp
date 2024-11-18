@@ -66,6 +66,23 @@ ValueRelation::ValueRelation(const shared_ptr<RelationContextWrapper> &context, 
 	TryBindRelation(columns);
 }
 
+ValueRelation::ValueRelation(const shared_ptr<RelationContextWrapper> &context,
+                             vector<vector<unique_ptr<ParsedExpression>>> &&expressions_p, vector<string> names_p,
+                             string alias_p)
+    : Relation(context, RelationType::VALUE_LIST_RELATION), alias(std::move(alias_p)) {
+	D_ASSERT(!expressions_p.empty());
+	if (names_p.empty()) {
+		auto &first_list = expressions_p[0];
+		for (auto &expr : first_list) {
+			names_p.push_back(expr->GetName());
+		}
+	}
+	names = std::move(names_p);
+	expressions = std::move(expressions_p);
+	QueryResult::DeduplicateColumns(names);
+	TryBindRelation(columns);
+}
+
 unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
 	auto result = make_uniq<SelectNode>();
 	result->select_list.push_back(make_uniq<StarExpression>());
