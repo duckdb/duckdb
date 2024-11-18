@@ -273,10 +273,10 @@ struct MacroExtractor {
 		vector<LogicalType> results;
 		auto &macro_entry = *entry.macros[offset];
 		for (idx_t i = 0; i < macro_entry.parameters.size(); i++) {
-			results.emplace_back(LogicalType::VARCHAR);
+			results.emplace_back(LogicalType::UNKNOWN);
 		}
 		for (idx_t i = 0; i < macro_entry.default_parameters.size(); i++) {
-			results.emplace_back(LogicalType::VARCHAR);
+			results.emplace_back(LogicalType::UNKNOWN);
 		}
 		return results;
 	}
@@ -344,10 +344,10 @@ struct TableMacroExtractor {
 		vector<LogicalType> results;
 		auto &macro_entry = *entry.macros[offset];
 		for (idx_t i = 0; i < macro_entry.parameters.size(); i++) {
-			results.emplace_back(LogicalType::VARCHAR);
+			results.emplace_back(LogicalType::UNKNOWN);
 		}
 		for (idx_t i = 0; i < macro_entry.default_parameters.size(); i++) {
-			results.emplace_back(LogicalType::VARCHAR);
+			results.emplace_back(LogicalType::UNKNOWN);
 		}
 		return results;
 	}

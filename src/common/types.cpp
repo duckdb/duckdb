@@ -170,6 +170,7 @@ string LogicalTypeIdToString(LogicalTypeId type) {
 
 constexpr const LogicalTypeId LogicalType::INVALID;
 constexpr const LogicalTypeId LogicalType::SQLNULL;
+constexpr const LogicalTypeId LogicalType::UNKNOWN;
 constexpr const LogicalTypeId LogicalType::BOOLEAN;
 constexpr const LogicalTypeId LogicalType::TINYINT;
 constexpr const LogicalTypeId LogicalType::UTINYINT;
