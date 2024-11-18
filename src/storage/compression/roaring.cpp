@@ -23,6 +23,66 @@ static constexpr bool NON_NULLS = false;
 static constexpr uint16_t MAX_RUN_IDX = 63;
 static constexpr uint16_t MAX_ARRAY_IDX = 127;
 
+static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
+	D_ASSERT(end > start);
+	result.EnsureWritable();
+	auto result_data = (validity_t *)result.GetData();
+
+	if ((start % ValidityMask::BITS_PER_VALUE) != 0) {
+		// Adjust the high bits of the first entry
+
+		// +======================================+
+		// |xxxxxxxxxxxxxxxxxxxxxxxxx|            |
+		// +======================================+
+		//
+		// 'x': bits to set to 0 in the result
+
+		idx_t right_bits = start % ValidityMask::BITS_PER_VALUE;
+		idx_t bits_to_set = ValidityMask::BITS_PER_VALUE - right_bits;
+		idx_t left_bits = 0;
+		if (start + bits_to_set > end) {
+			// Limit the amount of bits to set
+			left_bits = (start + bits_to_set) - end;
+			bits_to_set = end - start;
+		}
+
+		// Prepare the mask
+		validity_t mask = ValidityUncompressed::LOWER_MASKS[right_bits];
+		if (left_bits) {
+			// Mask off the part that we don't want to touch (if the range doesn't fully cover the bits)
+			mask |= ValidityUncompressed::UPPER_MASKS[left_bits];
+		}
+
+		idx_t entry_idx = start / ValidityMask::BITS_PER_VALUE;
+		start += bits_to_set;
+		result_data[entry_idx] &= mask;
+	}
+
+	idx_t remaining_bits = end - start;
+	idx_t full_entries = remaining_bits / ValidityMask::BITS_PER_VALUE;
+	idx_t entry_idx = start / ValidityMask::BITS_PER_VALUE;
+	// Set all the entries that are fully covered by the range to 0
+	for (idx_t i = 0; i < full_entries; i++) {
+		result_data[entry_idx + i] = (validity_t)0;
+	}
+
+	if ((remaining_bits % ValidityMask::BITS_PER_VALUE) != 0) {
+		// The last entry touched by the range is only partially covered
+
+		// +======================================+
+		// |                         |xxxxxxxxxxxx|
+		// +======================================+
+		//
+		// 'x': bits to set to 0 in the result
+
+		idx_t bits_to_set = end % ValidityMask::BITS_PER_VALUE;
+		idx_t left_bits = ValidityMask::BITS_PER_VALUE - bits_to_set;
+		validity_t mask = ValidityUncompressed::UPPER_MASKS[left_bits];
+		idx_t entry_idx = end / ValidityMask::BITS_PER_VALUE;
+		result_data[entry_idx] &= mask;
+	}
+}
+
 struct ContainerMetadata {
 public:
 	ContainerMetadata() {
@@ -712,10 +772,12 @@ public:
 					auto run_end = MinValue<idx_t>(run.start + 1 + run.length, scanned_count + to_scan);
 
 					// Process the run
-					// FIXME: optimize this
-					for (idx_t i = 0; valid_pos + i < run_end; i++) {
-						result_mask.SetInvalid(result_offset + result_idx + i);
-					}
+					D_ASSERT(run_end > valid_pos);
+					idx_t amount = run_end - valid_pos;
+					idx_t start = result_offset + result_idx;
+					idx_t end = start + amount;
+					SetInvalidRange(result_mask, start, end);
+
 					result_idx += run_end - valid_pos;
 					if (scanned_count + result_idx == run.start + 1 + run.length) {
 						// Fully processed the current run
@@ -729,10 +791,9 @@ public:
 				if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
 					// The run does not cover these entries
 					// set all the bits to 0
-					// FIXME: optimize this
-					for (idx_t i = 0; i < to_scan; i++) {
-						result_mask.SetInvalid(result_offset + i);
-					}
+					idx_t start = result_offset;
+					idx_t end = start + to_scan;
+					SetInvalidRange(result_mask, start, end);
 					break;
 				}
 				if (run_index < count && scanned_count >= runs[run_index].start &&
@@ -753,11 +814,10 @@ public:
 					idx_t valid_start = MinValue<idx_t>(valid_pos - scanned_count, to_scan);
 
 					if (i < valid_start) {
-						// FIXME: optimize this to group the SetInvalid calls
 						// These bits are all set to 0
-						for (idx_t j = i; j < valid_start; j++) {
-							result_mask.SetInvalid(result_offset + j);
-						}
+						idx_t start = result_offset + i;
+						idx_t end = start + (valid_start - i);
+						SetInvalidRange(result_mask, start, end);
 						i = valid_start;
 					}
 
@@ -825,16 +885,14 @@ public:
 					break;
 				}
 
-#if false
-				// FIXME: optimize this
-				if (array_index + to_scan < count && array[array_index] == scanned_count && array[array_index + to_scan] == scanned_count + to_scan) {
+				if (array_index + to_scan < count && array[array_index] == scanned_count &&
+				    array[array_index + to_scan] == scanned_count + to_scan) {
 					// All entries are present in the array, can set all bits to 0 directly
-					for (idx_t i = 0; i < to_scan; i++) {
-						result_mask.SetInvalid(result_offset + i);
-					}
+					idx_t start = result_offset;
+					idx_t end = start + to_scan;
+					SetInvalidRange(result_mask, start, end);
 					break;
 				}
-#endif
 
 				// At least one of the entries to scan is set
 				for (; array_index < count; array_index++) {
@@ -854,10 +912,9 @@ public:
 			do {
 				if (array_index >= count || scanned_count + to_scan < array[array_index]) {
 					// None of the bits we're scanning are set, set everything to 0 directly
-					// FIXME: optimize this
-					for (idx_t i = 0; i < to_scan; i++) {
-						result_mask.SetInvalid(result_offset + i);
-					}
+					idx_t start = result_offset;
+					idx_t end = start + to_scan;
+					SetInvalidRange(result_mask, start, end);
 					break;
 				}
 
@@ -871,16 +928,14 @@ public:
 				while (i < to_scan) {
 					// Determine the next valid position within the scan range, if available
 					idx_t valid_pos = (array_index < count) ? array[array_index] : scanned_count + to_scan;
-					idx_t valid_start = valid_pos - scanned_count;
+					idx_t valid_start = MinValue<idx_t>(valid_pos - scanned_count, to_scan);
 
 					if (i < valid_start) {
-						// FIXME: optimize this
 						// These bits are all set to 0
-						idx_t invalid_end = MinValue<idx_t>(valid_start, to_scan);
-						for (idx_t j = i; j < invalid_end; j++) {
-							result_mask.SetInvalid(result_offset + j);
-						}
-						i = invalid_end;
+						idx_t start = result_offset + i;
+						idx_t end = start + (valid_start - i);
+						SetInvalidRange(result_mask, start, end);
+						i = valid_start;
 					}
 
 					if (i == valid_start && i < to_scan && array_index < count) {
@@ -930,7 +985,8 @@ public:
 		if ((to_scan % ValidityMask::BITS_PER_VALUE) == 0 && (scanned_count % ValidityMask::BITS_PER_VALUE) == 0) {
 			ValidityUncompressed::AlignedScan((data_ptr_t)bitset, scanned_count, result, to_scan);
 		} else {
-			ValidityUncompressed::UnalignedScan((data_ptr_t)bitset, scanned_count, result, result_offset, to_scan);
+			ValidityUncompressed::UnalignedScan((data_ptr_t)bitset, container_size, scanned_count, result,
+			                                    result_offset, to_scan);
 		}
 		scanned_count += to_scan;
 	}

@@ -219,8 +219,9 @@ unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 
-void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_start, Vector &result, idx_t result_offset,
-                                         idx_t scan_count) {
+void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx_t input_start, Vector &result,
+                                         idx_t result_offset, idx_t scan_count) {
+	D_ASSERT(input_start < input_size);
 	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = reinterpret_cast<validity_t *>(input);
 
@@ -233,7 +234,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_start, Ve
 #if STANDARD_VECTOR_SIZE < 128
 	// fallback for tiny vector sizes
 	// the bitwise ops we use below don't work if the vector size is too small
-	ValidityMask source_mask(input_data);
+	ValidityMask source_mask(input_data, input_size);
 	for (idx_t i = 0; i < scan_count; i++) {
 		if (!source_mask.RowIsValid(input_start + i)) {
 			if (result_mask.AllValid()) {
@@ -356,7 +357,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_start, Ve
 
 #ifdef DEBUG
 	// verify that we actually accomplished the bitwise ops equivalent that we wanted to do
-	ValidityMask input_mask(input_data, segment.count);
+	ValidityMask input_mask(input_data, input_size);
 	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(input_start + i));
 	}
@@ -396,7 +397,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 
 	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	D_ASSERT(scan_state.block_id == segment.block->BlockId());
-	ValidityUncompressed::UnalignedScan(buffer_ptr, start, result, result_offset, scan_count);
+	ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result, result_offset, scan_count);
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
