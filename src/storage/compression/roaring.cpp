@@ -1,5 +1,3 @@
-#include "duckdb/storage/compression/roaring.hpp"
-
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/compression/compression.hpp"
@@ -511,7 +509,8 @@ public:
 		idx_t required_space = sizeof(ContainerMetadata);
 		if (metadata.IsUncompressed()) {
 			// Account for the alignment we might need for this container
-			required_space += (AlignValue<idx_t>((idx_t)data_ptr)) - (idx_t)data_ptr;
+			required_space +=
+			    (AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr))) - reinterpret_cast<idx_t>(data_ptr);
 			required_space += (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
 		} else if (metadata.IsRun()) {
 			required_space += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
@@ -547,8 +546,9 @@ public:
 
 		// Override the pointer to write directly into the block
 		if (metadata.IsUncompressed()) {
-			data_ptr = (data_ptr_t)(AlignValue<idx_t>((idx_t)(data_ptr)));
-			FastMemset(data_ptr, (uint32_t)-1, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
+			data_ptr = reinterpret_cast<data_ptr_t>(AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr)));
+			FastMemset(data_ptr, static_cast<uint32_t>(-1),
+			           sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
 			container_state.OverrideUncompressed(data_ptr);
 			data_ptr += (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
 		} else if (metadata.IsRun()) {
@@ -974,10 +974,10 @@ public:
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
 		if ((to_scan % ValidityMask::BITS_PER_VALUE) == 0 && (scanned_count % ValidityMask::BITS_PER_VALUE) == 0) {
-			ValidityUncompressed::AlignedScan((data_ptr_t)bitset, scanned_count, result, to_scan);
+			ValidityUncompressed::AlignedScan(reinterpret_cast<data_ptr_t>(bitset), scanned_count, result, to_scan);
 		} else {
-			ValidityUncompressed::UnalignedScan((data_ptr_t)bitset, container_size, scanned_count, result,
-			                                    result_offset, to_scan);
+			ValidityUncompressed::UnalignedScan(reinterpret_cast<data_ptr_t>(bitset), container_size, scanned_count,
+			                                    result, result_offset, to_scan);
 		}
 		scanned_count += to_scan;
 	}
