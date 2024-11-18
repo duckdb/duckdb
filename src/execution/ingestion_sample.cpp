@@ -750,6 +750,7 @@ void IngestionSample::Verify() {
 }
 
 void IngestionSample::PrintWeightsInOrder() {
+#ifdef DEBUG
 	vector<double> weights;
 	auto copy_base = base_reservoir_sample->Copy();
 	while (!copy_base->reservoir_weights.empty()) {
@@ -760,6 +761,7 @@ void IngestionSample::PrintWeightsInOrder() {
 	for (idx_t pos = 0; pos < weights.size(); pos++) {
 		Printer::Print(to_string(pos) + ": " + to_string(weights.at(pos)));
 	}
+#endif
 }
 
 } // namespace duckdb
