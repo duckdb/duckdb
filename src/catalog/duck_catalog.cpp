@@ -111,6 +111,10 @@ void DuckCatalog::ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback
 	schemas->Scan([&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
+CatalogSet &DuckCatalog::GetSchemaCatalogSet() {
+	return *schemas;
+}
+
 optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
                                                         OnEntryNotFound if_not_found, QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());

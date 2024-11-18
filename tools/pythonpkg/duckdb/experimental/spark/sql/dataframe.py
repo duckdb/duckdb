@@ -1014,6 +1014,8 @@ class DataFrame:
             columns = cols
         return GroupedData(Grouping(*columns), self)
 
+    groupby = groupBy
+
     @property
     def write(self) -> DataFrameWriter:
         return DataFrameWriter(self)

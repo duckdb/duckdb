@@ -14,6 +14,7 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 	if (depth == 0) {
 		settings.insert(MetricsType::QUERY_NAME);
 	} else {
+		settings.insert(MetricsType::OPERATOR_NAME);
 		settings.insert(MetricsType::OPERATOR_TYPE);
 	}
 	for (const auto &metric : settings) {
@@ -36,10 +37,19 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 }
 
 profiler_settings_t ProfilingInfo::DefaultSettings() {
-	return {MetricsType::QUERY_NAME,           MetricsType::BLOCKED_THREAD_TIME,     MetricsType::CPU_TIME,
-	        MetricsType::EXTRA_INFO,           MetricsType::CUMULATIVE_CARDINALITY,  MetricsType::OPERATOR_TYPE,
-	        MetricsType::OPERATOR_CARDINALITY, MetricsType::CUMULATIVE_ROWS_SCANNED, MetricsType::OPERATOR_ROWS_SCANNED,
-	        MetricsType::OPERATOR_TIMING,      MetricsType::RESULT_SET_SIZE,         MetricsType::LATENCY,
+	return {MetricsType::QUERY_NAME,
+	        MetricsType::BLOCKED_THREAD_TIME,
+	        MetricsType::CPU_TIME,
+	        MetricsType::EXTRA_INFO,
+	        MetricsType::CUMULATIVE_CARDINALITY,
+	        MetricsType::OPERATOR_NAME,
+	        MetricsType::OPERATOR_TYPE,
+	        MetricsType::OPERATOR_CARDINALITY,
+	        MetricsType::CUMULATIVE_ROWS_SCANNED,
+	        MetricsType::OPERATOR_ROWS_SCANNED,
+	        MetricsType::OPERATOR_TIMING,
+	        MetricsType::RESULT_SET_SIZE,
+	        MetricsType::LATENCY,
 	        MetricsType::ROWS_RETURNED};
 }
 
@@ -50,7 +60,7 @@ profiler_settings_t ProfilingInfo::DefaultRootSettings() {
 
 profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
 	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
-	        MetricsType::OPERATOR_TYPE};
+	        MetricsType::OPERATOR_NAME, MetricsType::OPERATOR_TYPE};
 }
 
 void ProfilingInfo::ResetMetrics() {
@@ -70,6 +80,9 @@ void ProfilingInfo::ResetMetrics() {
 		case MetricsType::CPU_TIME:
 		case MetricsType::OPERATOR_TIMING:
 			metrics[metric] = Value::CreateValue(0.0);
+			break;
+		case MetricsType::OPERATOR_NAME:
+			metrics[metric] = Value::CreateValue("");
 			break;
 		case MetricsType::OPERATOR_TYPE:
 			metrics[metric] = Value::CreateValue<uint8_t>(0);
@@ -185,6 +198,7 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 
 		switch (metric) {
 		case MetricsType::QUERY_NAME:
+		case MetricsType::OPERATOR_NAME:
 			yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[metric].GetValue<string>().c_str());
 			break;
 		case MetricsType::LATENCY:

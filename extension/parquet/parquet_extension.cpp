@@ -165,7 +165,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t max_threads;
 	vector<idx_t> projection_ids;
 	vector<LogicalType> scanned_types;
-	vector<column_t> column_ids;
+	vector<ColumnIndex> column_indexes;
 	optional_ptr<TableFilterSet> filters;
 
 	idx_t MaxThreads() const override {
@@ -285,7 +285,7 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 }
 
 static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBindData &bind_data,
-                                    const vector<column_t> &global_column_ids,
+                                    const vector<ColumnIndex> &global_column_ids,
                                     optional_ptr<TableFilterSet> table_filters, ClientContext &context,
                                     optional_idx file_idx, optional_ptr<MultiFileReaderGlobalState> reader_state) {
 	auto &parquet_options = bind_data.parquet_options;
@@ -321,7 +321,7 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 
 	// loop through the schema definition
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		auto global_column_index = global_column_ids[i];
+		auto global_column_index = global_column_ids[i].GetPrimaryIndex();
 
 		// check if this is a constant column
 		bool constant = false;
@@ -705,7 +705,7 @@ public:
 
 		result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
 		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, bind_data.types,
-		    bind_data.names, input.column_ids);
+		    bind_data.names, input.column_indexes);
 		if (file_list.IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
@@ -743,12 +743,12 @@ public:
 				if (file_name != reader_data->reader->file_name) {
 					throw InternalException("Mismatch in filename order and reader order in parquet scan");
 				}
-				InitializeParquetReader(*reader_data->reader, bind_data, input.column_ids, input.filters, context,
+				InitializeParquetReader(*reader_data->reader, bind_data, input.column_indexes, input.filters, context,
 				                        file_idx, result->multi_file_reader_state);
 			}
 		}
 
-		result->column_ids = input.column_ids;
+		result->column_indexes = input.column_indexes;
 		result->filters = input.filters.get();
 		result->row_group_index = 0;
 		result->file_index = 0;
@@ -761,16 +761,16 @@ public:
 			if (!input.projection_ids.empty()) {
 				result->projection_ids = input.projection_ids;
 			} else {
-				result->projection_ids.resize(input.column_ids.size());
+				result->projection_ids.resize(input.column_indexes.size());
 				iota(begin(result->projection_ids), end(result->projection_ids), 0);
 			}
 
 			const auto table_types = bind_data.types;
-			for (const auto &col_idx : input.column_ids) {
-				if (IsRowIdColumnId(col_idx)) {
+			for (const auto &col_idx : input.column_indexes) {
+				if (col_idx.IsRowIdColumn()) {
 					result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 				} else {
-					result->scanned_types.push_back(table_types[col_idx]);
+					result->scanned_types.push_back(table_types[col_idx.GetPrimaryIndex()]);
 				}
 			}
 		}
@@ -1025,7 +1025,7 @@ public:
 						reader =
 						    make_shared_ptr<ParquetReader>(context, current_reader_data.file_to_be_opened, pq_options);
 					}
-					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
+					InitializeParquetReader(*reader, bind_data, parallel_state.column_indexes, parallel_state.filters,
 					                        context, i, parallel_state.multi_file_reader_state);
 				} catch (...) {
 					parallel_lock.lock();

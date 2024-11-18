@@ -472,12 +472,12 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// 7. initialize bit-array B (|B| = n), and set all bits to 0
 	n = l2->count.load();
 	bit_array.resize(ValidityMask::EntryCount(n), 0);
-	bit_mask.Initialize(bit_array.data());
+	bit_mask.Initialize(bit_array.data(), n);
 
 	// Bloom filter
 	bloom_count = (n + (BLOOM_CHUNK_BITS - 1)) / BLOOM_CHUNK_BITS;
 	bloom_array.resize(ValidityMask::EntryCount(bloom_count), 0);
-	bloom_filter.Initialize(bloom_array.data());
+	bloom_filter.Initialize(bloom_array.data(), bloom_count);
 
 	// 11. for(i←1 to n) do
 	const auto &cmp2 = op.conditions[1].comparison;

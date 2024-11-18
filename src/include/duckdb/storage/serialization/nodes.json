@@ -1007,5 +1007,24 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "ColumnIndex",
+    "includes": [
+      "duckdb/common/column_index.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "index",
+        "type": "idx_t"
+      },
+      {
+        "id": 2,
+        "name": "child_indexes",
+        "type": "vector<ColumnIndex>"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

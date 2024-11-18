@@ -15,6 +15,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -79,7 +80,7 @@ public:
 	unordered_map<idx_t, unique_ptr<TableFilter>> filters;
 
 public:
-	void PushFilter(idx_t column_index, unique_ptr<TableFilter> filter);
+	void PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter);
 
 	bool Equals(TableFilterSet &other) {
 		if (filters.size() != other.filters.size()) {

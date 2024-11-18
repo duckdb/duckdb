@@ -1,0 +1,17 @@
+# name: test/sql/explain/test_explain_table_scan.test
+# description: Test explain of table scans
+# group: [explain]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (NULL, NULL)
+
+query II
+EXPLAIN SELECT * FROM integers
+----
+physical_plan	<REGEX>:.*Table: integers.*

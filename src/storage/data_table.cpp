@@ -3,29 +3,32 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/check_binder.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/storage/table/standard_column_data.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/update_state.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -158,7 +161,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
-                     const vector<column_t> &bound_columns, Expression &cast_expr)
+                     const vector<StorageIndex> &bound_columns, Expression &cast_expr)
     : db(parent.db), info(parent.info), is_root(true) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	// prevent any tuples from being added to the parent
@@ -225,8 +228,8 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
-                               TableFilterSet *table_filters) {
+void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state,
+                               const vector<StorageIndex> &column_ids, TableFilterSet *table_filters) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
 	state.Initialize(column_ids, table_filters);
@@ -235,7 +238,7 @@ void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &sta
 }
 
 void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
-                                         const vector<column_t> &column_ids, idx_t start_row, idx_t end_row) {
+                                         const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
@@ -377,7 +380,7 @@ TableStorageInfo DataTable::GetStorageInfo() {
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
+void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
                       const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	auto lock = info->checkpoint_lock.GetSharedLock();
 	row_groups->Fetch(transaction, result, column_ids, row_identifiers, fetch_count, state);
@@ -686,29 +689,24 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &cont
 	D_ASSERT(conflict_manager);
 	// The conflict manager is only provided when a ON CONFLICT clause was provided to the INSERT statement
 
-	idx_t matching_indexes = 0;
 	auto &conflict_info = conflict_manager->GetConflictInfo();
 	// First we figure out how many indexes match our conflict target
 	// So we can optimize accordingly
-	indexes.Scan([&](Index &index) {
-		matching_indexes += conflict_info.ConflictTargetMatches(index);
-		return false;
-	});
-	conflict_manager->SetMode(ConflictManagerMode::SCAN);
-	conflict_manager->SetIndexCount(matching_indexes);
-	// First we verify only the indexes that match our conflict target
-	unordered_set<Index *> checked_indexes;
 	indexes.Scan([&](Index &index) {
 		if (!index.IsUnique()) {
 			return false;
 		}
 		if (conflict_info.ConflictTargetMatches(index)) {
 			D_ASSERT(index.IsBound());
-			index.Cast<BoundIndex>().VerifyAppend(chunk, *conflict_manager);
-			checked_indexes.insert(&index);
+			conflict_manager->AddIndex(index.Cast<BoundIndex>());
 		}
 		return false;
 	});
+	conflict_manager->SetMode(ConflictManagerMode::SCAN);
+	// First we verify only the indexes that match our conflict target
+	for (auto index : conflict_manager->MatchedIndexes()) {
+		index->VerifyAppend(chunk, *conflict_manager);
+	}
 
 	conflict_manager->SetMode(ConflictManagerMode::THROW);
 	// Then we scan the other indexes, throwing if they cause conflicts on tuples that were not found during
@@ -717,12 +715,13 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &cont
 		if (!index.IsUnique()) {
 			return false;
 		}
-		if (checked_indexes.count(&index)) {
+		D_ASSERT(index.IsBound());
+		auto &bound_index = index.Cast<BoundIndex>();
+		if (conflict_manager->MatchedIndex(bound_index)) {
 			// Already checked this constraint
 			return false;
 		}
-		D_ASSERT(index.IsBound());
-		index.Cast<BoundIndex>().VerifyAppend(chunk, *conflict_manager);
+		bound_index.VerifyAppend(chunk, *conflict_manager);
 		return false;
 	});
 }
@@ -853,12 +852,60 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Da
 }
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
-                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+                            optional_ptr<const vector<LogicalIndex>> column_ids) {
+
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
+
+	if (!column_ids || column_ids->empty()) {
+		for (auto &chunk : collection.Chunks()) {
+			storage.LocalAppend(append_state, table, context, chunk);
+		}
+		storage.FinalizeLocalAppend(append_state);
+		return;
+	}
+
+	auto &column_list = table.GetColumns();
+	map<PhysicalIndex, unique_ptr<Expression>> active_expressions;
+	for (idx_t i = 0; i < column_ids->size(); i++) {
+		auto &col = column_list.GetColumn((*column_ids)[i]);
+		auto expr = make_uniq<BoundReferenceExpression>(col.Name(), col.Type(), i);
+		active_expressions[col.Physical()] = std::move(expr);
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	ConstantBinder default_binder(*binder, context, "DEFAULT value");
+	vector<unique_ptr<Expression>> expressions;
+	for (idx_t i = 0; i < column_list.PhysicalColumnCount(); i++) {
+		auto expr = active_expressions.find(PhysicalIndex(i));
+		if (expr != active_expressions.end()) {
+			expressions.push_back(std::move(expr->second));
+			continue;
+		}
+
+		auto &col = column_list.GetColumn(PhysicalIndex(i));
+		if (!col.HasDefaultValue()) {
+			auto null_expr = make_uniq<BoundConstantExpression>(Value(col.Type()));
+			expressions.push_back(std::move(null_expr));
+			continue;
+		}
+
+		auto default_copy = col.DefaultValue().Copy();
+		default_binder.target_type = col.Type();
+		auto bound_default = default_binder.Bind(default_copy);
+		expressions.push_back(std::move(bound_default));
+	}
+
+	ExpressionExecutor expression_executor(context, expressions);
+	DataChunk result;
+	result.Initialize(context, table.GetTypes());
+
 	for (auto &chunk : collection.Chunks()) {
-		storage.LocalAppend(append_state, table, context, chunk);
+		expression_executor.Execute(chunk, result);
+		storage.LocalAppend(append_state, table, context, result);
+		result.Reset();
 	}
 	storage.FinalizeLocalAppend(append_state);
 }
@@ -896,11 +943,11 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 	}
 	idx_t end = row_start + count;
 
-	vector<column_t> column_ids;
+	vector<StorageIndex> column_ids;
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < this->column_definitions.size(); i++) {
 		auto &col = this->column_definitions[i];
-		column_ids.push_back(i);
+		column_ids.emplace_back(i);
 		types.push_back(col.Type());
 	}
 	DataChunk chunk;
@@ -1161,7 +1208,7 @@ unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &tabl
 	if (result->has_delete_constraints) {
 		// initialize the chunk if there are any constraints to verify
 		for (idx_t i = 0; i < column_definitions.size(); i++) {
-			result->col_ids.push_back(column_definitions[i].StorageOid());
+			result->col_ids.emplace_back(column_definitions[i].StorageOid());
 			types.emplace_back(column_definitions[i].Type());
 		}
 		result->verify_chunk.Initialize(Allocator::Get(context), types);

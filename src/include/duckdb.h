@@ -2328,6 +2328,32 @@ Returns the LIST child at index as a duckdb_value.
 */
 DUCKDB_API duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index);
 
+/*!
+Creates an enum value from a type and a value. Must be destroyed with `duckdb_destroy_value`.
+
+* @param type The type of the enum
+* @param value The value for the enum
+* @return The enum value, or nullptr.
+*/
+DUCKDB_API duckdb_value duckdb_create_enum_value(duckdb_logical_type type, uint64_t value);
+
+/*!
+Returns the enum value of the given value.
+
+* @param value A duckdb_value containing an enum
+* @return A uint64_t, or MinValue<uint64> if the value cannot be converted
+*/
+DUCKDB_API uint64_t duckdb_get_enum_value(duckdb_value value);
+
+/*!
+Returns the STRUCT child at index as a duckdb_value.
+
+* @param value The STRUCT value.
+* @param index The index of the child.
+* @return The child as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index);
+
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
 //===--------------------------------------------------------------------===//
@@ -3624,10 +3650,11 @@ DUCKDB_API duckdb_state duckdb_appender_create_ext(duckdb_connection connection,
                                                    duckdb_appender *out_appender);
 
 /*!
-Returns the number of columns in the table that belongs to the appender.
+Returns the number of columns that belong to the appender.
+If there is no custom column configuration, then this equals the table's physical columns.
 
 * @param appender The appender to get the column count from.
-* @return The number of columns in the table.
+* @return The number of columns in the data chunks.
 */
 DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
 
