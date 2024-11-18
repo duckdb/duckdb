@@ -750,22 +750,22 @@ public:
 					// Determine the next valid position within the scan range, if available
 					idx_t valid_pos = (run_index < count) ? runs[run_index].start : scanned_count + to_scan;
 					valid_pos = MaxValue<idx_t>(valid_pos, scanned_count);
-					idx_t valid_start = valid_pos - scanned_count;
+					idx_t valid_start = MinValue<idx_t>(valid_pos - scanned_count, to_scan);
 
 					if (i < valid_start) {
 						// FIXME: optimize this to group the SetInvalid calls
 						// These bits are all set to 0
-						idx_t invalid_end = MinValue<idx_t>(valid_start, to_scan);
-						for (idx_t j = i; j < invalid_end; j++) {
+						for (idx_t j = i; j < valid_start; j++) {
 							result_mask.SetInvalid(result_offset + j);
 						}
-						i = invalid_end;
+						i = valid_start;
 					}
 
-					if (i == valid_start && i < to_scan && run_index < count) {
-						idx_t valid_end = MinValue<idx_t>(i + 1 + runs[run_index].length, to_scan);
-						// These bits are already set, no action required
-						i = valid_end;
+					auto end_of_run = run_index < count ? runs[run_index].start + 1 + runs[run_index].length
+					                                    : scanned_count + to_scan;
+					auto end_of_run_or_scan = MinValue<idx_t>(scanned_count + to_scan, end_of_run);
+					i = end_of_run_or_scan - scanned_count;
+					if (run_index < count && scanned_count + i == end_of_run) {
 						run_index++;
 					}
 				}
