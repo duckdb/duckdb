@@ -293,8 +293,6 @@ duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement,
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
-// FIXME: Bind other timestamp types.
-
 duckdb_state duckdb_bind_timestamp_tz(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                       duckdb_timestamp val) {
 	auto value = Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(val.micros));

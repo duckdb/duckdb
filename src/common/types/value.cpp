@@ -251,8 +251,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
 		const auto ts = Timestamp::FromDatetime(date, dtime_t(0));
-		const auto ts_tz = Cast::Operation<timestamp_t, timestamp_tz_t>(ts);
-		return Value::TIMESTAMPTZ(ts_tz);
+		return Value::TIMESTAMPTZ(timestamp_tz_t(ts));
 	}
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
@@ -388,7 +387,7 @@ Value Value::Infinity(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::infinity().value));
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity().value));
+		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity()));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:
@@ -411,7 +410,7 @@ Value Value::NegativeInfinity(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::ninfinity().value));
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity().value));
+		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity()));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(-std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:

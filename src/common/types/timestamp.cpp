@@ -417,6 +417,16 @@ timestamp_ns_t Timestamp::TimestampNsFromEpochMicros(int64_t micros) {
 	return result;
 }
 
+int64_t Timestamp::GetEpochSeconds(timestamp_t timestamp) {
+	D_ASSERT(Timestamp::IsFinite(timestamp));
+	return timestamp.value / Interval::MICROS_PER_SEC;
+}
+
+int64_t Timestamp::GetEpochMs(timestamp_t timestamp) {
+	D_ASSERT(Timestamp::IsFinite(timestamp));
+	return timestamp.value / Interval::MICROS_PER_MSEC;
+}
+
 int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
 	return timestamp.value;
 }

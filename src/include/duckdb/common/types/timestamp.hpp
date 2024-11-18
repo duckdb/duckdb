@@ -22,16 +22,15 @@ struct date_t;     // NOLINT
 struct dtime_t;    // NOLINT
 struct dtime_tz_t; // NOLINT
 
-//! Type used to represent timestamps.
-//! Its value holds seconds, microseconds, milliseconds or nanoseconds since 1970-01-01.
+//! Type used to represent a TIMESTAMP. timestamp_t holds the microseconds since 1970-01-01.
 struct timestamp_t { // NOLINT
 	int64_t value;
 
 	timestamp_t() = default;
-	explicit inline constexpr timestamp_t(int64_t value_p) : value(value_p) {
+	explicit inline constexpr timestamp_t(int64_t micros) : value(micros) {
 	}
-	inline timestamp_t &operator=(int64_t value_p) {
-		value = value_p;
+	inline timestamp_t &operator=(int64_t micros) {
+		value = micros;
 		return *this;
 	}
 
@@ -80,24 +79,34 @@ struct timestamp_t { // NOLINT
 	} // NOLINT
 };
 
+//! Type used to represent TIMESTAMP_S. timestamp_sec_t holds the seconds since 1970-01-01.
 struct timestamp_sec_t : public timestamp_t { // NOLINT
 	timestamp_sec_t() = default;
-	explicit inline constexpr timestamp_sec_t(int64_t value_p) : timestamp_t(value_p) {
+	explicit inline constexpr timestamp_sec_t(int64_t seconds) : timestamp_t(seconds) {
 	}
 };
+
+//! Type used to represent TIMESTAMP_MS. timestamp_ms_t holds the milliseconds since 1970-01-01.
 struct timestamp_ms_t : public timestamp_t { // NOLINT
 	timestamp_ms_t() = default;
-	explicit inline constexpr timestamp_ms_t(int64_t value_p) : timestamp_t(value_p) {
+	explicit inline constexpr timestamp_ms_t(int64_t millis) : timestamp_t(millis) {
 	}
 };
+
+//! Type used to represent TIMESTAMP_NS. timestamp_ns_t holds the nanoseconds since 1970-01-01.
 struct timestamp_ns_t : public timestamp_t { // NOLINT
 	timestamp_ns_t() = default;
-	explicit inline constexpr timestamp_ns_t(int64_t value_p) : timestamp_t(value_p) {
+	explicit inline constexpr timestamp_ns_t(int64_t nanos) : timestamp_t(nanos) {
 	}
 };
+
+//! Type used to represent TIMESTAMPTZ. timestamp_tz_t holds the microseconds since 1970-01-01 (UTC).
+//! It is physically the same as timestamp_t, both hold microseconds since epoch.
 struct timestamp_tz_t : public timestamp_t { // NOLINT
 	timestamp_tz_t() = default;
-	explicit inline constexpr timestamp_tz_t(int64_t value_p) : timestamp_t(value_p) {
+	explicit inline constexpr timestamp_tz_t(int64_t micros) : timestamp_t(micros) {
+	}
+	explicit inline constexpr timestamp_tz_t(timestamp_t ts) : timestamp_t(ts) {
 	}
 };
 
@@ -172,6 +181,10 @@ public:
 
 	//! Try convert a timestamp to epoch (in nanoseconds)
 	DUCKDB_API static bool TryGetEpochNanoSeconds(timestamp_t timestamp, int64_t &result);
+	//! Convert the epoch (in seconds) to a timestamp
+	DUCKDB_API static int64_t GetEpochSeconds(timestamp_t timestamp);
+	//! Convert the epoch (in ms) to a timestamp
+	DUCKDB_API static int64_t GetEpochMs(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in microseconds)
 	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in nanoseconds)
