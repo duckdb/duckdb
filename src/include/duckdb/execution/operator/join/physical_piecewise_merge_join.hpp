@@ -70,6 +70,7 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+	static bool IsSupported(const vector<JoinCondition> &conditions);
 
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)

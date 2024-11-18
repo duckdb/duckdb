@@ -1,0 +1,18 @@
+# name: test/sql/join/join_issue_14834.test
+# description: Issue #14834: Unexpected result when using INTERVAL and INNER JOIN subquery.
+# group: [join]
+
+statement ok
+CREATE  TABLE  t0(c1 INTERVAL);
+
+statement ok
+INSERT INTO t0(c1) VALUES ('1 month'), ('3 days');
+
+
+query II nosort
+SELECT * FROM t0 INNER  JOIN  (SELECT  INTERVAL 1000 DAY AS col0 FROM t0) AS sub0  ON (t0.c1 < sub0.col0);
+----
+1 month	1000 days
+3 days	1000 days
+1 month	1000 days
+3 days	1000 days

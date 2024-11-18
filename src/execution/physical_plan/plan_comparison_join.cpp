@@ -192,7 +192,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 		if (can_iejoin) {
 			plan = make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
 			                                 op.join_type, op.estimated_cardinality);
-		} else if (can_merge) {
+		} else if (can_merge && PhysicalPiecewiseMergeJoin::IsSupported(op.conditions)) {
 			// range join: use piecewise merge join
 			plan =
 			    make_uniq<PhysicalPiecewiseMergeJoin>(op, std::move(left), std::move(right), std::move(op.conditions),

@@ -154,6 +154,16 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
 	return SinkFinalizeType::READY;
 }
 
+bool PhysicalPiecewiseMergeJoin::IsSupported(const vector<JoinCondition> &conditions) {
+	for (auto &cond : conditions) {
+		// INTERVAL type does not supported memory comparison
+		if (cond.left->return_type.InternalType() == PhysicalType::INTERVAL) {
+			return false;
+		}
+	}
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
