@@ -217,9 +217,7 @@ public:
 		if (uncompressed) {
 			if (null) {
 				ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
-				for (idx_t i = 0; i < amount; i++) {
-					mask.SetInvalidUnsafe(count + i);
-				}
+				SetInvalidRange(mask, count, count + amount);
 			}
 			count += amount;
 			return;
