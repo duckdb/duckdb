@@ -303,7 +303,7 @@ public:
 
 struct ContainerMetadataCollectionScanner {
 public:
-	ContainerMetadataCollectionScanner(ContainerMetadataCollection &collection) : collection(collection) {
+	explicit ContainerMetadataCollectionScanner(ContainerMetadataCollection &collection) : collection(collection) {
 	}
 
 public:
@@ -401,7 +401,7 @@ public:
 	}
 
 public:
-	void Append(bool null, idx_t amount = 1) {
+	void Append(bool null, uint16_t amount = 1) {
 		if (uncompressed) {
 			if (null) {
 				ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
@@ -619,7 +619,7 @@ public:
 			idx_t appended = 0;
 			while (appended < count) {
 				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
-				container_state.Append(false, to_append);
+				container_state.Append(false, NumericCast<uint16_t>(to_append));
 				if (container_state.IsFull()) {
 					FlushContainer();
 				}
@@ -861,7 +861,7 @@ public:
 			idx_t appended = 0;
 			while (appended < count) {
 				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
-				container_state.Append(false, to_append);
+				container_state.Append(false, NumericCast<uint16_t>(to_append));
 				if (container_state.IsFull()) {
 					NextContainer();
 				}
