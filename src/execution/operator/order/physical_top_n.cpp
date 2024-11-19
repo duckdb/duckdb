@@ -322,7 +322,7 @@ void TopNHeap::Reduce() {
 	// we have too many values in the heap - reduce them
 	StringHeap new_sort_heap;
 	DataChunk new_heap_data;
-	new_heap_data.Initialize(allocator, payload_types, heap_size);
+	new_heap_data.Initialize(allocator, payload_types, heap.size());
 
 	SelectionVector new_payload_sel(heap.size());
 	for (idx_t i = 0; i < heap.size(); i++) {
@@ -337,9 +337,10 @@ void TopNHeap::Reduce() {
 	}
 
 	// copy over the data from the current payload chunk to the new payload chunk
-	heap_data.Copy(new_heap_data, new_payload_sel, heap.size());
+	new_heap_data.Slice(heap_data, new_payload_sel, heap.size());
+	new_heap_data.Flatten();
 
-	new_sort_heap.Move(sort_key_heap);
+	sort_key_heap.Move(new_sort_heap);
 	heap_data.Reference(new_heap_data);
 }
 
