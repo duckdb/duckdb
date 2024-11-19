@@ -18,6 +18,12 @@ MaterializedQueryResult::MaterializedQueryResult(ErrorData error)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)), scan_initialized(false) {
 }
 
+MaterializedQueryResult::~MaterializedQueryResult() {
+	scan_state.current_chunk_state.handles.clear();
+	row_collection.reset();
+	collection.reset();
+}
+
 string MaterializedQueryResult::ToString() {
 	string result;
 	if (success) {
