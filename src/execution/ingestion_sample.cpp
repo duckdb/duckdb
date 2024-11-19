@@ -22,27 +22,22 @@ unique_ptr<DataChunk> IngestionSample::GetChunkAndShrink() {
 	throw InternalException("Invalid Sampling state");
 }
 
-unique_ptr<DataChunk> IngestionSample::CreateNewSampleChunk(vector<LogicalType> &types) {
+unique_ptr<DataChunk> IngestionSample::CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const {
 	auto new_sample_chunk = make_uniq<DataChunk>();
 	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), types,
-	                             FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
+	                             size);
 	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
 		auto type = types[col_idx];
 		// TODO: should the validity mask be the capacity or the size?
 		FlatVector::Validity(new_sample_chunk->data[col_idx])
-		    .Initialize(FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
+		    .Initialize(size);
 
 		if (!ValidSampleType(type)) {
 			new_sample_chunk->data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(new_sample_chunk->data[col_idx], true);
 		}
 	}
-	idx_t num_samples_to_keep = actual_sample_indexes.size();
-	// set up selection vector to copy IngestionSample to ReservoirSample
-	SelectionVector sel(num_samples_to_keep);
-	for (idx_t i = 0; i < num_samples_to_keep; i++) {
-		sel.set_index(i, actual_sample_indexes[i]);
-	}
+
 	return new_sample_chunk;
 }
 
@@ -96,12 +91,11 @@ void IngestionSample::Shrink() {
 	}
 
 	auto types = sample_chunk->GetTypes();
-	unique_ptr<DataChunk> new_sample_chunk = nullptr;
+	auto new_sample_chunk = CreateNewSampleChunk(types, FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);;
 	SelectionVector sel;
 	// we always only keep a FIXED_SAMPLE_SIZE number of samples.
 	idx_t num_samples_to_keep = FIXED_SAMPLE_SIZE;
 	if (GetPriorityQueueSize() == 0) {
-		new_sample_chunk = CreateNewSampleChunk(types);
 		sel = SelFromSimpleIndexes(actual_sample_indexes);
 		num_samples_to_keep = actual_sample_indexes.size();
 	} else {
@@ -112,25 +106,17 @@ void IngestionSample::Shrink() {
 			weights_indexes.push_back(base_reservoir_sample->reservoir_weights.top());
 			base_reservoir_sample->reservoir_weights.pop();
 		}
-
 		// create one large chunk from the collected chunk samples.
 		D_ASSERT(sample_chunk->size() != 0);
-
-		// create a new sample chunk to store new samples
-		new_sample_chunk = CreateNewSampleChunk(types);
 
 		// set up selection vector to copy IngestionSample to ReservoirSample
 		sel = SelFromReservoirWeights(weights_indexes);
 	}
 
 	std::swap(sample_chunk, new_sample_chunk);
-	// first flatten the chunks to expand null constant vector columns that take the place
-	// of the un-supported columns.
 	// perform the copy
 	UpdateSampleAppend(*new_sample_chunk, sel, num_samples_to_keep);
-	// sample_chunk->Copy(*new_sample_chunk, sel, num_samples_to_keep, 0);
 	D_ASSERT(sample_chunk->size() == num_samples_to_keep);
-	// sample_chunk = std::move(new_sample_chunk);
 
 	Verify();
 	// We should only have one sample chunk now.
@@ -156,21 +142,23 @@ unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
 	D_ASSERT(sample_chunk);
 
 	// create a new sample chunk to store new samples
-	auto new_sample_chunk = make_uniq<DataChunk>();
+	// auto new_sample_chunk = make_uniq<DataChunk>();
 	auto types = sample_chunk->GetTypes();
+
 	D_ASSERT(sample_chunk->size() <= FIXED_SAMPLE_SIZE);
 	idx_t new_sample_chunk_size =
 	    for_serialization ? sample_chunk->size() : FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
-	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), types, new_sample_chunk_size);
-	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
-		auto type = types[col_idx];
-		// TODO: should the validity mask be the capacity or the size?
-		FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(new_sample_chunk_size);
-		if (!ValidSampleType(type)) {
-			new_sample_chunk->data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(new_sample_chunk->data[col_idx], true);
-		}
-	}
+	auto new_sample_chunk = CreateNewSampleChunk(types, new_sample_chunk_size);
+	// new_sample_chunk->Initialize(Allocator::DefaultAllocator(), types, new_sample_chunk_size);
+	// for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
+	// 	auto type = types[col_idx];
+	// 	// TODO: should the validity mask be the capacity or the size?
+	// 	FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(new_sample_chunk_size);
+	// 	if (!ValidSampleType(type)) {
+	// 		new_sample_chunk->data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+	// 		ConstantVector::SetNull(new_sample_chunk->data[col_idx], true);
+	// 	}
+	// }
 	// set up selection vector to copy IngestionSample to ReservoirSample
 	SelectionVector sel(new_sample_chunk_size);
 
@@ -387,7 +375,7 @@ idx_t IngestionSample::GetTuplesSeen() {
 	return base_reservoir_sample->num_entries_seen_total;
 }
 
-unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize() {
+unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 	Shrink();
 	Verify();
 	if (!sample_chunk || destroyed) {
@@ -399,7 +387,7 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSampleToSerialize(
 	// since this is for serialization, we really need to make sure keep a
 	// minimum of 1% or 2048 values
 	idx_t num_samples_to_keep = MinValue<idx_t>(
-	    FIXED_SAMPLE_SIZE, static_cast<idx_t>(PERCENTAGE_SAMPLE_SIZE * GetTuplesSeen() / (double(100))));
+	    FIXED_SAMPLE_SIZE, static_cast<idx_t>(CHUNK_SAMPLE_PERCENTAGE * static_cast<double>(GetTuplesSeen())));
 
 	vector<std::pair<double, idx_t>> weights_indexes;
 

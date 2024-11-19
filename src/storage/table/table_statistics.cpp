@@ -43,7 +43,6 @@ void TableStatistics::InitializeAddColumn(TableStatistics &parent, const Logical
 		column_stats.push_back(parent.column_stats[i]);
 	}
 	column_stats.push_back(ColumnStatistics::CreateEmptyStats(new_column_type));
-	// TODO: add new chunk with one type so that sample does not need to be destroyed
 	if (parent.table_sample) {
 		table_sample = std::move(parent.table_sample);
 	}
@@ -63,7 +62,6 @@ void TableStatistics::InitializeRemoveColumn(TableStatistics &parent, idx_t remo
 			column_stats.push_back(parent.column_stats[i]);
 		}
 	}
-	// TODO: split the sample chunk and fuse it back together without the deleted column
 	if (parent.table_sample) {
 		table_sample = std::move(parent.table_sample);
 	}
@@ -107,7 +105,6 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 void TableStatistics::MergeStats(TableStatistics &other) {
 	auto l = GetLock();
 	D_ASSERT(column_stats.size() == other.column_stats.size());
-	// if the sample has been nullified, no need to merge.
 	if (table_sample) {
 		if (other.table_sample) {
 			D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
@@ -179,7 +176,7 @@ void TableStatistics::Serialize(Serializer &serializer) const {
 	if (table_sample) {
 		D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
 		auto &ingestion_sample = table_sample->Cast<IngestionSample>();
-		to_serialize = ingestion_sample.ConvertToReservoirSampleToSerialize();
+		to_serialize = ingestion_sample.ConvertToReservoirSample();
 	}
 	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", to_serialize, nullptr);
 }

@@ -461,7 +461,7 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 		D_ASSERT(stats.table_sample->type == SampleType::INGESTION_SAMPLE);
 		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
 		ingest_sample.Merge(std::move(state.stats.table_sample));
-		// initialize the table sample again
+		// initialize the thread local sample again
 		state.stats.table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
 	}
 
@@ -1249,7 +1249,7 @@ unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 		auto &ingest_sample = stats.table_sample->Cast<IngestionSample>();
 		ingest_sample.Shrink();
 		// when get sample is called, return a sample that is min(FIXED_SAMPLE_SIZE, 0.01 * ingested_tuples).
-		auto ret = ingest_sample.ConvertToReservoirSampleToSerialize();
+		auto ret = ingest_sample.ConvertToReservoirSample();
 		return ret;
 	}
 	return nullptr;

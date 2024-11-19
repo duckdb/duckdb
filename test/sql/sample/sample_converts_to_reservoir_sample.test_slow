@@ -33,6 +33,7 @@ select count(*) from pragma_table_sample('t1') where a > 1;
 48
 
 
+
 query I
 select count(*) from (select (floor(range/200000))::INT a from range(204800) using  sample reservoir (1%)) t1 where a >= 1;
 ----

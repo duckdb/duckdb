@@ -106,7 +106,7 @@ public:
 	virtual void Finalize() = 0;
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used when
-	//! querying from a live sample and not a table collected sample.
+	//! querying from a sample defined in a query and not a table sample.
 	virtual unique_ptr<DataChunk> GetChunkAndShrink() = 0;
 	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0) = 0;
 	virtual void Destroy();
@@ -205,7 +205,6 @@ class ReservoirSamplePercentage : public BlockingSample {
 public:
 	static constexpr const SampleType TYPE = SampleType::RESERVOIR_PERCENTAGE_SAMPLE;
 
-public:
 	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed = -1);
 	ReservoirSamplePercentage(double percentage, int64_t seed, idx_t reservoir_sample_size);
 	explicit ReservoirSamplePercentage(double percentage, int64_t seed = -1);
@@ -246,10 +245,7 @@ private:
 	bool is_finalized;
 };
 
-// Ingestion sample needs to inherit from blocking sample.
-// this way it can be serialized (Maybe? Need to figure that out)
 
-// Special Sample type for ingestion
 class IngestionSample : public BlockingSample {
 public:
 	static constexpr const SampleType TYPE = SampleType::INGESTION_SAMPLE;
@@ -264,7 +260,7 @@ public:
 	IngestionSample(Allocator &allocator, int64_t seed);
 	explicit IngestionSample(idx_t sample_count, int64_t seed = 1);
 
-	unique_ptr<BlockingSample> ConvertToReservoirSampleToSerialize();
+	unique_ptr<BlockingSample> ConvertToReservoirSample();
 
 	SamplingMode SamplingState() const;
 
@@ -332,7 +328,7 @@ private:
 	// Shrink has different logic depending on if the IngestionSample is still in
 	// "Fast" mode or in "Slow" mode. This function creates a new sample chunk
 	// to copy the old sample chunk into
-	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types);
+	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const;
 };
 
 } // namespace duckdb
