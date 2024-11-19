@@ -118,6 +118,7 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 		sort_types.push_back(expr->return_type);
 		executor.AddExpression(*expr);
 	}
+	heap.reserve(InitialHeapAllocSize());
 	vector<LogicalType> sort_keys_type {LogicalType::BLOB};
 	sort_keys.Initialize(allocator, sort_keys_type);
 	heap_data.Initialize(allocator, payload_types, InitialHeapAllocSize());
