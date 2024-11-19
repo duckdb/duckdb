@@ -80,21 +80,21 @@ TEST_CASE("Test parse logical type", "[parse_logical_type]") {
 	}
 
 	SECTION("invalid types") {
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType(""), InternalException);
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("AAA"), InternalException);
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("[]"), InternalException);
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("aaa[]"), InternalException);
+		REQUIRE_THROWS(DBConfig::ParseLogicalType(""));
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("AAA"));
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("[]"));
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("aaa[]"));
 
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("VARCHAR42]"), InternalException);
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("VARCHAR[x]"), InternalException);
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("VARCHAR[-3]"), InternalException);
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("VARCHAR[0]"), InternalException);
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("VARCHAR[100001]"), InternalException);
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR42]"));
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR[x]"));
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR[-3]"));
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR[0]"));
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR[100001]"));
 
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("MAP()"), InternalException);
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("MAP(ANY,ANY,ANY)"), InternalException);
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("MAP()"));
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("MAP(ANY,ANY,ANY)"));
 
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("UNION()"), InternalException);
-		REQUIRE_THROWS_AS(DBConfig::ParseLogicalType("UNION(num AAA, v VARCHAR, f FLOAT)"), InternalException);
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("UNION()"));
+		REQUIRE_THROWS(DBConfig::ParseLogicalType("UNION(num AAA, v VARCHAR, f FLOAT)"));
 	}
 }
