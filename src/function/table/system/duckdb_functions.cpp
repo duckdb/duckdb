@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/client_data.hpp"
 
@@ -526,57 +527,49 @@ static Value GetParameterNames(FunctionEntry &entry, idx_t function_idx, Functio
 }
 
 // returns values:
-//  -1: no match; 0: explicit match; N: match by using N <ANY> values
-static int CalcDescriptionSpecificity(FunctionDescription &description, const vector<LogicalType> &parameter_types) {
-	int any_count = 0;
-
+// 0: exact type match; N: match using N <ANY> values; Invalid(): no match
+static optional_idx CalcDescriptionSpecificity(FunctionDescription &description,
+                                               const vector<LogicalType> &parameter_types) {
+	if (description.parameter_types.size() != parameter_types.size()) {
+		return optional_idx::Invalid();
+	}
+	idx_t any_count = 0;
 	for (idx_t i = 0; i < description.parameter_types.size(); i++) {
-		if (description.parameter_types[i] != parameter_types[i] &&
-		    description.parameter_types[i].id() != LogicalTypeId::ANY) {
-			return -1;
-		}
 		if (description.parameter_types[i].id() == LogicalTypeId::ANY) {
 			any_count++;
+		} else if (description.parameter_types[i] != parameter_types[i]) {
+			return optional_idx::Invalid();
 		}
 	}
 	return any_count;
 }
 
-/*
-Find FunctionDescription object with matching number of arguments and types
-return -1: no description matches the overload
-return >= 0: index of best matching description
-*/
-static int GetFunctionDescriptionIndex(vector<FunctionDescription> &function_descriptions,
-                                       vector<LogicalType> &function_parameter_types) {
-	int best_description_idx = -1;
+// Find FunctionDescription object with matching number of arguments and types
+static optional_idx GetFunctionDescriptionIndex(vector<FunctionDescription> &function_descriptions,
+                                                vector<LogicalType> &function_parameter_types) {
 	if (function_descriptions.size() == 1) {
 		// one description, use it even if nr of parameters don't match
-		best_description_idx = 0;
 		idx_t nr_function_parameters = function_parameter_types.size();
 		for (idx_t i = 0; i < function_descriptions[0].parameter_types.size(); i++) {
 			if (i < nr_function_parameters && function_descriptions[0].parameter_types[i] != LogicalTypeId::ANY &&
 			    function_descriptions[0].parameter_types[i] != function_parameter_types[i]) {
-				best_description_idx = -1;
+				return optional_idx::Invalid();
 			}
 		}
-	} else {
-		// multiple descriptions, search best match
+		return optional_idx(0);
+	}
 
-		//  -1: no match; 0: exact match with explicit types; N: match by using N <ANY> values
-		int best_specificity_score = -1;
-		int specificity_score;
-
-		for (idx_t descr_idx = 0; descr_idx < function_descriptions.size(); descr_idx++) {
-			specificity_score = -1;
-			if (function_parameter_types.size() == function_descriptions[descr_idx].parameter_types.size()) {
-				specificity_score =
-				    CalcDescriptionSpecificity(function_descriptions[descr_idx], function_parameter_types);
-			}
-			if (specificity_score >= 0 && (best_specificity_score < 0 || specificity_score < best_specificity_score)) {
-				best_specificity_score = specificity_score;
-				best_description_idx = static_cast<int>(descr_idx);
-			}
+	// multiple descriptions, search most specific description
+	optional_idx best_description_idx;
+	// specificity_score: 0: exact type match; N: match using N <ANY> values; Invalid(): no match
+	optional_idx best_specificity_score;
+	optional_idx specificity_score;
+	for (idx_t descr_idx = 0; descr_idx < function_descriptions.size(); descr_idx++) {
+		specificity_score = CalcDescriptionSpecificity(function_descriptions[descr_idx], function_parameter_types);
+		if (specificity_score.IsValid() &&
+		    (!best_specificity_score.IsValid() || specificity_score.GetIndex() < best_specificity_score.GetIndex())) {
+			best_specificity_score = specificity_score;
+			best_description_idx = descr_idx;
 		}
 	}
 	return best_description_idx;
@@ -587,10 +580,9 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	auto &function = entry.Cast<T>();
 	vector<LogicalType> parameter_types_vector = OP::GetParameterLogicalTypes(function, function_idx);
 	Value parameter_types_value = OP::GetParameterTypes(function, function_idx);
-
-	int description_idx = GetFunctionDescriptionIndex(entry.descriptions, parameter_types_vector);
+	optional_idx description_idx = GetFunctionDescriptionIndex(entry.descriptions, parameter_types_vector);
 	FunctionDescription function_description =
-	    (description_idx >= 0) ? entry.descriptions[static_cast<idx_t>(description_idx)] : FunctionDescription();
+	    description_idx.IsValid() ? entry.descriptions[description_idx.GetIndex()] : FunctionDescription();
 
 	idx_t col = 0;
 
