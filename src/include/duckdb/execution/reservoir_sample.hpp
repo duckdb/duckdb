@@ -256,56 +256,47 @@ public:
 
 	constexpr static idx_t FIXED_SAMPLE_SIZE_MULTIPLIER = 10;
 	constexpr static idx_t FAST_TO_SLOW_THRESHOLD = 60;
+
 	// how much of every chunk we consider for sampling.
-	// This can be lowered to improve ingestion performance.
+	// This can be lowered later to improve ingestion performance.
 	constexpr static double CHUNK_SAMPLE_PERCENTAGE = 1.00;
 
 	IngestionSample(Allocator &allocator, int64_t seed);
 	explicit IngestionSample(idx_t sample_count, int64_t seed = 1);
 
-	// TODO: this will need more info to initiliaze the correct sample type
 	unique_ptr<BlockingSample> ConvertToReservoirSampleToSerialize();
 
-	SamplingMode SamplingState() const {
-		if (base_reservoir_sample->reservoir_weights.empty()) {
-			return SamplingMode::FAST;
-		}
-		return SamplingMode::SLOW;
-	}
+	SamplingMode SamplingState() const;
 
 	//! Shrink the Ingestion Sample to only contain the tuples that are in the
 	//! reservoir weights or are in the "actual_indexes"
 	void Shrink();
 
-	void SimpleMerge(IngestionSample &other);
+	SelectionVector SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const;
+	static SelectionVector SelFromSimpleIndexes(vector<idx_t> &actual_indexes);
 
-	// Helper methods for Shrink().
-	// Shrink has different logic depending on if the IngestionSample is still in
-	// "Fast" mode or in "Slow" mode
-	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types);
-	SelectionVector CreateSelectionVectorFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const;
-	static SelectionVector CreateSelectionVectorFromSimpleVector(vector<idx_t> &actual_indexes);
-
-	unique_ptr<BlockingSample> Copy() const override;
 	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for
 	//! future sampling values
 	unique_ptr<BlockingSample> Copy(bool for_serialization) const;
+	unique_ptr<BlockingSample> Copy() const override;
+
+	//! create the first chunk called by AddToReservoir()
+	idx_t FillReservoir(DataChunk &chunk);
+	//! Add a chunk of data to the sample
+	void AddToReservoir(DataChunk &input) override;
+	//! Merge two Ingestion Samples. Other must be an ingestion sample
 	void Merge(unique_ptr<BlockingSample> other);
 
 	//! Update the sample by pushing new sample rows to the end of the sample_chunk.
 	//! The new sample rows are the tuples rows resulting from applying sel to other
-	void UpdateSampleAppend(DataChunk &other, SelectionVector &sel, idx_t sel_count);
+	void UpdateSampleAppend(DataChunk &other, SelectionVector &sel, idx_t append_count);
 	//! Actually appends the new tuples. TODO: rename function to AppendToSample
 	void UpdateSampleWithTypes(DataChunk &other, SelectionVector &sel, idx_t source_count, idx_t source_offset,
 	                           idx_t target_offset);
-	//! ??? Honestly don't know what the difference between this function and UpdateSampleWithTypes is.
-	void UpdateSampleCopy(DataChunk &other, SelectionVector &sel, idx_t source_offset, idx_t target_offset, idx_t size);
 
 	idx_t GetTuplesSeen();
-	static bool ValidSampleType(const LogicalType &type);
 	idx_t NumSamplesCollected();
-	//! Add a chunk of data to the sample
-	void AddToReservoir(DataChunk &input) override;
+	static bool ValidSampleType(const LogicalType &type);
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -314,31 +305,34 @@ public:
 	void Destroy() override;
 	void Finalize() override;
 
-	void PrintWeightsInOrder();
 	void Verify();
 
-	// when replacing samples in the chunk, it's possible
-	// that an index gets replaced twice because the new weight assigned
-	// is relatively low. This function loops through the max heap that holds the sample index
 	// map is [index in input chunk] -> [index in sample chunk]. Both are zero-based
-	// index in sample chunk is incremented by 1
-	// index in input chunk is incremented in random amounts.
-	// The base_reservoir_sampling gets updated however, so the indexes point to sample_chunk_offset +
-	// (index_in_sample_chunk) this data can then be used to make a selection vector to copy over the samples from the
-	// input chunk to the sample chunk
+	// [index in sample chunk] is incremented by 1
+	// index in input chunk have random values, however, they are increasing.
+	// The base_reservoir_sampling gets updated however, so the indexes point to (sample_chunk_offset +
+	// index_in_sample_chunk) this data is used to make a selection vector to copy samples from the input chunk to the
+	// sample chunk
+	//! Get indexes from current sample that can be replaced.
 	unordered_map<idx_t, idx_t> GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
-	unordered_map<idx_t, idx_t> GetReplacementIndexesSlow(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
-	unordered_map<idx_t, idx_t> GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
 
 	idx_t sample_count;
 	Allocator &allocator;
-	//! given the first chunk, create the first chunk
-	//! called be AddToReservoir()
-	idx_t FillReservoir(DataChunk &chunk);
 
 	unique_ptr<DataChunk> sample_chunk;
 
 	vector<idx_t> actual_sample_indexes;
+
+private:
+	unordered_map<idx_t, idx_t> GetReplacementIndexesSlow(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
+	unordered_map<idx_t, idx_t> GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
+	void SimpleMerge(IngestionSample &other);
+
+	// Helper methods for Shrink().
+	// Shrink has different logic depending on if the IngestionSample is still in
+	// "Fast" mode or in "Slow" mode. This function creates a new sample chunk
+	// to copy the old sample chunk into
+	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types);
 };
 
 } // namespace duckdb
