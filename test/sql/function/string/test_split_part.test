@@ -85,6 +85,11 @@ select split_part(NULL,',',1)
 ----
 NULL
 
+query T
+select split_part('a,b,c', ',',  NULL)
+----
+NULL
+
 # test incorrect usage
 statement error
 select split_part()
