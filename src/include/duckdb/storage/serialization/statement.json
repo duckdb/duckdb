@@ -9,6 +9,11 @@
         "id": 100,
         "name": "node",
         "type": "QueryNode*"
+      },
+      {
+        "id": 101,
+        "name": "named_param_map",
+        "type": "case_insensitive_map_t<idx_t>"
       }
     ]
   }

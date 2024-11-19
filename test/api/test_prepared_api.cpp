@@ -13,6 +13,10 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	// prepare no statements
 	REQUIRE_FAIL(con.Prepare(""));
 
+	// PrepareAndExecute with no values
+	duckdb::vector<Value> values;
+	REQUIRE_FAIL(con.PendingQuery("", values, false));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (11), (12), (13)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR)"));

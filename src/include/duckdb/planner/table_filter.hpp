@@ -25,12 +25,13 @@ class PhysicalTableScan;
 
 enum class TableFilterType : uint8_t {
 	CONSTANT_COMPARISON = 0, // constant comparison (e.g. =C, >C, >=C, <C, <=C)
-	IS_NULL = 1,
-	IS_NOT_NULL = 2,
-	CONJUNCTION_OR = 3,
-	CONJUNCTION_AND = 4,
-	STRUCT_EXTRACT = 5,
-	OPTIONAL_FILTER = 6
+	IS_NULL = 1,             // C IS NULL
+	IS_NOT_NULL = 2,         // C IS NOT NULL
+	CONJUNCTION_OR = 3,      // OR of different filters
+	CONJUNCTION_AND = 4,     // AND of different filters
+	STRUCT_EXTRACT = 5,      // filter applies to child-column of struct
+	OPTIONAL_FILTER = 6,     // executing filter is not required for query correctness
+	IN_FILTER = 7            // col IN (C1, C2, C3, ...)
 };
 
 //! TableFilter represents a filter pushed down into the table scan.

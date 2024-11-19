@@ -449,6 +449,17 @@ struct DuckDBAPISetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DynamicOrFilterThresholdSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "dynamic_or_filter_threshold";
+	static constexpr const char *Description =
+	    "The maximum amount of OR filters we generate dynamically from a hash join";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableExternalAccessSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_external_access";

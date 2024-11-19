@@ -49,6 +49,9 @@ SELECT * FROM integers
 does not exist
 
 statement ok
+drop view integers_view;
+
+statement ok
 IMPORT DATABASE '__TEST_DIR__/export_test'
 
 query I nosort q1
