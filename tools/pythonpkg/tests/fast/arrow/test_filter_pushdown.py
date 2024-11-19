@@ -929,8 +929,9 @@ class TestArrowFilterPushdown(object):
         duck_build_arrow = duck_build.arrow()
         duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
         duckdb_conn.register("duck_build_arrow", duck_build_arrow)
-        assert duckdb_conn.execute("SELECT count(*) from duck_probe_arrow, duck_build_arrow where a=b").fetchall() == [(20,)]
-
+        assert duckdb_conn.execute("SELECT count(*) from duck_probe_arrow, duck_build_arrow where a=b").fetchall() == [
+            (20,)
+        ]
 
     def test_in_filter_pushdown(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()

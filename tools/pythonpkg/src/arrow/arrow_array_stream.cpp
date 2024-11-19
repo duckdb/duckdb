@@ -408,8 +408,7 @@ py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &f
 		py::object child_expression = TransformFilterRecursive(*it.second, column_ref, config.time_zone, *arrow_type);
 		if (child_expression.is(py::none())) {
 			continue;
-		}
-		else if (expression.is(py::none())) {
+		} else if (expression.is(py::none())) {
 			expression = std::move(child_expression);
 		} else {
 			expression = expression.attr("__and__")(child_expression);
