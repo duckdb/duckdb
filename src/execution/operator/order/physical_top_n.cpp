@@ -292,7 +292,7 @@ void TopNHeap::Reduce() {
 	// we have too many values in the heap - reduce them
 	StringHeap new_sort_heap;
 	DataChunk new_heap_data;
-	new_heap_data.Initialize(allocator, payload_types, HeapAllocSize());
+	new_heap_data.Initialize(allocator, payload_types, heap_size);
 
 	SelectionVector new_payload_sel(heap.size());
 	for (idx_t i = 0; i < heap.size(); i++) {
