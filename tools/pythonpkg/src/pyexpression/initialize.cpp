@@ -15,7 +15,7 @@ void InitializeStaticMethods(py::module_ &m) {
 
 	// ColumnRef Expression
 	docs = "Create a column reference from the provided column name";
-	m.def("ColumnExpression", &DuckDBPyExpression::ColumnExpression, py::arg("name"), docs);
+	m.def("ColumnExpression", &DuckDBPyExpression::ColumnExpression, docs);
 
 	// Default Expression
 	docs = "";
@@ -265,7 +265,10 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 }
 
 static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
-	m.def(py::init<>([](const string &name) { return DuckDBPyExpression::ColumnExpression(name); }));
+	m.def(py::init<>([](const string &name) {
+		auto names = py::make_tuple(py::str(name));
+		return DuckDBPyExpression::ColumnExpression(names);
+	}));
 	m.def(py::init<>([](const py::object &obj) {
 		auto val = TransformPythonValue(obj);
 		return DuckDBPyExpression::InternalConstantExpression(std::move(val));
