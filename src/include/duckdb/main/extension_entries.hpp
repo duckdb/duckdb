@@ -967,6 +967,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_use_binary_copy", "postgres_scanner"},
     {"pg_use_ctid_scan", "postgres_scanner"},
     {"prefetch_all_parquet_files", "parquet"},
+    {"prefetch_metadata_bytes", "parquet"},
     {"s3_access_key_id", "httpfs"},
     {"s3_endpoint", "httpfs"},
     {"s3_region", "httpfs"},

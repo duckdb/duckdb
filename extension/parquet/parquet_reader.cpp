@@ -70,9 +70,19 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.path);
 	}
 
+	Value value;
+	context.TryGetCurrentSetting("prefetch_metadata_bytes", value);
+	const idx_t prefetch_metadata_bytes_option = UBigIntValue::Get(value);
+
+	const idx_t requested_footer_size = std::min((idx_t)file_size, prefetch_metadata_bytes_option + 8);
+
 	ResizeableBuffer buf;
 	buf.resize(allocator, 8);
 	buf.zero();
+
+	if (prefetch_metadata_bytes_option > 0) {
+		transport.RegisterPrefetch(file_size - requested_footer_size, requested_footer_size);
+	}
 
 	transport.SetLocation(file_size - 8);
 	transport.read(buf.ptr, 8);
@@ -102,7 +112,13 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 
 	auto metadata_pos = file_size - (footer_len + 8);
 	transport.SetLocation(metadata_pos);
-	transport.Prefetch(metadata_pos, footer_len);
+	if (metadata_pos < file_size - requested_footer_size) {
+		// metadata exceed the prefetch_metadata_bytes_option value
+		// Another request is needed
+		transport.ClearPrefetch();
+		transport.Prefetch(metadata_pos, footer_len);
+		// Note that this is not super clean, since some bytes will be requested twice
+	}
 
 	auto metadata = make_uniq<FileMetaData>();
 	if (footer_encrypted) {
