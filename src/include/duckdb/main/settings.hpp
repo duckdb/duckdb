@@ -1096,7 +1096,7 @@ struct ZstdMinStringLengthSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "zstd_min_string_length";
 	static constexpr const char *Description =
-	    "The (average) length at which to enable ZSTD compression, defaults to ('default_block_size' / 4)";
+	    "The (average) length at which to enable ZSTD compression, defaults to 4096";
 	static constexpr const char *InputType = "UBIGINT";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

@@ -761,21 +761,6 @@ Value FileSearchPathSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// ZSTD Threshold
-//===----------------------------------------------------------------------===//
-void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.zstd_min_string_length = input;
-}
-
-void ZstdMinStringLengthSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.zstd_min_string_length = Value(LogicalType::UBIGINT);
-}
-
-Value ZstdMinStringLengthSetting::GetSetting(const ClientContext &context) {
-	return context.db->config.options.zstd_min_string_length;
-}
-
-//===----------------------------------------------------------------------===//
 // Force Bitpacking Mode
 //===----------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

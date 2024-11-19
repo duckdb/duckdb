@@ -1065,4 +1065,20 @@ Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &
 	return Value::BOOLEAN(config.scalar_subquery_error_on_multiple_rows);
 }
 
+//===----------------------------------------------------------------------===//
+// Zstd Min String Length
+//===----------------------------------------------------------------------===//
+void ZstdMinStringLengthSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.zstd_min_string_length = input.GetValue<idx_t>();
+}
+
+void ZstdMinStringLengthSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.zstd_min_string_length = DBConfig().options.zstd_min_string_length;
+}
+
+Value ZstdMinStringLengthSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.zstd_min_string_length);
+}
+
 } // namespace duckdb
