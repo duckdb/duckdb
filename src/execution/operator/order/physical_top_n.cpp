@@ -236,14 +236,14 @@ void TopNHeap::Finalize() {
 }
 
 void TopNHeap::Reduce() {
-	if (payload_chunk.size() < ReduceThreshold()) {
+	if (heap_data.size() < ReduceThreshold()) {
 		// only reduce when we pass the reduce threshold
 		return;
 	}
 	// we have too many values in the heap - reduce them
 	StringHeap new_sort_heap;
-	DataChunk new_payload_chunk;
-	new_payload_chunk.Initialize(allocator, payload_types, HeapAllocSize());
+	DataChunk new_heap_data;
+	new_heap_data.Initialize(allocator, payload_types, HeapAllocSize());
 
 	SelectionVector new_payload_sel(heap.size());
 	for (idx_t i = 0; i < heap.size(); i++) {
@@ -258,10 +258,10 @@ void TopNHeap::Reduce() {
 	}
 
 	// copy over the data from the current payload chunk to the new payload chunk
-	payload_chunk.Copy(new_payload_chunk, new_payload_sel, heap.size());
+	heap_data.Copy(new_heap_data, new_payload_sel, heap.size());
 
 	new_sort_heap.Move(sort_key_heap);
-	payload_chunk.Reference(new_payload_chunk);
+	heap_data.Reference(new_heap_data);
 }
 
 void TopNHeap::InitializeScan(TopNScanState &state, bool exclude_offset) {
