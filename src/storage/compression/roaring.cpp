@@ -976,17 +976,18 @@ public:
 					result_idx = start_of_run - scanned_count;
 
 					// How much of the run are we covering?
-					auto run_end = MinValue<idx_t>(run.start + 1 + run.length, scanned_count + to_scan);
+					idx_t run_end = run.start + 1 + run.length;
+					auto run_or_scan_end = MinValue<idx_t>(run_end, scanned_count + to_scan);
 
 					// Process the run
-					D_ASSERT(run_end > start_of_run);
-					idx_t amount = run_end - start_of_run;
+					D_ASSERT(run_or_scan_end > start_of_run);
+					idx_t amount = run_or_scan_end - start_of_run;
 					idx_t start = result_offset + result_idx;
 					idx_t end = start + amount;
 					SetInvalidRange(result_mask, start, end);
 
-					result_idx += run_end - start_of_run;
-					if (scanned_count + result_idx == run.start + 1 + run.length) {
+					result_idx += run_or_scan_end - start_of_run;
+					if (scanned_count + result_idx == run_end) {
 						// Fully processed the current run
 						run_index++;
 					}
