@@ -9,6 +9,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/bitpacking.hpp"
 
 namespace duckdb {
 
@@ -138,6 +139,194 @@ public:
 	} data;
 };
 
+struct ContainerMetadataCollection {
+	static constexpr uint8_t IS_RUN_FLAG = 1 << 1;
+	static constexpr uint8_t IS_INVERTED_FLAG = 1 << 0;
+
+public:
+	ContainerMetadataCollection() {
+	}
+
+public:
+	void AddMetadata(ContainerMetadata metadata) {
+		if (metadata.IsRun()) {
+			AddRunContainer(metadata.NumberOfRuns(), metadata.IsInverted());
+		} else if (metadata.IsUncompressed()) {
+			AddBitsetContainer();
+		} else {
+			AddArrayContainer(metadata.Cardinality(), metadata.IsInverted());
+		}
+	}
+
+	idx_t GetMetadataSizeForSegment() const {
+		idx_t runs_count = GetRunContainerCount();
+		idx_t arrays_count = GetArrayAndBitsetContainerCount();
+		return GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+	}
+
+	idx_t GetMetadataSize(idx_t container_count, idx_t run_containers, idx_t array_containers) const {
+		idx_t types_size = BitpackingPrimitives::GetRequiredSize(container_count, 2);
+		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(run_containers, 6);
+		idx_t arrays_size = sizeof(uint8_t) * array_containers;
+		return types_size + runs_size + arrays_size;
+	}
+
+	idx_t GetRunContainerCount() const {
+		return runs_in_segment;
+	}
+	idx_t GetArrayAndBitsetContainerCount() const {
+		return arrays_in_segment;
+	}
+
+	void FlushSegment() {
+		runs_in_segment = 0;
+		count_in_segment = 0;
+		arrays_in_segment = 0;
+	}
+
+	void Reset() {
+		FlushSegment();
+		container_type.clear();
+		number_of_runs.clear();
+		cardinality.clear();
+	}
+
+	// Write the metadata for the current segment
+	idx_t Serialize(data_ptr_t dest) const {
+		// Element sizes (in bits) for written metadata
+		// +======================================+
+		// |mmmmmm|rrrrrr|aaaaaaa|                |
+		// +======================================+
+		//
+		// m: 2: (1: is_run, 1: is_inverted)
+		// r: 6: number_of_runs
+		// a: 8: cardinality
+
+		idx_t types_size = BitpackingPrimitives::GetRequiredSize(count_in_segment, 2);
+		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_in_segment, 6);
+		idx_t arrays_size = sizeof(uint8_t) * arrays_in_segment;
+
+		idx_t types_offset = container_type.size() - count_in_segment;
+		data_ptr_t types_data = (data_ptr_t)(container_type.data()); // NOLINT: c-style cast (for const)
+		BitpackingPrimitives::PackBuffer<uint8_t>(dest, types_data + types_offset, count_in_segment, 2);
+		dest += types_size;
+
+		idx_t runs_offset = number_of_runs.size() - runs_in_segment;
+		data_ptr_t run_data = (data_ptr_t)(number_of_runs.data()); // NOLINT: c-style cast (for const)
+		BitpackingPrimitives::PackBuffer<uint8_t>(dest, run_data + runs_offset, runs_in_segment, 6);
+		dest += runs_size;
+
+		idx_t arrays_offset = cardinality.size() - arrays_in_segment;
+		data_ptr_t arrays_data = (data_ptr_t)(cardinality.data()); // NOLINT: c-style cast (for const)
+		memcpy(dest, arrays_data + arrays_offset, sizeof(uint8_t) * arrays_in_segment);
+		return types_size + runs_size + arrays_size;
+	}
+
+	void Deserialize(data_ptr_t src, idx_t container_count) {
+		container_type.resize(
+		    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(container_count));
+		count_in_segment = container_count;
+
+		// Load the types of the containers
+		idx_t types_size = BitpackingPrimitives::GetRequiredSize(container_type.size(), 2);
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(container_type.data(), src, container_count, 2, true);
+		src += types_size;
+
+		// Figure out how many are run containers
+		idx_t runs_count = 0;
+		for (idx_t i = 0; i < container_count; i++) {
+			auto type = container_type[i];
+			runs_count += ((type >> 1) & 1) == 1;
+		}
+		runs_in_segment = runs_count;
+		number_of_runs.resize(AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(runs_count));
+		cardinality.resize(container_count - runs_count);
+
+		// Load the run containers
+		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_count, 6);
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(number_of_runs.data(), src, runs_count, 6, true);
+		src += runs_size;
+
+		// Load the array/bitset containers
+		idx_t arrays_size = sizeof(uint8_t) * cardinality.size();
+		arrays_in_segment = arrays_size;
+		memcpy(cardinality.data(), src, arrays_size);
+	}
+
+private:
+	void AddBitsetContainer() {
+		AddContainerType(false, false);
+		cardinality.push_back(MAX_ARRAY_IDX + 1);
+		arrays_in_segment++;
+		count_in_segment++;
+	}
+
+	void AddArrayContainer(idx_t amount, bool is_inverted) {
+		AddContainerType(false, is_inverted);
+		D_ASSERT(amount < MAX_ARRAY_IDX);
+		cardinality.push_back(amount);
+		arrays_in_segment++;
+		count_in_segment++;
+	}
+
+	void AddRunContainer(idx_t amount, bool is_inverted) {
+		AddContainerType(true, is_inverted);
+		D_ASSERT(amount < MAX_RUN_IDX);
+		number_of_runs.push_back(amount);
+		runs_in_segment++;
+		count_in_segment++;
+	}
+
+	void AddContainerType(bool is_run, bool is_inverted) {
+		uint8_t type = 0;
+		if (is_run) {
+			type |= IS_RUN_FLAG;
+		}
+		if (is_inverted) {
+			type |= IS_INVERTED_FLAG;
+		}
+		container_type.push_back(type);
+	}
+
+public:
+	//! Encode for each container in the lower 2 bits if the container 'is_run' and 'is_inverted'
+	vector<uint8_t> container_type;
+	//! Encode for each run container the length
+	vector<uint8_t> number_of_runs;
+	//! Encode for each array/bitset container the length
+	vector<uint8_t> cardinality;
+
+	idx_t count_in_segment = 0;
+	idx_t runs_in_segment = 0;
+	idx_t arrays_in_segment = 0;
+};
+
+struct ContainerMetadataCollectionScanner {
+public:
+	ContainerMetadataCollectionScanner(ContainerMetadataCollection &collection) : collection(collection) {
+	}
+
+public:
+	ContainerMetadata GetNext() {
+		auto type = collection.container_type[idx++];
+		const bool is_inverted = (type & 1) == 1;
+		const bool is_run = ((type >> 1) & 1) == 1;
+		uint8_t amount;
+		if (is_run) {
+			amount = collection.number_of_runs[run_idx++];
+		} else {
+			amount = collection.cardinality[array_idx++];
+		}
+		return ContainerMetadata(is_inverted, is_run, amount);
+	}
+
+public:
+	const ContainerMetadataCollection &collection;
+	idx_t array_idx = 0;
+	idx_t run_idx = 0;
+	idx_t idx = 0;
+};
+
 struct RunContainerRLEPair {
 	uint16_t start;
 	uint16_t length;
@@ -180,7 +369,6 @@ public:
 		}
 		idx_t GetByteSize() const {
 			idx_t res = 0;
-			res += sizeof(ContainerMetadata);
 			switch (container_type) {
 			case ContainerType::BITSET_CONTAINER:
 				res += AlignValue<idx_t, 8>(count) / 8;
@@ -386,6 +574,7 @@ public:
 			D_ASSERT(!space_used);
 			return;
 		}
+		metadata_collection.FlushSegment();
 		total_size += space_used;
 		space_used = 0;
 		current_count = 0;
@@ -398,11 +587,24 @@ public:
 		}
 		container_state.Finalize();
 		auto res = container_state.GetResult();
-		container_metadata.push_back(res.GetMetadata());
-		auto required_space = res.GetByteSize();
+		idx_t runs_count = metadata_collection.GetRunContainerCount();
+		idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
+
+		auto metadata = res.GetMetadata();
+		if (metadata.IsRun()) {
+			runs_count++;
+		} else {
+			arrays_count++;
+		}
+
+		idx_t required_space = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+
+		required_space += res.GetByteSize();
 		if (!HasEnoughSpaceInSegment(required_space)) {
 			FlushSegment();
 		}
+		container_metadata.push_back(metadata);
+		metadata_collection.AddMetadata(metadata);
 		space_used += required_space;
 		current_count += container_state.count;
 		container_state.Reset();
@@ -454,6 +656,7 @@ public:
 	//! The total amount of bytes used to compress the whole segment
 	idx_t total_size = 0;
 	//! The container metadata, determining the type of each container to use during compression
+	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> container_metadata;
 };
 
@@ -504,7 +707,7 @@ public:
 	}
 
 	bool CanStore(idx_t container_size, const ContainerMetadata &metadata) {
-		idx_t required_space = sizeof(ContainerMetadata);
+		idx_t required_space = 0;
 		if (metadata.IsUncompressed()) {
 			// Account for the alignment we might need for this container
 			required_space +=
@@ -515,6 +718,21 @@ public:
 		} else {
 			required_space += sizeof(uint16_t) * metadata.Cardinality();
 		}
+
+		idx_t runs_count = metadata_collection.GetRunContainerCount();
+		idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
+#ifdef DEBUG
+		idx_t current_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+		(void)current_size;
+		D_ASSERT(required_space + current_size <= GetRemainingSpace());
+#endif
+		if (metadata.IsRun()) {
+			runs_count++;
+		} else {
+			arrays_count++;
+		}
+		idx_t metadata_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+		required_space += metadata_size;
 
 		if (required_space > GetRemainingSpace()) {
 			return false;
@@ -529,7 +747,7 @@ public:
 		}
 		auto container_index = GetContainerIndex();
 		D_ASSERT(container_index < container_metadata.size());
-		auto &metadata = container_metadata[container_index];
+		auto metadata = container_metadata[container_index];
 
 		idx_t container_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(
 		    MinValue<idx_t>(analyze_state.count - count, ROARING_CONTAINER_SIZE));
@@ -538,9 +756,6 @@ public:
 			FlushSegment();
 			CreateEmptySegment(row_start);
 		}
-
-		metadata_ptr -= sizeof(ContainerMetadata);
-		Store<ContainerMetadata>(metadata, metadata_ptr);
 
 		// Override the pointer to write directly into the block
 		if (metadata.IsUncompressed()) {
@@ -555,6 +770,7 @@ public:
 			container_state.OverrideArray(data_ptr, metadata.IsInverted());
 			data_ptr += sizeof(uint16_t) * metadata.Cardinality();
 		}
+		metadata_collection.AddMetadata(metadata);
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -577,7 +793,7 @@ public:
 		auto &state = checkpointer.GetCheckpointState();
 		auto base_ptr = handle.Ptr();
 		// +======================================+
-		// |x|ddddddddddddddd|                |mmm|
+		// |x|ddddddddddddddd||mmm|               |
 		// +======================================+
 
 		// x: metadata_offset (to the "right" of it)
@@ -587,29 +803,24 @@ public:
 		// This is after 'x'
 		base_ptr += sizeof(idx_t);
 
-		// Size of the 'd' segment
+		// Size of the 'd' part
 		idx_t data_size = NumericCast<idx_t>(data_ptr - base_ptr);
 		data_size = AlignValue(data_size);
-		// Size of the 'm' segment
-		idx_t metadata_size = NumericCast<idx_t>(handle.Ptr() + info.GetBlockSize() - metadata_ptr);
-		idx_t total_segment_size;
+
+		// Size of the 'm' part
+		idx_t metadata_size = metadata_collection.GetMetadataSizeForSegment();
 
 		if (current_segment->count.load() == 0) {
+			D_ASSERT(metadata_size == 0);
 			return;
 		}
 
-		auto gap = metadata_ptr - data_ptr;
-		double percentage_of_block = (double)gap / ((double)info.GetBlockSize() / 100.0);
-		if (percentage_of_block > 0.25) {
-			// Move the metadata, to close the gap between the data and the metadata
-			std::memmove(base_ptr + data_size, metadata_ptr, metadata_size);
-			metadata_ptr = base_ptr + data_size;
-			total_segment_size = sizeof(idx_t) + data_size + metadata_size;
-		} else {
-			total_segment_size = info.GetBlockSize();
-		}
-		auto metadata_start = (metadata_ptr - base_ptr) + metadata_size;
+		idx_t serialized_metadata_size = metadata_collection.Serialize(data_ptr);
+		(void)serialized_metadata_size;
+		D_ASSERT(metadata_size == serialized_metadata_size);
+		auto metadata_start = data_ptr - base_ptr;
 		Store<idx_t>(metadata_start, handle.Ptr());
+		idx_t total_segment_size = sizeof(idx_t) + data_size + metadata_size;
 		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
@@ -678,6 +889,7 @@ public:
 	RoaringAnalyzeState &analyze_state;
 
 	ContainerCompressionState &container_state;
+	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> &container_metadata;
 
 	ColumnDataCheckpointer &checkpointer;
@@ -992,20 +1204,20 @@ public:
 
 		// Deserialize the container metadata for this segment
 		auto metadata_offset = Load<idx_t>(base_ptr);
-		auto metadata_ptr = data_ptr + metadata_offset - sizeof(ContainerMetadata);
+		auto metadata_ptr = data_ptr + metadata_offset;
 
 		auto segment_count = segment.count.load();
 		auto container_count = segment_count / ROARING_CONTAINER_SIZE;
 		if (segment_count % ROARING_CONTAINER_SIZE != 0) {
 			container_count++;
 		}
-		container_metadata.reserve(container_count);
+		metadata_collection.Deserialize(metadata_ptr, container_count);
+		ContainerMetadataCollectionScanner scanner(metadata_collection);
 		data_start_position.reserve(container_count);
 		idx_t position = 0;
 		for (idx_t i = 0; i < container_count; i++) {
-			auto metadata = Load<ContainerMetadata>(metadata_ptr);
+			auto metadata = scanner.GetNext();
 			container_metadata.push_back(metadata);
-			metadata_ptr -= sizeof(ContainerMetadata);
 			if (metadata.IsUncompressed()) {
 				position = AlignValue<idx_t>(position);
 			}
@@ -1134,6 +1346,7 @@ public:
 	ColumnSegment &segment;
 	unique_ptr<ContainerScanState> current_container;
 	data_ptr_t data_ptr;
+	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> container_metadata;
 	vector<idx_t> data_start_position;
 };
