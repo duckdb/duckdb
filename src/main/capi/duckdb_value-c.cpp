@@ -145,12 +145,19 @@ duckdb_value duckdb_create_time_tz_value(duckdb_time_tz input) {
 duckdb_time_tz duckdb_get_time_tz(duckdb_value val) {
 	return {CAPIGetValue<duckdb::dtime_tz_t, LogicalTypeId::TIME_TZ>(val).bits};
 }
+
 duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
-	return CAPICreateValue(duckdb::timestamp_t(input.micros));
+	duckdb::timestamp_t ts(input.micros);
+	return CAPICreateValue(ts);
 }
+
 duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
+	if (!val) {
+		return duckdb_timestamp {0};
+	}
 	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP>(val).value};
 }
+
 duckdb_value duckdb_create_interval(duckdb_interval input) {
 	return WrapValue(new duckdb::Value(duckdb::Value::INTERVAL(input.months, input.days, input.micros)));
 }
@@ -331,6 +338,9 @@ duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index) {
 }
 
 bool duckdb_is_null_value(duckdb_value value) {
+	if (!value) {
+		return false;
+	}
 	return UnwrapValue(value).IsNull();
 }
 

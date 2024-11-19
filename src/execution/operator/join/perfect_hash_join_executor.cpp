@@ -50,7 +50,8 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 
 	// Scan the build keys in the hash table
 	Vector build_vector(key_type, key_count);
-	RowOperations::FullScanColumn(ht.layout, tuples_addresses, build_vector, key_count, 0);
+	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count, 0, build_vector,
+	                       *FlatVector::IncrementalSelectionVector(), nullptr);
 
 	// Now fill the selection vector using the build keys and create a sequential vector
 	// TODO: add check for fast pass when probe is part of build domain
