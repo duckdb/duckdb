@@ -265,7 +265,7 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 		global_boundary_val = string_t(boundary_val);
 	}
 
-	if (heap_size < 1000) {
+	if (heap_size <= 100) {
 		AddSmallHeap(input, sort_keys_vec, boundary_val, global_boundary_val);
 	} else {
 		AddLargeHeap(input, sort_keys_vec, boundary_val, global_boundary_val);
