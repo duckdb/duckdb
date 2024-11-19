@@ -244,6 +244,8 @@ void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec, const strin
 }
 
 void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_boundary) {
+	static constexpr idx_t SMALL_HEAP_THRESHOLD = 100;
+
 	// compute the ordering values for the new chunk
 	sort_chunk.Reset();
 	executor.Execute(input, sort_chunk);
@@ -265,7 +267,7 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 		global_boundary_val = string_t(boundary_val);
 	}
 
-	if (heap_size <= 100) {
+	if (heap_size <= SMALL_HEAP_THRESHOLD) {
 		AddSmallHeap(input, sort_keys_vec, boundary_val, global_boundary_val);
 	} else {
 		AddLargeHeap(input, sort_keys_vec, boundary_val, global_boundary_val);
