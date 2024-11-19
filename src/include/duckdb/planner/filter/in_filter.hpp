@@ -1,8 +1,7 @@
-
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/filter/optional_filter.hpp
+// duckdb/planner/filter/in_filter.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,26 +9,27 @@
 #pragma once
 
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
-class OptionalFilter : public TableFilter {
+class InFilter : public TableFilter {
 public:
-	static constexpr const TableFilterType TYPE = TableFilterType::OPTIONAL_FILTER;
+	static constexpr const TableFilterType TYPE = TableFilterType::IN_FILTER;
 
 public:
-	explicit OptionalFilter(unique_ptr<TableFilter> filter = nullptr);
+	explicit InFilter(vector<Value> values);
 
+	vector<Value> values;
+
+public:
+	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
+	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
-
-public:
-	// optional child filters
-	unique_ptr<TableFilter> child_filter;
 };
 
 } // namespace duckdb

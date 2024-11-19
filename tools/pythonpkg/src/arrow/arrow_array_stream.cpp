@@ -302,13 +302,13 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 	}
 }
 
-py::object TransformFilterRecursive(TableFilter *filter, vector<string> &column_ref, const string &timezone_config,
+py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_ref, const string &timezone_config,
                                     const ArrowType &type) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	py::object field = import_cache.pyarrow.dataset().attr("field");
-	switch (filter->filter_type) {
+	switch (filter.filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter->Cast<ConstantFilter>();
+		auto &constant_filter = filter.Cast<ConstantFilter>();
 		auto constant_field = field(py::tuple(py::cast(column_ref)));
 		auto constant_value = GetScalar(constant_filter.constant, timezone_config, type);
 		switch (constant_filter.comparison_type) {
@@ -342,42 +342,42 @@ py::object TransformFilterRecursive(TableFilter *filter, vector<string> &column_
 	}
 	//! We do not pushdown or conjunctions yet
 	case TableFilterType::CONJUNCTION_OR: {
-		idx_t i = 0;
-		auto &or_filter = filter->Cast<ConjunctionOrFilter>();
-		//! Get first non null filter type
-		auto child_filter = or_filter.child_filters[i++].get();
-		py::object expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
-		while (i < or_filter.child_filters.size()) {
-			child_filter = or_filter.child_filters[i++].get();
+		auto &or_filter = filter.Cast<ConjunctionOrFilter>();
+		py::object expression = py::none();
+		for (idx_t i = 0; i < or_filter.child_filters.size(); i++) {
+			auto &child_filter = *or_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
-			expression = expression.attr("__or__")(child_expression);
+			if (expression.is(py::none())) {
+				expression = std::move(child_expression);
+			} else {
+				expression = expression.attr("__or__")(child_expression);
+			}
 		}
 		return expression;
 	}
 	case TableFilterType::CONJUNCTION_AND: {
-		idx_t i = 0;
-		auto &and_filter = filter->Cast<ConjunctionAndFilter>();
-		auto child_filter = and_filter.child_filters[i++].get();
-		py::object expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
-		while (i < and_filter.child_filters.size()) {
-			child_filter = and_filter.child_filters[i++].get();
+		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
+		py::object expression = py::none();
+		for (idx_t i = 0; i < and_filter.child_filters.size(); i++) {
+			auto &child_filter = *and_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
-			expression = expression.attr("__and__")(child_expression);
+			if (expression.is(py::none())) {
+				expression = std::move(child_expression);
+			} else {
+				expression = expression.attr("__and__")(child_expression);
+			}
 		}
 		return expression;
 	}
 	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter->Cast<StructFilter>();
-		auto &child_type = StructType::GetChildType(type.GetDuckType(), struct_filter.child_idx);
+		auto &struct_filter = filter.Cast<StructFilter>();
 		auto &child_name = struct_filter.child_name;
 		auto &struct_type_info = type.GetTypeInfo<ArrowStructInfo>();
 		auto &struct_child_type = struct_type_info.GetChild(struct_filter.child_idx);
 
 		column_ref.push_back(child_name);
-		auto child_expr =
-		    TransformFilterRecursive(struct_filter.child_filter.get(), column_ref, timezone_config, struct_child_type);
-		column_ref.pop_back();
-
+		auto child_expr = TransformFilterRecursive(*struct_filter.child_filter, std::move(column_ref), timezone_config,
+		                                           struct_child_type);
 		return child_expr;
 	}
 	case TableFilterType::OPTIONAL_FILTER:
@@ -392,22 +392,28 @@ py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &f
                                                                unordered_map<idx_t, idx_t> filter_to_col,
                                                                const ClientProperties &config,
                                                                const ArrowTableType &arrow_table) {
-	auto filters_map = &filter_collection.filters;
-	auto it = filters_map->begin();
-	D_ASSERT(columns.find(it->first) != columns.end());
-	auto arrow_type = &arrow_table.GetColumns().at(filter_to_col.at(it->first));
+	auto &filters_map = filter_collection.filters;
 
-	vector<string> column_ref;
-	column_ref.push_back(columns[it->first]);
-	py::object expression = TransformFilterRecursive(it->second.get(), column_ref, config.time_zone, **arrow_type);
-	while (it != filters_map->end()) {
-		arrow_type = &arrow_table.GetColumns().at(filter_to_col.at(it->first));
-		column_ref.clear();
-		column_ref.push_back(columns[it->first]);
-		py::object child_expression =
-		    TransformFilterRecursive(it->second.get(), column_ref, config.time_zone, **arrow_type);
-		expression = expression.attr("__and__")(child_expression);
-		it++;
+	py::object expression = py::none();
+	for (auto &it : filters_map) {
+		auto column_idx = it.first;
+		auto &column_name = columns[column_idx];
+
+		vector<string> column_ref;
+		column_ref.push_back(column_name);
+
+		D_ASSERT(columns.find(column_idx) != columns.end());
+
+		auto &arrow_type = arrow_table.GetColumns().at(filter_to_col.at(column_idx));
+		py::object child_expression = TransformFilterRecursive(*it.second, column_ref, config.time_zone, *arrow_type);
+		if (child_expression.is(py::none())) {
+			continue;
+		}
+		else if (expression.is(py::none())) {
+			expression = std::move(child_expression);
+		} else {
+			expression = expression.attr("__and__")(child_expression);
+		}
 	}
 	return expression;
 }

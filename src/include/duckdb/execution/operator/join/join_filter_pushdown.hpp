@@ -17,6 +17,7 @@ class DataChunk;
 class DynamicTableFilterSet;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
+class JoinHashTable;
 
 struct JoinFilterPushdownColumn {
 	//! The probe column index to which this filter should be applied
@@ -58,7 +59,12 @@ public:
 
 	void Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const;
 	void Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const;
-	void PushFilters(JoinFilterGlobalState &gstate, const PhysicalOperator &op) const;
+	void PushFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
+	                 const PhysicalOperator &op) const;
+
+private:
+	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
+	                  idx_t filter_idx, idx_t filter_col_idx) const;
 };
 
 } // namespace duckdb
