@@ -46,6 +46,25 @@ class TestsSparkFunctionsNull(object):
             Row(result=1),
         ]
 
+    def test_nvl2(self, spark):
+        df = spark.createDataFrame(
+            [
+                (
+                    None,
+                    8,
+                    6,
+                ),
+                (
+                    1,
+                    9,
+                    9,
+                ),
+            ],
+            ["a", "b", "c"],
+        )
+        res = df.select(F.nvl2(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r=6), Row(r=9)]
+
     def test_ifnull(self, spark):
         data = [
             (None, 2),
@@ -57,4 +76,39 @@ class TestsSparkFunctionsNull(object):
         assert res == [
             Row(nvl_value=2),
             Row(nvl_value=4),
+        ]
+
+    def test_nullif(self, spark):
+        df = spark.createDataFrame(
+            [
+                (
+                    None,
+                    None,
+                ),
+                (
+                    1,
+                    9,
+                ),
+            ],
+            ["a", "b"],
+        )
+        res = df.select(F.nullif(df.a, df.b).alias('r')).collect()
+        assert res == [Row(r=None), Row(r=1)]
+
+    def test_isnull(self, spark):
+        df = spark.createDataFrame([(1, None), (None, 2)], ("a", "b"))
+
+        res = df.select("a", "b", F.isnull("a").alias("r1"), F.isnull(df.b).alias("r2")).collect()
+        assert res == [
+            Row(a=1, b=None, r1=False, r2=True),
+            Row(a=None, b=2, r1=True, r2=False),
+        ]
+
+    def test_isnotnull(self, spark):
+        df = spark.createDataFrame([(1, None), (None, 2)], ("a", "b"))
+
+        res = df.select("a", "b", F.isnotnull("a").alias("r1"), F.isnotnull(df.b).alias("r2")).collect()
+        assert res == [
+            Row(a=1, b=None, r1=True, r2=False),
+            Row(a=None, b=2, r1=False, r2=True),
         ]

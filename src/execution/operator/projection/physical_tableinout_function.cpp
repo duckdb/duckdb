@@ -111,7 +111,11 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 InsertionOrderPreservingMap<string> PhysicalTableInOutFunction::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
-		result["__text__"] = function.to_string(bind_data.get());
+		TableFunctionToStringInput input(function, bind_data.get());
+		auto to_string_result = function.to_string(input);
+		for (const auto &it : to_string_result) {
+			result[it.first] = it.second;
+		}
 	} else {
 		result["Name"] = function.name;
 	}

@@ -282,15 +282,17 @@ typedef struct {
 	int32_t offset;
 } duckdb_time_tz_struct;
 
-//! Timestamps are stored as microseconds since 1970-01-01
-//! Use the duckdb_from_timestamp/duckdb_to_timestamp function to extract individual information
+//! Timestamps are stored as microseconds since 1970-01-01.
+//! Use the duckdb_from_timestamp and duckdb_to_timestamp functions to extract individual information.
 typedef struct {
 	int64_t micros;
 } duckdb_timestamp;
+
 typedef struct {
 	duckdb_date_struct date;
 	duckdb_time_struct time;
 } duckdb_timestamp_struct;
+
 typedef struct {
 	int32_t months;
 	int32_t days;
@@ -1472,7 +1474,7 @@ Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the stat
 DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
 /*!
-Returns the parameter logical type for the parameter at the given index.
+Returns the logical type for the parameter at the given index.
 
 Returns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.
 
@@ -1480,7 +1482,7 @@ The return type of this call should be destroyed with `duckdb_destroy_logical_ty
 
 * @param prepared_statement The prepared statement.
 * @param param_idx The parameter index.
-* @return The parameter logical type
+* @return The logical type of the parameter
 */
 DUCKDB_API duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
@@ -1992,7 +1994,7 @@ Not to be confused with `duckdb_create_time_tz`, which creates a duckdb_time_tz_
 DUCKDB_API duckdb_value duckdb_create_time_tz_value(duckdb_time_tz value);
 
 /*!
-Creates a value from a timestamp
+Creates a TIMESTAMP value from a duckdb_timestamp
 
 * @param input The timestamp value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -2145,10 +2147,10 @@ Returns the time_tz value of the given value.
 DUCKDB_API duckdb_time_tz duckdb_get_time_tz(duckdb_value val);
 
 /*!
-Returns the timestamp value of the given value.
+Returns the TIMESTAMP value of the given value.
 
-* @param val A duckdb_value containing a timestamp
-* @return A duckdb_timestamp, or MinValue<timestamp> if the value cannot be converted
+* @param val A duckdb_value containing a TIMESTAMP
+* @return A duckdb_timestamp, or MinValue<timestamp_t> if the value cannot be converted
 */
 DUCKDB_API duckdb_timestamp duckdb_get_timestamp(duckdb_value val);
 
@@ -2244,17 +2246,17 @@ Returns the MAP value at index as a duckdb_value.
 DUCKDB_API duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index);
 
 /*!
-Returns whether the specified value is null value or not.
+Returns whether the value's type is SQLNULL or not.
 
 * @param value The value to check.
-* @return True if the value is null, otherwise false.
+* @return True, if the value's type is SQLNULL, otherwise false.
 */
 DUCKDB_API bool duckdb_is_null_value(duckdb_value value);
 
 /*!
-Creates a value representing a NULL value.
+Creates a value of type SQLNULL.
 
-* @return The duckdb_value that represents NULL. This must be destroyed with `duckdb_destroy_value`.
+* @return The duckdb_value representing SQLNULL. This must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_null_value();
 
@@ -2274,6 +2276,32 @@ Returns the LIST child at index as a duckdb_value.
 * @return The child as a duckdb_value.
 */
 DUCKDB_API duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index);
+
+/*!
+Creates an enum value from a type and a value. Must be destroyed with `duckdb_destroy_value`.
+
+* @param type The type of the enum
+* @param value The value for the enum
+* @return The enum value, or nullptr.
+*/
+DUCKDB_API duckdb_value duckdb_create_enum_value(duckdb_logical_type type, uint64_t value);
+
+/*!
+Returns the enum value of the given value.
+
+* @param value A duckdb_value containing an enum
+* @return A uint64_t, or MinValue<uint64> if the value cannot be converted
+*/
+DUCKDB_API uint64_t duckdb_get_enum_value(duckdb_value value);
+
+/*!
+Returns the STRUCT child at index as a duckdb_value.
+
+* @param value The STRUCT value.
+* @param index The index of the child.
+* @return The child as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
@@ -3528,18 +3556,20 @@ DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profilin
 // Appender
 //===--------------------------------------------------------------------===//
 
-// Appenders are the most efficient way of loading data into DuckDB from within the C interface, and are recommended for
-// fast data loading. The appender is much faster than using prepared statements or individual `INSERT INTO` statements.
+// Appenders are the most efficient way of loading data into DuckDB from within the C API.
+// They are recommended for fast data loading as they perform better than prepared statements or individual `INSERT
+// INTO` statements.
 
-// Appends are made in row-wise format. For every column, a `duckdb_append_[type]` call should be made, after which
-// the row should be finished by calling `duckdb_appender_end_row`. After all rows have been appended,
-// `duckdb_appender_destroy` should be used to finalize the appender and clean up the resulting memory.
+// Appends are possible in row-wise format, and by appending entire data chunks.
 
-// Instead of appending rows with `duckdb_appender_end_row`, it is also possible to fill and append
-// chunks-at-a-time.
+// Row-wise: for every column, a `duckdb_append_[type]` call should be made. After finishing all appends to a row, call
+// `duckdb_appender_end_row`.
 
-// Note that `duckdb_appender_destroy` should always be called on the resulting appender, even if the function returns
-// `DuckDBError`.
+// Chunk-wise: Consecutively call `duckdb_append_data_chunk` until all chunks have been appended.
+
+// After all data has been appended, call `duckdb_appender_close` to finalize the appender followed by
+// `duckdb_appender_destroy` to clean up the memory.
+
 /*!
 Creates an appender object.
 
@@ -3571,21 +3601,23 @@ DUCKDB_API duckdb_state duckdb_appender_create_ext(duckdb_connection connection,
                                                    duckdb_appender *out_appender);
 
 /*!
-Returns the number of columns in the table that belongs to the appender.
+Returns the number of columns that belong to the appender.
+If there is no active column list, then this equals the table's physical columns.
 
 * @param appender The appender to get the column count from.
-* @return The number of columns in the table.
+* @return The number of columns in the data chunks.
 */
 DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
 
 /*!
-Returns the type of the column at the specified index.
+Returns the type of the column at the specified index. This is either a type in the active column list, or the same type
+as a column in the receiving table.
 
-Note: The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+Note: The resulting type must be destroyed with `duckdb_destroy_logical_type`.
 
 * @param appender The appender to get the column type from.
 * @param col_idx The index of the column to get the type of.
-* @return The duckdb_logical_type of the column.
+* @return The `duckdb_logical_type` of the column.
 */
 DUCKDB_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
 
@@ -3633,6 +3665,26 @@ before destroying the appender, if you need insights into the specific error.
 * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_appender_destroy(duckdb_appender *appender);
+
+/*!
+Appends a column to the active column list of the appender. Immediately flushes all previous data.
+
+The active column list specifies all columns that are expected when flushing the data. Any non-active columns are filled
+with their default values, or NULL.
+
+* @param appender The appender to add the column to.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_appender_add_column(duckdb_appender appender, const char *name);
+
+/*!
+Removes all columns from the active column list of the appender, resetting the appender to treat all columns as active.
+Immediately flushes all previous data.
+
+* @param appender The appender to clear the columns from.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_appender_clear_columns(duckdb_appender appender);
 
 /*!
 A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
@@ -3759,14 +3811,11 @@ DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
 
 /*!
 Appends a pre-filled data chunk to the specified appender.
-
-The types of the data chunk must exactly match the types of the table, no casting is performed.
-If the types do not match or the appender is in an invalid state, DuckDBError is returned.
-If the append is successful, DuckDBSuccess is returned.
+ Attempts casting, if the data chunk types do not match the active appender types.
 
 * @param appender The appender to append to.
 * @param chunk The data chunk to append.
-* @return The return state.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk);
 

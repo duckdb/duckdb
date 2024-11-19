@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
+#include "duckdb/main/relation/join_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
@@ -1085,12 +1086,12 @@ static JoinType ParseJoinType(const string &type) {
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const py::object &condition,
                                                     const string &type) {
 
-	JoinType dtype;
+	JoinType join_type;
 	string type_string = StringUtil::Lower(type);
 	StringUtil::Trim(type_string);
 
-	dtype = ParseJoinType(type_string);
-	if (dtype == JoinType::INVALID) {
+	join_type = ParseJoinType(type_string);
+	if (join_type == JoinType::INVALID) {
 		ThrowUnsupportedJoinTypeError(type);
 	}
 	auto alias = GetAlias();
@@ -1101,7 +1102,23 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	}
 	if (py::isinstance<py::str>(condition)) {
 		auto condition_string = std::string(py::cast<py::str>(condition));
-		return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition_string, dtype));
+		return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition_string, join_type));
+	}
+	vector<string> using_list;
+	if (py::is_list_like(condition)) {
+		auto using_list_p = py::list(condition);
+		for (auto &item : using_list_p) {
+			if (!py::isinstance<py::str>(item)) {
+				string actual_type = py::str(item.get_type());
+				throw InvalidInputException("Using clause should be a list of strings, not %s", actual_type);
+			}
+			using_list.push_back(std::string(py::str(item)));
+		}
+		if (using_list.empty()) {
+			throw InvalidInputException("Please provide at least one string in the condition to create a USING clause");
+		}
+		auto join_relation = make_shared_ptr<JoinRelation>(rel, other->rel, std::move(using_list), join_type);
+		return make_uniq<DuckDBPyRelation>(std::move(join_relation));
 	}
 	shared_ptr<DuckDBPyExpression> condition_expr;
 	if (!py::try_cast(condition, condition_expr)) {
@@ -1110,7 +1127,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	}
 	vector<unique_ptr<ParsedExpression>> conditions;
 	conditions.push_back(condition_expr->GetExpression().Copy());
-	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
+	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), join_type));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Cross(DuckDBPyRelation *other) {
