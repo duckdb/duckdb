@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
 
-#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 
 namespace duckdb {
 
@@ -42,7 +42,7 @@ unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(Cl
 
 unique_ptr<LocalSinkState> PhysicalMaterializedCollector::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<MaterializedCollectorLocalState>();
-	state->collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	state->collection = make_uniq<ColumnDataCollection>(context.client, types);
 	state->collection->InitializeAppend(state->append_state);
 	return std::move(state);
 }
@@ -53,7 +53,7 @@ unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState
 		gstate.collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	}
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(gstate.collection),
-	                                                 gstate.context->GetClientProperties());
+	                                                 gstate.context->GetClientProperties(), gstate.context->db);
 	return std::move(result);
 }
 
