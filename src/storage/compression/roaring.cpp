@@ -264,7 +264,7 @@ private:
 	void AddArrayContainer(idx_t amount, bool is_inverted) {
 		AddContainerType(false, is_inverted);
 		D_ASSERT(amount < MAX_ARRAY_IDX);
-		cardinality.push_back(amount);
+		cardinality.push_back(NumericCast<uint8_t>(amount));
 		arrays_in_segment++;
 		count_in_segment++;
 	}
@@ -272,7 +272,7 @@ private:
 	void AddRunContainer(idx_t amount, bool is_inverted) {
 		AddContainerType(true, is_inverted);
 		D_ASSERT(amount < MAX_RUN_IDX);
-		number_of_runs.push_back(amount);
+		number_of_runs.push_back(NumericCast<uint8_t>(amount));
 		runs_in_segment++;
 		count_in_segment++;
 	}
@@ -338,7 +338,7 @@ struct ContainerCompressionState {
 public:
 	struct Result {
 	public:
-		static Result RunContainer(idx_t runs, bool nulls) {
+		static Result RunContainer(uint16_t runs, bool nulls) {
 			auto res = Result();
 			res.container_type = ContainerType::RUN_CONTAINER;
 			res.nulls = nulls;
@@ -346,7 +346,7 @@ public:
 			return res;
 		}
 
-		static Result ArrayContainer(idx_t array_size, bool nulls) {
+		static Result ArrayContainer(uint16_t array_size, bool nulls) {
 			auto res = Result();
 			res.container_type = ContainerType::ARRAY_CONTAINER;
 			res.nulls = nulls;
@@ -354,7 +354,7 @@ public:
 			return res;
 		}
 
-		static Result BitsetContainer(idx_t container_size) {
+		static Result BitsetContainer(uint16_t container_size) {
 			auto res = Result();
 			res.container_type = ContainerType::BITSET_CONTAINER;
 			res.nulls = true;
@@ -388,7 +388,7 @@ public:
 		//! Whether nulls are being encoded or non-nulls
 		bool nulls;
 		//! The amount (meaning depends on container_type)
-		idx_t count;
+		uint16_t count;
 
 	private:
 		Result() {
@@ -431,7 +431,7 @@ public:
 		auto &current_array_idx = array_idx[null];
 		if (current_array_idx < MAX_ARRAY_IDX) {
 			if (current_array_idx + amount <= MAX_ARRAY_IDX) {
-				for (idx_t i = 0; i < amount; i++) {
+				for (uint16_t i = 0; i < amount; i++) {
 					arrays[null][current_array_idx + i] = count + i;
 				}
 			}
@@ -531,9 +531,9 @@ public:
 
 public:
 	//! Total amount of values covered by the container
-	idx_t count = 0;
+	uint16_t count = 0;
 	//! How many of the total are null
-	idx_t null_count = 0;
+	uint16_t null_count = 0;
 	bool last_is_null = false;
 
 	RunContainerRLEPair *runs[2];
@@ -703,7 +703,7 @@ public:
 	}
 
 	idx_t GetRemainingSpace() {
-		return metadata_ptr - data_ptr;
+		return static_cast<idx_t>(metadata_ptr - data_ptr);
 	}
 
 	bool CanStore(idx_t container_size, const ContainerMetadata &metadata) {
@@ -818,7 +818,7 @@ public:
 		idx_t serialized_metadata_size = metadata_collection.Serialize(data_ptr);
 		(void)serialized_metadata_size;
 		D_ASSERT(metadata_size == serialized_metadata_size);
-		auto metadata_start = data_ptr - base_ptr;
+		idx_t metadata_start = static_cast<idx_t>(data_ptr - base_ptr);
 		Store<idx_t>(metadata_start, handle.Ptr());
 		idx_t total_segment_size = sizeof(idx_t) + data_size + metadata_size;
 		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
@@ -1378,7 +1378,7 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 	RoaringScanState scan_state(segment);
 
 	idx_t internal_offset;
-	idx_t vector_idx = scan_state.GetContainerIndex(row_id, internal_offset);
+	idx_t vector_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
 	auto &container_state = scan_state.LoadContainer(vector_idx, internal_offset);
 
 	scan_state.ScanInternal(container_state, 1, result, result_idx);
