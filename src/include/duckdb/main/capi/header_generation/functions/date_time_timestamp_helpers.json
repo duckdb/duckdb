@@ -280,36 +280,46 @@
         },
         {
             "name": "duckdb_from_timestamp_ns",
-            "return_type": "duckdb_timestamp_ns_struct",
+            "return_type": "duckdb_state",
             "params": [
                 {
                     "type": "duckdb_timestamp_ns",
                     "name": "ts_ns"
+                },
+                {
+                    "type": "duckdb_timestamp_ns_struct *",
+                    "name": "out_ts_ns_struct"
                 }
             ],
             "comment": {
                 "description": "Decompose a `duckdb_timestamp_ns` object into a `duckdb_timestamp_ns_struct`.\n\n",
                 "param_comments": {
-                    "ts": "The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column."
+                    "ts_ns": "The `duckdb_timestamp_ns` object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column.",
+                    "out_ts_ns_struct": "The `duckdb_timestamp_ns_struct` with the decomposed elements."
                 },
-                "return_value": "The `duckdb_timestamp_ns_struct` with the decomposed elements."
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
             }
         },
         {
             "name": "duckdb_to_timestamp_ns",
-            "return_type": "duckdb_timestamp_ns",
+            "return_type": "duckdb_state",
             "params": [
                 {
                     "type": "duckdb_timestamp_ns_struct",
-                    "name": "ts"
+                    "name": "ts_ns_struct"
+                },
+                {
+                    "type": "duckdb_timestamp_ns *",
+                    "name": "out_ts_ns"
                 }
             ],
             "comment": {
-                "description": "Re-compose a `duckdb_timestamp_ns` from a duckdb_timestamp_ns_struct.\n\n",
+                "description": "Recompose a `duckdb_timestamp_ns` from a `duckdb_timestamp_ns_struct`.\n\n",
                 "param_comments": {
-                    "ts": "The de-composed elements in a `duckdb_timestamp_ns_struct`."
+                    "ts_ns_struct": "The decomposed elements in a `duckdb_timestamp_ns_struct`.",
+                    "out_ts_ns": "The recomposed `duckdb_timestamp_ns`."
                 },
-                "return_value": "The `duckdb_timestamp_ns` element."
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
             }
         },
         {

@@ -809,12 +809,13 @@ TEST_CASE("Test append timestamp_ns in C API", "[capi]") {
 	time_struct_in.sec = 33;
 	time_struct_in.micros = 1234;
 
-	duckdb_timestamp_ns_struct ts_struct_in;
-	ts_struct_in.date = date_struct_in;
-	ts_struct_in.time = time_struct_in;
-	ts_struct_in.nanos = 789;
+	duckdb_timestamp_ns_struct ts_ns_struct_in;
+	ts_ns_struct_in.date = date_struct_in;
+	ts_ns_struct_in.time = time_struct_in;
+	ts_ns_struct_in.nanos = 789;
 
-	duckdb_timestamp_ns ts_ns_in = duckdb_to_timestamp_ns(ts_struct_in);
+	duckdb_timestamp_ns ts_ns_in;
+	REQUIRE(duckdb_to_timestamp_ns(ts_ns_struct_in, &ts_ns_in) == DuckDBSuccess);
 	REQUIRE(ts_ns_in.nanos == 715522953001234789);
 
 	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
@@ -832,15 +833,16 @@ TEST_CASE("Test append timestamp_ns in C API", "[capi]") {
 	auto ts_ns_out = data[0];
 	REQUIRE(ts_ns_out.nanos == ts_ns_in.nanos);
 
-	auto ts_struct_out = duckdb_from_timestamp_ns(ts_ns_out);
-	REQUIRE(ts_struct_out.date.year == ts_struct_in.date.year);
-	REQUIRE(ts_struct_out.date.month == ts_struct_in.date.month);
-	REQUIRE(ts_struct_out.date.day == ts_struct_in.date.day);
-	REQUIRE(ts_struct_out.time.hour == ts_struct_in.time.hour);
-	REQUIRE(ts_struct_out.time.min == ts_struct_in.time.min);
-	REQUIRE(ts_struct_out.time.sec == ts_struct_in.time.sec);
-	REQUIRE(ts_struct_out.time.micros == ts_struct_in.time.micros);
-	REQUIRE(ts_struct_out.nanos == ts_struct_in.nanos);
+	duckdb_timestamp_ns_struct ts_ns_struct_out;
+	REQUIRE(duckdb_from_timestamp_ns(ts_ns_out, &ts_ns_struct_out) == DuckDBSuccess);
+	REQUIRE(ts_ns_struct_out.date.year == ts_ns_struct_in.date.year);
+	REQUIRE(ts_ns_struct_out.date.month == ts_ns_struct_in.date.month);
+	REQUIRE(ts_ns_struct_out.date.day == ts_ns_struct_in.date.day);
+	REQUIRE(ts_ns_struct_out.time.hour == ts_ns_struct_in.time.hour);
+	REQUIRE(ts_ns_struct_out.time.min == ts_ns_struct_in.time.min);
+	REQUIRE(ts_ns_struct_out.time.sec == ts_ns_struct_in.time.sec);
+	REQUIRE(ts_ns_struct_out.time.micros == ts_ns_struct_in.time.micros);
+	REQUIRE(ts_ns_struct_out.nanos == ts_ns_struct_in.nanos);
 }
 
 TEST_CASE("Test append to different catalog in C API") {

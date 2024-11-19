@@ -509,8 +509,8 @@ typedef struct {
 	duckdb_timestamp_struct (*duckdb_from_timestamp_ms)(duckdb_timestamp_ms ts_ms);
 	duckdb_timestamp_ms (*duckdb_to_timestamp_ms)(duckdb_timestamp_struct ts);
 	bool (*duckdb_is_finite_timestamp_ms)(duckdb_timestamp_ms ts_ms);
-	duckdb_timestamp_ns_struct (*duckdb_from_timestamp_ns)(duckdb_timestamp_ns ts_ns);
-	duckdb_timestamp_ns (*duckdb_to_timestamp_ns)(duckdb_timestamp_ns_struct ts);
+	duckdb_state (*duckdb_from_timestamp_ns)(duckdb_timestamp_ns ts_ns, duckdb_timestamp_ns_struct *out_ts_ns_struct);
+	duckdb_state (*duckdb_to_timestamp_ns)(duckdb_timestamp_ns_struct ts_ns_struct, duckdb_timestamp_ns *out_ts_ns);
 	bool (*duckdb_is_finite_timestamp_ns)(duckdb_timestamp_ns ts_ns);
 	duckdb_value (*duckdb_create_timestamp_tz)(duckdb_timestamp input);
 	duckdb_value (*duckdb_create_timestamp_s)(duckdb_timestamp_s input);

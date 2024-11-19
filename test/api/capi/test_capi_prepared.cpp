@@ -230,12 +230,14 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
-	duckdb_timestamp_ns_struct ts_ns;
-	ts_ns.date = date_struct;
-	ts_ns.time = time_struct;
-	ts_ns.nanos = 789;
+	duckdb_timestamp_ns_struct ts_ns_struct;
+	ts_ns_struct.date = date_struct;
+	ts_ns_struct.time = time_struct;
+	ts_ns_struct.nanos = 789;
 
-	duckdb_bind_timestamp_ns(stmt, 1, duckdb_to_timestamp_ns(ts_ns));
+	duckdb_timestamp_ns ts_ns;
+	REQUIRE(duckdb_to_timestamp_ns(ts_ns_struct, &ts_ns) == DuckDBSuccess);
+	duckdb_bind_timestamp_ns(stmt, 1, ts_ns);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	value = duckdb_value_varchar(&res, 0, 0);

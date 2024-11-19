@@ -1397,17 +1397,21 @@ DUCKDB_API bool duckdb_is_finite_timestamp_ms(duckdb_timestamp_ms ts_ms);
 /*!
 Decompose a `duckdb_timestamp_ns` object into a `duckdb_timestamp_ns_struct`.
 
-* @return The `duckdb_timestamp_ns_struct` with the decomposed elements.
+* @param ts_ns The `duckdb_timestamp_ns` object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column.
+* @param out_ts_ns_struct The `duckdb_timestamp_ns_struct` with the decomposed elements.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
-DUCKDB_API duckdb_timestamp_ns_struct duckdb_from_timestamp_ns(duckdb_timestamp_ns ts_ns);
+DUCKDB_API duckdb_state duckdb_from_timestamp_ns(duckdb_timestamp_ns ts_ns,
+                                                 duckdb_timestamp_ns_struct *out_ts_ns_struct);
 
 /*!
-Re-compose a `duckdb_timestamp_ns` from a duckdb_timestamp_ns_struct.
+Recompose a `duckdb_timestamp_ns` from a `duckdb_timestamp_ns_struct`.
 
-* @param ts The de-composed elements in a `duckdb_timestamp_ns_struct`.
-* @return The `duckdb_timestamp_ns` element.
+* @param ts_ns_struct The decomposed elements in a `duckdb_timestamp_ns_struct`.
+* @param out_ts_ns The recomposed `duckdb_timestamp_ns`.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
-DUCKDB_API duckdb_timestamp_ns duckdb_to_timestamp_ns(duckdb_timestamp_ns_struct ts);
+DUCKDB_API duckdb_state duckdb_to_timestamp_ns(duckdb_timestamp_ns_struct ts_ns_struct, duckdb_timestamp_ns *out_ts_ns);
 
 /*!
 Test a `duckdb_timestamp_ns` to see if it is a finite value.
