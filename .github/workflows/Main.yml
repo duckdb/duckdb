@@ -95,7 +95,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json"
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
       RUN_SLOW_VERIFIERS: 1
 
     steps:
@@ -134,7 +134,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json"
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
 
     steps:
     - uses: actions/checkout@v4
