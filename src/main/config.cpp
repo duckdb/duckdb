@@ -295,6 +295,9 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 			}
 			array_size = array_size * 10 + static_cast<idx_t>(type[length_idx] - '0');
 		}
+		if (array_size == 0 || array_size > ArrayType::MAX_ARRAY_SIZE) {
+			throw InternalException("Invalid array size: '%s'", type);
+		}
 		auto child_type = ParseLogicalType(type.substr(0, bracket_open_idx));
 		return LogicalType::ARRAY(child_type, array_size);
 	}
@@ -328,6 +331,9 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 			StringUtil::Trim(union_member_parts[1]);
 			auto value_type = ParseLogicalType(union_member_parts[1]);
 			union_members.emplace_back(make_pair(union_member_parts[0], value_type));
+		}
+		if (union_members.empty() || union_members.size() > UnionType::MAX_UNION_MEMBERS) {
+			throw InternalException("Invalid number of union members: '%s'", type);
 		}
 		return LogicalType::UNION(union_members);
 	}
