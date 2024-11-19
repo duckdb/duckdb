@@ -316,12 +316,12 @@ void TopNHeap::Reduce() {
 void TopNHeap::InitializeScan(TopNScanState &state, bool exclude_offset) {
 	auto heap_copy = heap;
 	// traverse the rest of the heap
+	state.scan_order.resize(heap_copy.size());
 	while (!heap_copy.empty()) {
 		std::pop_heap(heap_copy.begin(), heap_copy.end());
-		state.scan_order.push_back(UnsafeNumericCast<sel_t>(heap_copy.back().index));
+		state.scan_order[heap_copy.size() - 1] = UnsafeNumericCast<sel_t>(heap_copy.back().index);
 		heap_copy.pop_back();
 	}
-	std::reverse(state.scan_order.begin(), state.scan_order.end());
 	state.pos = exclude_offset ? offset : 0;
 }
 
