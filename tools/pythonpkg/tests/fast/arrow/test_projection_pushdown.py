@@ -26,3 +26,6 @@ class TestArrowProjectionPushdown(object):
         arrow_dataset = ds.dataset(arrow_table)
         duckdb_conn.register("testarrowdataset", arrow_dataset)
         assert duckdb_conn.execute("SELECT sum(a) FROM  testarrowdataset").fetchall() == [(111,)]
+
+
+

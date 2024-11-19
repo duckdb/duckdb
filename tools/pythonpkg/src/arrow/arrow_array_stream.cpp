@@ -49,19 +49,6 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_
 	bool has_filter = filters && !filters->filters.empty();
 
 	if (has_filter) {
-		for (auto it = filters->filters.begin(); it != filters->filters.end();) {
-			if (it->second->filter_type == TableFilterType::OPTIONAL_FILTER) {
-				it = filters->filters.erase(it);
-			} else {
-				++it;
-			}
-		}
-	}
-
-	// make sure there is still a filter
-	has_filter = filters && !filters->filters.empty();
-
-	if (has_filter) {
 		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
 		                              client_properties, arrow_table);
 		if (column_list.empty()) {
@@ -393,6 +380,8 @@ py::object TransformFilterRecursive(TableFilter *filter, vector<string> &column_
 
 		return child_expr;
 	}
+	case TableFilterType::OPTIONAL_FILTER:
+		return py::none();
 	default:
 		throw NotImplementedException("Pushdown Filter Type not supported in Arrow Scans");
 	}
