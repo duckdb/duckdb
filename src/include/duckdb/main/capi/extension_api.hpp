@@ -436,6 +436,9 @@ typedef struct {
 	duckdb_value (*duckdb_create_null_value)();
 	idx_t (*duckdb_get_list_size)(duckdb_value value);
 	duckdb_value (*duckdb_get_list_child)(duckdb_value value, idx_t index);
+	duckdb_value (*duckdb_create_enum_value)(duckdb_logical_type type, uint64_t value);
+	uint64_t (*duckdb_get_enum_value)(duckdb_value value);
+	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -822,6 +825,9 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_create_null_value = duckdb_create_null_value;
 	result.duckdb_get_list_size = duckdb_get_list_size;
 	result.duckdb_get_list_child = duckdb_get_list_child;
+	result.duckdb_create_enum_value = duckdb_create_enum_value;
+	result.duckdb_get_enum_value = duckdb_get_enum_value;
+	result.duckdb_get_struct_child = duckdb_get_struct_child;
 	return result;
 }
 

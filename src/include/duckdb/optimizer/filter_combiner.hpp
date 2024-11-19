@@ -45,6 +45,10 @@ public:
 
 	FilterResult AddFilter(unique_ptr<Expression> expr);
 
+	//! Returns whether or not a set of integral values is a dense range (i.e. 1, 2, 3, 4, 5)
+	//! If this returns true - this sorts "in_list" as a side-effect
+	static bool IsDenseRange(vector<Value> &in_list);
+
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();
 	TableFilterSet GenerateTableScanFilters(const vector<ColumnIndex> &column_ids);

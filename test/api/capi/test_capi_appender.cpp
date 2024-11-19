@@ -596,7 +596,6 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 TEST_CASE("Test append DEFAULT in C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
-
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	SECTION("BASIC DEFAULT VALUE") {

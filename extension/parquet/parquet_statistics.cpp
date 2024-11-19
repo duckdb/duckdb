@@ -299,6 +299,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		auto &struct_reader = reader.Cast<StructColumnReader>();
 		// Recurse into child readers
 		for (idx_t i = 0; i < struct_reader.child_readers.size(); i++) {
+			if (!struct_reader.child_readers[i]) {
+				continue;
+			}
 			auto &child_reader = *struct_reader.child_readers[i];
 			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_reader, columns);
 			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));

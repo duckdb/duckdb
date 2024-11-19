@@ -393,6 +393,23 @@ void DefaultOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 }
 
 //===----------------------------------------------------------------------===//
+// Dynamic Or Filter Threshold
+//===----------------------------------------------------------------------===//
+void DynamicOrFilterThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.dynamic_or_filter_threshold = input.GetValue<idx_t>();
+}
+
+void DynamicOrFilterThresholdSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).dynamic_or_filter_threshold = ClientConfig().dynamic_or_filter_threshold;
+}
+
+Value DynamicOrFilterThresholdSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::UBIGINT(config.dynamic_or_filter_threshold);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable External Access
 //===----------------------------------------------------------------------===//
 void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

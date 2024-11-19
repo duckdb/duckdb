@@ -89,7 +89,7 @@ public:
 	//! Pin a buffer (if not in-memory)
 	void Pin();
 	//! Returns the first free offset in a bitmask
-	uint32_t GetOffset(const idx_t bitmask_count);
+	uint32_t GetOffset(const idx_t bitmask_count, const idx_t available_segments);
 	//! Sets the allocation size, if dirty
 	void SetAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
 
@@ -102,7 +102,7 @@ private:
 private:
 	//! Sets all uninitialized regions of a buffer in the respective partial block allocation
 	void SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t segment_size, const idx_t offset,
-	                             const idx_t bitmask_offset);
+	                             const idx_t bitmask_offset, const idx_t available_segments);
 };
 
 } // namespace duckdb

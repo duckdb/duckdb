@@ -111,9 +111,8 @@ void pg_parser_parse(const char *query, parse_result *res) {
 	} catch (std::exception &ex) {
 		res->success = false;
 		res->error_message = ex.what();
+		res->error_location = pg_parser_state.pg_err_pos;
 	}
-	res->error_message = pg_parser_state.pg_err_msg;
-	res->error_location = pg_parser_state.pg_err_pos;
 }
 
 void pg_parser_cleanup() {
@@ -128,8 +127,7 @@ void pg_parser_cleanup() {
 }
 
 int ereport(int code, ...) {
-	std::string err = "parser error : " + std::string(pg_parser_state.pg_err_msg);
-	throw std::runtime_error(err);
+	throw std::runtime_error(pg_parser_state.pg_err_msg);
 }
 void elog(int code, const char *fmt, ...) {
 	throw std::runtime_error("elog NOT IMPLEMENTED");

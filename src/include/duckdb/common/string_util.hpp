@@ -125,6 +125,9 @@ public:
 	//! Returns true if the needle string exists in the haystack
 	DUCKDB_API static bool Contains(const string &haystack, const string &needle);
 
+	//! Returns the position of needle string within the haystack
+	DUCKDB_API static optional_idx Find(const string &haystack, const string &needle);
+
 	//! Returns true if the target string starts with the given prefix
 	DUCKDB_API static bool StartsWith(string str, string prefix);
 

@@ -59,7 +59,8 @@
         "parameters": "",
         "description": "",
         "example": "",
-        "type": "scalar_function"
+        "type": "scalar_function",
+        "aliases": ["ends_with"]
     },
     {
         "name": "contains",

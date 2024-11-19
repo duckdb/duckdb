@@ -9,7 +9,7 @@ namespace duckdb {
 bool Comparators::TieIsBreakable(const idx_t &tie_col, const data_ptr_t &row_ptr, const SortLayout &sort_layout) {
 	const auto &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
 	// Check if the blob is NULL
-	ValidityBytes row_mask(row_ptr);
+	ValidityBytes row_mask(row_ptr, sort_layout.column_count);
 	idx_t entry_idx;
 	idx_t idx_in_entry;
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
@@ -195,8 +195,8 @@ int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
                                          const child_list_t<LogicalType> &types, bool valid) {
 	idx_t count = types.size();
 	// Load validity masks
-	ValidityBytes left_validity(left_ptr);
-	ValidityBytes right_validity(right_ptr);
+	ValidityBytes left_validity(left_ptr, types.size());
+	ValidityBytes right_validity(right_ptr, types.size());
 	left_ptr += (count + 7) / 8;
 	right_ptr += (count + 7) / 8;
 	// Initialize variables
@@ -235,8 +235,8 @@ int Comparators::CompareArrayAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_
 	}
 
 	// Load array validity masks
-	ValidityBytes left_validity(left_ptr);
-	ValidityBytes right_validity(right_ptr);
+	ValidityBytes left_validity(left_ptr, array_size);
+	ValidityBytes right_validity(right_ptr, array_size);
 	left_ptr += (array_size + 7) / 8;
 	right_ptr += (array_size + 7) / 8;
 
@@ -352,8 +352,8 @@ int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_p
 	left_ptr += sizeof(idx_t);
 	right_ptr += sizeof(idx_t);
 	// Load list validity masks
-	ValidityBytes left_validity(left_ptr);
-	ValidityBytes right_validity(right_ptr);
+	ValidityBytes left_validity(left_ptr, left_len);
+	ValidityBytes right_validity(right_ptr, right_len);
 	left_ptr += (left_len + 7) / 8;
 	right_ptr += (right_len + 7) / 8;
 	// Compare
