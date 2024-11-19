@@ -33,7 +33,6 @@ static void StructConcatFunction(DataChunk &args, ExpressionState &state, Vector
 
 static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	case_insensitive_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
 	if (arguments.empty()) {
@@ -47,6 +46,11 @@ static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarF
 
 	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
 		const auto &arg = arguments[arg_idx];
+
+		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
+
 		if (arg->return_type.id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException("struct_concat: Argument at position \"%d\" is not a STRUCT", arg_idx + 1);
 		}
@@ -54,9 +58,15 @@ static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarF
 		const auto &child_types = StructType::GetChildTypes(arg->return_type);
 		for (const auto &child : child_types) {
 			if (!child.first.empty()) {
-				if (name_set.find(child.first) != name_set.end()) {
-					throw InvalidInputException("struct_concat: Arguments contain duplicate STRUCT entry \"%s\"",
-					                            child.first);
+				auto it = name_set.find(child.first);
+				if (it != name_set.end()) {
+					if (*it == child.first) {
+						throw InvalidInputException("struct_concat: Arguments contain duplicate STRUCT entry \"%s\"",
+						                            child.first);
+					}
+					throw InvalidInputException(
+					    "struct_concat: Arguments contain case-insensitive duplicate STRUCT entry \"%s\" and \"%s\"",
+					    child.first, *it);
 				}
 				name_set.insert(child.first);
 			} else {
@@ -71,7 +81,7 @@ static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarF
 	}
 
 	bound_function.return_type = LogicalType::STRUCT(combined_children);
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	return nullptr;
 }
 
 unique_ptr<BaseStatistics> StructConcatStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -99,8 +109,6 @@ ScalarFunction StructConcatFun::GetFunction() {
 	                   StructConcatStats);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.serialize = VariableReturnBindData::Serialize;
-	fun.deserialize = VariableReturnBindData::Deserialize;
 	return fun;
 }
 

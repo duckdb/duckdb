@@ -60,6 +60,16 @@ SELECT struct_concat({'a': 'first struct'}, {'a': 'second struct'});
 Invalid Input Error: struct_concat: Arguments contain duplicate STRUCT entry "a"
 
 statement error
+SELECT struct_concat({'a': 'first struct'}, {'A': 'second struct'});
+----
+Invalid Input Error: struct_concat: Arguments contain case-insensitive duplicate STRUCT entry "A" and "a"
+
+statement error
+SELECT struct_concat({'a': 1}, NULL);
+----
+Invalid Input Error: struct_concat: Argument at position "2" is not a STRUCT
+
+statement error
 SELECT struct_concat({'a': 'named struct'}, row(10));
 ----
 Invalid Input Error: struct_concat: Cannot mix named and unnamed STRUCTs
@@ -68,3 +78,21 @@ query I
 SELECT struct_concat(row('a'), row('b'));
 ----
 (a, b)
+
+statement ok
+PREPARE v1 AS SELECT struct_concat({'a': 1}, ?);
+
+query I
+EXECUTE v1({'b': 42});
+----
+{'a': 1, 'b': 42}
+
+statement ok
+PREPARE v2 AS SELECT struct_concat({'a': ?}, {'b': 42});
+
+query I
+EXECUTE v2(1);
+----
+{'a': 1, 'b': 42}
+
+
