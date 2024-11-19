@@ -3,6 +3,8 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
+#include <complex>
+
 namespace duckdb {
 
 bool LimitPushdown::CanOptimize(duckdb::LogicalOperator &op) {
@@ -30,6 +32,7 @@ unique_ptr<LogicalOperator> LimitPushdown::Optimize(unique_ptr<LogicalOperator> 
 	if (CanOptimize(*op)) {
 		auto projection = std::move(op->children[0]);
 		op->children[0] = std::move(projection->children[0]);
+		projection->SetEstimatedCardinality(op->estimated_cardinality);
 		projection->children[0] = std::move(op);
 		swap(projection, op);
 	}
