@@ -190,12 +190,18 @@
         "name": "make_date",
         "variants": [
             {
-                "parameters": "year,month,day",
+                "parameters": [
+                    {"name": "year"},
+                    {"name": "month"},
+                    {"name": "day"}
+                ],
                 "description": "The date for the given parts",
                 "example": "make_date(1992, 9, 20)"
             },
             {
-                "parameters": "date-struct::STRUCT(year BIGINT, month BIGINT, day BIGINT)",
+                "parameters": [
+                    {"name": "date-struct", "type": "STRUCT(year BIGINT, month BIGINT, day BIGINT)"}
+                ],
                 "description": "The date for the given struct.",
                 "example": "make_date({'year': 2024, 'month': 11, 'day': 14})"
             }

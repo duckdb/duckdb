@@ -247,12 +247,17 @@
         "name": "trim",
         "variants": [
             {
-                "parameters": "string::VARCHAR",
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"}
+                ],
                 "description": "Removes any spaces from either side of the string.",
                 "example": "trim(' test ')"
             },
             {
-                "parameters": "string::VARCHAR,characters::VARCHAR",
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "characters", "type": "VARCHAR"}
+                ],
                 "description": "Removes any occurrences of any of the characters from either side of the string",
                 "example": "trim('>>>>test<<', '><')"
             }

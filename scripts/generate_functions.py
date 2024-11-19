@@ -64,7 +64,13 @@ def get_struct_name(function_name):
 
 
 def get_parameter_line(variants):
-    return "\\1".join([variant['parameters'] for variant in variants])
+    return "\\1".join(
+        ",".join(
+            param['name'] + "::" + param['type'] if ('type' in param) else param['name']
+            for param in variant['parameters']
+        )
+        for variant in variants
+    )
 
 
 def get_description_line(variants):
