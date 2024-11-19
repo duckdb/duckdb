@@ -90,6 +90,9 @@ public:
 	void InitializeScan(TopNScanState &state, bool exclude_offset);
 	void Scan(TopNScanState &state, DataChunk &chunk);
 
+	void AddSmallHeap(DataChunk &input, Vector &sort_keys_vec, const string &boundary_val, const string_t &global_boundary_val);
+	void AddLargeHeap(DataChunk &input, Vector &sort_keys_vec, const string &boundary_val, const string_t &global_boundary_val);
+
 public:
 	idx_t ReduceThreshold() const {
 		return MaxValue<idx_t>(STANDARD_VECTOR_SIZE * 5ULL, 2ULL * heap_size);
@@ -132,28 +135,7 @@ TopNHeap::TopNHeap(ExecutionContext &context, const vector<LogicalType> &payload
     : TopNHeap(context.client, Allocator::Get(context.client), payload_types, orders, limit, offset) {
 }
 
-void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_boundary) {
-	// compute the ordering values for the new chunk
-	sort_chunk.Reset();
-	executor.Execute(input, sort_chunk);
-
-	// construct the sort key from the sort chunk
-	vector<OrderModifiers> modifiers;
-	for (auto &order : orders) {
-		modifiers.emplace_back(order.type, order.null_order);
-	}
-	sort_keys.Reset();
-	auto &sort_keys_vec = sort_keys.data[0];
-	CreateSortKeyHelpers::CreateSortKey(sort_chunk, modifiers, sort_keys_vec);
-
-	// fetch the current global boundary (if any)
-	string boundary_val;
-	string_t global_boundary_val;
-	if (global_boundary) {
-		boundary_val = global_boundary->GetBoundaryValue();
-		global_boundary_val = string_t(boundary_val);
-	}
-
+void TopNHeap::AddSmallHeap(DataChunk &input, Vector &sort_keys_vec, const string &boundary_val, const string_t &global_boundary_val) {
 	// insert the sort keys into the priority queue
 	constexpr idx_t BASE_INDEX = NumericLimits<uint32_t>::Maximum();
 
@@ -187,11 +169,6 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 		// early-out: no matches
 		return;
 	}
-	// if we modified the heap we might be able to update the global boundary
-	// note that the global boundary only applies to FULL heaps
-	if (heap.size() >= heap_size && global_boundary) {
-		global_boundary->UpdateValue(heap.front().sort_key);
-	}
 
 	// for all matching entries we need to copy over the corresponding payload values
 	idx_t match_count = 0;
@@ -212,6 +189,78 @@ void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_bou
 
 	// copy over the input rows to the payload chunk
 	heap_data.Append(input, true, &matching_sel, match_count);
+}
+
+void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec, const string &boundary_val, const string_t &global_boundary_val) {
+	auto sort_key_values = FlatVector::GetData<string_t>(sort_keys_vec);
+	idx_t base_index = heap_data.size();
+	idx_t match_count = 0;
+	for (idx_t r = 0; r < input.size(); r++) {
+		auto &sort_key = sort_key_values[r];
+		if (!boundary_val.empty() && sort_key > global_boundary_val) {
+			continue;
+		}
+		if (heap.size() >= heap_size) {
+			// heap is full - check the latest entry
+			if (sort_key > heap.front().sort_key) {
+				// current max in the heap is smaller than the new key - skip this entry
+				continue;
+			}
+		}
+		// replace the previous top entry with the new entry
+		TopNEntry entry;
+		entry.sort_key = sort_key.IsInlined() ? sort_key : sort_key_heap.AddBlob(sort_key);
+		entry.index = base_index + match_count;
+		matching_sel.set_index(match_count++, r);
+		if (heap.size() >= heap_size) {
+			std::pop_heap(heap.begin(), heap.end());
+			heap.pop_back();
+		}
+		heap.push_back(entry);
+		std::push_heap(heap.begin(), heap.end());
+	}
+	if (match_count == 0) {
+		// early-out: no matches
+		return;
+	}
+
+	// copy over the input rows to the payload chunk
+	heap_data.Append(input, true, &matching_sel, match_count);
+}
+
+void TopNHeap::Sink(DataChunk &input, optional_ptr<TopNBoundaryValue> global_boundary) {
+	// compute the ordering values for the new chunk
+	sort_chunk.Reset();
+	executor.Execute(input, sort_chunk);
+
+	// construct the sort key from the sort chunk
+	vector<OrderModifiers> modifiers;
+	for (auto &order : orders) {
+		modifiers.emplace_back(order.type, order.null_order);
+	}
+	sort_keys.Reset();
+	auto &sort_keys_vec = sort_keys.data[0];
+	CreateSortKeyHelpers::CreateSortKey(sort_chunk, modifiers, sort_keys_vec);
+
+	// fetch the current global boundary (if any)
+	string boundary_val;
+	string_t global_boundary_val;
+	if (global_boundary) {
+		boundary_val = global_boundary->GetBoundaryValue();
+		global_boundary_val = string_t(boundary_val);
+	}
+
+	if (heap_size < 1000) {
+		AddSmallHeap(input, sort_keys_vec, boundary_val, global_boundary_val);
+	} else {
+		AddLargeHeap(input, sort_keys_vec, boundary_val, global_boundary_val);
+	}
+
+	// if we modified the heap we might be able to update the global boundary
+	// note that the global boundary only applies to FULL heaps
+	if (heap.size() >= heap_size && global_boundary) {
+		global_boundary->UpdateValue(heap.front().sort_key);
+	}
 }
 
 void TopNHeap::Combine(TopNHeap &other) {
