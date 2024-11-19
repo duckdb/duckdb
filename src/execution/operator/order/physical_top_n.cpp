@@ -98,7 +98,7 @@ public:
 		return MaxValue<idx_t>(STANDARD_VECTOR_SIZE * 5ULL, 2ULL * heap_size);
 	}
 
-	idx_t HeapAllocSize() const {
+	idx_t InitialHeapAllocSize() const {
 		return MinValue<idx_t>(STANDARD_VECTOR_SIZE * 100ULL, ReduceThreshold()) + STANDARD_VECTOR_SIZE;
 	}
 };
@@ -120,7 +120,7 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 	}
 	vector<LogicalType> sort_keys_type {LogicalType::BLOB};
 	sort_keys.Initialize(allocator, sort_keys_type);
-	heap_data.Initialize(allocator, payload_types, HeapAllocSize());
+	heap_data.Initialize(allocator, payload_types, InitialHeapAllocSize());
 	payload_chunk.Initialize(allocator, payload_types);
 	sort_chunk.Initialize(allocator, sort_types);
 }
