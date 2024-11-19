@@ -161,11 +161,7 @@ void TableStatistics::CopyStats(TableStatisticsLock &lock, TableStatistics &othe
 	}
 
 	if (table_sample) {
-		// this may shrink the ingestion sample. we don't mind
 		D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
-		auto &ingestion_sample = table_sample->Cast<IngestionSample>();
-		// first shrink the sample, then copy.
-		ingestion_sample.Shrink();
 		other.table_sample = table_sample->Copy();
 	}
 }

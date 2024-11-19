@@ -118,7 +118,18 @@ void BaseReservoirSampling::ReplaceElement(double with_weight) {
 	SetNextEntry();
 }
 
+void BaseReservoirSampling::UpdateMinWeightThreshold() {
+	if (!reservoir_weights.empty()) {
+		min_weight_threshold = -reservoir_weights.top().first;
+		return;
+	}
+	min_weight_threshold = 1;
+}
+
 void BaseReservoirSampling::FillWeights(vector<idx_t> &actual_sample_indexes) {
+	if (!reservoir_weights.empty()) {
+		return;
+	}
 	D_ASSERT(actual_sample_indexes.size() <= FIXED_SAMPLE_SIZE);
 	D_ASSERT(reservoir_weights.empty());
 	auto min_weight_index = num_entries_seen_total / FIXED_SAMPLE_SIZE;
@@ -133,7 +144,6 @@ void BaseReservoirSampling::FillWeights(vector<idx_t> &actual_sample_indexes) {
 	}
 	D_ASSERT(reservoir_weights.size() <= FIXED_SAMPLE_SIZE);
 	SetNextEntry();
-	actual_sample_indexes.clear();
 }
 
 } // namespace duckdb

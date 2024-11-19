@@ -15,8 +15,7 @@
 
 #include "duckdb/common/queue.hpp"
 
-#define FIXED_SAMPLE_SIZE      STANDARD_VECTOR_SIZE
-#define PERCENTAGE_SAMPLE_SIZE 1
+#define FIXED_SAMPLE_SIZE STANDARD_VECTOR_SIZE
 
 namespace duckdb {
 
@@ -43,6 +42,7 @@ public:
 	void ReplaceElement(double with_weight = -1);
 
 	void IncreaseNumEntriesSeenTotal(idx_t count);
+	void UpdateMinWeightThreshold();
 
 	//! Go from the naive sampling to the reservoir sampling
 	//! Naive samping will not collect weights, but when we serialize
@@ -245,6 +245,12 @@ private:
 	bool is_finalized;
 };
 
+struct SampleCopyHelper {
+	SelectionVector sel;
+	//! Priority queue of [random element, index] for each of the elements in the sample
+	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
+	vector<idx_t> actual_indexes;
+};
 
 class IngestionSample : public BlockingSample {
 public:
@@ -256,6 +262,9 @@ public:
 	// how much of every chunk we consider for sampling.
 	// This can be lowered later to improve ingestion performance.
 	constexpr static double CHUNK_SAMPLE_PERCENTAGE = 1.00;
+	// If the table has less than 204800 rows, this is the percentage
+	// of values we save when serializing/returning a sample.
+	constexpr static double SAVE_PERCENTAGE = 0.01;
 
 	IngestionSample(Allocator &allocator, int64_t seed);
 	explicit IngestionSample(idx_t sample_count, int64_t seed = 1);
@@ -268,8 +277,12 @@ public:
 	//! reservoir weights or are in the "actual_indexes"
 	void Shrink();
 
-	SelectionVector SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const;
-	static SelectionVector SelFromSimpleIndexes(vector<idx_t> &actual_indexes);
+	//! Transform To "Slow" Merging IngestionSample
+	void ConvertToSlowSample();
+
+	SampleCopyHelper GetSelToCopyData(idx_t sel_size) const;
+	SampleCopyHelper SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const;
+	SampleCopyHelper SelFromSimpleIndexes(vector<idx_t> &actual_indexes) const;
 
 	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for
 	//! future sampling values
