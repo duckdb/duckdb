@@ -404,6 +404,7 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	{
 		auto val = duckdb_create_timestamp_tz({1});
+		REQUIRE(duckdb_get_timestamp_tz(nullptr).micros == 0);
 		auto result = duckdb_get_timestamp_tz(val);
 		REQUIRE(result.micros == 1);
 		duckdb_destroy_value(&val);
@@ -411,6 +412,7 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	{
 		auto val = duckdb_create_timestamp_s({1});
+		REQUIRE(duckdb_get_timestamp_s(nullptr).seconds == 0);
 		auto result = duckdb_get_timestamp_s(val);
 		REQUIRE(result.seconds == 1);
 		duckdb_destroy_value(&val);
@@ -418,6 +420,7 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	{
 		auto val = duckdb_create_timestamp_ms({1});
+		REQUIRE(duckdb_get_timestamp_ms(nullptr).millis == 0);
 		auto result = duckdb_get_timestamp_ms(val);
 		REQUIRE(result.millis == 1);
 		duckdb_destroy_value(&val);
@@ -425,6 +428,7 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	{
 		auto val = duckdb_create_timestamp_ns({1});
+		REQUIRE(duckdb_get_timestamp_ns(nullptr).nanos == 0);
 		auto result = duckdb_get_timestamp_ns(val);
 		REQUIRE(result.nanos == 1);
 		duckdb_destroy_value(&val);
