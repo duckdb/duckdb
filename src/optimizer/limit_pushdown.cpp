@@ -3,8 +3,6 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
-#include <complex>
-
 namespace duckdb {
 
 bool LimitPushdown::CanOptimize(duckdb::LogicalOperator &op) {
