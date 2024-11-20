@@ -14,6 +14,7 @@ add_library_unity(
   bitpacking.cpp
   bitpacking_hugeint.cpp
   patas.cpp
+  zstd.cpp
   alprd.cpp
   fsst.cpp
   roaring.cpp)

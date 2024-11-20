@@ -240,10 +240,9 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 			}
 		}
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
-			return Value::TIMESTAMPTZ(timestamp_value);
-		} else {
-			return Value::TIMESTAMP(timestamp_value);
+			return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_value));
 		}
+		return Value::TIMESTAMP(timestamp_value);
 	}
 	case LogicalTypeId::TIMESTAMP_NS: {
 		timestamp_ns_t timestamp_value;

@@ -30,7 +30,7 @@ public:
 
 	//! Extracts the component, or sets the validity mask to NULL if the date is infinite
 	int64_t ExtractElement(date_t date, ValidityMask &mask, idx_t idx) const {
-		if (DUCKDB_UNLIKELY(date.days < CACHE_MIN_DATE || date.days > CACHE_MAX_DATE)) {
+		if (DUCKDB_UNLIKELY(date.days < CACHE_MIN_DATE || date.days >= CACHE_MAX_DATE)) {
 			if (DUCKDB_UNLIKELY(!Value::IsFinite(date))) {
 				mask.SetInvalid(idx);
 				return 0;

@@ -1,4 +1,4 @@
-# name: test/optimizer/compressed_materialization.test_coverage
+# name: test/optimizer/compressed_materialization.test_slow
 # description: Compressed materialization test
 # group: [optimizer]
 
@@ -18,7 +18,7 @@ Binder Error: Compressed materialization functions are for internal use only!
 statement ok
 create table t0 as select range%400000 a, range%400000 b from range(500000);
 
-query III
+query III rowsort
 select * from (
       select *, row_number() OVER () as row_number from (
           SELECT * FROM t0 ORDER BY 1) ta
