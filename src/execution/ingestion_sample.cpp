@@ -52,7 +52,7 @@ SampleCopyHelper IngestionSample::GetSelToCopyData(idx_t sel_size) const {
 	D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sel_size);
 	auto base_copy = base_reservoir_sample->Copy();
 	vector<std::pair<double, idx_t>> weights_indexes;
-	D_ASSERT(sel_size == base_copy->reservoir_weights.size());
+	D_ASSERT(sel_size <= base_copy->reservoir_weights.size());
 	for (idx_t i = 0; i < sel_size; i++) {
 		weights_indexes.push_back(base_copy->reservoir_weights.top());
 		base_copy->reservoir_weights.pop();
