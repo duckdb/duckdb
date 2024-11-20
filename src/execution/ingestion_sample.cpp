@@ -373,7 +373,7 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 	auto ret = make_uniq<ReservoirSample>(num_samples_to_keep);
 	if (num_samples_to_keep <= 0) {
 		ret->base_reservoir_sample = base_reservoir_sample->Copy();
-		return ret;
+		return unique_ptr_cast<ReservoirSample, BlockingSample>(std::move(ret));
 	}
 
 	// set up reservoir chunk for the reservoir sample
