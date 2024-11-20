@@ -25,11 +25,9 @@ public:
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
 	                                   vector<string> names, unique_ptr<ColumnDataCollection> collection,
-	                                   ClientProperties client_properties, shared_ptr<DatabaseInstance> db = nullptr);
+	                                   ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit MaterializedQueryResult(ErrorData error);
-
-	DUCKDB_API ~MaterializedQueryResult() override;
 
 public:
 	//! Fetches a DataChunk from the query result.
@@ -65,8 +63,6 @@ private:
 	//! Scan state for Fetch calls
 	ColumnDataScanState scan_state;
 	bool scan_initialized;
-	//! Shared pointer to the database instance for buffer-managed query results (optional)
-	shared_ptr<DatabaseInstance> db;
 };
 
 } // namespace duckdb

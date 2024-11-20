@@ -1,27 +1,20 @@
 #include "duckdb/main/materialized_query_result.hpp"
-
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
                                                  vector<string> names_p, unique_ptr<ColumnDataCollection> collection_p,
-                                                 ClientProperties client_properties, shared_ptr<DatabaseInstance> db_p)
+                                                 ClientProperties client_properties)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), collection_p->Types(),
                   std::move(names_p), std::move(client_properties)),
-      collection(std::move(collection_p)), scan_initialized(false), db(db_p) {
+      collection(std::move(collection_p)), scan_initialized(false) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(ErrorData error)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)), scan_initialized(false) {
-}
-
-MaterializedQueryResult::~MaterializedQueryResult() {
-	scan_state.current_chunk_state.handles.clear();
-	row_collection.reset();
-	collection.reset();
 }
 
 string MaterializedQueryResult::ToString() {
