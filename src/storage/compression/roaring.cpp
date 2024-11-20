@@ -22,6 +22,7 @@ static constexpr bool NON_NULLS = false;
 static constexpr uint16_t MAX_RUN_IDX = 63;
 static constexpr uint16_t MAX_ARRAY_IDX = 127;
 
+// Set all the bits from start (inclusive) to end (exclusive) to 0
 static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	if (end <= start) {
 		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
