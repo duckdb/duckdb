@@ -959,40 +959,40 @@ public:
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 		// scanned.
 
-		do {
-			if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
-				// The run does not cover these entries, no action required
-				break;
+		if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
+			// The run does not cover these entries, no action required
+			scanned_count += to_scan;
+			return;
+		}
+
+		idx_t result_idx = 0;
+		while (run_index < count && result_idx < to_scan) {
+			auto run = runs[run_index];
+			// Either we are already inside a run, then 'start_of_run' will be scanned_count
+			// or we're skipping values until the run begins
+			auto start_of_run =
+			    MaxValue<idx_t>(MinValue<idx_t>(run.start, scanned_count + to_scan), scanned_count + result_idx);
+			result_idx = start_of_run - scanned_count;
+
+			// How much of the run are we covering?
+			idx_t run_end = run.start + 1 + run.length;
+			auto run_or_scan_end = MinValue<idx_t>(run_end, scanned_count + to_scan);
+
+			// Process the run
+			D_ASSERT(run_or_scan_end >= start_of_run);
+			if (run_or_scan_end > start_of_run) {
+				idx_t amount = run_or_scan_end - start_of_run;
+				idx_t start = result_offset + result_idx;
+				idx_t end = start + amount;
+				SetInvalidRange(result_mask, start, end);
 			}
-			idx_t result_idx = 0;
-			while (run_index < count && result_idx < to_scan) {
-				auto run = runs[run_index];
-				// Either we are already inside a run, then 'start_of_run' will be scanned_count
-				// or we're skipping values until the run begins
-				auto start_of_run =
-				    MaxValue<idx_t>(MinValue<idx_t>(run.start, scanned_count + to_scan), scanned_count + result_idx);
-				result_idx = start_of_run - scanned_count;
 
-				// How much of the run are we covering?
-				idx_t run_end = run.start + 1 + run.length;
-				auto run_or_scan_end = MinValue<idx_t>(run_end, scanned_count + to_scan);
-
-				// Process the run
-				D_ASSERT(run_or_scan_end >= start_of_run);
-				if (run_or_scan_end > start_of_run) {
-					idx_t amount = run_or_scan_end - start_of_run;
-					idx_t start = result_offset + result_idx;
-					idx_t end = start + amount;
-					SetInvalidRange(result_mask, start, end);
-				}
-
-				result_idx += run_or_scan_end - start_of_run;
-				if (scanned_count + result_idx == run_end) {
-					// Fully processed the current run
-					run_index++;
-				}
+			result_idx += run_or_scan_end - start_of_run;
+			if (scanned_count + result_idx == run_end) {
+				// Fully processed the current run
+				run_index++;
 			}
-		} while (false);
+		}
 		scanned_count += to_scan;
 	}
 
@@ -1045,23 +1045,21 @@ public:
 			SetInvalidRange(result_mask, result_offset, result_offset + to_scan);
 		}
 
-		do {
-			// At least one of the entries to scan is set
-			for (; array_index < count; array_index++) {
-				if (array[array_index] >= scanned_count + to_scan) {
-					break;
-				}
-				if (array[array_index] < scanned_count) {
-					continue;
-				}
-				auto index = array[array_index] - scanned_count;
-				if (INVERTED) {
-					result_mask.SetInvalid(result_offset + index);
-				} else {
-					result_mask.SetValid(result_offset + index);
-				}
+		// At least one of the entries to scan is set
+		for (; array_index < count; array_index++) {
+			if (array[array_index] >= scanned_count + to_scan) {
+				break;
 			}
-		} while (false);
+			if (array[array_index] < scanned_count) {
+				continue;
+			}
+			auto index = array[array_index] - scanned_count;
+			if (INVERTED) {
+				result_mask.SetInvalid(result_offset + index);
+			} else {
+				result_mask.SetValid(result_offset + index);
+			}
+		}
 		scanned_count += to_scan;
 	}
 
