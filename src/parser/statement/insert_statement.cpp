@@ -98,8 +98,10 @@ string InsertStatement::ToString() const {
 	auto values_list = GetValuesList();
 	if (values_list) {
 		D_ASSERT(!default_values);
+		auto saved_alias = values_list->alias;
 		values_list->alias = string();
 		result += values_list->ToString();
+		values_list->alias = saved_alias;
 	} else if (select_statement) {
 		D_ASSERT(!default_values);
 		result += select_statement->ToString();
@@ -154,7 +156,11 @@ string InsertStatement::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += returning_list[i]->ToString();
+			auto column = returning_list[i]->ToString();
+			if (!returning_list[i]->alias.empty()) {
+				column += StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->alias));
+			}
+			result += column;
 		}
 	}
 	return result;

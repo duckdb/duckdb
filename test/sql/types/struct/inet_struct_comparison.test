@@ -1,0 +1,33 @@
+# name: test/sql/types/struct/inet_struct_comparison.test
+# description: Test unnamed struct casts
+# group: [struct]
+
+# original issue from author for https://github.com/duckdb/duckdb/issues/13924
+require inet
+
+
+statement ok
+CREATE TABLE  t1(c0 INT, c1 INET);
+
+statement ok
+INSERT INTO t1(c0, c1) VALUES (1, '192.168.1.1');
+
+query II
+SELECT * FROM t1;
+----
+1	192.168.1.1
+
+query I
+SELECT ((NULL, t1.c0, NULL)<>(t1.c1)) FROM t1;
+----
+true
+
+query II
+SELECT * FROM t1 WHERE ((NULL, t1.c0, NULL)<>(t1.c1));
+----
+1	192.168.1.1
+
+query II
+SELECT * FROM t1 WHERE ((NULL, t1.c0, NULL)<>(t1.c1)) UNION ALL SELECT * FROM t1 WHERE (NOT ((NULL, t1.c0, NULL)<>(t1.c1))) UNION ALL SELECT * FROM t1 WHERE ((((NULL, t1.c0, NULL)<>(t1.c1))) IS NULL);
+----
+1	192.168.1.1

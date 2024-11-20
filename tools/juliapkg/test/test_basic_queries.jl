@@ -19,6 +19,14 @@ using Tables: partitions
     @test size(df, 1) == 1
     @test df.a == [42]
 
+    # do block syntax to automatically close cursor
+    df = DBInterface.execute(con, "SELECT 42 a") do results
+        return DataFrame(results)
+    end
+    @test names(df) == ["a"]
+    @test size(df, 1) == 1
+    @test df.a == [42]
+
     DBInterface.close!(con)
 end
 

@@ -2325,7 +2325,7 @@ struct sqlite3_mem_methods {
 ** the [VACUUM] command will fail with an obscure error when attempting to
 ** process a table with generated columns and a descending index.  This is
 ** not considered a bug since SQLite versions 3.3.0 and earlier do not support
-** either generated columns or decending indexes.
+** either generated columns or descending indexes.
 ** </dd>
 ** </dl>
 */
@@ -9160,7 +9160,7 @@ SQLITE_API int sqlite3_vtab_config(sqlite3*, int op, ...);
 ** [[SQLITE_VTAB_DIRECTONLY]]<dt>SQLITE_VTAB_DIRECTONLY</dt>
 ** <dd>Calls of the form
 ** [sqlite3_vtab_config](db,SQLITE_VTAB_DIRECTONLY) from within the
-** the [xConnect] or [xCreate] methods of a [virtual table] implmentation
+** the [xConnect] or [xCreate] methods of a [virtual table] implementation
 ** prohibits that virtual table from being used from within triggers and
 ** views.
 ** </dd>
@@ -9168,7 +9168,7 @@ SQLITE_API int sqlite3_vtab_config(sqlite3*, int op, ...);
 ** [[SQLITE_VTAB_INNOCUOUS]]<dt>SQLITE_VTAB_INNOCUOUS</dt>
 ** <dd>Calls of the form
 ** [sqlite3_vtab_config](db,SQLITE_VTAB_INNOCUOUS) from within the
-** the [xConnect] or [xCreate] methods of a [virtual table] implmentation
+** the [xConnect] or [xCreate] methods of a [virtual table] implementation
 ** identify that virtual table as being safe to use from within triggers
 ** and views.  Conceptually, the SQLITE_VTAB_INNOCUOUS tag means that the
 ** virtual table can do no serious harm even if it is controlled by a

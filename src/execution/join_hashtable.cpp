@@ -453,23 +453,21 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 		// if we expect the entry to be empty, if the operation fails we need to cancel the whole operation as another
 		// key might have been inserted in the meantime that does not match the current key
 		if (EXPECT_EMPTY) {
-
 			// add nullptr to the end of the list to mark the end
 			StorePointer(nullptr, row_ptr_to_insert + pointer_offset);
 
 			ht_entry_t new_empty_entry = ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
 			ht_entry_t expected_empty_entry = ht_entry_t::GetEmptyEntry();
-			std::atomic_compare_exchange_weak(&entry, &expected_empty_entry, new_empty_entry);
+			entry.compare_exchange_strong(expected_empty_entry, new_empty_entry, std::memory_order_acquire,
+			                              std::memory_order_relaxed);
 
 			// if the expected empty entry actually was null, we can just return the pointer, and it will be a nullptr
 			// if the expected entry was filled in the meantime, we need to cancel the operation and will return the
 			// pointer to the next entry
 			return expected_empty_entry.GetPointerOrNull();
-		}
-
-		// if we expect the entry to be full, we know that even if the insert fails the keys still match so we can
-		// just keep trying until we succeed
-		else {
+		} else {
+			// if we expect the entry to be full, we know that even if the insert fails the keys still match so we can
+			// just keep trying until we succeed
 			ht_entry_t expected_current_entry = entry.load(std::memory_order_relaxed);
 			ht_entry_t desired_new_entry = ht_entry_t::GetDesiredEntry(row_ptr_to_insert, salt);
 			D_ASSERT(expected_current_entry.IsOccupied());
@@ -477,7 +475,8 @@ static inline data_ptr_t InsertRowToEntry(atomic<ht_entry_t> &entry, const data_
 			do {
 				data_ptr_t current_row_pointer = expected_current_entry.GetPointer();
 				StorePointer(current_row_pointer, row_ptr_to_insert + pointer_offset);
-			} while (!std::atomic_compare_exchange_weak(&entry, &expected_current_entry, desired_new_entry));
+			} while (!entry.compare_exchange_weak(expected_current_entry, desired_new_entry, std::memory_order_release,
+			                                      std::memory_order_relaxed));
 
 			return nullptr;
 		}
@@ -584,7 +583,7 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 			idx_t new_remaining_count = 0;
 			for (idx_t i = 0; i < remaining_count; i++) {
 				const auto idx = remaining_sel->get_index(i);
-				if (ValidityBytes(lhs_row_locations[idx]).RowIsValidUnsafe(col_idx)) {
+				if (ValidityBytes(lhs_row_locations[idx], count).RowIsValidUnsafe(col_idx)) {
 					state.remaining_sel.set_index(new_remaining_count++, idx);
 				}
 			}
@@ -1468,18 +1467,12 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 	return true;
 }
 
-static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &keys, DataChunk &payload, Vector &hashes) {
+static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &payload, Vector &hashes) {
+	D_ASSERT(spill_chunk.ColumnCount() == payload.ColumnCount() + 1);
 	spill_chunk.Reset();
-	idx_t spill_col_idx = 0;
-	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
-		spill_chunk.data[col_idx].Reference(keys.data[col_idx]);
-	}
-	spill_col_idx += keys.ColumnCount();
-	for (idx_t col_idx = 0; col_idx < payload.data.size(); col_idx++) {
-		spill_chunk.data[spill_col_idx + col_idx].Reference(payload.data[col_idx]);
-	}
-	spill_col_idx += payload.ColumnCount();
-	spill_chunk.data[spill_col_idx].Reference(hashes);
+	spill_chunk.Reference(payload);
+	spill_chunk.data.back().Reference(hashes);
+	spill_chunk.SetCardinality(payload);
 }
 
 void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
@@ -1498,7 +1491,7 @@ void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys
 	                                            radix_bits, partition_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
-	CreateSpillChunk(spill_chunk, keys, payload, hashes);
+	CreateSpillChunk(spill_chunk, payload, hashes);
 
 	// can't probe these values right now, append to spill
 	spill_chunk.Slice(false_sel, false_count);

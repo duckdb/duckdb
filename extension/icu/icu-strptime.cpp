@@ -434,7 +434,7 @@ struct ICUStrftime : public ICUDateFunc {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction, Bind));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {

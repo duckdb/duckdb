@@ -5,6 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
 #include <cstdint>
@@ -242,12 +243,14 @@ static void MallocTrim(idx_t pad) {
 	static atomic<int64_t> LAST_TRIM_TIMESTAMP_MS {0};
 
 	int64_t last_trim_timestamp_ms = LAST_TRIM_TIMESTAMP_MS.load();
-	const int64_t current_timestamp_ms = Timestamp::GetEpochMs(Timestamp::GetCurrentTimestamp());
+	auto current_ts = Timestamp::GetCurrentTimestamp();
+	auto current_timestamp_ms = Cast::Operation<timestamp_t, timestamp_ms_t>(current_ts).value;
 
 	if (current_timestamp_ms - last_trim_timestamp_ms < TRIM_INTERVAL_MS) {
 		return; // We trimmed less than TRIM_INTERVAL_MS ago
 	}
-	if (!std::atomic_compare_exchange_weak(&LAST_TRIM_TIMESTAMP_MS, &last_trim_timestamp_ms, current_timestamp_ms)) {
+	if (!LAST_TRIM_TIMESTAMP_MS.compare_exchange_strong(last_trim_timestamp_ms, current_timestamp_ms,
+	                                                    std::memory_order_acquire, std::memory_order_relaxed)) {
 		return; // Another thread has updated LAST_TRIM_TIMESTAMP_MS since we loaded it
 	}
 

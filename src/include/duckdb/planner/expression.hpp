@@ -32,10 +32,12 @@ public:
 	bool HasSubquery() const override;
 	bool IsScalar() const override;
 	bool HasParameter() const override;
+
 	virtual bool IsVolatile() const;
 	virtual bool IsConsistent() const;
 	virtual bool PropagatesNullValues() const;
 	virtual bool IsFoldable() const;
+	virtual bool CanThrow() const;
 
 	hash_t Hash() const override;
 

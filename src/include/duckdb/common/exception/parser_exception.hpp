@@ -26,6 +26,10 @@ public:
 	explicit ParserException(optional_idx error_location, const string &msg, ARGS... params)
 	    : ParserException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_location)) {
 	}
+	template <typename... ARGS>
+	explicit ParserException(const ParsedExpression &expr, const string &msg, ARGS... params)
+	    : ParserException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
+	}
 
 	static ParserException SyntaxError(const string &query, const string &error_message, optional_idx error_location);
 };

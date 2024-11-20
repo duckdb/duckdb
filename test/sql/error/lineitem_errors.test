@@ -1,0 +1,80 @@
+# name: test/sql/error/lineitem_errors.test
+# description: Test lineitem errors
+# group: [error]
+
+statement ok
+CREATE TABLE lineitem(l_orderkey BIGINT NOT NULL, l_partkey BIGINT NOT NULL, l_suppkey BIGINT NOT NULL, l_linenumber BIGINT NOT NULL, l_quantity DECIMAL(15,2) NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR NOT NULL, l_linestatus VARCHAR NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR NOT NULL, l_shipmode VARCHAR NOT NULL, l_comment VARCHAR NOT NULL);
+
+# l_extendedprice is not ambiguous - we don't need to qualify it
+statement error
+select * from lineitem where l_extendedpric=5;
+----
+"l_extendedprice
+
+# l_extendedprice is ambiguous - we need to qualify it
+statement error
+select * from lineitem, lineitem l2 where l_extendedpric=5;
+----
+lineitem.l_extendedprice
+
+statement error
+select * from lineitem where lineitem.l_extendedpric=5;
+----
+"l_extendedprice
+
+# check long multi-line errors
+statement error
+SELECT
+      l_returnflag,
+      l_linestatus,
+      sum(l_quantity) AS sum_qty,
+      sum(l_extendedprice) AS sum_base_price,
+      sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+      sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+      avg(l_quantity) AS avg_qty,
+      avg(l_extendedprice) AS avg_price,
+      avg(l_discount) AS avg_disc,
+      count(*) AS count_order
+  FROM
+      lineitem
+  WHERE
+      l_shipdate <= CAST('1998-09-02' AS date) + timestamp '2020-01-01'
+  GROUP BY
+      l_returnflag,
+      l_linestatus
+  ORDER BY
+      l_returnflag,
+      l_linestatus;
+----
+<REGEX>:.*LINE 15:[^\n]+timestamp.*
+
+statement error
+SELECT
+      l_returnflag,
+      l_linestatus,
+      sum(l_quantity) AS sum_qty,
+      sum(l_extendedprice) AS sum_base_price,
+      sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+      sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+      avg(l_quantity) AS avg_qty,
+      avg(l_extendedprice) AS avg_price,
+      avg(l_discount) AS avg_disc,
+      count(*) AS count_order
+  FROM
+      lineitem
+  WHERE
+      l_shipdate <= CAST('1998-09-02' AS date) + timestamp '2020-01-01' -- this has a really long comment that ends up requiring truncation in the error message
+  GROUP BY
+      l_returnflag,
+      l_linestatus
+  ORDER BY
+      l_returnflag,
+      l_linestatus;
+----
+<REGEX>:.*LINE 15:[^\n]+timestamp.*
+
+# long single-line
+statement error
+SELECT l_returnflag, l_linestatus, sum(l_quantity) AS sum_qty, sum(l_extendedprice) AS sum_base_price, sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge, avg(l_quantity) AS avg_qty, avg(l_extendedprice) AS avg_price, avg(l_discount) AS avg_disc, count(*) AS count_order FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date) + timestamp '2020-01-01' GROUP BY l_returnflag, l_linestatus ORDER BY l_returnflag, l_linestatus;
+----
+<REGEX>:.*LINE 1:[^\n]+timestamp.*l_linestatus.*

@@ -335,8 +335,13 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 #elif defined(_GNU_SOURCE)
 	auto cpu = sched_getcpu();
 	if (cpu < 0) {
+#ifndef DUCKDB_NO_THREADS
 		// fallback to thread id
 		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#else
+
+		return 0;
+#endif
 	}
 	return (idx_t)cpu;
 #elif defined(__aarch64__) && defined(__APPLE__)
@@ -345,8 +350,12 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
 	return (idx_t)(c & (1 << 3) - 1);
 #else
+#ifndef DUCKDB_NO_THREADS
 	// fallback to thread id
 	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#else
+	return 0;
+#endif
 #endif
 #endif
 }

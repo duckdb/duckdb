@@ -35,12 +35,13 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 				for (idx_t i = 0; i < op->expressions.size(); i++) {
 					if (op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
 						auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
-						if (new_column_types.find(column_ids[col_ref.binding.column_index]) != new_column_types.end()) {
+						auto column_id = column_ids[col_ref.binding.column_index].GetPrimaryIndex();
+						if (new_column_types.find(column_id) != new_column_types.end()) {
 							// Only one reference per column is accepted
 							do_pushdown = false;
 							break;
 						}
-						new_column_types[column_ids[col_ref.binding.column_index]] = target_types[i];
+						new_column_types[column_id] = target_types[i];
 					} else {
 						do_pushdown = false;
 						break;
@@ -52,7 +53,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 					for (auto &type : new_column_types) {
 						logical_get.returned_types[type.first] = type.second;
 					}
-					return op;
+					return std::move(op->children[0]);
 				}
 			}
 		}
@@ -132,7 +133,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	                                node.right_binder->has_unplanned_dependent_joins;
 
 	// create actual logical ops for setops
-	LogicalOperatorType logical_type;
+	LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_INVALID;
 	switch (node.setop_type) {
 	case SetOperationType::UNION:
 	case SetOperationType::UNION_BY_NAME:

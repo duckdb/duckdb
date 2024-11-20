@@ -90,6 +90,7 @@ private:
 		}
 	}
 
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
 	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               ValidityMask &mask, ValidityMask &result_mask, void *dataptr, bool adds_nulls) {
@@ -135,6 +136,7 @@ private:
 			}
 		}
 	}
+#endif
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
 	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, void *dataptr, bool adds_nulls) {
@@ -153,6 +155,7 @@ private:
 			}
 			break;
 		}
+#ifndef DUCKDB_SMALLER_BINARY
 		case VectorType::FLAT_VECTOR: {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
@@ -162,6 +165,7 @@ private:
 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
 			break;
 		}
+#endif
 		default: {
 			UnifiedVectorFormat vdata;
 			input.ToUnifiedFormat(count, vdata);

@@ -76,7 +76,7 @@ public:
 
 	template <bool CHECK_OVERFLOW = true>
 	inline static uhugeint_t Divide(uhugeint_t lhs, uhugeint_t rhs) {
-		// division between two same-size unsigned intergers can only go wrong with division by zero
+		// division between two same-size unsigned integers can only go wrong with division by zero
 		if (rhs == 0) {
 			throw OutOfRangeException("Division of UHUGEINT by zero!");
 		}

@@ -28,9 +28,9 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		return NumericStats::CheckZonemap(stats, comparison_type, constant);
+		return NumericStats::CheckZonemap(stats, comparison_type, array_ptr<Value>(&constant, 1));
 	case PhysicalType::VARCHAR:
-		return StringStats::CheckZonemap(stats, comparison_type, StringValue::Get(constant));
+		return StringStats::CheckZonemap(stats, comparison_type, array_ptr<Value>(&constant, 1));
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}

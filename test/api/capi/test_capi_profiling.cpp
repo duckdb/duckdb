@@ -41,7 +41,21 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 		auto key_str = duckdb::string(key_c_str);
 		auto value_str = duckdb::string(value_c_str);
 
+		if (depth == 0) {
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_CARDINALITY));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_ROWS_SCANNED));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_TIMING));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_NAME));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::OPERATOR_TYPE));
+		} else {
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::QUERY_NAME));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::BLOCKED_THREAD_TIME));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::LATENCY));
+			REQUIRE(key_str != EnumUtil::ToString(MetricsType::ROWS_RETURNED));
+		}
+
 		if (key_str == EnumUtil::ToString(MetricsType::QUERY_NAME) ||
+		    key_str == EnumUtil::ToString(MetricsType::OPERATOR_NAME) ||
 		    key_str == EnumUtil::ToString(MetricsType::OPERATOR_TYPE) ||
 		    key_str == EnumUtil::ToString(MetricsType::EXTRA_INFO)) {
 			REQUIRE(!value_str.empty());

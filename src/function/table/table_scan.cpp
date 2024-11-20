@@ -17,6 +17,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/storage/storage_index.hpp"
 #include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
@@ -34,12 +35,25 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	DataChunk all_columns;
 };
 
-static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
-	if (column_id == DConstants::INVALID_INDEX) {
-		return column_id;
+static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
+	vector<StorageIndex> result;
+	for (auto &child_id : column_id.GetChildIndexes()) {
+		result.push_back(TransformStorageIndex(child_id));
 	}
-	auto &col = table.GetColumn(LogicalIndex(column_id));
-	return col.StorageOid();
+	return StorageIndex(column_id.GetPrimaryIndex(), std::move(result));
+}
+
+static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex &column_id) {
+	if (column_id.IsRowIdColumn()) {
+		return StorageIndex();
+	}
+	// the index of the base ColumnIndex is equal to the physical column index in the table
+	// for any child indices - the indices are already the physical indices
+	// (since only the top-level can have generated columns)
+	auto &col = table.GetColumn(column_id.ToLogical());
+	auto result = TransformStorageIndex(column_id);
+	result.SetIndex(col.StorageOid());
+	return result;
 }
 
 struct TableScanGlobalState : public GlobalTableFunctionState {
@@ -68,12 +82,11 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_uniq<TableScanLocalState>();
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	vector<column_t> column_ids = input.column_ids;
-	for (auto &col : column_ids) {
-		auto storage_idx = GetStorageIndex(bind_data.table, col);
-		col = storage_idx;
+	vector<StorageIndex> storage_ids;
+	for (auto &col : input.column_indexes) {
+		storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 	}
-	result->scan_state.Initialize(std::move(column_ids), input.filters.get());
+	result->scan_state.Initialize(std::move(storage_ids), input.filters.get(), input.sample_options.get());
 	TableScanParallelStateNext(context.client, input.bind_data.get(), result.get(), gstate);
 	if (input.CanRemoveFilterColumns()) {
 		auto &tsgs = gstate->Cast<TableScanGlobalState>();
@@ -93,11 +106,11 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	if (input.CanRemoveFilterColumns()) {
 		result->projection_ids = input.projection_ids;
 		const auto &columns = bind_data.table.GetColumns();
-		for (const auto &col_idx : input.column_ids) {
-			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+		for (const auto &col_idx : input.column_indexes) {
+			if (col_idx.IsRowIdColumn()) {
 				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 			} else {
-				result->scanned_types.push_back(columns.GetColumn(LogicalIndex(col_idx)).Type());
+				result->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 			}
 		}
 	}
@@ -175,16 +188,19 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 	return percentage;
 }
 
-idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                             LocalTableFunctionState *local_state, GlobalTableFunctionState *gstate_p) {
-	auto &state = local_state->Cast<TableScanLocalState>();
+OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
+	if (input.partition_info.RequiresPartitionColumns()) {
+		throw InternalException("TableScan::GetPartitionData: partition columns not supported");
+	}
+	auto &state = input.local_state->Cast<TableScanLocalState>();
 	if (state.scan_state.table_state.row_group) {
-		return state.scan_state.table_state.batch_index;
+		return OperatorPartitionData(state.scan_state.table_state.batch_index);
 	}
 	if (state.scan_state.local_state.row_group) {
-		return state.scan_state.table_state.batch_index + state.scan_state.local_state.batch_index;
+		return OperatorPartitionData(state.scan_state.table_state.batch_index +
+		                             state.scan_state.local_state.batch_index);
 	}
-	return 0;
+	return OperatorPartitionData(0);
 }
 
 BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
@@ -219,7 +235,7 @@ struct IndexScanGlobalState : public GlobalTableFunctionState {
 	idx_t row_ids_offset;
 	ColumnFetchState fetch_state;
 	TableScanState local_storage_state;
-	vector<storage_t> column_ids;
+	vector<StorageIndex> column_ids;
 	bool finished;
 };
 
@@ -236,8 +252,8 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 
 	result->local_storage_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 	result->column_ids.reserve(input.column_ids.size());
-	for (auto &id : input.column_ids) {
-		result->column_ids.push_back(GetStorageIndex(bind_data.table, id));
+	for (auto &col_id : input.column_indexes) {
+		result->column_ids.push_back(GetStorageIndex(bind_data.table, col_id));
 	}
 
 	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
@@ -281,7 +297,8 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 		column_t referenced_column = column_ids[bound_colref.binding.column_index];
 		// search for the referenced column in the set of column_ids
 		for (idx_t i = 0; i < get_column_ids.size(); i++) {
-			if (get_column_ids[i] == referenced_column) {
+			auto column_id = get_column_ids[i].GetPrimaryIndex();
+			if (column_id == referenced_column) {
 				bound_colref.binding.column_index = i;
 				return;
 			}
@@ -346,8 +363,8 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index_state != nullptr) {
 
 				auto &db_config = DBConfig::GetConfig(context);
-				auto index_scan_percentage = db_config.options.index_scan_percentage;
-				auto index_scan_max_count = db_config.options.index_scan_max_count;
+				auto index_scan_percentage = db_config.GetSetting<IndexScanPercentageSetting>(context);
+				auto index_scan_max_count = db_config.GetSetting<IndexScanMaxCountSetting>(context);
 
 				auto total_rows = storage.GetTotalRows();
 				auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * index_scan_percentage);
@@ -369,9 +386,10 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	});
 }
 
-string TableScanToString(const FunctionData *bind_data_p) {
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	string result = bind_data.table.name;
+InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
+	InsertionOrderPreservingMap<string> result;
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
+	result["Table"] = bind_data.table.name;
 	return result;
 }
 
@@ -412,7 +430,7 @@ TableFunction TableScanFunction::GetIndexScanFunction() {
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = nullptr;
-	scan_function.get_batch_index = nullptr;
+	scan_function.get_partition_data = nullptr;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = false;
 	scan_function.get_bind_info = TableScanGetBindInfo;
@@ -431,11 +449,12 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.pushdown_complex_filter = TableScanPushdownComplexFilter;
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;
-	scan_function.get_batch_index = TableScanGetBatchIndex;
+	scan_function.get_partition_data = TableScanGetPartitionData;
 	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
+	scan_function.sampling_pushdown = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;

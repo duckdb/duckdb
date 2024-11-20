@@ -95,6 +95,11 @@ struct CompressedSegmentState {
 		return "";
 	} // LCOV_EXCL_STOP
 
+	//! Get the block ids of additional pages created by the segment
+	virtual vector<block_id_t> GetAdditionalBlocks() const { // LCOV_EXCL_START
+		return vector<block_id_t>();
+	} // LCOV_EXCL_STOP
+
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);

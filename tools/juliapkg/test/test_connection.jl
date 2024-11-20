@@ -7,6 +7,11 @@
     DBInterface.close!(con)
     DBInterface.close!(con)
     @test 1 == 1
+
+    con = DBInterface.connect(DuckDB.DB, ":memory:")
+    @test isopen(con)
+    close(con)
+    @test !isopen(con)
 end
 
 @testset "Test opening a bogus directory" begin

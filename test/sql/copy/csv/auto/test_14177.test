@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/auto/test_14177.test
+# description: Test CSV Sample works for #14177
+# group: [auto]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select count(*) FROM (FROM read_csv('data/csv/auto/14177.csv', buffer_size=80, ignore_errors = true)) as t
+----
+5

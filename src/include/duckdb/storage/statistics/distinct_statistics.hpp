@@ -34,8 +34,8 @@ public:
 
 	unique_ptr<DistinctStatistics> Copy() const;
 
-	void Update(Vector &update, idx_t count, bool sample = true);
-	void Update(UnifiedVectorFormat &update_data, const LogicalType &ptype, idx_t count, bool sample = true);
+	void UpdateSample(Vector &new_data, idx_t count, Vector &hashes);
+	void Update(Vector &new_data, idx_t count, Vector &hashes);
 
 	string ToString() const;
 	idx_t GetCount() const;
@@ -46,14 +46,13 @@ public:
 	static unique_ptr<DistinctStatistics> Deserialize(Deserializer &deserializer);
 
 private:
+	void UpdateInternal(Vector &update, idx_t count, Vector &hashes);
+
+private:
 	//! For distinct statistics we sample the input to speed up insertions
 	static constexpr double BASE_SAMPLE_RATE = 0.1;
 	//! For integers, we sample more: likely to be join keys (and hashing is cheaper than, e.g., strings)
 	static constexpr double INTEGRAL_SAMPLE_RATE = 0.3;
-	//! For concurrent access
-	mutable mutex lock;
-	//! Preallocated vector for hashes
-	Vector hash_vec;
 };
 
 } // namespace duckdb

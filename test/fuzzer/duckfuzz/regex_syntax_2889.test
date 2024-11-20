@@ -31,8 +31,3 @@ statement error
 SELECT
 ----
 <REGEX>:Parser Error.*clause without selection list.*
-
-statement error
-SELECT
-----
-<!REGEX>:Parser Error

@@ -1,0 +1,98 @@
+# name: test/sql/collate/collate_like.test
+# description: Test collations in the LIKE clause
+# group: [collate]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 'a' LIKE 'A' COLLATE NOCASE
+----
+true
+
+query I
+SELECT 'a' NOT LIKE 'A' COLLATE NOCASE
+----
+false
+
+query I
+SELECT 'A' COLLATE NOCASE LIKE 'a'
+----
+true
+
+# like optimization rules
+query I
+SELECT 'a' LIKE 'A%' COLLATE NOCASE
+----
+true
+
+query I
+SELECT 'A' COLLATE NOCASE LIKE '%A' COLLATE NOCASE
+----
+true
+
+query I
+SELECT 'a' COLLATE NOCASE LIKE '%A%' COLLATE NOCASE
+----
+true
+
+query I
+SELECT 'OX' COLLATE NOACCENT.NOCASE LIKE 'ö%'
+----
+true
+
+#### Testing LIKE with collated columns
+statement ok
+CREATE TABLE t1 (c1 VARCHAR, pattern VARCHAR)
+
+statement ok
+INSERT INTO t1 VALUES('A', 'a'),('a', 'A'),('AAAA', 'AaAa'),('aaaa', 'baba')
+
+query I
+SELECT c1 FROM t1 WHERE c1 LIKE pattern
+----
+
+query I
+SELECT c1 FROM t1 WHERE c1 LIKE pattern COLLATE NOCASE
+----
+A
+a
+AAAA
+
+# like escape
+query I
+SELECT 'a%ö' COLLATE NOACCENT LIKE 'a$%ö' ESCAPE '$'
+----
+true
+
+query I
+SELECT 'a%ö' COLLATE NOACCENT NOT LIKE 'a$%ö' ESCAPE '$'
+----
+false
+
+# ilike
+query I
+SELECT 'oX' ILIKE 'Ö%'
+----
+false
+
+query I
+SELECT 'OX' COLLATE NOACCENT ILIKE 'ö%'
+----
+true
+
+query I
+SELECT 'öX' COLLATE NOACCENT NOT ILIKE 'Ö%'
+----
+false
+
+# glob
+query I
+SELECT 'oX' GLOB 'O*'
+----
+false
+
+query I
+SELECT 'oX' COLLATE NOCASE GLOB 'O*'
+----
+true

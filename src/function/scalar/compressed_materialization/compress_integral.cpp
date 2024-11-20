@@ -3,6 +3,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 
 namespace duckdb {
 
@@ -190,8 +191,7 @@ unique_ptr<FunctionData> CMIntegralDeserialize(Deserializer &deserializer, Scala
 
 ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	ScalarFunction result(IntegralCompressFunctionName(result_type), {input_type, input_type}, result_type,
-	                      GetIntegralCompressFunctionInputSwitch(input_type, result_type),
-	                      CompressedMaterializationFunctions::Bind);
+	                      GetIntegralCompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
 	result.serialize = CMIntegralSerialize;
 	result.deserialize = CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>;
 	return result;
@@ -207,16 +207,9 @@ static ScalarFunctionSet GetIntegralCompressFunctionSet(const LogicalType &resul
 	return set;
 }
 
-void CMIntegralCompressFun::RegisterFunction(BuiltinFunctions &set) {
-	for (const auto &result_type : CompressedMaterializationFunctions::IntegralTypes()) {
-		set.AddFunction(GetIntegralCompressFunctionSet(result_type));
-	}
-}
-
 ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	ScalarFunction result(IntegralDecompressFunctionName(result_type), {input_type, result_type}, result_type,
-	                      GetIntegralDecompressFunctionInputSwitch(input_type, result_type),
-	                      CompressedMaterializationFunctions::Bind);
+	                      GetIntegralDecompressFunctionInputSwitch(input_type, result_type), CMUtils::Bind);
 	result.serialize = CMIntegralSerialize;
 	result.deserialize = CMIntegralDeserialize<GetIntegralDecompressFunctionInputSwitch>;
 	return result;
@@ -224,7 +217,7 @@ ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_typ
 
 static ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &result_type) {
 	ScalarFunctionSet set(IntegralDecompressFunctionName(result_type));
-	for (const auto &input_type : CompressedMaterializationFunctions::IntegralTypes()) {
+	for (const auto &input_type : CMUtils::IntegralTypes()) {
 		if (GetTypeIdSize(result_type.InternalType()) > GetTypeIdSize(input_type.InternalType())) {
 			set.AddFunction(CMIntegralDecompressFun::GetFunction(input_type, result_type));
 		}
@@ -232,12 +225,52 @@ static ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &res
 	return set;
 }
 
-void CMIntegralDecompressFun::RegisterFunction(BuiltinFunctions &set) {
-	for (const auto &result_type : LogicalType::Integral()) {
-		if (GetTypeIdSize(result_type.InternalType()) > 1) {
-			set.AddFunction(GetIntegralDecompressFunctionSet(result_type));
-		}
-	}
+ScalarFunctionSet InternalCompressIntegralUtinyintFun::GetFunctions() {
+	return GetIntegralCompressFunctionSet(LogicalType(LogicalTypeId::UTINYINT));
+}
+
+ScalarFunctionSet InternalCompressIntegralUsmallintFun::GetFunctions() {
+	return GetIntegralCompressFunctionSet(LogicalType(LogicalTypeId::USMALLINT));
+}
+
+ScalarFunctionSet InternalCompressIntegralUintegerFun::GetFunctions() {
+	return GetIntegralCompressFunctionSet(LogicalType(LogicalTypeId::UINTEGER));
+}
+
+ScalarFunctionSet InternalCompressIntegralUbigintFun::GetFunctions() {
+	return GetIntegralCompressFunctionSet(LogicalType(LogicalTypeId::UBIGINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralSmallintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::SMALLINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralIntegerFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::INTEGER));
+}
+
+ScalarFunctionSet InternalDecompressIntegralBigintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::BIGINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralHugeintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::HUGEINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralUsmallintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::USMALLINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralUintegerFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::UINTEGER));
+}
+
+ScalarFunctionSet InternalDecompressIntegralUbigintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::UBIGINT));
+}
+
+ScalarFunctionSet InternalDecompressIntegralUhugeintFun::GetFunctions() {
+	return GetIntegralDecompressFunctionSet(LogicalType(LogicalTypeId::UHUGEINT));
 }
 
 } // namespace duckdb

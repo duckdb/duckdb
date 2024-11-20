@@ -1,0 +1,53 @@
+# name: test/optimizer/pushdown/test_pushdown_or.test_slow
+# group: [pushdown]
+
+require tpch
+
+statement ok
+create table t1 as select range a, range b from range(0,1000000) ;
+
+statement ok
+create table t2(a int);
+
+statement ok
+insert into t2 from range(10) t(a);
+
+#statement ok
+#select * from t1 join t2 using (a);
+
+query I
+select a from t1 where a = 30000 or a = 50000 or a = 500;
+----
+500
+30000
+50000
+
+
+statement ok
+call dbgen(sf=1);
+
+query I
+select l_orderkey from lineitem where l_orderkey = 6 or l_orderkey = 5999971;
+----
+6
+5999971
+5999971
+5999971
+5999971
+5999971
+5999971
+
+query II
+select l_orderkey, l_partkey from lineitem where l_orderkey = 6 or l_partkey = 4991;
+----
+6	139636
+403456	4991
+535522	4991
+981987	4991
+2593475	4991
+3237285	4991
+3695110	4991
+4093507	4991
+4437666	4991
+4734181	4991
+5552582	4991

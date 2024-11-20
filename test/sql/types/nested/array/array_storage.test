@@ -19,7 +19,7 @@ statement ok
 checkpoint;
 
 query IIIIIIIIIIIIIII rowsort
-SELECT * FROM pragma_storage_info('t1');
+SELECT * EXCLUDE additional_block_ids FROM pragma_storage_info('t1');
 ----
 0	a	1	[1, 0]		0	VALIDITY	0	1	Constant		[Has Null: false, Has No Null: true]					false	true	-1	0	(empty)
 0	a	1	[1, 1, 0]	0	VALIDITY	0	3	Constant		[Has Null: false, Has No Null: true]					false	true	-1	0	(empty)

@@ -22,12 +22,12 @@ loop j 1 10
 statement maybe
 alter table t2 rename to t3;
 ----
-Catalog
+Error
 
 statement maybe
 alter table t3 rename to t2;
 ----
-Catalog
+Error
 
 # j
 endloop

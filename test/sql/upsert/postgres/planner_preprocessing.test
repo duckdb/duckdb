@@ -146,7 +146,7 @@ insert into excluded AS target values(1, '2') on conflict (key) do update set da
 statement error
 insert into excluded values(1, '2') on conflict (key) do update set data = 3 RETURNING excluded.*;
 ----
-Binder Error: Duplicate alias "excluded" in query!
+Ambiguous reference to table "excluded"
 
 # clean up
 statement ok

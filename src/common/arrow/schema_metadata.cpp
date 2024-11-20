@@ -36,7 +36,12 @@ void ArrowSchemaMetadata::AddOption(const string &key, const string &value) {
 	metadata_map[key] = value;
 }
 string ArrowSchemaMetadata::GetOption(const string &key) const {
-	return metadata_map.at(key);
+	auto it = metadata_map.find(key);
+	if (it != metadata_map.end()) {
+		return it->second;
+	} else {
+		return "";
+	}
 }
 
 string ArrowSchemaMetadata::GetExtensionName() const {
@@ -51,9 +56,6 @@ ArrowSchemaMetadata ArrowSchemaMetadata::MetadataFromName(const string &extensio
 }
 
 bool ArrowSchemaMetadata::HasExtension() {
-	if (metadata_map.find(ARROW_EXTENSION_NAME) == metadata_map.end()) {
-		return false;
-	}
 	auto arrow_extension = GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
 	// FIXME: We are currently ignoring the ogc extensions
 	return !arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc");

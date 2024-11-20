@@ -60,16 +60,11 @@ public:
 	const vector<LogicalType> &GetTypes();
 
 private:
-	py::list FetchAllArrowChunks(idx_t rows_per_batch, bool to_polars);
-
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
-
-	bool FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch, bool to_polars);
 
 	PandasDataFrame FrameFromNumpy(bool date_as_object, const py::handle &o);
 
 	void ChangeToTZType(PandasDataFrame &df);
-	void ChangeDateToDatetime(PandasDataFrame &df);
 	unique_ptr<DataChunk> FetchNext(QueryResult &result);
 	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
 	unique_ptr<NumpyResultConversion> InitializeNumpyConversion(bool pandas = false);

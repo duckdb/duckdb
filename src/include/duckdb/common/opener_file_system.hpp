@@ -18,15 +18,14 @@ public:
 	virtual FileSystem &GetFileSystem() const = 0;
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
 
-	void VerifyNoOpener(optional_ptr<FileOpener> opener) {
-		if (opener) {
-			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
-		}
-	}
+	void VerifyNoOpener(optional_ptr<FileOpener> opener);
+	void VerifyCanAccessDirectory(const string &path);
+	void VerifyCanAccessFile(const string &path);
 
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override {
 		VerifyNoOpener(opener);
+		VerifyCanAccessFile(path);
 		return GetFileSystem().OpenFile(path, flags, GetOpener());
 	}
 
@@ -66,26 +65,32 @@ public:
 
 	bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyCanAccessDirectory(directory);
 		return GetFileSystem().DirectoryExists(directory, GetOpener());
 	}
 	void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyCanAccessDirectory(directory);
 		return GetFileSystem().CreateDirectory(directory, GetOpener());
 	}
 
 	void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyCanAccessDirectory(directory);
 		return GetFileSystem().RemoveDirectory(directory, GetOpener());
 	}
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override {
 		VerifyNoOpener(opener);
+		VerifyCanAccessDirectory(directory);
 		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
 	}
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyCanAccessFile(source);
+		VerifyCanAccessFile(target);
 		GetFileSystem().MoveFile(source, target, GetOpener());
 	}
 
@@ -99,6 +104,7 @@ public:
 
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyCanAccessFile(filename);
 		return GetFileSystem().FileExists(filename, GetOpener());
 	}
 
@@ -108,6 +114,7 @@ public:
 	}
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
+		VerifyCanAccessFile(filename);
 		GetFileSystem().RemoveFile(filename, GetOpener());
 	}
 
@@ -117,6 +124,7 @@ public:
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
 		VerifyNoOpener(opener);
+		VerifyCanAccessFile(path);
 		return GetFileSystem().Glob(path, GetOpener().get());
 	}
 
@@ -143,6 +151,9 @@ public:
 	vector<string> ListSubSystems() override {
 		return GetFileSystem().ListSubSystems();
 	}
+
+private:
+	void VerifyCanAccessFileInternal(const string &path, FileType type);
 };
 
 } // namespace duckdb

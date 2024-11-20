@@ -88,14 +88,18 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 	// We throw a binder exception if two same name in the SELECT list
 	for (idx_t i = 0; i < left_node.names.size(); ++i) {
 		if (left_names_map.find(left_node.names[i]) != left_names_map.end()) {
-			throw BinderException("UNION(ALL) BY NAME operation doesn't support same name in SELECT list");
+			throw BinderException("UNION (ALL) BY NAME operation doesn't support duplicate names in the SELECT list - "
+			                      "the name \"%s\" occurs multiple times in the left-hand side",
+			                      left_node.names[i]);
 		}
 		left_names_map[left_node.names[i]] = i;
 	}
 
 	for (idx_t i = 0; i < right_node.names.size(); ++i) {
 		if (right_names_map.find(right_node.names[i]) != right_names_map.end()) {
-			throw BinderException("UNION(ALL) BY NAME operation doesn't support same name in SELECT list");
+			throw BinderException("UNION (ALL) BY NAME operation doesn't support duplicate names in the SELECT list - "
+			                      "the name \"%s\" occurs multiple times in the right-hand side",
+			                      right_node.names[i]);
 		}
 		if (left_names_map.find(right_node.names[i]) == left_names_map.end()) {
 			result.names.push_back(right_node.names[i]);
@@ -182,6 +186,16 @@ static void BuildUnionByNameInfo(ClientContext &context, BoundSetOperationNode &
 	}
 }
 
+static void GatherSetOpBinders(BoundQueryNode &node, Binder &binder, vector<reference<Binder>> &binders) {
+	if (node.type != QueryNodeType::SET_OPERATION_NODE) {
+		binders.push_back(binder);
+		return;
+	}
+	auto &setop_node = node.Cast<BoundSetOperationNode>();
+	GatherSetOpBinders(*setop_node.left, *setop_node.left_binder, binders);
+	GatherSetOpBinders(*setop_node.right, *setop_node.right_binder, binders);
+}
+
 unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	auto result = make_uniq<BoundSetOperationNode>();
 	result->setop_type = statement.setop_type;
@@ -247,7 +261,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 			GatherAliases(*result, bind_state, reorder_idx);
 		}
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
-		OrderBinder order_binder({*result->left_binder, *result->right_binder}, bind_state);
+		vector<reference<Binder>> binders;
+		GatherSetOpBinders(*result->left, *result->left_binder, binders);
+		GatherSetOpBinders(*result->right, *result->right_binder, binders);
+		OrderBinder order_binder(binders, bind_state);
 		PrepareModifiers(order_binder, statement, *result);
 	}
 

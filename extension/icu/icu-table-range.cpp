@@ -195,7 +195,7 @@ struct ICUTableRange {
 		                             nullptr, Bind<false>, nullptr, RangeDateTimeLocalInit);
 		range_function.in_out_function = ICUTableRangeFunction<false>;
 		range.AddFunction(range_function);
-		ExtensionUtil::AddFunctionOverload(db, range);
+		ExtensionUtil::RegisterFunction(db, range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
@@ -204,7 +204,7 @@ struct ICUTableRange {
 		    RangeDateTimeLocalInit);
 		generate_series_function.in_out_function = ICUTableRangeFunction<true>;
 		generate_series.AddFunction(generate_series_function);
-		ExtensionUtil::AddFunctionOverload(db, generate_series);
+		ExtensionUtil::RegisterFunction(db, generate_series);
 	}
 };
 

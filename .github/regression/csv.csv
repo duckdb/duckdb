@@ -7,4 +7,3 @@ benchmark/csv/1_byte_values.benchmark
 benchmark/csv/16_byte_values.benchmark
 benchmark/csv/multiple_small_files.benchmark
 benchmark/csv/time_type.benchmark
-benchmark/csv/ignore_errors.benchmark

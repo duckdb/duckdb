@@ -20,7 +20,7 @@ select * from string_key;
 query I
 select col['a'] from string_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -40,7 +40,7 @@ select * from tinyint_key;
 query I
 select col[123] from tinyint_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -60,7 +60,7 @@ select * from smallint_key;
 query I
 select col[123] from smallint_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -80,7 +80,7 @@ select * from integer_key;
 query I
 select col[123] from integer_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -100,7 +100,7 @@ select * from bigint_key;
 query I
 select col[123] from bigint_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -120,7 +120,7 @@ select * from hugeint_key;
 query I
 select col[123] from hugeint_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -140,7 +140,7 @@ select * from boolean_key;
 query I
 select col[True] from boolean_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -160,7 +160,7 @@ select * from blob_key;
 query I
 select col['\xF0\x9F\xA6\x86'::BLOB] from blob_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -180,7 +180,7 @@ select * from date_key;
 query I
 select col['1992-09-20'::DATE] from date_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -200,7 +200,7 @@ select * from double_key;
 query I
 select col['12.3'::DOUBLE] from double_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -220,7 +220,7 @@ select * from real_key;
 query I
 select col['12.3'::REAL] from real_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -240,7 +240,7 @@ select * from decimal_key;
 query I
 select col['12.3'::DECIMAL] from decimal_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -260,7 +260,7 @@ select * from interval_key;
 query I
 select col[('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP)] from interval_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -280,7 +280,7 @@ select * from time_key;
 query I
 select col['12:30:00'::TIME] from time_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -300,7 +300,7 @@ select * from timestamp_key;
 query I
 select col['1992-09-20 11:30:00'::TIMESTAMP] from timestamp_key;
 ----
-[x]
+x
 
 # Invalid
 statement error
@@ -320,7 +320,7 @@ select * from uuid_key;
 query I
 select col['eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID] from uuid_key;
 ----
-[x]
+x
 
 # Invalid
 statement error

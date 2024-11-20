@@ -166,6 +166,8 @@ enum class FilterPropagateResult : uint8_t;
 
 enum class ForeignKeyType : uint8_t;
 
+enum class FunctionCollationHandling : uint8_t;
+
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionStability : uint8_t;
@@ -278,6 +280,8 @@ enum class SecretDisplayType : uint8_t;
 
 enum class SecretPersistType : uint8_t;
 
+enum class SecretSerializationType : uint8_t;
+
 enum class SequenceInfo : uint8_t;
 
 enum class SetOperationType : uint8_t;
@@ -320,6 +324,8 @@ enum class TableColumnType : uint8_t;
 
 enum class TableFilterType : uint8_t;
 
+enum class TablePartitionInfo : uint8_t;
+
 enum class TableReferenceType : uint8_t;
 
 enum class TableScanType : uint8_t;
@@ -327,6 +333,10 @@ enum class TableScanType : uint8_t;
 enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
+
+enum class TemporaryBufferSize : uint64_t;
+
+enum class TemporaryCompressionLevel : int;
 
 enum class TimestampCastResult : uint8_t;
 
@@ -561,6 +571,9 @@ template<>
 const char* EnumUtil::ToChars<ForeignKeyType>(ForeignKeyType value);
 
 template<>
+const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandling value);
+
+template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
@@ -729,6 +742,9 @@ template<>
 const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value);
 
 template<>
+const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
+
+template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
 
 template<>
@@ -792,6 +808,9 @@ template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value);
 
 template<>
+const char* EnumUtil::ToChars<TablePartitionInfo>(TablePartitionInfo value);
+
+template<>
 const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value);
 
 template<>
@@ -802,6 +821,12 @@ const char* EnumUtil::ToChars<TaskExecutionMode>(TaskExecutionMode value);
 
 template<>
 const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value);
+
+template<>
+const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value);
+
+template<>
+const char* EnumUtil::ToChars<TemporaryCompressionLevel>(TemporaryCompressionLevel value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
@@ -1051,6 +1076,9 @@ template<>
 ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value);
 
 template<>
+FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const char *value);
+
+template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
 
 template<>
@@ -1219,6 +1247,9 @@ template<>
 SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
 
 template<>
+SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);
+
+template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);
 
 template<>
@@ -1282,6 +1313,9 @@ template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value);
 
 template<>
+TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value);
+
+template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value);
 
 template<>
@@ -1292,6 +1326,12 @@ TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value);
 
 template<>
 TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value);
+
+template<>
+TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value);
+
+template<>
+TemporaryCompressionLevel EnumUtil::FromString<TemporaryCompressionLevel>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);

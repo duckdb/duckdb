@@ -11,11 +11,13 @@ namespace duckdb {
 
 void SelectStatement::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(100, "node", node);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<idx_t>>(101, "named_param_map", named_param_map);
 }
 
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SelectStatement>(new SelectStatement());
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(100, "node", result->node);
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<idx_t>>(101, "named_param_map", result->named_param_map);
 	return result;
 }
 

@@ -262,15 +262,8 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_dat
 	PartitionedTupleDataAppendState append_state;
 	new_partitioned_data.InitializeAppendState(append_state);
 
-	const auto reverse = RepartitionReverseOrder();
-	const idx_t start_idx = reverse ? partitions.size() : 0;
-	const idx_t end_idx = reverse ? 0 : partitions.size();
-	const int64_t update = reverse ? -1 : 1;
-	const int64_t adjustment = reverse ? -1 : 0;
-
-	for (idx_t partition_idx = start_idx; partition_idx != end_idx; partition_idx += idx_t(update)) {
-		auto actual_partition_idx = partition_idx + idx_t(adjustment);
-		auto &partition = *partitions[actual_partition_idx];
+	for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
+		auto &partition = *partitions[partition_idx];
 
 		if (partition.Count() > 0) {
 			TupleDataChunkIterator iterator(partition, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
@@ -279,9 +272,9 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_dat
 				new_partitioned_data.Append(append_state, chunk_state, iterator.GetCurrentChunkCount());
 			} while (iterator.Next());
 
-			RepartitionFinalizeStates(*this, new_partitioned_data, append_state, actual_partition_idx);
+			RepartitionFinalizeStates(*this, new_partitioned_data, append_state, partition_idx);
 		}
-		partitions[actual_partition_idx]->Reset();
+		partitions[partition_idx]->Reset();
 	}
 	new_partitioned_data.FlushAppendState(append_state);
 

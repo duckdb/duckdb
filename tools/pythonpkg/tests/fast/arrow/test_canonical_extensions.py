@@ -5,41 +5,9 @@ import json
 from uuid import UUID
 import datetime
 
-pa = pytest.importorskip('pyarrow')
+pa = pytest.importorskip('pyarrow', '18.0.0')
 
-from arrow_canonical_extensions import UuidType, JSONType, UHugeIntType, HugeIntType
-
-
-class UuidTypeWrong(pa.ExtensionType):
-    def __init__(self):
-        pa.ExtensionType.__init__(self, pa.binary(4), "arrow.uuid")
-
-    def __arrow_ext_serialize__(self):
-        # since we don't have a parameterized type, we don't need extra
-        # metadata to be deserialized
-        return b''
-
-    @classmethod
-    def __arrow_ext_deserialize__(cls, storage_type, serialized):
-        # return an instance of this subclass given the serialized
-        # metadata.
-        return UuidTypeWrong()
-
-
-class JSONTypeWrong(pa.ExtensionType):
-    def __init__(self):
-        pa.ExtensionType.__init__(self, pa.int32(), "arrow.json")
-
-    def __arrow_ext_serialize__(self):
-        # since we don't have a parameterized type, we don't need extra
-        # metadata to be deserialized
-        return b''
-
-    @classmethod
-    def __arrow_ext_deserialize__(cls, storage_type, serialized):
-        # return an instance of this subclass given the serialized
-        # metadata.
-        return JSONTypeWrong()
+from arrow_canonical_extensions import UHugeIntType, HugeIntType, VarIntType
 
 
 """
@@ -65,42 +33,20 @@ def arrow_duckdb_uhugeint():
 
 
 @pytest.fixture(scope='function')
-def arrow_json():
-    pa.register_extension_type(JSONType())
+def arrow_duckdb_varint():
+    pa.register_extension_type(VarIntType())
     yield
-    pa.unregister_extension_type("arrow.json")
-
-
-@pytest.fixture(scope='function')
-def arrow_json_wrong():
-    pa.register_extension_type(JSONTypeWrong())
-    yield
-    pa.unregister_extension_type("arrow.json")
-
-
-@pytest.fixture(scope='function')
-def arrow_uuid():
-    pa.register_extension_type(UuidType())
-    yield
-    pa.unregister_extension_type("arrow.uuid")
-
-
-@pytest.fixture(scope='function')
-def arrow_uuid_wrong():
-    pa.register_extension_type(UuidTypeWrong())
-    yield
-    pa.unregister_extension_type("arrow.uuid")
+    pa.unregister_extension_type("duckdb.varint")
 
 
 class TestCanonicalExtensionTypes(object):
 
-    def test_uuid(self, arrow_uuid):
+    def test_uuid(self):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("SET arrow_lossless_conversion = true")
 
         storage_array = pa.array([uuid.uuid4().bytes for _ in range(4)], pa.binary(16))
-        uuid_type = UuidType()
-        storage_array = uuid_type.wrap_array(storage_array)
+        storage_array = pa.uuid().wrap_array(storage_array)
 
         arrow_table = pa.Table.from_arrays([storage_array], names=['uuid_col'])
 
@@ -108,15 +54,15 @@ class TestCanonicalExtensionTypes(object):
 
         assert duck_arrow.equals(arrow_table)
 
-    def test_uuid_from_duck(self, arrow_uuid):
+    def test_uuid_from_duck(self):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("SET arrow_lossless_conversion = true")
 
         arrow_table = duckdb_cursor.execute("select uuid from test_all_types()").fetch_arrow_table()
 
         assert arrow_table.to_pylist() == [
-            {'uuid': b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'},
-            {'uuid': b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'},
+            {'uuid': UUID('00000000-0000-0000-0000-000000000000')},
+            {'uuid': UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')},
             {'uuid': None},
         ]
 
@@ -130,33 +76,16 @@ class TestCanonicalExtensionTypes(object):
             "select '00000000-0000-0000-0000-000000000100'::UUID as uuid"
         ).fetch_arrow_table()
 
-        assert arrow_table.to_pylist() == [
-            {'uuid': b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00'}
-        ]
+        assert arrow_table.to_pylist() == [{'uuid': UUID('00000000-0000-0000-0000-000000000100')}]
         assert duckdb_cursor.execute("FROM arrow_table").fetchall() == [(UUID('00000000-0000-0000-0000-000000000100'),)]
 
-    def test_uuid_exception(self, arrow_uuid_wrong):
-        duckdb_cursor = duckdb.connect()
-        duckdb_cursor.execute("SET arrow_lossless_conversion = true")
-
-        storage_array = pa.array(['aaaa'], pa.binary(4))
-        uuid_type = UuidTypeWrong()
-        storage_array = uuid_type.wrap_array(storage_array)
-
-        arrow_table = pa.Table.from_arrays([storage_array], names=['uuid_col'])
-
-        with pytest.raises(duckdb.InvalidInputException, match="arrow.uuid must be a fixed-size binary of 16 bytes"):
-            duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
-
-    def test_json(self, duckdb_cursor, arrow_json):
+    def test_json(self, duckdb_cursor):
         data = {"name": "Pedro", "age": 28, "car": "VW Fox"}
 
         # Convert dictionary to JSON string
         json_string = json.dumps(data)
 
         storage_array = pa.array([json_string], pa.string())
-        json_type = JSONType()
-        storage_array = json_type.wrap_array(storage_array)
 
         arrow_table = pa.Table.from_arrays([storage_array], names=['json_col'])
 
@@ -164,16 +93,6 @@ class TestCanonicalExtensionTypes(object):
         duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
 
         assert duck_arrow.equals(arrow_table)
-
-    def test_json_throw(self, duckdb_cursor, arrow_json_wrong):
-        storage_array = pa.array([32], pa.int32())
-        json_type = JSONTypeWrong()
-        storage_array = json_type.wrap_array(storage_array)
-
-        arrow_table = pa.Table.from_arrays([storage_array], names=['json_col'])
-
-        with pytest.raises(duckdb.InvalidInputException, match="arrow.json must be of a varchar format "):
-            duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
 
     def test_uuid_no_def(self):
         duckdb_cursor = duckdb.connect()
@@ -215,7 +134,7 @@ class TestCanonicalExtensionTypes(object):
             (None,),
         ]
 
-    def test_uuid_udf_registered(self, arrow_uuid):
+    def test_uuid_udf_registered(self):
         def test_function(x):
             print(x.type.__class__)
             return x
@@ -225,20 +144,6 @@ class TestCanonicalExtensionTypes(object):
 
         rel = con.sql("select ? as x", params=[uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')])
         rel.project("test(x) from t").fetchall()
-
-    def test_uuid_udf_unregistered(self):
-        con = duckdb.connect()
-        con.execute("SET arrow_lossless_conversion = true")
-
-        def test_function(x):
-            print(x.type.__class__)
-            return x
-
-        con.create_function('test', test_function, ['UUID'], 'UUID', type='arrow')
-
-        rel = con.sql("select ? as x", params=[uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')])
-        with pytest.raises(duckdb.Error, match="It seems that you are using the UUID arrow canonical extension"):
-            rel.project("test(x) from t").fetchall()
 
     def test_unimplemented_extension(self, duckdb_cursor):
         class MyType(pa.ExtensionType):
@@ -330,4 +235,18 @@ class TestCanonicalExtensionTypes(object):
         assert con.execute("FROM res_time").fetchall() == [(datetime.time(2, 30),)]
         assert con.execute("FROM res_tz").fetchall() == [
             (datetime.time(2, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=14400))),)
+        ]
+
+    def test_varint(self, arrow_duckdb_varint):
+        con = duckdb.connect()
+        res_varint = con.execute(
+            "SELECT '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::varint a FROM range(1) tbl(i)"
+        ).arrow()
+
+        assert res_varint.column("a").type == VarIntType()
+
+        assert con.execute("FROM res_varint").fetchall() == [
+            (
+                '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368',
+            )
         ]

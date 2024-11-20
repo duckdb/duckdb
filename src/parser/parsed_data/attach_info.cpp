@@ -6,18 +6,18 @@
 
 namespace duckdb {
 
-optional_idx AttachInfo::GetBlockAllocSize() const {
-
+StorageOptions AttachInfo::GetStorageOptions() const {
+	StorageOptions storage_options;
 	for (auto &entry : options) {
 		if (entry.first == "block_size") {
 			// Extract the block allocation size. This is NOT the actual memory available on a block (block_size),
 			// even though the corresponding option we expose to the user is called "block_size".
-			idx_t block_alloc_size = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
-			Storage::VerifyBlockAllocSize(block_alloc_size);
-			return block_alloc_size;
+			storage_options.block_alloc_size = entry.second.GetValue<uint64_t>();
+		} else if (entry.first == "row_group_size") {
+			storage_options.row_group_size = entry.second.GetValue<uint64_t>();
 		}
 	}
-	return optional_idx();
+	return storage_options;
 }
 
 unique_ptr<AttachInfo> AttachInfo::Copy() const {

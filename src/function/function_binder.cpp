@@ -6,17 +6,19 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
 
-FunctionBinder::FunctionBinder(ClientContext &context) : context(context) {
+FunctionBinder::FunctionBinder(ClientContext &context_p) : binder(nullptr), context(context_p) {
+}
+FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(binder_p.context) {
 }
 
 optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments) {
@@ -318,24 +320,13 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	// found a matching function!
 	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
-	// If any of the parameters are NULL, the function will just be replaced with a NULL constant
-	// But this NULL constant needs to have to correct type, because we use LogicalType::SQLNULL for binding macro's
-	// However, some functions may have an invalid return type, so we default to SQLNULL for those
-	LogicalType return_type_if_null;
-	switch (bound_function.return_type.id()) {
-	case LogicalTypeId::ANY:
-	case LogicalTypeId::DECIMAL:
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::LIST:
-	case LogicalTypeId::MAP:
-	case LogicalTypeId::UNION:
-	case LogicalTypeId::ARRAY:
-		return_type_if_null = LogicalType::SQLNULL;
-		break;
-	default:
-		return_type_if_null = bound_function.return_type;
-	}
-
+	// If any of the parameters are NULL, the function will just be replaced with a NULL constant.
+	// We try to give the NULL constant the correct type, but we have to do this without binding the function,
+	// because functions with DEFAULT_NULL_HANDLING should not have to deal with NULL inputs in their bind code.
+	// Some functions may have an invalid default return type, as they must be bound to infer the return type.
+	// In those cases, we default to SQLNULL.
+	const auto return_type_if_null =
+	    bound_function.return_type.IsComplete() ? bound_function.return_type : LogicalType::SQLNULL;
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
@@ -356,22 +347,110 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	return BindScalarFunction(bound_function, std::move(children), is_operator, binder);
 }
 
+bool RequiresCollationPropagation(const LogicalType &type) {
+	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias();
+}
+
+string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
+	string collation;
+	for (auto &arg : children) {
+		if (!RequiresCollationPropagation(arg->return_type)) {
+			// not a varchar column
+			continue;
+		}
+		auto child_collation = StringType::GetCollation(arg->return_type);
+		if (collation.empty()) {
+			collation = child_collation;
+		} else if (!child_collation.empty() && collation != child_collation) {
+			throw BinderException("Cannot combine types with different collation!");
+		}
+	}
+	return collation;
+}
+
+void PropagateCollations(ClientContext &, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &children) {
+	if (!RequiresCollationPropagation(bound_function.return_type)) {
+		// we only need to propagate if the function returns a varchar
+		return;
+	}
+	auto collation = ExtractCollation(children);
+	if (collation.empty()) {
+		// no collation to propagate
+		return;
+	}
+	// propagate the collation to the return type
+	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
+	bound_function.return_type = std::move(collation_type);
+}
+
+void PushCollations(ClientContext &context, ScalarFunction &bound_function, vector<unique_ptr<Expression>> &children,
+                    CollationType type) {
+	auto collation = ExtractCollation(children);
+	if (collation.empty()) {
+		// no collation to push
+		return;
+	}
+	// push collation into the return type if required
+	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
+	if (RequiresCollationPropagation(bound_function.return_type)) {
+		bound_function.return_type = collation_type;
+	}
+	// push collations to the children
+	for (auto &arg : children) {
+		if (RequiresCollationPropagation(arg->return_type)) {
+			// if this is a varchar type - propagate the collation
+			arg->return_type = collation_type;
+		}
+		// now push the actual collation handling
+		ExpressionBinder::PushCollation(context, arg, arg->return_type, type);
+	}
+}
+
+void HandleCollations(ClientContext &context, ScalarFunction &bound_function,
+                      vector<unique_ptr<Expression>> &children) {
+	switch (bound_function.collation_handling) {
+	case FunctionCollationHandling::IGNORE_COLLATIONS:
+		// explicitly ignoring collation handling
+		break;
+	case FunctionCollationHandling::PROPAGATE_COLLATIONS:
+		PropagateCollations(context, bound_function, children);
+		break;
+	case FunctionCollationHandling::PUSH_COMBINABLE_COLLATIONS:
+		// first propagate, then push collations to the children
+		PushCollations(context, bound_function, children, CollationType::COMBINABLE_COLLATIONS);
+		break;
+	default:
+		throw InternalException("Unrecognized collation handling");
+	}
+}
+
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
                                                           vector<unique_ptr<Expression>> children, bool is_operator,
                                                           optional_ptr<Binder> binder) {
 	unique_ptr<FunctionData> bind_info;
+
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
+	} else if (bound_function.bind_extended) {
+		if (!binder) {
+			throw InternalException("Function '%s' has a 'bind_extended' but the FunctionBinder was created without "
+			                        "a reference to a Binder",
+			                        bound_function.name);
+		}
+		ScalarFunctionBindInput bind_input(*binder);
+		bind_info = bound_function.bind_extended(bind_input, bound_function, children);
 	}
+
 	if (bound_function.get_modified_databases && binder) {
 		auto &properties = binder->GetStatementProperties();
 		FunctionModifiedDatabasesInput input(bind_info, properties);
 		bound_function.get_modified_databases(context, input);
 	}
+	HandleCollations(context, bound_function, children);
+
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
 
-	// now create the function
 	auto return_type = bound_function.return_type;
 	unique_ptr<Expression> result;
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function),

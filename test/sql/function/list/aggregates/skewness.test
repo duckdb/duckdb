@@ -19,6 +19,11 @@ CREATE TABLE skew AS SELECT LIST(10) AS i FROM range(5) t1(i)
 query I
 select list_skewness (i) from skew
 ----
+NAN
+
+query I
+select list_skewness ([1,2])
+----
 NULL
 
 # out of range

@@ -166,7 +166,8 @@
       {
         "id": 201,
         "name": "projections",
-        "type": "vector<idx_t>"
+        "type": "vector<idx_t>",
+        "property": "projection_map"
       }
     ],
     "constructor": ["orders"]
@@ -874,9 +875,15 @@
         "id": 201,
         "name": "unbound_expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 202,
+        "name": "alter_table_info",
+        "type": "unique_ptr<AlterTableInfo>",
+        "base": "ParseInfo"
       }
     ],
-    "constructor": ["$ClientContext", "info", "unbound_expressions"]
+    "constructor": ["$ClientContext", "info", "unbound_expressions", "alter_table_info"]
   },
   {
     "class": "LogicalExtensionOperator",
@@ -889,6 +896,26 @@
     "base": "LogicalOperator",
     "enum": "LOGICAL_VACUUM",
     "custom_implementation": true
+  },
+  {
+    "class": "LogicalExport",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXPORT",
+    "members": [
+      {
+        "id": 200,
+        "name": "copy_info",
+        "type": "CopyInfo*",
+        "base": "ParseInfo"
+      },
+      {
+        "id": 201,
+        "name": "exported_tables",
+        "type": "BoundExportData*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": ["$ClientContext", "copy_info", "exported_tables"]
   },
   {
     "class": "FilenamePattern",

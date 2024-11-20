@@ -1,0 +1,35 @@
+# name: test/sql/function/list/lambdas/lambdas_and_functions.test
+# description: Test mixing lambdas and functions
+# group: [lambdas]
+
+require json
+
+statement ok
+create or replace function demo(n, z) as table (
+  select list_transform(range(0,n), x -> z) as row
+);
+
+query I
+from demo(3,0);
+----
+[0, 0, 0]
+
+statement ok
+create or replace function demo(n, z) as table (
+  select list_transform(range(0,n), x -> 0+z) as row
+);
+
+query I
+from demo(3,0);
+----
+[0, 0, 0]
+
+statement ok
+create or replace function demo(n, z) as table (
+  select list_transform(range(0,n), x -> (z->'a')) as row
+);
+
+query I
+from demo(3, {'a': 2});
+----
+[2, 2, 2]

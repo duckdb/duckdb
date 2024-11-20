@@ -339,6 +339,123 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	return result;
 }
 
+vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
+	idx_t error_start = 0;
+	idx_t error_end = error_msg.size();
+
+	vector<SimplifiedToken> tokens;
+	// find "XXX Error:" - this marks the start of the error message
+	auto error = StringUtil::Find(error_msg, "Error: ");
+	if (error.IsValid()) {
+		SimplifiedToken token;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+		token.start = 0;
+		tokens.push_back(token);
+
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		token.start = error.GetIndex() + 6;
+		tokens.push_back(token);
+
+		error_start = error.GetIndex() + 7;
+	}
+
+	// find "LINE (number)" - this marks the end of the message
+	auto line_pos = StringUtil::Find(error_msg, "\nLINE ");
+	if (line_pos.IsValid()) {
+		// tokenize between
+		error_end = line_pos.GetIndex();
+	}
+
+	// now iterate over the
+	bool in_quotes = false;
+	for (idx_t i = error_start; i < error_end; i++) {
+		if (error_msg[i] == '"' || error_msg[i] == '\'') {
+			SimplifiedToken token;
+			token.start = i;
+			if (!in_quotes) {
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT;
+				token.start++;
+			} else {
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+			}
+			tokens.push_back(token);
+			in_quotes = !in_quotes;
+		}
+	}
+	if (in_quotes && error_end < error_msg.size()) {
+		SimplifiedToken token;
+		token.start = error_end;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		tokens.push_back(token);
+	}
+	if (line_pos.IsValid()) {
+		SimplifiedToken token;
+		token.start = line_pos.GetIndex() + 1;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
+		tokens.push_back(token);
+
+		// tokenize the LINE part
+		idx_t query_start;
+		for (query_start = line_pos.GetIndex() + 6; query_start < error_msg.size(); query_start++) {
+			if (error_msg[query_start] != ':' && !StringUtil::CharacterIsDigit(error_msg[query_start])) {
+				break;
+			}
+		}
+		if (query_start < error_msg.size()) {
+			token.start = query_start;
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+			tokens.push_back(token);
+
+			idx_t query_end;
+			for (query_end = query_start; query_end < error_msg.size(); query_end++) {
+				if (error_msg[query_end] == '\n') {
+					break;
+				}
+			}
+			// after LINE XXX: comes a caret - look for it
+			idx_t caret_position = error_msg.size();
+			bool place_caret = false;
+			idx_t caret_start = query_end + 1;
+			if (caret_start < error_msg.size()) {
+				for (idx_t i = caret_start; i < error_msg.size(); i++) {
+					if (error_msg[i] == '^') {
+						// found the caret
+						// to get the caret position in the query we need to
+						caret_position = i - caret_start - ((query_start - line_pos.GetIndex()) - 1);
+						place_caret = true;
+						break;
+					}
+				}
+			}
+			// tokenize the actual query
+			string query = error_msg.substr(query_start, query_end - query_start);
+			auto query_tokens = Tokenize(query);
+			for (auto &query_token : query_tokens) {
+				if (place_caret) {
+					if (query_token.start >= caret_position) {
+						// we need to place the caret here
+						query_token.start = query_start + caret_position;
+						query_token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+						tokens.push_back(query_token);
+
+						place_caret = false;
+						continue;
+					}
+				}
+				query_token.start += query_start;
+				tokens.push_back(query_token);
+			}
+			// FIXME: find the caret position and highlight/bold the identifier it points to
+			if (query_end < error_msg.size()) {
+				token.start = query_end;
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+				tokens.push_back(token);
+			}
+		}
+	}
+	return tokens;
+}
+
 KeywordCategory ToKeywordCategory(duckdb_libpgquery::PGKeywordCategory type) {
 	switch (type) {
 	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_RESERVED:

@@ -7,18 +7,14 @@
 
 namespace duckdb {
 
-DistinctStatistics::DistinctStatistics()
-    : log(make_uniq<HyperLogLog>()), sample_count(0), total_count(0),
-      hash_vec(LogicalType::HASH, STANDARD_VECTOR_SIZE) {
+DistinctStatistics::DistinctStatistics() : log(make_uniq<HyperLogLog>()), sample_count(0), total_count(0) {
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count)
-    : log(std::move(log)), sample_count(sample_count), total_count(total_count),
-      hash_vec(LogicalType::HASH, STANDARD_VECTOR_SIZE) {
+    : log(std::move(log)), sample_count(sample_count), total_count(total_count) {
 }
 
 unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {
-	lock_guard<mutex> guard(lock);
 	return make_uniq<DistinctStatistics>(log->Copy(), sample_count, total_count);
 }
 
@@ -28,25 +24,28 @@ void DistinctStatistics::Merge(const DistinctStatistics &other) {
 	total_count += other.total_count;
 }
 
-void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
+void DistinctStatistics::UpdateSample(Vector &new_data, idx_t count, Vector &hashes) {
 	total_count += count;
-	if (sample) {
-		const auto original_count = count;
-		const auto sample_rate = v.GetType().IsIntegral() ? INTEGRAL_SAMPLE_RATE : BASE_SAMPLE_RATE;
-		// Sample up to 'sample_rate' of STANDARD_VECTOR_SIZE of this vector (at least 1)
-		count = MaxValue<idx_t>(LossyNumericCast<idx_t>(sample_rate * static_cast<double>(STANDARD_VECTOR_SIZE)), 1);
-		// But never more than the original count
-		count = MinValue<idx_t>(count, original_count);
-	}
+	const auto original_count = count;
+	const auto sample_rate = new_data.GetType().IsIntegral() ? INTEGRAL_SAMPLE_RATE : BASE_SAMPLE_RATE;
+	// Sample up to 'sample_rate' of STANDARD_VECTOR_SIZE of this vector (at least 1)
+	count = MaxValue<idx_t>(LossyNumericCast<idx_t>(sample_rate * static_cast<double>(STANDARD_VECTOR_SIZE)), 1);
+	// But never more than the original count
+	count = MinValue<idx_t>(count, original_count);
+
+	UpdateInternal(new_data, count, hashes);
+}
+
+void DistinctStatistics::Update(Vector &new_data, idx_t count, Vector &hashes) {
+	total_count += count;
+	UpdateInternal(new_data, count, hashes);
+}
+
+void DistinctStatistics::UpdateInternal(Vector &new_data, idx_t count, Vector &hashes) {
 	sample_count += count;
+	VectorOperations::Hash(new_data, hashes, count);
 
-	lock_guard<mutex> guard(lock);
-	VectorOperations::Hash(v, hash_vec, count);
-
-	UnifiedVectorFormat vdata;
-	v.ToUnifiedFormat(count, vdata);
-
-	log->Update(v, hash_vec, count);
+	log->Update(new_data, hashes, count);
 }
 
 string DistinctStatistics::ToString() const {

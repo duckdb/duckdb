@@ -319,15 +319,17 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 			for (idx_t group_idx = 0; group_idx < grouped_aggregate_data.groups.size(); group_idx++) {
 				auto &group = grouped_aggregate_data.groups[group_idx];
 				auto &bound_ref = group->Cast<BoundReferenceExpression>();
-				filtered_input.data[bound_ref.index].Reference(chunk.data[bound_ref.index]);
+				auto &col = filtered_input.data[bound_ref.index];
+				col.Reference(chunk.data[bound_ref.index]);
+				col.Slice(sel_vec, count);
 			}
 			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
 				auto &child = aggregate.children[child_idx];
 				auto &bound_ref = child->Cast<BoundReferenceExpression>();
-
-				filtered_input.data[bound_ref.index].Reference(chunk.data[bound_ref.index]);
+				auto &col = filtered_input.data[bound_ref.index];
+				col.Reference(chunk.data[bound_ref.index]);
+				col.Slice(sel_vec, count);
 			}
-			filtered_input.Slice(sel_vec, count);
 			filtered_input.SetCardinality(count);
 
 			radix_table.Sink(context, filtered_input, sink_input, empty_chunk, empty_filter);

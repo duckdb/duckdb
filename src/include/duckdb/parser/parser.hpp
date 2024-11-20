@@ -44,6 +44,9 @@ public:
 	//! Tokenize a query, returning the raw tokens together with their locations
 	static vector<SimplifiedToken> Tokenize(const string &query);
 
+	//! Tokenize an error message, returning the raw tokens together with their locations
+	static vector<SimplifiedToken> TokenizeError(const string &error_msg);
+
 	//! Returns true if the given text matches a keyword of the parser
 	static KeywordCategory IsKeyword(const string &text);
 	//! Returns a list of all keywords in the parser

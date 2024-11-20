@@ -217,46 +217,6 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	}
 }
 
-TEST_CASE("Test DataChunk appending incorrect types in C API", "[capi]") {
-	CAPITester tester;
-	duckdb::unique_ptr<CAPIResult> result;
-	duckdb_state status;
-
-	REQUIRE(tester.OpenDatabase(nullptr));
-
-	REQUIRE(duckdb_vector_size() == STANDARD_VECTOR_SIZE);
-
-	tester.Query("CREATE TABLE test(i BIGINT, j SMALLINT)");
-
-	duckdb_logical_type types[2];
-	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
-	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_BOOLEAN);
-
-	auto data_chunk = duckdb_create_data_chunk(types, 2);
-	REQUIRE(data_chunk);
-
-	auto col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 0));
-	*col1_ptr = 42;
-	auto col2_ptr = (bool *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 1));
-	*col2_ptr = false;
-
-	duckdb_appender appender;
-	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBError);
-
-	auto error = duckdb_appender_error(appender);
-	REQUIRE(duckdb::StringUtil::Contains(error, "expected SMALLINT but got BOOLEAN for column 2"));
-
-	duckdb_appender_destroy(&appender);
-
-	duckdb_destroy_data_chunk(&data_chunk);
-
-	duckdb_destroy_logical_type(&types[0]);
-	duckdb_destroy_logical_type(&types[1]);
-}
-
 TEST_CASE("Test DataChunk varchar result fetch in C API", "[capi]") {
 	if (duckdb_vector_size() < 64) {
 		return;

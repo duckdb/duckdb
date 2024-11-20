@@ -1,0 +1,78 @@
+# name: test/sql/topn/tpch_top_n.test_slow
+# description: Test Top N NULLS FIRST/LAST with few rows
+# group: [topn]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+query I
+select l_quantity
+from lineitem
+where l_linestatus = 'O'
+order by l_quantity limit 10 offset 100;
+----
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+1.00
+
+query I
+select l_quantity
+from lineitem
+where l_linestatus = 'O'
+order by l_quantity limit 10 offset 1000000;
+----
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+17.00
+
+query I
+select sum(l_quantity)
+from lineitem
+group by l_orderkey
+order by sum(l_quantity) desc
+limit 10 offset 100;
+----
+297.00
+296.00
+296.00
+296.00
+296.00
+296.00
+296.00
+296.00
+295.00
+295.00
+
+query I
+select sum(l_quantity)
+from lineitem
+group by l_orderkey
+order by sum(l_quantity) desc
+limit 10 offset 100000;
+----
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00
+195.00

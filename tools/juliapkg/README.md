@@ -42,7 +42,7 @@ If you wish to load data from a DataFrame into a DuckDB table you can run a `CRE
 using DuckDB
 using DataFrames
 
-# create a new in-memory dabase
+# create a new in-memory database
 con = DBInterface.connect(DuckDB.DB)
 
 # create a DataFrame

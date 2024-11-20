@@ -35,7 +35,7 @@ public:
 
 	void Render(const LogicalOperator &op, std::ostream &ss);
 	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const ProfilingNode &op, std::ostream &ss);
+	void Render(const ProfilingNode &op, std::ostream &ss) override;
 	void Render(const Pipeline &op, std::ostream &ss);
 
 	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;

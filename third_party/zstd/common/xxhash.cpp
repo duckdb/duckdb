@@ -83,8 +83,8 @@
 /* for memcpy() */
 #include <string.h>
 
-#include "zstd/common/xxhash.h"
-#include "zstd/common/xxhash_static.h"
+#include "zstd/common/xxhash.hpp"
+#include "zstd/common/xxhash_static.hpp"
 
 /* *************************************
 *  Compiler Specific Options
@@ -103,7 +103,8 @@
 #  define FORCE_INLINE_ATTR
 #endif
 
-#define FORCE_INLINE_TEMPLATE static INLINE_KEYWORD FORCE_INLINE_ATTR
+// DuckDB: prefixed with XXHASH_ to avoid name conflicts
+#define XXHASH_FORCE_INLINE_TEMPLATE static INLINE_KEYWORD FORCE_INLINE_ATTR
 
 
 /* *************************************
@@ -169,6 +170,7 @@ static U64 XXH_read64(const void* memPtr)
 
 #endif   /* XXH_FORCE_DIRECT_MEMORY_ACCESS */
 
+} // namespace duckdb_zstd
 
 /* ****************************************
 *  Compiler-specific Functions and Macros
@@ -188,6 +190,8 @@ static U64 XXH_read64(const void* memPtr)
 #endif
 #  define XXH_rotl64(x,r) ((x << r) | (x >> (64 - r)))
 #endif
+
+namespace duckdb_zstd {
 
 #if defined(_MSC_VER)     /* Visual Studio */
 #  define XXH_swap32 _byteswap_ulong
@@ -234,7 +238,7 @@ typedef enum { XXH_bigEndian=0, XXH_littleEndian=1 } XXH_endianess;
 *****************************/
 typedef enum { XXH_aligned, XXH_unaligned } XXH_alignment;
 
-FORCE_INLINE_TEMPLATE U32 XXH_readLE32_align(const void* ptr, XXH_endianess endian, XXH_alignment align)
+XXHASH_FORCE_INLINE_TEMPLATE U32 XXH_readLE32_align(const void* ptr, XXH_endianess endian, XXH_alignment align)
 {
     if (align==XXH_unaligned)
         return endian==XXH_littleEndian ? XXH_read32(ptr) : XXH_swap32(XXH_read32(ptr));
@@ -242,7 +246,7 @@ FORCE_INLINE_TEMPLATE U32 XXH_readLE32_align(const void* ptr, XXH_endianess endi
         return endian==XXH_littleEndian ? *(const U32*)ptr : XXH_swap32(*(const U32*)ptr);
 }
 
-FORCE_INLINE_TEMPLATE U32 XXH_readLE32(const void* ptr, XXH_endianess endian)
+XXHASH_FORCE_INLINE_TEMPLATE U32 XXH_readLE32(const void* ptr, XXH_endianess endian)
 {
     return XXH_readLE32_align(ptr, endian, XXH_unaligned);
 }
@@ -252,7 +256,7 @@ static U32 XXH_readBE32(const void* ptr)
     return XXH_CPU_LITTLE_ENDIAN ? XXH_swap32(XXH_read32(ptr)) : XXH_read32(ptr);
 }
 
-FORCE_INLINE_TEMPLATE U64 XXH_readLE64_align(const void* ptr, XXH_endianess endian, XXH_alignment align)
+XXHASH_FORCE_INLINE_TEMPLATE U64 XXH_readLE64_align(const void* ptr, XXH_endianess endian, XXH_alignment align)
 {
     if (align==XXH_unaligned)
         return endian==XXH_littleEndian ? XXH_read64(ptr) : XXH_swap64(XXH_read64(ptr));
@@ -260,7 +264,7 @@ FORCE_INLINE_TEMPLATE U64 XXH_readLE64_align(const void* ptr, XXH_endianess endi
         return endian==XXH_littleEndian ? *(const U64*)ptr : XXH_swap64(*(const U64*)ptr);
 }
 
-FORCE_INLINE_TEMPLATE U64 XXH_readLE64(const void* ptr, XXH_endianess endian)
+XXHASH_FORCE_INLINE_TEMPLATE U64 XXH_readLE64(const void* ptr, XXH_endianess endian)
 {
     return XXH_readLE64_align(ptr, endian, XXH_unaligned);
 }
@@ -321,7 +325,7 @@ static U32 XXH32_round(U32 seed, U32 input)
     return seed;
 }
 
-FORCE_INLINE_TEMPLATE U32 XXH32_endian_align(const void* input, size_t len, U32 seed, XXH_endianess endian, XXH_alignment align)
+XXHASH_FORCE_INLINE_TEMPLATE U32 XXH32_endian_align(const void* input, size_t len, U32 seed, XXH_endianess endian, XXH_alignment align)
 {
     const BYTE* p = (const BYTE*)input;
     const BYTE* bEnd = p + len;
@@ -421,7 +425,7 @@ static U64 XXH64_mergeRound(U64 acc, U64 val)
     return acc;
 }
 
-FORCE_INLINE_TEMPLATE U64 XXH64_endian_align(const void* input, size_t len, U64 seed, XXH_endianess endian, XXH_alignment align)
+XXHASH_FORCE_INLINE_TEMPLATE U64 XXH64_endian_align(const void* input, size_t len, U64 seed, XXH_endianess endian, XXH_alignment align)
 {
     const BYTE* p = (const BYTE*)input;
     const BYTE* const bEnd = p + len;
@@ -570,7 +574,7 @@ XXH_PUBLIC_API XXH_errorcode XXH64_reset(XXH64_state_t* statePtr, unsigned long 
 }
 
 
-FORCE_INLINE_TEMPLATE XXH_errorcode XXH32_update_endian (XXH32_state_t* state, const void* input, size_t len, XXH_endianess endian)
+XXHASH_FORCE_INLINE_TEMPLATE XXH_errorcode XXH32_update_endian (XXH32_state_t* state, const void* input, size_t len, XXH_endianess endian)
 {
     const BYTE* p = (const BYTE*)input;
     const BYTE* const bEnd = p + len;
@@ -640,7 +644,7 @@ XXH_PUBLIC_API XXH_errorcode XXH32_update (XXH32_state_t* state_in, const void* 
 
 
 
-FORCE_INLINE_TEMPLATE U32 XXH32_digest_endian (const XXH32_state_t* state, XXH_endianess endian)
+XXHASH_FORCE_INLINE_TEMPLATE U32 XXH32_digest_endian (const XXH32_state_t* state, XXH_endianess endian)
 {
     const BYTE * p = (const BYTE*)state->mem32;
     const BYTE* const bEnd = (const BYTE*)(state->mem32) + state->memsize;
@@ -690,7 +694,7 @@ XXH_PUBLIC_API unsigned int XXH32_digest (const XXH32_state_t* state_in)
 
 /* **** XXH64 **** */
 
-FORCE_INLINE_TEMPLATE XXH_errorcode XXH64_update_endian (XXH64_state_t* state, const void* input, size_t len, XXH_endianess endian)
+XXHASH_FORCE_INLINE_TEMPLATE XXH_errorcode XXH64_update_endian (XXH64_state_t* state, const void* input, size_t len, XXH_endianess endian)
 {
     const BYTE* p = (const BYTE*)input;
     const BYTE* const bEnd = p + len;
@@ -759,7 +763,7 @@ XXH_PUBLIC_API XXH_errorcode XXH64_update (XXH64_state_t* state_in, const void* 
 
 
 
-FORCE_INLINE_TEMPLATE U64 XXH64_digest_endian (const XXH64_state_t* state, XXH_endianess endian)
+XXHASH_FORCE_INLINE_TEMPLATE U64 XXH64_digest_endian (const XXH64_state_t* state, XXH_endianess endian)
 {
     const BYTE * p = (const BYTE*)state->mem64;
     const BYTE* const bEnd = (const BYTE*)state->mem64 + state->memsize;
@@ -856,4 +860,4 @@ XXH_PUBLIC_API XXH64_hash_t XXH64_hashFromCanonical(const XXH64_canonical_t* src
     return XXH_readBE64(src);
 }
 
-}
+} // namespace duckdb_zstd

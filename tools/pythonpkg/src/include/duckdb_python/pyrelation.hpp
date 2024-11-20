@@ -207,10 +207,14 @@ public:
 	unique_ptr<DuckDBPyRelation> Map(py::function fun, Optional<py::object> schema);
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const py::object &condition, const string &type);
+	unique_ptr<DuckDBPyRelation> Cross(DuckDBPyRelation *other);
 
 	void ToParquet(const string &filename, const py::object &compression = py::none(),
 	               const py::object &field_ids = py::none(), const py::object &row_group_size_bytes = py::none(),
-	               const py::object &row_group_size = py::none());
+	               const py::object &row_group_size = py::none(), const py::object &overwrite = py::none(),
+	               const py::object &per_thread_output = py::none(), const py::object &use_tmp_file = py::none(),
+	               const py::object &partition_by = py::none(), const py::object &write_partition_columns = py::none(),
+	               const py::object &append = py::none());
 
 	void ToCSV(const string &filename, const py::object &sep = py::none(), const py::object &na_rep = py::none(),
 	           const py::object &header = py::none(), const py::object &quotechar = py::none(),
@@ -232,6 +236,7 @@ public:
 	void InsertInto(const string &table);
 
 	void Insert(const py::object &params = py::list());
+	void Update(const py::object &set, const py::object &where = py::none());
 
 	void Create(const string &table);
 

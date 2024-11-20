@@ -129,7 +129,7 @@ i32		1		NULL	NULL
 str		NULL	two		NULL
 str		NULL	three	NULL
 
-# Allow explict casts
+# Allow explicit casts
 statement ok
 CREATE TABLE tbl3 (u UNION(i INT));
 

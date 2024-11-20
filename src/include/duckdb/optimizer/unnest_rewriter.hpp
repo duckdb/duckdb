@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -61,14 +61,14 @@ public:
 
 private:
 	//! Find delim joins that contain an UNNEST
-	void FindCandidates(unique_ptr<LogicalOperator> *op_ptr, vector<unique_ptr<LogicalOperator> *> &candidates);
+	void FindCandidates(unique_ptr<LogicalOperator> &op, vector<reference<unique_ptr<LogicalOperator>>> &candidates);
 	//! Rewrite a delim join that contains an UNNEST
-	bool RewriteCandidate(unique_ptr<LogicalOperator> *candidate);
+	bool RewriteCandidate(unique_ptr<LogicalOperator> &candidate);
 	//! Update the bindings of the RHS sequence of LOGICAL_PROJECTION(s)
-	void UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, unique_ptr<LogicalOperator> *candidate,
+	void UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique_ptr<LogicalOperator> &candidate,
 	                       UnnestRewriterPlanUpdater &updater);
 	//! Update the bindings of the BOUND_UNNEST expression of the LOGICAL_UNNEST
-	void UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &updater, unique_ptr<LogicalOperator> *candidate);
+	void UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &updater, unique_ptr<LogicalOperator> &candidate);
 
 	//! Store all delim columns of the delim join
 	void GetDelimColumns(LogicalOperator &op);

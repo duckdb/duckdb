@@ -94,14 +94,8 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      BUILD_EXTENSIONS: ""
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
       RUN_SLOW_VERIFIERS: 1
 
     steps:
@@ -139,13 +133,8 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
       BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;json"
 
     steps:
     - uses: actions/checkout@v4

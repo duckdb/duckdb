@@ -21,7 +21,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 	}
 	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
-	info->query = TransformSelectStmt(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.query), false);
+	info->query = TransformSelectStmt(*stmt.query, false);
 
 	PivotEntryCheck("view");
 

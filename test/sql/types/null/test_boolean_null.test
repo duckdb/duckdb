@@ -32,7 +32,7 @@ SELECT NULL IS NULL, NULL IS NOT NULL, 42 IS NULL, 42 IS NOT NULL
 ----
 1	0	0	1
 
-# Comparisions
+# Comparisons
 query TTTT
 SELECT NULL = NULL, NULL <> NULL, 42 = NULL, 42 <> NULL
 ----

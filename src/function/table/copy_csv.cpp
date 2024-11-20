@@ -7,7 +7,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -82,12 +82,19 @@ void BaseCSVData::Finalize() {
 			SubstringDetection(options.dialect_options.state_machine_options.delimiter.GetValue(), null_str,
 			                   "DELIMITER", "NULL");
 
-			// quote/escape and nullstr must not be substrings of each other
+			// quote and nullstr must not be substrings of each other
 			SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), null_str, "QUOTE",
 			                   "NULL");
 
-			SubstringDetection(options.dialect_options.state_machine_options.escape.GetValue(), null_str, "ESCAPE",
-			                   "NULL");
+			// Validate the nullstr against the escape character
+			const char escape = options.dialect_options.state_machine_options.escape.GetValue();
+			// Allow nullstr to be escape character + some non-special character, e.g., "\N" (MySQL default).
+			// In this case, only unquoted occurrences of the nullstr will be recognized as null values.
+			if (options.dialect_options.state_machine_options.rfc_4180 == false && null_str.size() == 2 &&
+			    null_str[0] == escape && null_str[1] != '\0') {
+				continue;
+			}
+			SubstringDetection(escape, null_str, "ESCAPE", "NULL");
 		}
 	}
 
@@ -311,7 +318,8 @@ static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const
 		// force quote is disabled: check if we need to add quotes anyway
 		force_quote = RequiresQuotes(csv_data, str, len);
 	}
-	if (force_quote) {
+	// If a quote is set to none (i.e., null-terminator) we skip the quotation
+	if (force_quote && options.dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		// quoting is enabled: we might need to escape things in the string
 		bool requires_escape = false;
 		// simple CSV

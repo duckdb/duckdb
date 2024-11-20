@@ -1185,8 +1185,7 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
 				case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
 				case StrTimeSpecifier::YEAR_DECIMAL:
-					// Part of the offset
-					break;
+					// Switch to offset parsing
 				case StrTimeSpecifier::WEEKDAY_DECIMAL:
 					// First offset specifier
 					offset_specifier = specifiers[i];

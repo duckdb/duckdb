@@ -21,7 +21,7 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key)));
-	auto extract_function = StructExtractFun::KeyExtractFunction();
+	auto extract_function = GetKeyExtractFunction();
 	auto bind_info = extract_function.bind(context, extract_function, arguments);
 	auto return_type = extract_function.return_type;
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
@@ -34,7 +34,7 @@ unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &context, uni
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(int64_t(key))));
-	auto extract_function = StructExtractFun::IndexExtractFunction();
+	auto extract_function = GetIndexExtractFunction();
 	auto bind_info = extract_function.bind(context, extract_function, arguments);
 	auto return_type = extract_function.return_type;
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),

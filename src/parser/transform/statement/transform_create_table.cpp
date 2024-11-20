@@ -47,12 +47,22 @@ unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery
 }
 
 ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGColumnDef &cdef) {
-	string colname;
+	string name;
 	if (cdef.colname) {
-		colname = cdef.colname;
+		name = cdef.colname;
 	}
-	bool optional_type = cdef.category == duckdb_libpgquery::COL_GENERATED;
-	LogicalType target_type = (optional_type && !cdef.typeName) ? LogicalType::ANY : TransformTypeName(*cdef.typeName);
+
+	auto optional_type = cdef.category == duckdb_libpgquery::COL_GENERATED;
+	LogicalType target_type;
+	if (optional_type && !cdef.typeName) {
+		target_type = LogicalType::ANY;
+	} else if (!cdef.typeName) {
+		// ALTER TABLE tbl ALTER TYPE USING ...
+		target_type = LogicalType::UNKNOWN;
+	} else {
+		target_type = TransformTypeName(*cdef.typeName);
+	}
+
 	if (cdef.collClause) {
 		if (cdef.category == duckdb_libpgquery::COL_GENERATED) {
 			throw ParserException("Collations are not supported on generated columns");
@@ -63,7 +73,7 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 		target_type = LogicalType::VARCHAR_COLLATION(TransformCollation(cdef.collClause));
 	}
 
-	return ColumnDefinition(colname, target_type);
+	return ColumnDefinition(name, target_type);
 }
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery::PGCreateStmt &stmt) {
@@ -97,22 +107,26 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		auto node = PGPointerCast<duckdb_libpgquery::PGNode>(c->data.ptr_value);
 		switch (node->type) {
 		case duckdb_libpgquery::T_PGColumnDef: {
-			auto cdef = PGPointerCast<duckdb_libpgquery::PGColumnDef>(c->data.ptr_value);
-			auto centry = TransformColumnDefinition(*cdef);
-			if (cdef->constraints) {
-				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
-					auto constraint = TransformConstraint(*constr, centry, info->columns.LogicalColumnCount());
+			auto pg_col_def = PGPointerCast<duckdb_libpgquery::PGColumnDef>(c->data.ptr_value);
+			auto col_def = TransformColumnDefinition(*pg_col_def);
+
+			if (pg_col_def->constraints) {
+				for (auto cell = pg_col_def->constraints->head; cell != nullptr; cell = cell->next) {
+					auto pg_constraint = PGPointerCast<duckdb_libpgquery::PGConstraint>(cell->data.ptr_value);
+					auto constraint = TransformConstraint(*pg_constraint, col_def, info->columns.LogicalColumnCount());
 					if (constraint) {
 						info->constraints.push_back(std::move(constraint));
 					}
 				}
 			}
-			info->columns.AddColumn(std::move(centry));
+
+			info->columns.AddColumn(std::move(col_def));
 			column_count++;
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {
-			info->constraints.push_back(TransformConstraint(*c));
+			auto pg_constraint = PGPointerCast<duckdb_libpgquery::PGConstraint>(c->data.ptr_value);
+			info->constraints.push_back(TransformConstraint(*pg_constraint));
 			break;
 		}
 		default:

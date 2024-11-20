@@ -2,7 +2,6 @@
 # description: Test serialization of index to WAL
 # group: [wal]
 
-# load the DB from disk
 load __TEST_DIR__/test_wal_create_index.db
 
 statement ok

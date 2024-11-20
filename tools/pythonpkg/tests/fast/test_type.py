@@ -88,6 +88,12 @@ class TestType(object):
         type = duckdb.struct_type([BIGINT, BOOLEAN])
         assert str(type) == 'STRUCT(v1 BIGINT, v2 BOOLEAN)'
 
+    def test_incomplete_struct_type(self):
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Could not convert empty dictionary to a duckdb STRUCT type'
+        ):
+            type = duckdb.typing.DuckDBPyType(dict())
+
     def test_map_type(self):
         type = duckdb.map_type(duckdb.sqltype("BIGINT"), duckdb.sqltype("DECIMAL(10, 2)"))
         assert str(type) == 'MAP(BIGINT, DECIMAL(10,2))'

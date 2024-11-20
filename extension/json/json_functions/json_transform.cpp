@@ -102,6 +102,7 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOp
 	switch (unsafe_yyjson_get_tag(val)) {
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.strict_cast);
 		break;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -138,6 +139,7 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 	switch (unsafe_yyjson_get_tag(val)) {
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.parameters, w, s);
 		break;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
@@ -172,6 +174,7 @@ static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &re
 	switch (unsafe_yyjson_get_tag(val)) {
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
+	case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
 		return true;
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:

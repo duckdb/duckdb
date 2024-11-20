@@ -120,3 +120,17 @@ query TTTITI
 DESCRIBE v1
 ----
 k	DATE	YES	NULL	NULL	NULL
+
+# view over show tables
+statement ok
+CREATE VIEW show_tables_view AS ( SHOW TABLES );
+
+query T
+SELECT * FROM show_tables_view ORDER BY ALL
+----
+integers
+select
+show_tables_view
+t2
+tbl
+v1

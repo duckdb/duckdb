@@ -54,6 +54,23 @@ CREATE TABLE unit (
     amount_sold INTEGER,
 );
 ----
+Expression of generated column "total_profit" contains a subquery, which isn't allowed
+
+statement ok
+CREATE MACRO my_macro() AS (
+    (select 42)
+);
+
+# Expression contains a subquery - through a macro
+statement error
+CREATE TABLE unit (
+    total_profit INTEGER GENERATED ALWAYS AS(my_macro()) VIRTUAL,
+    word VARCHAR,
+    price INTEGER,
+    amount_sold INTEGER,
+);
+----
+Failed to bind generated column 'total_profit' because the expression contains a subquery
 
 # Duplicate column definition
 statement error

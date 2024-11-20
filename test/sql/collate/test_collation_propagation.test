@@ -1,0 +1,116 @@
+# name: test/sql/collate/test_collation_propagation.test
+# description: Test collations with string functions.
+# group: [collate]
+
+statement ok
+create table tbl (a varchar, b varchar);
+
+statement ok
+insert into tbl values ('ö', '>>>>>ö<<<<<'), ('o', '>>>>>o<<<<<'), ('p', '>>>>>p<<<<<');
+
+query I
+select a from tbl where contains(b collate nocase, 'O') order by all
+----
+o
+
+# test propagation of collation through string functions
+query I
+select concat(a collate noaccent, a) from tbl order by all;
+----
+öö
+oo
+pp
+
+query I
+select lower(a collate noaccent) from tbl order by all;
+----
+ö
+o
+p
+
+query I
+select upper(a collate noaccent) from tbl order by all;
+----
+Ö
+O
+P
+
+query I
+select trim(b collate noaccent, '<>') from tbl order by all
+----
+ö
+o
+p
+
+query I
+select ltrim(b collate noaccent, '<>') from tbl order by all
+----
+ö<<<<<
+o<<<<<
+p<<<<<
+
+query I
+select rtrim(b collate noaccent, '<>') from tbl order by all
+----
+>>>>>ö
+>>>>>o
+>>>>>p
+
+query I
+select repeat(a collate noaccent, 10) from tbl order by all;
+----
+öööööööööö
+oooooooooo
+pppppppppp
+
+query I
+select left(b collate noaccent, 6) from tbl order by all;
+----
+>>>>>ö
+>>>>>o
+>>>>>p
+
+query I
+select right(b collate noaccent, 6) from tbl order by all;
+----
+ö<<<<<
+o<<<<<
+p<<<<<
+
+query I
+select right(left(b collate noaccent, 6), 1) from tbl order by all;
+----
+ö
+o
+p
+
+query I
+select reverse(a collate noaccent) from tbl order by all;
+----
+ö
+o
+p
+
+# test pushing collations
+query I
+select a from tbl where contains(b collate noaccent, 'o') order by all
+----
+o
+ö
+
+query I
+select a from tbl where contains(b, 'ö' collate noaccent) order by all
+----
+o
+ö
+
+query I
+select a from tbl where contains(b collate nocase, 'O') order by all
+----
+o
+
+query I
+select a from tbl where starts_with(b collate noaccent, '>>>>>o') order by all
+----
+o
+ö

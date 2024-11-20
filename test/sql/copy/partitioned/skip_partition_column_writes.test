@@ -23,6 +23,20 @@ SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols/part_col=
 0	2	6
 0	4	8
 
+# Skip write of the first partition column with explicit option
+statement ok
+COPY test TO '__TEST_DIR__/no-part-cols-explicit' (FORMAT PARQUET, PARTITION_BY (part_col), WRITE_PARTITION_COLUMNS false);
+
+# SELECT query returns all columns, but written files do not have partition columns
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols-explicit/part_col=0/*.parquet' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
 # Skip writes of 2 partition columns
 statement ok
 COPY test TO '__TEST_DIR__/no-part-cols2' (FORMAT PARQUET, PARTITION_BY (part_col, value_col));
@@ -123,6 +137,12 @@ SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/no-part-cols9/part_col
 0	2	6
 0	4	8
 
+# WRITE_PARTITION_COLUMNS: false behaves the same as default, so partition by all should result in an error.
+statement error
+COPY test TO '__TEST_DIR__/no-part-cols9' (FORMAT PARQUET, PARTITION_BY '*', WRITE_PARTITION_COLUMNS false);
+----
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.
+
 # CSV
 
 # Skip write of the first partition column
@@ -132,6 +152,20 @@ COPY test TO '__TEST_DIR__/csv-no-part-cols' (FORMAT CSV, PARTITION_BY (part_col
 # SELECT query returns all columns, but written files do not have partition columns
 query III
 SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols/part_col=0/*.csv' ORDER BY value2_col;
+----
+0	1	0
+0	3	2
+0	0	4
+0	2	6
+0	4	8
+
+# Skip write of the first partition column with explicit option
+statement ok
+COPY test TO '__TEST_DIR__/csv-no-part-cols-explicit' (FORMAT CSV, PARTITION_BY (part_col), WRITE_PARTITION_COLUMNS false);
+
+# SELECT query returns all columns, but written files do not have partition columns
+query III
+SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols-explicit/part_col=0/*.csv' ORDER BY value2_col;
 ----
 0	1	0
 0	3	2
@@ -238,3 +272,9 @@ SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/csv-no-part-cols9/part
 0	0	4
 0	2	6
 0	4	8
+
+# WRITE_PARTITION_COLUMNS: false behaves the same as default, so partition by all should result in an error.
+statement error
+COPY test TO '__TEST_DIR__/csv-no-part-cols9' (FORMAT CSV, PARTITION_BY '*', WRITE_PARTITION_COLUMNS false);
+----
+Not implemented Error: No column to write as all columns are specified as partition columns. WRITE_PARTITION_COLUMNS option can be used to write partition columns.

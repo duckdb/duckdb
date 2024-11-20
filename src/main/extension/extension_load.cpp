@@ -67,8 +67,15 @@ struct ExtensionAccess {
 	static void SetError(duckdb_extension_info info, const char *error) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
-		load_state.has_error = true;
-		load_state.error_data = ErrorData(ExceptionType::UNKNOWN_TYPE, error);
+		if (error) {
+			load_state.has_error = true;
+			load_state.error_data = ErrorData(error);
+		} else {
+			load_state.has_error = true;
+			load_state.error_data = ErrorData(
+			    ExceptionType::UNKNOWN_TYPE,
+			    "Extension has indicated an error occured during initialization, but did not set an error message.");
+		}
 	}
 
 	//! Called by the extension get a pointer to the database that is loading it
@@ -91,7 +98,7 @@ struct ExtensionAccess {
 	}
 
 	//! Called by the extension get a pointer the correctly versioned extension C API struct.
-	static void *GetAPI(duckdb_extension_info info, const char *version) {
+	static const void *GetAPI(duckdb_extension_info info, const char *version) {
 
 		string version_string = version;
 		idx_t major, minor, patch;
@@ -106,7 +113,8 @@ struct ExtensionAccess {
 			              "Unsupported C CAPI version detected during extension initialization: " + string(version));
 			return nullptr;
 		}
-		load_state.api_struct = CreateAPIv0();
+
+		load_state.api_struct = load_state.db.GetExtensionAPIV0();
 		return &load_state.api_struct;
 	}
 };
@@ -118,7 +126,7 @@ struct ExtensionAccess {
 // The C++ init function
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 // The C init function
-typedef void (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
+typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
 typedef const char *(*ext_version_fun_t)(void);
 typedef bool (*ext_is_storage_t)(void);
 
@@ -531,11 +539,21 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	DuckDBExtensionLoadState load_state(db);
 
 	auto access = ExtensionAccess::CreateAccessStruct();
-	(*init_fun_capi)(load_state.ToCStruct(), &access);
+	auto result = (*init_fun_capi)(load_state.ToCStruct(), &access);
 
 	// Throw any error that the extension might have encountered
 	if (load_state.has_error) {
 		load_state.error_data.Throw("An error was thrown during initialization of the extension '" + extension + "': ");
+	}
+
+	// Extensions are expected to either set an error or return true indicating successful initialization
+	if (result == false) {
+		throw FatalException(
+		    "Extension '%s' failed to initialize but did not return an error. This indicates an "
+		    "error in the extension: C API extensions should return a boolean `true` to indicate succesful "
+		    "initialization. "
+		    "This means that the Extension may be partially initialized resulting in an inconsistent state of DuckDB.",
+		    extension);
 	}
 
 	D_ASSERT(res.install_info);

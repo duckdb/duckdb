@@ -8,7 +8,7 @@ group csv
 load
 CREATE TABLE t1 AS select 'thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___';
 insert into t1  select 'thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___,thisis16bytes___' from range(0,10000000) tbl(i);
-COPY t1 TO '${BENCHMARK_DIR}/this_is_16bytes.csv' (FORMAT CSV, HEADER 0);
+COPY t1 TO '${BENCHMARK_DIR}/this_is_16bytes.csv' (FORMAT CSV, HEADER 0, QUOTE '');
 
 run
 SELECT * from read_csv('${BENCHMARK_DIR}/this_is_16bytes.csv',delim= ',',  header = 0)

@@ -3019,7 +3019,7 @@ ures_getKeywordValues(const char *path, const char *keyword, UErrorCode *status)
 U_INTERNAL UBool U_EXPORT2
 ures_equal(const UResourceBundle* res1, const UResourceBundle* res2){
     if(res1==NULL || res2==NULL){
-        return res1==res2; /* pointer comparision */
+        return res1==res2; /* pointer comparison */
     }
     if(res1->fKey==NULL||  res2->fKey==NULL){
         return (res1->fKey==res2->fKey);

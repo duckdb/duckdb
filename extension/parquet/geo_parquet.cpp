@@ -176,21 +176,19 @@ void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vect
 // GeoParquetFileMetadata
 //------------------------------------------------------------------------------
 
-unique_ptr<GeoParquetFileMetadata>
-GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file_meta_data, ClientContext &context) {
+unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
+                                                                   const ClientContext &context) {
+
+	// Conversion not enabled, or spatial is not loaded!
+	if (!IsGeoParquetConversionEnabled(context)) {
+		return nullptr;
+	}
+
 	for (auto &kv : file_meta_data.key_value_metadata) {
 		if (kv.key == "geo") {
 			const auto geo_metadata = yyjson_read(kv.value.c_str(), kv.value.size(), 0);
 			if (!geo_metadata) {
 				// Could not parse the JSON
-				return nullptr;
-			}
-
-			// Check if the spatial extension is loaded, or try to autoload it.
-			const auto is_loaded = ExtensionHelper::TryAutoLoadExtension(context, "spatial");
-			if (!is_loaded) {
-				// Spatial extension is not available, we can't make use of the metadata anyway.
-				yyjson_doc_free(geo_metadata);
 				return nullptr;
 			}
 
@@ -290,7 +288,7 @@ void GeoParquetFileMetadata::FlushColumnMeta(const string &column_name, const Ge
 	column.bbox.Combine(meta.bbox);
 }
 
-void GeoParquetFileMetadata::Write(duckdb_parquet::format::FileMetaData &file_meta_data) const {
+void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data) const {
 
 	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
 	yyjson_mut_val *root = yyjson_mut_obj(doc);
@@ -344,7 +342,7 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::format::FileMetaData &file_me
 	}
 
 	// Create a string from the JSON
-	duckdb_parquet::format::KeyValue kv;
+	duckdb_parquet::KeyValue kv;
 	kv.__set_key("geo");
 	kv.__set_value(string(json, len));
 
@@ -366,6 +364,22 @@ void GeoParquetFileMetadata::RegisterGeometryColumn(const string &column_name) {
 		primary_geometry_column = column_name;
 	}
 	geometry_columns[column_name] = GeoParquetColumnMetadata();
+}
+
+bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &context) {
+	Value geoparquet_enabled;
+	if (!context.TryGetCurrentSetting("enable_geoparquet_conversion", geoparquet_enabled)) {
+		return false;
+	}
+	if (!geoparquet_enabled.GetValue<bool>()) {
+		// Disabled by setting
+		return false;
+	}
+	if (!context.db->ExtensionIsLoaded("spatial")) {
+		// Spatial extension is not loaded, we cant convert anyway
+		return false;
+	}
+	return true;
 }
 
 unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,

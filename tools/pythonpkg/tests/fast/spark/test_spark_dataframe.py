@@ -2,7 +2,8 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.experimental.spark.sql.types import (
+from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,11 +15,18 @@ from duckdb.experimental.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.experimental.spark.sql.functions import col, struct, when
+from spark_namespace.sql.functions import col, struct, when
+from spark_namespace.sql.column import Column
 import duckdb
 import re
 
-from duckdb.experimental.spark.errors import PySparkValueError, PySparkTypeError
+from spark_namespace.errors import PySparkValueError, PySparkTypeError
+
+
+def assert_column_objects_equal(col1: Column, col2: Column):
+    assert type(col1) == type(col2)
+    if not USE_ACTUAL_SPARK:
+        assert col1.expr == col2.expr
 
 
 class TestDataFrame(object):
@@ -35,8 +43,16 @@ class TestDataFrame(object):
 
         # Tuples of different sizes
         address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave")]
-        with pytest.raises(PySparkTypeError, match="LENGTH_SHOULD_BE_THE_SAME"):
-            df = spark.createDataFrame(address, ["id", "address", "state"])
+
+        if USE_ACTUAL_SPARK:
+            from py4j.protocol import Py4JJavaError
+
+            with pytest.raises(Py4JJavaError):
+                df = spark.createDataFrame(address, ["id", "address", "state"])
+                df.collect()
+        else:
+            with pytest.raises(PySparkTypeError, match="LENGTH_SHOULD_BE_THE_SAME"):
+                df = spark.createDataFrame(address, ["id", "address", "state"])
 
         # Dataframe instead of list
         with pytest.raises(PySparkTypeError, match="SHOULD_NOT_DATAFRAME"):
@@ -47,22 +63,29 @@ class TestDataFrame(object):
             df = spark.createDataFrame(5, ["id", "address", "test"])
 
         # Empty list
-        df = spark.createDataFrame([], ["id", "address", "test"])
-        res = df.collect()
-        assert res == []
+        if not USE_ACTUAL_SPARK:
+            # FIXME: Spark raises PySparkValueError [CANNOT_INFER_EMPTY_SCHEMA]
+            df = spark.createDataFrame([], ["id", "address", "test"])
+            res = df.collect()
+            assert res == []
 
         # Duplicate column names
         address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave", "DE")]
         df = spark.createDataFrame(address, ["id", "address", "id"])
         res = df.collect()
-        assert (
-            str(res)
-            == "[Row(id=1, address='14851 Jeffrey Rd', id='DE'), Row(id=2, address='43421 Margarita St', id='NY'), Row(id=3, address='13111 Siemon Ave', id='DE')]"
-        )
+        exptected_res_str = "[Row(id=1, address='14851 Jeffrey Rd', id='DE'), Row(id=2, address='43421 Margarita St', id='NY'), Row(id=3, address='13111 Siemon Ave', id='DE')]"
+        if USE_ACTUAL_SPARK:
+            # Spark uses string for both ID columns. DuckDB correctly infers the types.
+            exptected_res_str = (
+                exptected_res_str.replace("id=1", "id='1'").replace("id=2", "id='2'").replace("id=3", "id='3'")
+            )
+        assert str(res) == exptected_res_str
 
         # Not enough column names
-        with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-            df = spark.createDataFrame(address, ["id", "address"])
+        if not USE_ACTUAL_SPARK:
+            # FIXME: Spark does not raise this error
+            with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
+                df = spark.createDataFrame(address, ["id", "address"])
 
         # Empty column names list
         # Columns are filled in with default names
@@ -76,24 +99,28 @@ class TestDataFrame(object):
         ]
 
         # Too many column names
-        with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-            df = spark.createDataFrame(address, ["id", "address", "one", "two", "three"])
+        if not USE_ACTUAL_SPARK:
+            # In Spark, this leads to an IndexError
+            with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
+                df = spark.createDataFrame(address, ["id", "address", "one", "two", "three"])
 
         # Column names is not a list (but is iterable)
-        df = spark.createDataFrame(address, {'a': 5, 'b': 6, 'c': 42})
-        res = df.collect()
-        assert res == [
-            Row(a=1, b='14851 Jeffrey Rd', c='DE'),
-            Row(a=2, b='43421 Margarita St', c='NY'),
-            Row(a=3, b='13111 Siemon Ave', c='DE'),
-        ]
+        if not USE_ACTUAL_SPARK:
+            # These things do not work in Spark or throw different errors
+            df = spark.createDataFrame(address, {'a': 5, 'b': 6, 'c': 42})
+            res = df.collect()
+            assert res == [
+                Row(a=1, b='14851 Jeffrey Rd', c='DE'),
+                Row(a=2, b='43421 Margarita St', c='NY'),
+                Row(a=3, b='13111 Siemon Ave', c='DE'),
+            ]
 
-        # Column names is not a list (string, becomes a single column name)
-        with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-            df = spark.createDataFrame(address, 'a')
+            # Column names is not a list (string, becomes a single column name)
+            with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
+                df = spark.createDataFrame(address, 'a')
 
-        with pytest.raises(TypeError, match="must be an iterable, not int"):
-            df = spark.createDataFrame(address, 5)
+            with pytest.raises(TypeError, match="must be an iterable, not int"):
+                df = spark.createDataFrame(address, 5)
 
     def test_dataframe(self, spark):
         # Create DataFrame
@@ -101,6 +128,7 @@ class TestDataFrame(object):
         res = df.collect()
         assert res == [Row(col0='Scala', col1=25000), Row(col0='Spark', col1=35000), Row(col0='PHP', col1=21000)]
 
+    @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="We can't create tables with our Spark test setup")
     def test_writing_to_table(self, spark):
         # Create Hive table & query it.
         spark.sql(
@@ -166,7 +194,7 @@ class TestDataFrame(object):
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
     def test_df_creation_coverage(self, spark):
-        from duckdb.experimental.spark.sql.types import StructType, StructField, StringType, IntegerType
+        from spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
 
         data2 = [
             ("James", "", "Smith", "36636", "M", 3000),
@@ -225,7 +253,7 @@ class TestDataFrame(object):
 
         df2 = spark.createDataFrame(data=structureData, schema=structureSchema)
         res = df2.collect()
-        assert res == [
+        expected_res = [
             Row(
                 name={'firstname': 'James', 'middlename': '', 'lastname': 'Smith'}, id='36636', gender='M', salary=3100
             ),
@@ -246,6 +274,9 @@ class TestDataFrame(object):
             ),
             Row(name={'firstname': 'Jen', 'middlename': 'Mary', 'lastname': 'Brown'}, id='', gender='F', salary=-1),
         ]
+        if USE_ACTUAL_SPARK:
+            expected_res = [Row(name=Row(**r.name), id=r.id, gender=r.gender, salary=r.salary) for r in expected_res]
+        assert res == expected_res
         schema = df2.schema
         assert schema == StructType(
             [
@@ -267,7 +298,7 @@ class TestDataFrame(object):
         )
 
     def test_df_columns(self, spark):
-        from duckdb.experimental.spark.sql.functions import col, struct, when
+        from spark_namespace.sql.functions import col, struct, when
 
         structureData = [
             (("James", "", "Smith"), "36636", "M", 3100),
@@ -308,7 +339,7 @@ class TestDataFrame(object):
             ),
         ).drop("id", "gender", "salary")
 
-        assert 'OtherInfo' in updatedDF
+        assert 'OtherInfo' in updatedDF.columns
 
     def test_array_and_map_type(self, spark):
         """Array & Map"""
@@ -345,7 +376,7 @@ class TestDataFrame(object):
         data = [(56, "Carol"), (20, "Alice")]
         df = spark.createDataFrame(data, ["age", "name"])
 
-        assert df["age"] == col("age")
+        assert_column_objects_equal(df["age"], col("age"))
 
     def test_getitem_dataframe(self, spark):
         data = [(56, "Ben", "Street1"), (20, "Tom", "Street2")]
@@ -360,7 +391,7 @@ class TestDataFrame(object):
         data = [(56, "Ben", "Street1"), (20, "Tom", "Street2")]
         df = spark.createDataFrame(data, ["age", "name", "address"])
 
-        assert df.age == col("age")
+        assert_column_objects_equal(df.age, col("age"))
 
     def test_head_first(self, spark):
         data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
@@ -382,3 +413,11 @@ class TestDataFrame(object):
         rows = df.head(2)
         take = df.take(2)
         assert rows == take == expected
+
+    def test_drop(self, spark):
+        data = [(1, 2, 3, 4)]
+        df = spark.createDataFrame(data, ["one", "two", "three", "four"])
+        expected = ["one", "four"]
+        assert df.drop("two", "three").columns == expected
+        assert df.drop("two", col("three")).columns == expected
+        assert df.drop("two", col("three"), col("missing")).columns == expected

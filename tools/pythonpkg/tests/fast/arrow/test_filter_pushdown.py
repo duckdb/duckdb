@@ -918,3 +918,25 @@ class TestArrowFilterPushdown(object):
         ).fetchall() == [(28, '28')]
 
         pa.unregister_extension_type("duckdb.uhugeint")
+
+    def test_join_filter_pushdown(self, duckdb_cursor):
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("CREATE TABLE probe as select range a from range(10000);")
+        duckdb_conn.execute("CREATE TABLE build as select (random()*10000)::INT b from range(20);")
+        duck_probe = duckdb_conn.table("probe")
+        duck_build = duckdb_conn.table("build")
+        duck_probe_arrow = duck_probe.arrow()
+        duck_build_arrow = duck_build.arrow()
+        duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
+        duckdb_conn.register("duck_build_arrow", duck_build_arrow)
+        assert duckdb_conn.execute("SELECT count(*) from duck_probe_arrow, duck_build_arrow where a=b").fetchall() == [
+            (20,)
+        ]
+
+    def test_in_filter_pushdown(self, duckdb_cursor):
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("CREATE TABLE probe as select range a from range(1000);")
+        duck_probe = duckdb_conn.table("probe")
+        duck_probe_arrow = duck_probe.arrow()
+        duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
+        assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a in (1, 999)").fetchall() == [(1,), (999,)]

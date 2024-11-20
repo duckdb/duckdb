@@ -65,6 +65,8 @@ Add this to `jemalloc.h`:
 We also supply our own config string in `jemalloc.c`.
 Define this just after the `#include`s.
 ```c++
+#include "malloc_ncpus.h"
+
 #define JE_MALLOC_CONF_BUFFER_SIZE 200
 char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
 ```
@@ -74,6 +76,9 @@ JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
 	unsigned long long cpu_count = malloc_ncpus();
+	if (cpu_count == 0) {
+		cpu_count = duckdb_malloc_ncpus();
+	}
 	unsigned long long bgt_count = cpu_count / 16;
 	if (bgt_count == 0) {
 		bgt_count = 1;

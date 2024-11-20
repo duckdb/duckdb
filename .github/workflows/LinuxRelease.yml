@@ -325,7 +325,7 @@ jobs:
     - name: Build
       shell: bash
       env:
-        DISABLE_BUILTIN_EXTENSIONS: 1
+        GENERATE_EXTENSION_ENTRIES: 1
         LOCAL_EXTENSION_REPO: build/release/repository_other
       run: |
         make
@@ -448,4 +448,4 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DCORE_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)

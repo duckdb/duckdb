@@ -15,7 +15,7 @@ namespace duckdb {
 
 struct ParquetMetaDataBindData : public TableFunctionData {
 	vector<LogicalType> return_types;
-	unique_ptr<MultiFileList> file_list;
+	shared_ptr<MultiFileList> file_list;
 	unique_ptr<MultiFileReader> multi_file_reader;
 };
 
@@ -166,8 +166,8 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.emplace_back(LogicalType::MAP(LogicalType::BLOB, LogicalType::BLOB));
 }
 
-Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele,
-                          bool stats_is_set, const std::string &stats) {
+Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele, bool stats_is_set,
+                          const std::string &stats) {
 	if (!stats_is_set) {
 		return Value(LogicalType::VARCHAR);
 	}
@@ -352,7 +352,7 @@ void ParquetMetaDataOperatorData::BindSchema(vector<LogicalType> &return_types, 
 	return_types.emplace_back(LogicalType::VARCHAR);
 }
 
-Value ParquetLogicalTypeToString(const duckdb_parquet::format::LogicalType &type, bool is_set) {
+Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool is_set) {
 	if (!is_set) {
 		return Value();
 	}

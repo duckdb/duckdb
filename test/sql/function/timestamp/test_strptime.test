@@ -144,6 +144,16 @@ SELECT strptime('30', '%j'), strftime('1900-01-30'::DATE, '%-j')
 ----
 1900-01-30 00:00:00	30
 
+query I
+select strptime('100 2024', '%j %Y');
+----
+2024-04-09 00:00:00
+
+query I
+select strptime('2024 100', '%Y %j');
+----
+2024-04-09 00:00:00
+
 # day of year AND month
 query I
 SELECT strptime('1992-01-30 30', '%Y-%m-%d %j')

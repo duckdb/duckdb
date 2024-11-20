@@ -72,7 +72,7 @@ class TestPyArrowUDF(object):
         # The return type of the function is set to BIGINT, but it takes a VARCHAR
         con.create_function('pyarrow_string_to_num', takes_string, [VARCHAR], BIGINT, type='arrow')
 
-        # Succesful conversion
+        # Successful conversion
         res = con.sql("""select pyarrow_string_to_num('5')""").fetchall()
         assert res == [(5,)]
 

@@ -314,7 +314,7 @@ public:
 
 		auto segment_size = Finalize();
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(std::move(current_segment), segment_size);
+		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 		if (!final) {
 			CreateEmptySegment(next_start);

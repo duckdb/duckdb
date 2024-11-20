@@ -56,6 +56,17 @@ RETRIEVE_CONN_FROM_DICT = """auto connection_arg = kwargs.contains("conn") ? kwa
 """
 
 
+def is_py_args(method):
+    if 'args' not in method:
+        return False
+    args = method['args']
+    if len(args) == 0:
+        return False
+    if args[0]['name'] != '*args':
+        return False
+    return True
+
+
 def is_py_kwargs(method):
     return 'kwargs_as_dict' in method and method['kwargs_as_dict'] == True
 
@@ -169,7 +180,7 @@ def generate():
         definition += lambda_def
         definition += ", "
         definition += f"\"{method['docs']}\""
-        if 'args' in method:
+        if 'args' in method and not is_py_args(method):
             definition += ", "
             arguments = create_arguments(method['args'])
             definition += ', '.join(arguments)

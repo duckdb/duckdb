@@ -11,6 +11,9 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 	D_ASSERT(conj_expr.children.size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
 		permutation.push_back(idx);
+		if (conj_expr.children[idx]->CanThrow()) {
+			disable_permutations = true;
+		}
 		if (idx != conj_expr.children.size() - 1) {
 			swap_likeliness.push_back(100);
 		}
@@ -29,7 +32,7 @@ AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters)
 }
 
 AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
-	if (permutation.size() <= 1) {
+	if (permutation.size() <= 1 || disable_permutations) {
 		return AdaptiveFilterState();
 	}
 	AdaptiveFilterState state;
@@ -38,7 +41,7 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 }
 
 void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
-	if (permutation.size() <= 1) {
+	if (permutation.size() <= 1 || disable_permutations) {
 		// nothing to permute
 		return;
 	}
@@ -50,6 +53,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 	iteration_count++;
 	runtime_sum += duration;
 
+	D_ASSERT(!disable_permutations);
 	if (!warmup) {
 		// the last swap was observed
 		if (observe && iteration_count == observe_interval) {

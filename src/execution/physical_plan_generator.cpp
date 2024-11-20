@@ -13,24 +13,6 @@
 
 namespace duckdb {
 
-class DependencyExtractor : public LogicalOperatorVisitor {
-public:
-	explicit DependencyExtractor(LogicalDependencyList &dependencies) : dependencies(dependencies) {
-	}
-
-protected:
-	unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override {
-		// extract dependencies from the bound function expression
-		if (expr.function.dependency) {
-			expr.function.dependency(expr, dependencies);
-		}
-		return nullptr;
-	}
-
-private:
-	LogicalDependencyList &dependencies;
-};
-
 PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(context) {
 }
 
@@ -50,10 +32,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_RESOLVE_TYPES);
 	op->ResolveOperatorTypes();
 	profiler.EndPhase();
-
-	// extract dependencies from the logical plan
-	DependencyExtractor extractor(dependencies);
-	extractor.VisitOperator(*op);
 
 	// then create the main physical plan
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN);

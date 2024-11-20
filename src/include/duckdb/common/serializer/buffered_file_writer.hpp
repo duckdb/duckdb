@@ -43,7 +43,7 @@ public:
 	//! Truncate the size to a previous size (given that size <= GetFileSize())
 	DUCKDB_API void Truncate(idx_t size);
 
-	DUCKDB_API idx_t GetTotalWritten();
+	DUCKDB_API idx_t GetTotalWritten() const;
 };
 
 } // namespace duckdb

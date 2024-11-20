@@ -11,7 +11,7 @@ Node256Leaf &Node256Leaf::New(ART &art, Node &node) {
 	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
 
 	n256.count = 0;
-	ValidityMask mask(&n256.mask[0]);
+	ValidityMask mask(&n256.mask[0], Node256::CAPACITY);
 	mask.SetAllInvalid(CAPACITY);
 	return n256;
 }
@@ -19,14 +19,14 @@ Node256Leaf &Node256Leaf::New(ART &art, Node &node) {
 void Node256Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
 	n256.count++;
-	ValidityMask mask(&n256.mask[0]);
+	ValidityMask mask(&n256.mask[0], Node256::CAPACITY);
 	mask.SetValid(byte);
 }
 
 void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 	auto &n256 = Node::Ref<Node256Leaf>(art, node, NODE_256_LEAF);
 	n256.count--;
-	ValidityMask mask(&n256.mask[0]);
+	ValidityMask mask(&n256.mask[0], Node256::CAPACITY);
 	mask.SetInvalid(byte);
 
 	// Shrink node to Node15
@@ -37,12 +37,12 @@ void Node256Leaf::DeleteByte(ART &art, Node &node, const uint8_t byte) {
 }
 
 bool Node256Leaf::HasByte(uint8_t &byte) {
-	ValidityMask v_mask(&mask[0]);
+	ValidityMask v_mask(&mask[0], Node256::CAPACITY);
 	return v_mask.RowIsValid(byte);
 }
 
 bool Node256Leaf::GetNextByte(uint8_t &byte) {
-	ValidityMask v_mask(&mask[0]);
+	ValidityMask v_mask(&mask[0], Node256::CAPACITY);
 	for (uint16_t i = byte; i < CAPACITY; i++) {
 		if (v_mask.RowIsValid(i)) {
 			byte = UnsafeNumericCast<uint8_t>(i);
@@ -58,7 +58,7 @@ Node256Leaf &Node256Leaf::GrowNode15Leaf(ART &art, Node &node256_leaf, Node &nod
 	node256_leaf.SetGateStatus(node15_leaf.GetGateStatus());
 
 	n256.count = n15.count;
-	ValidityMask mask(&n256.mask[0]);
+	ValidityMask mask(&n256.mask[0], Node256::CAPACITY);
 	for (uint8_t i = 0; i < n15.count; i++) {
 		mask.SetValid(n15.key[i]);
 	}

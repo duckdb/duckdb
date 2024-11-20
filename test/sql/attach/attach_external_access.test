@@ -14,4 +14,4 @@ ATTACH ':memory:' AS db1
 statement error
 ATTACH 'mydb.db' AS db2
 ----
-Attaching on-disk databases is disabled through configuration
+Permission Error

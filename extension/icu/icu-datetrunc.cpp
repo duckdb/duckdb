@@ -177,7 +177,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateTruncFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 };
 

@@ -6,17 +6,27 @@ import sys
 
 @pytest.fixture()
 def tbl_table():
-    con = duckdb.default_connection
+    con = duckdb.default_connection()
     con.execute("drop table if exists tbl CASCADE")
     con.execute("create table tbl (i integer)")
     yield
     con.execute('drop table tbl CASCADE')
 
 
+@pytest.fixture()
+def scoped_default(duckdb_cursor):
+    default = duckdb.connect(':default:')
+    duckdb.set_default_connection(duckdb_cursor)
+    # Overwrite the default connection
+    yield
+    # Set it back on finalizing of the function
+    duckdb.set_default_connection(default)
+
+
 class TestRAPIQuery(object):
     @pytest.mark.parametrize('steps', [1, 2, 3, 4])
     def test_query_chain(self, steps):
-        con = duckdb.default_connection
+        con = duckdb.default_connection()
         amount = int(1000000)
         rel = None
         for _ in range(steps):
@@ -28,7 +38,7 @@ class TestRAPIQuery(object):
 
     @pytest.mark.parametrize('input', [[5, 4, 3], [], [1000]])
     def test_query_table(self, tbl_table, input):
-        con = duckdb.default_connection
+        con = duckdb.default_connection()
         rel = con.table("tbl")
         for row in input:
             rel.insert([row])
@@ -38,7 +48,7 @@ class TestRAPIQuery(object):
         assert result.fetchall() == [tuple([x]) for x in input]
 
     def test_query_table_basic(self, tbl_table):
-        con = duckdb.default_connection
+        con = duckdb.default_connection()
         rel = con.table("tbl")
         # Querying a table relation
         rel = rel.query("x", "select 5")
@@ -46,7 +56,7 @@ class TestRAPIQuery(object):
         assert result.fetchall() == [(5,)]
 
     def test_query_table_qualified(self, duckdb_cursor):
-        con = duckdb.default_connection
+        con = duckdb.default_connection()
         con.execute("create schema fff")
 
         # Create table in fff schema
@@ -54,7 +64,7 @@ class TestRAPIQuery(object):
         assert con.table("fff.t2").fetchall() == [(1,)]
 
     def test_query_insert_into_relation(self, tbl_table):
-        con = duckdb.default_connection
+        con = duckdb.default_connection()
         rel = con.query("select i from range(1000) tbl(i)")
         # Can't insert into this, not a table relation
         with pytest.raises(duckdb.InvalidInputException):
@@ -79,7 +89,7 @@ class TestRAPIQuery(object):
             rel.query("relation", "create table tbl as select * from not_a_valid_view")
 
     def test_query_table_unrelated(self, tbl_table):
-        con = duckdb.default_connection
+        con = duckdb.default_connection()
         rel = con.table("tbl")
         # Querying a table relation
         rel = rel.query("x", "select 5")
@@ -131,3 +141,52 @@ class TestRAPIQuery(object):
         other_rel = duckdb_cursor.sql('select a from rel')
         res = other_rel.fetchall()
         assert res == [(84,)]
+
+    def test_set_default_connection(self, scoped_default):
+        duckdb.sql("create table t as select 42")
+        assert duckdb.table('t').fetchall() == [(42,)]
+        con = duckdb.connect(':default:')
+
+        # Uses the same db as the module
+        assert con.table('t').fetchall() == [(42,)]
+
+        con2 = duckdb.connect()
+        con2.sql("create table t as select 21")
+        assert con2.table('t').fetchall() == [(21,)]
+        # Change the db used by the module
+        duckdb.set_default_connection(con2)
+
+        with pytest.raises(duckdb.CatalogException, match='Table with name d does not exist'):
+            con2.table('d').fetchall()
+
+        assert duckdb.table('t').fetchall() == [(21,)]
+
+        duckdb.sql("create table d as select [1,2,3]")
+
+        assert duckdb.table('d').fetchall() == [([1, 2, 3],)]
+        assert con2.table('d').fetchall() == [([1, 2, 3],)]
+
+    def test_set_default_connection_error(self, scoped_default):
+        with pytest.raises(TypeError, match='Invoked with: None'):
+            # set_default_connection does not allow None
+            duckdb.set_default_connection(None)
+
+        with pytest.raises(TypeError, match='Invoked with: 5'):
+            duckdb.set_default_connection(5)
+
+        assert duckdb.sql("select 42").fetchall() == [(42,)]
+        duckdb.close()
+
+        with pytest.raises(duckdb.ConnectionException, match='Connection Error: Connection already closed!'):
+            duckdb.sql("select 42").fetchall()
+
+        con2 = duckdb.connect()
+        duckdb.set_default_connection(con2)
+        assert duckdb.sql("select 42").fetchall() == [(42,)]
+
+        con3 = duckdb.connect()
+        con3.close()
+        duckdb.set_default_connection(con3)
+
+        with pytest.raises(duckdb.ConnectionException, match='Connection Error: Connection already closed!'):
+            duckdb.sql("select 42").fetchall()

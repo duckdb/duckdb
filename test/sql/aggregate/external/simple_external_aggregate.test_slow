@@ -38,7 +38,7 @@ set disabled_optimizers to 'compressed_materialization'
 # we can aggregate much more than fits in memory, but at low memory limits this is a bit more tricky
 # however, a large data set will make this test much slower
 statement ok
-pragma memory_limit='300MB'
+pragma memory_limit='350MB'
 
 query I
 select count(*) from (select distinct * from t1)

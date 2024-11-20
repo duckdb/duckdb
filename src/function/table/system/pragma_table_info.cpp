@@ -215,6 +215,12 @@ static ColumnConstraintInfo CheckConstraints(TableCatalogEntry &table, const Col
 	return result;
 }
 
+void PragmaTableInfo::GetColumnInfo(TableCatalogEntry &table, const ColumnDefinition &column, DataChunk &output,
+                                    idx_t index) {
+	auto constraint_info = CheckConstraints(table, column);
+	PragmaShowHelper::GetTableColumns(column, constraint_info, output, index);
+}
+
 static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output,
                                  bool is_table_info) {
 	if (data.offset >= table.GetColumns().LogicalColumnCount()) {

@@ -30,9 +30,12 @@ enum class VerificationType : uint8_t {
 
 class StatementVerifier {
 public:
-	StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p);
-	explicit StatementVerifier(unique_ptr<SQLStatement> statement_p);
-	static unique_ptr<StatementVerifier> Create(VerificationType type, const SQLStatement &statement_p);
+	StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p,
+	                  optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
+	explicit StatementVerifier(unique_ptr<SQLStatement> statement_p,
+	                           optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
+	static unique_ptr<StatementVerifier> Create(VerificationType type, const SQLStatement &statement_p,
+	                                            optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 	virtual ~StatementVerifier() noexcept;
 
 	//! Check whether expressions in this verifier and the other verifier match
@@ -41,8 +44,10 @@ public:
 	void CheckExpressions() const;
 
 	//! Run the select statement and store the result
-	virtual bool Run(ClientContext &context, const string &query,
-	                 const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>)> &run);
+	virtual bool
+	Run(ClientContext &context, const string &query,
+	    const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>,
+	                                                optional_ptr<case_insensitive_map_t<BoundParameterData>>)> &run);
 	//! Compare this verifier's results with another verifier
 	string CompareResults(const StatementVerifier &other);
 
@@ -50,6 +55,7 @@ public:
 	const VerificationType type;
 	const string name;
 	unique_ptr<SelectStatement> statement;
+	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
 	const vector<unique_ptr<ParsedExpression>> &select_list;
 	unique_ptr<MaterializedQueryResult> materialized_result;
 

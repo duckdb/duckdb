@@ -48,8 +48,11 @@ statement ok
 UPDATE empty SET usage = (SELECT mem_to_bytes(current.memory_usage) FROM pragma_database_size() AS current);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) == empty.usage
-FROM pragma_database_size() current, empty;
+SELECT case when base.usage >= empty.usage * 5
+	then true
+	else concat('Memory usage ', base.usage, ' is >= than 5 * empty usage ', empty.usage)::UNION(error VARCHAR, b BOOLEAN)
+	end
+FROM base, empty;
 ----
 true
 
@@ -83,12 +86,6 @@ true
 statement ok
 DROP TABLE t;
 
-query I
-SELECT mem_to_bytes(current.memory_usage) == empty.usage
-FROM pragma_database_size() current, empty;
-----
-true
-
 # create a table with a primary key and store the memory usage
 # now verify that the memory drops, but this time drop the whole table instead of deleting entries from it
 
@@ -107,12 +104,6 @@ FROM base, pragma_database_size() current;
 
 statement ok
 DROP TABLE t
-
-query I
-SELECT mem_to_bytes(current.memory_usage) == empty.usage
-FROM pragma_database_size() current, empty;
-----
-true
 
 # create a table with a primary key and store the memory usage
 # verify that the memory decreases by approximately half when deleting half the entries

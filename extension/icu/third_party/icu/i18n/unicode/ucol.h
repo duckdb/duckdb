@@ -459,7 +459,7 @@ ucol_openRules( const UChar        *rules,
  *                   instantiating collators (like out of memory or similar), this
  *                   API will return an error if an invalid attribute or attribute/value
  *                   combination is specified.
- * @return           A pointer to a UCollator or 0 if an error occured (including an
+ * @return           A pointer to a UCollator or 0 if an error occurred (including an
  *                   invalid attribute).
  * @see ucol_open
  * @see ucol_setAttribute

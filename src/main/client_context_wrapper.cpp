@@ -19,4 +19,8 @@ shared_ptr<ClientContext> ClientContextWrapper::GetContext() {
 	return actual_context;
 }
 
+void ClientContextWrapper::TryBindRelation(Relation &relation, vector<ColumnDefinition> &columns) {
+	GetContext()->TryBindRelation(relation, columns);
+}
+
 } // namespace duckdb

@@ -47,6 +47,13 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/pragma/test_custom_profiling_settings.test',  # Because of logic related to enabling 'restart' statement capabilities, this will not measure the right statement
                 'test/sql/copy/csv/test_copy.test',  # JSON is always loaded
                 'test/sql/copy/csv/test_timestamptz_12926.test',  # ICU is always loaded
+                'test/fuzzer/pedro/in_clause_optimization_error.test',  # error message differs due to a different execution path
+                'test/sql/order/test_limit_parameter.test',  # error message differs due to a different execution path
+                'test/sql/catalog/test_set_search_path.test',  # current_query() is not the same
+                'test/sql/catalog/table/create_table_parameters.test',  # prepared statement error quirks
+                'test/sql/pragma/profiling/test_custom_profiling_rows_scanned.test',  # we perform additional queries that mess with the expected metrics
+                'test/sql/pragma/profiling/test_custom_profiling_disable_metrics.test',  # we perform additional queries that mess with the expected metrics
+                'test/sql/pragma/profiling/test_custom_profiling_result_set_size.test',  # we perform additional queries that mess with the expected metrics
             ]
         )
         # TODO: get this from the `duckdb` package

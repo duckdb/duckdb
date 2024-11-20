@@ -44,12 +44,12 @@ void ColumnStatistics::SetDistinct(unique_ptr<DistinctStatistics> distinct) {
 	this->distinct_stats = std::move(distinct);
 }
 
-void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
+void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count, Vector &hashes) {
 	if (!distinct_stats) {
 		return;
 	}
-	// We sample for non-integral types to save cost, and because integers are more likely to be join keys
-	distinct_stats->Update(v, count);
+	// we use a sample to update the distinct statistics for performance reasons
+	distinct_stats->UpdateSample(v, count, hashes);
 }
 
 shared_ptr<ColumnStatistics> ColumnStatistics::Copy() const {

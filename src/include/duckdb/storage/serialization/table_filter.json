@@ -103,5 +103,36 @@
       }
     ],
     "constructor": ["child_idx", "child_name", "child_filter"]
+  },
+  {
+    "class": "OptionalFilter",
+    "base": "TableFilter",
+    "enum": "OPTIONAL_FILTER",
+    "includes": [
+      "duckdb/planner/filter/optional_filter.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "child_filter",
+        "type": "unique_ptr<TableFilter>"
+      }
+    ]
+  },
+  {
+    "class": "InFilter",
+    "base": "TableFilter",
+    "enum": "IN_FILTER",
+    "includes": [
+      "duckdb/planner/filter/in_filter.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "values",
+        "type": "vector<Value>"
+      }
+    ],
+    "constructor": ["values"]
   }
 ]

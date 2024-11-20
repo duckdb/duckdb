@@ -49,8 +49,9 @@ public:
 	vector<string> input_table_names;
 	//! For a table-in-out function, the set of projected input columns
 	vector<column_t> projected_input;
-	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
-	//! Stored so they can be included in explain output
+	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown and sample rate
+	//! pushed down into the table scan
+	//! Stored so the can be included in explain output
 	ExtraOperatorInfo extra_info;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
@@ -61,11 +62,11 @@ public:
 	optional_ptr<TableCatalogEntry> GetTable() const;
 
 public:
-	void SetColumnIds(vector<column_t> &&column_ids);
+	void SetColumnIds(vector<ColumnIndex> &&column_ids);
 	void AddColumnId(column_t column_id);
 	void ClearColumnIds();
-	const vector<column_t> &GetColumnIds() const;
-	vector<column_t> &GetMutableColumnIds();
+	const vector<ColumnIndex> &GetColumnIds() const;
+	vector<ColumnIndex> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 
@@ -86,6 +87,6 @@ private:
 
 private:
 	//! Bound column IDs
-	vector<column_t> column_ids;
+	vector<ColumnIndex> column_ids;
 };
 } // namespace duckdb

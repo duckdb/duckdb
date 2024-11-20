@@ -41,7 +41,7 @@ COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.csv' (FORMAT CSV);
 statement error
 SELECT NULL FROM read_csv('__TEST_DIR__/test_null_args.csv', names=NULL);
 ----
-<REGEX>:.*read_csv_auto names cannot be NULL.*
+<REGEX>:.*read_csv names cannot be NULL.*
 
 statement ok
 call dbgen(sf=0.01);

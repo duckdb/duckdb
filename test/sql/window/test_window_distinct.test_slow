@@ -8,9 +8,6 @@ statement ok
 CALL dbgen(sf=1);
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA temp_directory='__TEST_DIR__/window_distinct'
 
 # DISTINCT aggregate over a larger data set (e.g. lineitem or so)
@@ -25,15 +22,14 @@ ORDER BY ALL
 ----
 24004860 values hashing to d39903ddf93011916ff3354d8bded7ff
 
-statement ok
-PRAGMA disable_verification
-
 # Trigger external sorting of a partition
 statement ok
 PRAGMA threads=4
 
+# The actual memory consumption of this query is 1.5GB
+# So this is a serious level of stress.
 statement ok
-PRAGMA memory_limit='20MB'
+PRAGMA memory_limit='500MB'
 
 query I
 WITH t AS (

@@ -14,12 +14,12 @@
 
 namespace duckdb {
 
-using duckdb_parquet::format::ConvertedType;
-using duckdb_parquet::format::Type;
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::Type;
 
 static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
-                                                     const duckdb_parquet::format::SchemaElement &schema_ele,
-                                                     const duckdb_parquet::format::Statistics &parquet_stats) {
+                                                     const duckdb_parquet::SchemaElement &schema_ele,
+                                                     const duckdb_parquet::Statistics &parquet_stats) {
 	auto stats = NumericStats::CreateUnknown(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
@@ -45,8 +45,7 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	return stats.ToUnique();
 }
 
-Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
-                                           const duckdb_parquet::format::SchemaElement &schema_ele,
+Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
                                            const std::string &stats) {
 	auto stats_data = const_data_ptr_cast(stats.c_str());
 	switch (type.id()) {
@@ -180,7 +179,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 				throw InternalException("Time logicalType is set but unit is not defined");
 			}
 		}
-		if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIME_MILLIS) {
+		if (schema_ele.converted_type == duckdb_parquet::ConvertedType::TIME_MILLIS) {
 			return Value::TIME(Time::FromTimeMs(val));
 		} else {
 			return Value::TIME(dtime_t(val));
@@ -234,17 +233,16 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 				} else {
 					throw InternalException("Timestamp logicalType is set but unit is not defined");
 				}
-			} else if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
+			} else if (schema_ele.converted_type == duckdb_parquet::ConvertedType::TIMESTAMP_MILLIS) {
 				timestamp_value = Timestamp::FromEpochMs(val);
 			} else {
 				timestamp_value = timestamp_t(val);
 			}
 		}
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
-			return Value::TIMESTAMPTZ(timestamp_value);
-		} else {
-			return Value::TIMESTAMP(timestamp_value);
+			return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_value));
 		}
+		return Value::TIMESTAMP(timestamp_value);
 	}
 	case LogicalTypeId::TIMESTAMP_NS: {
 		timestamp_ns_t timestamp_value;
@@ -270,7 +268,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 				} else {
 					throw InternalException("Timestamp (NS) logicalType is set but unit is unknown");
 				}
-			} else if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIMESTAMP_MILLIS) {
+			} else if (schema_ele.converted_type == duckdb_parquet::ConvertedType::TIMESTAMP_MILLIS) {
 				timestamp_value = ParquetTimestampMsToTimestampNs(val);
 			} else {
 				timestamp_value = ParquetTimestampUsToTimestampNs(val);
@@ -300,6 +298,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		auto &struct_reader = reader.Cast<StructColumnReader>();
 		// Recurse into child readers
 		for (idx_t i = 0; i < struct_reader.child_readers.size(); i++) {
+			if (!struct_reader.child_readers[i]) {
+				continue;
+			}
 			auto &child_reader = *struct_reader.child_readers[i];
 			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_reader, columns);
 			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));

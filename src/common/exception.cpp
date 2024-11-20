@@ -292,6 +292,9 @@ PermissionException::PermissionException(const string &msg) : Exception(Exceptio
 SyntaxException::SyntaxException(const string &msg) : Exception(ExceptionType::SYNTAX, msg) {
 }
 
+ExecutorException::ExecutorException(const string &msg) : Exception(ExceptionType::EXECUTOR, msg) {
+}
+
 ConstraintException::ConstraintException(const string &msg) : Exception(ExceptionType::CONSTRAINT, msg) {
 }
 

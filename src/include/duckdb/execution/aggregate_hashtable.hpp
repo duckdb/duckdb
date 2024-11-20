@@ -57,6 +57,7 @@ public:
 	idx_t Capacity() const;
 	//! Threshold at which to resize the HT
 	idx_t ResizeThreshold() const;
+	static idx_t ResizeThreshold(idx_t capacity);
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be

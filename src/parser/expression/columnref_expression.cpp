@@ -3,9 +3,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/planner/binding_alias.hpp"
 
 namespace duckdb {
 
@@ -15,6 +13,20 @@ ColumnRefExpression::ColumnRefExpression() : ParsedExpression(ExpressionType::CO
 ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
     : ColumnRefExpression(table_name.empty() ? vector<string> {std::move(column_name)}
                                              : vector<string> {std::move(table_name), std::move(column_name)}) {
+}
+
+ColumnRefExpression::ColumnRefExpression(string column_name, const BindingAlias &alias)
+    : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
+	if (alias.IsSet()) {
+		if (!alias.GetCatalog().empty()) {
+			column_names.push_back(alias.GetCatalog());
+		}
+		if (!alias.GetSchema().empty()) {
+			column_names.push_back(alias.GetSchema());
+		}
+		column_names.push_back(alias.GetAlias());
+	}
+	column_names.push_back(std::move(column_name));
 }
 
 ColumnRefExpression::ColumnRefExpression(string column_name)

@@ -146,6 +146,8 @@ HTTPFileSystem::RunRequestWithRetry(const std::function<duckdb_httplib_openssl::
 			}
 		} catch (IOException &e) {
 			caught_e = std::current_exception();
+		} catch (HTTPException &e) {
+			caught_e = std::current_exception();
 		}
 
 		// Note: all duckdb_httplib_openssl::Error types will be retried.

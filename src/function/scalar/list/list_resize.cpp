@@ -1,5 +1,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -154,7 +155,7 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-void ListResizeFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet ListResizeFun::GetFunctions() {
 	ScalarFunction simple_fun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY},
 	                          LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
 	simple_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
@@ -163,15 +164,10 @@ void ListResizeFun::RegisterFunction(BuiltinFunctions &set) {
 	                                 LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
 	default_value_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
-	ScalarFunctionSet list_resize("list_resize");
-	list_resize.AddFunction(simple_fun);
-	list_resize.AddFunction(default_value_fun);
-	set.AddFunction(list_resize);
-
-	ScalarFunctionSet array_resize("array_resize");
-	array_resize.AddFunction(simple_fun);
-	array_resize.AddFunction(default_value_fun);
-	set.AddFunction(array_resize);
+	ScalarFunctionSet list_resize_set("list_resize");
+	list_resize_set.AddFunction(simple_fun);
+	list_resize_set.AddFunction(default_value_fun);
+	return list_resize_set;
 }
 
 } // namespace duckdb

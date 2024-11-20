@@ -300,7 +300,7 @@ alter_table_cmd:
 			 * ALTER TABLE <name> ALTER [COLUMN] <colname> [SET DATA] TYPE <typename>
 			 *		[ USING <expression> ] [RESTRICT|CASCADE]
 			 */
-			| ALTER opt_column ColId opt_set_data TYPE_P Typename opt_collate_clause alter_using
+			| ALTER opt_column ColId opt_set_data TYPE_P opt_Typename opt_collate_clause alter_using
 				{
 					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
 					PGColumnDef *def = makeNode(PGColumnDef);

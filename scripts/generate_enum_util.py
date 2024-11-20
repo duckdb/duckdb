@@ -31,6 +31,12 @@ overrides = {
         "NULLS_FIRST": ["NULLS_FIRST", "NULLS FIRST"],
         "NULLS_LAST": ["NULLS_LAST", "NULLS LAST"],
     },
+    "CheckpointAbort": {
+        "NO_ABORT": "NONE",
+        "DEBUG_ABORT_BEFORE_TRUNCATE": "BEFORE_TRUNCATE",
+        "DEBUG_ABORT_BEFORE_HEADER": "BEFORE_HEADER",
+        "DEBUG_ABORT_AFTER_FREE_LIST_WRITE": "AFTER_FREE_LIST_WRITE",
+    },
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},
 }
@@ -75,7 +81,7 @@ for hpp_file in hpp_files:
             enum_type = res.group(2)
 
             enum_members = []
-            # Capture All members: \w+(\s*\=\s*\w*)?
+            # Capture All members: \w+(\s*\=\s*-?\w*)?
             # group one is the member name
             # group two is the member value
             # First clean group from comments
@@ -84,7 +90,7 @@ for hpp_file in hpp_files:
             s = re.sub(r"\/\*.*\*\/", "", s)
 
             enum_values = {}
-            for member in re.finditer(r"(\w+)(\s*\=\s*\w*)?", s):
+            for member in re.finditer(r"(\w+)(\s*\=\s*-?\w*)?", s):
                 key = member.group(1)
                 strings = [key]
                 if enum_name in overrides and key in overrides[enum_name]:
@@ -186,27 +192,31 @@ with open(enum_util_source_file, "w") as f:
     f.write("namespace duckdb {\n\n")
 
     for enum_name, enum_type, enum_members in enums:
+        enum_string_array = "Get" + enum_name + "Values()"
         # Write the enum from string
-        f.write(f"template<>\nconst char* EnumUtil::ToChars<{enum_name}>({enum_name} value) {{\n")
-        f.write("\tswitch(value) {\n")
+        f.write(f"const StringUtil::EnumStringLiteral *{enum_string_array} {{\n")
+        f.write(f"\tstatic constexpr StringUtil::EnumStringLiteral values[] {{\n")
+        member_count = 0
         for key, strings in enum_members:
-            # Always use the first string as the enum string
-            f.write(f"\tcase {enum_name}::{key}:\n\t\treturn \"{strings[0]}\";\n")
+            for str_val in strings:
+                if member_count != 0:
+                    f.write(",\n")
+                f.write(f"\t\t{{ static_cast<uint32_t>({enum_name}::{key}), \"{str_val}\" }}")
+                member_count += 1
+        f.write("\n\t};")
+        f.write("\n\treturn values;")
+        f.write("\n}\n\n")
+        f.write(f"template<>\nconst char* EnumUtil::ToChars<{enum_name}>({enum_name} value) {{\n")
         f.write(
-            f"\tdefault:\n\t\tthrow NotImplementedException(StringUtil::Format(\"Enum value: \'%d\' not implemented in ToChars<{enum_name}>\", value));\n"
+            f"\treturn StringUtil::EnumToString({enum_string_array}, {member_count}, \"{enum_name}\", static_cast<uint32_t>(value));\n"
         )
-        f.write("\t}\n")
         f.write("}\n\n")
 
         # Write the string to enum
         f.write(f"template<>\n{enum_name} EnumUtil::FromString<{enum_name}>(const char *value) {{\n")
-        for key, strings in enum_members:
-            cond = " || ".join([f'StringUtil::Equals(value, "{string}")' for string in strings])
-            f.write(f'\tif ({cond}) {{\n\t\treturn {enum_name}::{key};\n\t}}\n')
         f.write(
-            f"\tthrow NotImplementedException(StringUtil::Format(\"Enum value: \'%s\' not implemented in FromString<{enum_name}>\", value));\n"
+            f"\treturn static_cast<{enum_name}>(StringUtil::StringToEnum({enum_string_array}, {member_count}, \"{enum_name}\", value));"
         )
-
-        f.write("}\n\n")
+        f.write("\n}\n\n")
 
     f.write("}\n\n")

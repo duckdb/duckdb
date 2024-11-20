@@ -1,0 +1,51 @@
+# name: test/sql/types/struct/unnest_big_struct.test_slow
+# description: Test UNNEST of many struct fields
+# group: [struct]
+
+statement ok
+CREATE TABLE tbl (str STRUCT (
+	c001 INT, c002 INT, c003 INT, c004 INT, c005 INT,
+	c006 INT, c007 INT, c008 INT, c009 INT, c010 INT,
+	c011 INT, c012 INT, c013 INT, c014 INT, c015 INT,
+	c016 INT, c017 INT, c018 INT, c019 INT, c020 INT,
+	c021 INT, c022 INT, c023 INT, c024 INT, c025 INT,
+	c026 INT, c027 INT, c028 INT, c029 INT, c030 INT,
+	c031 INT, c032 INT, c033 INT, c034 INT, c035 INT,
+	c036 INT, c037 INT, c038 INT, c039 INT, c040 INT,
+	c041 INT, c042 INT, c043 INT, c044 INT, c045 INT,
+	c046 INT, c047 INT, c048 INT, c049 INT, c050 INT,
+	c051 INT, c052 INT, c053 INT, c054 INT, c055 INT,
+	c056 INT, c057 INT, c058 INT, c059 INT, c060 INT,
+	c061 INT, c062 INT, c063 INT, c064 INT, c065 INT,
+	c066 INT, c067 INT, c068 INT, c069 INT, c070 INT,
+	c071 INT, c072 INT, c073 INT, c074 INT, c075 INT,
+	c076 INT, c077 INT, c078 INT, c079 INT, c080 INT,
+	c081 INT, c082 INT, c083 INT, c084 INT, c085 INT,
+	c086 INT, c087 INT, c088 INT, c089 INT, c090 INT,
+	c091 INT, c092 INT, c093 INT, c094 INT, c095 INT,
+	c096 INT, c097 INT, c098 INT, c099 INT, c100 INT,
+	c101 INT, c102 INT, c103 INT, c104 INT, c105 INT,
+	c106 INT, c107 INT, c108 INT, c109 INT, c110 INT
+));
+
+statement ok
+INSERT INTO tbl VALUES (ROW(
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+	42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+));
+
+loop i 0 15
+
+statement ok
+SELECT UNNEST(str) FROM tbl;
+
+endloop

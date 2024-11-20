@@ -46,7 +46,7 @@ unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
 		result->macros.push_back(macro->Copy());
 	}
 	result->name = name;
-	CopyProperties(*result);
+	CopyFunctionProperties(*result);
 	return std::move(result);
 }
 

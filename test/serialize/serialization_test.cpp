@@ -144,7 +144,7 @@ struct FooV2 {
 		serializer.WriteProperty<unique_ptr<Complex>>(4, "p4", p4);
 
 		// Because this is a new field, we have to provide a default value
-		// to try to preserve backwards compatability (in best case)
+		// to try to preserve backwards compatibility (in best case)
 		serializer.WritePropertyWithDefault<unique_ptr<Complex>>(5, "p5", p5);
 	}
 

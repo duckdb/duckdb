@@ -30,7 +30,7 @@ class Visitor:
                 error = textwrap.dedent(error)
                 raise Exception(error)
             enum_constants[value] = name
-        print(f"Succesfully verified the integrity of enum {enum_name} ({len(enum_constants)} entries)")
+        print(f"Successfully verified the integrity of enum {enum_name} ({len(enum_constants)} entries)")
 
     def __getattr__(self, name):
         return lambda *args, **kwargs: True

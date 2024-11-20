@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/main/client_context_wrapper.hpp"
 
 namespace duckdb {
 
@@ -11,20 +12,20 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
                            unique_ptr<ParsedExpression> condition_p, JoinType type, JoinRefType join_ref_type)
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
       condition(std::move(condition_p)), join_type(type), join_ref_type(join_ref_type) {
-	if (left->context.GetContext() != right->context.GetContext()) {
+	if (left->context->GetContext() != right->context->GetContext()) {
 		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	context.GetContext()->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, vector<string> using_columns_p,
                            JoinType type, JoinRefType join_ref_type)
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
       using_columns(std::move(using_columns_p)), join_type(type), join_ref_type(join_ref_type) {
-	if (left->context.GetContext() != right->context.GetContext()) {
+	if (left->context->GetContext() != right->context->GetContext()) {
 		throw InvalidInputException("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
-	context.GetContext()->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
@@ -47,7 +48,6 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	for (auto &col : duplicate_eliminated_columns) {
 		join_ref->duplicate_eliminated_columns.emplace_back(col->Copy());
 	}
-
 	return std::move(join_ref);
 }
 

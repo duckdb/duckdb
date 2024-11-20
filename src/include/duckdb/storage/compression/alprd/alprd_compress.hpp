@@ -226,8 +226,7 @@ public:
 		// Store the Dictionary
 		memcpy((void *)dataptr, (void *)state.left_parts_dict, actual_dictionary_size_bytes);
 
-		handle.Destroy();
-		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
+		checkpoint_state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 		data_bytes_used = 0;
 		vectors_flushed = 0;
 	}

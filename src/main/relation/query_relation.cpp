@@ -20,7 +20,7 @@ QueryRelation::QueryRelation(const shared_ptr<ClientContext> &context, unique_pt
 	if (query.empty()) {
 		query = select_stmt->ToString();
 	}
-	context->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 QueryRelation::~QueryRelation() {

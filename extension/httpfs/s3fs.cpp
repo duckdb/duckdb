@@ -12,7 +12,7 @@
 #endif
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -324,7 +324,11 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 			throw IOException("Unexpected response when uploading part to S3");
 		}
 
-	} catch (IOException &ex) {
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (error.Type() != ExceptionType::IO && error.Type() != ExceptionType::HTTP) {
+			throw;
+		}
 		// Ensure only one thread sets the exception
 		bool f = false;
 		auto exchanged = file_handle.uploader_has_error.compare_exchange_strong(f, true);
@@ -333,7 +337,6 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 		}
 
 		NotifyUploadsInProgress(file_handle);
-
 		return;
 	}
 
@@ -869,7 +872,7 @@ static bool Match(vector<string>::const_iterator key, vector<string>::const_iter
 			}
 			return false;
 		}
-		if (!LikeFun::Glob(key->data(), key->length(), pattern->data(), pattern->length())) {
+		if (!Glob(key->data(), key->length(), pattern->data(), pattern->length())) {
 			return false;
 		}
 		key++;

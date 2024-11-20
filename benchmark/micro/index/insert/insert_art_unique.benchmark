@@ -1,0 +1,17 @@
+# name: benchmark/micro/index/insert/insert_art_unique.benchmark
+# description: Insert 10M integers into an UNIQUE ART
+# group: [insert]
+
+name Insert UNIQUE ART
+group art
+
+load
+CREATE TABLE temp AS SELECT range AS id, random() AS pos FROM range(10000000) ORDER BY pos;
+CREATE TABLE art (id INTEGER);
+CREATE UNIQUE INDEX idx ON art USING ART(id);
+
+run
+INSERT INTO art (SELECT id FROM temp);
+
+cleanup
+DELETE FROM art;

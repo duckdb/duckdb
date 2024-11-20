@@ -48,9 +48,9 @@ std::string DuckDBPlatform() { // NOLINT: allow definition in header
 #ifdef __MINGW32__
 	postfix = "_mingw";
 #endif
-// this is used for the windows R builds which use a separate build environment
+// this is used for the windows R builds which use `mingw` equivalent extensions
 #ifdef DUCKDB_PLATFORM_RTOOLS
-	postfix = "_rtools";
+	postfix = "_mingw";
 #endif
 	return os + "_" + arch + postfix;
 }

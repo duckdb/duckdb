@@ -42,8 +42,8 @@ unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) cons
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(column.Copy());
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx))));
-	auto child = make_uniq<BoundFunctionExpression>(child_type, StructExtractFun::IndexExtractFunction(),
-	                                                std::move(arguments), StructExtractFun::GetBindData(child_idx));
+	auto child = make_uniq<BoundFunctionExpression>(child_type, GetIndexExtractFunction(), std::move(arguments),
+	                                                GetBindData(child_idx));
 	return child_filter->ToExpression(*child);
 }
 } // namespace duckdb

@@ -20,30 +20,46 @@ statement ok
 CREATE TABLE bits (b bit);
 
 # test creating a bitstring of determined size
+
+foreach cast VARCHAR BIT
+
 query I
-SELECT bitstring('0101011', 15);
+SELECT bitstring('0101011'::${cast}, 15);
 ----
 000000000101011
 
 query I
-SELECT bitstring('1', 6);
+SELECT bitstring('1'::${cast}, 6);
 ----
 000001
 
+query I
+SELECT bitstring('1'::${cast}, 1);
+----
+1
+
+query I
+SELECT bitstring('0101011'::${cast}, 203);
+----
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000101011
+
+query I
+SELECT bitstring('111100001111000010101010'::${cast}, 36);
+----
+000000000000111100001111000010101010
+
 statement error
-SELECT bitstring('0101011', 3);
+SELECT bitstring('0101011'::${cast}, 3);
 ----
 <REGEX>:Invalid Input Error.*Length must be equal or larger than input string.*
+
+# cast
+endloop
 
 statement error
 SELECT bitstring('', 0);
 ----
 <REGEX>:Conversion Error.*Cannot cast empty string to BIT.*
-
-query I
-SELECT bitstring('1', 1);
-----
-1
 
 statement error
 SELECT bitstring('5', 10);
@@ -54,11 +70,6 @@ statement error
 SELECT bitstring('0101011');
 ----
 <REGEX>:Binder Error.*No function matches.*
-
-query I
-SELECT bitstring('0101011', 203);
-----
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000101011
 
 # insert valid bit strings
 statement ok

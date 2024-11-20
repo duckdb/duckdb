@@ -30,6 +30,7 @@ public:
 
 public:
 	bool Equals(const PhysicalOperator &other) const override;
+	vector<const_reference<PhysicalOperator>> GetChildren() const override;
 
 public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,

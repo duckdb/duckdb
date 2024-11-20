@@ -58,6 +58,12 @@ bool Expression::IsConsistent() const {
 	return is_consistent;
 }
 
+bool Expression::CanThrow() const {
+	bool can_throw = false;
+	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { can_throw |= child.CanThrow(); });
+	return can_throw;
+}
+
 bool Expression::PropagatesNullValues() const {
 	if (type == ExpressionType::OPERATOR_IS_NULL || type == ExpressionType::OPERATOR_IS_NOT_NULL ||
 	    type == ExpressionType::COMPARE_NOT_DISTINCT_FROM || type == ExpressionType::COMPARE_DISTINCT_FROM ||

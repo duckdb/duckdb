@@ -43,7 +43,7 @@
 #define isContinuation(CE) (((CE) & UCOL_CONTINUATION_MARKER) == UCOL_CONTINUATION_MARKER)
 
 /**
- * This indicates an error has occured during processing or there are no more CEs
+ * This indicates an error has occurred during processing or there are no more CEs
  * to be returned.
  */
 #define UCOL_PROCESSED_NULLORDER        ((int64_t)U_INT64_MAX)
@@ -101,7 +101,7 @@ public:
      * @param ixHigh a pointer to an int32_t to receive the iterator index after fetching the CE.
      * @param status A pointer to an UErrorCode to receive any errors.
      * @return The next collation elements ordering, otherwise returns UCOL_PROCESSED_NULLORDER
-     *         if an error has occured or if the end of string has been reached
+     *         if an error has occurred or if the end of string has been reached
      */
     int64_t nextProcessed(int32_t *ixLow, int32_t *ixHigh, UErrorCode *status);
     /**
@@ -114,7 +114,7 @@ public:
      *               a U_BUFFER_OVERFLOW_ERROR is returned if the internal stack
      *               buffer has been exhausted.
      * @return The previous collation elements ordering, otherwise returns
-     *         UCOL_PROCESSED_NULLORDER if an error has occured or if the start of
+     *         UCOL_PROCESSED_NULLORDER if an error has occurred or if the start of
      *         string has been reached.
      */
     int64_t previousProcessed(int32_t *ixLow, int32_t *ixHigh, UErrorCode *status);

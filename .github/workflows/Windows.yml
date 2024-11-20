@@ -239,7 +239,7 @@ jobs:
        - name: Build
          shell: msys2 {0}
          run: |
-           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS=parquet -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCORE_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
            cmake --build . --config Release 
 
        - name: Test

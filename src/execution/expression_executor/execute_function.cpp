@@ -14,8 +14,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunct
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExecuteFunctionState>(expr, root);
 	for (auto &child : expr.children) {
-		result->AddChild(child.get());
+		result->AddChild(*child);
 	}
+
 	result->Finalize();
 	if (expr.function.init_local_state) {
 		result->local_state = expr.function.init_local_state(*result, expr, expr.bind_info.get());

@@ -40,10 +40,6 @@ public:
 };
 
 struct BooleanParquetValueConversion {
-	static bool DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		throw std::runtime_error("Dicts for booleans make no sense");
-	}
-
 	static bool PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.available(1);
 		return UnsafePlainRead(plain_data, reader);

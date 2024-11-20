@@ -52,10 +52,6 @@ public:
 		return false;
 	}
 
-	bool RequiresBatchIndex() const override {
-		return false;
-	}
-
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 public:

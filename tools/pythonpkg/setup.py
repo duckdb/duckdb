@@ -115,10 +115,7 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
-
-if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
+extensions = ['core_functions', 'parquet', 'icu', 'tpch', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
 is_pyodide = 'PYODIDE' in os.environ

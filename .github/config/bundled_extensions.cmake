@@ -17,7 +17,6 @@
 duckdb_extension_load(icu)
 duckdb_extension_load(tpch)
 duckdb_extension_load(json)
-duckdb_extension_load(fts)
 duckdb_extension_load(parquet)
 duckdb_extension_load(autocomplete)
 

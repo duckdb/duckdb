@@ -59,25 +59,31 @@ void ScanNumpyCategory(py::array &column, idx_t count, idx_t offset, Vector &out
 	}
 }
 
-template <class T>
-void ScanNumpyMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
-	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
-	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
-	ScanNumpyColumn<T>(numpy_col.array, numpy_col.stride, offset, out, count);
-	auto &result_mask = FlatVector::Validity(out);
-	if (bind_data.mask) {
-		auto mask = reinterpret_cast<const bool *>(bind_data.mask->numpy_array.data());
-		for (idx_t i = 0; i < count; i++) {
-			auto is_null = mask[offset + i];
-			if (is_null) {
-				result_mask.SetInvalid(i);
-			}
+static void ApplyMask(PandasColumnBindData &bind_data, ValidityMask &validity, idx_t count, idx_t offset) {
+	D_ASSERT(bind_data.mask);
+	auto mask = reinterpret_cast<const bool *>(bind_data.mask->numpy_array.data());
+	for (idx_t i = 0; i < count; i++) {
+		auto is_null = mask[offset + i];
+		if (is_null) {
+			validity.SetInvalid(i);
 		}
 	}
 }
 
 template <class T>
-void ScanNumpyFpColumn(const T *src_ptr, idx_t stride, idx_t count, idx_t offset, Vector &out) {
+void ScanNumpyMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
+	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
+	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
+	ScanNumpyColumn<T>(numpy_col.array, numpy_col.stride, offset, out, count);
+	if (bind_data.mask) {
+		auto &result_mask = FlatVector::Validity(out);
+		ApplyMask(bind_data, result_mask, count, offset);
+	}
+}
+
+template <class T>
+void ScanNumpyFpColumn(PandasColumnBindData &bind_data, const T *src_ptr, idx_t stride, idx_t count, idx_t offset,
+                       Vector &out) {
 	auto &mask = FlatVector::Validity(out);
 	if (stride == sizeof(T)) {
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset)); // NOLINT
@@ -96,6 +102,10 @@ void ScanNumpyFpColumn(const T *src_ptr, idx_t stride, idx_t count, idx_t offset
 				mask.SetInvalid(i);
 			}
 		}
+	}
+	if (bind_data.mask) {
+		auto &result_mask = FlatVector::Validity(out);
+		ApplyMask(bind_data, result_mask, count, offset);
 	}
 }
 
@@ -228,10 +238,12 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		ScanNumpyMasked<int64_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::FLOAT_32:
-		ScanNumpyFpColumn<float>(reinterpret_cast<const float *>(array.data()), numpy_col.stride, count, offset, out);
+		ScanNumpyFpColumn<float>(bind_data, reinterpret_cast<const float *>(array.data()), numpy_col.stride, count,
+		                         offset, out);
 		break;
 	case NumpyNullableType::FLOAT_64:
-		ScanNumpyFpColumn<double>(reinterpret_cast<const double *>(array.data()), numpy_col.stride, count, offset, out);
+		ScanNumpyFpColumn<double>(bind_data, reinterpret_cast<const double *>(array.data()), numpy_col.stride, count,
+		                          offset, out);
 		break;
 	case NumpyNullableType::DATETIME_NS:
 	case NumpyNullableType::DATETIME_MS:

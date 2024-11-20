@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020, Yann Collet, Facebook, Inc.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  * All rights reserved.
  *
  * This source code is licensed under both the BSD-style license (found in the
@@ -18,6 +18,7 @@
 #include "zstd.h" /* ZSTD_CCtx */
 
 namespace duckdb_zstd {
+
 /*-*************************************
 *  Target Compressed Block Size
 ***************************************/
@@ -29,7 +30,7 @@ size_t ZSTD_compressSuperBlock(ZSTD_CCtx* zc,
                                void* dst, size_t dstCapacity,
                                void const* src, size_t srcSize,
                                unsigned lastBlock);
-}
 
+} // namespace duckdb_zstd
 
 #endif /* ZSTD_COMPRESS_ADVANCED_H */

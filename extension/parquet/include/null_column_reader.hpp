@@ -25,20 +25,7 @@ public:
 	shared_ptr<ResizeableBuffer> dict;
 
 public:
-	void Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) override {
-		dict = std::move(data);
-	}
-
-	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
-	             idx_t result_offset, Vector &result) override {
-		auto &result_mask = FlatVector::Validity(result);
-
-		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			result_mask.SetInvalid(row_idx + result_offset);
-		}
-	}
-
-	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
+	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t *filter,
 	           idx_t result_offset, Vector &result) override {
 		(void)defines;
 		(void)plain_data;

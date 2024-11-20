@@ -169,7 +169,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 	// get query location
 	QueryErrorContext context;
 	current_entry = current_info.find("position");
-	new_entry = current_info.find("position");
+	new_entry = new_info.find("position");
 	uint64_t position;
 	if (current_entry != current_info.end() &&
 	    TryCast::Operation<string_t, uint64_t>(current_entry->second, position)) {

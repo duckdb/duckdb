@@ -20,7 +20,7 @@ public:
 
 public:
 	PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
-	                           unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
+	                           unique_ptr<FunctionData> bind_data_p, vector<ColumnIndex> column_ids_p,
 	                           idx_t estimated_cardinality, vector<column_t> projected_input);
 
 public:
@@ -47,7 +47,7 @@ private:
 	//! Bind data of the function
 	unique_ptr<FunctionData> bind_data;
 	//! The set of column ids to fetch
-	vector<column_t> column_ids;
+	vector<ColumnIndex> column_ids;
 	//! The set of input columns to project out
 	vector<column_t> projected_input;
 };

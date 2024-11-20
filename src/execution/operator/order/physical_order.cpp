@@ -264,10 +264,14 @@ SourceResultType PhysicalOrder::GetData(ExecutionContext &context, DataChunk &ch
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-idx_t PhysicalOrder::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                   LocalSourceState &lstate_p) const {
+OperatorPartitionData PhysicalOrder::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                      GlobalSourceState &gstate_p, LocalSourceState &lstate_p,
+                                                      const OperatorPartitionInfo &partition_info) const {
+	if (partition_info.RequiresPartitionColumns()) {
+		throw InternalException("PhysicalOrder::GetPartitionData: partition columns not supported");
+	}
 	auto &lstate = lstate_p.Cast<PhysicalOrderLocalSourceState>();
-	return lstate.batch_index;
+	return OperatorPartitionData(lstate.batch_index);
 }
 
 InsertionOrderPreservingMap<string> PhysicalOrder::ParamsToString() const {

@@ -64,7 +64,7 @@ query I nosort empty
 explain select * from parquet_scan('data/parquet-testing/data-types.parquet') where timestampval > '2019-11-27';
 ----
 
-# TODO string comparisions are not pruned yet
+# TODO string comparisons are not pruned yet
 # verify min/max stats on string cols work
 #query I nosort empty
 #explain select * from parquet_scan('data/parquet-testing/userdata1.parquet') where country < 'Aruba';

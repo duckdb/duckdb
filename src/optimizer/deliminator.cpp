@@ -81,13 +81,6 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 		if (candidate.joins.size() == candidate.delim_get_count && all_removed) {
 			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 			delim_join.duplicate_eliminated_columns.clear();
-			if (all_equality_conditions) {
-				for (auto &cond : delim_join.conditions) {
-					if (IsEqualityJoinCondition(cond)) {
-						cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-					}
-				}
-			}
 		}
 
 		// Only DelimJoins are ever created as SINGLE joins,

@@ -1,0 +1,57 @@
+# name: test/sql/alter/add_pk/test_add_pk_invalid_data.test
+# description: Test adding a PRIMARY KEY to a table with invalid data.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE duplicates (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO duplicates VALUES (1, 10), (2, 20), (3, 30), (1, 100)
+
+statement error
+ALTER TABLE duplicates ADD PRIMARY KEY (i)
+----
+<REGEX>:Constraint Error.*contains duplicates on indexed column.*
+
+# Now test with NULLs.
+
+statement ok
+CREATE TABLE nulls (i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO nulls VALUES (1, 10), (2, NULL), (3, 30), (4, 40);
+
+statement error
+ALTER TABLE nulls ADD PRIMARY KEY (i, j);
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*
+
+statement ok
+DROP TABLE nulls;
+
+statement ok
+CREATE TABLE nulls (i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO nulls VALUES (5, 10), (NULL, 20), (7, 30), (8, 100);
+
+statement error
+ALTER TABLE nulls ADD PRIMARY KEY (i)
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*
+
+# Validate NULL on a compound index.
+
+statement ok
+CREATE TABLE nulls_compound (i INTEGER, j INTEGER, k VARCHAR)
+
+statement ok
+INSERT INTO nulls_compound VALUES (1, 10, 'hello'), (2, 20, 'world'), (NULL, NULL, NULL), (3, 100, 'yay');
+
+statement error
+ALTER TABLE nulls_compound ADD PRIMARY KEY (k, i)
+----
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*

@@ -1,0 +1,31 @@
+# name: test/sql/types/struct/tpch_struct_projection_pushdown.test_slow
+# description: Test struct projection pushdown
+# group: [struct]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.01, suffix='_normalized');
+
+statement ok
+CREATE TABLE lineitem_struct AS SELECT lineitem_normalized AS struct_val FROM lineitem_normalized;
+
+statement ok
+CREATE VIEW lineitem AS SELECT UNNEST(struct_val) FROM lineitem_struct;
+
+
+query I
+SELECT
+    l_returnflag
+FROM
+    lineitem
+WHERE
+    l_shipdate <= CAST('1998-09-02' AS date)
+GROUP BY
+    l_returnflag
+ORDER BY
+    l_returnflag
+----
+A
+N
+R

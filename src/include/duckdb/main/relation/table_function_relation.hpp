@@ -17,7 +17,9 @@ public:
 	TableFunctionRelation(const shared_ptr<ClientContext> &context, string name, vector<Value> parameters,
 	                      named_parameter_map_t named_parameters, shared_ptr<Relation> input_relation_p = nullptr,
 	                      bool auto_init = true);
-
+	TableFunctionRelation(const shared_ptr<RelationContextWrapper> &context, string name, vector<Value> parameters,
+	                      named_parameter_map_t named_parameters, shared_ptr<Relation> input_relation_p = nullptr,
+	                      bool auto_init = true);
 	TableFunctionRelation(const shared_ptr<ClientContext> &context, string name, vector<Value> parameters,
 	                      shared_ptr<Relation> input_relation_p = nullptr, bool auto_init = true);
 	~TableFunctionRelation() override {

@@ -44,3 +44,64 @@ order by id, t
 3	5	-2	NULL
 3	-1	0	NULL
 3	NULL	10	5
+
+# Shifted lead optimisation with hash collisions
+statement ok
+CREATE TABLE issue14398 (date DATE, "group" INT, count INT, status STRING);
+
+statement ok
+INSERT INTO issue14398 VALUES
+('2024-01-01', 1, 1000, 'ordered'),
+('2024-02-01', 1, 1000, 'dispatched'),
+('2024-03-01', 1, 1000, 'dispatched'),
+('2024-01-01', 2, 2000, 'ordered'),
+('2024-02-01', 2, 2000, 'ordered'),
+('2024-03-01', 2, 2000, 'ordered'),
+('2024-01-01', 3, 3000, 'ordered'),
+('2024-02-01', 3, 3000, 'ordered'),
+('2024-03-01', 3, 3000, 'late'),
+('2024-01-01', 4, 4000, 'ordered'),
+('2024-02-01', 4, 4000, 'ordered'),
+('2024-03-01', 4, 4000, 'ordered'),
+('2024-01-01', 5, 5000, 'ordered'),
+('2024-02-01', 5, 5000, 'late'),
+('2024-03-01', 5, 5000, 'ordered'),
+('2024-01-01', 6, 1000, 'dispatched'),
+('2024-02-01', 6, 1000, 'dispatched'),
+('2024-03-01', 6, 1000, 'dispatched'),
+('2024-01-01', 7, 1000, 'late'),
+('2024-02-01', 7, 1000, 'dispatched'),
+('2024-03-01', 7, 1000, 'dispatched');
+
+query IIIIII
+SELECT
+  "t0"."date",
+  "t0"."group",
+  "t0"."count",
+  "t0"."status",
+  LEAD("t0"."date", 2) OVER (PARTITION BY "t0"."group" ORDER BY "t0"."date" ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS "end_date",
+  LEAD("t0"."status", 2) OVER (PARTITION BY "t0"."group" ORDER BY "t0"."date" ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS "end_status"
+FROM "issue14398" AS "t0"
+ORDER BY 2, 1
+----
+2024-01-01	1	1000	ordered	2024-03-01	dispatched
+2024-02-01	1	1000	dispatched	NULL	NULL
+2024-03-01	1	1000	dispatched	NULL	NULL
+2024-01-01	2	2000	ordered	2024-03-01	ordered
+2024-02-01	2	2000	ordered	NULL	NULL
+2024-03-01	2	2000	ordered	NULL	NULL
+2024-01-01	3	3000	ordered	2024-03-01	late
+2024-02-01	3	3000	ordered	NULL	NULL
+2024-03-01	3	3000	late	NULL	NULL
+2024-01-01	4	4000	ordered	2024-03-01	ordered
+2024-02-01	4	4000	ordered	NULL	NULL
+2024-03-01	4	4000	ordered	NULL	NULL
+2024-01-01	5	5000	ordered	2024-03-01	ordered
+2024-02-01	5	5000	late	NULL	NULL
+2024-03-01	5	5000	ordered	NULL	NULL
+2024-01-01	6	1000	dispatched	2024-03-01	dispatched
+2024-02-01	6	1000	dispatched	NULL	NULL
+2024-03-01	6	1000	dispatched	NULL	NULL
+2024-01-01	7	1000	late	2024-03-01	dispatched
+2024-02-01	7	1000	dispatched	NULL	NULL
+2024-03-01	7	1000	dispatched	NULL	NULL
