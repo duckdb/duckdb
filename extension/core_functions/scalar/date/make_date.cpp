@@ -116,6 +116,15 @@ static void ExecuteMakeTimestamp(DataChunk &input, ExpressionState &state, Vecto
 	SenaryExecutor::Execute<T, T, T, T, T, double, timestamp_t>(input, result, func);
 }
 
+template <typename T>
+static void ExecuteMakeTimestampNs(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.ColumnCount() == 1);
+
+	auto func = MakeTimestampOperator::Operation<T, timestamp_ns_t>;
+	UnaryExecutor::Execute<T, timestamp_ns_t>(input.data[0], result, input.size(), func);
+	return;
+}
+
 ScalarFunctionSet MakeDateFun::GetFunctions() {
 	ScalarFunctionSet make_date("make_date");
 	make_date.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
@@ -140,6 +149,13 @@ ScalarFunctionSet MakeTimestampFun::GetFunctions() {
 	                                        LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
+	return operator_set;
+}
+
+ScalarFunctionSet MakeTimestampNsFun::GetFunctions() {
+	ScalarFunctionSet operator_set("make_timestamp_ns");
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_NS, ExecuteMakeTimestampNs<int64_t>));
 	return operator_set;
 }
 
