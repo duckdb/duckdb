@@ -786,7 +786,7 @@ Arrow:
                     ok = op + 1  + (op[1] == '>');
                 }
                 /* it may optionally be followed by a single * or + */
-                if (!ok || (ok[0] && (ok[0] != '*' || ok[0] != '+' || ok[1]))) {
+                if (!ok || (ok[0] && ((ok[0] != '*' && ok[0] != '+') || ok[1]))) {
                     char msg[128];
                     snprintf(msg, 128, "PGQ expected an arrow instead of %s operator.", $1);
                     parser_yyerror(msg);
