@@ -211,14 +211,14 @@ public:
 		BitpackingPrimitives::PackBuffer<uint8_t>(dest, types_data + types_offset, count_in_segment, 2);
 		dest += types_size;
 
-		if (number_of_runs.size()) {
+		if (!number_of_runs.empty()) {
 			idx_t runs_offset = number_of_runs.size() - runs_in_segment;
 			data_ptr_t run_data = (data_ptr_t)(number_of_runs.data()); // NOLINT: c-style cast (for const)
 			BitpackingPrimitives::PackBuffer<uint8_t>(dest, run_data + runs_offset, runs_in_segment, 6);
 			dest += runs_size;
 		}
 
-		if (cardinality.size()) {
+		if (!cardinality.empty()) {
 			idx_t arrays_offset = cardinality.size() - arrays_in_segment;
 			data_ptr_t arrays_data = (data_ptr_t)(cardinality.data()); // NOLINT: c-style cast (for const)
 			memcpy(dest, arrays_data + arrays_offset, sizeof(uint8_t) * arrays_in_segment);
@@ -254,7 +254,7 @@ public:
 		}
 
 		// Load the array/bitset containers
-		if (cardinality.size()) {
+		if (!cardinality.empty()) {
 			idx_t arrays_size = sizeof(uint8_t) * cardinality.size();
 			arrays_in_segment = arrays_size;
 			memcpy(cardinality.data(), src, arrays_size);
