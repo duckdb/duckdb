@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, Callable, Union, overload, Optional, List, Tuple
+from typing import Any, Callable, List, Optional, Tuple, Union, overload
 
 from duckdb import (
     CaseExpression,
@@ -8,7 +8,7 @@ from duckdb import (
     ConstantExpression,
     Expression,
     FunctionExpression,
-    LambdaExpression
+    LambdaExpression,
 )
 
 from ..errors import PySparkTypeError
@@ -5074,3 +5074,213 @@ def arrays_zip(*cols: "ColumnOrName") -> Column:
      |    |    |-- vals3: long (nullable = true)
     """
     return _invoke_function_over_columns("list_zip", *cols)
+
+
+def substring(str: "ColumnOrName", pos: int, len: int) -> Column:
+    """
+    Substring starts at `pos` and is of length `len` when str is String type or
+    returns the slice of byte array that starts at `pos` in byte and is of length `len`
+    when str is Binary type.
+    .. versionadded:: 1.5.0
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+    Notes
+    -----
+    The position is not zero based, but 1 based index.
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    pos : int
+        starting position in str.
+    len : int
+        length of chars.
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        substring of given value.
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('abcd',)], ['s',])
+    >>> df.select(substring(df.s, 1, 2).alias('s')).collect()
+    [Row(s='ab')]
+    """
+    return _invoke_function(
+        "substring",
+        _to_column_expr(str),
+        ConstantExpression(pos),
+        ConstantExpression(len),
+    )
+
+
+def substr(
+    str: "ColumnOrName", pos: "ColumnOrName", len: Optional["ColumnOrName"] = None
+) -> Column:
+    """
+    Returns the substring of `str` that starts at `pos` and is of length `len`,
+    or the slice of byte array that starts at `pos` and is of length `len`.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    src : :class:`~pyspark.sql.Column` or str
+        A column of string.
+    pos : :class:`~pyspark.sql.Column` or str
+        A column of string, the substring of `str` that starts at `pos`.
+    len : :class:`~pyspark.sql.Column` or str, optional
+        A column of string, the substring of `str` is of length `len`.
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.createDataFrame(
+    ...     [("Spark SQL", 5, 1,)], ["a", "b", "c"]
+    ... ).select(sf.substr("a", "b", "c")).show()
+    +---------------+
+    |substr(a, b, c)|
+    +---------------+
+    |              k|
+    +---------------+
+    >>> import pyspark.sql.functions as sf
+    >>> spark.createDataFrame(
+    ...     [("Spark SQL", 5, 1,)], ["a", "b", "c"]
+    ... ).select(sf.substr("a", "b")).show()
+    +------------------------+
+    |substr(a, b, 2147483647)|
+    +------------------------+
+    |                   k SQL|
+    +------------------------+
+    """
+    if len is not None:
+        return _invoke_function_over_columns("substring", str, pos, len)
+    else:
+        return _invoke_function_over_columns("substring", str, pos)
+
+
+def contains(left: "ColumnOrName", right: "ColumnOrName") -> Column:
+    """
+    Returns a boolean. The value is True if right is found inside left.
+    Returns NULL if either input expression is NULL. Otherwise, returns False.
+    Both left or right must be of STRING or BINARY type.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    left : :class:`~pyspark.sql.Column` or str
+        The input column or strings to check, may be NULL.
+    right : :class:`~pyspark.sql.Column` or str
+        The input column or strings to find, may be NULL.
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Spark SQL", "Spark")], ['a', 'b'])
+    >>> df.select(contains(df.a, df.b).alias('r')).collect()
+    [Row(r=True)]
+    >>> df = spark.createDataFrame([("414243", "4243",)], ["c", "d"])
+    >>> df = df.select(to_binary("c").alias("c"), to_binary("d").alias("d"))
+    >>> df.printSchema()
+    root
+     |-- c: binary (nullable = true)
+     |-- d: binary (nullable = true)
+    >>> df.select(contains("c", "d"), contains("d", "c")).show()
+    +--------------+--------------+
+    |contains(c, d)|contains(d, c)|
+    +--------------+--------------+
+    |          true|         false|
+    +--------------+--------------+
+    """
+    return _invoke_function_over_columns("contains", left, right)
+
+
+def reverse(col: "ColumnOrName") -> Column:
+    """
+    Collection function: returns a reversed string or an array with reverse order of elements.
+    .. versionadded:: 1.5.0
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        array of elements in reverse order.
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('Spark SQL',)], ['data'])
+    >>> df.select(reverse(df.data).alias('s')).collect()
+    [Row(s='LQS krapS')]
+    >>> df = spark.createDataFrame([([2, 1, 3],) ,([1],) ,([],)], ['data'])
+    >>> df.select(reverse(df.data).alias('r')).collect()
+    [Row(r=[3, 1, 2]), Row(r=[1]), Row(r=[])]
+    """
+    return _invoke_function("reverse", _to_column_expr(col))
+
+def concat(*cols: "ColumnOrName") -> Column:
+    """
+    Concatenates multiple input columns together into a single column.
+    The function works with strings, numeric, binary and compatible array columns.
+    .. versionadded:: 1.5.0
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+    Parameters
+    ----------
+    cols : :class:`~pyspark.sql.Column` or str
+        target column or columns to work on.
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        concatenated values. Type of the `Column` depends on input columns' type.
+    See Also
+    --------
+    :meth:`pyspark.sql.functions.array_join` : to concatenate string columns with delimiter
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('abcd','123')], ['s', 'd'])
+    >>> df = df.select(concat(df.s, df.d).alias('s'))
+    >>> df.collect()
+    [Row(s='abcd123')]
+    >>> df
+    DataFrame[s: string]
+    >>> df = spark.createDataFrame([([1, 2], [3, 4], [5]), ([1, 2], None, [3])], ['a', 'b', 'c'])
+    >>> df = df.select(concat(df.a, df.b, df.c).alias("arr"))
+    >>> df.collect()
+    [Row(arr=[1, 2, 3, 4, 5]), Row(arr=None)]
+    >>> df
+    DataFrame[arr: array<bigint>]
+    """
+    return _invoke_function_over_columns("concat", *cols)
+
+
+def instr(str: "ColumnOrName", substr: str) -> Column:
+    """
+    Locate the position of the first occurrence of substr column in the given string.
+    Returns null if either of the arguments are null.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Notes
+    -----
+    The position is not zero based, but 1 based index. Returns 0 if substr
+    could not be found in str.
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+    substr : str
+        substring to look for.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        location of the first occurrence of the substring as integer.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('abcd',)], ['s',])
+    >>> df.select(instr(df.s, 'b').alias('s')).collect()
+    [Row(s=2)]
+    """
+    return _invoke_function("instr", _to_column_expr(str), ConstantExpression(substr))
+
