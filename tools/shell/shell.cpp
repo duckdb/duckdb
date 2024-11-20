@@ -1621,6 +1621,34 @@ private:
 	bool highlight = true;
 };
 
+
+class TrashRenderer : public duckdb::BaseResultRenderer {
+public:
+	TrashRenderer() {
+	}
+
+	void RenderLayout(const string &) override {
+	}
+
+	void RenderColumnName(const string &) override {
+	}
+
+	void RenderType(const string &) override {
+	}
+
+	void RenderValue(const string &, const duckdb::LogicalType &) override {
+	}
+
+	void RenderNull(const string &, const duckdb::LogicalType &) override {
+	}
+
+	void RenderFooter(const string &) override {
+	}
+
+	void PrintText(const string &, HighlightElementType ) {
+	}
+};
+
 /*
 ** Run a prepared statement
 */
@@ -1632,6 +1660,11 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
 		                      decimal_separator, &renderer);
+		return;
+	}
+	if (cMode == RenderMode::TRASH) {
+		TrashRenderer renderer;
+		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', &renderer);
 		return;
 	}
 
@@ -1663,27 +1696,25 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 
 	// iterate over the rows
 	do {
-		if (renderer) {
-			/* extract the data and data types */
-			for (int i = 0; i < nCol; i++) {
-				result.types[i] = sqlite3_column_type(pStmt, i);
-				if (result.types[i] == SQLITE_BLOB && cMode == RenderMode::INSERT) {
-					result.data[i] = "";
-				} else {
-					result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
-				}
-				if (!result.data[i] && result.types[i] != SQLITE_NULL) {
-					// OOM
-					rc = SQLITE_NOMEM;
-					break;
-				}
+		/* extract the data and data types */
+		for (int i = 0; i < nCol; i++) {
+			result.types[i] = sqlite3_column_type(pStmt, i);
+			if (result.types[i] == SQLITE_BLOB && cMode == RenderMode::INSERT) {
+				result.data[i] = "";
+			} else {
+				result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
+			}
+			if (!result.data[i] && result.types[i] != SQLITE_NULL) {
+				// OOM
+				rc = SQLITE_NOMEM;
+				break;
 			}
 		}
 
 		/* if data and types extracted successfully... */
 		if (SQLITE_ROW == rc) {
 			/* call the supplied callback with the result row data */
-			if (renderer && RenderRow(*renderer, result)) {
+			if (RenderRow(*renderer, result)) {
 				rc = SQLITE_ABORT;
 			} else {
 				rc = sqlite3_step(pStmt);
@@ -1691,9 +1722,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 		}
 	} while (SQLITE_ROW == rc);
 
-	if (renderer) {
-		renderer->RenderFooter(result);
-	}
+	renderer->RenderFooter(result);
 }
 
 /*
