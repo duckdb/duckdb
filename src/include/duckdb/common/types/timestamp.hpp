@@ -24,6 +24,8 @@ struct dtime_tz_t; // NOLINT
 
 //! Type used to represent a TIMESTAMP. timestamp_t holds the microseconds since 1970-01-01.
 struct timestamp_t { // NOLINT
+	// NOTE: The unit of value is microseconds for timestamp_t, but it can be
+	// different for subclasses (e.g. it's nanos for timestamp_ns, etc).
 	int64_t value;
 
 	timestamp_t() = default;
