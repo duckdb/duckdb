@@ -1654,7 +1654,6 @@ public:
 void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = this->max_rows;
-		;
 		size_t max_width = this->max_width;
 		if (!outfile.empty() && outfile[0] != '|') {
 			max_rows = (size_t)-1;
