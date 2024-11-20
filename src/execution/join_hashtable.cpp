@@ -136,17 +136,25 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, const idx_t &count, co
 	if (hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		D_ASSERT(!ConstantVector::IsNull(hashes_v));
 		auto indices = ConstantVector::GetData<hash_t>(hashes_v);
-		hash_t salt = ht_entry_t::ExtractSaltWithNulls(*indices);
 		idx_t offset = *indices & bitmask;
+#ifdef DISABLE_POINTER_SALT
+		*indices = offset;
+#else
+		hash_t salt = ht_entry_t::ExtractSaltWithNulls(*indices);
 		*indices = offset | salt;
+#endif
 		hashes_v.Flatten(count);
 	} else {
 		hashes_v.Flatten(count);
 		auto hashes = FlatVector::GetData<hash_t>(hashes_v);
 		for (idx_t i = 0; i < count; i++) {
-			idx_t salt = ht_entry_t::ExtractSaltWithNulls(hashes[i]);
 			idx_t offset = hashes[i] & bitmask;
+#ifdef DISABLE_POINTER_SALT
+			hashes[i] = offset;
+#else
+			idx_t salt = ht_entry_t::ExtractSaltWithNulls(hashes[i]);
 			hashes[i] = offset | salt;
+#endif
 		}
 	}
 }
@@ -605,7 +613,11 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 		for (idx_t i = 0; i < remaining_count; i++) {
 			const idx_t row_index = remaining_sel->get_index(i);
 			idx_t &ht_offset_and_salt = ht_offsets_and_salts[row_index];
+#ifdef DISABLE_POINTER_SALT
+			static constexpr hash_t salt = 0;
+#else
 			const hash_t salt = ht_entry_t::ExtractSalt(ht_offset_and_salt);
+#endif
 
 			// increment the ht_offset_and_salt of the entry as long as next entry is occupied and salt does not match
 			idx_t ht_offset;
@@ -621,9 +633,13 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
 				if (!occupied) {
 					break;
 				}
+#ifndef DISABLE_POINTER_SALT
 				if (entry.GetSalt() == salt) {
+#endif
 					break;
+#ifndef DISABLE_POINTER_SALT
 				}
+#endif
 
 				IncrementAndWrap(ht_offset_and_salt, capacity_mask);
 			}
