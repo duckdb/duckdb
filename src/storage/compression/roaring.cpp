@@ -488,7 +488,7 @@ public:
 				// End the last run
 				last_run.length = (count - last_run.start) - 1;
 			}
-			compressed_runs[(run_idx * 2) + 1] = count % COMPRESSED_SEGMENT_SIZE;
+			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
 			run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 			run_idx++;
 		} else if (!count || ((null != last_is_null) && null && run_idx < MAX_RUN_IDX)) {
@@ -497,7 +497,7 @@ public:
 				// Initialize a new run
 				current_run.start = count;
 			}
-			compressed_runs[(run_idx * 2) + 0] = count % COMPRESSED_SEGMENT_SIZE;
+			compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
 			run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 		}
 
@@ -506,8 +506,9 @@ public:
 		if (current_array_idx < MAX_ARRAY_IDX) {
 			if (current_array_idx + amount <= MAX_ARRAY_IDX) {
 				for (uint16_t i = 0; i < amount; i++) {
-					compressed_arrays[null][current_array_idx + i] = (count + i) % COMPRESSED_SEGMENT_SIZE;
-					array_counts[(count + i) / COMPRESSED_SEGMENT_SIZE]++;
+					compressed_arrays[null][current_array_idx + i] =
+					    static_cast<uint8_t>((count + i) % COMPRESSED_SEGMENT_SIZE);
+					array_counts[null][(count + i) / COMPRESSED_SEGMENT_SIZE]++;
 				}
 			}
 			if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
@@ -529,6 +530,7 @@ public:
 
 	void OverrideArray(data_ptr_t destination, bool nulls, idx_t count) {
 		if (count >= COMPRESSED_ARRAY_THRESHOLD) {
+			memset(destination, 0, sizeof(uint8_t) * 8);
 			array_counts[nulls] = reinterpret_cast<uint8_t *>(destination);
 			destination += sizeof(uint8_t) * 8;
 			compressed_arrays[nulls] = reinterpret_cast<uint8_t *>(destination);
@@ -539,6 +541,7 @@ public:
 
 	void OverrideRun(data_ptr_t destination, idx_t count) {
 		if (count >= COMPRESSED_RUN_THRESHOLD) {
+			memset(destination, 0, sizeof(uint8_t) * 8);
 			run_counts = reinterpret_cast<uint8_t *>(destination);
 			destination += sizeof(uint8_t) * 8;
 			compressed_runs = reinterpret_cast<uint8_t *>(destination);
@@ -554,9 +557,13 @@ public:
 	void Finalize() {
 		D_ASSERT(!finalized);
 		if (count && last_is_null && run_idx < MAX_RUN_IDX) {
-			auto &last_run = runs[run_idx];
-			// End the last run
-			last_run.length = (count - last_run.start);
+			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+				auto &last_run = runs[run_idx];
+				// End the last run
+				last_run.length = (count - last_run.start);
+			}
+			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
+			run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 			run_idx++;
 		}
 		finalized = true;
@@ -564,13 +571,9 @@ public:
 
 	Result GetResult() {
 		D_ASSERT(finalized);
-		const bool can_use_null_uncompressed_array = array_idx[NULLS] < COMPRESSED_ARRAY_THRESHOLD;
-		const bool can_use_non_null_uncompressed_array = array_idx[NON_NULLS] < COMPRESSED_ARRAY_THRESHOLD;
-
 		const bool can_use_null_array = array_idx[NULLS] < MAX_ARRAY_IDX;
 		const bool can_use_non_null_array = array_idx[NON_NULLS] < MAX_ARRAY_IDX;
 
-		const bool can_use_uncompressed_run = run_idx < COMPRESSED_RUN_THRESHOLD;
 		const bool can_use_run = run_idx < MAX_RUN_IDX;
 
 		const bool can_use_array = can_use_null_array || can_use_non_null_array;
@@ -583,7 +586,7 @@ public:
 		uint16_t non_null_array_cost =
 		    array_idx[NON_NULLS] < COMPRESSED_ARRAY_THRESHOLD ? array_idx[NON_NULLS] * 2 : 8 + array_idx[NON_NULLS];
 
-		uint16_t lowest_array_cost = MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]) * 2;
+		uint16_t lowest_array_cost = MinValue<uint16_t>(null_array_cost, non_null_array_cost);
 		uint16_t lowest_run_cost = run_idx < COMPRESSED_RUN_THRESHOLD ? run_idx * 4 : 8 + (run_idx * 2);
 		uint16_t bitset_cost =
 		    (AlignValue<uint16_t, ValidityMask::BITS_PER_VALUE>(count) / ValidityMask::BITS_PER_VALUE) *
@@ -1045,11 +1048,11 @@ private:
 template <bool COMPRESSED>
 struct RunContainerScanState : public ContainerScanState {
 public:
-	RunContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data, idx_t count)
-	    : ContainerScanState(container_index, container_size), segment(data), data(data), count(count) {
+	RunContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data_p, idx_t count)
+	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
 		if (COMPRESSED) {
 			D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
-			data = data + (sizeof(uint8_t) * 8);
+			data += (sizeof(uint8_t) * 8);
 		}
 	}
 
@@ -1183,10 +1186,11 @@ public:
 template <bool INVERTED, bool COMPRESSED>
 struct ArrayContainerScanState : public ContainerScanState {
 public:
-	ArrayContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data, idx_t count)
-	    : ContainerScanState(container_index, container_size), segment(data), data(data), count(count) {
+	ArrayContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data_p, idx_t count)
+	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
 		if (COMPRESSED) {
 			D_ASSERT(count >= COMPRESSED_ARRAY_THRESHOLD);
+			data += (sizeof(uint8_t) * 8);
 		}
 	}
 
@@ -1268,7 +1272,7 @@ public:
 				D_ASSERT(segment_index < 8);
 				count_in_segment++;
 				uint16_t new_index = segment_index * COMPRESSED_SEGMENT_SIZE;
-				new_index += reinterpret_cast<uint8_t *>(data)[(i * 2) + 0];
+				new_index += reinterpret_cast<uint8_t *>(data)[i];
 
 				D_ASSERT(!i || new_index > index);
 				index = new_index;
