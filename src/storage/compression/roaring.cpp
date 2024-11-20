@@ -1039,67 +1039,30 @@ public:
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 		// scanned.
 
-		if (INVERTED) {
-			// We are mapping nulls, not non-nulls
-			do {
-				if (array_index >= count || scanned_count + to_scan < array[array_index]) {
-					// None of the bits we're scanning are 0, no action required
-					break;
-				}
-
-				// At least one of the entries to scan is set
-				for (; array_index < count; array_index++) {
-					if (array[array_index] >= scanned_count + to_scan) {
-						break;
-					}
-					if (array[array_index] < scanned_count) {
-						continue;
-					}
-					auto index = array[array_index] - scanned_count;
-					result_mask.SetInvalid(result_offset + index);
-				}
-			} while (false);
-			scanned_count += to_scan;
-		} else {
-			// We are mapping non-nulls
-			do {
-				if (array_index >= count || scanned_count + to_scan < array[array_index]) {
-					// None of the bits we're scanning are set, set everything to 0 directly
-					idx_t start = result_offset;
-					idx_t end = start + to_scan;
-					SetInvalidRange(result_mask, start, end);
-					break;
-				}
-
-				if (array_index + to_scan < count && array[array_index] == scanned_count &&
-				    array[array_index + to_scan] == scanned_count + to_scan) {
-					// All bits are set, no action required
-					break;
-				}
-
-				idx_t i = 0;
-				while (i < to_scan) {
-					// Determine the next valid position within the scan range, if available
-					idx_t valid_pos = (array_index < count) ? array[array_index] : scanned_count + to_scan;
-					idx_t valid_start = MinValue<idx_t>(valid_pos - scanned_count, to_scan);
-
-					if (i < valid_start) {
-						// These bits are all set to 0
-						idx_t start = result_offset + i;
-						idx_t end = start + (valid_start - i);
-						SetInvalidRange(result_mask, start, end);
-						i = valid_start;
-					}
-
-					if (i == valid_start && i < to_scan && array_index < count) {
-						// This bit is already set, no action required
-						i++;
-						array_index++;
-					}
-				}
-			} while (false);
-			scanned_count += to_scan;
+		if (!INVERTED) {
+			// If we are mapping valid entries, that means the majority of the bits are invalid
+			// so we set everything to invalid and only flip the bits that are present in the array
+			SetInvalidRange(result_mask, result_offset, result_offset + to_scan);
 		}
+
+		do {
+			// At least one of the entries to scan is set
+			for (; array_index < count; array_index++) {
+				if (array[array_index] >= scanned_count + to_scan) {
+					break;
+				}
+				if (array[array_index] < scanned_count) {
+					continue;
+				}
+				auto index = array[array_index] - scanned_count;
+				if (INVERTED) {
+					result_mask.SetInvalid(result_offset + index);
+				} else {
+					result_mask.SetValid(result_offset + index);
+				}
+			}
+		} while (false);
+		scanned_count += to_scan;
 	}
 
 	void Skip(idx_t to_skip) override {
