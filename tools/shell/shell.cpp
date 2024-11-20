@@ -1621,7 +1621,6 @@ private:
 	bool highlight = true;
 };
 
-
 class TrashRenderer : public duckdb::BaseResultRenderer {
 public:
 	TrashRenderer() {
@@ -1645,7 +1644,7 @@ public:
 	void RenderFooter(const string &) override {
 	}
 
-	void PrintText(const string &, HighlightElementType ) {
+	void PrintText(const string &, HighlightElementType) {
 	}
 };
 
