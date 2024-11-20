@@ -1903,7 +1903,7 @@ void DuckDBPyConnection::Cursors::ClearCursors() {
 		py::gil_scoped_acquire gil;
 		cursor->Close();
 		// Ensure destructor runs with gil if triggered.
-		cursor.reset(nullptr)
+		cursor.reset();
 	}
 
 	cursors.clear();
