@@ -410,6 +410,38 @@ public:
 	}
 
 public:
+	void AppendVector(Vector &input, idx_t input_size, std::function<void()> on_full_container) {
+		UnifiedVectorFormat unified;
+		input.ToUnifiedFormat(input_size, unified);
+		auto &validity = unified.validity;
+
+		if (validity.AllValid()) {
+			idx_t appended = 0;
+			while (appended < input_size) {
+				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
+				Append(false, NumericCast<uint16_t>(to_append));
+				if (IsFull()) {
+					on_full_container();
+				}
+				appended += to_append;
+			}
+		} else {
+			idx_t appended = 0;
+			while (appended < input_size) {
+				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
+				for (idx_t i = 0; i < to_append; i++) {
+					auto idx = unified.sel->get_index(appended + i);
+					auto is_null = validity.RowIsValidUnsafe(idx);
+					Append(!is_null);
+				}
+				if (IsFull()) {
+					on_full_container();
+				}
+				appended += to_append;
+			}
+		}
+	}
+
 	void Append(bool null, uint16_t amount = 1) {
 		if (uncompressed) {
 			if (null) {
@@ -620,34 +652,9 @@ public:
 	}
 
 	void Analyze(Vector &input, idx_t count) {
-		UnifiedVectorFormat unified;
-		input.ToUnifiedFormat(count, unified);
-		auto &validity = unified.validity;
+		auto &self = *this;
+		container_state.AppendVector(input, count, [&self]() { self.FlushContainer(); });
 
-		if (validity.AllValid()) {
-			idx_t appended = 0;
-			while (appended < count) {
-				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
-				container_state.Append(false, NumericCast<uint16_t>(to_append));
-				if (container_state.IsFull()) {
-					FlushContainer();
-				}
-				appended += to_append;
-			}
-		} else {
-			idx_t appended = 0;
-			while (appended < count) {
-				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
-				for (idx_t i = 0; i < to_append; i++) {
-					auto is_null = validity.RowIsValidUnsafe(appended + i);
-					container_state.Append(!is_null);
-				}
-				if (container_state.IsFull()) {
-					FlushContainer();
-				}
-				appended += to_append;
-			}
-		}
 		this->count += count;
 	}
 
@@ -862,35 +869,8 @@ public:
 	}
 
 	void Compress(Vector &input, idx_t count) {
-		UnifiedVectorFormat unified;
-		input.ToUnifiedFormat(count, unified);
-		auto &validity = unified.validity;
-
-		if (validity.AllValid()) {
-			idx_t appended = 0;
-			while (appended < count) {
-				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
-				container_state.Append(false, NumericCast<uint16_t>(to_append));
-				if (container_state.IsFull()) {
-					NextContainer();
-				}
-				appended += to_append;
-			}
-		} else {
-			idx_t appended = 0;
-			while (appended < count) {
-				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - container_state.count, count - appended);
-				for (idx_t i = 0; i < to_append; i++) {
-					auto idx = unified.sel->get_index(appended + i);
-					auto is_null = validity.RowIsValidUnsafe(idx);
-					container_state.Append(!is_null);
-				}
-				if (container_state.IsFull()) {
-					NextContainer();
-				}
-				appended += to_append;
-			}
-		}
+		auto &self = *this;
+		container_state.AppendVector(input, count, [&self]() { self.NextContainer(); });
 	}
 
 public:
