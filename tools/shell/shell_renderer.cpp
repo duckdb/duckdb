@@ -618,6 +618,10 @@ public:
 					state.Print("1e999");
 				} else if (strcmp(data[i], "-inf") == 0) {
 					state.Print("-1e999");
+				} else if (strcmp(data[i], "nan") == 0) {
+					state.Print("null");
+				} else if (strcmp(data[i], "-nan") == 0) {
+					state.Print("null");
 				} else {
 					state.Print(data[i]);
 				}
