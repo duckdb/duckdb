@@ -97,8 +97,8 @@ struct MakeTimestampOperator {
 	}
 
 	template <typename T, typename RESULT_TYPE>
-	static RESULT_TYPE Operation(T micros) {
-		return timestamp_t(micros);
+	static RESULT_TYPE Operation(T value) {
+		return RESULT_TYPE(value);
 	}
 };
 
