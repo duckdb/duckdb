@@ -1098,7 +1098,8 @@ public:
 
 public:
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
-		if ((to_scan % ValidityMask::BITS_PER_VALUE) == 0 && (scanned_count % ValidityMask::BITS_PER_VALUE) == 0) {
+		if (!result_offset && (to_scan % ValidityMask::BITS_PER_VALUE) == 0 &&
+		    (scanned_count % ValidityMask::BITS_PER_VALUE) == 0) {
 			ValidityUncompressed::AlignedScan(reinterpret_cast<data_ptr_t>(bitset), scanned_count, result, to_scan);
 		} else {
 			ValidityUncompressed::UnalignedScan(reinterpret_cast<data_ptr_t>(bitset), container_size, scanned_count,
