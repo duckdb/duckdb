@@ -1651,11 +1651,18 @@ public:
 /*
 ** Run a prepared statement
 */
-void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run */
-) {
+void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	if (cMode == RenderMode::DUCKBOX) {
-		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
-		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
+		size_t max_rows = this->max_rows;
+		;
+		size_t max_width = this->max_width;
+		if (!outfile.empty() && outfile[0] != '|') {
+			max_rows = (size_t)-1;
+			max_width = (size_t)-1;
+		}
+		if (!stdout_is_console) {
+			max_width = (size_t)-1;
+		}
 		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
 		                      decimal_separator, &renderer);
