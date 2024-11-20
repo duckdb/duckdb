@@ -1,11 +1,11 @@
-# name: test/sql/storage/reclaim_space/reclaim_space_drop_overflow_strings.test_slow
+# name: test/sql/storage/compression/zstd/reclaim_space_table.test_slow
 # description: Test that we reclaim space when dropping tables containing overflow strings
-# group: [reclaim_space]
+# group: [zstd]
 
 load __TEST_DIR__/reclaim_space_overflow_strings.db
 
 statement ok
-PRAGMA force_compression='Uncompressed';
+PRAGMA force_compression='ZSTD';
 
 statement ok
 PRAGMA force_checkpoint;
