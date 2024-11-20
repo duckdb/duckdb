@@ -4,11 +4,17 @@
 
 namespace duckdb {
 
-idx_t IngestionSample::NumSamplesCollected() {
+idx_t IngestionSample::NumSamplesCollected() const {
 	if (!sample_chunk) {
 		return 0;
 	}
 	return sample_chunk->size();
+}
+
+idx_t IngestionSample::NumActiveSamples() const {
+	auto ret = MaxValue<idx_t>(actual_sample_indexes.size(), base_reservoir_sample->reservoir_weights.size());
+	D_ASSERT(ret <= FIXED_SAMPLE_SIZE);
+	return ret;
 }
 
 unique_ptr<DataChunk> IngestionSample::GetChunk(idx_t offset) {
@@ -83,28 +89,12 @@ void IngestionSample::Shrink() {
 
 	auto types = sample_chunk->GetTypes();
 	auto new_sample_chunk = CreateNewSampleChunk(types, FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
-	;
-	SampleCopyHelper sample_copy_helper;
-	// we always only keep a FIXED_SAMPLE_SIZE number of samples.
-	idx_t num_samples_to_keep = FIXED_SAMPLE_SIZE;
-	if (GetPriorityQueueSize() == 0) {
-		sample_copy_helper = SelFromSimpleIndexes(actual_sample_indexes);
-		num_samples_to_keep = sample_copy_helper.actual_indexes.size();
+	idx_t num_samples_to_keep = NumActiveSamples();
+	auto sample_copy_helper = GetSelToCopyData(num_samples_to_keep);
+
+	if (SamplingState() == SamplingMode::FAST) {
 		actual_sample_indexes = sample_copy_helper.actual_indexes;
 	} else {
-		// we will only keep one sample size of samples
-		vector<std::pair<double, idx_t>> weights_indexes;
-		D_ASSERT(num_samples_to_keep == base_reservoir_sample->reservoir_weights.size());
-		for (idx_t i = 0; i < num_samples_to_keep; i++) {
-			weights_indexes.push_back(base_reservoir_sample->reservoir_weights.top());
-			base_reservoir_sample->reservoir_weights.pop();
-		}
-		// create one large chunk from the collected chunk samples.
-		D_ASSERT(sample_chunk->size() != 0);
-
-		// set up selection vector to copy IngestionSample to ReservoirSample
-		sample_copy_helper = SelFromReservoirWeights(weights_indexes);
-		num_samples_to_keep = sample_copy_helper.reservoir_weights.size();
 		base_reservoir_sample->reservoir_weights = sample_copy_helper.reservoir_weights;
 		base_reservoir_sample->min_weighted_entry_index = base_reservoir_sample->reservoir_weights.top().second;
 	}
@@ -125,23 +115,23 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 SampleCopyHelper IngestionSample::GetSelToCopyData(idx_t sel_size) const {
 	SampleCopyHelper ret;
 	if (SamplingState() == SamplingMode::FAST) {
+		D_ASSERT(actual_sample_indexes.size() >= sel_size);
 		auto indexes_copy = actual_sample_indexes;
-		ret = SelFromSimpleIndexes(indexes_copy);
-	} else {
-		auto base_copy = base_reservoir_sample->Copy();
-		vector<std::pair<double, idx_t>> weights_indexes;
-		D_ASSERT(sel_size == base_copy->reservoir_weights.size());
-		for (idx_t i = 0; i < sel_size; i++) {
-			weights_indexes.push_back(base_copy->reservoir_weights.top());
-			base_copy->reservoir_weights.pop();
-		}
-		// create one large chunk from the collected chunk samples.
-		D_ASSERT(sample_chunk->size() != 0);
-
-		// set up selection vector to copy IngestionSample to ReservoirSample
-		ret = SelFromReservoirWeights(weights_indexes);
+		return SelFromSimpleIndexes(indexes_copy);
 	}
-	return ret;
+	D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sel_size);
+	auto base_copy = base_reservoir_sample->Copy();
+	vector<std::pair<double, idx_t>> weights_indexes;
+	D_ASSERT(sel_size == base_copy->reservoir_weights.size());
+	for (idx_t i = 0; i < sel_size; i++) {
+		weights_indexes.push_back(base_copy->reservoir_weights.top());
+		base_copy->reservoir_weights.pop();
+	}
+	// create one large chunk from the collected chunk samples.
+	D_ASSERT(sample_chunk->size() != 0);
+
+	// set up selection vector to copy IngestionSample to ReservoirSample
+	return SelFromReservoirWeights(weights_indexes);
 }
 
 unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
@@ -159,9 +149,9 @@ unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
 	// create a new sample chunk to store new samples
 	auto types = sample_chunk->GetTypes();
 	idx_t new_sample_chunk_size =
-	    for_serialization ? sample_chunk->size() : FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
+	    for_serialization ? NumActiveSamples() : FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
 	// how many values should be copied
-	idx_t values_to_copy = MinValue<idx_t>(sample_chunk->size(), FIXED_SAMPLE_SIZE);
+	idx_t values_to_copy = MinValue<idx_t>(NumActiveSamples(), FIXED_SAMPLE_SIZE);
 
 	auto new_sample_chunk = CreateNewSampleChunk(types, new_sample_chunk_size);
 
@@ -204,13 +194,14 @@ void IngestionSample::SimpleMerge(IngestionSample &other) {
 	idx_t total_seen = GetTuplesSeen() + other.GetTuplesSeen();
 
 	auto weight_tuples_this = static_cast<double>(GetTuplesSeen()) / static_cast<double>(total_seen);
-	auto weight_tuples_other = static_cast<double>(GetTuplesSeen()) / static_cast<double>(total_seen);
+	auto weight_tuples_other = static_cast<double>(other.GetTuplesSeen()) / static_cast<double>(total_seen);
 
-	// If weights don't add up to 1, most likely a simple merge occured and no new smaples were added.
+	// If weights don't add up to 1, most likely a simple merge occured and no new samples were added.
 	// if that is the case, add the missing weight to the lower weighted sample to adjust.
+	// this is to avoid cases where if you have a 20k row table and add another 20k rows row by row
+	// then eventually the missing weights will add up, and get you a more even distribution
 	if (weight_tuples_this + weight_tuples_other < 1) {
-		weight_tuples_other += MaxValue<double>(weight_tuples_other, weight_tuples_this) -
-		                       MinValue<double>(weight_tuples_other, weight_tuples_this);
+		weight_tuples_other += 1 - (weight_tuples_other + weight_tuples_this);
 	}
 
 	idx_t keep_from_this = 0;
@@ -329,6 +320,8 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	idx_t chunk_offset = 0;
 	// now we are adding entries from the other base_reservoir_sampling object to this
 	// while also filling in the selection vector we wil use to copy values.
+	// TODO: This can be faster. Just pop weights from other until you have
+	// num samples to keep. Then copy with an offset.
 	while (other_ingest.GetPriorityQueueSize() > 0) {
 		auto other_top = other_ingest.PopFromWeightQueue();
 		auto other_weight = -other_top.first;
@@ -380,28 +373,31 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 	idx_t num_samples_to_keep =
 	    MinValue<idx_t>(FIXED_SAMPLE_SIZE, static_cast<idx_t>(SAVE_PERCENTAGE * static_cast<double>(GetTuplesSeen())));
 
-	vector<std::pair<double, idx_t>> weights_indexes;
+	auto copy_helper = GetSelToCopyData(num_samples_to_keep);
 
 	auto ret = make_uniq<ReservoirSample>(num_samples_to_keep);
-	ret->base_reservoir_sample = base_reservoir_sample->Copy();
+	if (num_samples_to_keep <= 0) {
+		ret->base_reservoir_sample = base_reservoir_sample->Copy();
+		return ret;
+	}
 
 	// set up reservoir chunk for the reservoir sample
 	D_ASSERT(sample_chunk->size() <= FIXED_SAMPLE_SIZE);
 	// create a new sample chunk to store new samples
 	ret->reservoir_chunk = make_uniq<ReservoirChunk>();
+	auto types = sample_chunk->GetTypes();
+
+	// TODO: this could use CreateNewSampleChunk
 	ret->reservoir_chunk->chunk.Initialize(Allocator::DefaultAllocator(), sample_chunk->GetTypes(),
 	                                       num_samples_to_keep);
 	for (idx_t col_idx = 0; col_idx < ret->reservoir_chunk->chunk.ColumnCount(); col_idx++) {
 		FlatVector::Validity(ret->reservoir_chunk->chunk.data[col_idx]).Initialize(num_samples_to_keep);
 	}
 
-	auto copy_helper = GetSelToCopyData(num_samples_to_keep);
-
 	idx_t new_size = ret->reservoir_chunk->chunk.size() + num_samples_to_keep;
 
 	// now do the copy.
 	D_ASSERT(sample_chunk->GetTypes() == ret->reservoir_chunk->chunk.GetTypes());
-	auto types = sample_chunk->GetTypes();
 	for (idx_t i = 0; i < sample_chunk->ColumnCount(); i++) {
 		auto col_type = types[i];
 		if (ValidSampleType(col_type)) {
@@ -416,9 +412,9 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 	// set the cardinality
 	ret->reservoir_chunk->chunk.SetCardinality(new_size);
 	ret->base_reservoir_sample->reservoir_weights = copy_helper.reservoir_weights;
+	ret->base_reservoir_sample->num_entries_seen_total = base_reservoir_sample->num_entries_seen_total;
 	if (!ret->base_reservoir_sample->reservoir_weights.empty()) {
-		ret->base_reservoir_sample->min_weighted_entry_index =
-		    ret->base_reservoir_sample->reservoir_weights.top().second;
+		ret->base_reservoir_sample->SetNextEntry();
 	}
 
 	D_ASSERT(ret->reservoir_chunk->chunk.size() == num_samples_to_keep);
@@ -435,19 +431,7 @@ idx_t IngestionSample::FillReservoir(DataChunk &chunk) {
 		}
 		auto types = chunk.GetTypes();
 		// create a new sample chunk to store new samples
-		sample_chunk = make_uniq<DataChunk>();
-		sample_chunk->Initialize(Allocator::DefaultAllocator(), types,
-		                         FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
-
-		for (idx_t col_idx = 0; col_idx < sample_chunk->ColumnCount(); col_idx++) {
-			auto col_type = types[col_idx];
-			FlatVector::Validity(sample_chunk->data[col_idx])
-			    .Initialize(FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
-			if (!ValidSampleType(col_type)) {
-				sample_chunk->data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(sample_chunk->data[col_idx], true);
-			}
-		}
+		sample_chunk = CreateNewSampleChunk(types, FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
 	}
 
 	idx_t actual_sample_index_start = actual_sample_indexes.size();
@@ -650,7 +634,6 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	base_reservoir_sample->num_entries_seen_total += chunk.size();
 	D_ASSERT(base_reservoir_sample->reservoir_weights.size() == 0 ||
 	         base_reservoir_sample->reservoir_weights.size() == FIXED_SAMPLE_SIZE);
-	// sample_chunk->SetCardinality(sample_chunk_size_before_ingestion + sample_chunk_ind_to_data_chunk_index.size());
 
 	Verify();
 

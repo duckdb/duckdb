@@ -280,6 +280,9 @@ public:
 	//! Transform To "Slow" Merging IngestionSample
 	void ConvertToSlowSample();
 
+	//! When shrinking or copying or merging, you need to create a selection vector
+	//! to select the correct rows to copy. During this copy process, sometimes underlying
+	//! statistics are changed. The SampleCopyHelper object stores the changes
 	SampleCopyHelper GetSelToCopyData(idx_t sel_size) const;
 	SampleCopyHelper SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const;
 	SampleCopyHelper SelFromSimpleIndexes(vector<idx_t> &actual_indexes) const;
@@ -304,7 +307,8 @@ public:
 	                           idx_t target_offset);
 
 	idx_t GetTuplesSeen();
-	idx_t NumSamplesCollected();
+	idx_t NumSamplesCollected() const;
+	idx_t NumActiveSamples() const;
 	static bool ValidSampleType(const LogicalType &type);
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the

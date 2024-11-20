@@ -261,7 +261,7 @@ unique_ptr<IngestionSample> ReservoirSample::ConvertToIngestionSample() {
 	}
 
 	if (num_chunks_added > 1) {
-		throw InternalException("bruh, i dunno what happened");
+		throw InternalException("Error Converting Reservoir Sample to IngestionSample.");
 	}
 
 	// then assign the weights

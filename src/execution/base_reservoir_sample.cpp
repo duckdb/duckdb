@@ -72,6 +72,7 @@ void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sam
 }
 
 void BaseReservoirSampling::SetNextEntry() {
+	D_ASSERT(!reservoir_weights.empty());
 	//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
 	auto &min_key = reservoir_weights.top();
 	double t_w = -min_key.first;
