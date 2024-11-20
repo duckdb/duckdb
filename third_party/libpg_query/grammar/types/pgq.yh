@@ -17,8 +17,6 @@
 %type <list> QualifiednameOptionalAs
 %type <list> PropertiesSpec
 %type <list> PropertiesClause
-%type <list> ColumnSpec
-%type <list> ColumnList
 %type <node> GraphTableWhereOptional
 %type <node> KeepOptional
 %type <ival> GroupOrGroupsOptional

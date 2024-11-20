@@ -329,15 +329,6 @@ GraphTableStmt:
 			}
 		;
 
-ColumnSpec:
-		target_el					{ $$ = list_make2(makeInteger(PG_COLUMNSPEC_EXPR), $1); }
-		;
-ColumnList:
-		ColumnSpec  				{ $$ = list_make1($1); }
-		|
-		ColumnList ',' ColumnSpec	{ $$ = lappend($1, $3); }
-		;
-
 KeepOptional:
 		KEEP PathPrefix				{ $$ = $2; }
 		|
