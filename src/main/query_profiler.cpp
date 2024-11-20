@@ -87,6 +87,7 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 }
 
 void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool start_at_optimizer) {
+	lock_guard<std::recursive_mutex> guard(lock);
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -196,7 +197,7 @@ Value GetCumulativeOptimizers(ProfilingNode &node) {
 }
 
 void QueryProfiler::EndQuery() {
-	lock_guard<mutex> guard(flush_lock);
+	lock_guard<std::recursive_mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -271,6 +272,7 @@ string QueryProfiler::ToString(ExplainFormat explain_format) const {
 }
 
 string QueryProfiler::ToString(ProfilerPrintFormat format) const {
+	lock_guard<std::recursive_mutex> guard(lock);
 	if (!IsEnabled()) {
 		return RenderDisabledMessage(format);
 	}
@@ -304,6 +306,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 }
 
 void QueryProfiler::StartPhase(MetricsType phase_metric) {
+	lock_guard<std::recursive_mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -315,6 +318,7 @@ void QueryProfiler::StartPhase(MetricsType phase_metric) {
 }
 
 void QueryProfiler::EndPhase() {
+	lock_guard<std::recursive_mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -411,7 +415,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
-	lock_guard<mutex> guard(flush_lock);
+	lock_guard<std::recursive_mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -450,7 +454,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 }
 
 void QueryProfiler::SetInfo(const double &blocked_thread_time) {
-	lock_guard<mutex> guard(flush_lock);
+	lock_guard<std::recursive_mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -566,6 +570,7 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
+	lock_guard<std::recursive_mutex> guard(lock);
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
 	ss << "││    Query Profiling Information    ││\n";
@@ -677,6 +682,7 @@ static string StringifyAndFree(yyjson_mut_doc *doc, yyjson_mut_val *object) {
 }
 
 string QueryProfiler::ToJSON() const {
+	lock_guard<std::recursive_mutex> guard(lock);
 	auto doc = yyjson_mut_doc_new(nullptr);
 	auto result_obj = yyjson_mut_obj(doc);
 	yyjson_mut_doc_set_root(doc, result_obj);
@@ -796,6 +802,7 @@ string QueryProfiler::RenderDisabledMessage(ProfilerPrintFormat format) const {
 }
 
 void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
+	lock_guard<std::recursive_mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
