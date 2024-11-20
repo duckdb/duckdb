@@ -23,6 +23,9 @@ static constexpr uint16_t MAX_RUN_IDX = 63;
 static constexpr uint16_t MAX_ARRAY_IDX = 127;
 
 static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
+	if (start == end) {
+		return;
+	}
 	D_ASSERT(end > start);
 	result.EnsureWritable();
 	auto result_data = (validity_t *)result.GetData();
@@ -211,14 +214,18 @@ public:
 		BitpackingPrimitives::PackBuffer<uint8_t>(dest, types_data + types_offset, count_in_segment, 2);
 		dest += types_size;
 
-		idx_t runs_offset = number_of_runs.size() - runs_in_segment;
-		data_ptr_t run_data = (data_ptr_t)(number_of_runs.data()); // NOLINT: c-style cast (for const)
-		BitpackingPrimitives::PackBuffer<uint8_t>(dest, run_data + runs_offset, runs_in_segment, 6);
-		dest += runs_size;
+		if (number_of_runs.size()) {
+			idx_t runs_offset = number_of_runs.size() - runs_in_segment;
+			data_ptr_t run_data = (data_ptr_t)(number_of_runs.data()); // NOLINT: c-style cast (for const)
+			BitpackingPrimitives::PackBuffer<uint8_t>(dest, run_data + runs_offset, runs_in_segment, 6);
+			dest += runs_size;
+		}
 
-		idx_t arrays_offset = cardinality.size() - arrays_in_segment;
-		data_ptr_t arrays_data = (data_ptr_t)(cardinality.data()); // NOLINT: c-style cast (for const)
-		memcpy(dest, arrays_data + arrays_offset, sizeof(uint8_t) * arrays_in_segment);
+		if (cardinality.size()) {
+			idx_t arrays_offset = cardinality.size() - arrays_in_segment;
+			data_ptr_t arrays_data = (data_ptr_t)(cardinality.data()); // NOLINT: c-style cast (for const)
+			memcpy(dest, arrays_data + arrays_offset, sizeof(uint8_t) * arrays_in_segment);
+		}
 		return types_size + runs_size + arrays_size;
 	}
 
@@ -243,14 +250,18 @@ public:
 		cardinality.resize(container_count - runs_count);
 
 		// Load the run containers
-		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_count, 6);
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(number_of_runs.data(), src, runs_count, 6, true);
-		src += runs_size;
+		if (runs_count) {
+			idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_count, 6);
+			BitpackingPrimitives::UnPackBuffer<uint8_t>(number_of_runs.data(), src, runs_count, 6, true);
+			src += runs_size;
+		}
 
 		// Load the array/bitset containers
-		idx_t arrays_size = sizeof(uint8_t) * cardinality.size();
-		arrays_in_segment = arrays_size;
-		memcpy(cardinality.data(), src, arrays_size);
+		if (cardinality.size()) {
+			idx_t arrays_size = sizeof(uint8_t) * cardinality.size();
+			arrays_in_segment = arrays_size;
+			memcpy(cardinality.data(), src, arrays_size);
+		}
 	}
 
 private:
@@ -308,6 +319,7 @@ public:
 
 public:
 	ContainerMetadata GetNext() {
+		D_ASSERT(idx < collection.count_in_segment);
 		auto type = collection.container_type[idx++];
 		const bool is_inverted = (type & 1) == 1;
 		const bool is_run = ((type >> 1) & 1) == 1;
@@ -980,7 +992,7 @@ public:
 					auto run_or_scan_end = MinValue<idx_t>(run_end, scanned_count + to_scan);
 
 					// Process the run
-					D_ASSERT(run_or_scan_end > start_of_run);
+					D_ASSERT(run_or_scan_end >= start_of_run);
 					idx_t amount = run_or_scan_end - start_of_run;
 					idx_t start = result_offset + result_idx;
 					idx_t end = start + amount;
