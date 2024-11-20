@@ -382,7 +382,13 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			for (inner_iteration_count = 0; inner_iteration_count < capacity; inner_iteration_count++) {
 				auto &entry = entries[ht_offset];
 				if (entry.IsOccupied()) { // Cell is occupied: Compare salts
-					if (entry.GetSalt() == salt) {
+					const bool salt_equal =
+#ifdef DISABLE_POINTER_SALT
+					    true;
+#else
+					    entry.GetSalt() == salt;
+#endif
+					if (salt_equal) {
 						// Same salt, compare group keys
 						state.group_compare_vector.set_index(need_compare_count++, index);
 						break;

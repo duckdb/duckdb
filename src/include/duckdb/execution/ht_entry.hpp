@@ -13,6 +13,11 @@
 
 namespace duckdb {
 
+#if !defined(DISABLE_POINTER_SALT) && defined(__ANDROID__)
+// Google, why does Android need 18446744 TB of address space?
+#define DISABLE_POINTER_SALT
+#endif
+
 //! The ht_entry_t struct represents an individual entry within a hash table.
 /*!
     This struct is used by the JoinHashTable and AggregateHashTable to store entries within the hash table. It stores
@@ -21,8 +26,7 @@ namespace duckdb {
 */
 struct ht_entry_t { // NOLINT
 public:
-#if defined(__ANDROID__) || defined(DISABLE_POINTER_SALT)
-	// Google, why does Android need 18446744 TB of address space?
+#ifdef DISABLE_POINTER_SALT
 	static constexpr const hash_t SALT_MASK = 0x0000000000000000;
 	static constexpr const hash_t POINTER_MASK = 0xFFFFFFFFFFFFFFFF;
 #else
