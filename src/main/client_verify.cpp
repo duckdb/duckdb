@@ -65,7 +65,8 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	// For the DEBUG_ASYNC build we enable this extra verifier
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	if (config.query_verification_enabled) {
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt));
+		statement_verifiers.emplace_back(
+		    StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt, parameters));
 	}
 #endif
 
