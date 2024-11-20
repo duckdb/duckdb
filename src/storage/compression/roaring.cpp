@@ -843,6 +843,7 @@ public:
 		}
 
 		idx_t serialized_metadata_size = metadata_collection.Serialize(data_ptr);
+		metadata_collection.FlushSegment();
 		(void)serialized_metadata_size;
 		D_ASSERT(metadata_size == serialized_metadata_size);
 		idx_t metadata_start = static_cast<idx_t>(data_ptr - base_ptr);
