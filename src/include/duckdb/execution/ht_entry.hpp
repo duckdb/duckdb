@@ -21,7 +21,7 @@ namespace duckdb {
 */
 struct ht_entry_t { // NOLINT
 public:
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(DISABLE_POINTER_SALT)
 	// Google, why does Android need 18446744 TB of address space?
 	static constexpr const hash_t SALT_MASK = 0x0000000000000000;
 	static constexpr const hash_t POINTER_MASK = 0xFFFFFFFFFFFFFFFF;
