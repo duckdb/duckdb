@@ -23,7 +23,9 @@ static constexpr uint16_t MAX_RUN_IDX = 63;
 static constexpr uint16_t MAX_ARRAY_IDX = 127;
 
 static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
-	D_ASSERT(end > start);
+	if (end <= start) {
+		throw InternalException("SetInvalidRange called with end (%d) <= start (%d)", end, start);
+	}
 	result.EnsureWritable();
 	auto result_data = (validity_t *)result.GetData();
 
