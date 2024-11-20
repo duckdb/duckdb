@@ -4767,11 +4767,15 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				azCmd[nCmd - 1] = z;
 			}
 		}
-		if (z[1] == '-')
+		if (z[1] == '-') {
 			z++;
+		}
 		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 || strcmp(z, "-newline") == 0 ||
-		    strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
+		    strcmp(z, "-cmd") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
+		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
+			(void)cmdline_option_value(argc, argv, ++i);
+			stdin_is_interactive = false;
 		} else if (strcmp(z, "-init") == 0) {
 			zInitFile = cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-batch") == 0) {
