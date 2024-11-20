@@ -723,5 +723,11 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "zstd_min_string_length",
+        "description": "The (average) length at which to enable ZSTD compression, defaults to 4096",
+        "type": "UBIGINT",
+        "scope": "global"
     }
 ]
