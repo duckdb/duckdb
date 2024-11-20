@@ -2,7 +2,6 @@
 # description: test table sampl[e errors
 # group: [sample]
 
-
 statement ok
 create table t1 as select range a from range(204800);
 
