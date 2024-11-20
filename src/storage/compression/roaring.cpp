@@ -477,19 +477,15 @@ public:
 			return;
 		}
 
-		// Adjust the runs
-		auto &current_run_idx = run_idx[null];
-		auto &last_run_idx = run_idx[last_is_null];
-
-		if (count && null != last_is_null && last_run_idx < MAX_RUN_IDX) {
-			auto &last_run = runs[last_is_null][last_run_idx];
+		// Adjust the run
+		if (count && (null != last_is_null) && !null && run_idx < MAX_RUN_IDX) {
+			auto &last_run = runs[run_idx];
 			// End the last run
 			last_run.length = (count - last_run.start) - 1;
-			last_run_idx++;
-		}
-		if (!count || (null != last_is_null && current_run_idx < MAX_RUN_IDX)) {
-			auto &current_run = runs[null][current_run_idx];
-			// Initialize the new run
+			run_idx++;
+		} else if (!count || ((null != last_is_null) && null && run_idx < MAX_RUN_IDX)) {
+			auto &current_run = runs[run_idx];
+			// Initialize a new run
 			current_run.start = count;
 		}
 
@@ -516,8 +512,8 @@ public:
 	void OverrideArray(data_ptr_t destination, bool nulls) {
 		arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
 	}
-	void OverrideRun(data_ptr_t destination, bool nulls) {
-		runs[nulls] = reinterpret_cast<RunContainerRLEPair *>(destination);
+	void OverrideRun(data_ptr_t destination) {
+		runs = reinterpret_cast<RunContainerRLEPair *>(destination);
 	}
 	void OverrideUncompressed(data_ptr_t destination) {
 		uncompressed = reinterpret_cast<validity_t *>(destination);
@@ -525,12 +521,11 @@ public:
 
 	void Finalize() {
 		D_ASSERT(!finalized);
-		auto &last_run_idx = run_idx[last_is_null];
-		if (count && last_run_idx < MAX_RUN_IDX) {
-			auto &last_run = runs[last_is_null][last_run_idx];
+		if (count && last_is_null && run_idx < MAX_RUN_IDX) {
+			auto &last_run = runs[run_idx];
 			// End the last run
 			last_run.length = (count - last_run.start);
-			last_run_idx++;
+			run_idx++;
 		}
 		finalized = true;
 	}
@@ -540,17 +535,15 @@ public:
 		const bool can_use_null_array = array_idx[NON_NULLS] < MAX_ARRAY_IDX;
 		const bool can_use_non_null_array = array_idx[NULLS] < MAX_ARRAY_IDX;
 
-		const bool can_use_null_run = run_idx[NON_NULLS] < MAX_RUN_IDX;
-		const bool can_use_non_null_run = run_idx[NULLS] < MAX_RUN_IDX;
+		const bool can_use_run = run_idx < MAX_RUN_IDX;
 
 		const bool can_use_array = can_use_null_array || can_use_non_null_array;
-		const bool can_use_run = can_use_null_run || can_use_non_null_run;
 		if (!can_use_array && !can_use_run) {
 			// Can not efficiently encode at all, write it uncompressed
 			return Result::BitsetContainer(count);
 		}
 		uint16_t lowest_array_cost = MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]);
-		uint16_t lowest_run_cost = MinValue<uint16_t>(run_idx[NON_NULLS], run_idx[NULLS]) * 2;
+		uint16_t lowest_run_cost = run_idx * 2;
 		uint16_t uncompressed_cost =
 		    (AlignValue<uint16_t, ValidityMask::BITS_PER_VALUE>(count) / ValidityMask::BITS_PER_VALUE) *
 		    sizeof(validity_t);
@@ -567,19 +560,14 @@ public:
 				return Result::ArrayContainer(array_idx[NON_NULLS], NON_NULLS);
 			}
 		} else {
-			if (run_idx[NULLS] <= run_idx[NON_NULLS]) {
-				return Result::RunContainer(run_idx[NULLS], NULLS);
-			} else {
-				return Result::RunContainer(run_idx[NON_NULLS], NON_NULLS);
-			}
+			return Result::RunContainer(run_idx, NULLS);
 		}
 	}
 
 	void Reset() {
 		count = 0;
 		null_count = 0;
-		run_idx[NON_NULLS] = 0;
-		run_idx[NULLS] = 0;
+		run_idx = 0;
 		array_idx[NON_NULLS] = 0;
 		array_idx[NULLS] = 0;
 		finalized = false;
@@ -589,9 +577,7 @@ public:
 		arrays[NULLS] = base_arrays[NULLS];
 		arrays[NON_NULLS] = base_arrays[NON_NULLS];
 
-		runs[NULLS] = base_runs[NULLS];
-		runs[NON_NULLS] = base_runs[NON_NULLS];
-
+		runs = base_runs;
 		uncompressed = nullptr;
 	}
 
@@ -602,15 +588,15 @@ public:
 	uint16_t null_count = 0;
 	bool last_is_null = false;
 
-	RunContainerRLEPair *runs[2];
+	RunContainerRLEPair *runs;
 	uint16_t *arrays[2];
 
-	//! The runs (for sequential nulls | sequential non-nulls)
-	RunContainerRLEPair base_runs[2][MAX_RUN_IDX];
+	//! The runs (for sequential nulls)
+	RunContainerRLEPair base_runs[MAX_RUN_IDX];
 	//! The indices (for nulls | non-nulls)
 	uint16_t base_arrays[2][MAX_ARRAY_IDX];
 
-	uint16_t run_idx[2];
+	uint16_t run_idx;
 	uint16_t array_idx[2];
 
 	validity_t *uncompressed = nullptr;
@@ -805,7 +791,7 @@ public:
 			container_state.OverrideUncompressed(data_ptr);
 			data_ptr += (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
 		} else if (metadata.IsRun()) {
-			container_state.OverrideRun(data_ptr, metadata.IsInverted());
+			container_state.OverrideRun(data_ptr);
 			data_ptr += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
 		} else {
 			container_state.OverrideArray(data_ptr, metadata.IsInverted());
@@ -960,7 +946,6 @@ public:
 	idx_t scanned_count = 0;
 };
 
-template <bool INVERTED>
 struct RunContainerScanState : public ContainerScanState {
 public:
 	RunContainerScanState(idx_t container_index, idx_t container_size, RunContainerRLEPair *runs, idx_t count)
@@ -974,79 +959,41 @@ public:
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 		// scanned.
 
-		if (INVERTED) {
-			do {
-				if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
-					// The run does not cover these entries, no action required
-					break;
-				}
-				idx_t result_idx = 0;
-				while (run_index < count && result_idx < to_scan) {
-					auto run = runs[run_index];
-					// Either we are already inside a run, then 'start_of_run' will be scanned_count
-					// or we're skipping values until the run begins
-					auto start_of_run = MaxValue<idx_t>(MinValue<idx_t>(run.start, scanned_count + to_scan),
-					                                    scanned_count + result_idx);
-					result_idx = start_of_run - scanned_count;
+		do {
+			if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
+				// The run does not cover these entries, no action required
+				break;
+			}
+			idx_t result_idx = 0;
+			while (run_index < count && result_idx < to_scan) {
+				auto run = runs[run_index];
+				// Either we are already inside a run, then 'start_of_run' will be scanned_count
+				// or we're skipping values until the run begins
+				auto start_of_run =
+				    MaxValue<idx_t>(MinValue<idx_t>(run.start, scanned_count + to_scan), scanned_count + result_idx);
+				result_idx = start_of_run - scanned_count;
 
-					// How much of the run are we covering?
-					idx_t run_end = run.start + 1 + run.length;
-					auto run_or_scan_end = MinValue<idx_t>(run_end, scanned_count + to_scan);
+				// How much of the run are we covering?
+				idx_t run_end = run.start + 1 + run.length;
+				auto run_or_scan_end = MinValue<idx_t>(run_end, scanned_count + to_scan);
 
-					// Process the run
-					D_ASSERT(run_or_scan_end >= start_of_run);
-					if (run_or_scan_end > start_of_run) {
-						idx_t amount = run_or_scan_end - start_of_run;
-						idx_t start = result_offset + result_idx;
-						idx_t end = start + amount;
-						SetInvalidRange(result_mask, start, end);
-					}
-
-					result_idx += run_or_scan_end - start_of_run;
-					if (scanned_count + result_idx == run_end) {
-						// Fully processed the current run
-						run_index++;
-					}
-				}
-			} while (false);
-			scanned_count += to_scan;
-		} else {
-			do {
-				if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
-					// The run does not cover these entries
-					// set all the bits to 0
-					idx_t start = result_offset;
-					idx_t end = start + to_scan;
+				// Process the run
+				D_ASSERT(run_or_scan_end >= start_of_run);
+				if (run_or_scan_end > start_of_run) {
+					idx_t amount = run_or_scan_end - start_of_run;
+					idx_t start = result_offset + result_idx;
+					idx_t end = start + amount;
 					SetInvalidRange(result_mask, start, end);
-					break;
 				}
 
-				idx_t i = 0;
-				while (i < to_scan) {
-					// Determine the next valid position within the scan range, if available
-					idx_t valid_pos = (run_index < count) ? runs[run_index].start : scanned_count + to_scan;
-					valid_pos = MaxValue<idx_t>(valid_pos, scanned_count);
-					idx_t valid_start = MinValue<idx_t>(valid_pos - scanned_count, to_scan);
-
-					if (i < valid_start) {
-						// These bits are all set to 0
-						idx_t start = result_offset + i;
-						idx_t end = start + (valid_start - i);
-						SetInvalidRange(result_mask, start, end);
-						i = valid_start;
-					}
-
-					auto end_of_run = run_index < count ? runs[run_index].start + 1 + runs[run_index].length
-					                                    : scanned_count + to_scan;
-					auto end_of_run_or_scan = MinValue<idx_t>(scanned_count + to_scan, end_of_run);
-					i = end_of_run_or_scan - scanned_count;
-					if (run_index < count && scanned_count + i == end_of_run) {
-						run_index++;
-					}
+				result_idx += run_or_scan_end - start_of_run;
+				if (scanned_count + result_idx == run_end) {
+					// Fully processed the current run
+					run_index++;
 				}
-			} while (false);
-			scanned_count += to_scan;
-		}
+			}
+		} while (false);
+		scanned_count += to_scan;
 	}
 
 	void Skip(idx_t to_skip) override {
@@ -1293,15 +1240,10 @@ public:
 			current_container = make_uniq<BitsetContainerScanState>(container_index, container_size,
 			                                                        reinterpret_cast<validity_t *>(data_ptr));
 		} else if (metadata.IsRun()) {
-			if (metadata.IsInverted()) {
-				current_container = make_uniq<RunContainerScanState<NULLS>>(
-				    container_index, container_size, reinterpret_cast<RunContainerRLEPair *>(data_ptr),
-				    metadata.NumberOfRuns());
-			} else {
-				current_container = make_uniq<RunContainerScanState<NON_NULLS>>(
-				    container_index, container_size, reinterpret_cast<RunContainerRLEPair *>(data_ptr),
-				    metadata.NumberOfRuns());
-			}
+			D_ASSERT(metadata.IsInverted());
+			current_container = make_uniq<RunContainerScanState>(container_index, container_size,
+			                                                     reinterpret_cast<RunContainerRLEPair *>(data_ptr),
+			                                                     metadata.NumberOfRuns());
 		} else {
 			if (metadata.IsInverted()) {
 				current_container = make_uniq<ArrayContainerScanState<NULLS>>(
