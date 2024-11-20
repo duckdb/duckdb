@@ -23,9 +23,6 @@ static constexpr uint16_t MAX_RUN_IDX = 63;
 static constexpr uint16_t MAX_ARRAY_IDX = 127;
 
 static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
-	if (start == end) {
-		return;
-	}
 	D_ASSERT(end > start);
 	result.EnsureWritable();
 	auto result_data = (validity_t *)result.GetData();
@@ -993,10 +990,12 @@ public:
 
 					// Process the run
 					D_ASSERT(run_or_scan_end >= start_of_run);
-					idx_t amount = run_or_scan_end - start_of_run;
-					idx_t start = result_offset + result_idx;
-					idx_t end = start + amount;
-					SetInvalidRange(result_mask, start, end);
+					if (run_or_scan_end > start_of_run) {
+						idx_t amount = run_or_scan_end - start_of_run;
+						idx_t start = result_offset + result_idx;
+						idx_t end = start + amount;
+						SetInvalidRange(result_mask, start, end);
+					}
 
 					result_idx += run_or_scan_end - start_of_run;
 					if (scanned_count + result_idx == run_end) {
