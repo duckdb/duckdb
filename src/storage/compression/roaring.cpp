@@ -27,7 +27,17 @@ static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	result.EnsureWritable();
 	auto result_data = (validity_t *)result.GetData();
 
-	if ((start % ValidityMask::BITS_PER_VALUE) != 0) {
+#ifdef DEBUG
+	ValidityMask copy_for_verification(result.Capacity());
+	copy_for_verification.EnsureWritable();
+	for (idx_t i = 0;
+	     i < AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(result.Capacity()) / ValidityMask::BITS_PER_VALUE; i++) {
+		copy_for_verification.GetData()[i] = result.GetData()[i];
+	}
+#endif
+	idx_t index = start;
+
+	if ((index % ValidityMask::BITS_PER_VALUE) != 0) {
 		// Adjust the high bits of the first entry
 
 		// +======================================+
@@ -36,13 +46,13 @@ static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 		//
 		// 'x': bits to set to 0 in the result
 
-		idx_t right_bits = start % ValidityMask::BITS_PER_VALUE;
+		idx_t right_bits = index % ValidityMask::BITS_PER_VALUE;
 		idx_t bits_to_set = ValidityMask::BITS_PER_VALUE - right_bits;
 		idx_t left_bits = 0;
-		if (start + bits_to_set > end) {
+		if (index + bits_to_set > end) {
 			// Limit the amount of bits to set
-			left_bits = (start + bits_to_set) - end;
-			bits_to_set = end - start;
+			left_bits = (index + bits_to_set) - end;
+			bits_to_set = end - index;
 		}
 
 		// Prepare the mask
@@ -52,14 +62,14 @@ static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 			mask |= ValidityUncompressed::UPPER_MASKS[left_bits];
 		}
 
-		idx_t entry_idx = start / ValidityMask::BITS_PER_VALUE;
-		start += bits_to_set;
+		idx_t entry_idx = index / ValidityMask::BITS_PER_VALUE;
+		index += bits_to_set;
 		result_data[entry_idx] &= mask;
 	}
 
-	idx_t remaining_bits = end - start;
+	idx_t remaining_bits = end - index;
 	idx_t full_entries = remaining_bits / ValidityMask::BITS_PER_VALUE;
-	idx_t entry_idx = start / ValidityMask::BITS_PER_VALUE;
+	idx_t entry_idx = index / ValidityMask::BITS_PER_VALUE;
 	// Set all the entries that are fully covered by the range to 0
 	for (idx_t i = 0; i < full_entries; i++) {
 		result_data[entry_idx + i] = (validity_t)0;
@@ -80,6 +90,18 @@ static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 		idx_t entry_idx = end / ValidityMask::BITS_PER_VALUE;
 		result_data[entry_idx] &= mask;
 	}
+
+#ifdef DEBUG
+	D_ASSERT(end <= result.Capacity());
+	for (idx_t i = 0; i < result.Capacity(); i++) {
+		if (i >= start && i < end) {
+			D_ASSERT(!result.RowIsValidUnsafe(i));
+		} else {
+			// Ensure no others bits are touched by this method
+			D_ASSERT(copy_for_verification.RowIsValidUnsafe(i) == result.RowIsValidUnsafe(i));
+		}
+	}
+#endif
 }
 
 struct ContainerMetadata {
