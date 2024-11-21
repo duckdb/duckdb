@@ -17,6 +17,14 @@ CREATE TABLE test (a BIGINT);
 
 statement ok
 INSERT INTO test SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then null else 1337 end FROM range(0,10000) tbl(i);
+# runs:
+# (0,350)
+# (451,512)
+# (513,862)
+# (963,1024)
+# (1025,1374)
+# (1475,1536)
+# (1537,1886)
 
 statement ok
 checkpoint

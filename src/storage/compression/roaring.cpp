@@ -19,8 +19,12 @@ namespace roaring {
 static constexpr idx_t ROARING_CONTAINER_SIZE = 2048;
 static constexpr bool NULLS = true;
 static constexpr bool NON_NULLS = false;
-static constexpr uint16_t MAX_RUN_IDX = 63;
-static constexpr uint16_t MAX_ARRAY_IDX = 127;
+static constexpr uint16_t UNCOMPRESSED_SIZE = (ROARING_CONTAINER_SIZE / 8);
+static constexpr uint16_t MAX_RUN_IDX = (UNCOMPRESSED_SIZE - 8) / (sizeof(uint8_t) * 2);
+static constexpr uint16_t MAX_ARRAY_IDX = (UNCOMPRESSED_SIZE - 8) / (sizeof(uint8_t) * 1);
+static constexpr uint16_t COMPRESSED_ARRAY_THRESHOLD = 8;
+static constexpr uint16_t COMPRESSED_RUN_THRESHOLD = 4;
+static constexpr uint16_t COMPRESSED_SEGMENT_SIZE = (ROARING_CONTAINER_SIZE / 8);
 
 // Set all the bits from start (inclusive) to end (exclusive) to 0
 static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
@@ -479,20 +483,35 @@ public:
 
 		// Adjust the run
 		if (count && (null != last_is_null) && !null && run_idx < MAX_RUN_IDX) {
-			auto &last_run = runs[run_idx];
-			// End the last run
-			last_run.length = (count - last_run.start) - 1;
+			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+				auto &last_run = runs[run_idx];
+				// End the last run
+				last_run.length = (count - last_run.start) - 1;
+			}
+			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
+			run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 			run_idx++;
-		} else if (null && (!count || ((null != last_is_null) && run_idx < MAX_RUN_IDX))) {
-			auto &current_run = runs[run_idx];
-			// Initialize a new run
-			current_run.start = count;
+		} else if (null && (!count || null != last_is_null) && run_idx < MAX_RUN_IDX) {
+			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+				auto &current_run = runs[run_idx];
+				// Initialize a new run
+				current_run.start = count;
+			}
+			compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
+			run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 		}
 
 		// Add to the array
 		auto &current_array_idx = array_idx[null];
 		if (current_array_idx < MAX_ARRAY_IDX) {
 			if (current_array_idx + amount <= MAX_ARRAY_IDX) {
+				for (uint16_t i = 0; i < amount; i++) {
+					compressed_arrays[null][current_array_idx + i] =
+					    static_cast<uint8_t>((count + i) % COMPRESSED_SEGMENT_SIZE);
+					array_counts[null][(count + i) / COMPRESSED_SEGMENT_SIZE]++;
+				}
+			}
+			if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
 				for (uint16_t i = 0; i < amount; i++) {
 					arrays[null][current_array_idx + i] = count + i;
 				}
@@ -509,12 +528,28 @@ public:
 		return count == ROARING_CONTAINER_SIZE;
 	}
 
-	void OverrideArray(data_ptr_t destination, bool nulls) {
-		arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
+	void OverrideArray(data_ptr_t destination, bool nulls, idx_t count) {
+		if (count >= COMPRESSED_ARRAY_THRESHOLD) {
+			memset(destination, 0, sizeof(uint8_t) * 8);
+			array_counts[nulls] = reinterpret_cast<uint8_t *>(destination);
+			destination += sizeof(uint8_t) * 8;
+			compressed_arrays[nulls] = reinterpret_cast<uint8_t *>(destination);
+		} else {
+			arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
+		}
 	}
-	void OverrideRun(data_ptr_t destination) {
-		runs = reinterpret_cast<RunContainerRLEPair *>(destination);
+
+	void OverrideRun(data_ptr_t destination, idx_t count) {
+		if (count >= COMPRESSED_RUN_THRESHOLD) {
+			memset(destination, 0, sizeof(uint8_t) * 8);
+			run_counts = reinterpret_cast<uint8_t *>(destination);
+			destination += sizeof(uint8_t) * 8;
+			compressed_runs = reinterpret_cast<uint8_t *>(destination);
+		} else {
+			runs = reinterpret_cast<RunContainerRLEPair *>(destination);
+		}
 	}
+
 	void OverrideUncompressed(data_ptr_t destination) {
 		uncompressed = reinterpret_cast<validity_t *>(destination);
 	}
@@ -522,9 +557,15 @@ public:
 	void Finalize() {
 		D_ASSERT(!finalized);
 		if (count && last_is_null && run_idx < MAX_RUN_IDX) {
-			auto &last_run = runs[run_idx];
-			// End the last run
-			last_run.length = (count - last_run.start);
+			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+				auto &last_run = runs[run_idx];
+				// End the last run
+				last_run.length = (count - last_run.start);
+			}
+			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
+			if (count != ROARING_CONTAINER_SIZE) {
+				run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
+			}
 			run_idx++;
 		}
 		finalized = true;
@@ -539,16 +580,21 @@ public:
 
 		const bool can_use_array = can_use_null_array || can_use_non_null_array;
 		if (!can_use_array && !can_use_run) {
-			// Can not efficiently encode at all, write it uncompressed
+			// Can not efficiently encode at all, write it as bitset
 			return Result::BitsetContainer(count);
 		}
-		uint16_t lowest_array_cost = MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]) * sizeof(uint16_t);
-		uint16_t lowest_run_cost = run_idx * sizeof(uint32_t);
-		uint16_t uncompressed_cost =
+		uint16_t null_array_cost =
+		    array_idx[NULLS] < COMPRESSED_ARRAY_THRESHOLD ? array_idx[NULLS] * 2 : 8 + array_idx[NULLS];
+		uint16_t non_null_array_cost =
+		    array_idx[NON_NULLS] < COMPRESSED_ARRAY_THRESHOLD ? array_idx[NON_NULLS] * 2 : 8 + array_idx[NON_NULLS];
+
+		uint16_t lowest_array_cost = MinValue<uint16_t>(null_array_cost, non_null_array_cost);
+		uint16_t lowest_run_cost = run_idx < COMPRESSED_RUN_THRESHOLD ? run_idx * 4 : 8 + (run_idx * 2);
+		uint16_t bitset_cost =
 		    (AlignValue<uint16_t, ValidityMask::BITS_PER_VALUE>(count) / ValidityMask::BITS_PER_VALUE) *
 		    sizeof(validity_t);
-		if (MinValue<uint16_t>(lowest_array_cost, lowest_run_cost) > uncompressed_cost) {
-			// The amount of values is too small, better off using uncompressed
+		if (MinValue<uint16_t>(lowest_array_cost, lowest_run_cost) > bitset_cost) {
+			// The amount of values is too small, better off using bitset
 			// we can detect this at decompression because we know how many values are left
 			return Result::BitsetContainer(count);
 		}
@@ -576,8 +622,20 @@ public:
 		// Reset the arrays + runs
 		arrays[NULLS] = base_arrays[NULLS];
 		arrays[NON_NULLS] = base_arrays[NON_NULLS];
-
 		runs = base_runs;
+
+		compressed_arrays[NULLS] = base_compressed_arrays[NULLS];
+		compressed_arrays[NON_NULLS] = base_compressed_arrays[NON_NULLS];
+		compressed_runs = base_compressed_runs;
+
+		array_counts[NULLS] = base_array_counts[NULLS];
+		array_counts[NON_NULLS] = base_array_counts[NON_NULLS];
+		run_counts = base_run_counts;
+
+		memset(array_counts[NULLS], 0, sizeof(uint8_t) * 8);
+		memset(array_counts[NON_NULLS], 0, sizeof(uint8_t) * 8);
+		memset(run_counts, 0, sizeof(uint8_t) * 8);
+
 		uncompressed = nullptr;
 	}
 
@@ -589,15 +647,25 @@ public:
 	bool last_is_null = false;
 
 	RunContainerRLEPair *runs;
+	uint8_t *compressed_runs;
+	uint8_t *compressed_arrays[2];
 	uint16_t *arrays[2];
 
 	//! The runs (for sequential nulls)
-	RunContainerRLEPair base_runs[MAX_RUN_IDX];
+	RunContainerRLEPair base_runs[COMPRESSED_RUN_THRESHOLD];
 	//! The indices (for nulls | non-nulls)
-	uint16_t base_arrays[2][MAX_ARRAY_IDX];
+	uint16_t base_arrays[2][COMPRESSED_ARRAY_THRESHOLD];
 
 	uint16_t run_idx;
 	uint16_t array_idx[2];
+
+	uint8_t *array_counts[2];
+	uint8_t *run_counts;
+
+	uint8_t base_compressed_arrays[2][MAX_ARRAY_IDX];
+	uint8_t base_compressed_runs[MAX_RUN_IDX * 2];
+	uint8_t base_array_counts[2][8];
+	uint8_t base_run_counts[8];
 
 	validity_t *uncompressed = nullptr;
 	//! Whether the state has been finalized
@@ -769,7 +837,7 @@ public:
 
 	void InitializeContainer() {
 		if (count == analyze_state.count) {
-			// No more vectors left
+			// No more containers left
 			return;
 		}
 		auto container_index = GetContainerIndex();
@@ -791,10 +859,10 @@ public:
 			container_state.OverrideUncompressed(data_ptr);
 			data_ptr += (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
 		} else if (metadata.IsRun()) {
-			container_state.OverrideRun(data_ptr);
+			container_state.OverrideRun(data_ptr, metadata.NumberOfRuns());
 			data_ptr += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
 		} else {
-			container_state.OverrideArray(data_ptr, metadata.IsInverted());
+			container_state.OverrideArray(data_ptr, metadata.IsInverted(), metadata.Cardinality());
 			data_ptr += sizeof(uint16_t) * metadata.Cardinality();
 		}
 		metadata_collection.AddMetadata(metadata);
@@ -947,28 +1015,83 @@ public:
 	idx_t scanned_count = 0;
 };
 
+struct ContainerSegmentScan {
+public:
+	ContainerSegmentScan(data_ptr_t data) : segments(reinterpret_cast<uint8_t *>(data)), index(0), count(0) {
+	}
+	ContainerSegmentScan(const ContainerSegmentScan &other) = delete;
+	ContainerSegmentScan(ContainerSegmentScan &&other) = delete;
+	ContainerSegmentScan &operator=(const ContainerSegmentScan &other) = delete;
+	ContainerSegmentScan &operator=(ContainerSegmentScan &&other) = delete;
+
+public:
+	// Returns the base of the current segment, forwarding the index if the segment is depleted of values
+	uint16_t operator++(int) {
+		while (index < 8 && count >= segments[index]) {
+			count = 0;
+			index++;
+		}
+		count++;
+
+		// index == 8 is allowed for runs, as the last run could end at ROARING_CONTAINER_SIZE
+		D_ASSERT(index <= 8);
+		if (index < 8) {
+			D_ASSERT(segments[index] != 0);
+		}
+		uint16_t base = static_cast<uint16_t>(index) * COMPRESSED_SEGMENT_SIZE;
+		return base;
+	}
+
+private:
+	//! The 8 unsigned bytes indicating for each segment (256 bytes) of the container how many values are in the segment
+	uint8_t *segments;
+	uint8_t index;
+	uint8_t count;
+};
+
+template <bool COMPRESSED>
 struct RunContainerScanState : public ContainerScanState {
 public:
-	RunContainerScanState(idx_t container_index, idx_t container_size, RunContainerRLEPair *runs, idx_t count)
-	    : ContainerScanState(container_index, container_size), runs(runs), count(count) {
+	RunContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data_p, idx_t count)
+	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
+		if (COMPRESSED) {
+			D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
+			data += (sizeof(uint8_t) * 8);
+		}
 	}
 
 public:
+	void LoadNextRun() {
+		if (run_index >= count) {
+			finished = true;
+			return;
+		}
+		if (COMPRESSED) {
+			uint16_t start = segment++;
+			start += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 0];
+
+			uint16_t end = segment++;
+			end += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 1];
+
+			D_ASSERT(end > start);
+			run = RunContainerRLEPair {start, static_cast<uint16_t>(end - 1 - start)};
+		} else {
+			run = reinterpret_cast<RunContainerRLEPair *>(data)[run_index];
+		}
+		run_index++;
+	}
+
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
 		auto &result_mask = FlatVector::Validity(result);
 
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 		// scanned.
 
-		if (run_index >= count || runs[run_index].start > scanned_count + to_scan) {
-			// The run does not cover these entries, no action required
-			scanned_count += to_scan;
-			return;
-		}
-
 		idx_t result_idx = 0;
-		while (run_index < count && result_idx < to_scan) {
-			auto run = runs[run_index];
+		if (!run_index) {
+			LoadNextRun();
+		}
+		while (!finished && result_idx < to_scan) {
 			// Either we are already inside a run, then 'start_of_run' will be scanned_count
 			// or we're skipping values until the run begins
 			auto start_of_run =
@@ -991,7 +1114,7 @@ public:
 			result_idx += run_or_scan_end - start_of_run;
 			if (scanned_count + result_idx == run_end) {
 				// Fully processed the current run
-				run_index++;
+				LoadNextRun();
 			}
 		}
 		scanned_count += to_scan;
@@ -999,11 +1122,14 @@ public:
 
 	void Skip(idx_t to_skip) override {
 		idx_t end = scanned_count + to_skip;
-		while (scanned_count < end && run_index < count) {
-			idx_t run_end = runs[run_index].start + 1 + runs[run_index].length;
+		if (!run_index) {
+			LoadNextRun();
+		}
+		while (scanned_count < end && !finished) {
+			idx_t run_end = run.start + 1 + run.length;
 			scanned_count = MinValue<idx_t>(run_end, end);
 			if (scanned_count == run_end) {
-				run_index++;
+				LoadNextRun();
 			}
 		}
 		// In case run_index has already reached count
@@ -1012,28 +1138,67 @@ public:
 
 	void Verify() const override {
 #ifdef DEBUG
-		idx_t index = 0;
-		for (idx_t i = 0; i < count; i++) {
-			D_ASSERT(runs[i].start >= index);
-			index = runs[i].start + 1 + runs[i].length;
+		uint16_t index = 0;
+		if (COMPRESSED) {
+			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * 8));
+			for (idx_t i = 0; i < count; i++) {
+				// Get the start index of the run
+				uint16_t start = verify_segment++;
+				start += reinterpret_cast<uint8_t *>(data)[(i * 2) + 0];
+
+				// Get the end index of the run
+				uint16_t end = verify_segment++;
+				end += reinterpret_cast<uint8_t *>(data)[(i * 2) + 1];
+
+				D_ASSERT(!i || start >= index);
+				D_ASSERT(end > start);
+				index = end;
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				auto run = reinterpret_cast<RunContainerRLEPair *>(data)[i];
+				D_ASSERT(run.start >= index);
+				index = run.start + 1 + run.length;
+			}
 		}
 #endif
 	}
 
 public:
-	RunContainerRLEPair *runs;
+	ContainerSegmentScan segment;
+	RunContainerRLEPair run;
+	data_ptr_t data;
 	idx_t count;
 	idx_t run_index = 0;
+	bool finished = false;
 };
 
-template <bool INVERTED>
+template <bool INVERTED, bool COMPRESSED>
 struct ArrayContainerScanState : public ContainerScanState {
 public:
-	ArrayContainerScanState(idx_t container_index, idx_t container_size, uint16_t *array, idx_t count)
-	    : ContainerScanState(container_index, container_size), array(array), count(count) {
+	ArrayContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data_p, idx_t count)
+	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
+		if (COMPRESSED) {
+			D_ASSERT(count >= COMPRESSED_ARRAY_THRESHOLD);
+			data += (sizeof(uint8_t) * 8);
+		}
 	}
 
 public:
+	void LoadNextValue() {
+		if (array_index >= count) {
+			finished = true;
+			return;
+		}
+		if (COMPRESSED) {
+			value = segment++;
+			value += reinterpret_cast<uint8_t *>(data)[array_index];
+		} else {
+			value = reinterpret_cast<uint16_t *>(data)[array_index];
+		}
+		array_index++;
+	}
+
 	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
 		auto &result_mask = FlatVector::Validity(result);
 
@@ -1046,28 +1211,36 @@ public:
 			SetInvalidRange(result_mask, result_offset, result_offset + to_scan);
 		}
 
+		if (!array_index) {
+			LoadNextValue();
+		}
 		// At least one of the entries to scan is set
-		for (; array_index < count; array_index++) {
-			if (array[array_index] >= scanned_count + to_scan) {
+		while (!finished) {
+			if (value >= scanned_count + to_scan) {
 				break;
 			}
-			if (array[array_index] < scanned_count) {
+			if (value < scanned_count) {
+				LoadNextValue();
 				continue;
 			}
-			auto index = array[array_index] - scanned_count;
+			auto index = value - scanned_count;
 			if (INVERTED) {
 				result_mask.SetInvalid(result_offset + index);
 			} else {
 				result_mask.SetValid(result_offset + index);
 			}
+			LoadNextValue();
 		}
 		scanned_count += to_scan;
 	}
 
 	void Skip(idx_t to_skip) override {
 		idx_t end = scanned_count + to_skip;
-		while (array_index < count && array[array_index] < end) {
-			array_index++;
+		if (!array_index) {
+			LoadNextValue();
+		}
+		while (!finished && value < end) {
+			LoadNextValue();
 		}
 		// In case array_index has already reached count
 		scanned_count = end;
@@ -1075,16 +1248,32 @@ public:
 
 	void Verify() const override {
 #ifdef DEBUG
-		idx_t index = 0;
-		for (idx_t i = 0; i < count; i++) {
-			D_ASSERT(!i || array[i] > index);
-			index = array[i];
+		uint16_t index = 0;
+		if (COMPRESSED) {
+			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * 8));
+			for (uint16_t i = 0; i < count; i++) {
+				// Get the value
+				uint16_t new_index = verify_segment++;
+				new_index += reinterpret_cast<uint8_t *>(data)[i];
+
+				D_ASSERT(!i || new_index > index);
+				index = new_index;
+			}
+		} else {
+			auto array = reinterpret_cast<uint16_t *>(data);
+			for (uint16_t i = 0; i < count; i++) {
+				D_ASSERT(!i || array[i] > index);
+				index = array[i];
+			}
 		}
 #endif
 	}
 
 public:
-	uint16_t *array;
+	ContainerSegmentScan segment;
+	uint16_t value;
+	data_ptr_t data;
+	bool finished = false;
 	const idx_t count;
 	idx_t array_index = 0;
 };
@@ -1204,16 +1393,32 @@ public:
 			                                                        reinterpret_cast<validity_t *>(data_ptr));
 		} else if (metadata.IsRun()) {
 			D_ASSERT(metadata.IsInverted());
-			current_container = make_uniq<RunContainerScanState>(container_index, container_size,
-			                                                     reinterpret_cast<RunContainerRLEPair *>(data_ptr),
-			                                                     metadata.NumberOfRuns());
-		} else {
-			if (metadata.IsInverted()) {
-				current_container = make_uniq<ArrayContainerScanState<NULLS>>(
-				    container_index, container_size, reinterpret_cast<uint16_t *>(data_ptr), metadata.Cardinality());
+			auto number_of_runs = metadata.NumberOfRuns();
+			if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
+				current_container =
+				    make_uniq<RunContainerScanState<true>>(container_index, container_size, data_ptr, number_of_runs);
 			} else {
-				current_container = make_uniq<ArrayContainerScanState<NON_NULLS>>(
-				    container_index, container_size, reinterpret_cast<uint16_t *>(data_ptr), metadata.Cardinality());
+				current_container =
+				    make_uniq<RunContainerScanState<false>>(container_index, container_size, data_ptr, number_of_runs);
+			}
+		} else {
+			auto cardinality = metadata.Cardinality();
+			if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
+				if (metadata.IsInverted()) {
+					current_container = make_uniq<ArrayContainerScanState<NULLS, true>>(container_index, container_size,
+					                                                                    data_ptr, cardinality);
+				} else {
+					current_container = make_uniq<ArrayContainerScanState<NON_NULLS, true>>(
+					    container_index, container_size, data_ptr, cardinality);
+				}
+			} else {
+				if (metadata.IsInverted()) {
+					current_container = make_uniq<ArrayContainerScanState<NULLS, false>>(
+					    container_index, container_size, data_ptr, cardinality);
+				} else {
+					current_container = make_uniq<ArrayContainerScanState<NON_NULLS, false>>(
+					    container_index, container_size, data_ptr, cardinality);
+				}
 			}
 		}
 
@@ -1242,8 +1447,8 @@ public:
 		idx_t scanned = 0;
 		while (remaining) {
 			idx_t internal_offset;
-			idx_t vector_idx = GetContainerIndex(start_idx + scanned, internal_offset);
-			auto &scan_state = LoadContainer(vector_idx, internal_offset);
+			idx_t container_idx = GetContainerIndex(start_idx + scanned, internal_offset);
+			auto &scan_state = LoadContainer(container_idx, internal_offset);
 			idx_t remaining_in_container = scan_state.container_size - scan_state.scanned_count;
 			idx_t to_scan = MinValue<idx_t>(remaining, remaining_in_container);
 			ScanInternal(scan_state, to_scan, result, offset + scanned);
@@ -1300,8 +1505,8 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 	RoaringScanState scan_state(segment);
 
 	idx_t internal_offset;
-	idx_t vector_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
-	auto &container_state = scan_state.LoadContainer(vector_idx, internal_offset);
+	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
+	auto &container_state = scan_state.LoadContainer(container_idx, internal_offset);
 
 	scan_state.ScanInternal(container_state, 1, result, result_idx);
 }
