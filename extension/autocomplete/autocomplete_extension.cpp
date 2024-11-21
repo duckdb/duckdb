@@ -1,6 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 
 #include "autocomplete_extension.hpp"
+#include "matcher.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -32,20 +33,10 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-struct AutoCompleteCandidate {
-	explicit AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0)
-	    : candidate(std::move(candidate_p)), score_bonus(score_bonus) {
-	}
-
-	string candidate;
-	//! The higher the score bonus, the more likely this candidate will be chosen
-	int32_t score_bonus;
-};
-
 static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix,
-                                         const unordered_set<string> &extra_keywords, bool add_quotes = false) {
+                                         const vector<AutoCompleteCandidate> &extra_keywords, bool add_quotes = false) {
 	for (auto &kw : extra_keywords) {
-		available_suggestions.emplace_back(std::move(kw));
+		available_suggestions.push_back(kw);
 	}
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(available_suggestions.size());
@@ -67,7 +58,7 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 	auto results = StringUtil::TopNStrings(scores, 20, 999);
 	if (add_quotes) {
 		for (auto &result : results) {
-			if (extra_keywords.find(result) == extra_keywords.end()) {
+			if (!KeywordHelper::IsKeyword(result)) {
 				result = KeywordHelper::WriteOptionallyQuoted(result, '"', true);
 			} else {
 				result = result + " ";
@@ -219,8 +210,6 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	return result;
 }
 
-enum class SuggestionState : uint8_t { SUGGEST_KEYWORD, SUGGEST_TABLE_NAME, SUGGEST_COLUMN_NAME, SUGGEST_FILE_NAME };
-
 static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
 	// for auto-completion, we consider 4 scenarios
 	// * there is nothing in the buffer, or only one word -> suggest a keyword
@@ -228,17 +217,18 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	// * the previous keyword is FROM, INSERT, UPDATE ,... -> select a table name
 	// * we are in a string constant -> suggest a filename
 	// figure out which state we are in by doing a run through the query
+	// matcher->MatchWord(...);
 	idx_t pos = 0;
 	idx_t last_pos = 0;
 	idx_t pos_offset = 0;
 	bool seen_word = false;
-	unordered_set<string> suggested_keywords;
 	SuggestionState suggest_state = SuggestionState::SUGGEST_KEYWORD;
+	auto suggested_keywords = SuggestKeyword(context);
 	case_insensitive_set_t column_name_keywords = {"SELECT", "WHERE", "BY",    "HAVING", "QUALIFY",
 	                                               "LIMIT",  "SET",   "USING", "ON"};
-	case_insensitive_set_t table_name_keywords = {"FROM",  "JOIN", "INSERT", "UPDATE",  "DELETE",
-	                                              "ALTER", "DROP", "CALL",   "DESCRIBE"};
-	case_insensitive_map_t<unordered_set<string>> next_keyword_map;
+	case_insensitive_set_t table_name_keywords = {"FROM", "JOIN", "INSERT",   "UPDATE", "DELETE", "ALTER",
+	                                              "DROP", "CALL", "DESCRIBE", "TABLE",  "VIEW"};
+	case_insensitive_map_t<vector<AutoCompleteCandidate>> next_keyword_map;
 	next_keyword_map["SELECT"] = {"FROM",    "WHERE",  "GROUP",  "HAVING", "WINDOW", "ORDER",     "LIMIT",
 	                              "QUALIFY", "SAMPLE", "VALUES", "UNION",  "EXCEPT", "INTERSECT", "DISTINCT"};
 	next_keyword_map["WITH"] = {"RECURSIVE", "SELECT", "AS"};
@@ -248,6 +238,11 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	next_keyword_map["CREATE"] = {"TABLE", "SCHEMA", "VIEW", "SEQUENCE", "MACRO", "FUNCTION", "SECRET", "TYPE"};
 	next_keyword_map["DROP"] = next_keyword_map["CREATE"];
 	next_keyword_map["ALTER"] = {"TABLE", "VIEW", "ADD", "DROP", "COLUMN", "SET", "TYPE", "DEFAULT", "DATA", "RENAME"};
+	next_keyword_map["SEQUENCE"] = {};
+	next_keyword_map["MACRO"] = {};
+	next_keyword_map["FUNCTION"] = {};
+	next_keyword_map["SECRET"] = {};
+	next_keyword_map["TYPE"] = {};
 
 regular_scan:
 	for (; pos < sql.size(); pos++) {
@@ -267,7 +262,7 @@ regular_scan:
 		if (sql[pos] == ';') {
 			// semicolon: restart suggestion flow
 			suggest_state = SuggestionState::SUGGEST_KEYWORD;
-			suggested_keywords.clear();
+			suggested_keywords = SuggestKeyword(context);
 			last_pos = pos + 1;
 			continue;
 		}
@@ -326,7 +321,12 @@ process_word : {
 	if (entry != next_keyword_map.end()) {
 		suggested_keywords = entry->second;
 	} else {
-		suggested_keywords.erase(next_word);
+		for (auto it = suggested_keywords.begin(); it != suggested_keywords.end(); it++) {
+			if (StringUtil::CIEquals(it->candidate, next_word)) {
+				suggested_keywords.erase(it);
+				break;
+			}
+		}
 	}
 	if (std::all_of(next_word.begin(), next_word.end(), ::isdigit)) {
 		// Numbers are OK
@@ -348,7 +348,7 @@ standard_suggestion:
 	vector<string> suggestions;
 	switch (suggest_state) {
 	case SuggestionState::SUGGEST_KEYWORD:
-		suggestions = ComputeSuggestions(SuggestKeyword(context), last_word, suggested_keywords);
+		suggestions = ComputeSuggestions(suggested_keywords, last_word, {});
 		break;
 	case SuggestionState::SUGGEST_TABLE_NAME:
 		suggestions = ComputeSuggestions(SuggestTableName(context), last_word, suggested_keywords, true);
@@ -358,8 +358,7 @@ standard_suggestion:
 		break;
 	case SuggestionState::SUGGEST_FILE_NAME:
 		last_pos = pos;
-		suggestions =
-		    ComputeSuggestions(SuggestFileName(context, last_word, last_pos), last_word, unordered_set<string>());
+		suggestions = ComputeSuggestions(SuggestFileName(context, last_word, last_pos), last_word, {});
 		break;
 	default:
 		throw InternalException("Unrecognized suggestion state");

@@ -4,6 +4,27 @@
 
 require autocomplete
 
+# CREATE
+query II
+FROM sql_auto_complete('CR') LIMIT 1;
+----
+CREATE 	0
+
+query II
+FROM sql_auto_complete('CREATE TA') LIMIT 1;
+----
+TABLE	7
+
+query II
+FROM sql_auto_complete('create ta') LIMIT 1;
+----
+TABLE	7
+
+# nothing to suggest after CREATE FUNCTION
+query II
+FROM sql_auto_complete('CREATE FUNCTION abcd') LIMIT 1;
+----
+
 statement error
 FROM sql_auto_complete(NULL);
 ----
