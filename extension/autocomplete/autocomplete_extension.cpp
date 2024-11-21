@@ -1,7 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 
 #include "autocomplete_extension.hpp"
-#include "matcher.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -14,6 +14,9 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "matcher.hpp"
+#include "duckdb/catalog/default/builtin_types/types.hpp"
+#include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
@@ -68,27 +71,19 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 	return results;
 }
 
-static vector<string> InitialKeywords() {
-	return vector<string> {"SELECT",     "INSERT",   "DELETE",  "UPDATE",  "CREATE",   "DROP",      "COPY",
-	                       "ALTER",      "WITH",     "EXPORT",  "BEGIN",   "VACUUM",   "PREPARE",   "EXECUTE",
-	                       "DEALLOCATE", "CALL",     "ANALYZE", "EXPLAIN", "DESCRIBE", "SUMMARIZE", "LOAD",
-	                       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL",    "FROM",     "PIVOT",     "UNPIVOT"};
-}
+static vector<reference<AttachedDatabase>> GetAllCatalogs(ClientContext &context) {
+	vector<reference<AttachedDatabase>> result;
 
-static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
-	auto keywords = InitialKeywords();
-	vector<AutoCompleteCandidate> result;
-	for (auto &kw : keywords) {
-		auto score = 0;
-		if (kw == "SELECT") {
-			score = 2;
-		}
-		if (kw == "FROM" || kw == "DELETE" || kw == "INSERT" || kw == "UPDATE") {
-			score = 1;
-		}
-		result.emplace_back(kw + " ", score);
+	auto &database_manager = DatabaseManager::Get(context);
+	auto databases = database_manager.GetDatabases(context);
+	for(auto &database : databases) {
+		result.push_back(database.get());
 	}
 	return result;
+}
+
+static vector<reference<SchemaCatalogEntry>> GetAllSchemas(ClientContext &context) {
+	return Catalog::GetAllSchemas(context);
 }
 
 static vector<reference<CatalogEntry>> GetAllTables(ClientContext &context, bool for_table_names) {
@@ -121,6 +116,26 @@ static vector<reference<CatalogEntry>> GetAllTables(ClientContext &context, bool
 	return result;
 }
 
+static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto all_entries = GetAllCatalogs(context);
+	for (auto &entry_ref : all_entries) {
+		auto &entry = entry_ref.get();
+		suggestions.emplace_back(entry.name, 0);
+	}
+	return suggestions;
+}
+
+static vector<AutoCompleteCandidate> SuggestSchemaName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto all_entries = GetAllSchemas(context);
+	for (auto &entry_ref : all_entries) {
+		auto &entry = entry_ref.get();
+		suggestions.emplace_back(entry.name, 0);
+	}
+	return suggestions;
+}
+
 static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllTables(context, true);
@@ -133,6 +148,13 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 	return suggestions;
 }
 
+static vector<AutoCompleteCandidate> SuggestType(ClientContext &) {
+	vector<AutoCompleteCandidate> suggestions;
+	for (auto &type_entry : BUILTIN_TYPES) {
+		suggestions.emplace_back(type_entry.name, 0);
+	}
+	return suggestions;
+}
 static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllTables(context, false);
@@ -210,168 +232,187 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	return result;
 }
 
-static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
-	// for auto-completion, we consider 4 scenarios
-	// * there is nothing in the buffer, or only one word -> suggest a keyword
-	// * the previous keyword is SELECT, WHERE, BY, HAVING, ... -> suggest a column name
-	// * the previous keyword is FROM, INSERT, UPDATE ,... -> select a table name
-	// * we are in a string constant -> suggest a filename
-	// figure out which state we are in by doing a run through the query
-	// matcher->MatchWord(...);
-	idx_t pos = 0;
-	idx_t last_pos = 0;
-	idx_t pos_offset = 0;
-	bool seen_word = false;
-	SuggestionState suggest_state = SuggestionState::SUGGEST_KEYWORD;
-	auto suggested_keywords = SuggestKeyword(context);
-	case_insensitive_set_t column_name_keywords = {"SELECT", "WHERE", "BY",    "HAVING", "QUALIFY",
-	                                               "LIMIT",  "SET",   "USING", "ON"};
-	case_insensitive_set_t table_name_keywords = {"FROM", "JOIN", "INSERT",   "UPDATE", "DELETE", "ALTER",
-	                                              "DROP", "CALL", "DESCRIBE", "TABLE",  "VIEW"};
-	case_insensitive_map_t<vector<AutoCompleteCandidate>> next_keyword_map;
-	next_keyword_map["SELECT"] = {"FROM",    "WHERE",  "GROUP",  "HAVING", "WINDOW", "ORDER",     "LIMIT",
-	                              "QUALIFY", "SAMPLE", "VALUES", "UNION",  "EXCEPT", "INTERSECT", "DISTINCT"};
-	next_keyword_map["WITH"] = {"RECURSIVE", "SELECT", "AS"};
-	next_keyword_map["INSERT"] = {"INTO", "VALUES", "SELECT", "DEFAULT"};
-	next_keyword_map["DELETE"] = {"FROM", "WHERE", "USING"};
-	next_keyword_map["UPDATE"] = {"SET", "WHERE"};
-	next_keyword_map["CREATE"] = {"TABLE", "SCHEMA", "VIEW", "SEQUENCE", "MACRO", "FUNCTION", "SECRET", "TYPE"};
-	next_keyword_map["DROP"] = next_keyword_map["CREATE"];
-	next_keyword_map["ALTER"] = {"TABLE", "VIEW", "ADD", "DROP", "COLUMN", "SET", "TYPE", "DEFAULT", "DATA", "RENAME"};
-	next_keyword_map["SEQUENCE"] = {};
-	next_keyword_map["MACRO"] = {};
-	next_keyword_map["FUNCTION"] = {};
-	next_keyword_map["SECRET"] = {};
-	next_keyword_map["TYPE"] = {};
+enum class TokenizeState {
+	STANDARD = 0,
+	IN_COMMENT,
+	QUOTED_IDENTIFIER,
+	STRING_LITERAL
+};
 
-regular_scan:
-	for (; pos < sql.size(); pos++) {
-		if (sql[pos] == '\'') {
-			pos++;
-			last_pos = pos;
-			goto in_string_constant;
-		}
-		if (sql[pos] == '"') {
-			pos++;
-			last_pos = pos;
-			goto in_quotes;
-		}
-		if (sql[pos] == '-' && pos + 1 < sql.size() && sql[pos + 1] == '-') {
-			goto in_comment;
-		}
-		if (sql[pos] == ';') {
-			// semicolon: restart suggestion flow
-			suggest_state = SuggestionState::SUGGEST_KEYWORD;
-			suggested_keywords = SuggestKeyword(context);
-			last_pos = pos + 1;
-			continue;
-		}
-		if (StringUtil::CharacterIsSpace(sql[pos]) || StringUtil::CharacterIsOperator(sql[pos])) {
-			if (seen_word) {
-				goto process_word;
-			}
-		} else {
-			seen_word = true;
-		}
-	}
-	goto standard_suggestion;
-in_comment:
-	for (; pos < sql.size(); pos++) {
-		if (sql[pos] == '\n' || sql[pos] == '\r') {
-			pos++;
-			goto regular_scan;
-		}
-	}
-	// no suggestions inside comments
-	return make_uniq<SQLAutoCompleteFunctionData>(vector<string>(), 0);
-in_quotes:
-	for (; pos < sql.size(); pos++) {
-		if (sql[pos] == '"') {
-			pos++;
-			last_pos = pos;
-			seen_word = true;
-			goto regular_scan;
-		}
-	}
-	pos_offset = 1;
-	goto standard_suggestion;
-in_string_constant:
-	for (; pos < sql.size(); pos++) {
-		if (sql[pos] == '\'') {
-			pos++;
-			last_pos = pos;
-			seen_word = true;
-			goto regular_scan;
-		}
-	}
-	suggest_state = SuggestionState::SUGGEST_FILE_NAME;
-	goto standard_suggestion;
-process_word : {
-	while ((last_pos < sql.size()) &&
-	       (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
-		last_pos++;
-	}
-	auto next_word = sql.substr(last_pos, pos - last_pos);
-	if (table_name_keywords.find(next_word) != table_name_keywords.end()) {
-		suggest_state = SuggestionState::SUGGEST_TABLE_NAME;
-	} else if (column_name_keywords.find(next_word) != column_name_keywords.end()) {
-		suggest_state = SuggestionState::SUGGEST_COLUMN_NAME;
-	}
-	auto entry = next_keyword_map.find(next_word);
-	if (entry != next_keyword_map.end()) {
-		suggested_keywords = entry->second;
-	} else {
-		for (auto it = suggested_keywords.begin(); it != suggested_keywords.end(); it++) {
-			if (StringUtil::CIEquals(it->candidate, next_word)) {
-				suggested_keywords.erase(it);
+enum class WordState {
+	UNINITIALIZED,
+	KEYWORD,
+	OPERATOR
+};
+
+static bool TokenizeInput(const string &sql, MatchState &match_state, string &last_word, idx_t &last_pos) {
+	auto state = TokenizeState::STANDARD;
+
+	idx_t pos_offset = 0;
+	last_pos = 0;
+	WordState word_state = WordState::UNINITIALIZED;
+	for(idx_t i = 0; i < sql.size(); i++) {
+		auto c = sql[i];
+		switch(state) {
+		case TokenizeState::STANDARD:
+			if (c == '\'') {
+				state = TokenizeState::STRING_LITERAL;
+				last_pos = i;
 				break;
 			}
+			if (c == '"') {
+				state = TokenizeState::QUOTED_IDENTIFIER;
+				last_pos = i;
+				break;
+			}
+			if (c == ';') {
+				// end of statement
+				match_state.tokens.clear();
+				last_pos = i + 1;
+				word_state = WordState::UNINITIALIZED;
+				break;
+			}
+			if (c == '-' && i + 1 < sql.size() && sql[i + 1] == '-') {
+				i++;
+				state = TokenizeState::IN_COMMENT;
+				word_state = WordState::UNINITIALIZED;
+				break;
+			}
+			if (StringUtil::CharacterIsSpace(c)) {
+				// space character - check if this delineates a keyword
+				if (i > last_pos) {
+					// there is - push the keyword
+					auto next_word = sql.substr(last_pos, i - last_pos);
+					match_state.tokens.emplace_back(next_word);
+					word_state = WordState::UNINITIALIZED;
+				}
+				last_pos = i + 1;
+			} else if (StringUtil::CharacterIsOperator(c)) {
+				if (word_state == WordState::OPERATOR) {
+					continue;
+				}
+				// previous word is not an operator
+				if (i > last_pos) {
+					// we have a previous word - emit the token
+					auto next_word = sql.substr(last_pos, i - last_pos);
+					match_state.tokens.emplace_back(next_word);
+				}
+				last_pos = i;
+				word_state = WordState::OPERATOR;
+			} else {
+				if (word_state == WordState::KEYWORD) {
+					continue;
+				}
+				// previous word is an operator
+				if (i > last_pos) {
+					auto next_word = sql.substr(last_pos, i - last_pos);
+					match_state.tokens.emplace_back(next_word);
+				}
+				last_pos = i;
+				word_state = WordState::KEYWORD;
+			}
+			break;
+		case TokenizeState::STRING_LITERAL:
+			if (c == '\'') {
+				state = TokenizeState::STANDARD;
+			}
+			break;
+		case TokenizeState::QUOTED_IDENTIFIER:
+			if (c == '"') {
+				state = TokenizeState::STANDARD;
+			}
+			break;
+		case TokenizeState::IN_COMMENT:
+			if (c == '\n' || c == '\r') {
+				last_pos = i + 1;
+				state = TokenizeState::STANDARD;
+			}
+			break;
+		default:
+			throw InternalException("unrecognized tokenize state");
 		}
 	}
-	if (std::all_of(next_word.begin(), next_word.end(), ::isdigit)) {
-		// Numbers are OK
-		suggested_keywords.clear();
-	}
-	seen_word = false;
-	last_pos = pos;
-	goto regular_scan;
-}
-standard_suggestion:
-	if (suggest_state != SuggestionState::SUGGEST_FILE_NAME) {
-		while ((last_pos < sql.size()) &&
-		       (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
-			last_pos++;
-		}
-	}
-	auto last_word = sql.substr(last_pos, pos - last_pos);
-	last_pos -= pos_offset;
-	vector<string> suggestions;
-	switch (suggest_state) {
-	case SuggestionState::SUGGEST_KEYWORD:
-		suggestions = ComputeSuggestions(suggested_keywords, last_word, {});
+
+	// finished processing - check the final state
+	switch(state) {
+	case TokenizeState::STRING_LITERAL:
+		pos_offset = 1;
 		break;
-	case SuggestionState::SUGGEST_TABLE_NAME:
-		suggestions = ComputeSuggestions(SuggestTableName(context), last_word, suggested_keywords, true);
-		break;
-	case SuggestionState::SUGGEST_COLUMN_NAME:
-		suggestions = ComputeSuggestions(SuggestColumnName(context), last_word, suggested_keywords, true);
-		break;
-	case SuggestionState::SUGGEST_FILE_NAME:
-		last_pos = pos;
-		suggestions = ComputeSuggestions(SuggestFileName(context, last_word, last_pos), last_word, {});
-		break;
+	case TokenizeState::IN_COMMENT:
+		// no suggestions in comments
+		return false;
 	default:
-		throw InternalException("Unrecognized suggestion state");
+		break;
 	}
-	if (last_pos > sql.size()) {
-		D_ASSERT(false);
-		throw NotImplementedException("last_pos out of range");
+	while ((last_pos < sql.size()) &&
+		   (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
+		last_pos++;
+		   }
+	last_word = sql.substr(last_pos, sql.size() - last_pos);
+	last_pos -= pos_offset;
+	return true;
+}
+
+static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
+	// tokenize the input
+	vector<MatcherToken> tokens;
+	vector<MatcherSuggestion> suggestions;
+	MatchState state(tokens, suggestions);
+
+	string last_word;
+	idx_t last_pos;
+	auto allow_complete = TokenizeInput(sql, state, last_word, last_pos);
+	if (!allow_complete) {
+		return make_uniq<SQLAutoCompleteFunctionData>(vector<string>(), 0);
 	}
-	if (!last_word.empty() && std::all_of(last_word.begin(), last_word.end(), ::isdigit)) {
-		// avoid giving auto-complete suggestion for digits
-		suggestions.clear();
+	if (state.suggestions.empty()) {
+		// no suggestions found during tokenizing
+		// run the root matcher
+		auto matcher = Matcher::RootMatcher();
+		matcher->Match(state);
 	}
-	return make_uniq<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
+	if (state.suggestions.empty()) {
+		// still no suggestions - return
+		return make_uniq<SQLAutoCompleteFunctionData>(vector<string>(), 0);
+	}
+	vector<AutoCompleteCandidate> available_suggestions;
+	for (auto &suggestion : suggestions) {
+		// run the suggestions
+		vector<AutoCompleteCandidate> new_suggestions;
+		switch (suggestion.type) {
+		case SuggestionState::SUGGEST_VARIABLE:
+			// variables have no suggestions available
+			break;
+		case SuggestionState::SUGGEST_KEYWORD:
+			new_suggestions.emplace_back(suggestion.keyword);
+			break;
+		case SuggestionState::SUGGEST_CATALOG_NAME:
+			new_suggestions = SuggestCatalogName(context);
+			break;
+		case SuggestionState::SUGGEST_SCHEMA_NAME:
+			new_suggestions = SuggestSchemaName(context);
+			break;
+		case SuggestionState::SUGGEST_TABLE_NAME:
+			new_suggestions = SuggestTableName(context);
+			break;
+		case SuggestionState::SUGGEST_COLUMN_NAME:
+			new_suggestions = SuggestColumnName(context);
+			break;
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			new_suggestions = SuggestType(context);
+			break;
+		case SuggestionState::SUGGEST_FILE_NAME:
+			new_suggestions = SuggestFileName(context, last_word, last_pos);
+			break;
+		default:
+			throw InternalException("Unrecognized suggestion state");
+		}
+		for (auto &new_suggestion : new_suggestions) {
+			available_suggestions.push_back(std::move(new_suggestion));
+		}
+	}
+	auto result_suggestions = ComputeSuggestions(available_suggestions, last_word, {}, true);
+	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result_suggestions), last_pos);
 }
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
