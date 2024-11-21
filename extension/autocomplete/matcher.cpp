@@ -156,6 +156,9 @@ public:
 				// match did not succeed - propagate upwards
 				return child_match;
 			}
+			if (!separator) {
+				continue;
+			}
 			// succeeded in matching the child
 			// now we optionally match the separator
 			idx_t successful_token = repeat_state.token_index;
@@ -282,10 +285,41 @@ unique_ptr<Matcher> QualifiedTableName() {
 	return Matcher::List(std::move(m));
 }
 
+unique_ptr<Matcher> TypeName() {
+	return Matcher::TypeName();
+}
+
+unique_ptr<Matcher> NotNullConstraint() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(Matcher::Keyword("NOT"));
+	m.push_back(Matcher::Keyword("NULL", 0, '\0'));
+	return Matcher::List(std::move(m));
+}
+
+unique_ptr<Matcher> UniqueConstraint() {
+	return Matcher::Keyword("UNIQUE", 0, '\0');
+}
+
+unique_ptr<Matcher> PrimaryKeyConstraint() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(Matcher::Keyword("PRIMARY"));
+	m.push_back(Matcher::Keyword("KEY", 0, '\0'));
+	return Matcher::List(std::move(m));
+}
+
+unique_ptr<Matcher> ColumnConstraint() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(NotNullConstraint());
+	m.push_back(UniqueConstraint());
+	m.push_back(PrimaryKeyConstraint());
+	return Matcher::Optional(Matcher::Repeat(Matcher::Choice(std::move(m)), nullptr));
+}
+
 unique_ptr<Matcher> CreateTableColumnList() {
 	vector<unique_ptr<Matcher>> m;
 	m.push_back(Matcher::Variable());
-	m.push_back(Matcher::TypeName());
+	m.push_back(TypeName());
+	m.push_back(ColumnConstraint());
 	return Matcher::Repeat(Matcher::List(std::move(m)), Matcher::Keyword(","));
 }
 
