@@ -1,3 +1,5 @@
+#include "duckdb/storage/compression/roaring.hpp"
+
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/compression/compression.hpp"
@@ -118,253 +120,211 @@ struct RunContainerRLEPair {
 	uint16_t length;
 };
 
-struct ContainerMetadata {
-public:
-	ContainerMetadata() {
+ContainerMetadata::ContainerMetadata() {
+}
+ContainerMetadata::ContainerMetadata(bool is_inverted, bool is_run, uint16_t value) {
+	data.run_container.is_inverted = is_inverted;
+	if (is_run) {
+		data.run_container.is_run = 1;
+		data.run_container.number_of_runs = value;
+		data.run_container.unused = 0;
+	} else {
+		data.non_run_container.is_run = 0;
+		data.non_run_container.cardinality = value;
+		data.non_run_container.unused = 0;
 	}
-	ContainerMetadata(bool is_inverted, bool is_run, uint16_t value) {
-		data.run_container.is_inverted = is_inverted;
-		if (is_run) {
-			data.run_container.is_run = 1;
-			data.run_container.number_of_runs = value;
-			data.run_container.unused = 0;
+}
+
+bool ContainerMetadata::IsRun() const {
+	return data.run_container.is_run;
+}
+
+bool ContainerMetadata::IsUncompressed() const {
+	return !data.non_run_container.is_run && data.non_run_container.cardinality == MAX_ARRAY_IDX + 1;
+}
+
+bool ContainerMetadata::IsInverted() const {
+	return data.run_container.is_inverted;
+}
+
+uint16_t ContainerMetadata::NumberOfRuns() const {
+	return data.run_container.number_of_runs;
+}
+
+uint16_t ContainerMetadata::Cardinality() const {
+	return data.non_run_container.cardinality;
+}
+
+idx_t ContainerMetadata::GetDataSizeInBytes(idx_t container_size) const {
+	if (IsUncompressed()) {
+		return (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
+	}
+	if (IsRun()) {
+		auto number_of_runs = NumberOfRuns();
+		if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
+			return COMPRESSED_SEGMENT_COUNT + (sizeof(uint8_t) * number_of_runs * 2);
 		} else {
-			data.non_run_container.is_run = 0;
-			data.non_run_container.cardinality = value;
-			data.non_run_container.unused = 0;
+			return sizeof(RunContainerRLEPair) * number_of_runs;
 		}
-	}
-
-public:
-	bool IsRun() const {
-		return data.run_container.is_run;
-	}
-
-	bool IsUncompressed() const {
-		return !data.non_run_container.is_run && data.non_run_container.cardinality == MAX_ARRAY_IDX + 1;
-	}
-
-	bool IsInverted() const {
-		return data.run_container.is_inverted;
-	}
-
-	uint16_t NumberOfRuns() const {
-		return data.run_container.number_of_runs;
-	}
-
-	uint16_t Cardinality() const {
-		return data.non_run_container.cardinality;
-	}
-
-	idx_t GetDataSizeInBytes(idx_t container_size) const {
-		if (IsUncompressed()) {
-			return (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
-		}
-		if (IsRun()) {
-			auto number_of_runs = NumberOfRuns();
-			if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
-				return COMPRESSED_SEGMENT_COUNT + (sizeof(uint8_t) * number_of_runs * 2);
-			} else {
-				return sizeof(RunContainerRLEPair) * number_of_runs;
-			}
+	} else {
+		auto cardinality = Cardinality();
+		if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
+			return COMPRESSED_SEGMENT_COUNT + (sizeof(uint8_t) * cardinality);
 		} else {
-			auto cardinality = Cardinality();
-			if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
-				return COMPRESSED_SEGMENT_COUNT + (sizeof(uint8_t) * cardinality);
-			} else {
-				return sizeof(uint16_t) * cardinality;
-			}
+			return sizeof(uint16_t) * cardinality;
 		}
 	}
+}
 
-public:
-	union {
-		struct {
-			uint16_t unused : 1;          //! Currently unused bits
-			uint16_t is_inverted : 1;     //! Indicate if this maps nulls or non-nulls
-			uint16_t is_run : 1;          //! Indicate if this is a run container
-			uint16_t unused2 : 2;         //! Currently unused bits
-			uint16_t number_of_runs : 11; //! The number of runs
-		} run_container;
+ContainerMetadataCollection::ContainerMetadataCollection() {
+}
 
-		struct {
-			uint16_t unused : 1;       //! Currently unused bits
-			uint16_t is_inverted : 1;  //! Indicate if this maps nulls or non-nulls
-			uint16_t is_run : 1;       //! Indicate if this is a run container
-			uint16_t cardinality : 13; //! How many values are set (4096)
-		} non_run_container;
-	} data;
-};
+void ContainerMetadataCollection::AddMetadata(ContainerMetadata metadata) {
+	if (metadata.IsRun()) {
+		AddRunContainer(metadata.NumberOfRuns(), metadata.IsInverted());
+	} else if (metadata.IsUncompressed()) {
+		AddBitsetContainer();
+	} else {
+		AddArrayContainer(metadata.Cardinality(), metadata.IsInverted());
+	}
+}
 
-struct ContainerMetadataCollection {
-	static constexpr uint8_t IS_RUN_FLAG = 1 << 1;
-	static constexpr uint8_t IS_INVERTED_FLAG = 1 << 0;
+idx_t ContainerMetadataCollection::GetMetadataSizeForSegment() const {
+	idx_t runs_count = GetRunContainerCount();
+	idx_t arrays_count = GetArrayAndBitsetContainerCount();
+	return GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+}
 
-public:
-	ContainerMetadataCollection() {
+idx_t ContainerMetadataCollection::GetMetadataSize(idx_t container_count, idx_t run_containers,
+                                                   idx_t array_containers) const {
+	idx_t types_size = BitpackingPrimitives::GetRequiredSize(container_count, 2);
+	idx_t runs_size = BitpackingPrimitives::GetRequiredSize(run_containers, 6);
+	idx_t arrays_size = sizeof(uint8_t) * array_containers;
+	return types_size + runs_size + arrays_size;
+}
+
+idx_t ContainerMetadataCollection::GetRunContainerCount() const {
+	return runs_in_segment;
+}
+idx_t ContainerMetadataCollection::GetArrayAndBitsetContainerCount() const {
+	return arrays_in_segment;
+}
+
+void ContainerMetadataCollection::FlushSegment() {
+	runs_in_segment = 0;
+	count_in_segment = 0;
+	arrays_in_segment = 0;
+}
+
+void ContainerMetadataCollection::Reset() {
+	FlushSegment();
+	container_type.clear();
+	number_of_runs.clear();
+	cardinality.clear();
+}
+
+// Write the metadata for the current segment
+idx_t ContainerMetadataCollection::Serialize(data_ptr_t dest) const {
+	// Element sizes (in bits) for written metadata
+	// +======================================+
+	// |mmmmmm|rrrrrr|aaaaaaa|                |
+	// +======================================+
+	//
+	// m: 2: (1: is_run, 1: is_inverted)
+	// r: 6: number_of_runs
+	// a: 8: cardinality
+
+	idx_t types_size = BitpackingPrimitives::GetRequiredSize(count_in_segment, 2);
+	idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_in_segment, 6);
+	idx_t arrays_size = sizeof(uint8_t) * arrays_in_segment;
+
+	idx_t types_offset = container_type.size() - count_in_segment;
+	data_ptr_t types_data = (data_ptr_t)(container_type.data()); // NOLINT: c-style cast (for const)
+	BitpackingPrimitives::PackBuffer<uint8_t>(dest, types_data + types_offset, count_in_segment, 2);
+	dest += types_size;
+
+	if (!number_of_runs.empty()) {
+		idx_t runs_offset = number_of_runs.size() - runs_in_segment;
+		data_ptr_t run_data = (data_ptr_t)(number_of_runs.data()); // NOLINT: c-style cast (for const)
+		BitpackingPrimitives::PackBuffer<uint8_t>(dest, run_data + runs_offset, runs_in_segment, 6);
+		dest += runs_size;
 	}
 
-public:
-	void AddMetadata(ContainerMetadata metadata) {
-		if (metadata.IsRun()) {
-			AddRunContainer(metadata.NumberOfRuns(), metadata.IsInverted());
-		} else if (metadata.IsUncompressed()) {
-			AddBitsetContainer();
-		} else {
-			AddArrayContainer(metadata.Cardinality(), metadata.IsInverted());
-		}
+	if (!cardinality.empty()) {
+		idx_t arrays_offset = cardinality.size() - arrays_in_segment;
+		data_ptr_t arrays_data = (data_ptr_t)(cardinality.data()); // NOLINT: c-style cast (for const)
+		memcpy(dest, arrays_data + arrays_offset, sizeof(uint8_t) * arrays_in_segment);
+	}
+	return types_size + runs_size + arrays_size;
+}
+
+void ContainerMetadataCollection::Deserialize(data_ptr_t src, idx_t container_count) {
+	container_type.resize(AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(container_count));
+	count_in_segment = container_count;
+
+	// Load the types of the containers
+	idx_t types_size = BitpackingPrimitives::GetRequiredSize(container_type.size(), 2);
+	BitpackingPrimitives::UnPackBuffer<uint8_t>(container_type.data(), src, container_count, 2, true);
+	src += types_size;
+
+	// Figure out how many are run containers
+	idx_t runs_count = 0;
+	for (idx_t i = 0; i < container_count; i++) {
+		auto type = container_type[i];
+		runs_count += ((type >> 1) & 1) == 1;
+	}
+	runs_in_segment = runs_count;
+	number_of_runs.resize(AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(runs_count));
+	cardinality.resize(container_count - runs_count);
+
+	// Load the run containers
+	if (runs_count) {
+		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_count, 6);
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(number_of_runs.data(), src, runs_count, 6, true);
+		src += runs_size;
 	}
 
-	idx_t GetMetadataSizeForSegment() const {
-		idx_t runs_count = GetRunContainerCount();
-		idx_t arrays_count = GetArrayAndBitsetContainerCount();
-		return GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+	// Load the array/bitset containers
+	if (!cardinality.empty()) {
+		idx_t arrays_size = sizeof(uint8_t) * cardinality.size();
+		arrays_in_segment = arrays_size;
+		memcpy(cardinality.data(), src, arrays_size);
 	}
+}
 
-	idx_t GetMetadataSize(idx_t container_count, idx_t run_containers, idx_t array_containers) const {
-		idx_t types_size = BitpackingPrimitives::GetRequiredSize(container_count, 2);
-		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(run_containers, 6);
-		idx_t arrays_size = sizeof(uint8_t) * array_containers;
-		return types_size + runs_size + arrays_size;
+void ContainerMetadataCollection::AddBitsetContainer() {
+	AddContainerType(false, false);
+	cardinality.push_back(MAX_ARRAY_IDX + 1);
+	arrays_in_segment++;
+	count_in_segment++;
+}
+
+void ContainerMetadataCollection::AddArrayContainer(idx_t amount, bool is_inverted) {
+	AddContainerType(false, is_inverted);
+	D_ASSERT(amount < MAX_ARRAY_IDX);
+	cardinality.push_back(NumericCast<uint8_t>(amount));
+	arrays_in_segment++;
+	count_in_segment++;
+}
+
+void ContainerMetadataCollection::AddRunContainer(idx_t amount, bool is_inverted) {
+	AddContainerType(true, is_inverted);
+	D_ASSERT(amount < MAX_RUN_IDX);
+	number_of_runs.push_back(NumericCast<uint8_t>(amount));
+	runs_in_segment++;
+	count_in_segment++;
+}
+
+void ContainerMetadataCollection::AddContainerType(bool is_run, bool is_inverted) {
+	uint8_t type = 0;
+	if (is_run) {
+		type |= IS_RUN_FLAG;
 	}
-
-	idx_t GetRunContainerCount() const {
-		return runs_in_segment;
+	if (is_inverted) {
+		type |= IS_INVERTED_FLAG;
 	}
-	idx_t GetArrayAndBitsetContainerCount() const {
-		return arrays_in_segment;
-	}
-
-	void FlushSegment() {
-		runs_in_segment = 0;
-		count_in_segment = 0;
-		arrays_in_segment = 0;
-	}
-
-	void Reset() {
-		FlushSegment();
-		container_type.clear();
-		number_of_runs.clear();
-		cardinality.clear();
-	}
-
-	// Write the metadata for the current segment
-	idx_t Serialize(data_ptr_t dest) const {
-		// Element sizes (in bits) for written metadata
-		// +======================================+
-		// |mmmmmm|rrrrrr|aaaaaaa|                |
-		// +======================================+
-		//
-		// m: 2: (1: is_run, 1: is_inverted)
-		// r: 6: number_of_runs
-		// a: 8: cardinality
-
-		idx_t types_size = BitpackingPrimitives::GetRequiredSize(count_in_segment, 2);
-		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_in_segment, 6);
-		idx_t arrays_size = sizeof(uint8_t) * arrays_in_segment;
-
-		idx_t types_offset = container_type.size() - count_in_segment;
-		data_ptr_t types_data = (data_ptr_t)(container_type.data()); // NOLINT: c-style cast (for const)
-		BitpackingPrimitives::PackBuffer<uint8_t>(dest, types_data + types_offset, count_in_segment, 2);
-		dest += types_size;
-
-		if (!number_of_runs.empty()) {
-			idx_t runs_offset = number_of_runs.size() - runs_in_segment;
-			data_ptr_t run_data = (data_ptr_t)(number_of_runs.data()); // NOLINT: c-style cast (for const)
-			BitpackingPrimitives::PackBuffer<uint8_t>(dest, run_data + runs_offset, runs_in_segment, 6);
-			dest += runs_size;
-		}
-
-		if (!cardinality.empty()) {
-			idx_t arrays_offset = cardinality.size() - arrays_in_segment;
-			data_ptr_t arrays_data = (data_ptr_t)(cardinality.data()); // NOLINT: c-style cast (for const)
-			memcpy(dest, arrays_data + arrays_offset, sizeof(uint8_t) * arrays_in_segment);
-		}
-		return types_size + runs_size + arrays_size;
-	}
-
-	void Deserialize(data_ptr_t src, idx_t container_count) {
-		container_type.resize(
-		    AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(container_count));
-		count_in_segment = container_count;
-
-		// Load the types of the containers
-		idx_t types_size = BitpackingPrimitives::GetRequiredSize(container_type.size(), 2);
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(container_type.data(), src, container_count, 2, true);
-		src += types_size;
-
-		// Figure out how many are run containers
-		idx_t runs_count = 0;
-		for (idx_t i = 0; i < container_count; i++) {
-			auto type = container_type[i];
-			runs_count += ((type >> 1) & 1) == 1;
-		}
-		runs_in_segment = runs_count;
-		number_of_runs.resize(AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(runs_count));
-		cardinality.resize(container_count - runs_count);
-
-		// Load the run containers
-		if (runs_count) {
-			idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_count, 6);
-			BitpackingPrimitives::UnPackBuffer<uint8_t>(number_of_runs.data(), src, runs_count, 6, true);
-			src += runs_size;
-		}
-
-		// Load the array/bitset containers
-		if (!cardinality.empty()) {
-			idx_t arrays_size = sizeof(uint8_t) * cardinality.size();
-			arrays_in_segment = arrays_size;
-			memcpy(cardinality.data(), src, arrays_size);
-		}
-	}
-
-private:
-	void AddBitsetContainer() {
-		AddContainerType(false, false);
-		cardinality.push_back(MAX_ARRAY_IDX + 1);
-		arrays_in_segment++;
-		count_in_segment++;
-	}
-
-	void AddArrayContainer(idx_t amount, bool is_inverted) {
-		AddContainerType(false, is_inverted);
-		D_ASSERT(amount < MAX_ARRAY_IDX);
-		cardinality.push_back(NumericCast<uint8_t>(amount));
-		arrays_in_segment++;
-		count_in_segment++;
-	}
-
-	void AddRunContainer(idx_t amount, bool is_inverted) {
-		AddContainerType(true, is_inverted);
-		D_ASSERT(amount < MAX_RUN_IDX);
-		number_of_runs.push_back(NumericCast<uint8_t>(amount));
-		runs_in_segment++;
-		count_in_segment++;
-	}
-
-	void AddContainerType(bool is_run, bool is_inverted) {
-		uint8_t type = 0;
-		if (is_run) {
-			type |= IS_RUN_FLAG;
-		}
-		if (is_inverted) {
-			type |= IS_INVERTED_FLAG;
-		}
-		container_type.push_back(type);
-	}
-
-public:
-	//! Encode for each container in the lower 2 bits if the container 'is_run' and 'is_inverted'
-	vector<uint8_t> container_type;
-	//! Encode for each run container the length
-	vector<uint8_t> number_of_runs;
-	//! Encode for each array/bitset container the length
-	vector<uint8_t> cardinality;
-
-	idx_t count_in_segment = 0;
-	idx_t runs_in_segment = 0;
-	idx_t arrays_in_segment = 0;
-};
+	container_type.push_back(type);
+}
 
 struct ContainerMetadataCollectionScanner {
 public:
