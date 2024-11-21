@@ -331,16 +331,18 @@ unique_ptr<Matcher> ColumnDefinition() {
 }
 
 unique_ptr<Matcher> ColumnIdList() {
-	return Matcher::Repeat(Matcher::Variable(), Matcher::Keyword(","));
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(Matcher::Keyword("("));
+	m.push_back(Matcher::Repeat(Matcher::Variable(), Matcher::Keyword(",")));
+	m.push_back(Matcher::Keyword(")"));
+	return Matcher::List(std::move(m));
 }
 
 unique_ptr<Matcher> TopLevelPrimaryKeyConstraint() {
 	vector<unique_ptr<Matcher>> m;
 	m.push_back(Matcher::Keyword("PRIMARY"));
 	m.push_back(Matcher::Keyword("KEY", 0, '\0'));
-	m.push_back(Matcher::Keyword("("));
 	m.push_back(ColumnIdList());
-	m.push_back(Matcher::Keyword(")"));
 	return Matcher::List(std::move(m));
 }
 
@@ -377,10 +379,45 @@ unique_ptr<Matcher> CreateSchemaMatcher() {
 	return Matcher::List(std::move(m));
 }
 
+unique_ptr<Matcher> FunctionOrMacro() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(Matcher::Keyword("FUNCTION", 1));
+	m.push_back(Matcher::Keyword("MACRO", 1));
+	return Matcher::Choice(std::move(m));
+}
+
+unique_ptr<Matcher> ColumnReference() {
+	return Matcher::Variable();
+}
+
+unique_ptr<Matcher> ExpressionDefinition() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(ColumnReference());
+	return Matcher::Choice(std::move(m));
+}
+
+unique_ptr<Matcher> ScalarMacroDefinition() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(ColumnIdList());
+	m.push_back(Matcher::Keyword("AS"));
+	m.push_back(ExpressionDefinition());
+	return Matcher::Choice(std::move(m));
+}
+
+unique_ptr<Matcher> CreateFunctionMatcher() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(FunctionOrMacro());
+	m.push_back(IfNotExists());
+	m.push_back(QualifiedTableName());
+	m.push_back(Matcher::Repeat(ScalarMacroDefinition(), Matcher::Keyword(",")));
+	return Matcher::List(std::move(m));
+}
+
 unique_ptr<Matcher> CreateMatchers() {
 	vector<unique_ptr<Matcher>> m;
 	m.push_back(CreateTableMatcher());
 	m.push_back(CreateSchemaMatcher());
+	m.push_back(CreateFunctionMatcher());
 	return Matcher::Choice(std::move(m));
 }
 unique_ptr<Matcher> CreateStatementMatcher() {
