@@ -19,12 +19,14 @@ namespace roaring {
 static constexpr idx_t ROARING_CONTAINER_SIZE = 2048;
 static constexpr bool NULLS = true;
 static constexpr bool NON_NULLS = false;
-static constexpr uint16_t UNCOMPRESSED_SIZE = (ROARING_CONTAINER_SIZE / 8);
-static constexpr uint16_t MAX_RUN_IDX = (UNCOMPRESSED_SIZE - 8) / (sizeof(uint8_t) * 2);
-static constexpr uint16_t MAX_ARRAY_IDX = (UNCOMPRESSED_SIZE - 8) / (sizeof(uint8_t) * 1);
+static constexpr uint16_t UNCOMPRESSED_SIZE = (ROARING_CONTAINER_SIZE / sizeof(validity_t));
+static constexpr uint16_t COMPRESSED_SEGMENT_SIZE = 256;
+static constexpr uint16_t COMPRESSED_SEGMENT_COUNT = (ROARING_CONTAINER_SIZE / COMPRESSED_SEGMENT_SIZE);
+
+static constexpr uint16_t MAX_RUN_IDX = (UNCOMPRESSED_SIZE - COMPRESSED_SEGMENT_COUNT) / (sizeof(uint8_t) * 2);
+static constexpr uint16_t MAX_ARRAY_IDX = (UNCOMPRESSED_SIZE - COMPRESSED_SEGMENT_COUNT) / (sizeof(uint8_t) * 1);
 static constexpr uint16_t COMPRESSED_ARRAY_THRESHOLD = 8;
 static constexpr uint16_t COMPRESSED_RUN_THRESHOLD = 4;
-static constexpr uint16_t COMPRESSED_SEGMENT_SIZE = (ROARING_CONTAINER_SIZE / 8);
 
 // Set all the bits from start (inclusive) to end (exclusive) to 0
 static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
@@ -111,6 +113,11 @@ static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 #endif
 }
 
+struct RunContainerRLEPair {
+	uint16_t start;
+	uint16_t length;
+};
+
 struct ContainerMetadata {
 public:
 	ContainerMetadata() {
@@ -147,6 +154,27 @@ public:
 
 	uint16_t Cardinality() const {
 		return data.non_run_container.cardinality;
+	}
+
+	idx_t GetDataSizeInBytes(idx_t container_size) const {
+		if (IsUncompressed()) {
+			return (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
+		}
+		if (IsRun()) {
+			auto number_of_runs = NumberOfRuns();
+			if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
+				return COMPRESSED_SEGMENT_COUNT + (sizeof(uint8_t) * number_of_runs * 2);
+			} else {
+				return sizeof(RunContainerRLEPair) * number_of_runs;
+			}
+		} else {
+			auto cardinality = Cardinality();
+			if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
+				return COMPRESSED_SEGMENT_COUNT + (sizeof(uint8_t) * cardinality);
+			} else {
+				return sizeof(uint16_t) * cardinality;
+			}
+		}
 	}
 
 public:
@@ -363,11 +391,6 @@ public:
 	idx_t array_idx = 0;
 	idx_t run_idx = 0;
 	idx_t idx = 0;
-};
-
-struct RunContainerRLEPair {
-	uint16_t start;
-	uint16_t length;
 };
 
 enum class ContainerType : uint8_t { RUN_CONTAINER, ARRAY_CONTAINER, BITSET_CONTAINER };
@@ -632,9 +655,9 @@ public:
 		array_counts[NON_NULLS] = base_array_counts[NON_NULLS];
 		run_counts = base_run_counts;
 
-		memset(array_counts[NULLS], 0, sizeof(uint8_t) * 8);
-		memset(array_counts[NON_NULLS], 0, sizeof(uint8_t) * 8);
-		memset(run_counts, 0, sizeof(uint8_t) * 8);
+		memset(array_counts[NULLS], 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
+		memset(array_counts[NON_NULLS], 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
+		memset(run_counts, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 
 		uncompressed = nullptr;
 	}
@@ -807,12 +830,8 @@ public:
 			// Account for the alignment we might need for this container
 			required_space +=
 			    (AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr))) - reinterpret_cast<idx_t>(data_ptr);
-			required_space += (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
-		} else if (metadata.IsRun()) {
-			required_space += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
-		} else {
-			required_space += sizeof(uint16_t) * metadata.Cardinality();
 		}
+		required_space += metadata.GetDataSizeInBytes(container_size);
 
 		idx_t runs_count = metadata_collection.GetRunContainerCount();
 		idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
@@ -857,14 +876,14 @@ public:
 			data_ptr = reinterpret_cast<data_ptr_t>(AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr)));
 			FastMemset(data_ptr, ~0, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
 			container_state.OverrideUncompressed(data_ptr);
-			data_ptr += (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
 		} else if (metadata.IsRun()) {
-			container_state.OverrideRun(data_ptr, metadata.NumberOfRuns());
-			data_ptr += sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
+			auto number_of_runs = metadata.NumberOfRuns();
+			container_state.OverrideRun(data_ptr, number_of_runs);
 		} else {
-			container_state.OverrideArray(data_ptr, metadata.IsInverted(), metadata.Cardinality());
-			data_ptr += sizeof(uint16_t) * metadata.Cardinality();
+			auto cardinality = metadata.Cardinality();
+			container_state.OverrideArray(data_ptr, metadata.IsInverted(), cardinality);
 		}
+		data_ptr += metadata.GetDataSizeInBytes(container_size);
 		metadata_collection.AddMetadata(metadata);
 	}
 
@@ -1033,9 +1052,9 @@ public:
 		}
 		count++;
 
-		// index == 8 is allowed for runs, as the last run could end at ROARING_CONTAINER_SIZE
-		D_ASSERT(index <= 8);
-		if (index < 8) {
+		// index == COMPRESSED_SEGMENT_COUNT is allowed for runs, as the last run could end at ROARING_CONTAINER_SIZE
+		D_ASSERT(index <= COMPRESSED_SEGMENT_COUNT);
+		if (index < COMPRESSED_SEGMENT_COUNT) {
 			D_ASSERT(segments[index] != 0);
 		}
 		uint16_t base = static_cast<uint16_t>(index) * COMPRESSED_SEGMENT_SIZE;
@@ -1056,7 +1075,7 @@ public:
 	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
 		if (COMPRESSED) {
 			D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
-			data += (sizeof(uint8_t) * 8);
+			data += (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 		}
 	}
 
@@ -1140,7 +1159,7 @@ public:
 #ifdef DEBUG
 		uint16_t index = 0;
 		if (COMPRESSED) {
-			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * 8));
+			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT));
 			for (idx_t i = 0; i < count; i++) {
 				// Get the start index of the run
 				uint16_t start = verify_segment++;
@@ -1180,7 +1199,7 @@ public:
 	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
 		if (COMPRESSED) {
 			D_ASSERT(count >= COMPRESSED_ARRAY_THRESHOLD);
-			data += (sizeof(uint8_t) * 8);
+			data += (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 		}
 	}
 
@@ -1250,7 +1269,7 @@ public:
 #ifdef DEBUG
 		uint16_t index = 0;
 		if (COMPRESSED) {
-			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * 8));
+			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT));
 			for (uint16_t i = 0; i < count; i++) {
 				// Get the value
 				uint16_t new_index = verify_segment++;
@@ -1344,14 +1363,8 @@ public:
 
 public:
 	idx_t SkipVector(const ContainerMetadata &metadata) {
-		if (metadata.IsRun()) {
-			return sizeof(RunContainerRLEPair) * metadata.NumberOfRuns();
-		}
-		if (metadata.IsUncompressed()) {
-			// NOTE: this doesn't care about smaller containers, since only the last container can be smaller
-			return (ROARING_CONTAINER_SIZE / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
-		}
-		return sizeof(uint16_t) * metadata.Cardinality();
+		// NOTE: this doesn't care about smaller containers, since only the last container can be smaller
+		return metadata.GetDataSizeInBytes(ROARING_CONTAINER_SIZE);
 	}
 
 	bool UseContainerStateCache(idx_t container_index, idx_t internal_offset) {
