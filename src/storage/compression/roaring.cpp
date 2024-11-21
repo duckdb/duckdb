@@ -102,41 +102,6 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 #endif
 }
 
-ContainerMetadata::ContainerMetadata() {
-}
-ContainerMetadata::ContainerMetadata(bool is_inverted, bool is_run, uint16_t value) {
-	data.run_container.is_inverted = is_inverted;
-	if (is_run) {
-		data.run_container.is_run = 1;
-		data.run_container.number_of_runs = value;
-		data.run_container.unused = 0;
-	} else {
-		data.non_run_container.is_run = 0;
-		data.non_run_container.cardinality = value;
-		data.non_run_container.unused = 0;
-	}
-}
-
-bool ContainerMetadata::IsRun() const {
-	return data.run_container.is_run;
-}
-
-bool ContainerMetadata::IsUncompressed() const {
-	return !data.non_run_container.is_run && data.non_run_container.cardinality == MAX_ARRAY_IDX + 1;
-}
-
-bool ContainerMetadata::IsInverted() const {
-	return data.run_container.is_inverted;
-}
-
-uint16_t ContainerMetadata::NumberOfRuns() const {
-	return data.run_container.number_of_runs;
-}
-
-uint16_t ContainerMetadata::Cardinality() const {
-	return data.non_run_container.cardinality;
-}
-
 idx_t ContainerMetadata::GetDataSizeInBytes(idx_t container_size) const {
 	if (IsUncompressed()) {
 		return (container_size / ValidityMask::BITS_PER_VALUE) * sizeof(validity_t);
@@ -328,7 +293,13 @@ public:
 		} else {
 			amount = collection.cardinality[array_idx++];
 		}
-		return ContainerMetadata(is_inverted, is_run, amount);
+		if (is_run) {
+			return ContainerMetadata::RunContainer(amount);
+		}
+		if (amount == MAX_ARRAY_IDX + 1) {
+			return ContainerMetadata::BitsetContainer(amount);
+		}
+		return ContainerMetadata::ArrayContainer(amount, is_inverted);
 	}
 
 public:
@@ -338,69 +309,7 @@ public:
 	idx_t idx = 0;
 };
 
-enum class ContainerType : uint8_t { RUN_CONTAINER, ARRAY_CONTAINER, BITSET_CONTAINER };
-
 struct ContainerCompressionState {
-public:
-	struct Result {
-	public:
-		static Result RunContainer(uint16_t runs, bool nulls) {
-			auto res = Result();
-			res.container_type = ContainerType::RUN_CONTAINER;
-			res.nulls = nulls;
-			res.count = runs;
-			return res;
-		}
-
-		static Result ArrayContainer(uint16_t array_size, bool nulls) {
-			auto res = Result();
-			res.container_type = ContainerType::ARRAY_CONTAINER;
-			res.nulls = nulls;
-			res.count = array_size;
-			return res;
-		}
-
-		static Result BitsetContainer(uint16_t container_size) {
-			auto res = Result();
-			res.container_type = ContainerType::BITSET_CONTAINER;
-			res.nulls = true;
-			res.count = container_size;
-			return res;
-		}
-
-	public:
-		ContainerMetadata GetMetadata() const {
-			return ContainerMetadata(nulls, container_type == ContainerType::RUN_CONTAINER,
-			                         container_type == ContainerType::BITSET_CONTAINER ? MAX_ARRAY_IDX + 1 : count);
-		}
-		idx_t GetByteSize() const {
-			idx_t res = 0;
-			switch (container_type) {
-			case ContainerType::BITSET_CONTAINER:
-				res += AlignValue<idx_t, 8>(count) / 8;
-				break;
-			case ContainerType::RUN_CONTAINER:
-				res += count * sizeof(RunContainerRLEPair);
-				break;
-			case ContainerType::ARRAY_CONTAINER:
-				res += count * sizeof(uint16_t);
-				break;
-			}
-			return res;
-		}
-
-	public:
-		ContainerType container_type;
-		//! Whether nulls are being encoded or non-nulls
-		bool nulls;
-		//! The amount (meaning depends on container_type)
-		uint16_t count;
-
-	private:
-		Result() {
-		}
-	};
-
 public:
 	ContainerCompressionState() {
 		Reset();
@@ -539,7 +448,7 @@ public:
 		finalized = true;
 	}
 
-	Result GetResult() {
+	ContainerMetadata GetResult() {
 		D_ASSERT(finalized);
 		const bool can_use_null_array = array_idx[NULLS] < MAX_ARRAY_IDX;
 		const bool can_use_non_null_array = array_idx[NON_NULLS] < MAX_ARRAY_IDX;
@@ -549,7 +458,7 @@ public:
 		const bool can_use_array = can_use_null_array || can_use_non_null_array;
 		if (!can_use_array && !can_use_run) {
 			// Can not efficiently encode at all, write it as bitset
-			return Result::BitsetContainer(count);
+			return ContainerMetadata::BitsetContainer(count);
 		}
 		uint16_t null_array_cost = array_idx[NULLS] < COMPRESSED_ARRAY_THRESHOLD
 		                               ? array_idx[NULLS] * sizeof(uint16_t)
@@ -568,17 +477,17 @@ public:
 		if (MinValue<uint16_t>(lowest_array_cost, lowest_run_cost) > bitset_cost) {
 			// The amount of values is too small, better off using bitset
 			// we can detect this at decompression because we know how many values are left
-			return Result::BitsetContainer(count);
+			return ContainerMetadata::BitsetContainer(count);
 		}
 
 		if (lowest_array_cost <= lowest_run_cost) {
 			if (array_idx[NULLS] <= array_idx[NON_NULLS]) {
-				return Result::ArrayContainer(array_idx[NULLS], NULLS);
+				return ContainerMetadata::ArrayContainer(array_idx[NULLS], NULLS);
 			} else {
-				return Result::ArrayContainer(array_idx[NON_NULLS], NON_NULLS);
+				return ContainerMetadata::ArrayContainer(array_idx[NON_NULLS], NON_NULLS);
 			}
 		} else {
-			return Result::RunContainer(run_idx, NULLS);
+			return ContainerMetadata::RunContainer(run_idx);
 		}
 	}
 
@@ -678,11 +587,10 @@ public:
 			return;
 		}
 		container_state.Finalize();
-		auto res = container_state.GetResult();
+		auto metadata = container_state.GetResult();
 		idx_t runs_count = metadata_collection.GetRunContainerCount();
 		idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
 
-		auto metadata = res.GetMetadata();
 #ifdef DEBUG
 		idx_t container_index = 0;
 		idx_t container_size = container_state.count;
@@ -739,7 +647,7 @@ public:
 
 		idx_t required_space = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
 
-		required_space += res.GetByteSize();
+		required_space += metadata.GetDataSizeInBytes(container_state.count);
 		if (!HasEnoughSpaceInSegment(required_space)) {
 			FlushSegment();
 		}
@@ -950,7 +858,7 @@ public:
 #ifdef DEBUG
 		auto container_index = GetContainerIndex();
 		auto analyzed_metadata = container_metadata[container_index];
-		auto actual_metadata = container_state.GetResult().GetMetadata();
+		auto actual_metadata = container_state.GetResult();
 		D_ASSERT(analyzed_metadata == actual_metadata);
 #endif
 		count += container_state.count;

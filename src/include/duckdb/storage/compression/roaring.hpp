@@ -42,39 +42,80 @@ struct RunContainerRLEPair {
 	uint16_t length;
 };
 
+enum class ContainerType : uint8_t { RUN_CONTAINER, ARRAY_CONTAINER, BITSET_CONTAINER };
+
 struct ContainerMetadata {
 public:
-	ContainerMetadata();
-	ContainerMetadata(bool is_inverted, bool is_run, uint16_t value);
-
-public:
-	bool operator==(const ContainerMetadata &other) {
-		return memcmp(&data, &other.data, sizeof(uint16_t)) == 0;
+	bool operator==(const ContainerMetadata &other) const {
+		if (container_type != other.container_type) {
+			return false;
+		}
+		if (count != other.count) {
+			return false;
+		}
+		if (nulls != other.nulls) {
+			return false;
+		}
+		return true;
 	}
-	bool IsRun() const;
-	bool IsUncompressed() const;
-	bool IsInverted() const;
-	uint16_t NumberOfRuns() const;
-	uint16_t Cardinality() const;
-	idx_t GetDataSizeInBytes(idx_t container_size) const;
+
+	static ContainerMetadata RunContainer(uint16_t runs) {
+		auto res = ContainerMetadata();
+		res.container_type = ContainerType::RUN_CONTAINER;
+		res.nulls = true;
+		res.count = runs;
+		return res;
+	}
+
+	static ContainerMetadata ArrayContainer(uint16_t array_size, bool nulls) {
+		auto res = ContainerMetadata();
+		res.container_type = ContainerType::ARRAY_CONTAINER;
+		res.nulls = nulls;
+		res.count = array_size;
+		return res;
+	}
+
+	static ContainerMetadata BitsetContainer(uint16_t container_size) {
+		auto res = ContainerMetadata();
+		res.container_type = ContainerType::BITSET_CONTAINER;
+		res.nulls = true;
+		res.count = container_size;
+		return res;
+	}
 
 public:
-	union {
-		struct {
-			uint16_t unused : 1;          //! Currently unused bits
-			uint16_t is_inverted : 1;     //! Indicate if this maps nulls or non-nulls
-			uint16_t is_run : 1;          //! Indicate if this is a run container
-			uint16_t unused2 : 2;         //! Currently unused bits
-			uint16_t number_of_runs : 11; //! The number of runs
-		} run_container;
+	idx_t GetDataSizeInBytes(idx_t container_size) const;
+	bool IsUncompressed() const {
+		return container_type == ContainerType::BITSET_CONTAINER;
+	}
+	bool IsRun() const {
+		return container_type == ContainerType::RUN_CONTAINER;
+	}
+	bool IsInverted() const {
+		return nulls;
+	}
+	bool IsArray() const {
+		return container_type == ContainerType::ARRAY_CONTAINER;
+	}
+	idx_t NumberOfRuns() const {
+		D_ASSERT(IsRun());
+		return count;
+	}
+	idx_t Cardinality() const {
+		D_ASSERT(IsArray());
+		return count;
+	}
 
-		struct {
-			uint16_t unused : 1;       //! Currently unused bits
-			uint16_t is_inverted : 1;  //! Indicate if this maps nulls or non-nulls
-			uint16_t is_run : 1;       //! Indicate if this is a run container
-			uint16_t cardinality : 13; //! How many values are set (4096)
-		} non_run_container;
-	} data;
+public:
+	ContainerType container_type;
+	//! Whether nulls are being encoded or non-nulls
+	bool nulls;
+	//! The amount (meaning depends on container_type)
+	uint16_t count;
+
+private:
+	ContainerMetadata() {
+	}
 };
 
 struct ContainerMetadataCollection {
