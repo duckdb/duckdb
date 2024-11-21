@@ -95,8 +95,8 @@ public:
 	virtual ~Matcher() = default;
 
 	//! Match
-	virtual MatchResultType Match(MatchState &state) = 0;
-	virtual SuggestionType AddSuggestion(MatchState &state) = 0;
+	virtual MatchResultType Match(MatchState &state) const = 0;
+	virtual SuggestionType AddSuggestion(MatchState &state) const = 0;
 
 	static Matcher &RootMatcher(MatcherAllocator &allocator);
 };

@@ -27,6 +27,11 @@ FROM sql_auto_complete('CREATE T') LIMIT 1;
 TABLE 	7
 
 query II
+FROM sql_auto_complete('CREATE OR RE') LIMIT 1;
+----
+REPLACE 	10
+
+query II
 FROM sql_auto_complete('create ta') LIMIT 1;
 ----
 table 	7
