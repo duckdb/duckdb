@@ -33,17 +33,17 @@ private:
 
 class ListMatcher : public Matcher {
 public:
-	ListMatcher(vector<unique_ptr<Matcher>> matchers_p) : matchers(std::move(matchers_p)) {
+	explicit ListMatcher(vector<reference<Matcher>> matchers_p) : matchers(std::move(matchers_p)) {
 	}
 
 	MatchResultType Match(MatchState &state) override {
 		MatchState list_state(state);
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
-			auto &child_matcher = matchers[child_idx];
+			auto &child_matcher = matchers[child_idx].get();
 			if (list_state.token_index >= list_state.tokens.size()) {
 				// we exhausted the tokens - push suggestions for the child matcher
 				for (; child_idx < matchers.size(); child_idx++) {
-					auto suggestion_type = matchers[child_idx]->AddSuggestion(list_state);
+					auto suggestion_type = matchers[child_idx].get().AddSuggestion(list_state);
 					if (suggestion_type == SuggestionType::MANDATORY) {
 						// finished providing suggestions
 						break;
@@ -52,7 +52,7 @@ public:
 				state.token_index = list_state.token_index;
 				return MatchResultType::ADDED_SUGGESTION;
 			}
-			auto match_result = child_matcher->Match(list_state);
+			auto match_result = child_matcher.Match(list_state);
 			if (match_result != MatchResultType::SUCCESS) {
 				// we did not succeed in matching a child - skip
 				return match_result;
@@ -65,7 +65,7 @@ public:
 
 	SuggestionType AddSuggestion(MatchState &state) override {
 		for (auto &matcher : matchers) {
-			auto suggestion_result = matcher->AddSuggestion(state);
+			auto suggestion_result = matcher.get().AddSuggestion(state);
 			if (suggestion_result == SuggestionType::MANDATORY) {
 				// we must match this suggestion before continuing
 				return SuggestionType::MANDATORY;
@@ -76,17 +76,17 @@ public:
 	}
 
 private:
-	vector<unique_ptr<Matcher>> matchers;
+	vector<reference<Matcher>> matchers;
 };
 
 class OptionalMatcher : public Matcher {
 public:
-	OptionalMatcher(unique_ptr<Matcher> matcher_p) : matcher(std::move(matcher_p)) {
+	OptionalMatcher(Matcher &matcher_p) : matcher(matcher_p) {
 	}
 
 	MatchResultType Match(MatchState &state) override {
 		MatchState child_state(state);
-		auto child_match = matcher->Match(child_state);
+		auto child_match = matcher.Match(child_state);
 		if (child_match != MatchResultType::SUCCESS) {
 			// did not succeed in matching - go back up (but return success anyway)
 			return MatchResultType::SUCCESS;
@@ -97,23 +97,23 @@ public:
 	}
 
 	SuggestionType AddSuggestion(MatchState &state) override {
-		matcher->AddSuggestion(state);
+		matcher.AddSuggestion(state);
 		return SuggestionType::OPTIONAL;
 	}
 
 private:
-	unique_ptr<Matcher> matcher;
+	Matcher &matcher;
 };
 
 class ChoiceMatcher : public Matcher {
 public:
-	ChoiceMatcher(vector<unique_ptr<Matcher>> matchers_p) : matchers(std::move(matchers_p)) {
+	explicit ChoiceMatcher(vector<reference<Matcher>> matchers_p) : matchers(std::move(matchers_p)) {
 	}
 
 	MatchResultType Match(MatchState &state) override {
 		for (auto &child_matcher : matchers) {
 			MatchState choice_state(state);
-			auto child_result = child_matcher->Match(choice_state);
+			auto child_result = child_matcher.get().Match(choice_state);
 			if (child_result != MatchResultType::FAIL) {
 				// we matched this child - propagate upwards
 				state.token_index = choice_state.token_index;
@@ -125,19 +125,19 @@ public:
 
 	SuggestionType AddSuggestion(MatchState &state) override {
 		for (auto &child_matcher : matchers) {
-			child_matcher->AddSuggestion(state);
+			child_matcher.get().AddSuggestion(state);
 		}
 		return SuggestionType::MANDATORY;
 	}
 
 private:
-	vector<unique_ptr<Matcher>> matchers;
+	vector<reference<Matcher>> matchers;
 };
 
 class RepeatMatcher : public Matcher {
 public:
-	RepeatMatcher(unique_ptr<Matcher> element_p, unique_ptr<Matcher> separator_p)
-	    : element(std::move(element_p)), separator(std::move(separator_p)) {
+	RepeatMatcher(Matcher &element_p, optional_ptr<Matcher> separator_p)
+	    : element(element_p), separator(separator_p) {
 	}
 
 	MatchResultType Match(MatchState &state) override {
@@ -146,12 +146,12 @@ public:
 			// we exhausted the tokens - suggest the element
 			if (repeat_state.token_index >= state.tokens.size()) {
 				// we exhausted the tokens - suggest the element
-				element->AddSuggestion(state);
+				element.AddSuggestion(state);
 				return MatchResultType::ADDED_SUGGESTION;
 			}
 
 			// first we must match the element
-			auto child_match = element->Match(repeat_state);
+			auto child_match = element.Match(repeat_state);
 			if (child_match != MatchResultType::SUCCESS) {
 				// match did not succeed - propagate upwards
 				return child_match;
@@ -181,13 +181,13 @@ public:
 	}
 
 	SuggestionType AddSuggestion(MatchState &state) override {
-		element->AddSuggestion(state);
+		element.AddSuggestion(state);
 		return SuggestionType::MANDATORY;
 	}
 
 private:
-	unique_ptr<Matcher> element;
-	unique_ptr<Matcher> separator;
+	Matcher &element;
+	optional_ptr<Matcher> separator;
 };
 
 class VariableMatcher : public Matcher {
@@ -208,230 +208,289 @@ public:
 	SuggestionState suggestion_type;
 };
 
-unique_ptr<Matcher> Matcher::Keyword(const string &keyword, int32_t score_bonus, char extra_char) {
-	return make_uniq<KeywordMatcher>(keyword, score_bonus, extra_char);
+Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
+	auto &result = *matcher;
+	matchers.push_back(std::move(matcher));
+	return result;
 }
 
-unique_ptr<Matcher> Matcher::List(vector<unique_ptr<Matcher>> matchers) {
-	return make_uniq<ListMatcher>(std::move(matchers));
+//! Class for building matchers
+class MatcherFactory {
+public:
+	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {}
+
+	Matcher &RootMatcher();
+
+private:
+	// Base primitives
+	Matcher &Keyword(const string &keyword, int32_t score_bonus= 0, char extra_char = ' ');
+	Matcher &List(vector<reference<Matcher>> matchers);
+	Matcher &Choice(vector<reference<Matcher>> matchers);
+	Matcher &Optional(Matcher &matcher);
+	Matcher &Repeat(Matcher &matcher, optional_ptr<Matcher> separator);
+	Matcher &Variable();
+	Matcher &CatalogName();
+	Matcher &SchemaName();
+	Matcher &TypeName();
+	Matcher &TableName();
+
+private:
+	// Matchers
+	Matcher &TemporaryOrReplace();
+	Matcher &IfNotExists();
+	Matcher &CatalogQualification();
+	Matcher &SchemaQualification();
+	Matcher &QualifiedSchemaName();
+	Matcher &QualifiedTableName();
+	Matcher &NotNullConstraint();
+	Matcher &UniqueConstraint();
+	Matcher &PrimaryKeyConstraint();
+	Matcher &ColumnConstraint();
+	Matcher &ColumnDefinition();
+	Matcher &ColumnIdList();
+	Matcher &TopLevelPrimaryKeyConstraint();
+	Matcher &TopLevelConstraint();
+	Matcher &CreateTableColumnList();
+	Matcher &CreateTableMatcher();
+	Matcher &CreateSchemaMatcher();
+	Matcher &FunctionOrMacro();
+	Matcher &ColumnReference();
+	Matcher &ExpressionDefinition();
+	Matcher &ScalarMacroDefinition();
+	Matcher &CreateFunctionMatcher();
+	Matcher &CreateMatchers();
+	Matcher &CreateStatementMatcher();
+
+private:
+	MatcherAllocator &allocator;
+};
+
+Matcher &MatcherFactory::Keyword(const string &keyword, int32_t score_bonus, char extra_char) {
+	return allocator.Allocate(make_uniq<KeywordMatcher>(keyword, score_bonus, extra_char));
 }
 
-unique_ptr<Matcher> Matcher::Choice(vector<unique_ptr<Matcher>> matchers) {
-	return make_uniq<ChoiceMatcher>(std::move(matchers));
+Matcher &MatcherFactory::List(vector<reference<Matcher>> matchers) {
+	return allocator.Allocate(make_uniq<ListMatcher>(std::move(matchers)));
 }
 
-unique_ptr<Matcher> Matcher::Optional(unique_ptr<Matcher> matcher) {
-	return make_uniq<OptionalMatcher>(std::move(matcher));
+Matcher &MatcherFactory::Choice(vector<reference<Matcher>> matchers) {
+	return allocator.Allocate(make_uniq<ChoiceMatcher>(std::move(matchers)));
 }
 
-unique_ptr<Matcher> Matcher::Repeat(unique_ptr<Matcher> matcher, unique_ptr<Matcher> separator) {
-	return make_uniq<RepeatMatcher>(std::move(matcher), std::move(separator));
+Matcher &MatcherFactory::Optional(Matcher &matcher) {
+	return allocator.Allocate(make_uniq<OptionalMatcher>(matcher));
 }
 
-unique_ptr<Matcher> Matcher::Variable() {
-	return make_uniq<VariableMatcher>(SuggestionState::SUGGEST_VARIABLE);
+Matcher &MatcherFactory::Repeat(Matcher &matcher, optional_ptr<Matcher> separator) {
+	return allocator.Allocate(make_uniq<RepeatMatcher>(matcher, separator));
 }
 
-unique_ptr<Matcher> Matcher::CatalogName() {
-	return make_uniq<VariableMatcher>(SuggestionState::SUGGEST_CATALOG_NAME);
+Matcher &MatcherFactory::Variable() {
+	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_VARIABLE));
 }
 
-unique_ptr<Matcher> Matcher::SchemaName() {
-	return make_uniq<VariableMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME);
+Matcher &MatcherFactory::CatalogName() {
+	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_CATALOG_NAME));
 }
 
-unique_ptr<Matcher> Matcher::TypeName() {
-	return make_uniq<VariableMatcher>(SuggestionState::SUGGEST_TYPE_NAME);
+Matcher &MatcherFactory::SchemaName() {
+	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
 }
 
-unique_ptr<Matcher> Matcher::TableName() {
-	return make_uniq<VariableMatcher>(SuggestionState::SUGGEST_TABLE_NAME);
+Matcher &MatcherFactory::TypeName() {
+	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
 }
 
-unique_ptr<Matcher> TemporaryOrReplace() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("TEMP"));
-	m.push_back(Matcher::Keyword("TEMPORARY"));
-	return Matcher::Optional(Matcher::Choice(std::move(m)));
+Matcher &MatcherFactory::TableName() {
+	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
 }
 
-unique_ptr<Matcher> IfNotExists() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("IF"));
-	m.push_back(Matcher::Keyword("NOT"));
-	m.push_back(Matcher::Keyword("EXISTS"));
-	return Matcher::Optional(Matcher::List(std::move(m)));
+Matcher &MatcherFactory::TemporaryOrReplace() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("TEMP"));
+	m.push_back(Keyword("TEMPORARY"));
+	return Optional(Choice(std::move(m)));
 }
 
-unique_ptr<Matcher> CatalogQualification() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::CatalogName());
-	m.push_back(Matcher::Keyword(".", 0, '\0'));
-	return Matcher::List(std::move(m));
+Matcher &MatcherFactory::IfNotExists() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("IF"));
+	m.push_back(Keyword("NOT"));
+	m.push_back(Keyword("EXISTS"));
+	return Optional(List(std::move(m)));
 }
 
-unique_ptr<Matcher> SchemaQualification() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::SchemaName());
-	m.push_back(Matcher::Keyword(".", 0, '\0'));
-	return Matcher::List(std::move(m));
+Matcher &MatcherFactory::CatalogQualification() {
+	vector<reference<Matcher>> m;
+	m.push_back(CatalogName());
+	m.push_back(Keyword(".", 0, '\0'));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> QualifiedSchemaName() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Optional(CatalogQualification()));
-	m.push_back(Matcher::Variable());
-	return Matcher::List(std::move(m));
+Matcher &MatcherFactory::SchemaQualification() {
+	vector<reference<Matcher>> m;
+	m.push_back(SchemaName());
+	m.push_back(Keyword(".", 0, '\0'));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> QualifiedTableName() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Optional(CatalogQualification()));
-	m.push_back(Matcher::Optional(SchemaQualification()));
-	m.push_back(Matcher::Variable());
-	return Matcher::List(std::move(m));
+Matcher &MatcherFactory::QualifiedSchemaName() {
+	vector<reference<Matcher>> m;
+	m.push_back(Optional(CatalogQualification()));
+	m.push_back(Variable());
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> TypeName() {
-	return Matcher::TypeName();
+Matcher &MatcherFactory::QualifiedTableName() {
+	vector<reference<Matcher>> m;
+	m.push_back(Optional(CatalogQualification()));
+	m.push_back(Optional(SchemaQualification()));
+	m.push_back(Variable());
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> NotNullConstraint() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("NOT"));
-	m.push_back(Matcher::Keyword("NULL", 0, '\0'));
-	return Matcher::List(std::move(m));
+Matcher &MatcherFactory::NotNullConstraint() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("NOT"));
+	m.push_back(Keyword("NULL", 0, '\0'));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> UniqueConstraint() {
-	return Matcher::Keyword("UNIQUE", 0, '\0');
+Matcher &MatcherFactory::UniqueConstraint() {
+	return Keyword("UNIQUE", 0, '\0');
 }
 
-unique_ptr<Matcher> PrimaryKeyConstraint() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("PRIMARY"));
-	m.push_back(Matcher::Keyword("KEY", 0, '\0'));
-	return Matcher::List(std::move(m));
+Matcher &MatcherFactory::PrimaryKeyConstraint() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("PRIMARY"));
+	m.push_back(Keyword("KEY", 0, '\0'));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> ColumnConstraint() {
-	vector<unique_ptr<Matcher>> m;
+Matcher &MatcherFactory::ColumnConstraint() {
+	vector<reference<Matcher>> m;
 	m.push_back(NotNullConstraint());
 	m.push_back(UniqueConstraint());
 	m.push_back(PrimaryKeyConstraint());
-	return Matcher::Repeat(Matcher::Choice(std::move(m)), nullptr);
+	return Repeat(Choice(std::move(m)), nullptr);
 }
 
-unique_ptr<Matcher> ColumnDefinition() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Variable());
+Matcher &MatcherFactory::ColumnDefinition() {
+	vector<reference<Matcher>> m;
+	m.push_back(Variable());
 	m.push_back(TypeName());
-	m.push_back(Matcher::Optional(ColumnConstraint()));
-	return Matcher::List(std::move(m));
+	m.push_back(Optional(ColumnConstraint()));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> ColumnIdList() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("("));
-	m.push_back(Matcher::Repeat(Matcher::Variable(), Matcher::Keyword(",")));
-	m.push_back(Matcher::Keyword(")"));
-	return Matcher::List(std::move(m));
+Matcher &MatcherFactory::ColumnIdList() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("("));
+	m.push_back(Repeat(Variable(), Keyword(",")));
+	m.push_back(Keyword(")"));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> TopLevelPrimaryKeyConstraint() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("PRIMARY"));
-	m.push_back(Matcher::Keyword("KEY", 0, '\0'));
+Matcher &MatcherFactory::TopLevelPrimaryKeyConstraint() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("PRIMARY"));
+	m.push_back(Keyword("KEY", 0, '\0'));
 	m.push_back(ColumnIdList());
-	return Matcher::List(std::move(m));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> TopLevelConstraint() {
-	vector<unique_ptr<Matcher>> m;
+Matcher &MatcherFactory::TopLevelConstraint() {
+	vector<reference<Matcher>> m;
 	m.push_back(TopLevelPrimaryKeyConstraint());
-	return Matcher::Choice(std::move(m));
+	return Choice(std::move(m));
 }
 
-unique_ptr<Matcher> CreateTableColumnList() {
-	vector<unique_ptr<Matcher>> m;
+Matcher &MatcherFactory::CreateTableColumnList() {
+	vector<reference<Matcher>> m;
 	m.push_back(ColumnDefinition());
 	m.push_back(TopLevelConstraint());
-	return Matcher::Repeat(Matcher::Choice(std::move(m)), Matcher::Keyword(","));
+	return Repeat(Choice(std::move(m)), Keyword(","));
 }
 
-unique_ptr<Matcher> CreateTableMatcher() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("TABLE", 1));
+Matcher &MatcherFactory::CreateTableMatcher() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("TABLE", 1));
 	m.push_back(IfNotExists());
 	m.push_back(QualifiedTableName());
-	m.push_back(Matcher::Keyword("(", 0, '\0'));
+	m.push_back(Keyword("(", 0, '\0'));
 	m.push_back(CreateTableColumnList());
-	m.push_back(Matcher::Keyword(";"));
-	return Matcher::List(std::move(m));
+	m.push_back(Keyword(";"));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> CreateSchemaMatcher() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("SCHEMA", 1));
+Matcher &MatcherFactory::CreateSchemaMatcher() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("SCHEMA", 1));
 	m.push_back(IfNotExists());
 	m.push_back(QualifiedSchemaName());
-	m.push_back(Matcher::Keyword(";"));
-	return Matcher::List(std::move(m));
+	m.push_back(Keyword(";"));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> FunctionOrMacro() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("FUNCTION", 1));
-	m.push_back(Matcher::Keyword("MACRO", 1));
-	return Matcher::Choice(std::move(m));
+Matcher &MatcherFactory::FunctionOrMacro() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("FUNCTION", 1));
+	m.push_back(Keyword("MACRO", 1));
+	return Choice(std::move(m));
 }
 
-unique_ptr<Matcher> ColumnReference() {
-	return Matcher::Variable();
+Matcher &MatcherFactory::ColumnReference() {
+	return Variable();
 }
 
-unique_ptr<Matcher> ExpressionDefinition() {
-	vector<unique_ptr<Matcher>> m;
+Matcher &MatcherFactory::ExpressionDefinition() {
+	vector<reference<Matcher>> m;
 	m.push_back(ColumnReference());
-	return Matcher::Choice(std::move(m));
+	return Choice(std::move(m));
 }
 
-unique_ptr<Matcher> ScalarMacroDefinition() {
-	vector<unique_ptr<Matcher>> m;
+Matcher &MatcherFactory::ScalarMacroDefinition() {
+	vector<reference<Matcher>> m;
 	m.push_back(ColumnIdList());
-	m.push_back(Matcher::Keyword("AS"));
+	m.push_back(Keyword("AS"));
 	m.push_back(ExpressionDefinition());
-	return Matcher::Choice(std::move(m));
+	return Choice(std::move(m));
 }
 
-unique_ptr<Matcher> CreateFunctionMatcher() {
-	vector<unique_ptr<Matcher>> m;
+Matcher &MatcherFactory::CreateFunctionMatcher() {
+	vector<reference<Matcher>> m;
 	m.push_back(FunctionOrMacro());
 	m.push_back(IfNotExists());
 	m.push_back(QualifiedTableName());
-	m.push_back(Matcher::Repeat(ScalarMacroDefinition(), Matcher::Keyword(",")));
-	return Matcher::List(std::move(m));
+	m.push_back(Repeat(ScalarMacroDefinition(), Keyword(",")));
+	return List(std::move(m));
 }
 
-unique_ptr<Matcher> CreateMatchers() {
-	vector<unique_ptr<Matcher>> m;
+Matcher &MatcherFactory::CreateMatchers() {
+	vector<reference<Matcher>> m;
 	m.push_back(CreateTableMatcher());
 	m.push_back(CreateSchemaMatcher());
 	m.push_back(CreateFunctionMatcher());
-	return Matcher::Choice(std::move(m));
-}
-unique_ptr<Matcher> CreateStatementMatcher() {
-	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("CREATE"));
-	m.push_back(TemporaryOrReplace());
-	m.push_back(CreateMatchers());
-	return Matcher::List(std::move(m));
+	return Choice(std::move(m));
 }
 
-unique_ptr<Matcher> Matcher::RootMatcher() {
-	vector<unique_ptr<Matcher>> m;
+Matcher &MatcherFactory::CreateStatementMatcher() {
+	vector<reference<Matcher>> m;
+	m.push_back(Keyword("CREATE"));
+	m.push_back(TemporaryOrReplace());
+	m.push_back(CreateMatchers());
+	return List(std::move(m));
+}
+
+Matcher &MatcherFactory::RootMatcher() {
+	vector<reference<Matcher>> m;
 	m.push_back(CreateStatementMatcher());
-	return Matcher::Choice(std::move(m));
+	return Choice(std::move(m));
+}
+
+Matcher &Matcher::RootMatcher(MatcherAllocator &allocator) {
+	MatcherFactory factory(allocator);
+	return factory.RootMatcher();
 }
 
 } // namespace duckdb

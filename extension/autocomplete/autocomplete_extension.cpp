@@ -384,8 +384,9 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	if (state.suggestions.empty()) {
 		// no suggestions found during tokenizing
 		// run the root matcher
-		auto matcher = Matcher::RootMatcher();
-		matcher->Match(state);
+		MatcherAllocator allocator;
+		auto &matcher = Matcher::RootMatcher(allocator);
+		matcher.Match(state);
 	}
 	if (state.suggestions.empty()) {
 		// still no suggestions - return

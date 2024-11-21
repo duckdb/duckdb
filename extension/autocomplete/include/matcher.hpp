@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class MatcherAllocator;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
@@ -97,18 +98,15 @@ public:
 	virtual MatchResultType Match(MatchState &state) = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) = 0;
 
-	static unique_ptr<Matcher> Keyword(const string &keyword, int32_t score_bonus= 0, char extra_char = ' ');
-	static unique_ptr<Matcher> List(vector<unique_ptr<Matcher>> matchers);
-	static unique_ptr<Matcher> Choice(vector<unique_ptr<Matcher>> matchers);
-	static unique_ptr<Matcher> Optional(unique_ptr<Matcher> matcher);
-	static unique_ptr<Matcher> Repeat(unique_ptr<Matcher> matcher, unique_ptr<Matcher> final);
-	static unique_ptr<Matcher> Variable();
-	static unique_ptr<Matcher> CatalogName();
-	static unique_ptr<Matcher> SchemaName();
-	static unique_ptr<Matcher> TypeName();
-	static unique_ptr<Matcher> TableName();
+	static Matcher &RootMatcher(MatcherAllocator &allocator);
+};
 
-	static unique_ptr<Matcher> RootMatcher();
+class MatcherAllocator {
+public:
+	Matcher &Allocate(unique_ptr<Matcher> matcher);
+
+private:
+	vector<unique_ptr<Matcher>> matchers;
 };
 
 } // namespace duckdb
