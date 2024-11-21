@@ -2,7 +2,6 @@
 # description: Test or filter pushdown
 # group: [other]
 
-
 load
 create table t1 as select range id1 from range(100);
 create table t2 as select range id2 from range(200);
