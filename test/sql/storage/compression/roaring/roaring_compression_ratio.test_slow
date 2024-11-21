@@ -118,8 +118,8 @@ statement ok
 checkpoint
 
 statement ok
-set variable min_ratio = 6.8;
-set variable max_ratio = 7.6;
+set variable min_ratio = 8.6;
+set variable max_ratio = 8.8;
 
 query I
 SELECT

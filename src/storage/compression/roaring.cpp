@@ -1094,9 +1094,6 @@ public:
 
 	void ScanInternal(ContainerScanState &scan_state, idx_t to_scan, Vector &result, idx_t offset) {
 		scan_state.ScanPartial(result, offset, to_scan);
-#ifdef DEBUG
-		auto &result_mask = FlatVector::Validity(result);
-#endif
 	}
 
 	idx_t GetContainerIndex(idx_t start_index, idx_t &offset) {

@@ -22,8 +22,8 @@ static constexpr uint16_t COMPRESSED_SEGMENT_COUNT = (ROARING_CONTAINER_SIZE / C
 
 static constexpr uint16_t MAX_RUN_IDX = (UNCOMPRESSED_SIZE - COMPRESSED_SEGMENT_COUNT) / (sizeof(uint8_t) * 2);
 static constexpr uint16_t MAX_ARRAY_IDX = (UNCOMPRESSED_SIZE - COMPRESSED_SEGMENT_COUNT) / (sizeof(uint8_t) * 1);
-static constexpr uint16_t COMPRESSED_ARRAY_THRESHOLD = 60;
-static constexpr uint16_t COMPRESSED_RUN_THRESHOLD = 30;
+static constexpr uint16_t COMPRESSED_ARRAY_THRESHOLD = 8;
+static constexpr uint16_t COMPRESSED_RUN_THRESHOLD = 4;
 
 static constexpr uint16_t CONTAINER_TYPE_BITWIDTH = 2;
 static constexpr uint16_t RUN_CONTAINER_SIZE_BITWIDTH = 7;
