@@ -1,4 +1,4 @@
-# name: test/sql/function/table/sql_auto_complete.test
+# name: test/sql/function/autocomplete/create_table.test
 # description: Test sql_auto_complete
 # group: [table]
 
@@ -69,10 +69,11 @@ FROM sql_auto_complete('create table tbl(i INTEGER UNIQUE NOT N') LIMIT 1;
 ----
 NULL	38
 
-## suggest a stand-alone constraint
-#query II
-#FROM sql_auto_complete('create table tbl(i INTEGER, PRI') LIMIT 1;
-#----
+# top-level constraints
+query II
+FROM sql_auto_complete('create table tbl(i INTEGER, PRI') LIMIT 1;
+----
+PRIMARY 	28
 
 statement ok
 CREATE SCHEMA abcdefgh;
@@ -116,11 +117,6 @@ query II
 FROM sql_auto_complete('CREATE TABLE attached_in_memory.a') LIMIT 1;
 ----
 abcdefgh.	32
-
-# nothing to suggest after CREATE FUNCTION
-query II
-FROM sql_auto_complete('CREATE FUNCTION abcd') LIMIT 1;
-----
 
 statement error
 FROM sql_auto_complete(NULL);

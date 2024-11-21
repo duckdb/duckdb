@@ -277,6 +277,13 @@ unique_ptr<Matcher> SchemaQualification() {
 	return Matcher::List(std::move(m));
 }
 
+unique_ptr<Matcher> QualifiedSchemaName() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(Matcher::Optional(CatalogQualification()));
+	m.push_back(Matcher::Variable());
+	return Matcher::List(std::move(m));
+}
+
 unique_ptr<Matcher> QualifiedTableName() {
 	vector<unique_ptr<Matcher>> m;
 	m.push_back(Matcher::Optional(CatalogQualification()));
@@ -312,21 +319,46 @@ unique_ptr<Matcher> ColumnConstraint() {
 	m.push_back(NotNullConstraint());
 	m.push_back(UniqueConstraint());
 	m.push_back(PrimaryKeyConstraint());
-	return Matcher::Optional(Matcher::Repeat(Matcher::Choice(std::move(m)), nullptr));
+	return Matcher::Repeat(Matcher::Choice(std::move(m)), nullptr);
+}
+
+unique_ptr<Matcher> ColumnDefinition() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(Matcher::Variable());
+	m.push_back(TypeName());
+	m.push_back(Matcher::Optional(ColumnConstraint()));
+	return Matcher::List(std::move(m));
+}
+
+unique_ptr<Matcher> ColumnIdList() {
+	return Matcher::Repeat(Matcher::Variable(), Matcher::Keyword(","));
+}
+
+unique_ptr<Matcher> TopLevelPrimaryKeyConstraint() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(Matcher::Keyword("PRIMARY"));
+	m.push_back(Matcher::Keyword("KEY", 0, '\0'));
+	m.push_back(Matcher::Keyword("("));
+	m.push_back(ColumnIdList());
+	m.push_back(Matcher::Keyword(")"));
+	return Matcher::List(std::move(m));
+}
+
+unique_ptr<Matcher> TopLevelConstraint() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(TopLevelPrimaryKeyConstraint());
+	return Matcher::Choice(std::move(m));
 }
 
 unique_ptr<Matcher> CreateTableColumnList() {
 	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Variable());
-	m.push_back(TypeName());
-	m.push_back(ColumnConstraint());
-	return Matcher::Repeat(Matcher::List(std::move(m)), Matcher::Keyword(","));
+	m.push_back(ColumnDefinition());
+	m.push_back(TopLevelConstraint());
+	return Matcher::Repeat(Matcher::Choice(std::move(m)), Matcher::Keyword(","));
 }
 
-unique_ptr<Matcher> KeywordCreateMatcher() {
+unique_ptr<Matcher> CreateTableMatcher() {
 	vector<unique_ptr<Matcher>> m;
-	m.push_back(Matcher::Keyword("CREATE"));
-	m.push_back(TemporaryOrReplace());
 	m.push_back(Matcher::Keyword("TABLE", 1));
 	m.push_back(IfNotExists());
 	m.push_back(QualifiedTableName());
@@ -336,9 +368,32 @@ unique_ptr<Matcher> KeywordCreateMatcher() {
 	return Matcher::List(std::move(m));
 }
 
+unique_ptr<Matcher> CreateSchemaMatcher() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(Matcher::Keyword("SCHEMA", 1));
+	m.push_back(IfNotExists());
+	m.push_back(QualifiedSchemaName());
+	m.push_back(Matcher::Keyword(";"));
+	return Matcher::List(std::move(m));
+}
+
+unique_ptr<Matcher> CreateMatchers() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(CreateTableMatcher());
+	m.push_back(CreateSchemaMatcher());
+	return Matcher::Choice(std::move(m));
+}
+unique_ptr<Matcher> CreateStatementMatcher() {
+	vector<unique_ptr<Matcher>> m;
+	m.push_back(Matcher::Keyword("CREATE"));
+	m.push_back(TemporaryOrReplace());
+	m.push_back(CreateMatchers());
+	return Matcher::List(std::move(m));
+}
+
 unique_ptr<Matcher> Matcher::RootMatcher() {
 	vector<unique_ptr<Matcher>> m;
-	m.push_back(KeywordCreateMatcher());
+	m.push_back(CreateStatementMatcher());
 	return Matcher::Choice(std::move(m));
 }
 
