@@ -1902,6 +1902,8 @@ void DuckDBPyConnection::Cursors::ClearCursors() {
 		// release it don't ask me why it can't just realize there is no GIL and move on
 		py::gil_scoped_acquire gil;
 		cursor->Close();
+		// Ensure destructor runs with gil if triggered.
+		cursor.reset();
 	}
 
 	cursors.clear();

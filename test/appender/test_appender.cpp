@@ -746,3 +746,31 @@ TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
 	REQUIRE(failed);
 	appender.Close();
 }
+
+TEST_CASE("Test appending rows with an active column list", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (2 * j), m INT)"));
+	Appender appender(con, "main", "tbl");
+	appender.AddColumn("j");
+	appender.AddColumn("m");
+
+	appender.Append(42);
+	appender.Append(43);
+	appender.EndRow();
+
+	appender.Append(Value());
+	appender.Append(44);
+	appender.EndRow();
+	appender.Close();
+
+	result = con.Query("SELECT i, j, k, l, m FROM tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {42, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {30, 30}));
+	REQUIRE(CHECK_COLUMN(result, 3, {84, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {43, 44}));
+}

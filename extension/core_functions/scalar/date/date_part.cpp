@@ -1,18 +1,19 @@
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/date_lookup_cache.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/types/date_lookup_cache.hpp"
 
 namespace duckdb {
 
@@ -400,7 +401,7 @@ struct DatePart {
 	struct EpochMillisOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return Timestamp::GetEpochMs(input);
+			return Cast::Operation<TA, TR>(input);
 		}
 
 		template <class T>
@@ -1062,7 +1063,7 @@ int64_t DatePart::EpochMicrosecondsOperator::Operation(interval_t input) {
 template <>
 int64_t DatePart::EpochMillisOperator::Operation(timestamp_t input) {
 	D_ASSERT(Timestamp::IsFinite(input));
-	return Timestamp::GetEpochMs(input);
+	return Cast::Operation<timestamp_t, timestamp_ms_t>(input).value;
 }
 
 template <>
