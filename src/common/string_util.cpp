@@ -245,6 +245,10 @@ bool StringUtil::IsLower(const string &str) {
 	return str == Lower(str);
 }
 
+bool StringUtil::IsUpper(const string &str) {
+	return str == Upper(str);
+}
+
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
 uint64_t StringUtil::CIHash(const string &str) {
 	uint32_t hash = 0;

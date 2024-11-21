@@ -24,19 +24,20 @@ TABLE 	7
 query II
 FROM sql_auto_complete('create ta') LIMIT 1;
 ----
-TABLE 	7
+table 	7
 
 # suggest a type
 query II
 FROM sql_auto_complete('create table tbl(i INTE') LIMIT 1;
 ----
-INTEGER	19
+INTEGER 	19
 
-## suggest a type in a list
-#query II
-#FROM sql_auto_complete('create table tbl(i INTEGER, j INTE') LIMIT 1;
-#----
-#
+# suggest a type in a list
+query II
+FROM sql_auto_complete('create table tbl(i INTEGER, j INTE') LIMIT 1;
+----
+INTEGER 	30
+
 ## suggest a constraint
 #query II
 #FROM sql_auto_complete('create table tbl(i INTEGER PRI') LIMIT 1;
@@ -60,6 +61,12 @@ FROM sql_auto_complete('CREATE TABLE abcd') LIMIT 1;
 ----
 abcdefgh	13
 
+# we suggest the original schema
+query II
+FROM sql_auto_complete('CREATE TABLE ABCD') LIMIT 1;
+----
+abcdefgh	13
+
 # suggest a catalog
 statement ok
 ATTACH ':memory:' AS attached_in_memory;
@@ -72,7 +79,7 @@ attached_in_memory	13
 query II
 FROM sql_auto_complete('CREATE TABLE attached_in_memory.a') LIMIT 1;
 ----
-abcdefgh 	13
+abcdefgh	32
 
 # nothing to suggest after CREATE FUNCTION
 query II

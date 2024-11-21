@@ -24,19 +24,26 @@ enum class SuggestionState : uint8_t {
 	SUGGEST_VARIABLE
 };
 
+enum class CandidateMatchCase {
+	MATCH_CASE,
+	KEEP_CASE
+};
+
 struct AutoCompleteCandidate {
 	// NOLINTNEXTLINE: allow implicit conversion from string
-	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0)
-	    : candidate(std::move(candidate_p)), score_bonus(score_bonus) {
+	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0, CandidateMatchCase case_type = CandidateMatchCase::KEEP_CASE)
+	    : candidate(std::move(candidate_p)), score_bonus(score_bonus), case_type(case_type) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from const char*
-	AutoCompleteCandidate(const char *candidate_p, int32_t score_bonus = 0)
-	    : AutoCompleteCandidate(string(candidate_p), score_bonus) {
+	AutoCompleteCandidate(const char *candidate_p, int32_t score_bonus = 0, CandidateMatchCase case_type = CandidateMatchCase::KEEP_CASE)
+	    : AutoCompleteCandidate(string(candidate_p), score_bonus, case_type) {
 	}
 
 	string candidate;
 	//! The higher the score bonus, the more likely this candidate will be chosen
 	int32_t score_bonus;
+	//! Whether or not we match the case of the original type or preserve the case of the candidate
+	CandidateMatchCase case_type;
 };
 
 enum class MatchResultType { SUCCESS, ADDED_SUGGESTION, FAIL };
@@ -56,7 +63,9 @@ struct MatcherToken {
 
 struct MatcherSuggestion {
 	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherSuggestion(const string &text) : keyword(text), type(SuggestionState::SUGGEST_KEYWORD) {
+	MatcherSuggestion(const string &text) : keyword(text, 0, CandidateMatchCase::MATCH_CASE), type(SuggestionState::SUGGEST_KEYWORD) {
+	}
+	MatcherSuggestion(AutoCompleteCandidate keyword_p) : keyword(std::move(keyword_p)), type(SuggestionState::SUGGEST_KEYWORD) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from suggestion state
 	MatcherSuggestion(SuggestionState type) : keyword(""), type(type) {

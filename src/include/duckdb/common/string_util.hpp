@@ -200,6 +200,7 @@ public:
 	DUCKDB_API static string Title(const string &str);
 
 	DUCKDB_API static bool IsLower(const string &str);
+	DUCKDB_API static bool IsUpper(const string &str);
 
 	//! Case insensitive hash
 	DUCKDB_API static uint64_t CIHash(const string &str);

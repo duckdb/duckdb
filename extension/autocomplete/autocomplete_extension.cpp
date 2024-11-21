@@ -37,16 +37,23 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 };
 
 static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix,
-                                         const vector<AutoCompleteCandidate> &extra_keywords, bool add_quotes = false) {
-	for (auto &kw : extra_keywords) {
-		available_suggestions.push_back(kw);
-	}
+                                         bool add_quotes = false) {
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(available_suggestions.size());
+
+	bool prefix_is_lower = StringUtil::IsLower(prefix);
+	bool prefix_is_upper = StringUtil::IsUpper(prefix);
 	for (auto &suggestion : available_suggestions) {
 		const int32_t BASE_SCORE = 10;
 		auto &str = suggestion.candidate;
 		auto bonus = suggestion.score_bonus;
+		if (suggestion.case_type == CandidateMatchCase::MATCH_CASE) {
+			if (prefix_is_lower) {
+				str = StringUtil::Lower(str);
+			} else if (prefix_is_upper) {
+				str = StringUtil::Upper(str);
+			}
+		}
 
 		D_ASSERT(BASE_SCORE - bonus >= 0);
 		auto score = idx_t(BASE_SCORE - bonus);
@@ -55,6 +62,9 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 			score += StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
 		} else {
 			score += StringUtil::SimilarityScore(str, prefix);
+		}
+
+		if (StringUtil::IsLower(prefix)) {
 		}
 		scores.emplace_back(str, score);
 	}
@@ -151,7 +161,7 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 static vector<AutoCompleteCandidate> SuggestType(ClientContext &) {
 	vector<AutoCompleteCandidate> suggestions;
 	for (auto &type_entry : BUILTIN_TYPES) {
-		suggestions.emplace_back(type_entry.name, 0);
+		suggestions.emplace_back(type_entry.name, 0, CandidateMatchCase::MATCH_CASE);
 	}
 	return suggestions;
 }
@@ -411,7 +421,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			available_suggestions.push_back(std::move(new_suggestion));
 		}
 	}
-	auto result_suggestions = ComputeSuggestions(available_suggestions, last_word, {}, true);
+	auto result_suggestions = ComputeSuggestions(available_suggestions, last_word, true);
 	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result_suggestions), last_pos);
 }
 

@@ -4,7 +4,7 @@ namespace duckdb {
 
 class KeywordMatcher : public Matcher {
 public:
-	KeywordMatcher(string keyword_p) : keyword(std::move(keyword_p)) {
+	explicit KeywordMatcher(string keyword_p) : keyword(std::move(keyword_p)) {
 	}
 
 	MatchResultType Match(MatchState &state) override {
