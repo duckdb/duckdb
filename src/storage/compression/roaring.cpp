@@ -676,6 +676,54 @@ public:
 		idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
 
 		auto metadata = res.GetMetadata();
+#ifdef DEBUG
+		idx_t container_index = 0;
+		idx_t container_size = container_state.count;
+		if (!metadata.IsUncompressed()) {
+			unique_ptr<ContainerScanState> scan_state;
+			if (metadata.IsRun()) {
+				D_ASSERT(metadata.IsInverted());
+				auto number_of_runs = metadata.NumberOfRuns();
+				if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
+					auto segments = container_state.run_counts;
+					auto data_ptr = container_state.compressed_runs;
+					scan_state = make_uniq<CompressedRunContainerScanState>(container_index, container_size,
+					                                                        number_of_runs, segments, data_ptr);
+				} else {
+					auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.runs);
+					scan_state =
+					    make_uniq<RunContainerScanState>(container_index, container_size, number_of_runs, data_ptr);
+				}
+			} else {
+				auto cardinality = metadata.Cardinality();
+				if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
+					if (metadata.IsInverted()) {
+						auto segments = reinterpret_cast<data_ptr_t>(container_state.array_counts[NULLS]);
+						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.compressed_arrays[NULLS]);
+						scan_state = make_uniq<CompressedArrayContainerScanState<NULLS>>(
+						    container_index, container_size, cardinality, segments, data_ptr);
+					} else {
+						auto segments = reinterpret_cast<data_ptr_t>(container_state.array_counts[NON_NULLS]);
+						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.compressed_arrays[NON_NULLS]);
+						scan_state = make_uniq<CompressedArrayContainerScanState<NON_NULLS>>(
+						    container_index, container_size, cardinality, segments, data_ptr);
+					}
+				} else {
+					if (metadata.IsInverted()) {
+						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.arrays[NULLS]);
+						scan_state = make_uniq<ArrayContainerScanState<NULLS>>(container_index, container_size,
+						                                                       cardinality, data_ptr);
+					} else {
+						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.arrays[NON_NULLS]);
+						scan_state = make_uniq<ArrayContainerScanState<NON_NULLS>>(container_index, container_size,
+						                                                           cardinality, data_ptr);
+					}
+				}
+			}
+			scan_state->Verify();
+		}
+#endif
+
 		if (metadata.IsRun()) {
 			runs_count++;
 		} else {
