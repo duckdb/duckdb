@@ -837,7 +837,7 @@ public:
 
 	void InitializeContainer() {
 		if (count == analyze_state.count) {
-			// No more vectors left
+			// No more containers left
 			return;
 		}
 		auto container_index = GetContainerIndex();
@@ -1015,14 +1015,14 @@ public:
 	idx_t scanned_count = 0;
 };
 
-struct VectorSegmentCompression {
+struct ContainerSegmentScan {
 public:
-	VectorSegmentCompression(data_ptr_t data) : segments(reinterpret_cast<uint8_t *>(data)), index(0), count(0) {
+	ContainerSegmentScan(data_ptr_t data) : segments(reinterpret_cast<uint8_t *>(data)), index(0), count(0) {
 	}
-	VectorSegmentCompression(const VectorSegmentCompression &other) = delete;
-	VectorSegmentCompression(VectorSegmentCompression &&other) = delete;
-	VectorSegmentCompression &operator=(const VectorSegmentCompression &other) = delete;
-	VectorSegmentCompression &operator=(VectorSegmentCompression &&other) = delete;
+	ContainerSegmentScan(const ContainerSegmentScan &other) = delete;
+	ContainerSegmentScan(ContainerSegmentScan &&other) = delete;
+	ContainerSegmentScan &operator=(const ContainerSegmentScan &other) = delete;
+	ContainerSegmentScan &operator=(ContainerSegmentScan &&other) = delete;
 
 public:
 	// Returns the base of the current segment, forwarding the index if the segment is depleted of values
@@ -1033,6 +1033,7 @@ public:
 		}
 		count++;
 
+		// index == 8 is allowed for runs, as the last run could end at ROARING_CONTAINER_SIZE
 		D_ASSERT(index <= 8);
 		if (index < 8) {
 			D_ASSERT(segments[index] != 0);
@@ -1042,7 +1043,7 @@ public:
 	}
 
 private:
-	//! The 8 unsigned bytes indicating for each segment (256 bytes) of the Vector how many values are in the segment
+	//! The 8 unsigned bytes indicating for each segment (256 bytes) of the container how many values are in the segment
 	uint8_t *segments;
 	uint8_t index;
 	uint8_t count;
@@ -1139,7 +1140,7 @@ public:
 #ifdef DEBUG
 		uint16_t index = 0;
 		if (COMPRESSED) {
-			VectorSegmentCompression verify_segment(data - (sizeof(uint8_t) * 8));
+			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * 8));
 			for (idx_t i = 0; i < count; i++) {
 				// Get the start index of the run
 				uint16_t start = verify_segment++;
@@ -1164,7 +1165,7 @@ public:
 	}
 
 public:
-	VectorSegmentCompression segment;
+	ContainerSegmentScan segment;
 	RunContainerRLEPair run;
 	data_ptr_t data;
 	idx_t count;
@@ -1249,7 +1250,7 @@ public:
 #ifdef DEBUG
 		uint16_t index = 0;
 		if (COMPRESSED) {
-			VectorSegmentCompression verify_segment(data - (sizeof(uint8_t) * 8));
+			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * 8));
 			for (uint16_t i = 0; i < count; i++) {
 				// Get the value
 				uint16_t new_index = verify_segment++;
@@ -1269,7 +1270,7 @@ public:
 	}
 
 public:
-	VectorSegmentCompression segment;
+	ContainerSegmentScan segment;
 	uint16_t value;
 	data_ptr_t data;
 	bool finished = false;
@@ -1446,8 +1447,8 @@ public:
 		idx_t scanned = 0;
 		while (remaining) {
 			idx_t internal_offset;
-			idx_t vector_idx = GetContainerIndex(start_idx + scanned, internal_offset);
-			auto &scan_state = LoadContainer(vector_idx, internal_offset);
+			idx_t container_idx = GetContainerIndex(start_idx + scanned, internal_offset);
+			auto &scan_state = LoadContainer(container_idx, internal_offset);
 			idx_t remaining_in_container = scan_state.container_size - scan_state.scanned_count;
 			idx_t to_scan = MinValue<idx_t>(remaining, remaining_in_container);
 			ScanInternal(scan_state, to_scan, result, offset + scanned);
@@ -1504,8 +1505,8 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 	RoaringScanState scan_state(segment);
 
 	idx_t internal_offset;
-	idx_t vector_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
-	auto &container_state = scan_state.LoadContainer(vector_idx, internal_offset);
+	idx_t container_idx = scan_state.GetContainerIndex(static_cast<idx_t>(row_id), internal_offset);
+	auto &container_state = scan_state.LoadContainer(container_idx, internal_offset);
 
 	scan_state.ScanInternal(container_state, 1, result, result_idx);
 }
