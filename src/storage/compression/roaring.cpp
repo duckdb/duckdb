@@ -491,7 +491,7 @@ public:
 			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
 			run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 			run_idx++;
-		} else if (!count || ((null != last_is_null) && null && run_idx < MAX_RUN_IDX)) {
+		} else if (null && (!count || ((null != last_is_null) && run_idx < MAX_RUN_IDX))) {
 			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
 				auto &current_run = runs[run_idx];
 				// Initialize a new run
