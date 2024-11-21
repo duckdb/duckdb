@@ -4,7 +4,7 @@ namespace duckdb {
 
 class KeywordMatcher : public Matcher {
 public:
-	explicit KeywordMatcher(string keyword_p) : keyword(std::move(keyword_p)) {
+	explicit KeywordMatcher(string keyword_p, int32_t score_bonus = 0, char extra_char = '\0') : keyword(std::move(keyword_p)), score_bonus(score_bonus), extra_char(extra_char) {
 	}
 
 	MatchResultType Match(MatchState &state) override {
@@ -19,12 +19,16 @@ public:
 	}
 
 	SuggestionType AddSuggestion(MatchState &state) override {
-		state.suggestions.push_back(keyword);
+		AutoCompleteCandidate candidate(keyword, score_bonus, CandidateMatchCase::MATCH_CASE);
+		candidate.extra_char = extra_char;
+		state.suggestions.emplace_back(std::move(candidate));
 		return SuggestionType::MANDATORY;
 	}
 
 private:
 	string keyword;
+	int32_t score_bonus;
+	char extra_char;
 };
 
 class ListMatcher : public Matcher {
@@ -201,8 +205,8 @@ public:
 	SuggestionState suggestion_type;
 };
 
-unique_ptr<Matcher> Matcher::Keyword(const string &keyword) {
-	return make_uniq<KeywordMatcher>(keyword);
+unique_ptr<Matcher> Matcher::Keyword(const string &keyword, int32_t score_bonus, char extra_char) {
+	return make_uniq<KeywordMatcher>(keyword, score_bonus, extra_char);
 }
 
 unique_ptr<Matcher> Matcher::List(vector<unique_ptr<Matcher>> matchers) {
@@ -259,14 +263,14 @@ unique_ptr<Matcher> IfNotExists() {
 unique_ptr<Matcher> CatalogQualification() {
 	vector<unique_ptr<Matcher>> m;
 	m.push_back(Matcher::CatalogName());
-	m.push_back(Matcher::Keyword("."));
+	m.push_back(Matcher::Keyword(".", 0, '\0'));
 	return Matcher::List(std::move(m));
 }
 
 unique_ptr<Matcher> SchemaQualification() {
 	vector<unique_ptr<Matcher>> m;
 	m.push_back(Matcher::SchemaName());
-	m.push_back(Matcher::Keyword("."));
+	m.push_back(Matcher::Keyword(".", 0, '\0'));
 	return Matcher::List(std::move(m));
 }
 
@@ -289,10 +293,10 @@ unique_ptr<Matcher> KeywordCreateMatcher() {
 	vector<unique_ptr<Matcher>> m;
 	m.push_back(Matcher::Keyword("CREATE"));
 	m.push_back(TemporaryOrReplace());
-	m.push_back(Matcher::Keyword("TABLE"));
+	m.push_back(Matcher::Keyword("TABLE", 1));
 	m.push_back(IfNotExists());
 	m.push_back(QualifiedTableName());
-	m.push_back(Matcher::Keyword("("));
+	m.push_back(Matcher::Keyword("(", 0, '\0'));
 	m.push_back(CreateTableColumnList());
 	m.push_back(Matcher::Keyword(";"));
 	return Matcher::List(std::move(m));

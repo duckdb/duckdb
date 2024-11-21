@@ -36,24 +36,23 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix,
-                                         bool add_quotes = false) {
+static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix) {
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(available_suggestions.size());
 
+	case_insensitive_map_t<idx_t> matches;
 	bool prefix_is_lower = StringUtil::IsLower(prefix);
 	bool prefix_is_upper = StringUtil::IsUpper(prefix);
-	for (auto &suggestion : available_suggestions) {
+	for(idx_t i = 0; i < available_suggestions.size(); i++) {
+		auto &suggestion = available_suggestions[i];
 		const int32_t BASE_SCORE = 10;
 		auto &str = suggestion.candidate;
 		auto bonus = suggestion.score_bonus;
-		if (suggestion.case_type == CandidateMatchCase::MATCH_CASE) {
-			if (prefix_is_lower) {
-				str = StringUtil::Lower(str);
-			} else if (prefix_is_upper) {
-				str = StringUtil::Upper(str);
-			}
+		if (matches.find(str) != matches.end()) {
+			// entry already exists
+			continue;
 		}
+		matches[str] = i;
 
 		D_ASSERT(BASE_SCORE - bonus >= 0);
 		auto score = idx_t(BASE_SCORE - bonus);
@@ -63,19 +62,26 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 		} else {
 			score += StringUtil::SimilarityScore(str, prefix);
 		}
-
-		if (StringUtil::IsLower(prefix)) {
-		}
 		scores.emplace_back(str, score);
 	}
 	auto results = StringUtil::TopNStrings(scores, 20, 999);
-	if (add_quotes) {
-		for (auto &result : results) {
-			if (!KeywordHelper::IsKeyword(result)) {
-				result = KeywordHelper::WriteOptionallyQuoted(result, '"', true);
-			} else {
-				result = result + " ";
+	for(auto &result : results) {
+		auto entry = matches.find(result);
+		if (entry == matches.end()) {
+			throw InternalException("Auto-complete match not found");
+		}
+		auto &suggestion = available_suggestions[entry->second];
+		if (suggestion.case_type == CandidateMatchCase::MATCH_CASE) {
+			if (prefix_is_lower) {
+				result = StringUtil::Lower(result);
+			} else if (prefix_is_upper) {
+				result = StringUtil::Upper(result);
 			}
+		} else {
+			result = KeywordHelper::WriteOptionallyQuoted(result, '"');
+		}
+		if (suggestion.extra_char != '\0') {
+			result += suggestion.extra_char;
 		}
 	}
 	return results;
@@ -131,7 +137,9 @@ static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) 
 	auto all_entries = GetAllCatalogs(context);
 	for (auto &entry_ref : all_entries) {
 		auto &entry = entry_ref.get();
-		suggestions.emplace_back(entry.name, 0);
+		AutoCompleteCandidate candidate(entry.name, 0);
+		candidate.extra_char = '.';
+		suggestions.push_back(std::move(candidate));
 	}
 	return suggestions;
 }
@@ -141,7 +149,9 @@ static vector<AutoCompleteCandidate> SuggestSchemaName(ClientContext &context) {
 	auto all_entries = GetAllSchemas(context);
 	for (auto &entry_ref : all_entries) {
 		auto &entry = entry_ref.get();
-		suggestions.emplace_back(entry.name, 0);
+		AutoCompleteCandidate candidate(entry.name, 0);
+		candidate.extra_char = '.';
+		suggestions.push_back(std::move(candidate));
 	}
 	return suggestions;
 }
@@ -354,10 +364,6 @@ static bool TokenizeInput(const string &sql, MatchState &match_state, string &la
 	default:
 		break;
 	}
-	while ((last_pos < sql.size()) &&
-		   (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
-		last_pos++;
-		   }
 	last_word = sql.substr(last_pos, sql.size() - last_pos);
 	last_pos -= pos_offset;
 	return true;
@@ -418,10 +424,13 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			throw InternalException("Unrecognized suggestion state");
 		}
 		for (auto &new_suggestion : new_suggestions) {
+			if (new_suggestion.extra_char == '\0') {
+				new_suggestion.extra_char = suggestion.extra_char;
+			}
 			available_suggestions.push_back(std::move(new_suggestion));
 		}
 	}
-	auto result_suggestions = ComputeSuggestions(available_suggestions, last_word, true);
+	auto result_suggestions = ComputeSuggestions(available_suggestions, last_word);
 	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result_suggestions), last_pos);
 }
 

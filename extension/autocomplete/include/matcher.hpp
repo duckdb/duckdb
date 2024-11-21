@@ -44,6 +44,8 @@ struct AutoCompleteCandidate {
 	int32_t score_bonus;
 	//! Whether or not we match the case of the original type or preserve the case of the candidate
 	CandidateMatchCase case_type;
+	//! Extra char to push at the back
+	char extra_char = '\0';
 };
 
 enum class MatchResultType { SUCCESS, ADDED_SUGGESTION, FAIL };
@@ -62,18 +64,16 @@ struct MatcherToken {
 };
 
 struct MatcherSuggestion {
-	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherSuggestion(const string &text) : keyword(text, 0, CandidateMatchCase::MATCH_CASE), type(SuggestionState::SUGGEST_KEYWORD) {
-	}
 	MatcherSuggestion(AutoCompleteCandidate keyword_p) : keyword(std::move(keyword_p)), type(SuggestionState::SUGGEST_KEYWORD) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from suggestion state
-	MatcherSuggestion(SuggestionState type) : keyword(""), type(type) {
+	MatcherSuggestion(SuggestionState type, char extra_char = '\0') : keyword(""), type(type), extra_char(extra_char) {
 	}
 
 	//! Literal suggestion
 	AutoCompleteCandidate keyword;
 	SuggestionState type;
+	char extra_char = '\0';
 };
 
 struct MatchState {
@@ -97,7 +97,7 @@ public:
 	virtual MatchResultType Match(MatchState &state) = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) = 0;
 
-	static unique_ptr<Matcher> Keyword(const string &keyword);
+	static unique_ptr<Matcher> Keyword(const string &keyword, int32_t score_bonus= 0, char extra_char = ' ');
 	static unique_ptr<Matcher> List(vector<unique_ptr<Matcher>> matchers);
 	static unique_ptr<Matcher> Choice(vector<unique_ptr<Matcher>> matchers);
 	static unique_ptr<Matcher> Optional(unique_ptr<Matcher> matcher);
