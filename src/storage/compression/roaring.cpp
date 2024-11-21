@@ -1079,29 +1079,33 @@ public:
 			D_ASSERT(metadata.IsInverted());
 			auto number_of_runs = metadata.NumberOfRuns();
 			if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
-				current_container =
-				    make_uniq<RunContainerScanState<true>>(container_index, container_size, data_ptr, number_of_runs);
+				auto segments = data_ptr;
+				data_ptr = segments + COMPRESSED_SEGMENT_COUNT;
+				current_container = make_uniq<CompressedRunContainerScanState>(container_index, container_size,
+				                                                               number_of_runs, segments, data_ptr);
 			} else {
 				current_container =
-				    make_uniq<RunContainerScanState<false>>(container_index, container_size, data_ptr, number_of_runs);
+				    make_uniq<RunContainerScanState>(container_index, container_size, number_of_runs, data_ptr);
 			}
 		} else {
 			auto cardinality = metadata.Cardinality();
 			if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
+				auto segments = data_ptr;
+				data_ptr = segments + COMPRESSED_SEGMENT_COUNT;
 				if (metadata.IsInverted()) {
-					current_container = make_uniq<ArrayContainerScanState<NULLS, true>>(container_index, container_size,
-					                                                                    data_ptr, cardinality);
+					current_container = make_uniq<CompressedArrayContainerScanState<NULLS>>(
+					    container_index, container_size, cardinality, segments, data_ptr);
 				} else {
-					current_container = make_uniq<ArrayContainerScanState<NON_NULLS, true>>(
-					    container_index, container_size, data_ptr, cardinality);
+					current_container = make_uniq<CompressedArrayContainerScanState<NON_NULLS>>(
+					    container_index, container_size, cardinality, segments, data_ptr);
 				}
 			} else {
 				if (metadata.IsInverted()) {
-					current_container = make_uniq<ArrayContainerScanState<NULLS, false>>(
-					    container_index, container_size, data_ptr, cardinality);
+					current_container = make_uniq<ArrayContainerScanState<NULLS>>(container_index, container_size,
+					                                                              cardinality, data_ptr);
 				} else {
-					current_container = make_uniq<ArrayContainerScanState<NON_NULLS, false>>(
-					    container_index, container_size, data_ptr, cardinality);
+					current_container = make_uniq<ArrayContainerScanState<NON_NULLS>>(container_index, container_size,
+					                                                                  cardinality, data_ptr);
 				}
 			}
 		}

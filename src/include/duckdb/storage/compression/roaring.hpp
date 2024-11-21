@@ -145,15 +145,10 @@ private:
 
 //! RUN Container
 
-template <bool COMPRESSED>
 struct RunContainerScanState : public ContainerScanState {
 public:
-	RunContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data_p, idx_t count)
-	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
-		if (COMPRESSED) {
-			D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
-			data += (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
-		}
+	RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count, data_ptr_t data_p)
+	    : ContainerScanState(container_index, container_size), count(count), data(data_p) {
 	}
 
 public:
@@ -210,89 +205,101 @@ public:
 		// In case run_index has already reached count
 		scanned_count = end;
 	}
+	virtual void Verify() const override {
+#ifdef DEBUG
+		uint16_t index = 0;
+		for (idx_t i = 0; i < count; i++) {
+			auto run = reinterpret_cast<RunContainerRLEPair *>(data)[i];
+			D_ASSERT(run.start >= index);
+			index = run.start + 1 + run.length;
+		}
+#endif
+	}
+
+protected:
+	virtual void LoadNextRun() {
+		if (run_index >= count) {
+			finished = true;
+			return;
+		}
+		run = reinterpret_cast<RunContainerRLEPair *>(data)[run_index];
+		run_index++;
+	}
+
+protected:
+	RunContainerRLEPair run;
+	bool finished = false;
+	idx_t run_index = 0;
+	idx_t count;
+	data_ptr_t data;
+};
+
+struct CompressedRunContainerScanState : public RunContainerScanState {
+public:
+	CompressedRunContainerScanState(idx_t container_index, idx_t container_size, idx_t count, data_ptr_t segments,
+	                                data_ptr_t data)
+	    : RunContainerScanState(container_index, container_size, count, data), segments(segments), segment(segments) {
+		D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
+	}
+
+public:
+	void LoadNextRun() override {
+		if (run_index >= count) {
+			finished = true;
+			return;
+		}
+		uint16_t start = segment++;
+		start += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 0];
+
+		uint16_t end = segment++;
+		end += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 1];
+
+		D_ASSERT(end > start);
+		run = RunContainerRLEPair {start, static_cast<uint16_t>(end - 1 - start)};
+		run_index++;
+	}
+
 	void Verify() const override {
 #ifdef DEBUG
 		uint16_t index = 0;
-		if (COMPRESSED) {
-			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT));
-			for (idx_t i = 0; i < count; i++) {
-				// Get the start index of the run
-				uint16_t start = verify_segment++;
-				start += reinterpret_cast<uint8_t *>(data)[(i * 2) + 0];
+		ContainerSegmentScan verify_segment(segments);
+		for (idx_t i = 0; i < count; i++) {
+			// Get the start index of the run
+			uint16_t start = verify_segment++;
+			start += reinterpret_cast<uint8_t *>(data)[(i * 2) + 0];
 
-				// Get the end index of the run
-				uint16_t end = verify_segment++;
-				end += reinterpret_cast<uint8_t *>(data)[(i * 2) + 1];
+			// Get the end index of the run
+			uint16_t end = verify_segment++;
+			end += reinterpret_cast<uint8_t *>(data)[(i * 2) + 1];
 
-				D_ASSERT(!i || start >= index);
-				D_ASSERT(end > start);
-				index = end;
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				auto run = reinterpret_cast<RunContainerRLEPair *>(data)[i];
-				D_ASSERT(run.start >= index);
-				index = run.start + 1 + run.length;
-			}
+			D_ASSERT(!i || start >= index);
+			D_ASSERT(end > start);
+			index = end;
 		}
 #endif
 	}
 
 private:
-	void LoadNextRun() {
-		if (run_index >= count) {
-			finished = true;
-			return;
-		}
-		if (COMPRESSED) {
-			uint16_t start = segment++;
-			start += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 0];
-
-			uint16_t end = segment++;
-			end += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 1];
-
-			D_ASSERT(end > start);
-			run = RunContainerRLEPair {start, static_cast<uint16_t>(end - 1 - start)};
-		} else {
-			run = reinterpret_cast<RunContainerRLEPair *>(data)[run_index];
-		}
-		run_index++;
-	}
-
-public:
+	data_ptr_t segments;
 	ContainerSegmentScan segment;
-	RunContainerRLEPair run;
-	data_ptr_t data;
-	idx_t count;
-	idx_t run_index = 0;
-	bool finished = false;
 };
 
 //! ARRAY Container
 
-template <bool INVERTED, bool COMPRESSED>
+template <bool INVERTED>
 struct ArrayContainerScanState : public ContainerScanState {
 public:
-	ArrayContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data_p, idx_t count)
-	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
-		if (COMPRESSED) {
-			D_ASSERT(count >= COMPRESSED_ARRAY_THRESHOLD);
-			data += (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
-		}
+	ArrayContainerScanState(idx_t container_index, idx_t container_size, idx_t count, data_ptr_t data_p)
+	    : ContainerScanState(container_index, container_size), data(data_p), count(count) {
 	}
 
-private:
-	void LoadNextValue() {
+public:
+	virtual void LoadNextValue() {
 		if (array_index >= count) {
 			finished = true;
 			return;
 		}
-		if (COMPRESSED) {
-			value = segment++;
-			value += reinterpret_cast<uint8_t *>(data)[array_index];
-		} else {
-			value = reinterpret_cast<uint16_t *>(data)[array_index];
-		}
+		value = reinterpret_cast<uint16_t *>(data)[array_index];
 		array_index++;
 	}
 
@@ -344,36 +351,63 @@ public:
 		scanned_count = end;
 	}
 
-	void Verify() const override {
+	virtual void Verify() const override {
 #ifdef DEBUG
 		uint16_t index = 0;
-		if (COMPRESSED) {
-			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT));
-			for (uint16_t i = 0; i < count; i++) {
-				// Get the value
-				uint16_t new_index = verify_segment++;
-				new_index += reinterpret_cast<uint8_t *>(data)[i];
-
-				D_ASSERT(!i || new_index > index);
-				index = new_index;
-			}
-		} else {
-			auto array = reinterpret_cast<uint16_t *>(data);
-			for (uint16_t i = 0; i < count; i++) {
-				D_ASSERT(!i || array[i] > index);
-				index = array[i];
-			}
+		auto array = reinterpret_cast<uint16_t *>(data);
+		for (uint16_t i = 0; i < count; i++) {
+			D_ASSERT(!i || array[i] > index);
+			index = array[i];
 		}
 #endif
 	}
 
-public:
-	ContainerSegmentScan segment;
+protected:
 	uint16_t value;
 	data_ptr_t data;
 	bool finished = false;
 	const idx_t count;
 	idx_t array_index = 0;
+};
+
+template <bool INVERTED>
+struct CompressedArrayContainerScanState : public ArrayContainerScanState<INVERTED> {
+public:
+	CompressedArrayContainerScanState(idx_t container_index, idx_t container_size, idx_t count, data_ptr_t segments,
+	                                  data_ptr_t data)
+	    : ArrayContainerScanState<INVERTED>(container_index, container_size, count, data), segments(segments),
+	      segment(segments) {
+		D_ASSERT(count >= COMPRESSED_ARRAY_THRESHOLD);
+	}
+
+public:
+	void LoadNextValue() override {
+		if (this->array_index >= this->count) {
+			this->finished = true;
+			return;
+		}
+		this->value = segment++;
+		this->value += reinterpret_cast<uint8_t *>(this->data)[this->array_index];
+		this->array_index++;
+	}
+	void Verify() const override {
+#ifdef DEBUG
+		uint16_t index = 0;
+		ContainerSegmentScan verify_segment(segments);
+		for (uint16_t i = 0; i < this->count; i++) {
+			// Get the value
+			uint16_t new_index = verify_segment++;
+			new_index += reinterpret_cast<uint8_t *>(this->data)[i];
+
+			D_ASSERT(!i || new_index > index);
+			index = new_index;
+		}
+#endif
+	}
+
+private:
+	data_ptr_t segments;
+	ContainerSegmentScan segment;
 };
 
 //! BITSET Container
