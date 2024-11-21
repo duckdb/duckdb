@@ -1139,28 +1139,14 @@ public:
 #ifdef DEBUG
 		uint16_t index = 0;
 		if (COMPRESSED) {
-			uint8_t segment_index = 0;
-			idx_t count_in_segment = 0;
-			uint8_t *segment_counts = data - (sizeof(uint8_t) * 8);
+			VectorSegmentCompression verify_segment(data - (sizeof(uint8_t) * 8));
 			for (idx_t i = 0; i < count; i++) {
 				// Get the start index of the run
-				while (segment_index < 8 && count_in_segment >= segment_counts[segment_index]) {
-					count_in_segment = 0;
-					segment_index++;
-				}
-				D_ASSERT(segment_index <= 8);
-				count_in_segment++;
-				uint16_t start = segment_index * COMPRESSED_SEGMENT_SIZE;
+				uint16_t start = verify_segment++;
 				start += reinterpret_cast<uint8_t *>(data)[(i * 2) + 0];
 
 				// Get the end index of the run
-				while (segment_index < 8 && count_in_segment >= segment_counts[segment_index]) {
-					count_in_segment = 0;
-					segment_index++;
-				}
-				D_ASSERT(segment_index <= 8);
-				count_in_segment++;
-				uint16_t end = segment_index * COMPRESSED_SEGMENT_SIZE;
+				uint16_t end = verify_segment++;
 				end += reinterpret_cast<uint8_t *>(data)[(i * 2) + 1];
 
 				D_ASSERT(!i || start >= index);
@@ -1263,18 +1249,10 @@ public:
 #ifdef DEBUG
 		uint16_t index = 0;
 		if (COMPRESSED) {
-			uint8_t segment_index = 0;
-			idx_t count_in_segment = 0;
-			uint8_t *segment_counts = data - (sizeof(uint8_t) * 8);
+			VectorSegmentCompression verify_segment(data - (sizeof(uint8_t) * 8));
 			for (uint16_t i = 0; i < count; i++) {
 				// Get the value
-				while (segment_index < 8 && count_in_segment >= segment_counts[segment_index]) {
-					count_in_segment = 0;
-					segment_index++;
-				}
-				D_ASSERT(segment_index <= 8);
-				count_in_segment++;
-				uint16_t new_index = segment_index * COMPRESSED_SEGMENT_SIZE;
+				uint16_t new_index = verify_segment++;
 				new_index += reinterpret_cast<uint8_t *>(data)[i];
 
 				D_ASSERT(!i || new_index > index);
