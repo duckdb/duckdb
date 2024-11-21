@@ -12,6 +12,26 @@ namespace duckdb {
 
 namespace roaring {
 
+//! The amount of values that are encoded per container
+static constexpr idx_t ROARING_CONTAINER_SIZE = 2048;
+static constexpr bool NULLS = true;
+static constexpr bool NON_NULLS = false;
+static constexpr uint16_t UNCOMPRESSED_SIZE = (ROARING_CONTAINER_SIZE / sizeof(validity_t));
+static constexpr uint16_t COMPRESSED_SEGMENT_SIZE = 256;
+static constexpr uint16_t COMPRESSED_SEGMENT_COUNT = (ROARING_CONTAINER_SIZE / COMPRESSED_SEGMENT_SIZE);
+
+static constexpr uint16_t MAX_RUN_IDX = (UNCOMPRESSED_SIZE - COMPRESSED_SEGMENT_COUNT) / (sizeof(uint8_t) * 2);
+static constexpr uint16_t MAX_ARRAY_IDX = (UNCOMPRESSED_SIZE - COMPRESSED_SEGMENT_COUNT) / (sizeof(uint8_t) * 1);
+static constexpr uint16_t COMPRESSED_ARRAY_THRESHOLD = 8;
+static constexpr uint16_t COMPRESSED_RUN_THRESHOLD = 4;
+
+static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end);
+
+struct RunContainerRLEPair {
+	uint16_t start;
+	uint16_t length;
+};
+
 struct ContainerMetadata {
 public:
 	ContainerMetadata();
@@ -80,6 +100,295 @@ public:
 	idx_t count_in_segment = 0;
 	idx_t runs_in_segment = 0;
 	idx_t arrays_in_segment = 0;
+};
+
+struct ContainerScanState {
+public:
+	ContainerScanState(idx_t container_index_p, idx_t container_size)
+	    : container_index(container_index_p), container_size(container_size) {
+	}
+	virtual ~ContainerScanState() {
+	}
+
+public:
+	virtual void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) = 0;
+	virtual void Skip(idx_t count) = 0;
+	virtual void Verify() const = 0;
+
+public:
+	//! The index of the container
+	idx_t container_index;
+	//! The size of the container (how many values does it hold)
+	idx_t container_size;
+	//! How much of the container is already consumed
+	idx_t scanned_count = 0;
+};
+
+struct ContainerSegmentScan {
+public:
+	explicit ContainerSegmentScan(data_ptr_t data);
+	ContainerSegmentScan(const ContainerSegmentScan &other) = delete;
+	ContainerSegmentScan(ContainerSegmentScan &&other) = delete;
+	ContainerSegmentScan &operator=(const ContainerSegmentScan &other) = delete;
+	ContainerSegmentScan &operator=(ContainerSegmentScan &&other) = delete;
+
+public:
+	// Returns the base of the current segment, forwarding the index if the segment is depleted of values
+	uint16_t operator++(int);
+
+private:
+	//! The 8 unsigned bytes indicating for each segment (256 bytes) of the container how many values are in the segment
+	uint8_t *segments;
+	uint8_t index;
+	uint8_t count;
+};
+
+//! RUN Container
+
+template <bool COMPRESSED>
+struct RunContainerScanState : public ContainerScanState {
+public:
+	RunContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data_p, idx_t count)
+	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
+		if (COMPRESSED) {
+			D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
+			data += (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
+		}
+	}
+
+public:
+	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
+		auto &result_mask = FlatVector::Validity(result);
+
+		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
+		// scanned.
+
+		idx_t result_idx = 0;
+		if (!run_index) {
+			LoadNextRun();
+		}
+		while (!finished && result_idx < to_scan) {
+			// Either we are already inside a run, then 'start_of_run' will be scanned_count
+			// or we're skipping values until the run begins
+			auto start_of_run =
+			    MaxValue<idx_t>(MinValue<idx_t>(run.start, scanned_count + to_scan), scanned_count + result_idx);
+			result_idx = start_of_run - scanned_count;
+
+			// How much of the run are we covering?
+			idx_t run_end = run.start + 1 + run.length;
+			auto run_or_scan_end = MinValue<idx_t>(run_end, scanned_count + to_scan);
+
+			// Process the run
+			D_ASSERT(run_or_scan_end >= start_of_run);
+			if (run_or_scan_end > start_of_run) {
+				idx_t amount = run_or_scan_end - start_of_run;
+				idx_t start = result_offset + result_idx;
+				idx_t end = start + amount;
+				SetInvalidRange(result_mask, start, end);
+			}
+
+			result_idx += run_or_scan_end - start_of_run;
+			if (scanned_count + result_idx == run_end) {
+				// Fully processed the current run
+				LoadNextRun();
+			}
+		}
+		scanned_count += to_scan;
+	}
+	void Skip(idx_t to_skip) override {
+		idx_t end = scanned_count + to_skip;
+		if (!run_index) {
+			LoadNextRun();
+		}
+		while (scanned_count < end && !finished) {
+			idx_t run_end = run.start + 1 + run.length;
+			scanned_count = MinValue<idx_t>(run_end, end);
+			if (scanned_count == run_end) {
+				LoadNextRun();
+			}
+		}
+		// In case run_index has already reached count
+		scanned_count = end;
+	}
+	void Verify() const override {
+#ifdef DEBUG
+		uint16_t index = 0;
+		if (COMPRESSED) {
+			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT));
+			for (idx_t i = 0; i < count; i++) {
+				// Get the start index of the run
+				uint16_t start = verify_segment++;
+				start += reinterpret_cast<uint8_t *>(data)[(i * 2) + 0];
+
+				// Get the end index of the run
+				uint16_t end = verify_segment++;
+				end += reinterpret_cast<uint8_t *>(data)[(i * 2) + 1];
+
+				D_ASSERT(!i || start >= index);
+				D_ASSERT(end > start);
+				index = end;
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				auto run = reinterpret_cast<RunContainerRLEPair *>(data)[i];
+				D_ASSERT(run.start >= index);
+				index = run.start + 1 + run.length;
+			}
+		}
+#endif
+	}
+
+private:
+	void LoadNextRun() {
+		if (run_index >= count) {
+			finished = true;
+			return;
+		}
+		if (COMPRESSED) {
+			uint16_t start = segment++;
+			start += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 0];
+
+			uint16_t end = segment++;
+			end += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 1];
+
+			D_ASSERT(end > start);
+			run = RunContainerRLEPair {start, static_cast<uint16_t>(end - 1 - start)};
+		} else {
+			run = reinterpret_cast<RunContainerRLEPair *>(data)[run_index];
+		}
+		run_index++;
+	}
+
+public:
+	ContainerSegmentScan segment;
+	RunContainerRLEPair run;
+	data_ptr_t data;
+	idx_t count;
+	idx_t run_index = 0;
+	bool finished = false;
+};
+
+//! ARRAY Container
+
+template <bool INVERTED, bool COMPRESSED>
+struct ArrayContainerScanState : public ContainerScanState {
+public:
+	ArrayContainerScanState(idx_t container_index, idx_t container_size, data_ptr_t data_p, idx_t count)
+	    : ContainerScanState(container_index, container_size), segment(data_p), data(data_p), count(count) {
+		if (COMPRESSED) {
+			D_ASSERT(count >= COMPRESSED_ARRAY_THRESHOLD);
+			data += (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
+		}
+	}
+
+private:
+	void LoadNextValue() {
+		if (array_index >= count) {
+			finished = true;
+			return;
+		}
+		if (COMPRESSED) {
+			value = segment++;
+			value += reinterpret_cast<uint8_t *>(data)[array_index];
+		} else {
+			value = reinterpret_cast<uint16_t *>(data)[array_index];
+		}
+		array_index++;
+	}
+
+public:
+	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
+		auto &result_mask = FlatVector::Validity(result);
+
+		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
+		// scanned.
+
+		if (!INVERTED) {
+			// If we are mapping valid entries, that means the majority of the bits are invalid
+			// so we set everything to invalid and only flip the bits that are present in the array
+			SetInvalidRange(result_mask, result_offset, result_offset + to_scan);
+		}
+
+		if (!array_index) {
+			LoadNextValue();
+		}
+		// At least one of the entries to scan is set
+		while (!finished) {
+			if (value >= scanned_count + to_scan) {
+				break;
+			}
+			if (value < scanned_count) {
+				LoadNextValue();
+				continue;
+			}
+			auto index = value - scanned_count;
+			if (INVERTED) {
+				result_mask.SetInvalid(result_offset + index);
+			} else {
+				result_mask.SetValid(result_offset + index);
+			}
+			LoadNextValue();
+		}
+		scanned_count += to_scan;
+	}
+
+	void Skip(idx_t to_skip) override {
+		idx_t end = scanned_count + to_skip;
+		if (!array_index) {
+			LoadNextValue();
+		}
+		while (!finished && value < end) {
+			LoadNextValue();
+		}
+		// In case array_index has already reached count
+		scanned_count = end;
+	}
+
+	void Verify() const override {
+#ifdef DEBUG
+		uint16_t index = 0;
+		if (COMPRESSED) {
+			ContainerSegmentScan verify_segment(data - (sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT));
+			for (uint16_t i = 0; i < count; i++) {
+				// Get the value
+				uint16_t new_index = verify_segment++;
+				new_index += reinterpret_cast<uint8_t *>(data)[i];
+
+				D_ASSERT(!i || new_index > index);
+				index = new_index;
+			}
+		} else {
+			auto array = reinterpret_cast<uint16_t *>(data);
+			for (uint16_t i = 0; i < count; i++) {
+				D_ASSERT(!i || array[i] > index);
+				index = array[i];
+			}
+		}
+#endif
+	}
+
+public:
+	ContainerSegmentScan segment;
+	uint16_t value;
+	data_ptr_t data;
+	bool finished = false;
+	const idx_t count;
+	idx_t array_index = 0;
+};
+
+//! BITSET Container
+
+struct BitsetContainerScanState : public ContainerScanState {
+public:
+	BitsetContainerScanState(idx_t container_index, idx_t count, validity_t *bitset);
+
+public:
+	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override;
+	void Skip(idx_t to_skip) override;
+	void Verify() const override;
+
+public:
+	validity_t *bitset;
 };
 
 } // namespace roaring
