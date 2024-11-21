@@ -483,7 +483,7 @@ public:
 			// End the last run
 			last_run.length = (count - last_run.start) - 1;
 			run_idx++;
-		} else if (!count || ((null != last_is_null) && null && run_idx < MAX_RUN_IDX)) {
+		} else if (null && (!count || ((null != last_is_null) && run_idx < MAX_RUN_IDX))) {
 			auto &current_run = runs[run_idx];
 			// Initialize a new run
 			current_run.start = count;
@@ -532,8 +532,8 @@ public:
 
 	Result GetResult() {
 		D_ASSERT(finalized);
-		const bool can_use_null_array = array_idx[NON_NULLS] < MAX_ARRAY_IDX;
-		const bool can_use_non_null_array = array_idx[NULLS] < MAX_ARRAY_IDX;
+		const bool can_use_null_array = array_idx[NULLS] < MAX_ARRAY_IDX;
+		const bool can_use_non_null_array = array_idx[NON_NULLS] < MAX_ARRAY_IDX;
 
 		const bool can_use_run = run_idx < MAX_RUN_IDX;
 
@@ -542,8 +542,8 @@ public:
 			// Can not efficiently encode at all, write it uncompressed
 			return Result::BitsetContainer(count);
 		}
-		uint16_t lowest_array_cost = MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]);
-		uint16_t lowest_run_cost = run_idx * 2;
+		uint16_t lowest_array_cost = MinValue<uint16_t>(array_idx[NON_NULLS], array_idx[NULLS]) * sizeof(uint16_t);
+		uint16_t lowest_run_cost = run_idx * sizeof(uint32_t);
 		uint16_t uncompressed_cost =
 		    (AlignValue<uint16_t, ValidityMask::BITS_PER_VALUE>(count) / ValidityMask::BITS_PER_VALUE) *
 		    sizeof(validity_t);
