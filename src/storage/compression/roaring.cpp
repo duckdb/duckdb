@@ -563,7 +563,9 @@ public:
 				last_run.length = (count - last_run.start);
 			}
 			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
-			run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
+			if (count != ROARING_CONTAINER_SIZE) {
+				run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
+			}
 			run_idx++;
 		}
 		finalized = true;
@@ -1025,15 +1027,16 @@ public:
 public:
 	// Returns the base of the current segment, forwarding the index if the segment is depleted of values
 	uint16_t operator++(int) {
-		while (count >= segments[index]) {
+		while (index < 8 && count >= segments[index]) {
 			count = 0;
 			index++;
 		}
-		D_ASSERT(index < 8);
 		count++;
 
-		D_ASSERT(index < 8);
-		D_ASSERT(segments[index] != 0);
+		D_ASSERT(index <= 8);
+		if (index < 8) {
+			D_ASSERT(segments[index] != 0);
+		}
 		uint16_t base = static_cast<uint16_t>(index) * COMPRESSED_SEGMENT_SIZE;
 		return base;
 	}
@@ -1141,21 +1144,21 @@ public:
 			uint8_t *segment_counts = data - (sizeof(uint8_t) * 8);
 			for (idx_t i = 0; i < count; i++) {
 				// Get the start index of the run
-				while (count_in_segment >= segment_counts[segment_index]) {
+				while (segment_index < 8 && count_in_segment >= segment_counts[segment_index]) {
 					count_in_segment = 0;
 					segment_index++;
 				}
-				D_ASSERT(segment_index < 8);
+				D_ASSERT(segment_index <= 8);
 				count_in_segment++;
 				uint16_t start = segment_index * COMPRESSED_SEGMENT_SIZE;
 				start += reinterpret_cast<uint8_t *>(data)[(i * 2) + 0];
 
 				// Get the end index of the run
-				while (count_in_segment >= segment_counts[segment_index]) {
+				while (segment_index < 8 && count_in_segment >= segment_counts[segment_index]) {
 					count_in_segment = 0;
 					segment_index++;
 				}
-				D_ASSERT(segment_index < 8);
+				D_ASSERT(segment_index <= 8);
 				count_in_segment++;
 				uint16_t end = segment_index * COMPRESSED_SEGMENT_SIZE;
 				end += reinterpret_cast<uint8_t *>(data)[(i * 2) + 1];
@@ -1265,11 +1268,11 @@ public:
 			uint8_t *segment_counts = data - (sizeof(uint8_t) * 8);
 			for (uint16_t i = 0; i < count; i++) {
 				// Get the value
-				while (count_in_segment >= segment_counts[segment_index]) {
+				while (segment_index < 8 && count_in_segment >= segment_counts[segment_index]) {
 					count_in_segment = 0;
 					segment_index++;
 				}
-				D_ASSERT(segment_index < 8);
+				D_ASSERT(segment_index <= 8);
 				count_in_segment++;
 				uint16_t new_index = segment_index * COMPRESSED_SEGMENT_SIZE;
 				new_index += reinterpret_cast<uint8_t *>(data)[i];
