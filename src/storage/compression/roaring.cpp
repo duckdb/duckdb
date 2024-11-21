@@ -439,7 +439,7 @@ public:
 	}
 
 public:
-	void AppendVector(Vector &input, idx_t input_size, std::function<void()> on_full_container) {
+	void AppendVector(Vector &input, idx_t input_size, const std::function<void()> &on_full_container) {
 		UnifiedVectorFormat unified;
 		input.ToUnifiedFormat(input_size, unified);
 		auto &validity = unified.validity;
@@ -1017,7 +1017,7 @@ public:
 
 struct ContainerSegmentScan {
 public:
-	ContainerSegmentScan(data_ptr_t data) : segments(reinterpret_cast<uint8_t *>(data)), index(0), count(0) {
+	explicit ContainerSegmentScan(data_ptr_t data) : segments(reinterpret_cast<uint8_t *>(data)), index(0), count(0) {
 	}
 	ContainerSegmentScan(const ContainerSegmentScan &other) = delete;
 	ContainerSegmentScan(ContainerSegmentScan &&other) = delete;
