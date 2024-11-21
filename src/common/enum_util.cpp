@@ -135,6 +135,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/compression/roaring.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
@@ -849,6 +850,25 @@ const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value) {
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value) {
 	return static_cast<ConstraintType>(StringUtil::StringToEnum(GetConstraintTypeValues(), 5, "ConstraintType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetContainerTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ContainerType::RUN_CONTAINER), "RUN_CONTAINER" },
+		{ static_cast<uint32_t>(ContainerType::ARRAY_CONTAINER), "ARRAY_CONTAINER" },
+		{ static_cast<uint32_t>(ContainerType::BITSET_CONTAINER), "BITSET_CONTAINER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ContainerType>(ContainerType value) {
+	return StringUtil::EnumToString(GetContainerTypeValues(), 3, "ContainerType", static_cast<uint32_t>(value));
+}
+
+template<>
+ContainerType EnumUtil::FromString<ContainerType>(const char *value) {
+	return static_cast<ContainerType>(StringUtil::StringToEnum(GetContainerTypeValues(), 3, "ContainerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCopyFunctionReturnTypeValues() {
