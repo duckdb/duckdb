@@ -179,8 +179,8 @@ idx_t ContainerMetadataCollection::GetMetadataSizeForSegment() const {
 
 idx_t ContainerMetadataCollection::GetMetadataSize(idx_t container_count, idx_t run_containers,
                                                    idx_t array_containers) const {
-	idx_t types_size = BitpackingPrimitives::GetRequiredSize(container_count, 2);
-	idx_t runs_size = BitpackingPrimitives::GetRequiredSize(run_containers, 6);
+	idx_t types_size = BitpackingPrimitives::GetRequiredSize(container_count, CONTAINER_TYPE_BITWIDTH);
+	idx_t runs_size = BitpackingPrimitives::GetRequiredSize(run_containers, RUN_CONTAINER_SIZE_BITWIDTH);
 	idx_t arrays_size = sizeof(uint8_t) * array_containers;
 	return types_size + runs_size + arrays_size;
 }
@@ -213,22 +213,24 @@ idx_t ContainerMetadataCollection::Serialize(data_ptr_t dest) const {
 	// +======================================+
 	//
 	// m: 2: (1: is_run, 1: is_inverted)
-	// r: 6: number_of_runs
+	// r: 7: number_of_runs
 	// a: 8: cardinality
 
-	idx_t types_size = BitpackingPrimitives::GetRequiredSize(count_in_segment, 2);
-	idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_in_segment, 6);
+	idx_t types_size = BitpackingPrimitives::GetRequiredSize(count_in_segment, CONTAINER_TYPE_BITWIDTH);
+	idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_in_segment, RUN_CONTAINER_SIZE_BITWIDTH);
 	idx_t arrays_size = sizeof(uint8_t) * arrays_in_segment;
 
 	idx_t types_offset = container_type.size() - count_in_segment;
 	data_ptr_t types_data = (data_ptr_t)(container_type.data()); // NOLINT: c-style cast (for const)
-	BitpackingPrimitives::PackBuffer<uint8_t>(dest, types_data + types_offset, count_in_segment, 2);
+	BitpackingPrimitives::PackBuffer<uint8_t>(dest, types_data + types_offset, count_in_segment,
+	                                          CONTAINER_TYPE_BITWIDTH);
 	dest += types_size;
 
 	if (!number_of_runs.empty()) {
 		idx_t runs_offset = number_of_runs.size() - runs_in_segment;
 		data_ptr_t run_data = (data_ptr_t)(number_of_runs.data()); // NOLINT: c-style cast (for const)
-		BitpackingPrimitives::PackBuffer<uint8_t>(dest, run_data + runs_offset, runs_in_segment, 6);
+		BitpackingPrimitives::PackBuffer<uint8_t>(dest, run_data + runs_offset, runs_in_segment,
+		                                          RUN_CONTAINER_SIZE_BITWIDTH);
 		dest += runs_size;
 	}
 
@@ -261,8 +263,9 @@ void ContainerMetadataCollection::Deserialize(data_ptr_t src, idx_t container_co
 
 	// Load the run containers
 	if (runs_count) {
-		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_count, 6);
-		BitpackingPrimitives::UnPackBuffer<uint8_t>(number_of_runs.data(), src, runs_count, 6, true);
+		idx_t runs_size = BitpackingPrimitives::GetRequiredSize(runs_count, RUN_CONTAINER_SIZE_BITWIDTH);
+		BitpackingPrimitives::UnPackBuffer<uint8_t>(number_of_runs.data(), src, runs_count, RUN_CONTAINER_SIZE_BITWIDTH,
+		                                            true);
 		src += runs_size;
 	}
 
@@ -495,9 +498,9 @@ public:
 
 	void OverrideArray(data_ptr_t destination, bool nulls, idx_t count) {
 		if (count >= COMPRESSED_ARRAY_THRESHOLD) {
-			memset(destination, 0, sizeof(uint8_t) * 8);
+			memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 			array_counts[nulls] = reinterpret_cast<uint8_t *>(destination);
-			destination += sizeof(uint8_t) * 8;
+			destination += sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
 			compressed_arrays[nulls] = reinterpret_cast<uint8_t *>(destination);
 		} else {
 			arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
@@ -506,9 +509,9 @@ public:
 
 	void OverrideRun(data_ptr_t destination, idx_t count) {
 		if (count >= COMPRESSED_RUN_THRESHOLD) {
-			memset(destination, 0, sizeof(uint8_t) * 8);
+			memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 			run_counts = reinterpret_cast<uint8_t *>(destination);
-			destination += sizeof(uint8_t) * 8;
+			destination += sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
 			compressed_runs = reinterpret_cast<uint8_t *>(destination);
 		} else {
 			runs = reinterpret_cast<RunContainerRLEPair *>(destination);
@@ -548,13 +551,17 @@ public:
 			// Can not efficiently encode at all, write it as bitset
 			return Result::BitsetContainer(count);
 		}
-		uint16_t null_array_cost =
-		    array_idx[NULLS] < COMPRESSED_ARRAY_THRESHOLD ? array_idx[NULLS] * 2 : 8 + array_idx[NULLS];
-		uint16_t non_null_array_cost =
-		    array_idx[NON_NULLS] < COMPRESSED_ARRAY_THRESHOLD ? array_idx[NON_NULLS] * 2 : 8 + array_idx[NON_NULLS];
+		uint16_t null_array_cost = array_idx[NULLS] < COMPRESSED_ARRAY_THRESHOLD
+		                               ? array_idx[NULLS] * sizeof(uint16_t)
+		                               : COMPRESSED_SEGMENT_COUNT + (array_idx[NULLS] * sizeof(uint8_t));
+		uint16_t non_null_array_cost = array_idx[NON_NULLS] < COMPRESSED_ARRAY_THRESHOLD
+		                                   ? array_idx[NON_NULLS] * sizeof(uint16_t)
+		                                   : COMPRESSED_SEGMENT_COUNT + (array_idx[NON_NULLS] * sizeof(uint8_t));
 
 		uint16_t lowest_array_cost = MinValue<uint16_t>(null_array_cost, non_null_array_cost);
-		uint16_t lowest_run_cost = run_idx < COMPRESSED_RUN_THRESHOLD ? run_idx * 4 : 8 + (run_idx * 2);
+		uint16_t lowest_run_cost = run_idx < COMPRESSED_RUN_THRESHOLD
+		                               ? run_idx * sizeof(uint32_t)
+		                               : COMPRESSED_SEGMENT_COUNT + (run_idx * sizeof(uint16_t));
 		uint16_t bitset_cost =
 		    (AlignValue<uint16_t, ValidityMask::BITS_PER_VALUE>(count) / ValidityMask::BITS_PER_VALUE) *
 		    sizeof(validity_t);
@@ -629,8 +636,8 @@ public:
 
 	uint8_t base_compressed_arrays[2][MAX_ARRAY_IDX];
 	uint8_t base_compressed_runs[MAX_RUN_IDX * 2];
-	uint8_t base_array_counts[2][8];
-	uint8_t base_run_counts[8];
+	uint8_t base_array_counts[2][COMPRESSED_SEGMENT_COUNT];
+	uint8_t base_run_counts[COMPRESSED_SEGMENT_COUNT];
 
 	validity_t *uncompressed = nullptr;
 	//! Whether the state has been finalized
@@ -939,6 +946,13 @@ public:
 		if (!container_state.count) {
 			return;
 		}
+		container_state.Finalize();
+#ifdef DEBUG
+		auto container_index = GetContainerIndex();
+		auto analyzed_metadata = container_metadata[container_index];
+		auto actual_metadata = container_state.GetResult().GetMetadata();
+		D_ASSERT(analyzed_metadata == actual_metadata);
+#endif
 		count += container_state.count;
 		bool has_nulls = container_state.null_count != 0;
 		bool has_non_nulls = container_state.null_count != container_state.count;
@@ -1008,7 +1022,7 @@ ContainerSegmentScan::ContainerSegmentScan(data_ptr_t data)
 
 // Returns the base of the current segment, forwarding the index if the segment is depleted of values
 uint16_t ContainerSegmentScan::operator++(int) {
-	while (index < 8 && count >= segments[index]) {
+	while (index < COMPRESSED_SEGMENT_COUNT && count >= segments[index]) {
 		count = 0;
 		index++;
 	}
@@ -1169,6 +1183,9 @@ public:
 
 	void ScanInternal(ContainerScanState &scan_state, idx_t to_scan, Vector &result, idx_t offset) {
 		scan_state.ScanPartial(result, offset, to_scan);
+#ifdef DEBUG
+		auto &result_mask = FlatVector::Validity(result);
+#endif
 	}
 
 	idx_t GetContainerIndex(idx_t start_index, idx_t &offset) {

@@ -22,8 +22,18 @@ static constexpr uint16_t COMPRESSED_SEGMENT_COUNT = (ROARING_CONTAINER_SIZE / C
 
 static constexpr uint16_t MAX_RUN_IDX = (UNCOMPRESSED_SIZE - COMPRESSED_SEGMENT_COUNT) / (sizeof(uint8_t) * 2);
 static constexpr uint16_t MAX_ARRAY_IDX = (UNCOMPRESSED_SIZE - COMPRESSED_SEGMENT_COUNT) / (sizeof(uint8_t) * 1);
-static constexpr uint16_t COMPRESSED_ARRAY_THRESHOLD = 8;
-static constexpr uint16_t COMPRESSED_RUN_THRESHOLD = 4;
+static constexpr uint16_t COMPRESSED_ARRAY_THRESHOLD = 60;
+static constexpr uint16_t COMPRESSED_RUN_THRESHOLD = 30;
+
+static constexpr uint16_t CONTAINER_TYPE_BITWIDTH = 2;
+static constexpr uint16_t RUN_CONTAINER_SIZE_BITWIDTH = 7;
+static constexpr uint16_t ARRAY_CONTAINER_SIZE_BITWIDTH = 8;
+
+static_assert((1 << RUN_CONTAINER_SIZE_BITWIDTH) - 1 >= MAX_RUN_IDX,
+              "The bitwidth used to store the size of a run container has to be big enough to store the maximum size");
+static_assert(
+    (1 << ARRAY_CONTAINER_SIZE_BITWIDTH) - 1 >= MAX_ARRAY_IDX + 1,
+    "The bitwidth used to store the size of an array/bitset container has to be big enough to store the maximum size");
 
 static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end);
 
@@ -38,6 +48,9 @@ public:
 	ContainerMetadata(bool is_inverted, bool is_run, uint16_t value);
 
 public:
+	bool operator==(const ContainerMetadata &other) {
+		return memcmp(&data, &other.data, sizeof(uint16_t)) == 0;
+	}
 	bool IsRun() const;
 	bool IsUncompressed() const;
 	bool IsInverted() const;
@@ -137,7 +150,8 @@ public:
 	uint16_t operator++(int);
 
 private:
-	//! The 8 unsigned bytes indicating for each segment (256 bytes) of the container how many values are in the segment
+	//! The COMPRESSED_SEGMENT_COUNT unsigned bytes indicating for each segment (256 bytes) of the container how many
+	//! values are in the segment
 	uint8_t *segments;
 	uint8_t index;
 	uint8_t count;
