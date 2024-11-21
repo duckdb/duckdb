@@ -449,6 +449,9 @@ public:
 	}
 
 	ContainerMetadata GetResult() {
+		if (uncompressed) {
+			return ContainerMetadata::BitsetContainer(count);
+		}
 		D_ASSERT(finalized);
 		const bool can_use_null_array = array_idx[NULLS] < MAX_ARRAY_IDX;
 		const bool can_use_non_null_array = array_idx[NON_NULLS] < MAX_ARRAY_IDX;

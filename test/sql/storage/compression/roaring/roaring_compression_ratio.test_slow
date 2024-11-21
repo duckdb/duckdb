@@ -54,8 +54,8 @@ CREATE TYPE test_result AS UNION (
 );
 
 statement ok
-set variable min_ratio = 1.5;
-set variable max_ratio = 1.6;
+set variable min_ratio = 2.6;
+set variable max_ratio = 2.8;
 
 query I
 SELECT
