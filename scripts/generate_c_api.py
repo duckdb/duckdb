@@ -3,6 +3,7 @@ import json
 import re
 import glob
 import copy
+import argparse
 from packaging.version import Version
 from functools import reduce
 from pathlib import Path
@@ -18,9 +19,6 @@ from pathlib import Path
 # The main C header. This is what to include when linking with DuckDB through the C API.
 DUCKDB_HEADER_OUT_FILE_NAME = 'duckdb.h'
 DUCKDB_HEADER_OUT_FILE = 'src/include/' + DUCKDB_HEADER_OUT_FILE_NAME
-# The main C header excluding all functions.
-DUCKDB_HEADER_BASE_OUT_FILE_NAME = 'duckdb_base.h'
-DUCKDB_HEADER_BASE_OUT_FILE = 'src/include/' + DUCKDB_HEADER_BASE_OUT_FILE_NAME
 # The header to be included by DuckDB C extensions.
 DUCKDB_HEADER_C_OUT_FILE = 'src/include/duckdb_extension.h'
 # The header to be included by DuckDB Go extensions.
@@ -129,7 +127,6 @@ HELPER_MACROS = f'''
 '''
 
 DUCKDB_H_HEADER = HEADER(DUCKDB_HEADER_OUT_FILE_NAME)
-DUCKDB_H_HEADER_BASE = HEADER(DUCKDB_HEADER_BASE_OUT_FILE_NAME)
 DUCKDB_C_H_HEADER = HEADER('duckdb_extension.h')
 DUCKDB_GO_H_HEADER = HEADER('duckdb_go_extension.h')
 DUCKDB_EXT_INTERNAL_H_HEADER = HEADER('extension_api.hpp')
@@ -376,59 +373,59 @@ def create_version_defines(version):
 
 
 # Create duckdb.h
-def create_duckdb_h(header_file, function_groups, write_functions=True):
-    function_declarations_finished = ''
+def create_duckdb_h(file, function_groups, write_functions=True):
+    declarations = ''
 
     if write_functions:
-        function_declarations_finished += COMMENT_HEADER("Functions")
-        function_declarations_finished += '\n'
+        declarations += COMMENT_HEADER("Functions")
+        declarations += '\n'
+        declarations += f'#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS\n\n'
 
         for curr_group in function_groups:
-            function_declarations_finished += f'''//===--------------------------------------------------------------------===//
-    // {to_camel_case(curr_group['group'])}
-    //===--------------------------------------------------------------------===//\n\n'''
-
+            declarations += COMMENT_HEADER(to_camel_case(curr_group['group']))
             if 'description' in curr_group:
-                function_declarations_finished += curr_group['description'] + '\n'
+                declarations += curr_group['description'] + '\n'
 
             deprecated_state = False
             group_is_deprecated = 'deprecated' in curr_group and curr_group['deprecated']
             if group_is_deprecated:
-                function_declarations_finished += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
+                declarations += f'#ifndef DUCKDB_API_NO_DEPRECATED\n'
                 deprecated_state = True
 
             for function in curr_group['entries']:
                 function_is_deprecated = group_is_deprecated or ('deprecated' in function and function['deprecated'])
                 if deprecated_state and not function_is_deprecated:
-                    function_declarations_finished += '#endif\n'
+                    declarations += '#endif\n'
                     deprecated_state = False
                 elif not deprecated_state and function_is_deprecated:
-                    function_declarations_finished += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
+                    declarations += '#ifndef DUCKDB_API_NO_DEPRECATED\n'
                     deprecated_state = True
 
                 function_comment = create_function_comment(function)
-                function_contains_deprecation_notice = (
+                function_deprecation_notice = (
                     '**DEPRECATED**' in function_comment or '**DEPRECATION NOTICE**' in function_comment
                 )
-                if function_is_deprecated and not function_contains_deprecation_notice:
+                if function_is_deprecated and not function_deprecation_notice:
                     raise Exception(
                         f"Function {str(function)} is labeled as deprecated but the comment does not indicate this"
                     )
-                elif not function_is_deprecated and function_contains_deprecation_notice:
+                elif not function_is_deprecated and function_deprecation_notice:
                     raise Exception(
                         f"Function {str(function)} is not labeled as deprecated but the comment indicates that it is"
                     )
-                function_declarations_finished += function_comment
-                function_declarations_finished += create_function_declaration(function)
-
-                function_declarations_finished += '\n'
+                declarations += function_comment
+                declarations += create_function_declaration(function)
+                declarations += '\n'
 
             if deprecated_state:
-                function_declarations_finished += '#endif\n'
+                declarations += '#endif\n'
 
+    declarations += '#endif\n'
+
+    # Write the function declarations to the header template, and then write the file.
     header_template = fetch_header_template_main()
-    duckdb_h = DUCKDB_H_HEADER + header_template.replace(BASE_HEADER_CONTENT_MARK, function_declarations_finished)
-    with open(header_file, 'w+') as f:
+    duckdb_h = DUCKDB_H_HEADER + header_template.replace(BASE_HEADER_CONTENT_MARK, declarations)
+    with open(file, 'w+') as f:
         f.write(duckdb_h)
 
 
@@ -809,7 +806,7 @@ def create_duckdb_go_ext_h(file, ext_api_version, function_groups, api_struct_de
         function_groups,
         api_struct_definition,
         exclusion_set,
-        DUCKDB_HEADER_BASE_OUT_FILE_NAME,
+        DUCKDB_HEADER_OUT_FILE_NAME,
         DUCKDB_GO_H_HEADER,
         with_member_invoker=True,
     )
@@ -855,6 +852,10 @@ def create_struct_function_set(api_definitions):
 
 
 if __name__ == "__main__":
+    arg_parser = argparse.ArgumentParser(description='Generate the C API')
+    arg_parser.add_argument('-go', '--generate-go', type=bool, help='Emit the duckdb go extension header', required=False, default=False)
+    args = arg_parser.parse_args()
+
     # parse the api definition (which fields make it into the struct)
     ext_api_definitions = parse_ext_api_definitions(EXT_API_DEFINITION_PATTERN)
 
@@ -880,8 +881,6 @@ if __name__ == "__main__":
 
     print(f" * {DUCKDB_HEADER_OUT_FILE}")
     create_duckdb_h(DUCKDB_HEADER_OUT_FILE, function_groups)
-    print(f" * {DUCKDB_HEADER_BASE_OUT_FILE}")
-    create_duckdb_h(DUCKDB_HEADER_BASE_OUT_FILE, function_groups, write_functions=False)
 
     print(f" * {DUCKDB_HEADER_C_OUT_FILE}")
     create_duckdb_c_ext_h(
@@ -892,27 +891,30 @@ if __name__ == "__main__":
         ext_api_exclusion_set,
     )
 
-    print(f" * {DUCKDB_HEADER_GO_OUT_FILE}")
-    create_duckdb_go_ext_h(
-        DUCKDB_HEADER_GO_OUT_FILE,
-        ext_api_version,
-        function_groups,
-        ext_api_definitions,
-        ext_api_exclusion_set,
-    )
-
     print(f" * {DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE}")
     create_duckdb_ext_internal_h(
         ext_api_version, function_groups, function_map, ext_api_definitions, ext_api_exclusion_set
     )
-
     print()
 
     os.system(f"python3 scripts/format.py {DUCKDB_HEADER_OUT_FILE} --fix --noconfirm")
-    os.system(f"python3 scripts/format.py {DUCKDB_HEADER_BASE_OUT_FILE} --fix --noconfirm")
     os.system(f"python3 scripts/format.py {DUCKDB_HEADER_C_OUT_FILE} --fix --noconfirm")
-    os.system(f"python3 scripts/format.py {DUCKDB_HEADER_GO_OUT_FILE} --fix --noconfirm")
     os.system(f"python3 scripts/format.py {DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE} --fix --noconfirm")
 
     print()
     print("C API headers generated successfully!")
+
+    print()
+    if args.generate_go:
+        print(f" * {DUCKDB_HEADER_GO_OUT_FILE}")
+        create_duckdb_go_ext_h(
+            DUCKDB_HEADER_GO_OUT_FILE,
+            ext_api_version,
+            function_groups,
+            ext_api_definitions,
+            ext_api_exclusion_set,
+        )
+        os.system(f"python3 scripts/format.py {DUCKDB_HEADER_GO_OUT_FILE} --fix --noconfirm")
+        print()
+        print("Go C API headers generated successfully!")
+
