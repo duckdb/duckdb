@@ -14,11 +14,10 @@ def test_highlight_column_header(shell):
     test = (
         ShellTest(shell)
         .statement(".highlight_results on")
-        .statement(lineitem_ddl)
-        .statement('select * from lineitem;')
+        .statement('select NULL AS r;')
     )
     result = test.run()
-    result.check_stdout('\x1b[1ml_comment\x1b[0m')
+    result.check_stdout('\x1b[90mNULL\x1b[0m')
 @pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
 def test_custom_highlight(shell):
     test = (

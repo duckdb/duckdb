@@ -661,30 +661,37 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			D_ASSERT(fk.info.pk_keys.empty());
 			D_ASSERT(fk.info.fk_keys.empty());
 			FindForeignKeyIndexes(create_info.columns, fk.fk_columns, fk.info.fk_keys);
+
+			// Resolve the self-reference.
 			if (StringUtil::CIEquals(create_info.table, fk.info.table)) {
-				// self-referential foreign key constraint
 				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
 				FindMatchingPrimaryKeyColumns(create_info.columns, create_info.constraints, fk);
 				FindForeignKeyIndexes(create_info.columns, fk.pk_columns, fk.info.pk_keys);
 				CheckForeignKeyTypes(create_info.columns, create_info.columns, fk);
-			} else {
-				// have to resolve referenced table
-				auto table_entry =
-				    entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, INVALID_CATALOG, fk.info.schema, fk.info.table);
-				auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
-				fk_schemas.insert(pk_table_entry_ptr.schema);
-				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
-				FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
-				CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
-				auto &storage = pk_table_entry_ptr.GetStorage();
-
-				if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
-					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
-					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
-					                      "present on these columns",
-					                      pk_table_entry_ptr.name, fk_column_names);
-				}
+				continue;
 			}
+
+			// Resolve the table reference.
+			auto table_entry =
+			    entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, INVALID_CATALOG, fk.info.schema, fk.info.table);
+			if (table_entry->type == CatalogType::VIEW_ENTRY) {
+				throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
+			}
+
+			auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
+			fk_schemas.insert(pk_table_entry_ptr.schema);
+			FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
+			FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
+			CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
+			auto &storage = pk_table_entry_ptr.GetStorage();
+
+			if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
+				auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
+				throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
+				                      "present on these columns",
+				                      pk_table_entry_ptr.name, fk_column_names);
+			}
+
 			D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
 			D_ASSERT(fk.info.pk_keys.size() == fk.pk_columns.size());
 			D_ASSERT(fk.info.fk_keys.size() == fk.fk_columns.size());

@@ -48,7 +48,6 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	for (auto &col : duplicate_eliminated_columns) {
 		join_ref->duplicate_eliminated_columns.emplace_back(col->Copy());
 	}
-
 	return std::move(join_ref);
 }
 

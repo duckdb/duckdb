@@ -288,6 +288,12 @@
         "struct": "DuckDBAPISetting"
     },
     {
+        "name": "dynamic_or_filter_threshold",
+        "description": "The maximum amount of OR filters we generate dynamically from a hash join",
+        "type": "UBIGINT",
+        "scope": "local"
+    },
+    {
         "name": "enable_external_access",
         "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",
@@ -717,5 +723,11 @@
         "aliases": [
             "user"
         ]
+    },
+    {
+        "name": "zstd_min_string_length",
+        "description": "The (average) length at which to enable ZSTD compression, defaults to 4096",
+        "type": "UBIGINT",
+        "scope": "global"
     }
 ]

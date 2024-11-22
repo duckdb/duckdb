@@ -453,6 +453,7 @@ static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
 	case TableFilterType::CONSTANT_COMPARISON:
+	case TableFilterType::IN_FILTER:
 		return state.current->start + state.current->count;
 	default: {
 		throw NotImplementedException("Unimplemented filter type for zonemap");

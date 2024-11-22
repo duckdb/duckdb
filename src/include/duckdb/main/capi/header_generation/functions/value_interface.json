@@ -339,7 +339,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a timestamp\n\n",
+                "description": "Creates a TIMESTAMP value from a duckdb_timestamp\n\n",
                 "param_comments": {
                     "input": "The timestamp value"
                 },
@@ -667,11 +667,11 @@
                 }
             ],
             "comment": {
-                "description": "Returns the timestamp value of the given value.\n\n",
+                "description": "Returns the TIMESTAMP value of the given value.\n\n",
                 "param_comments": {
-                    "val": "A duckdb_value containing a timestamp"
+                    "val": "A duckdb_value containing a TIMESTAMP"
                 },
-                "return_value": "A duckdb_timestamp, or MinValue<timestamp> if the value cannot be converted"
+                "return_value": "A duckdb_timestamp, or MinValue<timestamp_t> if the value cannot be converted"
             }
         },
         {
@@ -889,11 +889,11 @@
                 }
             ],
             "comment": {
-                "description": "Returns whether the specified value is null value or not.\n\n",
+                "description": "Returns whether the value's type is SQLNULL or not.\n\n",
                 "param_comments": {
                     "value": "The value to check."
                 },
-                "return_value": "True if the value is null, otherwise false."
+                "return_value": "True, if the value's type is SQLNULL, otherwise false."
             }
         },
         {
@@ -901,8 +901,8 @@
             "return_type": "duckdb_value",
             "params": [],
             "comment": {
-                "description": "Creates a value representing a NULL value.\n\n",
-                "return_value": "The duckdb_value that represents NULL. This must be destroyed with `duckdb_destroy_value`."
+                "description": "Creates a value of type SQLNULL.\n\n",
+                "return_value": "The duckdb_value representing SQLNULL. This must be destroyed with `duckdb_destroy_value`."
             }
         },
         {

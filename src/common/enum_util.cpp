@@ -795,6 +795,7 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_PATAS), "COMPRESSION_PATAS" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALP), "COMPRESSION_ALP" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALPRD), "COMPRESSION_ALPRD" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "COMPRESSION_ZSTD" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
 	};
 	return values;
@@ -802,12 +803,12 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value) {
-	return StringUtil::EnumToString(GetCompressionTypeValues(), 13, "CompressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCompressionTypeValues(), 14, "CompressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value) {
-	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 13, "CompressionType", value));
+	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 14, "CompressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetConflictManagerModeValues() {
@@ -3600,19 +3601,20 @@ const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
 		{ static_cast<uint32_t>(TableFilterType::CONJUNCTION_OR), "CONJUNCTION_OR" },
 		{ static_cast<uint32_t>(TableFilterType::CONJUNCTION_AND), "CONJUNCTION_AND" },
 		{ static_cast<uint32_t>(TableFilterType::STRUCT_EXTRACT), "STRUCT_EXTRACT" },
-		{ static_cast<uint32_t>(TableFilterType::OPTIONAL_FILTER), "OPTIONAL_FILTER" }
+		{ static_cast<uint32_t>(TableFilterType::OPTIONAL_FILTER), "OPTIONAL_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::IN_FILTER), "IN_FILTER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
-	return StringUtil::EnumToString(GetTableFilterTypeValues(), 7, "TableFilterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableFilterTypeValues(), 8, "TableFilterType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
-	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 7, "TableFilterType", value));
+	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 8, "TableFilterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {
