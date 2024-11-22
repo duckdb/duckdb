@@ -948,6 +948,136 @@ uint16_t ContainerSegmentScan::operator++(int) {
 	return base;
 }
 
+//===--------------------------------------------------------------------===//
+// ContainerScanState
+//===--------------------------------------------------------------------===//
+
+//! RunContainer
+
+RunContainerScanState::RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count,
+                                             data_ptr_t data_p)
+    : ContainerScanState(container_index, container_size), count(count), data(data_p) {
+}
+
+void RunContainerScanState::ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) {
+	auto &result_mask = FlatVector::Validity(result);
+
+	// This method assumes that the validity mask starts off as having all bits set for the entries that are being
+	// scanned.
+
+	idx_t result_idx = 0;
+	if (!run_index) {
+		LoadNextRun();
+	}
+	while (!finished && result_idx < to_scan) {
+		// Either we are already inside a run, then 'start_of_run' will be scanned_count
+		// or we're skipping values until the run begins
+		auto start_of_run =
+		    MaxValue<idx_t>(MinValue<idx_t>(run.start, scanned_count + to_scan), scanned_count + result_idx);
+		result_idx = start_of_run - scanned_count;
+
+		// How much of the run are we covering?
+		idx_t run_end = run.start + 1 + run.length;
+		auto run_or_scan_end = MinValue<idx_t>(run_end, scanned_count + to_scan);
+
+		// Process the run
+		D_ASSERT(run_or_scan_end >= start_of_run);
+		if (run_or_scan_end > start_of_run) {
+			idx_t amount = run_or_scan_end - start_of_run;
+			idx_t start = result_offset + result_idx;
+			idx_t end = start + amount;
+			SetInvalidRange(result_mask, start, end);
+		}
+
+		result_idx += run_or_scan_end - start_of_run;
+		if (scanned_count + result_idx == run_end) {
+			// Fully processed the current run
+			LoadNextRun();
+		}
+	}
+	scanned_count += to_scan;
+}
+
+void RunContainerScanState::Skip(idx_t to_skip) {
+	idx_t end = scanned_count + to_skip;
+	if (!run_index) {
+		LoadNextRun();
+	}
+	while (scanned_count < end && !finished) {
+		idx_t run_end = run.start + 1 + run.length;
+		scanned_count = MinValue<idx_t>(run_end, end);
+		if (scanned_count == run_end) {
+			LoadNextRun();
+		}
+	}
+	// In case run_index has already reached count
+	scanned_count = end;
+}
+
+void RunContainerScanState::Verify() const {
+#ifdef DEBUG
+	uint16_t index = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto run = reinterpret_cast<RunContainerRLEPair *>(data)[i];
+		D_ASSERT(run.start >= index);
+		index = run.start + 1 + run.length;
+	}
+#endif
+}
+
+void RunContainerScanState::LoadNextRun() {
+	if (run_index >= count) {
+		finished = true;
+		return;
+	}
+	run = reinterpret_cast<RunContainerRLEPair *>(data)[run_index];
+	run_index++;
+}
+
+CompressedRunContainerScanState::CompressedRunContainerScanState(idx_t container_index, idx_t container_size,
+                                                                 idx_t count, data_ptr_t segments, data_ptr_t data)
+    : RunContainerScanState(container_index, container_size, count, data), segments(segments), segment(segments) {
+	D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
+}
+
+void CompressedRunContainerScanState::LoadNextRun() {
+	if (run_index >= count) {
+		finished = true;
+		return;
+	}
+	uint16_t start = segment++;
+	start += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 0];
+
+	uint16_t end = segment++;
+	end += reinterpret_cast<uint8_t *>(data)[(run_index * 2) + 1];
+
+	D_ASSERT(end > start);
+	run = RunContainerRLEPair {start, static_cast<uint16_t>(end - 1 - start)};
+	run_index++;
+}
+
+void CompressedRunContainerScanState::Verify() const {
+#ifdef DEBUG
+	uint16_t index = 0;
+	ContainerSegmentScan verify_segment(segments);
+	for (idx_t i = 0; i < count; i++) {
+		// Get the start index of the run
+		uint16_t start = verify_segment++;
+		start += reinterpret_cast<uint8_t *>(data)[(i * 2) + 0];
+
+		// Get the end index of the run
+		uint16_t end = verify_segment++;
+		end += reinterpret_cast<uint8_t *>(data)[(i * 2) + 1];
+
+		D_ASSERT(!i || start >= index);
+		D_ASSERT(end > start);
+		index = end;
+	}
+#endif
+}
+
+//! BitsetContainer
+
 BitsetContainerScanState::BitsetContainerScanState(idx_t container_index, idx_t count, validity_t *bitset)
     : ContainerScanState(container_index, count), bitset(bitset) {
 }
