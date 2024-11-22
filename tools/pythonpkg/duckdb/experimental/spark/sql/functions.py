@@ -702,6 +702,87 @@ def asin(col: "ColumnOrName") -> Column:
     return Column(CaseExpression((col < -1.0) | (col > 1.0), ConstantExpression(float("nan"))).otherwise(FunctionExpression("asin", col)))
 
 
+def like(
+    str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Column"] = None
+) -> Column:
+    """
+    Returns true if str matches `pattern` with `escape`,
+    null if any arguments are null, false otherwise.
+    The default escape character is the '\'.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        A string.
+    pattern : :class:`~pyspark.sql.Column` or str
+        A string. See the DuckDB documentation on like_escape for more information.
+    escape : :class:`~pyspark.sql.Column`
+        An character added since Spark 3.0. The default escape character is the '\'.
+        If an escape character precedes a special symbol or another escape character, the
+        following character is matched literally. It is invalid to escape any other character.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Spark", "_park")], ['a', 'b'])
+    >>> df.select(like(df.a, df.b).alias('r')).collect()
+    [Row(r=True)]
+
+    >>> df = spark.createDataFrame(
+    ...     [("%SystemDrive%/Users/John", "/%SystemDrive/%//Users%")],
+    ...     ['a', 'b']
+    ... )
+    >>> df.select(like(df.a, df.b, lit('/')).alias('r')).collect()
+    [Row(r=True)]
+    """
+    if escapeChar is None:
+        escapeChar = ConstantExpression("\\")
+    else:
+        escapeChar = _to_column_expr(escapeChar)
+    return _invoke_function("like_escape", _to_column_expr(str), _to_column_expr(pattern), escapeChar)
+
+
+def ilike(
+    str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Column"] = None
+) -> Column:
+    """
+    Returns true if str matches `pattern` with `escape` case-insensitively,
+    null if any arguments are null, false otherwise.
+    The default escape character is the '\'.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    str : :class:`~pyspark.sql.Column` or str
+        A string.
+    pattern : :class:`~pyspark.sql.Column` or str
+        A string. See the DuckDB documentation on ilike_escape for more information.
+    escape : :class:`~pyspark.sql.Column`
+        An character added since Spark 3.0. The default escape character is the '\'.
+        If an escape character precedes a special symbol or another escape character, the
+        following character is matched literally. It is invalid to escape any other character.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([("Spark", "_park")], ['a', 'b'])
+    >>> df.select(ilike(df.a, df.b).alias('r')).collect()
+    [Row(r=True)]
+
+    >>> df = spark.createDataFrame(
+    ...     [("%SystemDrive%/Users/John", "/%SystemDrive/%//Users%")],
+    ...     ['a', 'b']
+    ... )
+    >>> df.select(ilike(df.a, df.b, lit('/')).alias('r')).collect()
+    [Row(r=True)]
+    """
+    if escapeChar is None:
+        escapeChar = ConstantExpression("\\")
+    else:
+        escapeChar = _to_column_expr(escapeChar)
+    return _invoke_function("ilike_escape", _to_column_expr(str), _to_column_expr(pattern), escapeChar)
+
 
 def array_agg(col: "ColumnOrName") -> Column:
     """
