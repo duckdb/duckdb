@@ -15,6 +15,7 @@ PRAGMA force_compression='roaring'
 statement ok
 CREATE TABLE test (a BIGINT);
 
+# Runs can't be inverted, this would be better off being inverted but the space saving is only 1 run at most.
 statement ok
 INSERT INTO test SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then 1337 else null end FROM range(0,10000) tbl(i);
 

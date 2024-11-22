@@ -54,10 +54,13 @@ with intermediates as (
 	select i % 2048 as i
 	from range(0, 10_000) t(i)
 )
-INSERT INTO test SELECT case when (i >= 0 and i < 110) or (i >= 1500 and i < 1800) or (i >= 2000) then null else 1337 end FROM range(0,10000) tbl(i);
+INSERT INTO test SELECT case when (i >= 0 and i < 110) or (i >= 1500 and i < 1800) or (i >= 2000) then null else 1337 end FROM intermediates;
 # (0,110)
 # (1500,1800)
 # (2000,2048)
+
+statement ok
+checkpoint;
 
 query I
 select count(*) from test WHERE a IS NOT NULL;

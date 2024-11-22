@@ -31,4 +31,35 @@ select sum(a), min(a), max(a) from test;
 12835200	1337	1337
 
 statement ok
+delete from test
+
+# 5 null values per Vector, uses inverted uncompressed arrays
+statement ok
+with intermediates as (
+	select i % 2048 as i
+	from range(0, 10_000) t(i)
+)
+insert into test select case when
+	i = 0 or
+	i = 6 or
+	i = 1000 or
+	i = 1500 or
+	i = 2000
+	then null
+else 1337 end from intermediates;
+
+statement ok
+checkpoint;
+
+query I
+select count(*) from test WHERE a IS NOT NULL;
+----
+9976
+
+query III
+select sum(a), min(a), max(a) from test;
+----
+13337912	1337	1337
+
+statement ok
 DROP TABLE test;
