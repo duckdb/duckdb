@@ -1888,13 +1888,7 @@ def flatten(col: "ColumnOrName") -> Column:
     +------------------+
     """
     col = _to_column_expr(col)
-    contains_null = FunctionExpression(
-        "list_contains",
-        FunctionExpression(
-            "list_transform", col, LambdaExpression("x", ColumnExpression("x").isnull())
-        ),
-        True,
-    )
+    contains_null = _list_contains_null(col)
     return Column(
         CaseExpression(contains_null, None).otherwise(
             FunctionExpression("flatten", col)
@@ -5825,14 +5819,8 @@ def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
     a1 = _to_column_expr(a1)
     a2 = _to_column_expr(a2)
 
-    # FIXME: Hacky way to check if the array contains null as we can't write a lambda function
-    # with the expression API or use list comprehensions. Else, we could for example filter
-    # the list to remove nulls and then check if the length of the list has changed.
-    def list_contains_null(a: ColumnExpression) -> Expression:
-        return FunctionExpression("len", FunctionExpression("regexp_extract_all", FunctionExpression("array_to_string", a, ConstantExpression('|')), ConstantExpression('\|'))) < (FunctionExpression("len", a) - 1)
-
-    a1_has_null = list_contains_null(a1)
-    a2_has_null = list_contains_null(a2)
+    a1_has_null = _list_contains_null(a1)
+    a2_has_null = _list_contains_null(a2)
 
     return Column(
         CaseExpression(
@@ -5841,6 +5829,16 @@ def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
             CaseExpression(
                 (FunctionExpression("len", a1) > 0) & (FunctionExpression("len", a2) > 0) & (a1_has_null | a2_has_null), ConstantExpression(None)
                 ).otherwise(ConstantExpression(False)))
+    )
+
+
+def _list_contains_null(c: ColumnExpression) -> Expression:
+    return FunctionExpression(
+        "list_contains",
+        FunctionExpression(
+            "list_transform", c, LambdaExpression("x", ColumnExpression("x").isnull())
+        ),
+        True,
     )
 
 
