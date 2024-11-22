@@ -383,6 +383,7 @@ def create_duckdb_h(file, function_groups, write_functions=True):
 
         for curr_group in function_groups:
             declarations += COMMENT_HEADER(to_camel_case(curr_group['group']))
+            declarations += '\n'
             if 'description' in curr_group:
                 declarations += curr_group['description'] + '\n'
 
