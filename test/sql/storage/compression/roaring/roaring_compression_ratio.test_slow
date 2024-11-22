@@ -12,9 +12,13 @@ set variable dataset_size = 120_000_000;
 #### Array container Roaring Compression ratio calculation:
 # For single row group
 # 60 vectors with 82 non-null values per vector
-# Total compressed bytes = (60 * 2 (metadata)) + (60 * (82 * 2)) = 9960 bytes
+# Total compressed bytes:
+# metadata: (64 / (8 / 2 (bitwidth))) + 60 = 76
+# data: (8 + (82 * 1)) * 60 = 5400
+# 5476 bytes
+
 # Total uncompressed bytes = (60 * 256) = 15360 bytes
-# Expected Ratio ~= 1.5x
+# Expected Ratio ~= 2.8x
 statement ok
 PRAGMA force_compression='roaring'
 
@@ -85,9 +89,13 @@ drop table test_uncompressed;
 #### Run container Roaring Compression ratio calculation:
 # For single row group
 # 60 vectors with 7/8 runs of nulls per vector
-# Total compressed bytes = (60 * 2 (metadata)) + (60 * (8 * 4)) = 2040 bytes
+# Total compressed bytes:
+# metadata: (64 / (8 / 2 (bitwidth))) + ((64 * 7) / 8) = 72
+# data: (8 + (8 * 2)) * 60 = 1440
+# 1512 bytes
+
 # Total uncompressed bytes = (60 * 256) = 15360 bytes
-# Expected Ratio ~= 7.5x
+# Expected Ratio ~= 10.15x
 statement ok
 PRAGMA force_compression='roaring'
 
@@ -117,6 +125,7 @@ SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_t
 statement ok
 checkpoint
 
+# Hmm, this doesnt actually match the result from the back-of-the-napkin calculation
 statement ok
 set variable min_ratio = 8.6;
 set variable max_ratio = 8.8;

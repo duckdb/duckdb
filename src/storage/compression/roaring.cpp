@@ -244,7 +244,7 @@ void ContainerMetadataCollection::Deserialize(data_ptr_t src, idx_t container_co
 
 void ContainerMetadataCollection::AddBitsetContainer() {
 	AddContainerType(false, false);
-	cardinality.push_back(MAX_ARRAY_IDX + 1);
+	cardinality.push_back(BITSET_CONTAINER_SENTINEL_VALUE);
 	arrays_in_segment++;
 	count_in_segment++;
 }
@@ -296,7 +296,7 @@ public:
 		if (is_run) {
 			return ContainerMetadata::RunContainer(amount);
 		}
-		if (amount == MAX_ARRAY_IDX + 1) {
+		if (amount == BITSET_CONTAINER_SENTINEL_VALUE) {
 			return ContainerMetadata::BitsetContainer(amount);
 		}
 		return ContainerMetadata::ArrayContainer(amount, is_inverted);
