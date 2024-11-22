@@ -636,11 +636,11 @@ struct duckdb_extension_access {
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
+#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
+
 //===--------------------------------------------------------------------===//
 // Functions
 //===--------------------------------------------------------------------===//
-
-#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
 
 //===--------------------------------------------------------------------===//
 // Open Connect

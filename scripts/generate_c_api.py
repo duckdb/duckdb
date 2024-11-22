@@ -377,9 +377,9 @@ def create_duckdb_h(file, function_groups, write_functions=True):
     declarations = ''
 
     if write_functions:
+        declarations += f'#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS\n\n'
         declarations += COMMENT_HEADER("Functions")
         declarations += '\n'
-        declarations += f'#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS\n\n'
 
         for curr_group in function_groups:
             declarations += COMMENT_HEADER(to_camel_case(curr_group['group']))
