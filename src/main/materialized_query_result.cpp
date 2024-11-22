@@ -1,7 +1,8 @@
 #include "duckdb/main/materialized_query_result.hpp"
+
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -11,10 +12,19 @@ MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, S
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), collection_p->Types(),
                   std::move(names_p), std::move(client_properties)),
       collection(std::move(collection_p)), scan_initialized(false) {
+	// Tie the DB instance lifetime to the collection, otherwise the DB might close before the result is destroyed
+	collection->TieDatabaseInstanceLifetime();
 }
 
 MaterializedQueryResult::MaterializedQueryResult(ErrorData error)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)), scan_initialized(false) {
+}
+
+MaterializedQueryResult::~MaterializedQueryResult() {
+	// Destroy the collection last, so that deallocations happen before the DB instance is destroyed
+	scan_state.current_chunk_state.handles.clear();
+	row_collection.reset();
+	collection.reset();
 }
 
 string MaterializedQueryResult::ToString() {
@@ -93,7 +103,9 @@ unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
 		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
 	}
 	auto result = make_uniq<DataChunk>();
-	collection->InitializeScanChunk(*result);
+	// Need to pass default allocator here otherwise we might get the DB allocator,
+	// of which the lifetime might expire before the chunk does
+	collection->InitializeScanChunk(*result, &Allocator::DefaultAllocator());
 	if (!scan_initialized) {
 		// we disallow zero copy so the chunk is independently usable even after the result is destroyed
 		collection->InitializeScan(scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);

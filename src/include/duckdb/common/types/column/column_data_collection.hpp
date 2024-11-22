@@ -77,7 +77,7 @@ public:
 	DUCKDB_API void Append(ColumnDataAppendState &state, DataChunk &new_chunk);
 
 	//! Initializes a chunk with the correct types that can be used to call Scan
-	DUCKDB_API void InitializeScanChunk(DataChunk &chunk) const;
+	DUCKDB_API void InitializeScanChunk(DataChunk &chunk, optional_ptr<Allocator> allocator_p = nullptr) const;
 	//! Initializes a chunk with the correct types for a given scan state
 	DUCKDB_API void InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
@@ -165,6 +165,9 @@ public:
 	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
 
+	//! Ties DB lifetime to this ColumnDataCollection (needed if used as buffer-managed query result)
+	void TieDatabaseInstanceLifetime();
+
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<ColumnDataCollection> Deserialize(Deserializer &deserializer);
 
@@ -189,6 +192,8 @@ private:
 	bool finished_append;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
+	//! DB (optional)
+	shared_ptr<DatabaseInstance> db;
 };
 
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection

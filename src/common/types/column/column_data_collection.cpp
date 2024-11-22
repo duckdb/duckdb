@@ -8,6 +8,7 @@
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -82,6 +83,9 @@ ColumnDataCollection::ColumnDataCollection(ColumnDataCollection &other)
 }
 
 ColumnDataCollection::~ColumnDataCollection() {
+	// Explicitly destroy these first so the (optional) DB is destroyed after deallocations
+	allocator.reset();
+	segments.clear();
 }
 
 void ColumnDataCollection::Initialize(vector<LogicalType> types_p) {
@@ -891,8 +895,8 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 	return true;
 }
 
-void ColumnDataCollection::InitializeScanChunk(DataChunk &chunk) const {
-	chunk.Initialize(allocator->GetAllocator(), types);
+void ColumnDataCollection::InitializeScanChunk(DataChunk &chunk, optional_ptr<Allocator> allocator_p) const {
+	chunk.Initialize(allocator_p ? *allocator_p : allocator->GetAllocator(), types);
 }
 
 void ColumnDataCollection::InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const {
@@ -1196,6 +1200,13 @@ ColumnDataAllocatorType ColumnDataCollection::GetAllocatorType() const {
 
 const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {
 	return segments;
+}
+
+void ColumnDataCollection::TieDatabaseInstanceLifetime() {
+	if (allocator->GetType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return; // Not needed if we don't need the buffer manager
+	}
+	db = allocator->GetBufferManager().GetDatabase().shared_from_this();
 }
 
 void ColumnDataCollection::Serialize(Serializer &serializer) const {

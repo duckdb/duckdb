@@ -29,6 +29,8 @@ public:
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit MaterializedQueryResult(ErrorData error);
 
+	DUCKDB_API ~MaterializedQueryResult() override;
+
 public:
 	//! Fetches a DataChunk from the query result.
 	//! This will consume the result (i.e. the result can only be scanned once with this function)

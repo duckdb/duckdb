@@ -138,7 +138,7 @@ ImportError: dlopen(/usr/bin/python3/site-packages/duckdb/duckdb.cpython-311-dar
 
 When building DuckDB it outputs which extensions are linked into DuckDB, the python package does not deal with linked in extensions very well.
 The output looks something like this:
-`-- Extensions linked into DuckDB: [json, fts, tpcds, tpch, parquet, icu, httpfs]`
+`-- Extensions linked into DuckDB: [json, tpcds, tpch, parquet, icu, httpfs]`
 
 `httpfs` should not be in that list, among others.
 Refer to `extension/extension_config_local.cmake` or the other `*.cmake` files and make sure you add DONT_LINK to the problematic extension.
