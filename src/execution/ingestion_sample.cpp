@@ -30,17 +30,6 @@ unique_ptr<DataChunk> IngestionSample::GetChunkAndShrink() {
 unique_ptr<DataChunk> IngestionSample::CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const {
 	auto new_sample_chunk = make_uniq<DataChunk>();
 	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), types, size);
-	for (idx_t col_idx = 0; col_idx < new_sample_chunk->ColumnCount(); col_idx++) {
-		auto type = types[col_idx];
-		// TODO: should the validity mask be the capacity or the size?
-		FlatVector::Validity(new_sample_chunk->data[col_idx]).Initialize(size);
-
-		if (!ValidSampleType(type)) {
-			new_sample_chunk->data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(new_sample_chunk->data[col_idx], true);
-		}
-	}
-
 	return new_sample_chunk;
 }
 
