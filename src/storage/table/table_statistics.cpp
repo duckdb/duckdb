@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/table_statistics.hpp"
+
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
@@ -26,8 +27,8 @@ void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(Empty());
 	D_ASSERT(!table_sample);
 
-	table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
 	stats_lock = make_shared_ptr<mutex>();
+	table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
 	}
@@ -139,6 +140,29 @@ void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatist
 ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) {
 	return *column_stats[i];
 }
+
+BlockingSample &TableStatistics::GetTableSampleRef(TableStatisticsLock &lock) {
+	if (!table_sample) {
+		auto boop = 0;
+	}
+	D_ASSERT(table_sample);
+	return *table_sample;
+}
+
+unique_ptr<BlockingSample> TableStatistics::GetTableSample(TableStatisticsLock &lock) {
+	return std::move(table_sample);
+}
+
+void TableStatistics::SetTableSample(TableStatisticsLock &lock, unique_ptr<BlockingSample> sample) {
+	table_sample = std::move(sample);
+}
+
+void TableStatistics::DestroyTableSample(TableStatisticsLock &lock) const {
+	if (table_sample) {
+		table_sample->Destroy();
+	}
+}
+
 unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 	lock_guard<mutex> l(*stats_lock);
 	auto result = column_stats[i]->Statistics().Copy();

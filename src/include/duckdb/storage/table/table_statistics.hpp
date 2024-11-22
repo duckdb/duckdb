@@ -48,6 +48,14 @@ public:
 	//! Get a reference to the stats - this requires us to hold the lock.
 	//! The reference can only be safely accessed while the lock is held
 	ColumnStatistics &GetStats(TableStatisticsLock &lock, idx_t i);
+	//! Get a reference to the table sample - this requires us to hold the lock.
+	BlockingSample &GetTableSampleRef(TableStatisticsLock &lock);
+	//! Take ownership of the sample, needed for merging. Requires the lock
+	unique_ptr<BlockingSample> GetTableSample(TableStatisticsLock &lock);
+	void SetTableSample(TableStatisticsLock &lock, unique_ptr<BlockingSample> sample);
+
+	void DestroyTableSample(TableStatisticsLock &lock) const;
+	void AppendToTableSample(TableStatisticsLock &lock, unique_ptr<BlockingSample> sample);
 
 	bool Empty();
 
@@ -56,14 +64,13 @@ public:
 	void Serialize(Serializer &serializer) const;
 	void Deserialize(Deserializer &deserializer, ColumnList &columns);
 
-	//! The table sample
-	unique_ptr<BlockingSample> table_sample;
-
 private:
 	//! The statistics lock
 	shared_ptr<mutex> stats_lock;
 	//! Column statistics
 	vector<shared_ptr<ColumnStatistics>> column_stats;
+	//! The table sample
+	unique_ptr<BlockingSample> table_sample;
 };
 
 } // namespace duckdb
