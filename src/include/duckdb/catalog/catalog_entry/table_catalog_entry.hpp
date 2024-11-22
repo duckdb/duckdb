@@ -83,7 +83,7 @@ public:
 	//! Get statistics of a column (physical or virtual) within the table
 	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) = 0;
 
-	virtual unique_ptr<BlockingSample> GetSample() = 0;
+	virtual unique_ptr<BlockingSample> GetSample();
 
 	//! Returns the column index of the specified column name.
 	//! If the column does not exist:
