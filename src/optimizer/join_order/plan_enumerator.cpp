@@ -472,7 +472,7 @@ void PlanEnumerator::InitLeafPlans() {
 void PlanEnumerator::SolveJoinOrder() {
 	bool force_no_cross_product = query_graph_manager.context.config.force_no_cross_product;
 	// first try to solve the join order exactly
-	if (query_graph_manager.relation_manager.NumRelations() >= 13) {
+	if (query_graph_manager.relation_manager.NumRelations() >= THRESHOLD_TO_SWAP_TO_APPROXIMATE) {
 		SolveJoinOrderApproximately();
 	} else if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
