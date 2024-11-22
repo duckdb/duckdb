@@ -4961,9 +4961,12 @@ def array_join(
     >>> df.select(array_join(df.data, ",", "NULL").alias("joined")).collect()
     [Row(joined='a,b,c'), Row(joined='a,NULL')]
     """
+    col = _to_column_expr(col)
     if null_replacement is not None:
-        raise ContributionsAcceptedError("null_replacement is not yet supported")
-    return _invoke_function("array_to_string", _to_column_expr(col), ConstantExpression(delimiter))
+        col = FunctionExpression(
+            "list_transform", col, LambdaExpression("x", CaseExpression(ColumnExpression("x").isnull(), ConstantExpression(null_replacement)).otherwise(ColumnExpression("x")))
+        )
+    return _invoke_function("array_to_string", col, ConstantExpression(delimiter))
 
 
 def array_position(col: "ColumnOrName", value: Any) -> Column:

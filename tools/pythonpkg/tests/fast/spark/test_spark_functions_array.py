@@ -166,11 +166,12 @@ class TestSparkFunctionsArray:
         res = df.select(F.sort_array(df.data, asc=False).alias('r')).collect()
         assert res == [Row(r=[3, 2, 1, None]), Row(r=[1]), Row(r=[])]
 
-    def test_array_join(self, spark):
+    @pytest.mark.parametrize(("null_replacement", "expected_joined_2"), [(None, "a"), ("replaced", "a,replaced")])
+    def test_array_join(self, spark, null_replacement, expected_joined_2):
         df = spark.createDataFrame([(["a", "b", "c"],), (["a", None],)], ['data'])
 
-        res = df.select(F.array_join(df.data, ",").alias("joined")).collect()
-        assert res == [Row(joined='a,b,c'), Row(joined='a')]
+        res = df.select(F.array_join(df.data, ",", null_replacement=null_replacement).alias("joined")).collect()
+        assert res == [Row(joined='a,b,c'), Row(joined=expected_joined_2)]
 
     def test_array_position(self, spark):
         df = spark.createDataFrame([(["c", "b", "a"],), ([],)], ['data'])
