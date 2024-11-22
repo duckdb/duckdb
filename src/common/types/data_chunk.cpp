@@ -132,6 +132,13 @@ void DataChunk::Move(DataChunk &chunk) {
 	chunk.Destroy();
 }
 
+void DataChunk::Swap(duckdb::DataChunk &chunk) {
+	std::swap(data, chunk.data);
+	std::swap(vector_caches, chunk.vector_caches);
+	std::swap(capacity, chunk.capacity);
+	std::swap(count, chunk.count);
+}
+
 void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
@@ -314,6 +321,16 @@ void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t 
 		} else {
 			data[col_offset + c].Slice(other.data[c], sel, count_p);
 		}
+	}
+}
+
+void DataChunk::ConcatenateSlice(DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t base_count,
+                                 idx_t col_offset) {
+	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
+	this->count += count_p;
+	SelCache merge_cache;
+	for (idx_t c = 0; c < other.ColumnCount(); c++) {
+		data[col_offset + c].ConcatenateSlice(other.data[c], sel, count_p, base_count, merge_cache);
 	}
 }
 
