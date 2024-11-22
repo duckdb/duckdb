@@ -13,10 +13,10 @@
 
 namespace duckdb {
 
-// #if !defined(DISABLE_POINTER_SALT) && defined(__ANDROID__)
+#if !defined(DISABLE_POINTER_SALT) && defined(__ANDROID__)
 // Google, why does Android need 18446744 TB of address space?
 #define DISABLE_POINTER_SALT
-// #endif
+#endif
 
 //! The ht_entry_t struct represents an individual entry within a hash table.
 /*!
@@ -26,69 +26,53 @@ namespace duckdb {
 */
 struct ht_entry_t { // NOLINT
 public:
-	//! Upper 16 bits are salt
+#ifdef DISABLE_POINTER_SALT
+	//! No salt, all pointer
+	static constexpr const hash_t SALT_MASK = 0x0000000000000000;
+	static constexpr const hash_t POINTER_MASK = 0xFFFFFFFFFFFFFFFF;
+#else
+	//! Upper 16 bits are salt, lower 48 bits are the pointer
 	static constexpr const hash_t SALT_MASK = 0xFFFF000000000000;
-	//! Lower 48 bits are the pointer
 	static constexpr const hash_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
+#endif
 
-	explicit inline ht_entry_t(hash_t value_p) noexcept : value(value_p) {
+	ht_entry_t() noexcept : value(0) {
 	}
 
-	// Add a default constructor for 32-bit linux test case
-	ht_entry_t() noexcept : value(0) {
+	explicit ht_entry_t(hash_t value_p) noexcept : value(value_p) {
+	}
+
+	ht_entry_t(const hash_t &salt, const data_ptr_t &pointer)
+	    : value(cast_pointer_to_uint64(pointer) | (salt & SALT_MASK)) {
 	}
 
 	inline bool IsOccupied() const {
 		return value != 0;
 	}
 
-	inline void SetOccupied() {
-#ifndef DISABLE_POINTER_SALT
-		throw InternalException("SetOccupied should only be used when salting is disabled!");
-#else
-		value = 1;
-#endif
-	}
-
-	// Returns a pointer based on the stored value without checking cell occupancy.
-	// This can return a nullptr if the cell is not occupied.
-	inline data_ptr_t GetPointerOrNull() const {
-#ifdef DISABLE_POINTER_SALT
-		return cast_uint64_to_pointer(value);
-#else
-		return cast_uint64_to_pointer(value & POINTER_MASK);
-#endif
-	}
-
-	// Returns a pointer based on the stored value if the cell is occupied
+	//! Returns a pointer based on the stored value (asserts if the cell is occupied)
 	inline data_ptr_t GetPointer() const {
 		D_ASSERT(IsOccupied());
 		return GetPointerOrNull();
 	}
 
+	//! Returns a pointer based on the stored value
+	inline data_ptr_t GetPointerOrNull() const {
+		return cast_uint64_to_pointer(value & POINTER_MASK);
+	}
+
 	inline void SetPointer(const data_ptr_t &pointer) {
-#ifdef DISABLE_POINTER_SALT
-		value = cast_pointer_to_uint64(pointer);
-#else
 		// Pointer shouldn't use upper bits
 		D_ASSERT((cast_pointer_to_uint64(pointer) & SALT_MASK) == 0);
 		// Value should have all 1's in the pointer area
 		D_ASSERT((value & POINTER_MASK) == POINTER_MASK);
 		// Set upper bits to 1 in pointer so the salt stays intact
 		value &= cast_pointer_to_uint64(pointer) | SALT_MASK;
-#endif
 	}
 
 	// Returns the salt, leaves upper salt bits intact, sets lower bits to all 1's
-	static inline hash_t ExtractSalt(hash_t hash) {
-		CheckSaltUsage();
+	static inline hash_t ExtractSalt(const hash_t &hash) {
 		return hash | POINTER_MASK;
-	}
-
-	// Returns the salt, leaves upper salt bits intact, sets lower bits to all 0's
-	static inline hash_t ExtractSaltWithNulls(hash_t hash) {
-		CheckSaltUsage();
-		return hash & SALT_MASK;
 	}
 
 	inline hash_t GetSalt() const {
@@ -96,34 +80,12 @@ public:
 	}
 
 	inline void SetSalt(const hash_t &salt) {
-		CheckSaltUsage();
 		// Shouldn't be occupied when we set this
 		D_ASSERT(!IsOccupied());
-		value = POINTER_MASK;
 		// Salt should have all 1's in the pointer field
 		D_ASSERT((salt & POINTER_MASK) == POINTER_MASK);
 		// No need to mask, just put the whole thing there
 		value = salt;
-	}
-
-	static inline ht_entry_t GetDesiredEntry(const data_ptr_t &pointer, const hash_t &salt) {
-#ifdef DISABLE_POINTER_SALT
-		return ht_entry_t(cast_pointer_to_uint64(pointer));
-#else
-		auto desired = cast_pointer_to_uint64(pointer) | (salt & SALT_MASK);
-		return ht_entry_t(desired);
-#endif
-	}
-
-	static inline ht_entry_t GetEmptyEntry() {
-		return ht_entry_t(0);
-	}
-
-private:
-	static inline void CheckSaltUsage() {
-#ifdef DISABLE_POINTER_SALT
-		throw InternalException("Salt should not be used!");
-#endif
 	}
 
 private:

@@ -125,22 +125,20 @@ public:
 
 public:
 	struct SharedState {
-
 		SharedState();
 
 		// The ptrs to the row to which a key should be inserted into during building
 		// or matched against during probing
 		Vector rhs_row_locations;
+		Vector salt_v;
 
 		SelectionVector salt_match_sel;
 		SelectionVector key_no_match_sel;
 	};
 
 	struct ProbeState : SharedState {
-
 		ProbeState();
 
-		Vector salt_v;
 		Vector ht_offsets_v;
 		Vector ht_offsets_dense_v;
 

@@ -151,10 +151,8 @@ void GroupedAggregateHashTable::Verify() {
 		if (!entry.IsOccupied()) {
 			continue;
 		}
-#ifndef DISABLE_POINTER_SALT
 		auto hash = Load<hash_t>(entry.GetPointer() + hash_offset);
 		D_ASSERT(entry.GetSalt() == ht_entry_t::ExtractSalt(hash));
-#endif
 		total_count++;
 	}
 	D_ASSERT(total_count == Count());
@@ -162,7 +160,7 @@ void GroupedAggregateHashTable::Verify() {
 }
 
 void GroupedAggregateHashTable::ClearPointerTable() {
-	std::fill_n(entries, capacity, ht_entry_t::GetEmptyEntry());
+	std::fill_n(entries, capacity, ht_entry_t());
 }
 
 void GroupedAggregateHashTable::ResetCount() {
@@ -209,9 +207,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 					}
 					auto &entry = entries[entry_idx];
 					D_ASSERT(!entry.IsOccupied());
-#ifndef DISABLE_POINTER_SALT
 					entry.SetSalt(ht_entry_t::ExtractSalt(hash));
-#endif
 					entry.SetPointer(row_location);
 					D_ASSERT(entry.IsOccupied());
 				}
@@ -343,9 +339,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		const auto &hash = hashes[r];
 		ht_offsets[r] = ApplyBitMask(hash);
 		D_ASSERT(ht_offsets[r] == hash % capacity);
-#ifndef DISABLE_POINTER_SALT
 		hash_salts[r] = ht_entry_t::ExtractSalt(hash);
-#endif
 	}
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
@@ -388,12 +382,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			for (inner_iteration_count = 0; inner_iteration_count < capacity; inner_iteration_count++) {
 				auto &entry = entries[ht_offset];
 				if (entry.IsOccupied()) { // Cell is occupied: Compare salts
-#ifdef DISABLE_POINTER_SALT
-					static constexpr bool salt_equal = true;
-#else
-					const auto salt_equal = entry.GetSalt() == salt;
-#endif
-					if (salt_equal) {
+					if (entry.GetSalt() == salt) {
 						// Same salt, compare group keys
 						state.group_compare_vector.set_index(need_compare_count++, index);
 						break;
@@ -401,12 +390,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 					// Different salts, move to next entry (linear probing)
 					IncrementAndWrap(ht_offset, bitmask);
 				} else { // Cell is unoccupied, let's claim it
-					     // Set salt (also marks as occupied)
-#ifdef DISABLE_POINTER_SALT
-					entry.SetOccupied();
-#else
+					// Set salt (also marks as occupied)
 					entry.SetSalt(salt);
-#endif
 					// Update selection lists for outer loops
 					state.empty_vector.set_index(new_entry_count++, index);
 					new_groups_out.set_index(new_group_count++, index);
