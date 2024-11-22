@@ -9,7 +9,7 @@ create or replace table integers_1 as select range a, range+1 b  from range(1024
 
 # no sample collected yet. There are only 5
 query I
-select count(*) from pragma_table_sample('integers_1') order by all;
+select count(*) from duckdb_table_sample('integers_1') order by all;
 ----
 1024
 
@@ -18,7 +18,7 @@ delete from integers_1 where a = 3;
 
 # sample no longer exists
 query I
-select count(*) from pragma_table_sample('integers_1') order by all;
+select count(*) from duckdb_table_sample('integers_1') order by all;
 ----
 0
 
@@ -26,7 +26,7 @@ statement ok
 create or replace table integers_1 as select range a, range+1 b  from range(102400);
 
 query I
-select count(*) from pragma_table_sample('integers_1');
+select count(*) from duckdb_table_sample('integers_1');
 ----
 1024
 
@@ -34,7 +34,7 @@ statement ok
 update integers_1 set a = 5 where a = 1;
 
 query II
-select * from pragma_table_sample('integers_1');
+select * from duckdb_table_sample('integers_1');
 ----
 
 # test adding columns destroys the sample.
@@ -42,7 +42,7 @@ statement ok
 create or replace table integers_1 as select range a, range+1 b  from range(204800);
 
 query I
-select count(*) from pragma_table_sample('integers_1');
+select count(*) from duckdb_table_sample('integers_1');
 ----
 2048
 
@@ -50,7 +50,7 @@ statement ok
 Alter table integers_1 add column c DOUBLE;
 
 query III
-select * from pragma_table_sample('integers_1');
+select * from duckdb_table_sample('integers_1');
 ----
 
 
@@ -61,7 +61,7 @@ create or replace table integers_1 as select range a, range+1 b  from range(1024
 
 # don't have enough smaples yet.
 query I
-select count(*) from pragma_table_sample('integers_1');
+select count(*) from duckdb_table_sample('integers_1');
 ----
 1024
 
@@ -69,7 +69,7 @@ statement ok
 Alter table integers_1 alter b TYPE VARCHAR
 
 query II
-select * from pragma_table_sample('integers_1');
+select * from duckdb_table_sample('integers_1');
 ----
 
 # test dropping a columns
@@ -77,7 +77,7 @@ statement ok
 create or replace table integers_1 as select range a, range+1 b  from range(102400);
 
 query I
-select count(*) from pragma_table_sample('integers_1');
+select count(*) from duckdb_table_sample('integers_1');
 ----
 1024
 
@@ -85,7 +85,7 @@ statement ok
 Alter table integers_1 drop b;
 
 query I
-select * from pragma_table_sample('integers_1');
+select * from duckdb_table_sample('integers_1');
 ----
 
 
@@ -96,7 +96,7 @@ statement ok
 create or replace table integers_1 as select range a, range+1 b  from range(500);
 
 query I
-select count(*) from pragma_table_sample('integers_1');
+select count(*) from duckdb_table_sample('integers_1');
 ----
 500
 
@@ -105,7 +105,7 @@ Alter table integers_1 drop b;
 
 # sample is destroyed
 query I
-select * from pragma_table_sample('integers_1');
+select * from duckdb_table_sample('integers_1');
 ----
 
 restart
@@ -115,7 +115,7 @@ insert into integers_1 select range a from range(500);
 
 # sample is still destroyed
 query I
-select * from pragma_table_sample('integers_1');
+select * from duckdb_table_sample('integers_1');
 ----
 
 

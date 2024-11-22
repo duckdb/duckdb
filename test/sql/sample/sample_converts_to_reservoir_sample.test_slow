@@ -22,13 +22,13 @@ restart
 endloop
 
 query I
-select count(*) from pragma_table_sample('t1');
+select count(*) from duckdb_table_sample('t1');
 ----
 2048
 
 
 query I
-select count(*) from pragma_table_sample('t1') where a > 1;
+select count(*) from duckdb_table_sample('t1') where a > 1;
 ----
 48
 
@@ -55,12 +55,12 @@ restart
 endloop
 
 query I
-select count(*) from pragma_table_sample('t1');
+select count(*) from duckdb_table_sample('t1');
 ----
 2048
 
 
 query I
-select count(*) from pragma_table_sample('t1') where a > 1;
+select count(*) from duckdb_table_sample('t1') where a > 1;
 ----
 48

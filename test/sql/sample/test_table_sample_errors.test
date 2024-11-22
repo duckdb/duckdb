@@ -9,6 +9,6 @@ statement ok
 create view v1 as select * from t1;
 
 statement error
-select * from pragma_table_sample('v1');
+select * from duckdb_table_sample('v1');
 ----
 <REGEX>:.*Invalid Catalog type.*

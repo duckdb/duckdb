@@ -14,7 +14,7 @@ create table materialized_range as select 1 a from range(102400);
 
 # only 1% of 102400
 query I
-select count(*) from pragma_table_sample('materialized_range');
+select count(*) from duckdb_table_sample('materialized_range');
 ----
 1024
 
@@ -25,12 +25,12 @@ insert into materialized_range select 2 a from range(102400);
 
 # collect another 1% of 102400
 query I
-select count(*) from pragma_table_sample('materialized_range');
+select count(*) from duckdb_table_sample('materialized_range');
 ----
 2048
 
 query II
-select a, count(*) from pragma_table_sample('materialized_range') group by all order by a;
+select a, count(*) from duckdb_table_sample('materialized_range') group by all order by a;
 ----
 1	1024
 2	1024
@@ -42,14 +42,14 @@ insert into materialized_range select 3 a from range(102400);
 
 # sample remains at 2048 values
 query I
-select count(*) from pragma_table_sample('materialized_range');
+select count(*) from duckdb_table_sample('materialized_range');
 ----
 2048
 
 # the above seems skewed, but this test shows that if all samples are added at the same time
 # to a reservoir sample, they are not skewed
 query II
-select a, count(*) from pragma_table_sample('materialized_range') group by all  order by a;
+select a, count(*) from duckdb_table_sample('materialized_range') group by all  order by a;
 ----
 1	677
 2	674

@@ -334,11 +334,9 @@ public:
 
 	unique_ptr<DataChunk> sample_chunk;
 
-	vector<idx_t> actual_sample_indexes;
-
 private:
-	unordered_map<idx_t, idx_t> GetReplacementIndexesSlow(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
-	unordered_map<idx_t, idx_t> GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
+	unordered_map<idx_t, idx_t> GetReplacementIndexesSlow(idx_t sample_chunk_offset, idx_t chunk_length);
+	unordered_map<idx_t, idx_t> GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t chunk_length);
 	void SimpleMerge(IngestionSample &other);
 
 	// Helper methods for Shrink().
@@ -346,6 +344,9 @@ private:
 	// "Fast" mode or in "Slow" mode. This function creates a new sample chunk
 	// to copy the old sample chunk into
 	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const;
+
+	void RandomizeActualSampleIndexes();
+	vector<idx_t> actual_sample_indexes;
 };
 
 } // namespace duckdb

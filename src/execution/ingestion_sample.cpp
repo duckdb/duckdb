@@ -163,6 +163,27 @@ void IngestionSample::ConvertToSlowSample() {
 	actual_sample_indexes.clear();
 }
 
+void IngestionSample::RandomizeActualSampleIndexes() {
+	if (actual_sample_indexes.size() <= 1) {
+		return;
+	}
+	if (actual_sample_indexes.size() == 2) {
+		if (base_reservoir_sample->random.NextRandom() > 0.5) {
+			std::swap(actual_sample_indexes[0], actual_sample_indexes[1]);
+			return;
+		}
+	}
+	idx_t upper_bound = actual_sample_indexes.size() - 1;
+	for (idx_t i = 0; i < upper_bound; i++) {
+		idx_t random_shuffle = base_reservoir_sample->random.NextRandomInteger(
+		    static_cast<uint32_t>(i + 1), static_cast<uint32_t>(upper_bound));
+		idx_t tmp = actual_sample_indexes[random_shuffle];
+		// basically replacing the tuple that was at index actual_sample_indexes[random_shuffle]
+		actual_sample_indexes[random_shuffle] = actual_sample_indexes[i];
+		actual_sample_indexes[i] = tmp;
+	}
+}
+
 void IngestionSample::SimpleMerge(IngestionSample &other) {
 	D_ASSERT(GetPriorityQueueSize() == 0);
 	D_ASSERT(other.GetPriorityQueueSize() == 0);
@@ -211,6 +232,9 @@ void IngestionSample::SimpleMerge(IngestionSample &other) {
 	if (sample_chunk->size() + keep_from_other > FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER) {
 		Shrink();
 	}
+
+	RandomizeActualSampleIndexes();
+	other.RandomizeActualSampleIndexes();
 
 	D_ASSERT(size_after_merge <= other.actual_sample_indexes.size() + actual_sample_indexes.size());
 	SelectionVector sel(keep_from_other);
@@ -472,17 +496,16 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_
 	return GetReplacementIndexesSlow(sample_chunk_offset, theoretical_chunk_length);
 }
 
-unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sample_chunk_offset,
-                                                                       idx_t theoretical_chunk_length) {
-	idx_t num_to_pop = static_cast<idx_t>((static_cast<double>(theoretical_chunk_length) /
-	                                       static_cast<double>(theoretical_chunk_length + GetTuplesSeen())) *
-	                                      static_cast<double>(theoretical_chunk_length));
+unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t chunk_length) {
+	idx_t num_to_pop =
+	    static_cast<idx_t>((static_cast<double>(chunk_length) / static_cast<double>(chunk_length + GetTuplesSeen())) *
+	                       static_cast<double>(chunk_length));
 
 	unordered_map<idx_t, idx_t> replacement_indexes;
 	replacement_indexes.reserve(num_to_pop);
 	vector<idx_t> indexes;
 
-	for (idx_t i = 0; i < theoretical_chunk_length; i++) {
+	for (idx_t i = 0; i < chunk_length; i++) {
 		indexes.push_back(i);
 	}
 
@@ -496,7 +519,7 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sam
 
 		// also shuffle the first num_to_pop values in indexes to get a random range of values from the incoming chunk
 		idx_t random_index_from_sample = base_reservoir_sample->random.NextRandomInteger(
-		    static_cast<uint32_t>(i), static_cast<uint32_t>(theoretical_chunk_length));
+		    static_cast<uint32_t>(i), static_cast<uint32_t>(chunk_length));
 		idx_t tmp = indexes[random_index_from_sample];
 		indexes[random_index_from_sample] = indexes[i];
 		indexes[i] = tmp;
@@ -506,9 +529,8 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sam
 	return replacement_indexes;
 }
 
-unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesSlow(idx_t sample_chunk_offset,
-                                                                       idx_t theoretical_chunk_length) {
-	idx_t remaining = theoretical_chunk_length;
+unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesSlow(idx_t sample_chunk_offset, idx_t chunk_length) {
+	idx_t remaining = chunk_length;
 	unordered_map<idx_t, idx_t> ret;
 	idx_t sample_chunk_index = 0;
 

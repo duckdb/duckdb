@@ -16,7 +16,7 @@ statement ok
 create table integers_1 as (select (range + 5) a, range b, get_current_time() as time from materialized_range);
 
 #query II nosort result_1
-#select a::INT, b from pragma_table_sample('integers_1') order by all;
+#select a::INT, b from duckdb_table_sample('integers_1') order by all;
 #----
 
 statement ok
@@ -24,7 +24,7 @@ create table integers_2 as (select (range + 5) a, range b, get_current_time() as
 
 ## samples should be the same given the same table and the same contents.
 #query II nosort result_1
-#select a::INT, b from pragma_table_sample('integers_2') order by all;
+#select a::INT, b from duckdb_table_sample('integers_2') order by all;
 #----
 
 statement ok
@@ -35,12 +35,12 @@ create or replace table integers_2 as (select (range + 5) a, range b from materi
 
 # sample only has values in the table it was sampled from
 query I
-select count(*) from (select b from pragma_table_sample('integers_1') intersect (select b from integers_1));
+select count(*) from (select b from duckdb_table_sample('integers_1') intersect (select b from integers_1));
 ----
 2048
 
 query I
-select count(*) from (select b from pragma_table_sample('integers_2') intersect (select b from integers_2));
+select count(*) from (select b from duckdb_table_sample('integers_2') intersect (select b from integers_2));
 ----
 2048
 
@@ -48,18 +48,18 @@ select count(*) from (select b from pragma_table_sample('integers_2') intersect 
 restart
 
 query I
-select count(*) from pragma_table_sample('integers_1');
+select count(*) from duckdb_table_sample('integers_1');
 ----
 2048
 
 query I
-select count(*) from pragma_table_sample('integers_2');
+select count(*) from duckdb_table_sample('integers_2');
 ----
 2048
 
 
 query II
-select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
+select (b / 1000000)::INT as interval, count(*) as frequency from duckdb_table_sample('integers_1') group by interval order by all;
 ----
 0	210
 1	416
@@ -74,7 +74,7 @@ statement ok
 insert into integers_1 (select (range + 5) a, range b from range(5000000,6000000));
 
 query II
-select (b / 1000000)::INT as interval, count(*) as frequency from pragma_table_sample('integers_1') group by interval order by all;
+select (b / 1000000)::INT as interval, count(*) as frequency from duckdb_table_sample('integers_1') group by interval order by all;
 ----
 0	173
 1	351
@@ -96,7 +96,7 @@ select count(*) from integers_1;
 # about half of the samples should have the pair '-1', 1. TODO: Figure out
 # why the sample prefers values from later on.
 query I
-select count(*) from pragma_table_sample('integers_1') where a = -1 and b = -1;
+select count(*) from duckdb_table_sample('integers_1') where a = -1 and b = -1;
 ----
 1057
 
@@ -105,14 +105,14 @@ restart
 
 # updated sample is also newly serialized
 query I
-select count(*) from pragma_table_sample('integers_1') where a = -1 and b = -1;
+select count(*) from duckdb_table_sample('integers_1') where a = -1 and b = -1;
 ----
 1057
 
 
 # create a view on top of the sample
 statement ok
-create view sample_view as select * from pragma_table_sample('integers_1');
+create view sample_view as select * from duckdb_table_sample('integers_1');
 
 
 # update the sample

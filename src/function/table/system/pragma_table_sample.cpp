@@ -16,21 +16,21 @@
 
 namespace duckdb {
 
-struct PragmaTableSampleFunctionData : public TableFunctionData {
-	explicit PragmaTableSampleFunctionData(CatalogEntry &entry_p) : entry(entry_p) {
+struct DuckDBTableSampleFunctionData : public TableFunctionData {
+	explicit DuckDBTableSampleFunctionData(CatalogEntry &entry_p) : entry(entry_p) {
 	}
 	CatalogEntry &entry;
 };
 
-struct PragmaTableSampleOperatorData : public GlobalTableFunctionState {
-	PragmaTableSampleOperatorData() : sample_offset(0) {
+struct DuckDBTableSampleOperatorData : public GlobalTableFunctionState {
+	DuckDBTableSampleOperatorData() : sample_offset(0) {
 		sample = nullptr;
 	}
 	idx_t sample_offset;
 	unique_ptr<BlockingSample> sample;
 };
 
-static unique_ptr<FunctionData> PragmaTableSampleBind(ClientContext &context, TableFunctionBindInput &input,
+static unique_ptr<FunctionData> DuckDBTableSampleBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 
 	// look up the table name in the catalog
@@ -52,14 +52,14 @@ static unique_ptr<FunctionData> PragmaTableSampleBind(ClientContext &context, Ta
 		names.push_back(col.GetName());
 	}
 
-	return make_uniq<PragmaTableSampleFunctionData>(entry);
+	return make_uniq<DuckDBTableSampleFunctionData>(entry);
 }
 
-unique_ptr<GlobalTableFunctionState> PragmaTableSampleInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_uniq<PragmaTableSampleOperatorData>();
+unique_ptr<GlobalTableFunctionState> DuckDBTableSampleInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<DuckDBTableSampleOperatorData>();
 }
 
-static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOperatorData &data,
+static void DuckDBTableSampleTable(ClientContext &context, DuckDBTableSampleOperatorData &data,
                                    TableCatalogEntry &table, DataChunk &output) {
 	// if table has statistics.
 	// copy the sample of statistics into the output chunk
@@ -75,21 +75,21 @@ static void PragmaTableSampleTable(ClientContext &context, PragmaTableSampleOper
 	}
 }
 
-static void PragmaTableSampleFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = data_p.bind_data->Cast<PragmaTableSampleFunctionData>();
-	auto &state = data_p.global_state->Cast<PragmaTableSampleOperatorData>();
+static void DuckDBTableSampleFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = data_p.bind_data->Cast<DuckDBTableSampleFunctionData>();
+	auto &state = data_p.global_state->Cast<DuckDBTableSampleOperatorData>();
 	switch (bind_data.entry.type) {
 	case CatalogType::TABLE_ENTRY:
-		PragmaTableSampleTable(context, state, bind_data.entry.Cast<TableCatalogEntry>(), output);
+		DuckDBTableSampleTable(context, state, bind_data.entry.Cast<TableCatalogEntry>(), output);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_sample");
 	}
 }
 
-void PragmaTableSample::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_table_sample", {LogicalType::VARCHAR}, PragmaTableSampleFunction,
-	                              PragmaTableSampleBind, PragmaTableSampleInit));
+void DuckDBTableSample::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(TableFunction("duckdb_table_sample", {LogicalType::VARCHAR}, DuckDBTableSampleFunction,
+	                              DuckDBTableSampleBind, DuckDBTableSampleInit));
 }
 
 } // namespace duckdb

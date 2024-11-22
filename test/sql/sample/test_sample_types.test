@@ -1,4 +1,4 @@
-# name: test/sql/sample/test_sample_types.test_slow
+# name: test/sql/sample/test_sample_types.test
 # description: Test sampling of larger relations
 # group: [sample]
 
@@ -6,7 +6,7 @@ statement ok
 create table string_samples as select range::Varchar a from range(204800);
 
 query I
-select count(*) from pragma_table_sample('string_samples') where a is NULL;
+select count(*) from duckdb_table_sample('string_samples') where a is NULL;
 ----
 2048
 
@@ -14,7 +14,7 @@ statement ok
 create table struct_samples as select {'key1': 'quack-a-lack', 'key2': range} a from range(204800);
 
 query I
-select count(*) from pragma_table_sample('struct_samples') where a is null;
+select count(*) from duckdb_table_sample('struct_samples') where a is null;
 ----
 2048
 
@@ -22,6 +22,6 @@ statement ok
 create table blob_samples as select '\xAA\xAB\xAC'::BLOB a from range(204800);
 
 query I
-select count(*) from pragma_table_sample('blob_samples') where a is NULL;
+select count(*) from duckdb_table_sample('blob_samples') where a is NULL;
 ----
 2048
