@@ -40,7 +40,7 @@ static_assert(
     (1 << ARRAY_CONTAINER_SIZE_BITWIDTH) - 1 >= MAX_ARRAY_IDX + 1,
     "The bitwidth used to store the size of an array/bitset container has to be big enough to store the maximum size");
 
-static void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end);
+void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end);
 
 struct RunContainerRLEPair {
 	uint16_t start;
@@ -265,7 +265,7 @@ public:
 		// In case run_index has already reached count
 		scanned_count = end;
 	}
-	virtual void Verify() const override {
+	void Verify() const override {
 #ifdef DEBUG
 		uint16_t index = 0;
 		for (idx_t i = 0; i < count; i++) {
@@ -411,7 +411,7 @@ public:
 		scanned_count = end;
 	}
 
-	virtual void Verify() const override {
+	void Verify() const override {
 #ifdef DEBUG
 		uint16_t index = 0;
 		auto array = reinterpret_cast<uint16_t *>(data);
