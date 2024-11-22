@@ -728,6 +728,39 @@ def array_agg(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("list", col)
 
 
+def collect_list(col: "ColumnOrName") -> Column:
+    """
+    Aggregate function: returns a list of objects with duplicates.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Notes
+    -----
+    The function is non-deterministic because the order of collected results depends
+    on the order of the rows which may be non-deterministic after a shuffle.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to compute on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        list of objects with duplicates.
+
+    Examples
+    --------
+    >>> df2 = spark.createDataFrame([(2,), (5,), (5,)], ('age',))
+    >>> df2.agg(collect_list('age')).collect()
+    [Row(collect_list(age)=[2, 5, 5])]
+    """
+    return array_agg(col)
+
+
 def array_append(col: "ColumnOrName", value: Any) -> Column:
     """
     Collection function: returns an array of the elements in col1 along

@@ -108,7 +108,12 @@ class TestSparkFunctionsArray:
         df = spark.createDataFrame([[1, "A"], [1, "A"], [2, "A"]], ["c", "group"])
 
         res = df.groupBy("group").agg(F.array_agg("c").alias("r")).collect()
+        assert res[0] == Row(group="A", r=[1, 1, 2])
 
+    def test_collect_list(self, spark):
+        df = spark.createDataFrame([[1, "A"], [1, "A"], [2, "A"]], ["c", "group"])
+
+        res = df.groupBy("group").agg(F.collect_list("c").alias("r")).collect()
         assert res[0] == Row(group="A", r=[1, 1, 2])
 
     def test_array_append(self, spark):
