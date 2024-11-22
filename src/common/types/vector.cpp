@@ -15,6 +15,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/types/varint.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -22,7 +23,6 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "fsst.h"
-#include "duckdb/common/types/varint.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -283,36 +283,49 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 // currently, we only consider the flat vector and the dictionary vector.
 void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t count, idx_t base_count,
                               SelCache &sel_cache) {
+	// first time
 	if (this->data != other.data) {
 		Reference(other);
 		Slice(sel, count);
 		return;
 	}
 
-	if (this->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &dict_codes = DictionaryVector::SelVector(*this);
+	// the result chunk must be a dictionary vector after first calling this function
+	assert(this->GetVectorType() == VectorType::DICTIONARY_VECTOR);
+	auto &dict_codes = DictionaryVector::SelVector(*this);
+	if (other.GetVectorType() == VectorType::FLAT_VECTOR) {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t idx = sel.get_index(i);
+			dict_codes.set_index(base_count + i, idx);
+		}
+	} else if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &current_sel = DictionaryVector::SelVector(other);
+		// dictionary vector: need to merge dictionaries check if we have a cached entry
+		auto target_data = current_sel.data();
+		auto entry = sel_cache.cache.find(target_data);
+		if (entry != sel_cache.cache.end()) {
+			this->buffer = make_buffer<DictionaryBuffer>(entry->second->Cast<DictionaryBuffer>().GetSelVector());
+		} else {
+			// how to optimize it?
+			// I use the following code in duckdb 0.8.1, but it fails in 1.1.2.
+			//	for (idx_t i = 0; i < count; i++) {
+			//		idx_t idx = sel.get_index(i);
+			//		dict_codes.set_index(base_count + i, current_sel.get_index(idx));
+			//	}
+			SelectionVector new_sel(STANDARD_VECTOR_SIZE);
+			new_sel.Initialize(current_sel);
 
-		if (other.GetVectorType() == VectorType::FLAT_VECTOR) {
 			for (idx_t i = 0; i < count; i++) {
 				idx_t idx = sel.get_index(i);
-				dict_codes.set_index(base_count + i, idx);
+				new_sel.set_index(base_count + i, current_sel.get_index(idx));
 			}
-		} else if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-			auto &current_sel = DictionaryVector::SelVector(other);
-			auto target_data = current_sel.data();
-			auto entry = sel_cache.cache.find(target_data);
 
-			// we use a cache to reuse sel vectors.
-			if (entry != sel_cache.cache.end()) {
-				this->buffer = make_buffer<DictionaryBuffer>(entry->second->Cast<DictionaryBuffer>().GetSelVector());
-			} else {
-				for (idx_t i = 0; i < count; i++) {
-					idx_t idx = sel.get_index(i);
-					dict_codes.set_index(base_count + i, current_sel.get_index(idx));
-				}
-				sel_cache.cache[target_data] = this->buffer;
-			}
+			this->buffer = make_buffer<DictionaryBuffer>(new_sel);
+			sel_cache.cache[target_data] = this->buffer;
 		}
+	} else {
+		assert(false);
+		std::cerr << "Unsupported Types\n";
 	}
 }
 

@@ -923,6 +923,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 					Store<bool>(true, ptrs[idx] + ht.tuple_size);
 				}
 			}
+
 			// for right semi join, just mark the entry as found and move on. Propagation happens later
 			if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 				DataChunk *res_chunk;
@@ -932,17 +933,17 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 					res_chunk = &result;
 				} else {
 					// init the buffer
-					if (buffer->ColumnCount() == 0) {
+					if (buffer->ColumnCount() == 0)
 						buffer->Initialize(Allocator::DefaultAllocator(), result.GetTypes());
-					}
-					res_chunk = buffer;
+
 					base_count = 0;
+					res_chunk = buffer;
 				}
 
 				// matches were found
 				// construct the result
 				// on the LHS, we create a slice using the result vector
-				res_chunk->ConcatenateSlice(left, result_vector, result_count, 0);
+				res_chunk->ConcatenateSlice(left, result_vector, result_count, base_count);
 
 				// on the RHS, we need to fetch the data from the hash table
 				for (idx_t i = 0; i < count; i++)
@@ -956,7 +957,6 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			}
 			AdvancePointers();
 		}
-		break;
 	}
 }
 
