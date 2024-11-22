@@ -65,12 +65,12 @@ checkpoint;
 query I
 select count(*) from test WHERE a IS NOT NULL;
 ----
-1590
+7758
 
 query III
 select sum(a), min(a), max(a) from test;
 ----
-2125830	1337	1337
+10372446	1337	1337
 
 statement ok
 DROP TABLE test;
