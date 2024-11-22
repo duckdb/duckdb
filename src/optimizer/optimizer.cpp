@@ -152,10 +152,10 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
-	//	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
-	//		JoinOrderOptimizer optimizer(context);
-	//		plan = optimizer.Optimize(std::move(plan));
-	//	});
+	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
+		JoinOrderOptimizer optimizer(context);
+		plan = optimizer.Optimize(std::move(plan));
+	});
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
