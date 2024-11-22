@@ -8,6 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+
 namespace duckdb {
 
 namespace roaring {
