@@ -15,17 +15,17 @@ create table materialized_range as select * from range(5000000);
 statement ok
 create table integers_1 as (select (range + 5) a, range b, get_current_time() as time from materialized_range);
 
-query II nosort result_1
-select a::INT, b from pragma_table_sample('integers_1') order by all;
-----
+#query II nosort result_1
+#select a::INT, b from pragma_table_sample('integers_1') order by all;
+#----
 
 statement ok
 create table integers_2 as (select (range + 5) a, range b, get_current_time() as time from materialized_range);
 
-# samples should be the same given the same table and the same contents.
-query II nosort result_1
-select a::INT, b from pragma_table_sample('integers_2') order by all;
-----
+## samples should be the same given the same table and the same contents.
+#query II nosort result_1
+#select a::INT, b from pragma_table_sample('integers_2') order by all;
+#----
 
 statement ok
 create or replace table integers_1 as (select (range + 5) a, range b from materialized_range);

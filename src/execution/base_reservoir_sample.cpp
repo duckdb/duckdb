@@ -1,20 +1,27 @@
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "math.h"
 
 namespace duckdb {
 
-vector<double> BaseReservoirSampling::TuplesToMinWeightMap() {
-	return vector<double> {
-	    0,        0.000161, 0.530136, 0.693454, 0.768098, 0.813462, 0.842048, 0.864743, 0.880825, 0.894071, 0.905238,
-	    0.912615, 0.919314, 0.925869, 0.930331, 0.934715, 0.938872, 0.942141, 0.945010, 0.947712, 0.949381, 0.952094,
-	    0.954973, 0.956840, 0.958685, 0.960314, 0.961985, 0.963819, 0.965385, 0.966284, 0.966994, 0.968070, 0.969026,
-	    0.969987, 0.970997, 0.971923, 0.972774, 0.973473, 0.974157, 0.974998, 0.975458, 0.975869, 0.976474, 0.976995,
-	    0.977581, 0.978220, 0.978649, 0.979157, 0.979721, 0.980169, 0.980685, 0.981087, 0.981425, 0.981626, 0.981905,
-	    0.982207, 0.982534, 0.982756, 0.983048, 0.983485, 0.983875, 0.984114, 0.984346, 0.984516, 0.984743, 0.985056,
-	    0.985174, 0.985418, 0.985610, 0.985758, 0.985978, 0.986105, 0.986306, 0.986490, 0.986644, 0.986842, 0.987089,
-	    0.987331, 0.987456, 0.987624, 0.987795, 0.987920, 0.988059, 0.988160, 0.988311, 0.988403, 0.988626, 0.988709,
-	    0.988884, 0.989072, 0.989206, 0.989321, 0.989406, 0.989492, 0.989623, 0.989738, 0.989835, 0.989995, 0.990080,
-	    0.990164, 0.990276, 0.990394, 0.990505, 0.990602, 0.990699, 0.990840, 0.990906, 0.991045, 0.991108, 0.991183,
-	    0.991300, 0.991409, 0.991475, 0.991539, 0.991595, 0.991669, 0.991718, 0.991800, 0.991885, 0.991946, 0.991975};
+double BaseReservoirSampling::GetMinWeightFromTuplesSeen(idx_t rows_seen_total) {
+	// this function was obtained using https://mycurvefit.com. Inputting multiple x, y values into
+	// The
+	switch (rows_seen_total) {
+	case 0:
+		return 0;
+	case 1:
+		return 0.000161;
+	case 2:
+		return 0.530136;
+	case 3:
+		return 0.693454;
+	default: {
+		// 0.978 - 1.5194 * std::exp(0.441 * rows_seen_total);
+		// 0.988 - 0.17742 * std::exp(-0.0718 * rows_seen_total);
+		// 0.987 - 0.19 * std::exp(-0.077 * rows_seen_total);
+		return (0.99 - 0.436 * std::exp(-0.07 * rows_seen_total));
+	}
+	}
 }
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
@@ -133,14 +140,11 @@ void BaseReservoirSampling::FillWeights(vector<idx_t> &actual_sample_indexes) {
 	}
 	D_ASSERT(actual_sample_indexes.size() <= FIXED_SAMPLE_SIZE);
 	D_ASSERT(reservoir_weights.empty());
-	auto min_weight_index = num_entries_seen_total / FIXED_SAMPLE_SIZE;
-	auto tuples_to_min_weight_map = TuplesToMinWeightMap();
-	if (tuples_to_min_weight_map.size() < min_weight_index) {
-		min_weight_index = tuples_to_min_weight_map.size();
-	}
-	auto min_weight = tuples_to_min_weight_map[min_weight_index];
+	auto num_entries_seen_normalized = num_entries_seen_total / FIXED_SAMPLE_SIZE;
+	auto min_weight = GetMinWeightFromTuplesSeen(num_entries_seen_normalized);
 	for (auto &index : actual_sample_indexes) {
-		auto weight = random.NextRandom(min_weight, 1);
+		RandomEngine new_random_engine;
+		auto weight = new_random_engine.NextRandom(min_weight, 1);
 		reservoir_weights.emplace(-weight, index);
 	}
 	D_ASSERT(reservoir_weights.size() <= FIXED_SAMPLE_SIZE);

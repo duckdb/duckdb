@@ -2,6 +2,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 
+#include <sys/stat.h>
+
 namespace duckdb {
 
 idx_t IngestionSample::NumSamplesCollected() const {
@@ -284,8 +286,14 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	D_ASSERT(SamplingState() == SamplingMode::SLOW && other_ingest.SamplingState() == SamplingMode::SLOW);
 
 	idx_t total_samples = GetPriorityQueueSize() + other_ingest.GetPriorityQueueSize();
-	idx_t num_samples_to_keep = MinValue<idx_t>(FIXED_SAMPLE_SIZE, total_samples);
-
+	idx_t total_samples_seen =
+	    base_reservoir_sample->num_entries_seen_total + other_ingest.base_reservoir_sample->num_entries_seen_total;
+	idx_t num_samples_to_keep = MinValue<idx_t>(
+	    FIXED_SAMPLE_SIZE, static_cast<idx_t>(static_cast<double>(total_samples_seen) * SAVE_PERCENTAGE));
+	if (num_samples_to_keep < GetPriorityQueueSize()) {
+		num_samples_to_keep = GetPriorityQueueSize();
+	}
+	D_ASSERT(GetPriorityQueueSize() <= num_samples_to_keep);
 	D_ASSERT(total_samples <= FIXED_SAMPLE_SIZE * 2);
 
 	// pop from base base_reservoir samples and weights until there are num_samples_to_keep left.
@@ -302,6 +310,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 			base_reservoir_sample->UpdateMinWeightThreshold();
 		}
 	}
+
 	D_ASSERT(other_ingest.GetPriorityQueueSize() + GetPriorityQueueSize() <= FIXED_SAMPLE_SIZE);
 	D_ASSERT(other_ingest.GetPriorityQueueSize() + GetPriorityQueueSize() == num_samples_to_keep);
 	D_ASSERT(other_ingest.sample_chunk->GetTypes() == sample_chunk->GetTypes());
@@ -656,7 +665,9 @@ void IngestionSample::Verify() {
 	if (NumSamplesCollected() > FIXED_SAMPLE_SIZE) {
 		D_ASSERT(GetPriorityQueueSize() == FIXED_SAMPLE_SIZE);
 	} else if (NumSamplesCollected() <= FIXED_SAMPLE_SIZE && GetPriorityQueueSize() > 0) {
-		D_ASSERT(NumSamplesCollected() == GetPriorityQueueSize());
+		// it's possible to collect more samples than your priority queue size.
+		// see sample_converts_to_reservoir_sample.test
+		D_ASSERT(NumSamplesCollected() >= GetPriorityQueueSize());
 	}
 	auto base_reservoir_copy = base_reservoir_sample->Copy();
 	unordered_map<idx_t, idx_t> index_count;

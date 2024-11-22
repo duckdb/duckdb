@@ -72,7 +72,7 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BaseReservoirSampling> Deserialize(Deserializer &deserializer);
 
-	static vector<double> TuplesToMinWeightMap();
+	static double GetMinWeightFromTuplesSeen(idx_t rows_seen_total);
 	// static unordered_map<idx_t, double> tuples_to_min_weight_map;
 	// Blocking sample is a virtual class. It should be allowed to see the weights and
 	// of tuples in the sample. The blocking sample can then easily maintain statisitcal properties
@@ -157,8 +157,8 @@ public:
 	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
 
 public:
-	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = 1);
-	explicit ReservoirSample(idx_t sample_count, int64_t seed = 1);
+	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = -1);
+	explicit ReservoirSample(idx_t sample_count, int64_t seed = -1);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -266,7 +266,7 @@ public:
 	// of values we save when serializing/returning a sample.
 	constexpr static double SAVE_PERCENTAGE = 0.01;
 
-	IngestionSample(Allocator &allocator, int64_t seed);
+	IngestionSample(Allocator &allocator, int64_t seed = 1);
 	explicit IngestionSample(idx_t sample_count, int64_t seed = 1);
 
 	unique_ptr<BlockingSample> ConvertToReservoirSample();
