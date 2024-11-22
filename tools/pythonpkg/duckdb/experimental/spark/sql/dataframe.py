@@ -695,8 +695,7 @@ class DataFrame:
 
         if on is not None and not isinstance(on, list):
             on = [on]  # type: ignore[assignment]
-
-        if on is not None:
+        if on is not None and not all([isinstance(x, str) for x in on]):
             assert isinstance(on, list)
             # Get (or create) the Expressions from the list of Columns
             on = [_to_column_expr(x) for x in on]
@@ -707,6 +706,7 @@ class DataFrame:
             ), "on should be Column or list of Column"
             on = reduce(lambda x, y: x.__and__(y), cast(List[Expression], on))
 
+
         if on is None and how is None:
             result = self.relation.join(other.relation)
         else:
@@ -714,6 +714,9 @@ class DataFrame:
                 how = "inner"
             if on is None:
                 on = "true"
+            elif isinstance(on, list) and all([isinstance(x, str) for x in on]):
+                # Passed directly through as a list of strings
+                on = on
             else:
                 on = str(on)
             assert isinstance(how, str), "how should be a string"
@@ -910,7 +913,7 @@ class DataFrame:
         [Row(age=5, name='Bob')]
         """
         if isinstance(item, str):
-            return col(item)
+            return Column(duckdb.ColumnExpression(self.relation.alias, item))
         elif isinstance(item, Column):
             return self.filter(item)
         elif isinstance(item, (list, tuple)):
@@ -932,7 +935,7 @@ class DataFrame:
             raise AttributeError(
                 "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
             )
-        return col(name)
+        return Column(duckdb.ColumnExpression(self.relation.alias, name))
 
     @overload
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":

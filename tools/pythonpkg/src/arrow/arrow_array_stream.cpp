@@ -49,19 +49,6 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_
 	bool has_filter = filters && !filters->filters.empty();
 
 	if (has_filter) {
-		for (auto it = filters->filters.begin(); it != filters->filters.end();) {
-			if (it->second->filter_type == TableFilterType::OPTIONAL_FILTER) {
-				it = filters->filters.erase(it);
-			} else {
-				++it;
-			}
-		}
-	}
-
-	// make sure there is still a filter
-	has_filter = filters && !filters->filters.empty();
-
-	if (has_filter) {
 		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
 		                              client_properties, arrow_table);
 		if (column_list.empty()) {
@@ -395,8 +382,6 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 	}
 	case TableFilterType::OPTIONAL_FILTER:
 		return py::none();
-	case TableFilterType::IN_FILTER:
-		throw NotImplementedException("Pushdown In Filter Type not supported in Arrow Scans");
 	default:
 		throw NotImplementedException("Pushdown Filter Type not supported in Arrow Scans");
 	}
@@ -421,7 +406,9 @@ py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &f
 
 		auto &arrow_type = arrow_table.GetColumns().at(filter_to_col.at(column_idx));
 		py::object child_expression = TransformFilterRecursive(*it.second, column_ref, config.time_zone, *arrow_type);
-		if (expression.is(py::none())) {
+		if (child_expression.is(py::none())) {
+			continue;
+		} else if (expression.is(py::none())) {
 			expression = std::move(child_expression);
 		} else {
 			expression = expression.attr("__and__")(child_expression);

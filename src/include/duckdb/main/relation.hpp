@@ -34,6 +34,13 @@ class LogicalOperator;
 class QueryNode;
 class TableRef;
 
+static string CreateRelationAlias(RelationType type, const string &alias) {
+	if (!alias.empty()) {
+		return alias;
+	}
+	return StringUtil::Format("%s_%s", EnumUtil::ToString(type), StringUtil::GenerateRandomName());
+}
+
 class RelationContextWrapper : public ClientContextWrapper {
 public:
 	~RelationContextWrapper() override = default;
@@ -54,16 +61,19 @@ public:
 	Relation(const shared_ptr<ClientContext> &context_p, const RelationType type) : type(type) {
 		context = make_shared_ptr<ClientContextWrapper>(context_p);
 	}
-	Relation(const shared_ptr<ClientContextWrapper> &context, RelationType type) : context(context), type(type) {
+	Relation(const shared_ptr<ClientContextWrapper> &context, RelationType type, const string &alias_p = "")
+	    : context(context), type(type), alias(CreateRelationAlias(type, alias_p)) {
 	}
 
-	Relation(const shared_ptr<RelationContextWrapper> &context, RelationType type) : context(context), type(type) {
+	Relation(const shared_ptr<RelationContextWrapper> &context, RelationType type, const string &alias_p = "")
+	    : context(context), type(type), alias(CreateRelationAlias(type, alias_p)) {
 	}
 
 	virtual ~Relation() = default;
 
 	shared_ptr<ClientContextWrapper> context;
 	RelationType type;
+	const string alias;
 	vector<shared_ptr<ExternalDependency>> external_dependencies;
 
 public:
