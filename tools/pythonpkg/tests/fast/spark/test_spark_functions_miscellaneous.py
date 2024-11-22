@@ -53,10 +53,7 @@ class TestsSparkFunctionsMiscellaneous:
         res = df.select(F.like(df.a, df.b).alias('r')).collect()
         assert res == [Row(r=True)]
 
-        df = spark.createDataFrame(
-             [("%SystemDrive%/Users/John", "/%SystemDrive/%//Users%")],
-             ['a', 'b']
-         )
+        df = spark.createDataFrame([("%SystemDrive%/Users/John", "/%SystemDrive/%//Users%")], ['a', 'b'])
         res = df.select(F.like(df.a, df.b, F.lit('/')).alias('r')).collect()
         assert res == [Row(r=True)]
 
@@ -65,9 +62,6 @@ class TestsSparkFunctionsMiscellaneous:
         res = df.select(F.ilike(df.a, df.b).alias('r')).collect()
         assert res == [Row(r=True)]
 
-        df = spark.createDataFrame(
-             [("%SystemDrive%/Users/John", "/%SystemDrive/%//Users%")],
-             ['a', 'b']
-         )
+        df = spark.createDataFrame([("%SystemDrive%/Users/John", "/%SystemDrive/%//Users%")], ['a', 'b'])
         res = df.select(F.ilike(df.a, df.b, F.lit('/')).alias('r')).collect()
         assert res == [Row(r=True)]
