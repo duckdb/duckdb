@@ -307,14 +307,14 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 			this->buffer = make_buffer<DictionaryBuffer>(entry->second->Cast<DictionaryBuffer>().GetSelVector());
 		} else {
 			// how to optimize it?
-			// I use the following code in duckdb 0.8.1, but it fails in 1.1.2.
+			// I use the following code in duckdb 0.8.1, but it fails in duckdb 1.1.2.
 			//	for (idx_t i = 0; i < count; i++) {
 			//		idx_t idx = sel.get_index(i);
 			//		dict_codes.set_index(base_count + i, current_sel.get_index(idx));
 			//	}
 			SelectionVector new_sel(STANDARD_VECTOR_SIZE);
-			new_sel.Initialize(current_sel);
-
+			for (idx_t i = 0; i < base_count; i++)
+				new_sel.set_index(i, dict_codes[i]);
 			for (idx_t i = 0; i < count; i++) {
 				idx_t idx = sel.get_index(i);
 				new_sel.set_index(base_count + i, current_sel.get_index(idx));
