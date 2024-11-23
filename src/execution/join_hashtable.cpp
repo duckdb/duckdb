@@ -908,8 +908,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	}
 
 	while (this->count > 0 && !HasBuffer()) {
-		SelectionVector result_vector(STANDARD_VECTOR_SIZE);
-		idx_t result_count = ScanInnerJoin(keys, result_vector);
+		idx_t result_count = ScanInnerJoin(keys, chain_match_sel_vector);
 
 		if (result_count > 0) {
 			if (PropagatesBuildSide(ht.join_type)) {
@@ -943,7 +942,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 				// matches were found
 				// construct the result
 				// on the LHS, we create a slice using the result vector
-				res_chunk->ConcatenateSlice(left, result_vector, result_count, base_count);
+				res_chunk->ConcatenateSlice(left, chain_match_sel_vector, result_count, base_count);
 
 				// on the RHS, we need to fetch the data from the hash table
 				for (idx_t i = 0; i < count; i++)
@@ -952,7 +951,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 					auto &vector = res_chunk->data[left.ColumnCount() + i];
 					const auto output_col_idx = ht.output_columns[i];
 					D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
-					GatherResult(vector, result_vector, result_count, output_col_idx);
+					GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
 				}
 			}
 			AdvancePointers();
