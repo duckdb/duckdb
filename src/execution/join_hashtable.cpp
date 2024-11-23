@@ -780,11 +780,6 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 		return;
 	}
 
-	// Data Chunk Compaction
-	result.Reset();
-	if (HasBuffer())
-		result.Swap(*buffer);
-
 	switch (ht.join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
@@ -906,6 +901,11 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 		D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.output_columns.size());
 	}
+
+	// Data Chunk Compaction
+	result.Reset();
+	if (HasBuffer())
+		result.Swap(*buffer);
 
 	while (this->count > 0 && !HasBuffer()) {
 		idx_t result_count = ScanInnerJoin(keys, chain_match_sel_vector);
