@@ -283,7 +283,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t count, idx_t base_count,
                               SelCache &sel_cache) {
 	// vector reference
-	if (this->data != other.data) {
+	if (base_count == 0) {
 		Reference(other);
 		Slice(sel, count);
 
@@ -291,7 +291,13 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 	}
 
 	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		// dictionary on a constant is just a constant
+		auto &dict_codes = DictionaryVector::SelVector(*this);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t idx = sel.get_index(i);
+			dict_codes.set_index(base_count + i, idx);
+		}
+		std::cout << "CONSTANT_VECTOR is called.\n";
+
 		return;
 	}
 
@@ -301,6 +307,7 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 			idx_t idx = sel.get_index(i);
 			dict_codes.set_index(base_count + i, idx);
 		}
+		std::cout << "FLAT_VECTOR is called.\n";
 		return;
 	}
 
@@ -319,6 +326,7 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 			}
 			sel_cache.cache[target_data] = this->buffer;
 		}
+		std::cout << "DICTIONARY_VECTOR is called.\n";
 		return;
 	}
 
@@ -328,6 +336,7 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 			idx_t idx = sel.get_index(i);
 			dict_codes.set_index(base_count + i, idx);
 		}
+		std::cout << "FSST_VECTOR is called.\n";
 		return;
 	}
 
@@ -337,6 +346,7 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 			idx_t idx = sel.get_index(i);
 			dict_codes.set_index(base_count + i, idx);
 		}
+		std::cout << "SEQUENCE_VECTOR is called.\n";
 		return;
 	}
 

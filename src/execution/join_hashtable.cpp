@@ -956,6 +956,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 				}
 			}
 			AdvancePointers();
+			std::cout << result.ToString() << "\n";
 		}
 	}
 }
