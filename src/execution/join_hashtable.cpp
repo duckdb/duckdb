@@ -908,14 +908,15 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		result.Swap(*buffer);
 
 	while (this->count > 0 && !HasBuffer()) {
-		idx_t result_count = ScanInnerJoin(keys, chain_match_sel_vector);
+		SelectionVector result_vector(STANDARD_VECTOR_SIZE);
+		idx_t result_count = ScanInnerJoin(keys, result_vector);
 
 		if (result_count > 0) {
 			if (PropagatesBuildSide(ht.join_type)) {
 				// full/right outer join: mark join matches as FOUND in the HT
 				auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 				for (idx_t i = 0; i < result_count; i++) {
-					auto idx = chain_match_sel_vector.get_index(i);
+					auto idx = result_vector.get_index(i);
 					// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
 					// threads Technically it is, but it does not matter, since the only value that can be written is
 					// "true"
@@ -942,16 +943,16 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 				// matches were found
 				// construct the result
 				// on the LHS, we create a slice using the result vector
-				result_chunk->ConcatenateSlice(left, chain_match_sel_vector, result_count, base_count);
+				result_chunk->ConcatenateSlice(left, result_vector, result_count, base_count);
 
 				// on the RHS, we need to fetch the data from the hash table
-				for (idx_t i = 0; i < count; i++)
+				for (idx_t i = 0; i < result_count; i++)
 					target_vector.set_index(i, base_count + i);
 				for (idx_t i = 0; i < ht.output_columns.size(); i++) {
 					auto &vector = result_chunk->data[left.ColumnCount() + i];
 					const auto output_col_idx = ht.output_columns[i];
 					D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
-					GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
+					GatherResult(vector, result_vector, result_count, output_col_idx);
 				}
 			}
 			AdvancePointers();
