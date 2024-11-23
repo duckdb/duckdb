@@ -139,12 +139,13 @@ duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
 	}
-	LogicalType param_type;
-	
+
 	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
 	if (identifier == duckdb::string()) {
 		return nullptr;
 	}
+
+	LogicalType param_type;
 
 	if (wrapper->statement->data->TryGetType(identifier, param_type)) {
 		return reinterpret_cast<duckdb_logical_type>(new LogicalType(param_type));
