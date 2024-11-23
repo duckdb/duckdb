@@ -103,7 +103,7 @@ public:
 	buffer_ptr<SelectionData> sel_data() { // NOLINT: allow casing for legacy reasons
 		return selection_data;
 	}
-	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
+	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count, idx_t capacity = 0) const;
 
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;

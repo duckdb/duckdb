@@ -231,7 +231,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// already a dictionary, slice the current dictionary
 		auto &current_sel = DictionaryVector::SelVector(*this);
-		auto sliced_dictionary = current_sel.Slice(sel, count);
+		auto sliced_dictionary = current_sel.Slice(sel, count, STANDARD_VECTOR_SIZE);
 		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary));
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
 			auto &child_vector = DictionaryVector::Child(*this);
@@ -287,16 +287,16 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 		Reference(other);
 		Slice(sel, count);
 
-		// Create a new selection buffer with the size of STANDARD_VECTOR_SIZE
-		auto sel_data = make_buffer<SelectionData>(STANDARD_VECTOR_SIZE);
-		auto result_ptr = sel_data->owned_data.get();
-
-		// Perform result[i] = sel[i] safely, ensuring valid index mapping
-		auto &current_sel = DictionaryVector::SelVector(*this);
-		for (idx_t i = 0; i < count; i++) {
-			result_ptr[i] = UnsafeNumericCast<sel_t>(current_sel[i]);
-		}
-		buffer = make_buffer<DictionaryBuffer>(sel);
+		//		// Create a new selection buffer with the size of STANDARD_VECTOR_SIZE
+		//		auto sel_data = make_buffer<SelectionData>(STANDARD_VECTOR_SIZE);
+		//		auto result_ptr = sel_data->owned_data.get();
+		//
+		//		// Perform result[i] = sel[i] safely, ensuring valid index mapping
+		//		auto &current_sel = DictionaryVector::SelVector(*this);
+		//		for (idx_t i = 0; i < count; i++) {
+		//			result_ptr[i] = UnsafeNumericCast<sel_t>(current_sel[i]);
+		//		}
+		//		buffer = make_buffer<DictionaryBuffer>(sel);
 
 		return;
 	}
