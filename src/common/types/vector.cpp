@@ -280,50 +280,57 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-// currently, we only consider the flat vector and the dictionary vector.
 void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t count, idx_t base_count,
                               SelCache &sel_cache) {
-	// first time
+	// vector reference
 	if (this->data != other.data) {
 		Reference(other);
 		Slice(sel, count);
 		return;
 	}
 
-	// the result chunk must be a dictionary vector after first calling this function
-	assert(this->GetVectorType() == VectorType::DICTIONARY_VECTOR);
-	auto &dict_codes = DictionaryVector::SelVector(*this);
+	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// dictionary on a constant is just a constant
+		return;
+	}
+
 	if (other.GetVectorType() == VectorType::FLAT_VECTOR) {
+		auto &dict_codes = DictionaryVector::SelVector(*this);
 		for (idx_t i = 0; i < count; i++) {
 			idx_t idx = sel.get_index(i);
 			dict_codes.set_index(base_count + i, idx);
 		}
-	} else if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &current_sel = DictionaryVector::SelVector(other);
+		return;
+	}
+
+	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &dict_codes = DictionaryVector::SelVector(*this);
+		auto &other_sel = DictionaryVector::SelVector(other);
 		// dictionary vector: need to merge dictionaries check if we have a cached entry
-		auto target_data = current_sel.data();
+		auto target_data = other_sel.data();
 		auto entry = sel_cache.cache.find(target_data);
 		if (entry != sel_cache.cache.end()) {
 			this->buffer = make_buffer<DictionaryBuffer>(entry->second->Cast<DictionaryBuffer>().GetSelVector());
 		} else {
-			// how to optimize it?
-			// I use the following code in duckdb 0.8.1, but it fails in duckdb 1.1.2.
-			//	for (idx_t i = 0; i < count; i++) {
-			//		idx_t idx = sel.get_index(i);
-			//		dict_codes.set_index(base_count + i, current_sel.get_index(idx));
-			//	}
-			SelectionVector new_sel(STANDARD_VECTOR_SIZE);
-			for (idx_t i = 0; i < base_count; i++)
-				new_sel.set_index(i, dict_codes[i]);
 			for (idx_t i = 0; i < count; i++) {
 				idx_t idx = sel.get_index(i);
-				new_sel.set_index(base_count + i, current_sel.get_index(idx));
+				dict_codes.set_index(base_count + i, other_sel.get_index(idx));
 			}
-
-			this->buffer = make_buffer<DictionaryBuffer>(new_sel);
 			sel_cache.cache[target_data] = this->buffer;
 		}
-	} else {
+		return;
+	}
+
+	if (other.GetVectorType() == VectorType::FSST_VECTOR) {
+		auto &dict_codes = DictionaryVector::SelVector(*this);
+		for (idx_t i = 0; i < count; i++) {
+			idx_t idx = sel.get_index(i);
+			dict_codes.set_index(base_count + i, idx);
+		}
+		return;
+	}
+
+	{
 		assert(false);
 		std::cerr << "Unsupported Types\n";
 	}

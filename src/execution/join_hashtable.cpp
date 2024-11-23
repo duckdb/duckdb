@@ -925,30 +925,30 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 			// for right semi join, just mark the entry as found and move on. Propagation happens later
 			if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
-				DataChunk *res_chunk;
+				DataChunk *result_chunk;
 				idx_t base_count;
 				if (result.size() + result_count <= STANDARD_VECTOR_SIZE) {
 					base_count = result.size();
-					res_chunk = &result;
+					result_chunk = &result;
 				} else {
+					base_count = 0;
+					result_chunk = buffer;
+
 					// init the buffer
 					if (buffer->ColumnCount() == 0)
 						buffer->Initialize(Allocator::DefaultAllocator(), result.GetTypes());
-
-					base_count = 0;
-					res_chunk = buffer;
 				}
 
 				// matches were found
 				// construct the result
 				// on the LHS, we create a slice using the result vector
-				res_chunk->ConcatenateSlice(left, chain_match_sel_vector, result_count, base_count);
+				result_chunk->ConcatenateSlice(left, chain_match_sel_vector, result_count, base_count);
 
 				// on the RHS, we need to fetch the data from the hash table
 				for (idx_t i = 0; i < count; i++)
 					target_vector.set_index(i, base_count + i);
 				for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-					auto &vector = res_chunk->data[left.ColumnCount() + i];
+					auto &vector = result_chunk->data[left.ColumnCount() + i];
 					const auto output_col_idx = ht.output_columns[i];
 					D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
 					GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
