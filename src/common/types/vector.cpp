@@ -286,6 +286,18 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 	if (this->data != other.data) {
 		Reference(other);
 		Slice(sel, count);
+
+		// Create a new selection buffer with the size of STANDARD_VECTOR_SIZE
+		auto sel_data = make_buffer<SelectionData>(STANDARD_VECTOR_SIZE);
+		auto result_ptr = sel_data->owned_data.get();
+
+		// Perform result[i] = sel[i] safely, ensuring valid index mapping
+		auto &current_sel = DictionaryVector::SelVector(*this);
+		for (idx_t i = 0; i < count; i++) {
+			result_ptr[i] = UnsafeNumericCast<sel_t>(current_sel[i]);
+		}
+		buffer = make_buffer<DictionaryBuffer>(sel);
+
 		return;
 	}
 
