@@ -140,7 +140,12 @@ duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared
 		return nullptr;
 	}
 	LogicalType param_type;
-	auto identifier = std::to_string(param_idx);
+	
+	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
+	if (identifier == duckdb::string()) {
+		return nullptr;
+	}
+
 	if (wrapper->statement->data->TryGetType(identifier, param_type)) {
 		return reinterpret_cast<duckdb_logical_type>(new LogicalType(param_type));
 	}
