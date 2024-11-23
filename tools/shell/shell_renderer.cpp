@@ -618,6 +618,10 @@ public:
 					state.Print("1e999");
 				} else if (strcmp(data[i], "-inf") == 0) {
 					state.Print("-1e999");
+				} else if (strcmp(data[i], "nan") == 0) {
+					state.Print("null");
+				} else if (strcmp(data[i], "-nan") == 0) {
+					state.Print("null");
 				} else {
 					state.Print(data[i]);
 				}
@@ -830,9 +834,6 @@ unique_ptr<RowRenderer> ShellState::GetRowRenderer(RenderMode mode) {
 		return unique_ptr<RowRenderer>(new ModeSemiRenderer(*this));
 	case RenderMode::PRETTY:
 		return unique_ptr<RowRenderer>(new ModePrettyRenderer(*this));
-	case RenderMode::TRASH:
-		// no renderer
-		return nullptr;
 	default:
 		throw std::runtime_error("Unsupported mode for GetRowRenderer");
 	}
