@@ -33,7 +33,7 @@ void SelectionVector::Print(idx_t count) const {
 // LCOV_EXCL_STOP
 
 buffer_ptr<SelectionData> SelectionVector::Slice(const SelectionVector &sel, idx_t count) const {
-	auto data = make_buffer<SelectionData>(count);
+	auto data = make_buffer<SelectionData>(STANDARD_VECTOR_SIZE);
 	auto result_ptr = data->owned_data.get();
 	// for every element, we perform result[i] = target[new[i]]
 	for (idx_t i = 0; i < count; i++) {
