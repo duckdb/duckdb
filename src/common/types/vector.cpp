@@ -290,24 +290,8 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 		return;
 	}
 
-	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		auto &dict_codes = DictionaryVector::SelVector(*this);
-		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = sel.get_index(i);
-			dict_codes.set_index(base_count + i, idx);
-		}
-		std::cout << "CONSTANT_VECTOR is called.\n";
-
-		return;
-	}
-
-	if (other.GetVectorType() == VectorType::FLAT_VECTOR) {
-		auto &dict_codes = DictionaryVector::SelVector(*this);
-		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = sel.get_index(i);
-			dict_codes.set_index(base_count + i, idx);
-		}
-		std::cout << "FLAT_VECTOR is called.\n";
+	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// dictionary on a constant is just a constant
 		return;
 	}
 
@@ -326,33 +310,15 @@ void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t c
 			}
 			sel_cache.cache[target_data] = this->buffer;
 		}
-		std::cout << "DICTIONARY_VECTOR is called.\n";
 		return;
-	}
-
-	if (other.GetVectorType() == VectorType::FSST_VECTOR) {
+	} else {
+		// for other types, we just concatenate their selection vectors
 		auto &dict_codes = DictionaryVector::SelVector(*this);
 		for (idx_t i = 0; i < count; i++) {
 			idx_t idx = sel.get_index(i);
 			dict_codes.set_index(base_count + i, idx);
 		}
-		std::cout << "FSST_VECTOR is called.\n";
 		return;
-	}
-
-	if (other.GetVectorType() == VectorType::SEQUENCE_VECTOR) {
-		auto &dict_codes = DictionaryVector::SelVector(*this);
-		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = sel.get_index(i);
-			dict_codes.set_index(base_count + i, idx);
-		}
-		std::cout << "SEQUENCE_VECTOR is called.\n";
-		return;
-	}
-
-	{
-		assert(false);
-		std::cerr << "Unsupported Types: " << VectorTypeToString(other.GetVectorType()) << "\n";
 	}
 }
 
