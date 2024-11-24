@@ -387,15 +387,6 @@ class TestSparkFunctionsString(object):
         res = df.select(F.substring(df.s, 1, 2).alias("s")).collect()
         assert res == [Row(s="ab")]
 
-    def test_substr(self, spark):
-        data = [("Spark SQL", 5, 1)]
-        df = spark.createDataFrame(data, ["a", "b", "c"])
-        res = df.select(F.substr("a", "b", "c").alias("res")).collect()
-        assert res == [Row(res='k')]
-
-        res = df.select(F.substr("a", "b").alias("res")).collect()
-        assert res == [Row(res='k SQL')]
-
     def test_contains(self, spark):
         data = [
             ("firstRowFirstColumn",),

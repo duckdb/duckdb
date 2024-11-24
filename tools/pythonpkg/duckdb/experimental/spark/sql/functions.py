@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, Callable, List, Optional, Tuple, Union, overload
+from typing import Any, Callable, Union, overload, Optional, List, Tuple
 
 from duckdb import (
     CaseExpression,
@@ -8,7 +8,7 @@ from duckdb import (
     ConstantExpression,
     Expression,
     FunctionExpression,
-    LambdaExpression,
+    LambdaExpression
 )
 
 from ..errors import PySparkTypeError
@@ -5111,48 +5111,6 @@ def substring(str: "ColumnOrName", pos: int, len: int) -> Column:
         ConstantExpression(pos),
         ConstantExpression(len),
     )
-
-
-def substr(
-    str: "ColumnOrName", pos: "ColumnOrName", len: Optional["ColumnOrName"] = None
-) -> Column:
-    """
-    Returns the substring of `str` that starts at `pos` and is of length `len`,
-    or the slice of byte array that starts at `pos` and is of length `len`.
-    .. versionadded:: 3.5.0
-    Parameters
-    ----------
-    src : :class:`~pyspark.sql.Column` or str
-        A column of string.
-    pos : :class:`~pyspark.sql.Column` or str
-        A column of string, the substring of `str` that starts at `pos`.
-    len : :class:`~pyspark.sql.Column` or str, optional
-        A column of string, the substring of `str` is of length `len`.
-    Examples
-    --------
-    >>> import pyspark.sql.functions as sf
-    >>> spark.createDataFrame(
-    ...     [("Spark SQL", 5, 1,)], ["a", "b", "c"]
-    ... ).select(sf.substr("a", "b", "c")).show()
-    +---------------+
-    |substr(a, b, c)|
-    +---------------+
-    |              k|
-    +---------------+
-    >>> import pyspark.sql.functions as sf
-    >>> spark.createDataFrame(
-    ...     [("Spark SQL", 5, 1,)], ["a", "b", "c"]
-    ... ).select(sf.substr("a", "b")).show()
-    +------------------------+
-    |substr(a, b, 2147483647)|
-    +------------------------+
-    |                   k SQL|
-    +------------------------+
-    """
-    if len is not None:
-        return _invoke_function_over_columns("substring", str, pos, len)
-    else:
-        return _invoke_function_over_columns("substring", str, pos)
 
 
 def contains(left: "ColumnOrName", right: "ColumnOrName") -> Column:
