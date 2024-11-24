@@ -61,7 +61,7 @@ TEST_CASE("Generate serialized plans file", "[.][serialization]") {
 		planner.CreatePlan(std::move(p.statements[0]));
 		auto plan = std::move(planner.plan);
 
-		BinarySerializer serializer(target);
+		BinarySerializer serializer(target, SerializationOptions::DefaultOldestSupported());
 		serializer.Begin();
 		plan->Serialize(serializer);
 		serializer.End();

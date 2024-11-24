@@ -48,7 +48,7 @@ TEST_CASE("Test default values", "[serialization]") {
 	foo_in.c = 44;
 
 	MemoryStream stream;
-	SerializationOptions options;
+	SerializationOptions options(SerializationOptions::DefaultOldestSupported());
 	options.serialize_default_values = false;
 	BinarySerializer::Serialize(foo_in, stream, options);
 	auto pos1 = stream.GetPosition();
@@ -167,7 +167,7 @@ TEST_CASE("Test deleted values", "[serialization]") {
 	FooV2 v2_in = {1, 3, make_uniq<Complex>(1, "foo"), nullptr};
 
 	MemoryStream stream;
-	SerializationOptions options;
+	SerializationOptions options(SerializationOptions::DefaultOldestSupported());
 	options.serialize_default_values = false;
 	// First of, sanity check that foov1 <-> foov1 works
 	BinarySerializer::Serialize(v1_in, stream, options);

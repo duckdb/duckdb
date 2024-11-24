@@ -36,7 +36,7 @@ static void test_helper(string sql, duckdb::vector<string> fixtures = duckdb::ve
 		plan = optimizer.Optimize(std::move(plan));
 
 		// LogicalOperator's copy utilizes its serialize and deserialize methods
-		auto new_plan = plan->Copy(*con.context);
+		auto new_plan = plan->Copy(*con.context, SerializationCompatibility::Default());
 
 		auto optimized_plan = optimizer.Optimize(std::move(new_plan));
 		con.context->transaction.Commit();
@@ -68,7 +68,7 @@ static void test_helper_multi_db(string sql, duckdb::vector<string> fixtures = d
 		plan = optimizer.Optimize(std::move(plan));
 
 		// LogicalOperator's copy utilizes its serialize and deserialize methods
-		auto new_plan = plan->Copy(*con.context);
+		auto new_plan = plan->Copy(*con.context, SerializationCompatibility::Default());
 
 		auto optimized_plan = optimizer.Optimize(std::move(new_plan));
 		con.context->transaction.Commit();

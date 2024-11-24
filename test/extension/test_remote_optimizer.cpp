@@ -106,7 +106,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
 			for (auto &chunk : collection.Chunks()) {
 				MemoryStream target;
-				BinarySerializer serializer(target);
+				BinarySerializer serializer(target, SerializationOptions::DefaultOldestSupported());
 				serializer.Begin();
 				chunk.Serialize(serializer);
 				serializer.End();
