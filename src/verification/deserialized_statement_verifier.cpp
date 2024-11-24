@@ -16,7 +16,8 @@ DeserializedStatementVerifier::Create(const SQLStatement &statement,
 
 	auto &select_stmt = statement.Cast<SelectStatement>();
 	MemoryStream stream;
-	BinarySerializer::Serialize(select_stmt, stream);
+	SerializationOptions s(SerializationOptions::Latest());
+	BinarySerializer::Serialize(select_stmt, stream, s);
 	stream.Rewind();
 	auto result = BinaryDeserializer::Deserialize<SelectStatement>(stream);
 
