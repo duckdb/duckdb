@@ -1404,9 +1404,8 @@ class DataFrame:
         return rows
 
     def cache(self) -> "DataFrame":
-        query_alias = f"_tmp_{uuid.uuid1().hex}"
-        self.alias(query_alias)
-        cached_cte = self.session.conn.query(f"WITH t AS MATERIALIZED (FROM {query_alias}) FROM t")
+        query = self.relation.sql_query()
+        cached_cte = self.session.conn.query(f"WITH t AS MATERIALIZED (FROM ({query})) FROM t")
         return DataFrame(cached_cte, self.session)
 
 
