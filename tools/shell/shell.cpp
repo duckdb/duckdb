@@ -1621,17 +1621,55 @@ private:
 	bool highlight = true;
 };
 
+class TrashRenderer : public duckdb::BaseResultRenderer {
+public:
+	TrashRenderer() {
+	}
+
+	void RenderLayout(const string &) override {
+	}
+
+	void RenderColumnName(const string &) override {
+	}
+
+	void RenderType(const string &) override {
+	}
+
+	void RenderValue(const string &, const duckdb::LogicalType &) override {
+	}
+
+	void RenderNull(const string &, const duckdb::LogicalType &) override {
+	}
+
+	void RenderFooter(const string &) override {
+	}
+
+	void PrintText(const string &, HighlightElementType) {
+	}
+};
+
 /*
 ** Run a prepared statement
 */
-void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run */
-) {
+void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	if (cMode == RenderMode::DUCKBOX) {
-		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
-		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
+		size_t max_rows = this->max_rows;
+		size_t max_width = this->max_width;
+		if (!outfile.empty() && outfile[0] != '|') {
+			max_rows = (size_t)-1;
+			max_width = (size_t)-1;
+		}
+		if (!stdout_is_console) {
+			max_width = (size_t)-1;
+		}
 		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
 		                      decimal_separator, &renderer);
+		return;
+	}
+	if (cMode == RenderMode::TRASH) {
+		TrashRenderer renderer;
+		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', &renderer);
 		return;
 	}
 
@@ -1663,27 +1701,25 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 
 	// iterate over the rows
 	do {
-		if (renderer) {
-			/* extract the data and data types */
-			for (int i = 0; i < nCol; i++) {
-				result.types[i] = sqlite3_column_type(pStmt, i);
-				if (result.types[i] == SQLITE_BLOB && cMode == RenderMode::INSERT) {
-					result.data[i] = "";
-				} else {
-					result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
-				}
-				if (!result.data[i] && result.types[i] != SQLITE_NULL) {
-					// OOM
-					rc = SQLITE_NOMEM;
-					break;
-				}
+		/* extract the data and data types */
+		for (int i = 0; i < nCol; i++) {
+			result.types[i] = sqlite3_column_type(pStmt, i);
+			if (result.types[i] == SQLITE_BLOB && cMode == RenderMode::INSERT) {
+				result.data[i] = "";
+			} else {
+				result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
+			}
+			if (!result.data[i] && result.types[i] != SQLITE_NULL) {
+				// OOM
+				rc = SQLITE_NOMEM;
+				break;
 			}
 		}
 
 		/* if data and types extracted successfully... */
 		if (SQLITE_ROW == rc) {
 			/* call the supplied callback with the result row data */
-			if (renderer && RenderRow(*renderer, result)) {
+			if (RenderRow(*renderer, result)) {
 				rc = SQLITE_ABORT;
 			} else {
 				rc = sqlite3_step(pStmt);
@@ -1691,9 +1727,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 		}
 	} while (SQLITE_ROW == rc);
 
-	if (renderer) {
-		renderer->RenderFooter(result);
-	}
+	renderer->RenderFooter(result);
 }
 
 /*
@@ -4739,11 +4773,15 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				azCmd[nCmd - 1] = z;
 			}
 		}
-		if (z[1] == '-')
+		if (z[1] == '-') {
 			z++;
+		}
 		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 || strcmp(z, "-newline") == 0 ||
-		    strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
+		    strcmp(z, "-cmd") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
+		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
+			(void)cmdline_option_value(argc, argv, ++i);
+			stdin_is_interactive = false;
 		} else if (strcmp(z, "-init") == 0) {
 			zInitFile = cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-batch") == 0) {

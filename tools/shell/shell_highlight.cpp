@@ -19,7 +19,7 @@ static HighlightElement highlight_elements[] = {{"error", PrintColor::RED, Print
                                                 {"numeric_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
                                                 {"string_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
                                                 {"line_indicator", PrintColor::STANDARD, PrintIntensity::BOLD},
-                                                {"column_name", PrintColor::STANDARD, PrintIntensity::BOLD},
+                                                {"column_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
                                                 {"column_type", PrintColor::STANDARD, PrintIntensity::STANDARD},
                                                 {"numeric_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
                                                 {"string_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
