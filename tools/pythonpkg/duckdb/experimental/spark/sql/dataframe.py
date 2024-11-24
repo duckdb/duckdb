@@ -1405,8 +1405,7 @@ class DataFrame:
 
     def cache(self) -> "DataFrame":
         query = self.relation.sql_query()
-        cached_cte = self.session.conn.query(f"WITH t AS MATERIALIZED (FROM ({query})) FROM t")
-        return DataFrame(cached_cte, self.session)
+        return self.session.sql(f"WITH t AS MATERIALIZED (FROM ({query})) FROM t")
 
 
 __all__ = ["DataFrame"]
