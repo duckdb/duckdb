@@ -59,7 +59,11 @@ extern const uint64_t VERSION_NUMBER;
 string GetDuckDBVersion(idx_t version_number);
 optional_idx GetStorageVersion(const char *version_string);
 optional_idx GetSerializationVersion(const char *version_string);
+string GetSerializationVersionName(idx_t index);
 vector<string> GetSerializationCandidates();
+extern const uint64_t DEFAULT_STORAGE_VERSION_INFO;
+extern const uint64_t DEFAULT_SERIALIZATION_VERSION_INFO;
+extern const uint64_t LATEST_SERIALIZATION_VERSION_INFO;
 
 //! The MainHeader is the first header in the storage file. The MainHeader is typically written only once for a database
 //! file.
@@ -76,6 +80,9 @@ struct MainHeader {
 	uint64_t flags[FLAG_COUNT];
 	static void CheckMagicBytes(FileHandle &handle);
 
+	string CompatibilityGitDesc() {
+		return string(char_ptr_cast(compatibility_git_desc), 0, MAX_VERSION_SIZE);
+	}
 	string LibraryGitDesc() {
 		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);
 	}
@@ -85,6 +92,8 @@ struct MainHeader {
 
 	void Write(WriteStream &ser);
 	static MainHeader Read(ReadStream &source);
+
+	data_t compatibility_git_desc[MAX_VERSION_SIZE];
 
 private:
 	data_t library_git_desc[MAX_VERSION_SIZE];

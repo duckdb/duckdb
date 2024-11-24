@@ -93,7 +93,32 @@ public:
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
+	idx_t GetCompatibilityVersion() const {
+		if (!compatibility_version.IsValid()) {
+			throw InternalException("Compatibility version queried before call to SetCompatibilityVersion");
+		}
+		return compatibility_version.GetIndex();
+	}
+	string GetCompatibilityVersionName() const {
+		idx_t id = GetCompatibilityVersion();
+		return GetSerializationVersionName(id);
+	}
+	void SetCompatibilityVersion(const string &compatibility_version) {
+		auto version = GetSerializationVersion(compatibility_version.c_str());
+		if (version.IsValid()) {
+			SetCompatibilityVersionImpl(version.GetIndex());
+		} else {
+			SetCompatibilityVersionImpl(DEFAULT_SERIALIZATION_VERSION_INFO);
+		}
+	}
+
 private:
+	void SetCompatibilityVersionImpl(idx_t compat_version) {
+		if (compatibility_version.IsValid()) {
+			throw InternalException("Compatibility version already set");
+		}
+		compatibility_version = compat_version;
+	}
 	DatabaseInstance &db;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
@@ -103,6 +128,7 @@ private:
 	optional_ptr<StorageExtension> storage_extension;
 	bool is_initial_database = false;
 	bool is_closed = false;
+	optional_idx compatibility_version;
 };
 
 } // namespace duckdb

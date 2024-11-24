@@ -139,6 +139,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
+		db.SetCompatibilityVersion("latest");
 		return;
 	}
 
@@ -188,6 +189,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		}
 
 		// Initialize the block manager before creating a new database.
+		db.SetCompatibilityVersion(config.options.serialization_compatibility.duckdb_version.c_str());
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);

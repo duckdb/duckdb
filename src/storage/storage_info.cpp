@@ -117,6 +117,15 @@ optional_idx GetSerializationVersion(const char *version_string) {
 	return optional_idx();
 }
 
+string GetSerializationVersionName(idx_t index) {
+	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
+		if (serialization_version_info[i].serialization_version == index) {
+			return serialization_version_info[i].version_name;
+		}
+	}
+	return "";
+}
+
 vector<string> GetSerializationCandidates() {
 	vector<string> candidates;
 	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
