@@ -153,9 +153,9 @@ class BenchmarkRunner:
             print(err)
             return 'Failed to run benchmark ' + benchmark
 
-    def run_benchmarks(self):
+    def run_benchmarks(self, benchmark_list: List[str]):
         results = {}
-        for benchmark in self.benchmark_list:
+        for benchmark in benchmark_list:
             results[benchmark] = self.run_benchmark(benchmark)
         return results
 
