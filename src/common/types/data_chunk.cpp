@@ -370,7 +370,7 @@ void DataChunk::Verify() {
 
 	// verify that we can round-trip chunk serialization
 	MemoryStream mem_stream;
-	BinarySerializer serializer(mem_stream);
+	BinarySerializer serializer(mem_stream, SerializationOptions::Latest());
 
 	serializer.Begin();
 	Serialize(serializer);

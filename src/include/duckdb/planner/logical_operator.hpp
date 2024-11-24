@@ -23,6 +23,8 @@
 
 namespace duckdb {
 
+class SerializationCompatibility;
+
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
 class LogicalOperator {
@@ -69,7 +71,7 @@ public:
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	virtual unique_ptr<LogicalOperator> Copy(ClientContext &context) const;
+	virtual unique_ptr<LogicalOperator> Copy(ClientContext &context, const SerializationCompatibility &a) const;
 
 	virtual bool RequireOptimizer() const {
 		return true;

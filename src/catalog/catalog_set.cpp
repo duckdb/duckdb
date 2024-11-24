@@ -353,15 +353,16 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		// serialize the AlterInfo into a temporary buffer
+		AttachedDatabase &target_db = GetCatalog().GetAttached();
 		MemoryStream stream;
-		BinarySerializer serializer(stream);
+		BinarySerializer serializer(stream, SerializationOptions::From(target_db));
 		serializer.Begin();
 		serializer.WriteProperty(100, "column_name", alter_info.GetColumnName());
 		serializer.WriteProperty(101, "alter_info", &alter_info);
 		serializer.End();
 
-		DuckTransactionManager::Get(GetCatalog().GetAttached())
-		    .PushCatalogEntry(*transaction.transaction, new_entry->Child(), stream.GetData(), stream.GetPosition());
+		DuckTransactionManager::Get(target_db).PushCatalogEntry(*transaction.transaction, new_entry->Child(),
+		                                                        stream.GetData(), stream.GetPosition());
 	}
 
 	read_lock.unlock();

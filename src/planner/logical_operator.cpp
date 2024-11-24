@@ -1,5 +1,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/main/config.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -164,7 +165,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		MemoryStream stream;
 		// We are serializing a query plan
 		try {
-			BinarySerializer::Serialize(*expressions[expr_idx], stream);
+			BinarySerializer::Serialize(*expressions[expr_idx], stream, SerializationOptions::DefaultOldestSupported());
 		} catch (NotImplementedException &ex) {
 			// ignore for now (FIXME)
 			continue;
@@ -214,9 +215,12 @@ vector<idx_t> LogicalOperator::GetTableIndex() const {
 	return vector<idx_t> {};
 }
 
-unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
+unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context,
+                                                  const SerializationCompatibility &compat) const {
 	MemoryStream stream;
-	BinarySerializer serializer(stream);
+	SerializationOptions s(SerializationOptions::From(compat));
+	// TODO FIXME ME
+	BinarySerializer serializer(stream, s);
 	try {
 		serializer.Begin();
 		this->Serialize(serializer);
