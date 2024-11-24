@@ -15,6 +15,7 @@
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/block.hpp"
@@ -117,6 +118,10 @@ public:
 
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
+	const SerializationOptions &GetSerializationOptions() {
+		return serialization_options;
+	}
+
 protected:
 	static unique_ptr<WriteAheadLog> ReplayInternal(AttachedDatabase &database, unique_ptr<FileHandle> handle);
 
@@ -127,6 +132,7 @@ protected:
 	string wal_path;
 	atomic<idx_t> wal_size;
 	atomic<WALInitState> init_state;
+	SerializationOptions serialization_options;
 };
 
 } // namespace duckdb

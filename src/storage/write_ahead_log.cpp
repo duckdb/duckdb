@@ -26,7 +26,11 @@ constexpr uint64_t WAL_VERSION_NUMBER = 2;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size,
                              WALInitState init_state)
-    : database(database), wal_path(wal_path), wal_size(wal_size), init_state(init_state) {
+    : database(database), wal_path(wal_path), wal_size(wal_size), init_state(init_state),
+      serialization_options(SerializationOptions::From(database)) {
+	// CLEANUP
+	serialization_options.serialization_compatibility =
+	    SerializationCompatibility::FromIndex(database.GetCompatibilityVersion());
 }
 
 WriteAheadLog::~WriteAheadLog() {
@@ -131,7 +135,8 @@ private:
 
 class WriteAheadLogSerializer {
 public:
-	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type) : checksum_writer(wal), serializer(checksum_writer) {
+	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type)
+	    : checksum_writer(wal), serializer(checksum_writer, wal.GetSerializationOptions()) {
 		if (!wal.Initialized()) {
 			wal.Initialize();
 		}
@@ -172,7 +177,7 @@ void WriteAheadLog::WriteVersion() {
 	}
 	// write the version marker
 	// note that we explicitly do not checksum the version entry
-	BinarySerializer serializer(*writer);
+	BinarySerializer serializer(*writer, serialization_options);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
 	serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
@@ -274,8 +279,7 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
                     const string &name) {
-	const auto &db_options = db.GetDatabase().config.options;
-	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	auto v1_0_0_storage = db.GetCompatibilityVersion() < 3;
 	case_insensitive_map_t<Value> options;
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
