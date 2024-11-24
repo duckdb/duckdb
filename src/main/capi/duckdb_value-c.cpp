@@ -160,7 +160,7 @@ duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
 
 duckdb_value duckdb_create_timestamp_tz(duckdb_timestamp input) {
 	duckdb::timestamp_tz_t ts(input.micros);
-	return CAPICreateValue(ts); 
+	return CAPICreateValue(ts);
 }
 
 duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val) {
@@ -172,7 +172,7 @@ duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val) {
 
 duckdb_value duckdb_create_timestamp_s(duckdb_timestamp_s input) {
 	duckdb::timestamp_sec_t ts(input.seconds);
-	return CAPICreateValue(ts); 
+	return CAPICreateValue(ts);
 }
 
 duckdb_timestamp_s duckdb_get_timestamp_s(duckdb_value val) {
@@ -184,7 +184,7 @@ duckdb_timestamp_s duckdb_get_timestamp_s(duckdb_value val) {
 
 duckdb_value duckdb_create_timestamp_ms(duckdb_timestamp_ms input) {
 	duckdb::timestamp_ms_t ts(input.millis);
-	return CAPICreateValue(ts); 
+	return CAPICreateValue(ts);
 }
 
 duckdb_timestamp_ms duckdb_get_timestamp_ms(duckdb_value val) {
@@ -196,7 +196,7 @@ duckdb_timestamp_ms duckdb_get_timestamp_ms(duckdb_value val) {
 
 duckdb_value duckdb_create_timestamp_ns(duckdb_timestamp_ns input) {
 	duckdb::timestamp_ns_t ts(input.nanos);
-	return CAPICreateValue(ts); 
+	return CAPICreateValue(ts);
 }
 
 duckdb_timestamp_ns duckdb_get_timestamp_ns(duckdb_value val) {
