@@ -179,9 +179,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	        ]
 	    }
 	 */
-	SerializationOptions serialization_options;
-
-	serialization_options.serialization_compatibility = config.options.serialization_compatibility;
+	SerializationOptions serialization_options(SerializationOptions::From(db));
 
 	BinarySerializer serializer(*metadata_writer, serialization_options);
 	serializer.Begin();
