@@ -185,7 +185,8 @@ static void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *d
 
 static void WriteExtensionMetadataFileToDisk(FileSystem &fs, const string &path, ExtensionInstallInfo &metadata) {
 	auto file_writer = BufferedFileWriter(fs, path);
-	BinarySerializer::Serialize(metadata, file_writer);
+	// Extension info is currently per-version, so also Latest is OK here
+	BinarySerializer::Serialize(metadata, file_writer, SerializationOptions::DefaultOldestSupported());
 	file_writer.Sync();
 }
 
