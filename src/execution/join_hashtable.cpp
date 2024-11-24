@@ -949,8 +949,9 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 					base_count = 0;
 
 					// use a buffer to store temporary data
-					if (buffer->ColumnCount() == 0)
+					if (buffer->ColumnCount() == 0) {
 						buffer->Initialize(Allocator::DefaultAllocator(), result.GetTypes());
+					}
 
 					buffer->ConcatenateSlice(left, chain_match_sel_vector, result_count, 0);
 					VectorOperations::Copy(pointers, payloads_pointers, chain_match_sel_vector, result_count, 0, 0);
@@ -960,8 +961,9 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		AdvancePointers();
 
 		// the result chunk cannot handle more data
-		if (HasBuffer() || base_count == STANDARD_VECTOR_SIZE)
+		if (HasBuffer() || base_count == STANDARD_VECTOR_SIZE) {
 			break;
+		}
 	}
 
 	if (base_count > 0) {
