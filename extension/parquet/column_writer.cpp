@@ -1586,9 +1586,11 @@ public:
 
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
 		auto result = make_uniq<WKBColumnWriterState>(context, row_group, row_group.columns.size());
+		result->encoding = Encoding::RLE_DICTIONARY;
 		RegisterToRowGroup(row_group);
 		return std::move(result);
 	}
+
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override {
 		StandardColumnWriter::Write(state, vector, count);
 
