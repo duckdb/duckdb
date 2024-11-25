@@ -189,8 +189,25 @@ FROM sql_auto_complete('SELECT * FROM tbl UNION ALL SEL') LIMIT 1;
 ----
 SELECT 	28
 
+# qualify
+query II
+FROM sql_auto_complete('SELECT * FROM tbl QUAL') LIMIT 1;
+----
+QUALIFY 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl QUALIFY row_number() OVER () ORD') LIMIT 1;
+----
+ORDER 	47
+
 # quoted identifiers
 query II
 FROM sql_auto_complete('SELECT ''ORDER'' "WHERE" FR') LIMIT 1;
 ----
 FROM 	23
+
+# escaped quoted identifiers
+query II
+FROM sql_auto_complete('SELECT ''OR''''DER'' "WHE""RE" FR') LIMIT 1;
+----
+FROM 	27

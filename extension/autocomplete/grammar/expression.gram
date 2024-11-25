@@ -1,5 +1,5 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
-FunctionExpression <- Identifier Parens(List(Expression))
+FunctionExpression <- Identifier Parens(List(Expression)?) WindowFunction?
 ParenthesisExpression <- Parens(Expression)
 LiteralExpression <- StringLiteral / NumberLiteral
 CastExpression <- 'CAST'i Parens(Expression 'AS'i TypeName)
@@ -12,7 +12,10 @@ DistinctExpression <- 'DISTINCT'i Expression
 SubstringExpression <- 'SUBSTRING'i Parens(Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral)
 LiteralListExpression <- Parens(List(Expression))
 FrameClause <- 'ROWS'i 'BETWEEN'i (('UNBOUNDED'i 'PRECEDING'i)) 'AND' (('CURRENT'i 'ROW'i))
-WindowExpression <- Parens(('PARTITION'i 'BY'i List(Expression))? OrderByClause? FrameClause?)
+WindowFunction <- 'OVER'i WindowFrame
+WindowFrame <- Parens(WindowFrameContents)
+WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
+WindowPartition <- 'PARTITION'i 'BY'i List(Expression)
 IsNullExpression <- ColumnReference 'IS'i 'NOT'i? 'NULL'i # TODO
 
 SingleExpression <-
@@ -27,7 +30,6 @@ SingleExpression <-
     CountStarExpression /
     CastExpression /
     ExtractExpression /
-    WindowExpression /
     FunctionExpression /
     ColumnReference /
     LiteralExpression
@@ -36,17 +38,15 @@ ArithmeticOperator <- '+' / '-' / '*' / '/'
 LikeOperator <- 'NOT'i? 'LIKE'i
 InOperator <- 'NOT'i? 'IN'i !'T'i # special handling to not match INTERSECT
 BooleanOperator <- ('OR'i !'D'i) / 'AND'i # special handling to not match ORDER BY
-ComparisionOperator <-  '=' / '<=' / '>=' / '<' / '>'
-WindowOperator <- 'OVER'i
+ComparisonOperator <-  '=' / '<=' / '>=' / '<' / '>'
 BetweenOperator <- 'BETWEEN'i
 
 Operator <-
     ArithmeticOperator /
-    ComparisionOperator /
+    ComparisonOperator /
     BooleanOperator /
     LikeOperator /
     InOperator /
-    WindowOperator /
     BetweenOperator
 
 Expression <- SingleExpression (Operator SingleExpression)*

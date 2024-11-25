@@ -308,6 +308,16 @@ static bool TokenizeInput(const string &sql, MatchState &match_state, string &la
 					word_state = WordState::UNINITIALIZED;
 				}
 				last_pos = i + 1;
+			} else if (c == '(' || c == ')') {
+				// ( and ) are single-character operators
+				if (i > last_pos) {
+					// push a previous byte if there is any
+					auto next_word = sql.substr(last_pos, i - last_pos);
+					match_state.tokens.emplace_back(next_word);
+				}
+				match_state.tokens.emplace_back(string(1, c));
+				last_pos = i + 1;
+				word_state = WordState::UNINITIALIZED;
 			} else if (StringUtil::CharacterIsOperator(c)) {
 				if (word_state == WordState::OPERATOR) {
 					continue;

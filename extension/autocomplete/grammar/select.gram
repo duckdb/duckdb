@@ -2,7 +2,7 @@ SelectStatement <- SimpleSelect (SetopClause SimpleSelect)*
 
 SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) 'ALL'i?
 
-SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? OrderByClause? LimitClause? OffsetClause?
+SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? QualifyClause? OrderByClause? LimitClause? OffsetClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
 WithStatement <- Identifier 'AS'i SubqueryReference
@@ -30,6 +30,7 @@ FromClause <- 'FROM'i List(TableRef)
 WhereClause <- 'WHERE'i Expression
 GroupByClause <- 'GROUP'i 'BY'i GroupByExpressions
 HavingClause <- 'HAVING'i Expression
+QualifyClause <- 'QUALIFY'i Expression
 
 GroupByExpressions <- List(Expression) / 'ALL'i
 

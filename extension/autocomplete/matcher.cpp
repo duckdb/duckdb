@@ -21,20 +21,15 @@ SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	return AddSuggestionInternal(state);
 }
 
-string Matcher::ToString(MatcherPrintState state) const {
-	if (!print_text.empty()) {
-		return print_text;
+string Matcher::GetName() const {
+	if (name.empty()) {
+		return ToString();
 	}
-	if (state.stack.find(*this) != state.stack.end()) {
-		return "RECURSIVE";
-	}
-	state.stack.insert(*this);
-	return ToStringInternal(state);
+	return name;
 }
 
 void Matcher::Print() const {
-	MatcherPrintState state;
-	Printer::Print(ToString(state));
+	Printer::Print(ToString());
 }
 
 void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
@@ -66,7 +61,7 @@ public:
 		return SuggestionType::MANDATORY;
 	}
 
-	string ToStringInternal(MatcherPrintState state) const override {
+	string ToString() const override {
 		return "'" + keyword + "'";
 	}
 
@@ -85,6 +80,9 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
+		if (name == "FunctionExpression") {
+			// Printer::Print("Window Function!");
+		}
 		MatchState list_state(state);
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
 			auto &child_matcher = matchers[child_idx].get();
@@ -126,13 +124,13 @@ public:
 		return SuggestionType::OPTIONAL;
 	}
 
-	string ToStringInternal(MatcherPrintState state) const override {
+	string ToString() const override {
 		string result = "";
 		for(auto &matcher : matchers) {
 			if (!result.empty()) {
 				result += " ";
 			}
-			result += matcher.get().ToString(state);
+			result += matcher.get().GetName();
 		}
 		return "(" + result + ")";
 	}
@@ -165,8 +163,8 @@ public:
 		return SuggestionType::OPTIONAL;
 	}
 
-	string ToStringInternal(MatcherPrintState state) const override {
-		return matcher.ToString(std::move(state)) + "?";
+	string ToString() const override {
+		return matcher.GetName() + "?";
 	}
 
 private:
@@ -201,13 +199,13 @@ public:
 		return SuggestionType::MANDATORY;
 	}
 
-	string ToStringInternal(MatcherPrintState state) const override {
+	string ToString() const override {
 		string result = "";
 		for(auto &matcher : matchers) {
 			if (!result.empty()) {
 				result += " / ";
 			}
-			result += matcher.get().ToString(state);
+			result += matcher.get().GetName();
 		}
 		return result;
 	}
@@ -260,8 +258,8 @@ public:
 		return SuggestionType::MANDATORY;
 	}
 
-	string ToStringInternal(MatcherPrintState state) const override {
-		return element.ToString(std::move(state)) + "*";
+	string ToString() const override {
+		return element.GetName() + "*";
 	}
 
 private:
@@ -298,7 +296,7 @@ public:
 		return SuggestionType::MANDATORY;
 	}
 
-	string ToStringInternal(MatcherPrintState ) const override {
+	string ToString() const override {
 		switch(suggestion_type) {
 		case SuggestionState::SUGGEST_KEYWORD:
 			return "KEYWORD";
@@ -345,7 +343,7 @@ public:
 		return SuggestionType::MANDATORY;
 	}
 
-	string ToStringInternal(MatcherPrintState ) const override {
+	string ToString() const override {
 		return "STRING_LITERAL";
 	}
 };
@@ -383,7 +381,6 @@ private:
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
-	void AddPrintOverride(const char *name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
 
@@ -391,7 +388,6 @@ private:
 	MatcherAllocator &allocator;
 	string_map_t<reference<Matcher>> matchers;
 	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
-	case_insensitive_set_t print_overrides;
 };
 
 Matcher &MatcherFactory::Keyword(const string &keyword) const {
@@ -904,9 +900,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 	if (list.GetRootMatcherCount() != 1) {
 		throw InternalException("PEG matcher create error - unclosed bracket found");
 	}
-	if (print_overrides.find(rule_name.GetString()) != print_overrides.end()) {
-		matcher.SetPrintText(rule_name.GetString());
-	}
+	matcher.SetName(rule_name.GetString());
 	return matcher;
 }
 
@@ -917,10 +911,6 @@ void MatcherFactory::AddKeywordOverride(const char *name, uint32_t score, char e
 
 void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
 	matchers.insert(make_pair(name, reference<Matcher>(matcher)));
-}
-
-void MatcherFactory::AddPrintOverride(const char *name) {
-	print_overrides.insert(name);
 }
 
 Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rule) {
@@ -940,10 +930,6 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("ColumnName", ColumnName());
 	AddRuleOverride("NumberLiteral", Variable());
 	AddRuleOverride("StringLiteral", StringLiteral());
-
-	// print overrides
-	AddPrintOverride("SelectStatement");
-	AddPrintOverride("Expression");
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);

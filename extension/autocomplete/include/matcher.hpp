@@ -76,6 +76,7 @@ struct MatcherToken {
 };
 
 struct MatcherSuggestion {
+	// NOLINTNEXTLINE: allow implicit conversion from auto-complete candidate
 	MatcherSuggestion(AutoCompleteCandidate keyword_p) : keyword(std::move(keyword_p)), type(SuggestionState::SUGGEST_KEYWORD) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from suggestion state
@@ -114,10 +115,6 @@ enum class MatcherType {
 	STRING_LITERAL
 };
 
-struct MatcherPrintState {
-	reference_set_t<const Matcher> stack;
-};
-
 class Matcher {
 public:
 	explicit Matcher(MatcherType type) : type(type) {}
@@ -127,8 +124,7 @@ public:
 	virtual MatchResultType Match(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
-	string ToString(MatcherPrintState state) const;
-	virtual string ToStringInternal(MatcherPrintState state) const = 0;
+	virtual string ToString() const = 0;
 	void Print() const;
 
 	static Matcher &RootMatcher(MatcherAllocator &allocator);
@@ -136,9 +132,10 @@ public:
 	MatcherType Type() const {
 		return type;
 	}
-	void SetPrintText(string print_text_p) {
-		print_text = std::move(print_text_p);
+	void SetName(string name_p) {
+		name = std::move(name_p);
 	}
+	string GetName() const;
 
 public:
 	template <class TARGET>
@@ -157,9 +154,9 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
-private:
+protected:
 	MatcherType type;
-	string print_text;
+	string name;
 };
 
 class MatcherAllocator {
