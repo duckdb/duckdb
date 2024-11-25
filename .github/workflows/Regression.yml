@@ -66,6 +66,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - name: Checkout Private Regression
+        if: github.repository == 'duckdb/duckdb'
         uses: actions/checkout@v4
         with:
           repository: duckdb/fivetran_regression
@@ -146,7 +147,7 @@ jobs:
           python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/realnest.csv --verbose --threads 2
 
       - name: Regression Test Fivetran
-        if: always()
+        if: github.repository == 'duckdb/duckdb'
         shell: bash
         run: |
           python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/fivetran.csv --verbose --threads 2
