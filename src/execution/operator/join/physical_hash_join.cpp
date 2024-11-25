@@ -33,10 +33,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
-                                   PerfectHashJoinStats perfect_join_stats,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
-      delim_types(std::move(delim_types)), perfect_join_statistics(std::move(perfect_join_stats)) {
+      delim_types(std::move(delim_types)) {
 
 	filter_pushdown = std::move(pushdown_info_p);
 
@@ -105,9 +104,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_state)
+                                   idx_t estimated_cardinality)
     : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {},
-                       estimated_cardinality, std::move(perfect_join_state), nullptr) {
+                       estimated_cardinality, nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -142,7 +141,7 @@ public:
 		hash_table = op.InitializeHashTable(context);
 
 		// For perfect hash join
-		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table, op.perfect_join_statistics);
+		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
 		// For external hash join
 		external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
 		// Set probe types
@@ -711,14 +710,13 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	sink.local_hash_tables.clear();
 	ht.Unpartition();
 
-	bool can_do_perfect_hash_join = false;
+	unique_ptr<DataChunk> final_min_max;
 	if (filter_pushdown && ht.Count() > 0) {
-		auto final_min_max = filter_pushdown->PushFilters(context, ht, *sink.global_filter_state, *this);
-		can_do_perfect_hash_join = sink.perfect_join_executor->CanDoPerfectHashJoin(*this, *final_min_max);
+		final_min_max = filter_pushdown->PushFilters(context, ht, *sink.global_filter_state, *this);
 	}
 
 	// check for possible perfect hash table
-	auto use_perfect_hash = can_do_perfect_hash_join;
+	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin(*this, std::move(final_min_max));
 	if (use_perfect_hash) {
 		D_ASSERT(ht.equality_types.size() == 1);
 		auto key_type = ht.equality_types[0];
@@ -1321,11 +1319,6 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 	}
 	result["Conditions"] = condition_info;
 
-	if (perfect_join_statistics.is_build_small) {
-		// perfect hash join
-		result["Build Min"] = perfect_join_statistics.build_min.ToString();
-		result["Build Max"] = perfect_join_statistics.build_max.ToString();
-	}
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

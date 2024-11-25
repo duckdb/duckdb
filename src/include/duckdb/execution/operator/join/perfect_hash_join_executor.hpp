@@ -32,10 +32,10 @@ class PerfectHashJoinExecutor {
 	using PerfectHashTable = vector<Vector>;
 
 public:
-	explicit PerfectHashJoinExecutor(const PhysicalHashJoin &join, JoinHashTable &ht, PerfectHashJoinStats pjoin_stats);
+	PerfectHashJoinExecutor(const PhysicalHashJoin &join, JoinHashTable &ht);
 
 public:
-	bool CanDoPerfectHashJoin(const PhysicalHashJoin &op, DataChunk &final_min_max);
+	bool CanDoPerfectHashJoin(const PhysicalHashJoin &op, unique_ptr<DataChunk> final_min_max);
 
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context);
 	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &lhs_output_columns,
@@ -61,9 +61,9 @@ private:
 	JoinHashTable &ht;
 	//! Columnar perfect hash table
 	PerfectHashTable perfect_hash_table;
-	//! Build and probe statistics
+	//! Build statistics
 	PerfectHashJoinStats perfect_join_statistics;
-	//! Stores the occurences of each value in the build side
+	//! Stores the occurrences of each value in the build side
 	unsafe_unique_array<bool> bitmap_build_idx;
 	//! Stores the number of unique keys in the build side
 	idx_t unique_keys = 0;

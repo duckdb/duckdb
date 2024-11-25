@@ -5,9 +5,8 @@
 
 namespace duckdb {
 
-PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p, JoinHashTable &ht_p,
-                                                 PerfectHashJoinStats perfect_join_stats)
-    : join(join_p), ht(ht_p), perfect_join_statistics(std::move(perfect_join_stats)) {
+PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p, JoinHashTable &ht_p)
+    : join(join_p), ht(ht_p) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -17,35 +16,41 @@ bool ExtractNumericValue(Value val, hugeint_t &result) {
 	if (!val.type().IsIntegral()) {
 		switch (val.type().InternalType()) {
 		case PhysicalType::INT8:
-			result = val.GetValueUnsafe<int8_t>();
+			result = Hugeint::Convert(val.GetValueUnsafe<int8_t>());
 			break;
 		case PhysicalType::INT16:
-			result = val.GetValueUnsafe<int16_t>();
+			result = Hugeint::Convert(val.GetValueUnsafe<int16_t>());
 			break;
 		case PhysicalType::INT32:
-			result = val.GetValueUnsafe<int32_t>();
+			result = Hugeint::Convert(val.GetValueUnsafe<int32_t>());
 			break;
 		case PhysicalType::INT64:
-			result = val.GetValueUnsafe<int64_t>();
+			result = Hugeint::Convert(val.GetValueUnsafe<int64_t>());
 			break;
 		case PhysicalType::INT128:
 			result = val.GetValueUnsafe<hugeint_t>();
 			break;
 		case PhysicalType::UINT8:
-			result = val.GetValueUnsafe<uint8_t>();
+			result = Hugeint::Convert(val.GetValueUnsafe<uint8_t>());
 			break;
 		case PhysicalType::UINT16:
-			result = val.GetValueUnsafe<uint16_t>();
+			result = Hugeint::Convert(val.GetValueUnsafe<uint16_t>());
 			break;
 		case PhysicalType::UINT32:
-			result = val.GetValueUnsafe<uint32_t>();
+			result = Hugeint::Convert(val.GetValueUnsafe<uint32_t>());
 			break;
 		case PhysicalType::UINT64:
-			result = val.GetValueUnsafe<uint64_t>();
+			result = Hugeint::Convert(val.GetValueUnsafe<uint64_t>());
 			break;
-		case PhysicalType::UINT128:
-			result = val.GetValueUnsafe<uhugeint_t>();
+		case PhysicalType::UINT128: {
+			const auto uhugeint_val = val.GetValueUnsafe<uhugeint_t>();
+			if (uhugeint_val > NumericCast<uhugeint_t>(NumericLimits<hugeint_t>::Maximum())) {
+				return false;
+			}
+			result.lower = uhugeint_val.lower;
+			result.upper = NumericCast<int64_t>(uhugeint_val.upper);
 			break;
+		}
 		default:
 			return false;
 		}
@@ -58,11 +63,11 @@ bool ExtractNumericValue(Value val, hugeint_t &result) {
 	return true;
 }
 
-bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, DataChunk &final_min_max) {
+bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, unique_ptr<DataChunk> final_min_max) {
 	// We only do this optimization for inner joins with one integer equality condition
+	const auto key_type = op.conditions[0].left->return_type;
 	if (op.join_type != JoinType::INNER || op.conditions.size() != 1 ||
-	    op.conditions[0].comparison != ExpressionType::COMPARE_EQUAL ||
-	    !TypeIsInteger(op.conditions[0].left->return_type.InternalType())) {
+	    op.conditions[0].comparison != ExpressionType::COMPARE_EQUAL || !TypeIsInteger(key_type.InternalType())) {
 		return false;
 	}
 	// We bail out if there are nested types on the RHS
@@ -78,8 +83,13 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, D
 	}
 
 	// And when the build range is smaller than the threshold
-	perfect_join_statistics.build_min = final_min_max.data[0].GetValue(0);
-	perfect_join_statistics.build_max = final_min_max.data[1].GetValue(0);
+	if (final_min_max) {
+		perfect_join_statistics.build_min = final_min_max->data[0].GetValue(0);
+		perfect_join_statistics.build_max = final_min_max->data[1].GetValue(0);
+	} else {
+		perfect_join_statistics.build_min = Value::MinimumValue(key_type);
+		perfect_join_statistics.build_max = Value::MaximumValue(key_type);
+	}
 	hugeint_t min_value, max_value;
 	if (!ExtractNumericValue(perfect_join_statistics.build_min, min_value) ||
 	    !ExtractNumericValue(perfect_join_statistics.build_max, max_value)) {
@@ -118,7 +128,6 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
 	// Now fill columns with build data
-
 	return FullScanHashTable(key_type);
 }
 
