@@ -83,10 +83,11 @@ public:
 		bool is_null;
 
 		// data chunk compaction buffer
-		DataChunk *buffer;
-		Vector payloads_pointers;
+		idx_t base_count;
+		Vector rhs_pointers;
+		SelectionVector lhs_sel_vector;
 
-		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state, DataChunk *buffer);
+		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Are pointer chains all pointing to NULL?
@@ -118,9 +119,8 @@ public:
 
 		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
 
-		bool HasBuffer() const {
-			return buffer != nullptr && buffer->size() > 0;
-		}
+		//! Update the data chunk compaction buffer
+		void UpdateCompactionBuffer(SelectionVector &result_vector, idx_t result_count);
 
 	public:
 		void AdvancePointers();

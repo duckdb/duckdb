@@ -231,7 +231,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// already a dictionary, slice the current dictionary
 		auto &current_sel = DictionaryVector::SelVector(*this);
-		auto sliced_dictionary = current_sel.Slice(sel, count, STANDARD_VECTOR_SIZE);
+		auto sliced_dictionary = current_sel.Slice(sel, count);
 		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary));
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
 			auto &child_vector = DictionaryVector::Child(*this);
@@ -277,48 +277,6 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 		}
 	} else {
 		Slice(sel, count);
-	}
-}
-
-void Vector::ConcatenateSlice(Vector &other, const SelectionVector &sel, idx_t count, idx_t base_count,
-                              SelCache &sel_cache) {
-	// vector reference
-	if (base_count == 0) {
-		Reference(other);
-		Slice(sel, count);
-
-		return;
-	}
-
-	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		// dictionary on a constant is just a constant
-		return;
-	}
-
-	if (other.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &dict_codes = DictionaryVector::SelVector(*this);
-		auto &other_sel = DictionaryVector::SelVector(other);
-		// dictionary vector: need to merge dictionaries check if we have a cached entry
-		auto target_data = other_sel.data();
-		auto entry = sel_cache.cache.find(target_data);
-		if (entry != sel_cache.cache.end()) {
-			this->buffer = make_buffer<DictionaryBuffer>(entry->second->Cast<DictionaryBuffer>().GetSelVector());
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				idx_t idx = sel.get_index(i);
-				dict_codes.set_index(base_count + i, other_sel.get_index(idx));
-			}
-			sel_cache.cache[target_data] = this->buffer;
-		}
-		return;
-	} else {
-		// for other types, we just concatenate their selection vectors
-		auto &dict_codes = DictionaryVector::SelVector(*this);
-		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = sel.get_index(i);
-			dict_codes.set_index(base_count + i, idx);
-		}
-		return;
 	}
 }
 

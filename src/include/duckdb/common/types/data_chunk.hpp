@@ -83,9 +83,6 @@ public:
 	//! Set the DataChunk to own the data of data chunk, destroying the other chunk in the process
 	DUCKDB_API void Move(DataChunk &chunk);
 
-	//! Data Chunk Compaction: Swap the data of two data chunks
-	DUCKDB_API void Swap(DataChunk &chunk);
-
 	//! Initializes a DataChunk with the given types and without any vector data allocation.
 	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
 
@@ -137,12 +134,6 @@ public:
 
 	//! Slice a DataChunk from "offset" to "offset + count"
 	DUCKDB_API void Slice(idx_t offset, idx_t count);
-
-	//! Slice all Vectors from other.data[i] to data[i + 'col_offset']
-	//! Turning all Vectors into Dictionary Vectors, using 'sel'
-	//! Concatenating the new selection vector to the original
-	DUCKDB_API void ConcatenateSlice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t base_count = 0,
-	                                 idx_t col_offset = 0);
 
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
 	//! function was called. This sets the count to 0, and resets each member

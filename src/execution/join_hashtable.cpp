@@ -768,18 +768,17 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 	}
 }
 
-ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p, DataChunk *buffer)
+ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p)
     : key_state(key_state_p), pointers(LogicalType::POINTER), count(0), sel_vector(STANDARD_VECTOR_SIZE),
       chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE),
       found_match(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
-      is_null(true), buffer(buffer), payloads_pointers(LogicalType::POINTER) {
+      is_null(true), base_count(0), rhs_pointers(LogicalType::POINTER), lhs_sel_vector(STANDARD_VECTOR_SIZE) {
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	if (finished) {
 		return;
 	}
-
 	switch (ht.join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
@@ -893,8 +892,22 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_v
 }
 
 void ScanStructure::GatherResult(Vector &result, const idx_t count, const idx_t col_idx) {
-	ht.data_collection->Gather(payloads_pointers, *FlatVector::IncrementalSelectionVector(), count, col_idx, result,
+	ht.data_collection->Gather(rhs_pointers, *FlatVector::IncrementalSelectionVector(), count, col_idx, result,
 	                           *FlatVector::IncrementalSelectionVector(), nullptr);
+}
+
+void ScanStructure::UpdateCompactionBuffer(SelectionVector &result_vector, idx_t result_count) {
+	// matches were found
+	// record the result
+	// on the LHS, we store result vector
+	for (idx_t i = 0; i < result_count; i++) {
+		lhs_sel_vector.set_index(base_count + i, result_vector.get_index(i));
+	}
+
+	// on the RHS, we collect their pointers
+	VectorOperations::Copy(pointers, rhs_pointers, result_vector, result_count, 0, base_count);
+
+	base_count += result_count;
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -902,13 +915,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.output_columns.size());
 	}
 
-	// if the buffer has data, the result get it
 	result.Reset();
-	if (HasBuffer()) {
-		result.Swap(*buffer);
-	}
-
-	idx_t base_count = result.size();
+	bool valid_result_chunk = false;
 	while (this->count > 0) {
 		chain_match_sel_vector.Initialize();
 		idx_t result_count = ScanInnerJoin(keys, chain_match_sel_vector);
@@ -928,17 +936,13 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 			if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 				if (base_count + result_count <= STANDARD_VECTOR_SIZE) {
-					// matches were found
-					// construct the result
-					// on the LHS, we create a slice using the result vector
-					result.ConcatenateSlice(left, chain_match_sel_vector, result_count, base_count);
-
-					// on the RHS, we collect their pointers
-					VectorOperations::Copy(pointers, payloads_pointers, chain_match_sel_vector, result_count, 0,
-					                       base_count);
-
-					base_count += result_count;
+					// use a buffer to store temporary data
+					UpdateCompactionBuffer(chain_match_sel_vector, result_count);
 				} else {
+					// if the buffer cannot contain the next chunk, output it
+					// slice LHS vectors
+					result.Slice(left, lhs_sel_vector, base_count);
+
 					// gather RHS vectors
 					for (idx_t i = 0; i < ht.output_columns.size(); i++) {
 						auto &vector = result.data[left.ColumnCount() + i];
@@ -947,33 +951,31 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 						GatherResult(vector, base_count, output_col_idx);
 					}
 					base_count = 0;
+					valid_result_chunk = true;
 
 					// use a buffer to store temporary data
-					if (buffer->ColumnCount() == 0) {
-						buffer->Initialize(Allocator::DefaultAllocator(), result.GetTypes());
-					}
-
-					buffer->ConcatenateSlice(left, chain_match_sel_vector, result_count, 0);
-					VectorOperations::Copy(pointers, payloads_pointers, chain_match_sel_vector, result_count, 0, 0);
+					UpdateCompactionBuffer(chain_match_sel_vector, result_count);
 				}
 			}
 		}
 		AdvancePointers();
 
 		// the result chunk cannot handle more data
-		if (HasBuffer() || base_count == STANDARD_VECTOR_SIZE) {
+		if (valid_result_chunk || base_count == STANDARD_VECTOR_SIZE) {
 			break;
 		}
 	}
 
-	if (base_count > 0) {
-		// gather RHS vectors
+	if (!valid_result_chunk && base_count > 0) {
+		// slice LHS vectors and gather RHS vectors
+		result.Slice(left, lhs_sel_vector, base_count);
 		for (idx_t i = 0; i < ht.output_columns.size(); i++) {
 			auto &vector = result.data[left.ColumnCount() + i];
 			const auto output_col_idx = ht.output_columns[i];
 			D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
 			GatherResult(vector, base_count, output_col_idx);
 		}
+		base_count = 0;
 	}
 }
 

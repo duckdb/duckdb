@@ -737,16 +737,12 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 class HashJoinOperatorState : public CachingOperatorState {
 public:
 	explicit HashJoinOperatorState(ClientContext &context, HashJoinGlobalSinkState &sink)
-	    : cpt_buffer(make_uniq<DataChunk>()), probe_executor(context),
-	      scan_structure(*sink.hash_table, join_key_state, cpt_buffer.get()) {
+	    : probe_executor(context), scan_structure(*sink.hash_table, join_key_state) {
 	}
 
 	DataChunk lhs_join_keys;
 	TupleDataChunkState join_key_state;
 	DataChunk lhs_output;
-
-	//! data chunk compaction buffer
-	unique_ptr<DataChunk> cpt_buffer;
 
 	ExpressionExecutor probe_executor;
 	JoinHashTable::ScanStructure scan_structure;
@@ -943,9 +939,6 @@ public:
 	TupleDataChunkState join_key_state;
 	ExpressionExecutor lhs_join_key_executor;
 
-	//! data chunk compaction buffer
-	unique_ptr<DataChunk> cpt_buffer;
-
 	//! Scan structure for the external probe
 	JoinHashTable::ScanStructure scan_structure;
 	JoinHashTable::ProbeState probe_state;
@@ -1123,7 +1116,7 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, const HashJoinGlobalSinkState &sink,
                                                    Allocator &allocator)
     : local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER), lhs_join_key_executor(sink.context),
-      cpt_buffer(make_uniq<DataChunk>()), scan_structure(*sink.hash_table, join_key_state, cpt_buffer.get()) {
+      scan_structure(*sink.hash_table, join_key_state) {
 	auto &chunk_state = probe_local_scan.current_chunk_state;
 	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
 
