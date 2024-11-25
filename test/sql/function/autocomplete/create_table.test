@@ -38,11 +38,15 @@ table 	7
 
 # suggest a type
 query II
+FROM sql_auto_complete('create table tbl(') LIMIT 1;
+----
+(	16
+
+# suggest a type
+query II
 FROM sql_auto_complete('create table tbl(i INTE') LIMIT 1;
 ----
 INTEGER	19
-
-mode skip
 
 # suggest a type in a list
 query II
@@ -59,12 +63,12 @@ PRIMARY 	27
 query II
 FROM sql_auto_complete('create table tbl(i INTEGER PRIMARY KE') LIMIT 1;
 ----
-KEY	35
+KEY 	35
 
 query II
 FROM sql_auto_complete('create table tbl(i INTEGER UNIQ') LIMIT 1;
 ----
-UNIQUE	27
+UNIQUE 	27
 
 query II
 FROM sql_auto_complete('create table tbl(i INTEGER UNIQUE NO') LIMIT 1;
@@ -74,7 +78,7 @@ NOT 	34
 query II
 FROM sql_auto_complete('create table tbl(i INTEGER UNIQUE NOT N') LIMIT 1;
 ----
-NULL	38
+NULL 	38
 
 # top-level constraints
 query II

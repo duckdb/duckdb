@@ -340,7 +340,7 @@ private:
 	Matcher &TableName() const;
 	Matcher &ColumnName() const;
 
-	void SetKeywordScore(const char *name, uint32_t score);
+	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
@@ -348,16 +348,15 @@ private:
 private:
 	MatcherAllocator &allocator;
 	string_map_t<reference<Matcher>> matchers;
-	case_insensitive_map_t<uint32_t> keyword_scores;
+	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
 };
 
 Matcher &MatcherFactory::Keyword(const string &keyword) const {
-	uint32_t score_bonus = 0;
-	auto entry = keyword_scores.find(keyword);
-	if (entry != keyword_scores.end()) {
-		score_bonus = entry->second;
+	auto entry = keyword_overrides.find(keyword);
+	if (entry != keyword_overrides.end()) {
+		return entry->second.get();
 	}
-	return allocator.Allocate(make_uniq<KeywordMatcher>(keyword, score_bonus, ' '));
+	return allocator.Allocate(make_uniq<KeywordMatcher>(keyword, 0, ' '));
 }
 
 Matcher &MatcherFactory::List() const {
@@ -790,7 +789,11 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 					throw InternalException("Optional/Repeat rule found as first token");
 				}
 				auto &final_matcher = list_matcher.matchers.back();
-				auto &replaced_matcher = op_type == '?' ? Optional(final_matcher) : Repeat(final_matcher, nullptr);
+				if (op_type == '*') {
+					// * is Optional(Repeat(CHILD))
+					final_matcher = Repeat(final_matcher.get(), nullptr);
+				}
+				auto &replaced_matcher = Optional(final_matcher);
 				list_matcher.matchers.pop_back();
 				list_matcher.matchers.push_back(replaced_matcher);
 				break;
@@ -829,8 +832,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				break;
 			}
 			case '!': {
-				// FIXME: ignore NOT operator
-				break;
+				throw InternalException("NOT operator not supported in PEG grammar");
 			}
 			default:
 				throw InternalException("unrecognized peg operator type");
@@ -838,8 +840,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 			break;
 		}
 		case PEGTokenType::REGEX:
-			// FIXME: ignore regex operator
-			break;
+			throw InternalException("REGEX operator not supported in PEG grammar");
 		default:
 			throw InternalException("unrecognized peg token type");
 		}
@@ -850,8 +851,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 	return matcher;
 }
 
-void MatcherFactory::SetKeywordScore(const char *name, uint32_t score) {
-	keyword_scores[name] = score;
+void MatcherFactory::AddKeywordOverride(const char *name, uint32_t score, char extra_char) {
+	auto &keyword_matcher = allocator.Allocate(make_uniq<KeywordMatcher>(name, score, extra_char));
+	keyword_overrides.insert(make_pair(name, reference<Matcher>(keyword_matcher)));
 }
 
 void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
@@ -863,8 +865,11 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	PEGParser parser;
 	parser.ParseRules(grammar);
 
+	// keyword overrides
+	AddKeywordOverride("TABLE", 1, ' ');
+	AddKeywordOverride(".", 0, '\0');
+	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
-	SetKeywordScore("TABLE", 1);
 	AddRuleOverride("Identifier", Variable());
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("CatalogName", CatalogName());
