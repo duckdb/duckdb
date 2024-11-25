@@ -12,6 +12,10 @@ PhysicalMaterializedCollector::PhysicalMaterializedCollector(PreparedStatementDa
 SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, DataChunk &chunk,
                                                    OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<MaterializedCollectorLocalState>();
+	if (!lstate.collection) { // Lazily initialize to avoid unnecessarily allocating
+		lstate.collection = make_uniq<ColumnDataCollection>(context.client, types);
+		lstate.collection->InitializeAppend(lstate.append_state);
+	}
 	lstate.collection->Append(lstate.append_state, chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -20,7 +24,7 @@ SinkCombineResultType PhysicalMaterializedCollector::Combine(ExecutionContext &c
                                                              OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<MaterializedCollectorGlobalState>();
 	auto &lstate = input.local_state.Cast<MaterializedCollectorLocalState>();
-	if (lstate.collection->Count() == 0) {
+	if (!lstate.collection || lstate.collection->Count() == 0) {
 		return SinkCombineResultType::FINISHED;
 	}
 
@@ -41,10 +45,7 @@ unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(Cl
 }
 
 unique_ptr<LocalSinkState> PhysicalMaterializedCollector::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_uniq<MaterializedCollectorLocalState>();
-	state->collection = make_uniq<ColumnDataCollection>(context.client, types);
-	state->collection->InitializeAppend(state->append_state);
-	return std::move(state);
+	return make_uniq<MaterializedCollectorLocalState>();
 }
 
 unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState &state) {
