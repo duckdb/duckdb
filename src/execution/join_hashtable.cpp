@@ -892,6 +892,11 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_v
 	ht.data_collection->Gather(pointers, sel_vector, count, col_no, result, result_vector, nullptr);
 }
 
+void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count,
+                                 const idx_t col_idx) {
+	GatherResult(result, *FlatVector::IncrementalSelectionVector(), sel_vector, count, col_idx);
+}
+
 void ScanStructure::GatherResult(Vector &result, const idx_t count, const idx_t col_idx) {
 	ht.data_collection->Gather(rhs_pointers, *FlatVector::IncrementalSelectionVector(), count, col_idx, result,
 	                           *FlatVector::IncrementalSelectionVector(), nullptr);
@@ -947,7 +952,25 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			}
 
 			if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
-				// use a buffer to store temporary data
+				// Fast Path: if there is NO more than one element in the chain, we construct the result chunk directly
+				if (!ht.chains_longer_than_one) {
+					// matches were found
+					// on the LHS, we create a slice using the result vector
+					result.Slice(left, chain_match_sel_vector, result_count);
+
+					// on the RHS, we need to fetch the data from the hash table
+					for (idx_t i = 0; i < ht.output_columns.size(); i++) {
+						auto &vector = result.data[left.ColumnCount() + i];
+						const auto output_col_idx = ht.output_columns[i];
+						D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
+						GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
+					}
+
+					AdvancePointers();
+					return;
+				}
+
+				// Common Path: use a buffer to store temporary data
 				UpdateCompactionBuffer(base_count, chain_match_sel_vector, result_count);
 				base_count += result_count;
 			}
