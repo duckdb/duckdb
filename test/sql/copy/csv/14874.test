@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/14874.test
+# description: Test for issue #14784
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+FROM 'data/csv/drug_exposure.csv';
+----
+9102
