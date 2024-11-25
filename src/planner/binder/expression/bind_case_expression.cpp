@@ -21,6 +21,11 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	// figure out the result type of the CASE expression
 	auto &else_expr = BoundExpression::GetExpression(*expr.else_expr);
 	auto return_type = ExpressionBinder::GetExpressionReturnType(*else_expr);
+	if (return_type == LogicalTypeId::SQLNULL) {
+		auto &check = expr.case_checks[0];
+		auto &then_expr = BoundExpression::GetExpression(*check.then_expr);
+		return_type = ExpressionBinder::GetExpressionReturnType(*then_expr);
+	}
 	for (auto &check : expr.case_checks) {
 		auto &then_expr = BoundExpression::GetExpression(*check.then_expr);
 		auto then_type = ExpressionBinder::GetExpressionReturnType(*then_expr);

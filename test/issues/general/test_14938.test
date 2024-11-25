@@ -1,0 +1,26 @@
+# name: test/issues/general/test_14938.test
+# description: Issue 14938 - Unexpected implicit cast when using CASE WHEN
+# group: [general]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TYPE E1 AS ENUM ('v1', 'v2');
+
+statement ok
+CREATE TABLE t1 (v E1);
+
+statement ok
+INSERT INTO t1 VALUES ('v1');
+
+statement ok
+INSERT INTO t1 VALUES ('v1');
+
+statement ok
+INSERT INTO t1 VALUES ('v1');
+
+query I
+select column_type from (DESCRIBE (SELECT CASE WHEN COUNT(DISTINCT v) == 1 THEN FIRST(v) END AS r FROM t1)) as _;
+----
+ENUM('v1', 'v2')
