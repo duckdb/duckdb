@@ -399,11 +399,20 @@ public:
 			idx_t appended = 0;
 			while (appended < input_size) {
 				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
+				bool last_is_null;
+				idx_t length = 0;
 				for (idx_t i = 0; i < to_append; i++) {
 					auto idx = unified.sel->get_index(appended + i);
 					auto is_null = validity.RowIsValidUnsafe(idx);
-					Append<EMPTY>(!is_null);
+					if (i && is_null != last_is_null) {
+						Append<EMPTY>(!last_is_null, length);
+						length = 1;
+					} else {
+						length++;
+					}
+					last_is_null = is_null;
 				}
+				Append<EMPTY>(!last_is_null, length);
 				if (IsFull()) {
 					on_full_container();
 				}
