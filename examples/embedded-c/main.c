@@ -15,15 +15,15 @@ int main() {
 		goto cleanup;
 	}
 	if (duckdb_query(con, "CREATE TABLE integers(i INTEGER, j INTEGER);", NULL) == DuckDBError) {
-		fprintf(stderr, "Failed to query database\n");
+		fprintf(stderr, "Failed to create table\n");
 		goto cleanup;
 	}
 	if (duckdb_query(con, "INSERT INTO integers VALUES (3, 4), (5, 6), (7, NULL);", NULL) == DuckDBError) {
-		fprintf(stderr, "Failed to query database\n");
+		fprintf(stderr, "Failed to insert into table\n");
 		goto cleanup;
 	}
 	if (duckdb_query(con, "SELECT * FROM integers", &result) == DuckDBError) {
-		fprintf(stderr, "Failed to query database\n");
+		fprintf(stderr, "Failed to select from table\n");
 		goto cleanup;
 	}
 	// print the names of the result
