@@ -69,9 +69,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: duckdb/fivetran_regression
-          path: benchmark/fivetran
-          fetch-depth: 0
           ref: main
+          token: ${{ env.GH_TOKEN }}
+          path: benchmark/fivetran
 
       - name: Build
         shell: bash
