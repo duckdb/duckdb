@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   window_boundaries_state.cpp
   window_collection.cpp
+  window_cumedist_function.cpp
   window_executor.cpp
   window_segment_tree.cpp
   window_shared_expressions.cpp

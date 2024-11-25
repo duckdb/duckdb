@@ -15,6 +15,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/window/window_cumedist_function.hpp"
 #include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/function/window/window_segment_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
