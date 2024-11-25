@@ -396,7 +396,12 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 			entries.emplace_back(catalog_name, schema);
 		}
 		if (entries.empty()) {
-			entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+			auto &default_entry = search_path.GetDefault();
+			if (!IsInvalidCatalog(default_entry.catalog)) {
+				entries.emplace_back(default_entry.catalog, schema);
+			} else {
+				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+			}
 		}
 	} else if (IsInvalidSchema(schema)) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);

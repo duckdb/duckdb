@@ -37,7 +37,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
 		auto count_star_fun = CountStarFun::GetFunction();
 
-		FunctionBinder function_binder(binder.context);
+		FunctionBinder function_binder(binder);
 		auto count_star =
 		    function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, AggregateType::NON_DISTINCT);
 		auto idx_type = count_star->return_type;
@@ -87,7 +87,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		vector<unique_ptr<Expression>> first_children;
 		first_children.push_back(std::move(bound));
 
-		FunctionBinder function_binder(binder.context);
+		FunctionBinder function_binder(binder);
 		auto first_agg =
 		    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(expr.return_type),
 		                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);

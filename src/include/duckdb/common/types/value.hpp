@@ -130,14 +130,18 @@ public:
 	DUCKDB_API static Value TIMETZ(dtime_tz_t time);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
-	//! Create a timestamp Value from a specified date/time combination
+	//! Create a timestamp Value from a specified date/time combination.
 	DUCKDB_API static Value TIMESTAMP(date_t date, dtime_t time);
-	//! Create a timestamp Value from a specified timestamp
+	//! Create a timestamp Value from a specified value.
 	DUCKDB_API static Value TIMESTAMP(timestamp_t timestamp);
-	DUCKDB_API static Value TIMESTAMPNS(timestamp_t timestamp);
-	DUCKDB_API static Value TIMESTAMPMS(timestamp_t timestamp);
-	DUCKDB_API static Value TIMESTAMPSEC(timestamp_t timestamp);
-	DUCKDB_API static Value TIMESTAMPTZ(timestamp_t timestamp);
+	//! Create a timestamp_s Value from a specified value.
+	DUCKDB_API static Value TIMESTAMPSEC(timestamp_sec_t timestamp);
+	//! Create a timestamp_ms Value from a specified value.
+	DUCKDB_API static Value TIMESTAMPMS(timestamp_ms_t timestamp);
+	//! Create a timestamp_ns Value from a specified value.
+	DUCKDB_API static Value TIMESTAMPNS(timestamp_ns_t timestamp);
+	//! Create a timestamp_tz Value from a specified value.
+	DUCKDB_API static Value TIMESTAMPTZ(timestamp_tz_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	DUCKDB_API static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                                  int32_t micros);
@@ -327,6 +331,10 @@ private:
 		dtime_t time;
 		dtime_tz_t timetz;
 		timestamp_t timestamp;
+		timestamp_sec_t timestamp_s;
+		timestamp_ms_t timestamp_ms;
+		timestamp_ns_t timestamp_ns;
+		timestamp_tz_t timestamp_tz;
 		interval_t interval;
 	} value_; // NOLINT
 
@@ -408,6 +416,22 @@ struct TimeValue {
 
 struct TimestampValue {
 	DUCKDB_API static timestamp_t Get(const Value &value);
+};
+
+struct TimestampSValue {
+	DUCKDB_API static timestamp_sec_t Get(const Value &value);
+};
+
+struct TimestampMSValue {
+	DUCKDB_API static timestamp_ms_t Get(const Value &value);
+};
+
+struct TimestampNSValue {
+	DUCKDB_API static timestamp_ns_t Get(const Value &value);
+};
+
+struct TimestampTZValue {
+	DUCKDB_API static timestamp_tz_t Get(const Value &value);
 };
 
 struct IntervalValue {
@@ -532,6 +556,14 @@ DUCKDB_API dtime_tz_t Value::GetValue() const;
 template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
 template <>
+DUCKDB_API timestamp_sec_t Value::GetValue() const;
+template <>
+DUCKDB_API timestamp_ms_t Value::GetValue() const;
+template <>
+DUCKDB_API timestamp_ns_t Value::GetValue() const;
+template <>
+DUCKDB_API timestamp_tz_t Value::GetValue() const;
+template <>
 DUCKDB_API interval_t Value::GetValue() const;
 template <>
 DUCKDB_API Value Value::GetValue() const;
@@ -575,6 +607,14 @@ DUCKDB_API dtime_tz_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API timestamp_t Value::GetValueUnsafe() const;
 template <>
+DUCKDB_API timestamp_sec_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API timestamp_ms_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API timestamp_ns_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API timestamp_tz_t Value::GetValueUnsafe() const;
+template <>
 DUCKDB_API interval_t Value::GetValueUnsafe() const;
 
 template <>
@@ -590,5 +630,13 @@ template <>
 DUCKDB_API bool Value::IsFinite(date_t input);
 template <>
 DUCKDB_API bool Value::IsFinite(timestamp_t input);
+template <>
+DUCKDB_API bool Value::IsFinite(timestamp_sec_t input);
+template <>
+DUCKDB_API bool Value::IsFinite(timestamp_ms_t input);
+template <>
+DUCKDB_API bool Value::IsFinite(timestamp_ns_t input);
+template <>
+DUCKDB_API bool Value::IsFinite(timestamp_tz_t input);
 
 } // namespace duckdb

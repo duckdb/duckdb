@@ -117,6 +117,9 @@ struct ClientConfig {
 	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
 	idx_t pivot_filter_threshold = 20;
 
+	//! The maximum amount of OR filters we generate dynamically from a hash join
+	idx_t dynamic_or_filter_threshold = 50;
+
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
 	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
@@ -171,12 +174,12 @@ public:
 	}
 
 	template <class OP>
-	typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
+	static typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
 		return OP::GetSetting(context).template GetValue<typename OP::RETURN_TYPE>();
 	}
 
 	template <class OP>
-	Value GetSettingValue(const ClientContext &context) {
+	static Value GetSettingValue(const ClientContext &context) {
 		return OP::GetSetting(context);
 	}
 

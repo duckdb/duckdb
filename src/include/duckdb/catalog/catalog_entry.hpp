@@ -99,6 +99,7 @@ public:
 	bool HasParent() const;
 	CatalogEntry &Child();
 	CatalogEntry &Parent();
+	const CatalogEntry &Parent() const;
 
 public:
 	template <class TARGET>

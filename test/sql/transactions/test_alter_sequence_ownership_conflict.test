@@ -1,0 +1,43 @@
+# name: test/sql/transactions/test_alter_sequence_ownership_conflict.test
+# description: Test write-write conflict with a DROP and an ALTER
+# group: [transactions]
+
+require noforcestorage
+
+load __TEST_DIR__/alter_sequence_conflict1.db;
+
+statement ok
+CREATE TABLE tbl1 (id INT);
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE tbl2 (
+	id INT DEFAULT nextval('seq')
+);
+
+statement ok
+ALTER SEQUENCE seq OWNED BY tbl1;
+
+statement ok con1
+START TRANSACTION;
+
+statement ok con1
+DROP TABLE tbl1 CASCADE;
+
+statement ok con2
+START TRANSACTION;
+
+# This fails because a newer version of 'seq' exists, as a DELETED_ENTRY
+# because of the 'DROP TABLE tbl1 CASCADE'
+statement error con2
+ALTER SEQUENCE seq OWNED BY tbl2;
+----
+write-write conflict on alter with "seq"
+
+statement ok con1
+COMMIT;
+
+statement ok con2
+COMMIT;

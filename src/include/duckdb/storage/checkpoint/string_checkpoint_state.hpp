@@ -73,6 +73,10 @@ public:
 		return "Overflow String Block Ids: " + result;
 	}
 
+	vector<block_id_t> GetAdditionalBlocks() const override {
+		return on_disk_blocks;
+	}
+
 private:
 	mutex block_lock;
 	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;

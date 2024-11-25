@@ -449,6 +449,17 @@ struct DuckDBAPISetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DynamicOrFilterThresholdSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "dynamic_or_filter_threshold";
+	static constexpr const char *Description =
+	    "The maximum amount of OR filters we generate dynamically from a hash join";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableExternalAccessSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_external_access";
@@ -1087,6 +1098,17 @@ struct UsernameSetting {
 	static constexpr const char *Name = "username";
 	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
 	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct ZstdMinStringLengthSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "zstd_min_string_length";
+	static constexpr const char *Description =
+	    "The (average) length at which to enable ZSTD compression, defaults to 4096";
+	static constexpr const char *InputType = "UBIGINT";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

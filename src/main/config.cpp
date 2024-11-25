@@ -95,6 +95,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DisabledFilesystemsSetting),
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
     DUCKDB_GLOBAL(DuckDBAPISetting),
+    DUCKDB_LOCAL(DynamicOrFilterThresholdSetting),
     DUCKDB_GLOBAL(EnableExternalAccessSetting),
     DUCKDB_GLOBAL(EnableFSSTVectorsSetting),
     DUCKDB_LOCAL(EnableHTTPLoggingSetting),
@@ -159,6 +160,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
     DUCKDB_GLOBAL(UsernameSetting),
     DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
+    DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
