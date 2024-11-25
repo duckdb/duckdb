@@ -77,6 +77,7 @@ jobs:
       - name: Set up benchmarks
         shell: bash
         run: |
+          git clone git@github.com:duckdb/fivetran_regression.git benchmark/fivetran
           cp -r benchmark duckdb/
 
       - name: Regression Test Micro
@@ -136,7 +137,13 @@ jobs:
           wget https://duckdb-blobs.s3.amazonaws.com/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
           cp duckdb_benchmark_data/real_nest.duckdb duckdb/duckdb_benchmark_data/real_nest.duckdb
           python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/realnest.csv --verbose --threads 2
-         
+
+      - name: Regression Test Fivetran
+        if: always()
+        shell: bash
+        run: |
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/fivetran.csv --verbose --threads 2
+
   regression-test-storage:
     name: Storage Size Regression Test
     runs-on: ubuntu-20.04
