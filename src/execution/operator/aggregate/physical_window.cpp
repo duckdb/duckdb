@@ -18,6 +18,7 @@
 #include "duckdb/function/window/window_rank_function.hpp"
 #include "duckdb/function/window/window_cumedist_function.hpp"
 #include "duckdb/function/window/window_executor.hpp"
+#include "duckdb/function/window/window_rownumber_function.hpp"
 #include "duckdb/function/window/window_segment_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
