@@ -175,8 +175,8 @@ void IngestionSample::RandomizeActualSampleIndexes() {
 	}
 	idx_t upper_bound = actual_sample_indexes.size() - 1;
 	for (idx_t i = 0; i < upper_bound; i++) {
-		idx_t random_shuffle = base_reservoir_sample->random.NextRandomInteger(
-		    static_cast<uint32_t>(i + 1), static_cast<uint32_t>(upper_bound));
+		idx_t random_shuffle = base_reservoir_sample->random.NextRandomInteger(static_cast<uint32_t>(i + 1),
+		                                                                       static_cast<uint32_t>(upper_bound));
 		idx_t tmp = actual_sample_indexes[random_shuffle];
 		// basically replacing the tuple that was at index actual_sample_indexes[random_shuffle]
 		actual_sample_indexes[random_shuffle] = actual_sample_indexes[i];

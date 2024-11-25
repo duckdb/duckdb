@@ -142,9 +142,6 @@ ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) 
 }
 
 BlockingSample &TableStatistics::GetTableSampleRef(TableStatisticsLock &lock) {
-	if (!table_sample) {
-		auto boop = 0;
-	}
 	D_ASSERT(table_sample);
 	return *table_sample;
 }
