@@ -13,7 +13,12 @@ CaseElse <- 'ELSE'i Expression
 DateExpression <- 'DATE'i Expression
 DistinctExpression <- 'DISTINCT'i Expression
 SubstringExpression <- 'SUBSTRING'i Parens(Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral)
-FrameClause <- 'ROWS'i 'BETWEEN'i (('UNBOUNDED'i 'PRECEDING'i)) 'AND' (('CURRENT'i 'ROW'i))
+FrameClause <- Framing FrameExtent WindowExcludeClause?
+Framing <- 'ROWS'i / 'RANGE'i / 'GROUPS'i
+FrameExtent <- FrameBound / ('BETWEEN'i FrameBound 'AND'i FrameBound)
+FrameBound <- ('UNBOUNDED'i 'PRECEDING'i) / ('UNBOUNDED'i 'FOLLOWING'i) / ('CURRENT'i 'ROW'i) / (Expression 'PRECEDING'i) / (Expression 'FOLLOWING'i)
+WindowExcludeClause <- 'EXCLUDE'i WindowExcludeElement
+WindowExcludeElement <- ('CURRENT'i 'ROW'i) / 'GROUP'i / 'TIES'i / ('NO'i 'OTHERS'i)
 WindowFunction <- 'OVER'i WindowFrame
 WindowFrame <- Parens(WindowFrameContents)
 WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
