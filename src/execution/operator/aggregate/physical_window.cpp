@@ -18,6 +18,7 @@
 #include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/function/window/window_segment_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
+#include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"

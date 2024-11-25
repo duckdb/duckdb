@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/window/window_boundaries_state.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/function/window/window_segment_tree.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -66,6 +67,22 @@ public:
 
 	//! The state used for reading the range collection
 	unique_ptr<WindowCursor> range_cursor;
+};
+
+class WindowExecutorBoundsState : public WindowExecutorLocalState {
+public:
+	explicit WindowExecutorBoundsState(const WindowExecutorGlobalState &gstate);
+	~WindowExecutorBoundsState() override {
+	}
+
+	virtual void UpdateBounds(WindowExecutorGlobalState &gstate, idx_t row_idx, DataChunk &eval_chunk,
+	                          optional_ptr<WindowCursor> range);
+
+	// Frame management
+	const ValidityMask &partition_mask;
+	const ValidityMask &order_mask;
+	DataChunk bounds;
+	WindowBoundariesState state;
 };
 
 class WindowExecutor {
@@ -183,75 +200,6 @@ protected:
 class WindowCumeDistExecutor : public WindowExecutor {
 public:
 	WindowCumeDistExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
-
-protected:
-	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
-	                      Vector &result, idx_t count, idx_t row_idx) const override;
-};
-
-// Base class for non-aggregate functions that have a payload
-class WindowValueExecutor : public WindowExecutor {
-public:
-	WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
-
-	void Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
-	              CollectionPtr collection) const override;
-
-	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
-	                                                     const ValidityMask &order_mask) const override;
-	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
-
-	//! The column index of the value column
-	column_t child_idx = DConstants::INVALID_INDEX;
-	//! The column index of the Nth column
-	column_t nth_idx = DConstants::INVALID_INDEX;
-	//! The column index of the offset column
-	column_t offset_idx = DConstants::INVALID_INDEX;
-	//! The column index of the default value column
-	column_t default_idx = DConstants::INVALID_INDEX;
-};
-
-//
-class WindowNtileExecutor : public WindowValueExecutor {
-public:
-	WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
-
-protected:
-	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
-	                      Vector &result, idx_t count, idx_t row_idx) const override;
-};
-class WindowLeadLagExecutor : public WindowValueExecutor {
-public:
-	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
-
-	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
-
-protected:
-	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
-	                      Vector &result, idx_t count, idx_t row_idx) const override;
-};
-
-class WindowFirstValueExecutor : public WindowValueExecutor {
-public:
-	WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
-
-protected:
-	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
-	                      Vector &result, idx_t count, idx_t row_idx) const override;
-};
-
-class WindowLastValueExecutor : public WindowValueExecutor {
-public:
-	WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
-
-protected:
-	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
-	                      Vector &result, idx_t count, idx_t row_idx) const override;
-};
-
-class WindowNthValueExecutor : public WindowValueExecutor {
-public:
-	WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
 
 protected:
 	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
