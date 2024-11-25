@@ -5,6 +5,7 @@ add_library_unity(
   window_collection.cpp
   window_cumedist_function.cpp
   window_executor.cpp
+  window_rank_function.cpp
   window_segment_tree.cpp
   window_shared_expressions.cpp
   window_value_function.cpp)
