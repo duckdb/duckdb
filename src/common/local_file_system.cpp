@@ -19,11 +19,6 @@
 #include <sys/clonefile.h>
 #endif
 
-#ifdef LINUX
-#include <linux/fs.h>
-#include <sys/ioctl.h>
-#endif
-
 #ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
@@ -56,6 +51,7 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #endif
 #include <fcntl.h>
 #include <libgen.h>
+#include <sys/sendfile.h>
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #elif defined(__APPLE__)
@@ -1096,7 +1092,7 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	}
 }
 
-void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
 	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
 	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!CopyFileW(source_unicode.c_str(), target_unicode.c_str(), FALSE)) {
@@ -1356,19 +1352,43 @@ unique_ptr<FileSystem> FileSystem::CreateLocal() {
 }
 
 #if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
-void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
   int src_fd = src_handle->Cast<UnixFileHandle>().fd;
   fclonefileat(src_fd, AT_FDCWD, target.c_str(), 0);
 }
-#elif LINUX
-void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
-    int dst_fd = dst_handle->Cast<UnixFileHandle>().fd;
+#elif __linux__
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
+    int dst_fd = open(target.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);;
     int src_fd = src_handle->Cast<UnixFileHandle>().fd;
-    ioctl(dst_fd, FICLONE, src_fd);
+    off_t len, ret;
+    struct stat stat;
+
+    if (fstat(src_fd, &stat) == -1)
+      {
+        perror("fstat");
+      }
+    len = stat.st_size;
+
+    do
+      {
+        
+        ret = sendfile(dst_fd, src_fd, NULL, len);
+
+        if (ret == -1)
+          {
+            perror("copy_file_range");
+          }
+        len -= ret;
+      }
+    while (len > 0 && ret > 0);
+    if (close(dst_fd) == -1)
+      {
+        perror("close");
+      }
 }
 #else
 #ifndef _WIN32
-void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
     throw NotImplementedException("CopyFile Unsupported");
 }
 #endif

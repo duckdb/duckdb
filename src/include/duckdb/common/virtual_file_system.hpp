@@ -47,7 +47,7 @@ public:
 	               FileOpener *opener = nullptr) override;
 
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) override;
-        void CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) override;
+        void CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) override;
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;

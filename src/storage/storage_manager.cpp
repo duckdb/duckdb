@@ -360,12 +360,11 @@ uint64_t SingleFileStorageManager::GetSnapshotId() {
 string SingleFileStorageManager::Snapshot() {
   uint64_t sid = dynamic_cast<SingleFileBlockManager *>(block_manager.get())->GetSnapshotId();
   unique_ptr<FileHandle>& src_handle = dynamic_cast<SingleFileBlockManager *>(block_manager.get())->GetFileHandle();
-   unique_ptr<FileHandle> dst_handle = dynamic_cast<SingleFileBlockManager *>(block_manager.get())->CloneEmptyDatabase();
   string ret = path;
   ret += ".";
   ret += to_string(sid);
   auto &fs = FileSystem::Get(db);
-  fs.CopyFile(path, ret, src_handle, dst_handle);
+  fs.CopyFile(path, ret, src_handle);
   return ret;
 }
  
