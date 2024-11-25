@@ -12,18 +12,19 @@ ColumnAliases <- Parens(List(Identifier))
 
 InnerTableRef <- (SubqueryReference / BaseTableRef) TableAlias?
 
-TableRef <- InnerTableRef JoinClause?
+TableRef <- InnerTableRef JoinClause*
 BaseTableRef <- CatalogQualification? SchemaQualification? TableName
 
 TableAlias <- 'AS'i? Identifier ColumnAliases?
 
 JoinClause <- RegularJoinClause / JoinWithoutOnClause
-RegularJoinClause <- JoinType? InnerOuter? 'JOIN'i InnerTableRef 'ON'i Expression
+RegularJoinClause <- JoinType? 'JOIN'i InnerTableRef JoinQualifier
 JoinWithoutOnClause <- JoinPrefix 'JOIN'i InnerTableRef
+JoinQualifier <- ('ON'i Expression) / 'USING'i Parens(List(Identifier))
 
-InnerOuter <- 'INNER'i / 'OUTER'i
-JoinType <- 'LEFT'i / 'RIGHT'i / 'SEMI'i / 'ANTI'i
-JoinPrefix <- 'CROSS'i / ('NATURAL'i JoinType) / 'POSITIONAL'i
+OuterJoinType <- 'FULL'i / 'LEFT'i / 'RIGHT'i
+JoinType <- (OuterJoinType 'OUTER'i?) / 'SEMI'i / 'ANTI'i / 'INNER'i
+JoinPrefix <- 'CROSS'i / ('NATURAL'i JoinType?) / 'POSITIONAL'i / 'ASOF'i
 
 FromClause <- 'FROM'i List(TableRef)
 WhereClause <- 'WHERE'i Expression

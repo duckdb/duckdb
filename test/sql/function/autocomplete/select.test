@@ -87,6 +87,11 @@ FROM sql_auto_complete('SELECT * FROM tbl INNER JO') LIMIT 1;
 JOIN 	24
 
 query II
+FROM sql_auto_complete('SELECT * FROM tbl JOIN tbl2 USING (i) WH') LIMIT 1;
+----
+WHERE 	38
+
+query II
 FROM sql_auto_complete('SELECT * FROM tbl LEF') LIMIT 1;
 ----
 LEFT 	18
@@ -102,14 +107,34 @@ FROM sql_auto_complete('SELECT * FROM tbl NAT') LIMIT 1;
 NATURAL 	18
 
 query II
+FROM sql_auto_complete('SELECT * FROM tbl NATURAL FU') LIMIT 1;
+----
+FULL 	26
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl NATURAL FULL OUT') LIMIT 1;
+----
+OUTER 	31
+
+query II
 FROM sql_auto_complete('SELECT * FROM tbl POS') LIMIT 1;
 ----
 POSITIONAL 	18
 
-#query II
-#FROM sql_auto_complete('SELECT * FROM tbl POSITIONAL JOIN tbl2 WH') LIMIT 1;
-#----
-#POSITIONAL 	18
+query II
+FROM sql_auto_complete('SELECT * FROM tbl NATURAL JOIN tbl2 WH') LIMIT 1;
+----
+WHERE 	36
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl NATURAL JOIN tbl2 NAT') LIMIT 1;
+----
+NATURAL 	36
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl JOIN tbl2 US') LIMIT 1;
+----
+USING 	28
 
 # cross product
 query II

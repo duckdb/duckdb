@@ -279,7 +279,7 @@ public:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		auto category = KeywordHelper::KeywordCategoryType(token_text);
-		if (category == KeywordCategory::KEYWORD_RESERVED) {
+		if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
 			return MatchResultType::FAIL;
 		}
 		if (!IsIdentifier(token_text)) {
