@@ -373,6 +373,9 @@ public:
 };
 
 struct ContainerCompressionState {
+private:
+	enum class Type : uint8_t { UNDECIDED, BITSET_CONTAINER, RUN_CONTAINER, ARRAY_CONTAINER, INVERTED_ARRAY_CONTAINER };
+
 public:
 	ContainerCompressionState() {
 		Reset();
@@ -424,6 +427,7 @@ public:
 	template <bool EMPTY = false>
 	void Append(bool null, uint16_t amount = 1) {
 		if (!EMPTY && uncompressed) {
+			D_ASSERT(type == Type::BITSET_CONTAINER);
 			if (null) {
 				ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
 				SetInvalidRange(mask, count, count + amount);
@@ -433,8 +437,8 @@ public:
 		}
 
 		// Adjust the run
-		if (count && (null != last_is_null) && !null && run_idx < MAX_RUN_IDX) {
-			if (!EMPTY) {
+		if (!null && run_idx < MAX_RUN_IDX && count && (null != last_is_null)) {
+			if (!EMPTY && (type == Type::UNDECIDED || type == Type::RUN_CONTAINER)) {
 				if (run_idx < COMPRESSED_RUN_THRESHOLD) {
 					auto &last_run = runs[run_idx];
 					// End the last run
@@ -444,8 +448,8 @@ public:
 				run_counts[count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 			}
 			run_idx++;
-		} else if (null && (!count || null != last_is_null) && run_idx < MAX_RUN_IDX) {
-			if (!EMPTY) {
+		} else if (null && run_idx < MAX_RUN_IDX && (!count || null != last_is_null)) {
+			if (!EMPTY && (type == Type::UNDECIDED || type == Type::RUN_CONTAINER)) {
 				if (run_idx < COMPRESSED_RUN_THRESHOLD) {
 					auto &current_run = runs[run_idx];
 					// Initialize a new run
@@ -459,7 +463,8 @@ public:
 		// Add to the array
 		auto &current_array_idx = array_idx[null];
 		if (current_array_idx < MAX_ARRAY_IDX) {
-			if (!EMPTY) {
+			if (!EMPTY &&
+			    (type == Type::UNDECIDED || type == Type::ARRAY_CONTAINER || type == Type::INVERTED_ARRAY_CONTAINER)) {
 				if (current_array_idx + amount <= MAX_ARRAY_IDX) {
 					for (uint16_t i = 0; i < amount; i++) {
 						compressed_arrays[null][current_array_idx + i] =
@@ -486,6 +491,12 @@ public:
 	}
 
 	void OverrideArray(data_ptr_t destination, bool nulls, idx_t count) {
+		if (nulls) {
+			type = Type::INVERTED_ARRAY_CONTAINER;
+		} else {
+			type = Type::ARRAY_CONTAINER;
+		}
+
 		if (count >= COMPRESSED_ARRAY_THRESHOLD) {
 			memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 			array_counts[nulls] = reinterpret_cast<uint8_t *>(destination);
@@ -497,6 +508,8 @@ public:
 	}
 
 	void OverrideRun(data_ptr_t destination, idx_t count) {
+		type = Type::RUN_CONTAINER;
+
 		if (count >= COMPRESSED_RUN_THRESHOLD) {
 			memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 			run_counts = reinterpret_cast<uint8_t *>(destination);
@@ -508,6 +521,7 @@ public:
 	}
 
 	void OverrideUncompressed(data_ptr_t destination) {
+		type = Type::BITSET_CONTAINER;
 		uncompressed = reinterpret_cast<validity_t *>(destination);
 	}
 
@@ -600,6 +614,8 @@ public:
 		memset(array_counts[NON_NULLS], 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 		memset(run_counts, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 
+		type = Type::UNDECIDED;
+
 		uncompressed = nullptr;
 	}
 
@@ -634,6 +650,7 @@ public:
 	validity_t *uncompressed = nullptr;
 	//! Whether the state has been finalized
 	bool finalized = false;
+	Type type = Type::UNDECIDED;
 };
 
 //===--------------------------------------------------------------------===//
