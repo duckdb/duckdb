@@ -1,5 +1,5 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
-FunctionExpression <- Identifier Parens(List(Expression)?) WindowFunction?
+FunctionExpression <- Identifier Parens(List(Expression)?) OverClause?
 ParenthesisExpression <- Parens(List(Expression))
 LiteralExpression <- StringLiteral / NumberLiteral / 'NULL'i / 'TRUE'i / 'FALSE'i
 CastExpression <- CastOrTryCast Parens(Expression 'AS'i TypeName)
@@ -19,8 +19,9 @@ FrameExtent <- FrameBound / ('BETWEEN'i FrameBound 'AND'i FrameBound)
 FrameBound <- ('UNBOUNDED'i 'PRECEDING'i) / ('UNBOUNDED'i 'FOLLOWING'i) / ('CURRENT'i 'ROW'i) / (Expression 'PRECEDING'i) / (Expression 'FOLLOWING'i)
 WindowExcludeClause <- 'EXCLUDE'i WindowExcludeElement
 WindowExcludeElement <- ('CURRENT'i 'ROW'i) / 'GROUP'i / 'TIES'i / ('NO'i 'OTHERS'i)
-WindowFunction <- 'OVER'i WindowFrame
-WindowFrame <- Parens(WindowFrameContents)
+OverClause <- 'OVER'i WindowFrame
+WindowFrame <- WindowFrameDefinition / Identifier / Parens(Identifier)
+WindowFrameDefinition <- Parens(WindowFrameContents)
 WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
 WindowPartition <- 'PARTITION'i 'BY'i List(Expression)
 IsNullExpression <- ColumnReference 'IS'i 'NOT'i? 'NULL'i # TODO

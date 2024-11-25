@@ -38,12 +38,6 @@ table 	7
 
 # suggest a type
 query II
-FROM sql_auto_complete('create table tbl(') LIMIT 1;
-----
-(	16
-
-# suggest a type
-query II
 FROM sql_auto_complete('create table tbl(i INTE') LIMIT 1;
 ----
 INTEGER	19

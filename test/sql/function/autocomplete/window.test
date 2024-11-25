@@ -44,3 +44,14 @@ query II
 FROM sql_auto_complete('SELECT sum(42) OVER (PARTITION BY col1, col2 ORDER BY col3 ROW') LIMIT 1;
 ----
 ROWS 	59
+
+# window clause
+query II
+FROM sql_auto_complete('SELECT lead(l_orderkey) OVER win FR') LIMIT 1;
+----
+FROM 	33
+
+query II
+FROM sql_auto_complete('SELECT lead(l_orderkey) OVER (win) FROM tbl WINDOW win AS (PART') LIMIT 1;
+----
+PARTITION 	59
