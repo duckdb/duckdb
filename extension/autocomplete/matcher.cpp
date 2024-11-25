@@ -216,47 +216,38 @@ class RepeatMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::REPEAT;
 public:
-	RepeatMatcher(Matcher &element_p, optional_ptr<Matcher> separator_p)
-	    : Matcher(TYPE), element(element_p), separator(separator_p) {
+	explicit RepeatMatcher(Matcher &element_p)
+	    : Matcher(TYPE), element(element_p) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
 		MatchState repeat_state(state);
+
+		// first we must match the element
+		auto child_match = element.Match(repeat_state);
+		if (child_match != MatchResultType::SUCCESS) {
+			// match did not succeed - propagate upwards
+			return child_match;
+		}
+		// we have matched (at least) once - so this is always a success
+		// now we can keep on repeating the matching (optionally)
 		while (true) {
-			// we exhausted the tokens - suggest the element
+			// update the token index we propagate upwards
+			state.token_index = repeat_state.token_index;
+
+			// check if we have tokens left
 			if (repeat_state.token_index >= state.tokens.size()) {
 				// we exhausted the tokens - suggest the element
 				element.AddSuggestion(state);
-				return MatchResultType::ADDED_SUGGESTION;
+				return MatchResultType::SUCCESS;
 			}
 
-			// first we must match the element
-			auto child_match = element.Match(repeat_state);
+			// now match the element again
+			child_match = element.Match(repeat_state);
 			if (child_match != MatchResultType::SUCCESS) {
-				// match did not succeed - propagate upwards
-				return child_match;
+				// if we did not succeed we are done matching
+				return MatchResultType::SUCCESS;
 			}
-			if (!separator) {
-				continue;
-			}
-			// succeeded in matching the child
-			// now we optionally match the separator
-			idx_t successful_token = repeat_state.token_index;
-
-			if (successful_token >= state.tokens.size()) {
-				// we exhausted the tokens - suggest the separator
-				separator->AddSuggestion(state);
-				return MatchResultType::ADDED_SUGGESTION;
-			}
-
-			auto repeat_match = separator->Match(repeat_state);
-			if (repeat_match == MatchResultType::SUCCESS) {
-				// we suggested in matching the separator - match the element again
-				continue;
-			}
-			// we did not succeed in matching the separator - this means the repetition has ended
-			state.token_index = successful_token;
-			return MatchResultType::SUCCESS;
 		}
 	}
 
@@ -266,22 +257,22 @@ public:
 	}
 
 	string ToStringInternal(MatcherPrintState state) const override {
-		if (separator) {
-			throw InternalException("eek separator");
-		}
 		return element.ToString(std::move(state)) + "*";
 	}
 
 private:
 	Matcher &element;
-	optional_ptr<Matcher> separator;
 };
 
-class VariableMatcher : public Matcher {
+class IdentifierMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
 public:
-	explicit VariableMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
+	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
+	}
+
+	static bool IsIdentifier(const string &text) {
+		return StringUtil::CharacterIsAlphaNumeric(text[0]) || text[0] == '"';
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -289,6 +280,9 @@ public:
 		auto &token_text = state.tokens[state.token_index].text;
 		auto category = KeywordHelper::KeywordCategoryType(token_text);
 		if (category == KeywordCategory::KEYWORD_RESERVED) {
+			return MatchResultType::FAIL;
+		}
+		if (!IsIdentifier(token_text)) {
 			return MatchResultType::FAIL;
 		}
 		state.token_index++;
@@ -348,7 +342,7 @@ private:
 	Matcher &List(vector<reference<Matcher>> matchers) const;
 	Matcher &Choice(vector<reference<Matcher>> matchers) const;
 	Matcher &Optional(Matcher &matcher) const;
-	Matcher &Repeat(Matcher &matcher, optional_ptr<Matcher> separator) const;
+	Matcher &Repeat(Matcher &matcher) const;
 	Matcher &Variable() const;
 	Matcher &CatalogName() const;
 	Matcher &SchemaName() const;
@@ -393,32 +387,32 @@ Matcher &MatcherFactory::Optional(Matcher &matcher) const {
 	return allocator.Allocate(make_uniq<OptionalMatcher>(matcher));
 }
 
-Matcher &MatcherFactory::Repeat(Matcher &matcher, optional_ptr<Matcher> separator) const {
-	return allocator.Allocate(make_uniq<RepeatMatcher>(matcher, separator));
+Matcher &MatcherFactory::Repeat(Matcher &matcher) const {
+	return allocator.Allocate(make_uniq<RepeatMatcher>(matcher));
 }
 
 Matcher &MatcherFactory::Variable() const {
-	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_VARIABLE));
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
 }
 
 Matcher &MatcherFactory::CatalogName() const {
-	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_CATALOG_NAME));
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_CATALOG_NAME));
 }
 
 Matcher &MatcherFactory::SchemaName() const {
-	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
 }
 
 Matcher &MatcherFactory::TableName() const {
-	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
 }
 
 Matcher &MatcherFactory::ColumnName() const {
-	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_COLUMN_NAME));
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME));
 }
 
 Matcher &MatcherFactory::TypeName() const {
-	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
 }
 
 enum class PEGRuleType {
@@ -816,7 +810,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				auto &final_matcher = list_matcher.matchers.back();
 				if (op_type == '*') {
 					// * is Optional(Repeat(CHILD))
-					final_matcher = Repeat(final_matcher.get(), nullptr);
+					final_matcher = Repeat(final_matcher.get());
 				}
 				auto &replaced_matcher = Optional(final_matcher);
 				list_matcher.matchers.pop_back();

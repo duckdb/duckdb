@@ -96,11 +96,31 @@ FROM sql_auto_complete('SELECT * FROM tbl LEFT OUT') LIMIT 1;
 ----
 OUTER 	23
 
-# cross product
+query II
+FROM sql_auto_complete('SELECT * FROM tbl NAT') LIMIT 1;
+----
+NATURAL 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl POS') LIMIT 1;
+----
+POSITIONAL 	18
+
 #query II
-#FROM sql_auto_complete('SELECT * FROM tbl, tbl2 LEFT OUT') LIMIT 1;
+#FROM sql_auto_complete('SELECT * FROM tbl POSITIONAL JOIN tbl2 WH') LIMIT 1;
 #----
-#OUTER 	23
+#POSITIONAL 	18
+
+# cross product
+query II
+FROM sql_auto_complete('SELECT * FROM tbl, tbl2 WH') LIMIT 1;
+----
+WHERE 	24
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl, tbl2 LEFT OUT') LIMIT 1;
+----
+OUTER 	29
 
 # from first
 query II
