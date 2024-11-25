@@ -36,9 +36,9 @@ void MainHeader::Write(WriteStream &ser) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
-	ser.WriteData(compatibility_git_desc, MainHeader::MAX_VERSION_SIZE);
-	SerializeVersionNumber(ser, DuckDB::SourceID());
 	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
+	SerializeVersionNumber(ser, DuckDB::SourceID());
+	ser.WriteData(compatibility_git_desc, MainHeader::MAX_VERSION_SIZE);
 }
 
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
@@ -87,9 +87,9 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
-	DeserializeVersionNumber(source, header.compatibility_git_desc);
 	DeserializeVersionNumber(source, header.library_git_desc);
 	DeserializeVersionNumber(source, header.library_git_hash);
+	DeserializeVersionNumber(source, header.compatibility_git_desc);
 	return header;
 }
 
