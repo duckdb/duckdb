@@ -1,7 +1,8 @@
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 
 #include <cmath>
@@ -130,10 +131,11 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 
 	auto timestamptz_list_type = LogicalType::LIST(LogicalType::TIMESTAMP_TZ);
 	auto empty_timestamptz_list = Value::LIST(LogicalType::TIMESTAMP_TZ, vector<Value>());
-	auto timestamptz_list = Value::LIST(LogicalType::TIMESTAMP_TZ,
-	                                    {Value::TIMESTAMPTZ(timestamp_t()), Value::TIMESTAMPTZ(timestamp_t::infinity()),
-	                                     Value::TIMESTAMPTZ(timestamp_t::ninfinity()), Value(LogicalType::TIMESTAMP_TZ),
-	                                     Value::TIMESTAMPTZ(Timestamp::FromString("2022-05-12 16:23:45-07"))});
+	auto timestamptz_list =
+	    Value::LIST(LogicalType::TIMESTAMP_TZ,
+	                {Value::TIMESTAMPTZ(timestamp_tz_t()), Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity())),
+	                 Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity())), Value(LogicalType::TIMESTAMP_TZ),
+	                 Value::TIMESTAMPTZ(timestamp_tz_t(Timestamp::FromString("2022-05-12 16:23:45-07")))});
 	result.emplace_back(timestamptz_list_type, "timestamptz_array", empty_timestamptz_list, timestamptz_list);
 
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
