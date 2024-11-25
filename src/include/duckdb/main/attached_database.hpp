@@ -103,22 +103,24 @@ public:
 		idx_t id = GetCompatibilityVersion();
 		return GetSerializationVersionName(id);
 	}
-	void SetCompatibilityVersion(const string &compatibility_version) {
+	void SetCompatibilityVersion(const string &compatibility_version, idx_t default_value) {
 		auto version = GetSerializationVersion(compatibility_version.c_str());
 		if (version.IsValid()) {
-			SetCompatibilityVersionImpl(version.GetIndex());
+			SetCompatibilityVersion(version.GetIndex());
+		} else if (compatibility_version.empty()) {
+			SetCompatibilityVersion(default_value);
 		} else {
-			SetCompatibilityVersionImpl(DEFAULT_SERIALIZATION_VERSION_INFO);
+			SetCompatibilityVersion(LATEST_SERIALIZATION_VERSION_INFO);
 		}
 	}
-
-private:
-	void SetCompatibilityVersionImpl(idx_t compat_version) {
+	void SetCompatibilityVersion(idx_t compat_version) {
 		if (compatibility_version.IsValid()) {
 			throw InternalException("Compatibility version already set");
 		}
 		compatibility_version = compat_version;
 	}
+
+private:
 	DatabaseInstance &db;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
