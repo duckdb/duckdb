@@ -188,8 +188,11 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			options.block_alloc_size = config.options.default_block_alloc_size;
 		}
 
+		// Set options from config
+		string compatibility_version = StorageCompatibilityVersionSetting::GetSetting(config);
+		db.SetCompatibilityVersion(compatibility_version);
+
 		// Initialize the block manager before creating a new database.
-		db.SetCompatibilityVersion(config.options.serialization_compatibility.duckdb_version.c_str());
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
