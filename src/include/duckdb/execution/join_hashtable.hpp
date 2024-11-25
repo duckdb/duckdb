@@ -82,10 +82,13 @@ public:
 		bool finished;
 		bool is_null;
 
-		// data chunk compaction buffer
-		idx_t base_count;
+		// it records the RHS pointers for the result chunk
 		Vector rhs_pointers;
+		// it records the LHS sel vector for the result chunk
 		SelectionVector lhs_sel_vector;
+		// these two variable records the last match results
+		idx_t last_match_count;
+		SelectionVector last_sel_vector;
 
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		//! Get the next batch of data from the scan structure
@@ -120,7 +123,7 @@ public:
 		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
 
 		//! Update the data chunk compaction buffer
-		void UpdateCompactionBuffer(SelectionVector &result_vector, idx_t result_count);
+		void UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count);
 
 	public:
 		void AdvancePointers();
