@@ -42,4 +42,13 @@ struct RowFun {
 	static ScalarFunction GetFunction();
 };
 
+struct StructConcatFun {
+	static constexpr const char *Name = "struct_concat";
+	static constexpr const char *Parameters = "struct,struct,...";
+	static constexpr const char *Description = "Merge the multiple STRUCTs into a single STRUCT.";
+	static constexpr const char *Example = "struct_concat(struct_pack(i := 4), struct_pack(s := 'string'))";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

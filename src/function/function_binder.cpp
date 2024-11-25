@@ -6,17 +6,19 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
 
-FunctionBinder::FunctionBinder(ClientContext &context) : context(context) {
+FunctionBinder::FunctionBinder(ClientContext &context_p) : binder(nullptr), context(context_p) {
+}
+FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(binder_p.context) {
 }
 
 optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments) {
@@ -318,24 +320,13 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	// found a matching function!
 	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
-	// If any of the parameters are NULL, the function will just be replaced with a NULL constant
-	// But this NULL constant needs to have to correct type, because we use LogicalType::SQLNULL for binding macro's
-	// However, some functions may have an invalid return type, so we default to SQLNULL for those
-	LogicalType return_type_if_null;
-	switch (bound_function.return_type.id()) {
-	case LogicalTypeId::ANY:
-	case LogicalTypeId::DECIMAL:
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::LIST:
-	case LogicalTypeId::MAP:
-	case LogicalTypeId::UNION:
-	case LogicalTypeId::ARRAY:
-		return_type_if_null = LogicalType::SQLNULL;
-		break;
-	default:
-		return_type_if_null = bound_function.return_type;
-	}
-
+	// If any of the parameters are NULL, the function will just be replaced with a NULL constant.
+	// We try to give the NULL constant the correct type, but we have to do this without binding the function,
+	// because functions with DEFAULT_NULL_HANDLING should not have to deal with NULL inputs in their bind code.
+	// Some functions may have an invalid default return type, as they must be bound to infer the return type.
+	// In those cases, we default to SQLNULL.
+	const auto return_type_if_null =
+	    bound_function.return_type.IsComplete() ? bound_function.return_type : LogicalType::SQLNULL;
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
@@ -440,7 +431,16 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
+	} else if (bound_function.bind_extended) {
+		if (!binder) {
+			throw InternalException("Function '%s' has a 'bind_extended' but the FunctionBinder was created without "
+			                        "a reference to a Binder",
+			                        bound_function.name);
+		}
+		ScalarFunctionBindInput bind_input(*binder);
+		bind_info = bound_function.bind_extended(bind_input, bound_function, children);
 	}
+
 	if (bound_function.get_modified_databases && binder) {
 		auto &properties = binder->GetStatementProperties();
 		FunctionModifiedDatabasesInput input(bind_info, properties);

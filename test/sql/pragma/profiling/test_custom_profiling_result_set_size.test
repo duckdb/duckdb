@@ -25,11 +25,19 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
 
+statement ok
+CREATE TYPE Result AS UNION (
+    Ok BOOLEAN,
+    Err BIGINT
+);
+
 # Expected size: 144 = 9 (length of list) * 12 (size of a string)
 query I
-SELECT
-	CASE WHEN result_set_size = 144 THEN 'true'
-	ELSE 'false' END
+SELECT 
+    CASE 
+        WHEN result_set_size = 144 THEN TRUE::Result
+        ELSE result_set_size::Result
+    END AS result
 FROM metrics_output;
 ----
 true

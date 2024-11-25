@@ -103,9 +103,10 @@ public:
 	//! Append a chunk to the transaction-local storage of this table
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
-	//! Append a column data collection to the transaction-local storage of this table
+	//! Append a column data collection with default values to the transaction-local storage of this table.
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+	                 optional_ptr<const vector<LogicalIndex>> column_ids);
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
 	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends

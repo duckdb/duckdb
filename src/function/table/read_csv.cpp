@@ -170,7 +170,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 		return nullptr;
 	}
 	return make_uniq<CSVGlobalState>(context, bind_data.buffer_manager, bind_data.options,
-	                                 context.db->NumberOfThreads(), bind_data.files, input.column_ids, bind_data);
+	                                 context.db->NumberOfThreads(), bind_data.files, input.column_indexes, bind_data);
 }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,

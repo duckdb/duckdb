@@ -161,5 +161,15 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
             GIT_TAG f2a15013fb4559e1591e977c1c023aa0a369c6f3
+            APPLY_PATCHES
             )
 endif()
+
+################# FTS
+duckdb_extension_load(fts
+        LOAD_TESTS
+        DONT_LINK
+        GIT_URL https://github.com/duckdb/duckdb_fts
+        GIT_TAG 0477abaf2484aa7b9aabf8ace9dc0bde80a15554
+        TEST_DIR test/sql
+)

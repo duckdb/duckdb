@@ -68,6 +68,42 @@ class TestSparkFunctionsArray:
             Row(max_value=2),
         ]
 
+    def test_get(self, spark):
+        df = spark.createDataFrame([(["a", "b", "c"], 1)], ['data', 'index'])
+
+        res = df.select(F.get(df.data, 1).alias("r")).collect()
+        assert res == [Row(r="b")]
+
+        res = df.select(F.get(df.data, -1).alias("r")).collect()
+        assert res == [Row(r=None)]
+
+        res = df.select(F.get(df.data, 3).alias("r")).collect()
+        assert res == [Row(r=None)]
+
+        res = df.select(F.get(df.data, "index").alias("r")).collect()
+        assert res == [Row(r='b')]
+
+        res = df.select(F.get(df.data, F.col("index") - 1).alias("r")).collect()
+        assert res == [Row(r='a')]
+
+    def test_flatten(self, spark):
+        df = spark.createDataFrame([([[1, 2, 3], [4, 5], [6]],), ([None, [4, 5]],)], ['data'])
+
+        res = df.select(F.flatten(df.data).alias("r")).collect()
+        assert res == [Row(r=[1, 2, 3, 4, 5, 6]), Row(r=None)]
+
+    def test_array_compact(self, spark):
+        df = spark.createDataFrame([([1, None, 2, 3],), ([4, 5, None, 4],)], ['data'])
+
+        res = df.select(F.array_compact(df.data).alias("v")).collect()
+        assert [Row(v=[1, 2, 3]), Row(v=[4, 5, 4])]
+
+    def test_array_remove(self, spark):
+        df = spark.createDataFrame([([1, 2, 3, 1, 1],), ([],)], ['data'])
+
+        res = df.select(F.array_remove(df.data, 1).alias("v")).collect()
+        assert res == [Row(v=[2, 3]), Row(v=[])]
+
     def test_array_agg(self, spark):
         df = spark.createDataFrame([[1, "A"], [1, "A"], [2, "A"]], ["c", "group"])
 

@@ -214,7 +214,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 		compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
 		                                             (const void *)temp_writer.GetData(), temp_writer.GetPosition(),
-		                                             writer.CompressionLevel());
+		                                             UnsafeNumericCast<int32_t>(writer.CompressionLevel()));
 		compressed_data = compressed_buf.get();
 		break;
 	}

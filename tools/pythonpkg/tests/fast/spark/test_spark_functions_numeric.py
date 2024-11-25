@@ -315,3 +315,36 @@ class TestSparkFunctionsNumeric(object):
 
         res = df.select(F.e().alias("e")).collect()
         assert pytest.approx(res[0].e) == math.e
+
+    def test_pi(self, spark):
+        df = spark.createDataFrame([("value",)], ["value"])
+
+        res = df.select(F.pi().alias("pi")).collect()
+        assert pytest.approx(res[0].pi) == math.pi
+
+    def test_pow(self, spark):
+        df = spark.createDataFrame([(2, 3)], ["a", "b"])
+
+        res = df.select(F.pow(df["a"], df["b"]).alias("pow")).collect()
+        assert res[0].pow == 8
+
+    def test_random(self, spark):
+        df = spark.range(0, 2, 1)
+        res = df.withColumn('rand', F.rand()).collect()
+
+        assert isinstance(res[0].rand, float)
+        assert res[0].rand >= 0 and res[0].rand < 1
+
+        assert isinstance(res[1].rand, float)
+        assert res[1].rand >= 0 and res[1].rand < 1
+
+    @pytest.mark.parametrize("sign_func", [F.sign, F.signum])
+    def test_sign(self, spark, sign_func):
+        df = spark.range(1).select(sign_func(F.lit(-5).alias("v1")), sign_func(F.lit(6).alias("v2")))
+        res = df.collect()
+        assert res == [Row(v1=-1.0, v2=1.0)]
+
+    def test_sin(self, spark):
+        df = spark.range(1)
+        res = df.select(F.sin(F.lit(math.radians(90))).alias("v")).collect()
+        assert res == [Row(v=1.0)]

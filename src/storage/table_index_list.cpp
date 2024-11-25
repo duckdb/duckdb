@@ -145,7 +145,6 @@ void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, Data
 	if (!index->IsBound()) {
 		throw InternalException("Internal Foreign Key error: trying to verify an unbound index...");
 	}
-	conflict_manager.SetIndexCount(1);
 	index->Cast<BoundIndex>().CheckConstraintsForChunk(chunk, conflict_manager);
 }
 

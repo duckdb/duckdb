@@ -512,17 +512,17 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 	return new_params;
 }
 
-case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedStatement &prep,
-                                                                       const py::object &params) {
+case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(const py::object &params,
+                                                                       optional_ptr<PreparedStatement> prep = {}) {
 	case_insensitive_map_t<BoundParameterData> named_values;
 	if (py::is_list_like(params)) {
-		if (prep.named_param_map.size() != py::len(params)) {
+		if (prep && prep->named_param_map.size() != py::len(params)) {
 			if (py::len(params) == 0) {
 				throw InvalidInputException("Expected %d parameters, but none were supplied",
-				                            prep.named_param_map.size());
+				                            prep->named_param_map.size());
 			}
-			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.named_param_map.size(),
-			                            py::len(params));
+			throw InvalidInputException("Prepared statement needs %d parameters, %d given",
+			                            prep->named_param_map.size(), py::len(params));
 		}
 		auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(params);
 		for (idx_t i = 0; i < unnamed_values.size(); i++) {
@@ -561,7 +561,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 	}
 
 	// Execute the prepared statement with the prepared parameters
-	auto named_values = TransformPreparedParameters(prep, params);
+	auto named_values = TransformPreparedParameters(params, prep);
 	unique_ptr<QueryResult> res;
 	{
 		D_ASSERT(py::gil_check());
@@ -572,6 +572,35 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 		if (pending_query->HasError()) {
 			pending_query->ThrowError();
 		}
+		res = CompletePendingQuery(*pending_query);
+
+		if (res->HasError()) {
+			res->ThrowError();
+		}
+	}
+	return res;
+}
+
+unique_ptr<QueryResult> DuckDBPyConnection::PrepareAndExecuteInternal(unique_ptr<SQLStatement> statement,
+                                                                      py::object params) {
+	if (params.is_none()) {
+		params = py::list();
+	}
+
+	auto named_values = TransformPreparedParameters(params);
+
+	unique_ptr<QueryResult> res;
+	{
+		D_ASSERT(py::gil_check());
+		py::gil_scoped_release release;
+		unique_lock<std::mutex> lock(py_connection_lock);
+
+		auto pending_query = con.GetConnection().PendingQuery(std::move(statement), named_values, true);
+
+		if (pending_query->HasError()) {
+			pending_query->ThrowError();
+		}
+
 		res = CompletePendingQuery(*pending_query);
 
 		if (res->HasError()) {
@@ -617,8 +646,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &que
 	// FIXME: SQLites implementation says to not accept an 'execute' call with multiple statements
 	ExecuteImmediately(std::move(statements));
 
-	auto prep = PrepareQuery(std::move(last_statement));
-	auto res = ExecuteInternal(*prep, std::move(params));
+	auto res = PrepareAndExecuteInternal(std::move(last_statement), std::move(params));
 
 	// Set the internal 'result' object
 	if (res) {
@@ -1468,8 +1496,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 
 	if (!relation) {
 		// Could not create a relation, resort to direct execution
-		auto prep = PrepareQuery(std::move(last_statement));
-		auto res = ExecuteInternal(*prep, std::move(params));
+		unique_ptr<QueryResult> res;
+
+		res = PrepareAndExecuteInternal(std::move(last_statement), std::move(params));
+
 		if (!res) {
 			return nullptr;
 		}
@@ -1872,6 +1902,8 @@ void DuckDBPyConnection::Cursors::ClearCursors() {
 		// release it don't ask me why it can't just realize there is no GIL and move on
 		py::gil_scoped_acquire gil;
 		cursor->Close();
+		// Ensure destructor runs with gil if triggered.
+		cursor.reset();
 	}
 
 	cursors.clear();

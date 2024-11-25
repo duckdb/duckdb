@@ -397,6 +397,7 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	{
 		auto val = duckdb_create_timestamp({1});
+		REQUIRE(duckdb_get_timestamp(nullptr).micros == 0);
 		auto result = duckdb_get_timestamp(val);
 		REQUIRE(result.micros == 1);
 		duckdb_destroy_value(&val);

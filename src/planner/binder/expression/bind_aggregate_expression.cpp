@@ -21,16 +21,31 @@
 
 namespace duckdb {
 
-static bool ExtractFunctionalDependencies(column_binding_set_t &deps, const unique_ptr<Expression> &expr) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expr->Cast<BoundColumnRefExpression>();
-		deps.insert(colref.binding);
+static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const vector<unique_ptr<Expression>> &deps) {
+	//	Volatile expressions can't depend on anything else
+	if (expr->IsVolatile()) {
+		return false;
+	}
+	//	Constant expressions are always FD
+	if (expr->IsFoldable()) {
+		return true;
+	}
+	// If the expression matches ANY of the dependencies, then it is FD on them
+	for (const auto &dep : deps) {
+		// We don't need to check volatility of the dependencies because we checked it for the expression.
+		if (expr->Equals(*dep)) {
+			return true;
+		}
 	}
 
-	bool is_volatile = expr->IsVolatile();
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { is_volatile |= ExtractFunctionalDependencies(deps, child); });
-	return is_volatile;
+	// The expression doesn't match any dependency, so check ALL children.
+	bool has_children = false;
+	bool are_dependent = true;
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+		has_children = true;
+		are_dependent &= IsFunctionallyDependent(child, deps);
+	});
+	return has_children && are_dependent;
 }
 
 static Value NegatePercentileValue(const Value &v, const bool desc) {
@@ -240,7 +255,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	// bind the aggregate
-	FunctionBinder function_binder(context);
+	FunctionBinder function_binder(binder);
 	auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 	if (!best_function.IsValid()) {
 		error.AddQueryLocation(aggr);
@@ -265,26 +280,9 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// If the aggregate is DISTINCT then the ORDER BYs need to be functional dependencies of the arguments.
 	if (aggr.distinct && order_bys) {
-		column_binding_set_t child_dependencies;
-		bool children_volatile = false;
-		for (const auto &child : children) {
-			children_volatile |= ExtractFunctionalDependencies(child_dependencies, child);
-		}
-
-		column_binding_set_t order_dependencies;
-		bool order_volatile = false;
+		bool in_args = true;
 		for (const auto &order_by : order_bys->orders) {
-			order_volatile |= ExtractFunctionalDependencies(order_dependencies, order_by.expression);
-		}
-
-		bool in_args = !children_volatile && !order_volatile;
-		if (in_args) {
-			for (const auto &binding : order_dependencies) {
-				if (!child_dependencies.count(binding)) {
-					in_args = false;
-					break;
-				}
-			}
+			in_args &= IsFunctionallyDependent(order_by.expression, children);
 		}
 
 		if (!in_args) {

@@ -22,7 +22,11 @@ from spark_namespace.sql.functions import (
     max,
     min,
     mean,
+    mode,
+    median,
+    product,
     count,
+    skewness,
     any_value,
     approx_count_distinct,
     covar_pop,
@@ -178,3 +182,51 @@ class TestDataFrameGroupBy(object):
         )
 
         assert res == [Row(name='Alice', first_age=None, last_age=2), Row(name='Bob', first_age=5, last_age=5)]
+
+    def test_group_by_mean(self, spark):
+        df = spark.createDataFrame(
+            [
+                ("Java", 2012, 20000),
+                ("dotNET", 2012, 5000),
+                ("Java", 2012, 22000),
+                ("dotNET", 2012, 10000),
+                ("dotNET", 2013, 48000),
+                ("Java", 2013, 30000),
+            ],
+            schema=("course", "year", "earnings"),
+        )
+
+        res = df.groupBy("course").agg(median("earnings").alias("m")).collect()
+
+        assert sorted(res, key=lambda x: x.course) == [Row(course='Java', m=22000), Row(course='dotNET', m=10000)]
+
+    def test_group_by_mode(self, spark):
+        df = spark.createDataFrame(
+            [
+                ("Java", 2012, 20000),
+                ("dotNET", 2012, 5000),
+                ("Java", 2012, 20000),
+                ("dotNET", 2012, 5000),
+                ("dotNET", 2013, 48000),
+                ("Java", 2013, 30000),
+            ],
+            schema=("course", "year", "earnings"),
+        )
+
+        res = df.groupby("course").agg(mode("year").alias("mode")).collect()
+
+        assert sorted(res, key=lambda x: x.course) == [Row(course='Java', mode=2012), Row(course='dotNET', mode=2012)]
+
+    def test_group_by_product(self, spark):
+        df = spark.range(1, 10).toDF('x').withColumn('mod3', col('x') % 3)
+        res = df.groupBy('mod3').agg(product('x').alias('product')).orderBy("mod3").collect()
+        assert res == [Row(mod3=0, product=162), Row(mod3=1, product=28), Row(mod3=2, product=80)]
+
+    def test_group_by_skewness(self, spark):
+        df = spark.createDataFrame([[1, "A"], [1, "A"], [2, "A"]], ["c", "group"])
+        res = df.groupBy("group").agg(skewness(df.c).alias("v")).collect()
+        # FIXME: Why is this different?
+        if USE_ACTUAL_SPARK:
+            assert pytest.approx(res[0].v) == 0.7071067811865475
+        else:
+            assert pytest.approx(res[0].v) == 1.7320508075688699

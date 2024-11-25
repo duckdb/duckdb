@@ -28,6 +28,8 @@ public:
 		if (aggr.filter) {
 			// 	Start with all invalid and set the ones that pass
 			filter_mask.Initialize(group_count, false);
+		} else {
+			filter_mask.InitializeEmpty(group_count);
 		}
 	}
 
@@ -581,7 +583,7 @@ void WindowCustomAggregator::Finalize(WindowAggregatorState &gstate, WindowAggre
 	}
 	auto &filter_mask = gcsink.filter_mask;
 	auto &filter_packed = gcsink.filter_packed;
-	filter_mask.Pack(filter_packed, filter_mask.target_count);
+	filter_mask.Pack(filter_packed, filter_mask.Capacity());
 
 	gcsink.partition_input =
 	    make_uniq<WindowPartitionInput>(gcsink.context, inputs, count, child_idx, all_valids, filter_packed, stats);
@@ -1532,6 +1534,7 @@ protected:
 class WindowDistinctAggregatorGlobalState : public WindowAggregatorGlobalState {
 public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+	using LocalSortStatePtr = unique_ptr<LocalSortState>;
 	using ZippedTuple = WindowDistinctSortTree::ZippedTuple;
 	using ZippedElements = WindowDistinctSortTree::ZippedElements;
 
@@ -1540,6 +1543,9 @@ public:
 
 	//! Compute the block starts
 	void MeasurePayloadBlocks();
+	//! Create a new local sort
+	optional_ptr<LocalSortState> InitializeLocalSort() const;
+
 	//! Patch up the previous index block boundaries
 	void PatchPrevIdcs();
 	bool TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate);
@@ -1549,13 +1555,13 @@ public:
 	idx_t memory_per_thread;
 
 	//! Finalize guard
-	mutex lock;
+	mutable mutex lock;
 	//! Finalize stage
 	atomic<PartitionSortStage> stage;
 	//! Tasks launched
 	idx_t total_tasks = 0;
 	//! Tasks launched
-	idx_t tasks_assigned = 0;
+	mutable idx_t tasks_assigned;
 	//! Tasks landed
 	mutable atomic<idx_t> tasks_completed;
 
@@ -1566,6 +1572,8 @@ public:
 
 	//! Sorting operations
 	GlobalSortStatePtr global_sort;
+	//! Local sort set
+	mutable vector<LocalSortStatePtr> local_sorts;
 	//! The block starts (the scanner doesn't know this) plus the total count
 	vector<idx_t> block_starts;
 
@@ -1586,7 +1594,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
                                                                          const WindowDistinctAggregator &aggregator,
                                                                          idx_t group_count)
     : WindowAggregatorGlobalState(context, aggregator, group_count), context(aggregator.context),
-      stage(PartitionSortStage::INIT), tasks_completed(0), merge_sort_tree(*this, group_count),
+      stage(PartitionSortStage::INIT), tasks_assigned(0), tasks_completed(0), merge_sort_tree(*this, group_count),
       levels_flat_native(aggr) {
 	payload_types.emplace_back(LogicalType::UBIGINT);
 
@@ -1642,6 +1650,16 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	}
 }
 
+optional_ptr<LocalSortState> WindowDistinctAggregatorGlobalState::InitializeLocalSort() const {
+	lock_guard<mutex> local_sort_guard(lock);
+	auto local_sort = make_uniq<LocalSortState>();
+	local_sort->Initialize(*global_sort, global_sort->buffer_manager);
+	++tasks_assigned;
+	local_sorts.emplace_back(std::move(local_sort));
+
+	return local_sorts.back().get();
+}
+
 class WindowDistinctAggregatorLocalState : public WindowAggregatorLocalState {
 public:
 	explicit WindowDistinctAggregatorLocalState(const WindowDistinctAggregatorGlobalState &aggregator);
@@ -1655,7 +1673,7 @@ public:
 	              idx_t count, idx_t row_idx);
 
 	//! Thread-local sorting data
-	LocalSortState local_sort;
+	optional_ptr<LocalSortState> local_sort;
 	//! Finalize stage
 	PartitionSortStage stage = PartitionSortStage::INIT;
 	//! Finalize scan block index
@@ -1693,9 +1711,6 @@ WindowDistinctAggregatorLocalState::WindowDistinctAggregatorLocalState(
       statef(gastate.aggr), statep(LogicalType::POINTER), statel(LogicalType::POINTER), flush_count(0) {
 	InitSubFrames(frames, gastate.aggregator.exclude_mode);
 	payload_chunk.Initialize(Allocator::DefaultAllocator(), gastate.payload_types);
-
-	auto &global_sort = gastate.global_sort;
-	local_sort.Initialize(*global_sort, global_sort->buffer_manager);
 
 	sort_chunk.Initialize(Allocator::DefaultAllocator(), gastate.sort_types);
 	sort_chunk.data.back().Reference(payload_chunk.data[0]);
@@ -1743,10 +1758,14 @@ void WindowDistinctAggregatorLocalState::Sink(DataChunk &sink_chunk, DataChunk &
 		payload_chunk.Slice(*filter_sel, filtered);
 	}
 
-	local_sort.SinkChunk(sort_chunk, payload_chunk);
+	if (!local_sort) {
+		local_sort = gastate.InitializeLocalSort();
+	}
 
-	if (local_sort.SizeInBytes() > gastate.memory_per_thread) {
-		local_sort.Sort(*gastate.global_sort, true);
+	local_sort->SinkChunk(sort_chunk, payload_chunk);
+
+	if (local_sort->SizeInBytes() > gastate.memory_per_thread) {
+		local_sort->Sort(*gastate.global_sort, true);
 	}
 }
 
@@ -1761,9 +1780,8 @@ void WindowDistinctAggregatorLocalState::Finalize(WindowAggregatorGlobalState &g
 void WindowDistinctAggregatorLocalState::ExecuteTask() {
 	auto &global_sort = *gastate.global_sort;
 	switch (stage) {
-	case PartitionSortStage::INIT:
-		//	AddLocalState is thread-safe
-		global_sort.AddLocalState(local_sort);
+	case PartitionSortStage::SCAN:
+		global_sort.AddLocalState(*gastate.local_sorts[block_idx]);
 		break;
 	case PartitionSortStage::MERGE: {
 		MergeSorter merge_sorter(global_sort, global_sort.buffer_manager);
@@ -1795,8 +1813,20 @@ bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggr
 
 	switch (stage.load()) {
 	case PartitionSortStage::INIT:
-		// Wait for all the local sorts to be processed
-		if (tasks_completed < locals) {
+		//	5: Sort sorted lexicographically increasing
+		total_tasks = local_sorts.size();
+		tasks_assigned = 0;
+		tasks_completed = 0;
+		lstate.stage = stage = PartitionSortStage::SCAN;
+		lstate.block_idx = tasks_assigned++;
+		return true;
+	case PartitionSortStage::SCAN:
+		// Process all the local sorts
+		if (tasks_assigned < total_tasks) {
+			lstate.stage = PartitionSortStage::SCAN;
+			lstate.block_idx = tasks_assigned++;
+			return true;
+		} else if (tasks_completed < tasks_assigned) {
 			return false;
 		}
 		global_sort->PrepareMergePhase();
@@ -1873,10 +1903,7 @@ void WindowDistinctAggregator::Finalize(WindowAggregatorState &gsink, WindowAggr
 	auto &ldstate = lstate.Cast<WindowDistinctAggregatorLocalState>();
 	ldstate.Finalize(gdsink, collection);
 
-	//	5: Sort sorted lexicographically increasing
-	ldstate.ExecuteTask();
-
-	// Merge in parallel
+	// Sort, merge and build the tree in parallel
 	while (gdsink.stage.load() != PartitionSortStage::FINISHED) {
 		if (gdsink.TryPrepareNextStage(ldstate)) {
 			ldstate.ExecuteTask();
