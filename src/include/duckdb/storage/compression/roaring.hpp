@@ -19,6 +19,8 @@ namespace roaring {
 
 //! Used for compressed runs/arrays
 static constexpr uint16_t COMPRESSED_SEGMENT_SIZE = 256;
+//! compresed segment size is 256, instead of division we can make use of shifting
+static constexpr uint16_t COMPRESSED_SEGMENT_SHIFT_AMOUNT = 8;
 //! The amount of values that are encoded per container
 static constexpr idx_t ROARING_CONTAINER_SIZE = 2048;
 static constexpr bool NULLS = true;

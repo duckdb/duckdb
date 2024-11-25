@@ -423,8 +423,7 @@ public:
 
 	template <bool EMPTY = false>
 	void Append(bool null, uint16_t amount = 1) {
-		if (uncompressed) {
-			D_ASSERT(!EMPTY);
+		if (!EMPTY && uncompressed) {
 			if (null) {
 				ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
 				SetInvalidRange(mask, count, count + amount);
@@ -442,7 +441,7 @@ public:
 					last_run.length = (count - last_run.start) - 1;
 				}
 				compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
-				run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
+				run_counts[count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 			}
 			run_idx++;
 		} else if (null && (!count || null != last_is_null) && run_idx < MAX_RUN_IDX) {
@@ -453,7 +452,7 @@ public:
 					current_run.start = count;
 				}
 				compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
-				run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
+				run_counts[count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 			}
 		}
 
@@ -465,7 +464,7 @@ public:
 					for (uint16_t i = 0; i < amount; i++) {
 						compressed_arrays[null][current_array_idx + i] =
 						    static_cast<uint8_t>((count + i) % COMPRESSED_SEGMENT_SIZE);
-						array_counts[null][(count + i) / COMPRESSED_SEGMENT_SIZE]++;
+						array_counts[null][(count + i) >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 					}
 				}
 				if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
@@ -522,7 +521,7 @@ public:
 			}
 			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
 			if (count != ROARING_CONTAINER_SIZE) {
-				run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
+				run_counts[count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 			}
 			run_idx++;
 		}
