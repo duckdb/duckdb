@@ -403,7 +403,7 @@ public:
 			while (appended < input_size) {
 				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
 				bool last_is_null;
-				idx_t length = 0;
+				uint16_t length = 0;
 				for (idx_t i = 0; i < to_append; i++) {
 					auto idx = unified.sel->get_index(appended + i);
 					auto is_null = validity.RowIsValidUnsafe(idx);
