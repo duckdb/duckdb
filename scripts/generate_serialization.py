@@ -151,10 +151,10 @@ SWITCH_STATEMENT_FORMAT = (
 '''
 )
 
-DESERIALIZE_ELEMENT_FORMAT = '\tauto {property_key} = deserializer.ReadProperty<{property_type}>({property_id}, "{property_key}"{property_default});\n'
-DESERIALIZE_ELEMENT_BASE_FORMAT = '\tauto {property_key} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n'
+DESERIALIZE_ELEMENT_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<{property_type}>({property_id}, "{property_key}"{property_default});\n'
+DESERIALIZE_ELEMENT_BASE_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n'
 DESERIALIZE_ELEMENT_CLASS_FORMAT = '\tdeserializer.ReadProperty<{property_type}>({property_id}, "{property_key}", result{assignment}{property_name}{property_default});\n'
-DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT = '\tauto {property_key} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n\tresult{assignment}{property_name} = unique_ptr_cast<{base_property}, {derived_property}>(std::move({property_key}));\n'
+DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n\tresult{assignment}{property_name} = unique_ptr_cast<{base_property}, {derived_property}>(std::move({property_name}));\n'
 
 MOVE_LIST = [
     'string',
@@ -221,7 +221,7 @@ def get_serialize_element(
     default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
     template = SERIALIZE_ELEMENT_FORMAT
     if is_deleted:
-        template = "\t/* [Deleted] ({property_type}) \"{property_key}\" */\n"
+        template = "\t/* [Deleted] ({property_type}) \"{property_name}\" */\n"
     elif has_default:
         template = template.replace('WriteProperty', 'WritePropertyWithDefault')
     serialization_code = template.format(
@@ -259,10 +259,8 @@ def get_deserialize_element_template(
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
     if is_deleted:
-        template = (
-            template.replace(f', result{assignment}{property_key}', '')
-            .replace(f'auto {property_name}', '')
-            .replace('ReadProperty', 'ReadDeletedProperty')
+        template = template.replace(', result{assignment}{property_name}', '').replace(
+            'ReadProperty', 'ReadDeletedProperty'
         )
     elif has_default and default_value is None:
         template = template.replace('ReadProperty', 'ReadPropertyWithDefault')
@@ -284,6 +282,7 @@ def get_deserialize_element_template(
 def get_deserialize_element(
     property_name, property_key, property_id, property_type, has_default, default_value, is_deleted, base, pointer_type
 ):
+    property_name = property_name.replace('.', '_')
     template = DESERIALIZE_ELEMENT_FORMAT
     if base:
         template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace('{base_property}', base.replace('*', ''))
@@ -301,11 +300,11 @@ def get_deserialize_element(
     )
 
 
-def get_deserialize_assignment(property_name, property_type, pointer_type, property_key):
+def get_deserialize_assignment(property_name, property_type, pointer_type):
     assignment = '.' if pointer_type == 'none' else '->'
-    property = property_key
+    property = property_name.replace('.', '_')
     if requires_move(property_type):
-        property = f'std::move({property_key})'
+        property = f'std::move({property})'
     return f'\tresult{assignment}{property_name} = {property};\n'
 
 
@@ -614,7 +613,8 @@ def generate_class_code(class_entry):
                         constructor_parameters += ", "
                     type_name = replace_pointer(entry.type)
                     if requires_move(type_name) and not is_reference:
-                        constructor_parameters += 'std::move(' + entry.name + ')'
+                        entry.deserialize_property = entry.deserialize_property.replace('.', '_')
+                        constructor_parameters += 'std::move(' + entry.deserialize_property + ')'
                     else:
                         constructor_parameters += entry.deserialize_property
                     found = True
@@ -632,7 +632,7 @@ def generate_class_code(class_entry):
                     if entry.name == constructor_entry:
                         if len(constructor_parameters) > 0:
                             constructor_parameters += ", "
-                        constructor_parameters += GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.name)
+                        constructor_parameters += GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type)
                         found = True
                         break
             if not found:
@@ -698,7 +698,7 @@ def generate_class_code(class_entry):
             )
         elif entry.name not in constructor_entries and not entry.deleted:
             class_deserialize += get_deserialize_assignment(
-                entry.deserialize_property, entry.type, class_entry.pointer_type, property_key
+                entry.deserialize_property, entry.type, class_entry.pointer_type
             )
         if entry.name in class_entry.set_parameter_names and not entry.deleted:
             class_deserialize += SET_DESERIALIZE_PARAMETER_FORMAT.format(

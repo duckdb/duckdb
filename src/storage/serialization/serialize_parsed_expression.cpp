@@ -17,7 +17,7 @@ void ParsedExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &deserializer) {
-	auto class = deserializer.ReadProperty<ExpressionClass>(100, "class");
+	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "class");
 	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(102, "alias");
 	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
@@ -161,7 +161,7 @@ void ComparisonExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ComparisonExpression>(new ComparisonExpression(deserializer.Get<type>()));
+	auto result = duckdb::unique_ptr<ComparisonExpression>(new ComparisonExpression(deserializer.Get<ExpressionType>()));
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "left", result->left);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "right", result->right);
 	return std::move(result);
@@ -173,7 +173,7 @@ void ConjunctionExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ConjunctionExpression>(new ConjunctionExpression(deserializer.Get<type>()));
+	auto result = duckdb::unique_ptr<ConjunctionExpression>(new ConjunctionExpression(deserializer.Get<ExpressionType>()));
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", result->children);
 	return std::move(result);
 }
@@ -258,7 +258,7 @@ void OperatorExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> OperatorExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<OperatorExpression>(new OperatorExpression(deserializer.Get<type>()));
+	auto result = duckdb::unique_ptr<OperatorExpression>(new OperatorExpression(deserializer.Get<ExpressionType>()));
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(200, "children", result->children);
 	return std::move(result);
 }
@@ -353,7 +353,7 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<WindowExpression>(new WindowExpression(deserializer.Get<type>()));
+	auto result = duckdb::unique_ptr<WindowExpression>(new WindowExpression(deserializer.Get<ExpressionType>()));
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->function_name);
 	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
 	deserializer.ReadPropertyWithDefault<string>(202, "catalog", result->catalog);
