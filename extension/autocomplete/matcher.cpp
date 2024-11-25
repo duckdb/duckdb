@@ -1,10 +1,34 @@
 #include "matcher.hpp"
 
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+#include "inlined_grammar.hpp"
+
 namespace duckdb {
+struct PEGParser;
+
+SuggestionType Matcher::AddSuggestion(MatchState &state) const {
+	auto entry = state.added_suggestions.find(*this);
+	if (entry != state.added_suggestions.end()) {
+		return SuggestionType::MANDATORY;
+	}
+	state.added_suggestions.insert(*this);
+	return AddSuggestionInternal(state);
+}
+
+void Matcher::Print() const {
+	Printer::Print(ToString());
+}
 
 class KeywordMatcher : public Matcher {
 public:
-	explicit KeywordMatcher(string keyword_p, int32_t score_bonus = 0, char extra_char = '\0') : keyword(std::move(keyword_p)), score_bonus(score_bonus), extra_char(extra_char) {
+	static constexpr MatcherType TYPE = MatcherType::KEYWORD;
+public:
+	explicit KeywordMatcher(string keyword_p, int32_t score_bonus = 0, char extra_char = '\0') : Matcher(TYPE), keyword(std::move(keyword_p)), score_bonus(score_bonus), extra_char(extra_char) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -18,11 +42,15 @@ public:
 		}
 	}
 
-	SuggestionType AddSuggestion(MatchState &state) const override {
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		AutoCompleteCandidate candidate(keyword, score_bonus, CandidateMatchCase::MATCH_CASE);
 		candidate.extra_char = extra_char;
 		state.suggestions.emplace_back(std::move(candidate));
 		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "'" + keyword + "'";
 	}
 
 private:
@@ -33,7 +61,10 @@ private:
 
 class ListMatcher : public Matcher {
 public:
-	explicit ListMatcher(vector<reference<Matcher>> matchers_p) : matchers(std::move(matchers_p)) {
+	static constexpr MatcherType TYPE = MatcherType::LIST;
+public:
+	ListMatcher() : Matcher(TYPE) {}
+	explicit ListMatcher(vector<reference<Matcher>> matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -63,7 +94,7 @@ public:
 		return MatchResultType::SUCCESS;
 	}
 
-	SuggestionType AddSuggestion(MatchState &state) const override {
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		for (auto &matcher : matchers) {
 			auto suggestion_result = matcher.get().AddSuggestion(state);
 			if (suggestion_result == SuggestionType::MANDATORY) {
@@ -75,13 +106,26 @@ public:
 		return SuggestionType::OPTIONAL;
 	}
 
-private:
+	string ToString() const override {
+		string result = "";
+		for(auto &matcher : matchers) {
+			if (!result.empty()) {
+				result += " ";
+			}
+			result += matcher.get().ToString();
+		}
+		return "(" + result + ")";
+	}
+
+public:
 	vector<reference<Matcher>> matchers;
 };
 
 class OptionalMatcher : public Matcher {
 public:
-	explicit OptionalMatcher(Matcher &matcher_p) : matcher(matcher_p) {
+	static constexpr MatcherType TYPE = MatcherType::OPTIONAL;
+public:
+	explicit OptionalMatcher(Matcher &matcher_p) : Matcher(TYPE), matcher(matcher_p) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -96,9 +140,13 @@ public:
 		return MatchResultType::SUCCESS;
 	}
 
-	SuggestionType AddSuggestion(MatchState &state) const override {
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		matcher.AddSuggestion(state);
 		return SuggestionType::OPTIONAL;
+	}
+
+	string ToString() const override {
+		return matcher.ToString() + "?";
 	}
 
 private:
@@ -107,7 +155,10 @@ private:
 
 class ChoiceMatcher : public Matcher {
 public:
-	explicit ChoiceMatcher(vector<reference<Matcher>> matchers_p) : matchers(std::move(matchers_p)) {
+	static constexpr MatcherType TYPE = MatcherType::CHOICE;
+public:
+	ChoiceMatcher() : Matcher(TYPE) {}
+	explicit ChoiceMatcher(vector<reference<Matcher>> matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -123,21 +174,34 @@ public:
 		return MatchResultType::FAIL;
 	}
 
-	SuggestionType AddSuggestion(MatchState &state) const override {
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		for (auto &child_matcher : matchers) {
 			child_matcher.get().AddSuggestion(state);
 		}
 		return SuggestionType::MANDATORY;
 	}
 
-private:
+	string ToString() const override {
+		string result = "";
+		for(auto &matcher : matchers) {
+			if (!result.empty()) {
+				result += " / ";
+			}
+			result += matcher.get().ToString();
+		}
+		return result;
+	}
+
+public:
 	vector<reference<Matcher>> matchers;
 };
 
 class RepeatMatcher : public Matcher {
 public:
+	static constexpr MatcherType TYPE = MatcherType::REPEAT;
+public:
 	RepeatMatcher(Matcher &element_p, optional_ptr<Matcher> separator_p)
-	    : element(element_p), separator(separator_p) {
+	    : Matcher(TYPE), element(element_p), separator(separator_p) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -180,9 +244,16 @@ public:
 		}
 	}
 
-	SuggestionType AddSuggestion(MatchState &state) const override {
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		element.AddSuggestion(state);
 		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		if (separator) {
+			throw InternalException("eek separator");
+		}
+		return element.ToString() + "*";
 	}
 
 private:
@@ -192,17 +263,48 @@ private:
 
 class VariableMatcher : public Matcher {
 public:
-	explicit VariableMatcher(SuggestionState suggestion_type) : suggestion_type(suggestion_type) {
+	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
+public:
+	explicit VariableMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
+		// variable matchers match anything except for reserved keywords
+		auto &token_text = state.tokens[state.token_index].text;
+		auto category = KeywordHelper::KeywordCategoryType(token_text);
+		if (category == KeywordCategory::KEYWORD_RESERVED) {
+			return MatchResultType::FAIL;
+		}
 		state.token_index++;
 		return MatchResultType::SUCCESS;
 	}
 
-	SuggestionType AddSuggestion(MatchState &state) const override {
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		state.suggestions.emplace_back(suggestion_type);
 		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		switch(suggestion_type) {
+		case SuggestionState::SUGGEST_KEYWORD:
+			return "KEYWORD";
+		case SuggestionState::SUGGEST_CATALOG_NAME:
+			return "CATALOG_NAME";
+		case SuggestionState::SUGGEST_SCHEMA_NAME:
+			return "SCHEMA_NAME";
+		case SuggestionState::SUGGEST_TABLE_NAME:
+			return "TABLE_NAME";
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			return "TYPE_NAME";
+		case SuggestionState::SUGGEST_COLUMN_NAME:
+			return "COLUMN_NAME";
+		case SuggestionState::SUGGEST_FILE_NAME:
+			return "FILE_NAME";
+		case SuggestionState::SUGGEST_VARIABLE:
+			return "VARIABLE";
+		default:
+			return "?VARIABLE?";
+		}
 	}
 
 	SuggestionState suggestion_type;
@@ -214,21 +316,19 @@ Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	return result;
 }
 
-enum class CachedMatcherType {
-	IF_NOT_EXISTS,
-	QUALIFIED_TABLE_NAME
-};
-
 //! Class for building matchers
 class MatcherFactory {
+	friend struct MatcherList;
 public:
 	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {}
 
-	Matcher &RootMatcher();
+	//! Create a matcher from a PEG grammar
+	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
 
 private:
 	// Base primitives
-	Matcher &Keyword(const string &keyword, int32_t score_bonus= 0, char extra_char = ' ') const;
+	Matcher &Keyword(const string &keyword) const;
+	Matcher &List() const;
 	Matcher &List(vector<reference<Matcher>> matchers) const;
 	Matcher &Choice(vector<reference<Matcher>> matchers) const;
 	Matcher &Optional(Matcher &matcher) const;
@@ -238,57 +338,30 @@ private:
 	Matcher &SchemaName() const;
 	Matcher &TypeName() const;
 	Matcher &TableName() const;
+	Matcher &ColumnName() const;
 
-private:
-	// Matchers
-	Matcher &OrReplace();
-	Matcher &Temporary();
-	Matcher &IfNotExists();
-	Matcher &CatalogQualification();
-	Matcher &SchemaQualification();
-	Matcher &QualifiedSchemaName();
-	Matcher &QualifiedTableName();
-	Matcher &NotNullConstraint();
-	Matcher &UniqueConstraint();
-	Matcher &PrimaryKeyConstraint();
-	Matcher &ColumnConstraint();
-	Matcher &ColumnDefinition();
-	Matcher &ColumnIdList();
-	Matcher &TopLevelPrimaryKeyConstraint();
-	Matcher &TopLevelConstraint();
-	Matcher &CreateTableColumnList();
-	Matcher &CreateTableMatcher();
-	Matcher &CreateSchemaMatcher();
-	Matcher &FunctionOrMacro();
-	Matcher &ColumnReference();
-	Matcher &ExpressionDefinition();
-	Matcher &ScalarMacroDefinition();
-	Matcher &CreateFunctionMatcher();
-	Matcher &CreateMatchers();
-	Matcher &CreateStatementMatcher();
-
-private:
-	optional_ptr<Matcher> CheckCache(CachedMatcherType matcher_type) {
-		auto entry = matcher_cache.find(matcher_type);
-		if (entry != matcher_cache.end()) {
-			// entry was already created - return the entry
-			return &entry->second.get();
-		}
-		return nullptr;
-	}
-
-	Matcher &Cache(CachedMatcherType matcher_type, Matcher &matcher) {
-		matcher_cache.insert(make_pair(matcher_type, reference<Matcher>(matcher)));
-		return matcher;
-	}
+	void SetKeywordScore(const char *name, uint32_t score);
+	void AddRuleOverride(const char *name, Matcher &matcher);
+	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
+	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
 
 private:
 	MatcherAllocator &allocator;
-	unordered_map<CachedMatcherType, reference<Matcher>> matcher_cache;
+	string_map_t<reference<Matcher>> matchers;
+	case_insensitive_map_t<uint32_t> keyword_scores;
 };
 
-Matcher &MatcherFactory::Keyword(const string &keyword, int32_t score_bonus, char extra_char) const {
-	return allocator.Allocate(make_uniq<KeywordMatcher>(keyword, score_bonus, extra_char));
+Matcher &MatcherFactory::Keyword(const string &keyword) const {
+	uint32_t score_bonus = 0;
+	auto entry = keyword_scores.find(keyword);
+	if (entry != keyword_scores.end()) {
+		score_bonus = entry->second;
+	}
+	return allocator.Allocate(make_uniq<KeywordMatcher>(keyword, score_bonus, ' '));
+}
+
+Matcher &MatcherFactory::List() const {
+	return allocator.Allocate(make_uniq<ListMatcher>());
 }
 
 Matcher &MatcherFactory::List(vector<reference<Matcher>> matchers) const {
@@ -319,218 +392,491 @@ Matcher &MatcherFactory::SchemaName() const {
 	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
 }
 
-Matcher &MatcherFactory::TypeName() const {
-	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
-}
-
 Matcher &MatcherFactory::TableName() const {
 	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
 }
 
-Matcher &MatcherFactory::OrReplace() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("OR"));
-	m.push_back(Keyword("REPLACE"));
-	return Optional(List(std::move(m)));
+Matcher &MatcherFactory::ColumnName() const {
+	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_COLUMN_NAME));
 }
 
-Matcher &MatcherFactory::Temporary() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("TEMP"));
-	m.push_back(Keyword("TEMPORARY"));
-	return Optional(Choice(std::move(m)));
+Matcher &MatcherFactory::TypeName() const {
+	return allocator.Allocate(make_uniq<VariableMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
 }
 
-Matcher &MatcherFactory::IfNotExists() {
-	auto cache_type = CachedMatcherType::IF_NOT_EXISTS;
-	auto cache_entry = CheckCache(cache_type);
-	if (cache_entry) {
-		return *cache_entry;
+enum class PEGRuleType {
+	LITERAL,    // literal rule ('Keyword'i)
+	REFERENCE,  // reference to another rule (Rule)
+	OPTIONAL,   // optional rule (Rule?)
+	OR,         // or rule (Rule1 / Rule2)
+	REPEAT      // repeat rule (Rule1*
+};
+
+enum class PEGTokenType {
+	LITERAL,       // literal token ('Keyword'i)
+	REFERENCE,     // reference token (Rule)
+	OPERATOR,      // operator token (/ or )
+	FUNCTION_CALL, // start of function call (i.e. Function(...))
+	REGEX          // regular expression ([ \t\n\r] or <[a-z_]i[a-z0-9_]i>)
+};
+
+struct PEGToken {
+	PEGTokenType type;
+	string_t text;
+};
+
+struct PEGRule {
+	string_map_t<idx_t> parameters;
+	vector<PEGToken> tokens;
+
+	void Clear() {
+		parameters.clear();
+		tokens.clear();
 	}
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("IF"));
-	m.push_back(Keyword("NOT"));
-	m.push_back(Keyword("EXISTS"));
-	return Cache(cache_type, Optional(List(std::move(m))));
-}
+};
 
-Matcher &MatcherFactory::CatalogQualification() {
-	vector<reference<Matcher>> m;
-	m.push_back(CatalogName());
-	m.push_back(Keyword(".", 0, '\0'));
-	return List(std::move(m));
-}
+struct PEGParser {
+public:
+	void ParseRules(const char *grammar);
 
-Matcher &MatcherFactory::SchemaQualification() {
-	vector<reference<Matcher>> m;
-	m.push_back(SchemaName());
-	m.push_back(Keyword(".", 0, '\0'));
-	return List(std::move(m));
-}
+	string_map_t<PEGRule> rules;
+};
 
-Matcher &MatcherFactory::QualifiedSchemaName() {
-	vector<reference<Matcher>> m;
-	m.push_back(Optional(CatalogQualification()));
-	m.push_back(Variable());
-	return List(std::move(m));
-}
+enum class PEGParseState {
+	RULE_NAME,      // Rule name
+	RULE_SEPARATOR, // look for <-
+	RULE_DEFINITION // part of rule definition
+};
 
-Matcher &MatcherFactory::QualifiedTableName() {
-	auto cache_type = CachedMatcherType::QUALIFIED_TABLE_NAME;
-	auto cache_entry = CheckCache(cache_type);
-	if (cache_entry) {
-		return *cache_entry;
+bool IsPEGOperator(char c) {
+	switch (c) {
+	case '/':
+	case '?':
+	case '(':
+	case ')':
+	case '*':
+	case '!':
+		return true;
+	default:
+		return false;
 	}
-	vector<reference<Matcher>> m;
-	m.push_back(Optional(CatalogQualification()));
-	m.push_back(Optional(SchemaQualification()));
-	m.push_back(Variable());
-	return Cache(cache_type, List(std::move(m)));
 }
 
-Matcher &MatcherFactory::NotNullConstraint() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("NOT"));
-	m.push_back(Keyword("NULL", 0, '\0'));
-	return List(std::move(m));
+void PEGParser::ParseRules(const char *grammar) {
+	string_t rule_name;
+	PEGRule rule;
+	PEGParseState parse_state = PEGParseState::RULE_NAME;
+	idx_t bracket_count = 0;
+	bool in_or_clause = false;
+	// look for the rules
+	idx_t c = 0;
+	while(grammar[c]) {
+		if (grammar[c] == '#') {
+			// comment - ignore until EOL
+			while(grammar[c] && !StringUtil::CharacterIsNewline(grammar[c])) {
+				c++;
+			}
+			continue;
+		}
+		if (parse_state == PEGParseState::RULE_DEFINITION && StringUtil::CharacterIsNewline(grammar[c]) && bracket_count == 0 && !in_or_clause) {
+			// if we see a newline while we are parsing a rule definition we can complete the rule
+			if (rule.tokens.empty()) {
+				throw InternalException("Failed to parse grammar - rule %s is empty", rule_name.GetString());
+			}
+			rules.insert(make_pair(rule_name, std::move(rule)));
+			rule_name = string_t();
+			rule.Clear();
+			// look for the subsequent rule
+			parse_state = PEGParseState::RULE_NAME;
+			c++;
+			continue;
+		}
+		if (StringUtil::CharacterIsSpace(grammar[c])) {
+			// skip whitespace
+			c++;
+			continue;
+		}
+		switch (parse_state) {
+		case PEGParseState::RULE_NAME: {
+			// look for alpha-numerics
+			idx_t start_pos = c;
+			if (grammar[c] == '%') {
+				// rules can start with % (%whitespace)
+				c++;
+			}
+			while(grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
+				c++;
+			}
+			if (c == start_pos) {
+				throw InternalException("Failed to parse grammar - expected an alpha-numeric rule name (pos %d)", c);
+			}
+			rule_name = string_t(grammar + start_pos, c - start_pos);
+			rule.Clear();
+			parse_state = PEGParseState::RULE_SEPARATOR;
+			break;
+		}
+		case PEGParseState::RULE_SEPARATOR: {
+			if (grammar[c] == '(') {
+				if (!rule.parameters.empty()) {
+					throw InternalException("Failed to parse grammar - multiple parameters at position %d", c);
+				}
+				// parameter
+				c++;
+				idx_t parameter_start = c;
+				while(grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
+					c++;
+				}
+				if (parameter_start == c) {
+					throw InternalException("Failed to parse grammar - expected a parameter at position %d", c);
+				}
+				rule.parameters.insert(make_pair(string_t(grammar + parameter_start, c - parameter_start), rule.parameters.size()));
+				if (grammar[c] != ')') {
+					throw InternalException("Failed to parse grammar - expected closing bracket at position %d", c);
+				}
+				c++;
+			} else {
+				if (grammar[c] != '<' || grammar[c + 1] != '-') {
+					throw InternalException("Failed to parse grammar - expected a rule definition (<-) (pos %d)", c);
+				}
+				c += 2;
+				parse_state = PEGParseState::RULE_DEFINITION;
+			}
+			break;
+		}
+		case PEGParseState::RULE_DEFINITION: {
+			// we parse either:
+			// (1) a literal ('Keyword'i)
+			// (2) a rule reference (Rule)
+			// (3) an operator ( '(' '/' '?' '*' ')')
+			in_or_clause = false;
+			if (grammar[c] == '\'') {
+				// parse literal
+				c++;
+				idx_t literal_start = c;
+				while(grammar[c] && grammar[c] != '\'') {
+					c++;
+				}
+				if (!grammar[c]) {
+					throw InternalException("Failed to parse grammar - did not find closing ' (pos %d)", c);
+				}
+				PEGToken token;
+				token.text = string_t(grammar + literal_start, c - literal_start);
+				token.type = PEGTokenType::LITERAL;
+				rule.tokens.push_back(token);
+				c++;
+				if (grammar[c] == 'i') {
+					// skip optional case insensitive marker
+					// note: all keywords we parse are case insensitive so we just ignore this marker
+					c++;
+				}
+			} else if (StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
+				// alphanumeric character - this is a rule reference
+				idx_t rule_start = c;
+				while(grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
+					c++;
+				}
+				PEGToken token;
+				token.text = string_t(grammar + rule_start, c - rule_start);
+				if (grammar[c] == '(') {
+					// this is a function call
+					c++;
+					bracket_count++;
+					token.type = PEGTokenType::FUNCTION_CALL;
+				} else {
+					token.type = PEGTokenType::REFERENCE;
+				}
+				rule.tokens.push_back(token);
+			} else if (grammar[c] == '[' || grammar[c] == '<') {
+				// regular expression- [^"] or <...>
+				idx_t rule_start = c;
+				char final_char = grammar[c] == '[' ? ']' : '>';
+				while(grammar[c] && grammar[c] != final_char) {
+					c++;
+				}
+				c++;
+				PEGToken token;
+				token.text = string_t(grammar + rule_start, c - rule_start);
+				token.type = PEGTokenType::REGEX;
+				rule.tokens.push_back(token);
+			} else if (IsPEGOperator(grammar[c])) {
+				if (grammar[c] == '(') {
+					bracket_count++;
+				} else if (grammar[c] == ')') {
+					if (bracket_count == 0) {
+						throw InternalException("Failed to parse grammar - unclosed bracket at position %d in rule %s", c, rule_name.GetString());
+					}
+					bracket_count--;
+				} else if (grammar[c] == '/') {
+					in_or_clause = true;
+				}
+				// operator - operators are always length 1
+				PEGToken token;
+				token.text = string_t(grammar + c, 1);
+				token.type = PEGTokenType::OPERATOR;
+				rule.tokens.push_back(token);
+				c++;
+			} else {
+				throw InternalException("Unrecognized rule contents in rule %s (character %s)", rule_name.GetString(), string(1, grammar[c]));
+			}
+		}
+		default:
+			break;
+		}
+		if (!grammar[c]) {
+			break;
+		}
+	}
+	if (parse_state == PEGParseState::RULE_SEPARATOR) {
+		throw InternalException("Failed to parse grammar - rule %s does not have a definition", rule_name.GetString());
+	}
+	if (parse_state == PEGParseState::RULE_DEFINITION) {
+		if (rule.tokens.empty()) {
+			throw InternalException("Failed to parse grammar - rule %s is empty", rule_name.GetString());
+		}
+		rules.insert(make_pair(rule_name, std::move(rule)));
+	}
 }
 
-Matcher &MatcherFactory::UniqueConstraint() {
-	return Keyword("UNIQUE", 0, '\0');
+Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
+	vector<reference<Matcher>> parameters;
+	return CreateMatcher(parser, rule_name, parameters);
 }
 
-Matcher &MatcherFactory::PrimaryKeyConstraint() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("PRIMARY"));
-	m.push_back(Keyword("KEY", 0, '\0'));
-	return List(std::move(m));
+struct MatcherListEntry {
+	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher) {}
+	MatcherListEntry(Matcher &matcher, string function_name_p) : matcher(matcher), function_name(std::move(function_name_p)) {}
+
+	Matcher &matcher;
+	string function_name;
+};
+
+struct MatcherList {
+public:
+	explicit MatcherList(PEGParser &parser, MatcherFactory &factory) : parser(parser), factory(factory) {
+	}
+
+	void AddMatcher(Matcher &matcher) {
+		auto &root_matcher = matchers.back().matcher;
+		switch(root_matcher.Type()) {
+		case MatcherType::LIST: {
+			auto &root_list = root_matcher.Cast<ListMatcher>();
+			root_list.matchers.push_back(matcher);
+			break;
+		}
+		case MatcherType::CHOICE:
+			// for a choice matcher we need to pop the choice matcher from the stack afterwards
+			if (matchers.size() <= 1) {
+				throw InternalException("Choice matcher should never be the root in the matcher stack");
+			}
+			root_matcher.Cast<ChoiceMatcher>().matchers.push_back(matcher);
+			matchers.pop_back();
+			break;
+		default:
+			throw InternalException("Cannot add matcher to root matcher of this type");
+		}
+	}
+	void AddRootMatcher(Matcher &matcher) {
+		matchers.emplace_back(matcher);
+	}
+	idx_t GetRootMatcherCount() const {
+		return matchers.size();
+	}
+	MatcherListEntry &GetLastRootMatcher() {
+		return matchers.back();
+	}
+	void BeginFunction(string function_name) {
+		auto &parameter_list = factory.List();
+		matchers.emplace_back(parameter_list, std::move(function_name));
+	}
+	void CloseBracket() {
+		if (matchers.size() <= 1) {
+			throw InternalException("PEG matcher create error - found too many close brackets");
+		}
+		auto &root_bracket_matcher = matchers.back();
+		if (root_bracket_matcher.function_name.empty()) {
+			// not a function
+			auto &bracket_matcher = root_bracket_matcher.matcher;
+			// remove the last matcher from the stack
+			matchers.pop_back();
+			// push it into the last matcher
+			AddMatcher(bracket_matcher);
+		} else {
+			// function matcher
+			auto &function_name = root_bracket_matcher.function_name;
+			auto &function_parameters = root_bracket_matcher.matcher.Cast<ListMatcher>();
+			// do the substitution of the function call
+			auto &function_call = factory.CreateMatcher(parser, function_name, function_parameters.matchers);
+			// remove the last matcher from the stack
+			matchers.pop_back();
+			// push it into the last matcher
+			AddMatcher(function_call);
+		}
+	}
+
+private:
+	PEGParser &parser;
+	MatcherFactory &factory;
+	vector<MatcherListEntry> matchers;
+};
+
+Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters) {
+	bool is_function_call = !parameters.empty();
+	if (!is_function_call) {
+		// check if the matcher has already been created first
+		auto matcher_entry = matchers.find(rule_name);
+		if (matcher_entry != matchers.end()) {
+			// return the created matcher
+			return matcher_entry->second.get();
+		}
+	}
+	// look up the rule
+	auto entry = parser.rules.find(rule_name);
+	if (entry == parser.rules.end()) {
+		throw InternalException("Failed to create matcher for rule %s - rule is missing", rule_name.GetString());
+	}
+	// create a matcher and cache it
+	// since matchers can be recursive we need to cache it prior to recursively constructing the other rules
+	auto &matcher = List();
+	if (!is_function_call) {
+		matchers.insert(make_pair(rule_name, reference<Matcher>(matcher)));
+	}
+
+	MatcherList list(parser, *this);
+	list.AddRootMatcher(matcher);
+	// fill the matcher from the given set of rules
+	auto &rule = entry->second;
+	if (parameters.size() != rule.parameters.size()) {
+		throw InternalException("Parameter count mismatch (rule %s expected %d parameters but got %d)", rule_name.GetString(), rule.parameters.size(), parameters.size());
+	}
+	for(idx_t token_idx = 0; token_idx < rule.tokens.size(); token_idx++) {
+		auto &token = rule.tokens[token_idx];
+		switch(token.type) {
+		case PEGTokenType::LITERAL:
+			// literal - push the keyword
+			list.AddMatcher(Keyword(token.text.GetString()));
+			break;
+		case PEGTokenType::REFERENCE: {
+			// check if we are referring to a keyword
+			auto param_entry = rule.parameters.find(token.text);
+			if (param_entry != rule.parameters.end()) {
+				// refers to a parameter - refer to it directly
+				list.AddMatcher(parameters[param_entry->second].get());
+			} else {
+				// refers to a different rule - create the matcher for that rule
+				auto ref_name = token.text.GetString();
+				list.AddMatcher(CreateMatcher(parser, ref_name));
+			}
+			break;
+		}
+		case PEGTokenType::FUNCTION_CALL: {
+			// function call - get the name of the function
+			auto function_name = token.text.GetString();
+			list.BeginFunction(function_name);
+			break;
+		}
+		case PEGTokenType::OPERATOR: {
+			// tokens need to be one byte
+			auto op_type = token.text.GetData()[0];
+			switch(op_type) {
+			case '?':
+			case '*': {
+				// optional/repeat - make the last rule optional/repeat
+				auto &last_matcher = list.GetLastRootMatcher().matcher;
+				if (last_matcher.Type() != MatcherType::LIST) {
+					throw InternalException("Optional/Repeat expected a list matcher");
+				}
+				auto &list_matcher = last_matcher.Cast<ListMatcher>();
+				if (list_matcher.matchers.empty()) {
+					throw InternalException("Optional/Repeat rule found as first token");
+				}
+				auto &final_matcher = list_matcher.matchers.back();
+				auto &replaced_matcher = op_type == '?' ? Optional(final_matcher) : Repeat(final_matcher, nullptr);
+				list_matcher.matchers.pop_back();
+				list_matcher.matchers.push_back(replaced_matcher);
+				break;
+			}
+			case '/': {
+				// OR operator - this signifies a choice between the last rule and the next rule
+				auto &last_matcher = list.GetLastRootMatcher().matcher;
+				if (last_matcher.Type() != MatcherType::LIST) {
+					throw InternalException("OR expected a list matcher");
+				}
+				auto &list_matcher = last_matcher.Cast<ListMatcher>();
+				if (list_matcher.matchers.empty()) {
+					throw InternalException("OR rule found as first token");
+				}
+				auto &final_matcher = list_matcher.matchers.back();
+				vector<reference<Matcher>> choice_matchers;
+				choice_matchers.push_back(final_matcher);
+				auto &choice_matcher = Choice(choice_matchers);
+
+				// the choice matcher gets added to the list matcher (instead of the previous matcher)
+				list_matcher.matchers.pop_back();
+				list_matcher.matchers.push_back(choice_matcher);
+				// then it gets pushed onto the stack of matchers
+				// the next rule will then get pushed onto the choice matcher
+				list.AddRootMatcher(choice_matcher);
+				break;
+			}
+			case '(': {
+				// bracket open - push a new list matcher onto the stack
+				auto &bracket_matcher = List();
+				list.AddRootMatcher(bracket_matcher);
+				break;
+			}
+			case ')': {
+				list.CloseBracket();
+				break;
+			}
+			case '!': {
+				// FIXME: ignore NOT operator
+				break;
+			}
+			default:
+				throw InternalException("unrecognized peg operator type");
+			}
+			break;
+		}
+		case PEGTokenType::REGEX:
+			// FIXME: ignore regex operator
+			break;
+		default:
+			throw InternalException("unrecognized peg token type");
+		}
+	}
+	if (list.GetRootMatcherCount() != 1) {
+		throw InternalException("PEG matcher create error - unclosed bracket found");
+	}
+	return matcher;
 }
 
-Matcher &MatcherFactory::ColumnConstraint() {
-	vector<reference<Matcher>> m;
-	m.push_back(NotNullConstraint());
-	m.push_back(UniqueConstraint());
-	m.push_back(PrimaryKeyConstraint());
-	return Repeat(Choice(std::move(m)), nullptr);
+void MatcherFactory::SetKeywordScore(const char *name, uint32_t score) {
+	keyword_scores[name] = score;
 }
 
-Matcher &MatcherFactory::ColumnDefinition() {
-	vector<reference<Matcher>> m;
-	m.push_back(Variable());
-	m.push_back(TypeName());
-	m.push_back(Optional(ColumnConstraint()));
-	return List(std::move(m));
+void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
+	matchers.insert(make_pair(name, reference<Matcher>(matcher)));
 }
 
-Matcher &MatcherFactory::ColumnIdList() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("("));
-	m.push_back(Repeat(Variable(), Keyword(",")));
-	m.push_back(Keyword(")"));
-	return List(std::move(m));
-}
+Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rule) {
+	// parse the grammar into a set of rules
+	PEGParser parser;
+	parser.ParseRules(grammar);
 
-Matcher &MatcherFactory::TopLevelPrimaryKeyConstraint() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("PRIMARY"));
-	m.push_back(Keyword("KEY", 0, '\0'));
-	m.push_back(ColumnIdList());
-	return List(std::move(m));
-}
+	// rule overrides
+	SetKeywordScore("TABLE", 1);
+	AddRuleOverride("Identifier", Variable());
+	AddRuleOverride("TypeName", TypeName());
+	AddRuleOverride("CatalogName", CatalogName());
+	AddRuleOverride("SchemaName", SchemaName());
 
-Matcher &MatcherFactory::TopLevelConstraint() {
-	vector<reference<Matcher>> m;
-	m.push_back(TopLevelPrimaryKeyConstraint());
-	return Choice(std::move(m));
-}
-
-Matcher &MatcherFactory::CreateTableColumnList() {
-	vector<reference<Matcher>> m;
-	m.push_back(ColumnDefinition());
-	m.push_back(TopLevelConstraint());
-	return Repeat(Choice(std::move(m)), Keyword(","));
-}
-
-Matcher &MatcherFactory::CreateTableMatcher() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("TABLE", 1));
-	m.push_back(IfNotExists());
-	m.push_back(QualifiedTableName());
-	m.push_back(Keyword("(", 0, '\0'));
-	m.push_back(CreateTableColumnList());
-	m.push_back(Keyword(";"));
-	return List(std::move(m));
-}
-
-Matcher &MatcherFactory::CreateSchemaMatcher() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("SCHEMA", 1));
-	m.push_back(IfNotExists());
-	m.push_back(QualifiedSchemaName());
-	m.push_back(Keyword(";"));
-	return List(std::move(m));
-}
-
-Matcher &MatcherFactory::FunctionOrMacro() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("FUNCTION", 1));
-	m.push_back(Keyword("MACRO", 1));
-	return Choice(std::move(m));
-}
-
-Matcher &MatcherFactory::ColumnReference() {
-	return Variable();
-}
-
-Matcher &MatcherFactory::ExpressionDefinition() {
-	vector<reference<Matcher>> m;
-	m.push_back(ColumnReference());
-	return Choice(std::move(m));
-}
-
-Matcher &MatcherFactory::ScalarMacroDefinition() {
-	vector<reference<Matcher>> m;
-	m.push_back(ColumnIdList());
-	m.push_back(Keyword("AS"));
-	m.push_back(ExpressionDefinition());
-	return Choice(std::move(m));
-}
-
-Matcher &MatcherFactory::CreateFunctionMatcher() {
-	vector<reference<Matcher>> m;
-	m.push_back(FunctionOrMacro());
-	m.push_back(IfNotExists());
-	m.push_back(QualifiedTableName());
-	m.push_back(Repeat(ScalarMacroDefinition(), Keyword(",")));
-	return List(std::move(m));
-}
-
-Matcher &MatcherFactory::CreateMatchers() {
-	vector<reference<Matcher>> m;
-	m.push_back(CreateTableMatcher());
-	m.push_back(CreateSchemaMatcher());
-	m.push_back(CreateFunctionMatcher());
-	return Choice(std::move(m));
-}
-
-Matcher &MatcherFactory::CreateStatementMatcher() {
-	vector<reference<Matcher>> m;
-	m.push_back(Keyword("CREATE"));
-	m.push_back(OrReplace());
-	m.push_back(Temporary());
-	m.push_back(CreateMatchers());
-	return List(std::move(m));
-}
-
-Matcher &MatcherFactory::RootMatcher() {
-	vector<reference<Matcher>> m;
-	m.push_back(CreateStatementMatcher());
-	return Choice(std::move(m));
+	// now create the matchers for each of the rules recursively - starting at the root rule
+	return CreateMatcher(parser, root_rule);
 }
 
 Matcher &Matcher::RootMatcher(MatcherAllocator &allocator) {
 	MatcherFactory factory(allocator);
-	return factory.RootMatcher();
+	return factory.CreateMatcher(INLINED_PEG_GRAMMAR, "Statement");
 }
 
 } // namespace duckdb

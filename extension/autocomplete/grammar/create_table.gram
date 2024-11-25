@@ -1,0 +1,29 @@
+CreateStmt <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt)
+OrReplace <- 'OR'i 'REPLACE'i
+Temporary <- 'TEMP'i / 'TEMPORARY'i
+
+CreateTableStmt <- 'TABLE'i IfNotExists? QualifiedTableName Parens(CreateTableColumnList)
+IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
+QualifiedTableName <- CatalogQualification? SchemaQualification? Identifier
+CatalogQualification <- CatalogName '.'
+SchemaQualification <- SchemaName '.'
+CatalogName <- Identifier
+SchemaName <- Identifier
+
+CreateTableColumnList <- List(CreateTableColumnElement)
+CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
+ColumnDefinition <- Identifier TypeName ColumnConstraint*
+ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint
+NotNullConstraint <- 'NOT'i 'NULL'i
+UniqueConstraint <- 'UNIQUE'i
+PrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i
+
+TopLevelConstraint <- TopPrimaryKeyConstraint
+TopPrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i ColumnIdList
+ColumnIdList <- Parens(List(Identifier))
+
+TypeName <- Identifier
+
+PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
+QuotedIdentifier <- '"' [^"]* '"'
+Identifier <- QuotedIdentifier / PlainIdentifier

@@ -10,8 +10,10 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
+class Matcher;
 class MatcherAllocator;
 
 enum class SuggestionState : uint8_t {
@@ -87,18 +89,56 @@ struct MatchState {
 
 	vector<MatcherToken> &tokens;
 	vector<MatcherSuggestion> &suggestions;
+	reference_set_t<const Matcher> added_suggestions;
 	idx_t token_index;
+};
+
+enum class MatcherType {
+	KEYWORD,
+	LIST,
+	OPTIONAL,
+	CHOICE,
+	REPEAT,
+	VARIABLE
 };
 
 class Matcher {
 public:
+	explicit Matcher(MatcherType type) : type(type) {}
 	virtual ~Matcher() = default;
 
 	//! Match
 	virtual MatchResultType Match(MatchState &state) const = 0;
-	virtual SuggestionType AddSuggestion(MatchState &state) const = 0;
+	virtual SuggestionType AddSuggestion(MatchState &state) const;
+	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
+	virtual string ToString() const = 0;
+	void Print() const;
 
 	static Matcher &RootMatcher(MatcherAllocator &allocator);
+
+	MatcherType Type() const {
+		return type;
+	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast matcher to type - matcher type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast matcher to type - matcher type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+private:
+	MatcherType type;
 };
 
 class MatcherAllocator {

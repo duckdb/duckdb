@@ -86,6 +86,9 @@ public:
 	static bool CharacterIsAlpha(char c) {
 		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 	}
+	static bool CharacterIsAlphaNumeric(char c) {
+		return CharacterIsAlpha(c) || CharacterIsDigit(c);
+	}
 	static bool CharacterIsOperator(char c) {
 		if (c == '_') {
 			return false;
