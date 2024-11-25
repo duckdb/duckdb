@@ -3,34 +3,33 @@ WITH xyze_jets AS (
     rowid,
     list_transform(JET,
               j -> CAST(ROW(j.btag,
-                            j.btag * cos(j.phi),
-                            j.btag * sin(j.phi),
-                            j.btag * ( ( exp(j.eta) - exp(-j.eta) ) / 2.0 ),
-                            sqrt(j.btag * cosh(j.eta) * j.btag * cosh(j.eta) + j.mass * j.mass)) AS
+                            j.pt * cos(j.phi),
+                            j.pt * sin(j.phi),
+                            j.pt * ( ( exp(j.eta) - exp(-j.eta) ) / 2.0 ),
+                            sqrt(j.pt * cosh(j.eta) * j.pt * cosh(j.eta) + j.mass * j.mass)) AS
                         ROW (btag REAL, x REAL, y REAL, z REAL, e REAL))) AS Jet
   FROM hep_singleMu
 ),
 tri_jets AS (
   WITH m as (select unnest(Jet) as m from hep_singleMu)
-    SELECT rowid, m1, m2, m3
-    FROM xyze_jets
-    CROSS JOIN (
-      SELECT row_number() OVER () idx1, unnest(jet) as m1
-      FROM xyze_jets
-    ) AS _m1
-    CROSS JOIN (
-      SELECT row_number() OVER () idx2, unnest(jet) as m2
-      FROM xyze_jets
-    ) AS _m2
-    CROSS JOIN (
-      SELECT row_number() OVER () idx3, unnest(jet) as m3 
-      FROM xyze_jets
-    ) AS _m3
-    WHERE idx1 < idx2 AND idx2 < idx3
+  SELECT m1, m2, m3, idx1, idx2, idx3
+  FROM (
+    SELECT row_number() OVER (Partition by rowid) idx1, m1
+    FROM (select rowid, unnest(jet) as m1 from xyze_jets)
+  ) AS _m1
+  CROSS JOIN (
+    SELECT row_number() OVER (Partition by rowid) idx2, m2
+    FROM (select rowid, unnest(jet) as m2 from xyze_jets)
+  ) AS _m2
+  CROSS JOIN (
+    SELECT row_number() OVER (Partition by rowid) idx3, m3
+    FROM (select rowid, unnest(jet) as m3 from xyze_jets)
+  ) AS _m3
+  WHERE idx1 < idx2 AND idx2 < idx3
 ),
 condensed_tri_jet AS (
   SELECT
-    rowid, m1, m2, m3,
+    idx1, idx2, idx3, m1, m2, m3,
     m1.x + m2.x + m3.x AS x,
     m1.y + m2.y + m3.y AS y,
     m1.z + m2.z + m3.z AS z,
@@ -43,27 +42,27 @@ condensed_tri_jet AS (
 ),
 singular_system AS (
   SELECT
-    rowid,
+    idx1, idx2, idx3,
     min_by(
-      sqrt(x2 + y2),
-      abs(172.5 - sqrt(e2 - x2 - y2 - z2))
+        list_max([m1.btag, m2.btag, m3.btag]),
+        abs(172.5 - sqrt(e2 - x2 - y2 - z2))
     ) AS btag
   FROM condensed_tri_jet
-  GROUP BY rowid
+  GROUP BY idx1, idx2, idx3
 )
 SELECT
-  FLOOR((
-    CASE
-      WHEN btag < 15 THEN 14.99
-      WHEN btag > 40 THEN 40.01
-      ELSE btag
-    END) / 0.25) * 0.25 + 0.125 AS x,
-  COUNT(*) AS y
+    CAST((
+     CASE
+         WHEN btag < 0 THEN -0.005
+         WHEN btag > 1 THEN 1.005
+         ELSE btag
+         END - 0.005) / 0.01 AS BIGINT) * 0.01 + 0.005 AS x,
+    COUNT(*) AS y
 FROM singular_system
-GROUP BY FLOOR((
-    CASE
-      WHEN btag < 15 THEN 14.99
-      WHEN btag > 40 THEN 40.01
+GROUP BY CAST((
+  CASE
+      WHEN btag < 0 THEN -0.005
+      WHEN btag > 1 THEN 1.005
       ELSE btag
-    END) / 0.25) * 0.25 + 0.125
+      END - 0.005) / 0.01 AS BIGINT) * 0.01 + 0.005
 ORDER BY x;

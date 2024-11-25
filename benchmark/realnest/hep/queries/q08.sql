@@ -1,6 +1,6 @@
 WITH uniform_structure_leptons AS (
   SELECT
-    rowid,
+    event,
     MET,
     list_distinct(
       list_concat(
@@ -34,18 +34,18 @@ lepton_pairs AS (
     idx2 AS l2_idx
   FROM uniform_structure_leptons
   CROSS JOIN (
-    SELECT row_number() over () idx1, unnest(Leptons) as l1
-    FROM uniform_structure_leptons
+    SELECT l1, row_number() over (Partition by event) idx1
+    FROM (select unnest(Leptons) l1, event from uniform_structure_leptons)
   ) AS _l1
   CROSS JOIN (
-    SELECT row_number() over () idx2, unnest(Leptons) as l2
-    FROM uniform_structure_leptons
+    SELECT l2, row_number() over (Partition by event) idx2
+    FROM (select unnest(Leptons) l2, event from uniform_structure_leptons)
   ) AS _l2
   WHERE idx1 < idx2 AND l1.type = l2.type AND l1.charge != l2.charge
 ),
 processed_pairs AS (
   SELECT
-    rowid,
+    event,
     min_by(
       ROW(
         l1_idx,
@@ -57,17 +57,17 @@ processed_pairs AS (
       abs(91.2 - sqrt(l.e * l.e - l.x * l.x - l.y * l.y - l.z * l.z))
     ) AS system
   FROM lepton_pairs
-  GROUP BY rowid
+  GROUP BY event
 ),
 other_max_pt AS (
-  SELECT rowid, CAST(max_by(sqrt(2 * system[4] * l.pt * (1.0 - cos((system[5]- l.phi + pi()) % (2 * pi()) - pi()))), l.pt) AS REAL) AS pt
+  SELECT event, CAST(max_by(sqrt(2 * system[4] * l.pt * (1.0 - cos((system[5]- l.phi + pi()) % (2 * pi()) - pi()))), l.pt) AS REAL) AS pt
   FROM processed_pairs
   CROSS JOIN (
-    SELECT row_number() over () idx, unnest(system[3]) as l
-    FROM processed_pairs
+    SELECT l, row_number() over (partition by row_id) idx
+    FROM (select unnest(system[3]) as l, event row_id from processed_pairs)
   )
   WHERE idx != system[1] AND idx != system[2]
-  GROUP BY rowid
+  GROUP BY event
 )
 SELECT
   FLOOR((
