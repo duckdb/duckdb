@@ -8,6 +8,13 @@ and the [documentation page](https://duckpgq.notion.site/duckpgq/b8ac652667964f9
 [![Discord](https://discordapp.com/api/guilds/1225369321077866496/widget.png?style=banner3)](https://discord.gg/8X95XHhQB7)
 
 # Loading DuckPGQ into DuckDB
+As of DuckDB v1.1.* we support loading DuckPGQ as a community extension. 
+```sql
+install duckpgq from community; 
+load duckpgq;
+```
+
+
 For availability please see the [DuckPGQ extension availability section](https://github.com/cwida/duckpgq-extension#duckpgq-extension-availability).
 
 Since this is a third-party extension, DuckDB must be started in `unsigned` mode to load it. The extension can be loaded with the following commands: 
