@@ -34,6 +34,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 
@@ -340,6 +341,18 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<duckdb::CompressionType>(104, "compression_type", result.compression_type);
 	deserializer.ReadPropertyWithExplicitDefault<Value>(105, "comment", result.comment, Value());
 	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, string>>(106, "tags", result.tags, unordered_map<string, string>());
+	return result;
+}
+
+void ColumnIndex::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<idx_t>(1, "index", index);
+	serializer.WritePropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", child_indexes);
+}
+
+ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
+	ColumnIndex result;
+	deserializer.ReadPropertyWithDefault<idx_t>(1, "index", result.index);
+	deserializer.ReadPropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", result.child_indexes);
 	return result;
 }
 

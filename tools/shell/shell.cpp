@@ -80,12 +80,12 @@
 #include <stdio.h>
 #include <assert.h>
 #include "duckdb_shell_wrapper.h"
+#include "duckdb/common/box_renderer.hpp"
 #include "sqlite3.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
 typedef unsigned char u8;
 #include <ctype.h>
-#include <stdarg.h>
 
 #if !defined(_WIN32) && !defined(WIN32)
 #include <signal.h>
@@ -142,6 +142,7 @@ typedef unsigned char u8;
 #endif
 
 #include "shell_renderer.hpp"
+#include "shell_highlight.hpp"
 #include "shell_state.hpp"
 
 using namespace duckdb_shell;
@@ -401,6 +402,7 @@ static bool stdin_is_interactive = true;
 ** true if translation is required.
 */
 static bool stdout_is_console = true;
+static bool stderr_is_console = true;
 
 /*
 ** The following is the open SQLite database.  We make a pointer
@@ -420,10 +422,36 @@ static volatile int seenInterrupt = 0;
 */
 static const char *program_name;
 
+enum class OptionType { DEFAULT, ON, OFF };
+
 /*
 ** Whether or not we are running in safe mode
 */
 static bool safe_mode = false;
+
+/*
+** Whether or not we are highlighting errors
+*/
+static OptionType highlight_errors = OptionType::DEFAULT;
+
+static bool HighlightErrors() {
+	if (highlight_errors == OptionType::DEFAULT) {
+		return stderr_is_console;
+	}
+	return highlight_errors == OptionType::ON;
+}
+
+/*
+** Whether or not we are highlighting results
+*/
+static OptionType highlight_results = OptionType::DEFAULT;
+
+static bool HighlightResults() {
+	if (highlight_results == OptionType::DEFAULT) {
+		return stdout_is_console;
+	}
+	return highlight_results == OptionType::ON;
+}
 
 /*
 ** Prompt strings. Initialized in main. Settable with
@@ -479,12 +507,24 @@ static void shell_out_of_memory(void) {
 	exit(1);
 }
 
+ShellState::ShellState() {
+	nullValue = "NULL";
+}
+
+void ShellState::Print(PrintOutput output, const char *str) {
+	utf8_printf(output == PrintOutput::STDOUT ? out : stderr, "%s", str);
+}
+
+void ShellState::Print(PrintOutput output, const string &str) {
+	Print(output, str.c_str());
+}
+
 void ShellState::Print(const char *str) {
-	utf8_printf(out, "%s", str);
+	Print(PrintOutput::STDOUT, str);
 }
 
 void ShellState::Print(const string &str) {
-	utf8_printf(out, "%s", str.c_str());
+	Print(PrintOutput::STDOUT, str.c_str());
 }
 
 void ShellState::PrintValue(const char *str) {
@@ -1527,24 +1567,109 @@ columnar_end:
 }
 
 extern "C" {
-extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                                   int columns, char thousands, char decimal);
+extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
+                                  int columns, char thousands, char decimal, duckdb::BaseResultRenderer *renderer);
 }
+
+class DuckBoxRenderer : public duckdb::BaseResultRenderer {
+public:
+	DuckBoxRenderer(ShellState &state, bool highlight)
+	    : shell_highlight(state), output(PrintOutput::STDOUT), highlight(highlight) {
+	}
+
+	void RenderLayout(const string &text) override {
+		PrintText(text, HighlightElementType::LAYOUT);
+	}
+
+	void RenderColumnName(const string &text) override {
+		PrintText(text, HighlightElementType::COLUMN_NAME);
+	}
+
+	void RenderType(const string &text) override {
+		PrintText(text, HighlightElementType::COLUMN_TYPE);
+	}
+
+	void RenderValue(const string &text, const duckdb::LogicalType &type) override {
+		if (type.IsNumeric()) {
+			PrintText(text, HighlightElementType::NUMERIC_VALUE);
+		} else if (type.IsTemporal()) {
+			PrintText(text, HighlightElementType::TEMPORAL_VALUE);
+		} else {
+			PrintText(text, HighlightElementType::STRING_VALUE);
+		}
+	}
+
+	void RenderNull(const string &text, const duckdb::LogicalType &type) override {
+		PrintText(text, HighlightElementType::NULL_VALUE);
+	}
+
+	void RenderFooter(const string &text) override {
+		PrintText(text, HighlightElementType::FOOTER);
+	}
+
+	void PrintText(const string &text, HighlightElementType element_type) {
+		if (highlight) {
+			shell_highlight.PrintText(text, output, element_type);
+		} else {
+			utf8_printf(shell_highlight.state.out, "%s", text.c_str());
+		}
+	}
+
+private:
+	ShellHighlight shell_highlight;
+	PrintOutput output;
+	bool highlight = true;
+};
+
+class TrashRenderer : public duckdb::BaseResultRenderer {
+public:
+	TrashRenderer() {
+	}
+
+	void RenderLayout(const string &) override {
+	}
+
+	void RenderColumnName(const string &) override {
+	}
+
+	void RenderType(const string &) override {
+	}
+
+	void RenderValue(const string &, const duckdb::LogicalType &) override {
+	}
+
+	void RenderNull(const string &, const duckdb::LogicalType &) override {
+	}
+
+	void RenderFooter(const string &) override {
+	}
+
+	void PrintText(const string &, HighlightElementType) {
+	}
+};
 
 /*
 ** Run a prepared statement
 */
-void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run */
-) {
+void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	if (cMode == RenderMode::DUCKBOX) {
-		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;
-		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
-		char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
-		                                  decimal_separator);
-		if (str) {
-			utf8_printf(out, "%s", str);
-			sqlite3_free(str);
+		size_t max_rows = this->max_rows;
+		size_t max_width = this->max_width;
+		if (!outfile.empty() && outfile[0] != '|') {
+			max_rows = (size_t)-1;
+			max_width = (size_t)-1;
 		}
+		if (!stdout_is_console) {
+			max_width = (size_t)-1;
+		}
+		DuckBoxRenderer renderer(*this, HighlightResults());
+		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
+		                      decimal_separator, &renderer);
+		return;
+	}
+	if (cMode == RenderMode::TRASH) {
+		TrashRenderer renderer;
+		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', &renderer);
 		return;
 	}
 
@@ -1576,27 +1701,25 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 
 	// iterate over the rows
 	do {
-		if (renderer) {
-			/* extract the data and data types */
-			for (int i = 0; i < nCol; i++) {
-				result.types[i] = sqlite3_column_type(pStmt, i);
-				if (result.types[i] == SQLITE_BLOB && cMode == RenderMode::INSERT) {
-					result.data[i] = "";
-				} else {
-					result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
-				}
-				if (!result.data[i] && result.types[i] != SQLITE_NULL) {
-					// OOM
-					rc = SQLITE_NOMEM;
-					break;
-				}
+		/* extract the data and data types */
+		for (int i = 0; i < nCol; i++) {
+			result.types[i] = sqlite3_column_type(pStmt, i);
+			if (result.types[i] == SQLITE_BLOB && cMode == RenderMode::INSERT) {
+				result.data[i] = "";
+			} else {
+				result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
+			}
+			if (!result.data[i] && result.types[i] != SQLITE_NULL) {
+				// OOM
+				rc = SQLITE_NOMEM;
+				break;
 			}
 		}
 
 		/* if data and types extracted successfully... */
 		if (SQLITE_ROW == rc) {
 			/* call the supplied callback with the result row data */
-			if (renderer && RenderRow(*renderer, result)) {
+			if (RenderRow(*renderer, result)) {
 				rc = SQLITE_ABORT;
 			} else {
 				rc = sqlite3_step(pStmt);
@@ -1604,9 +1727,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run
 		}
 	} while (SQLITE_ROW == rc);
 
-	if (renderer) {
-		renderer->RenderFooter(result);
-	}
+	renderer->RenderFooter(result);
 }
 
 /*
@@ -2012,6 +2133,9 @@ static const char *azHelp[] = {
 #ifdef HAVE_LINENOISE
     ".highlight [on|off]      Toggle syntax highlighting in the shell on/off",
 #endif
+    ".highlight_colors [element] [color]  ([bold])? Configure highlighting colors",
+    ".highlight_errors [on|off] Toggle highlighting of errors in the shell on/off",
+    ".highlight_results [on|off] Toggle highlighting of results in the shell on/off",
     ".import FILE TABLE       Import data from FILE into TABLE",
     "   Options:",
     "     --ascii               Use \\037 and \\036 as column and row separators",
@@ -2703,22 +2827,24 @@ void ShellState::ResetOutput() {
 	}
 	outfile = string();
 	out = stdout;
+	stdout_is_console = true;
 }
 
-static void printDatabaseError(const char *zErr) {
-	if (strstr(zErr, "Error: ")) {
+void ShellState::PrintDatabaseError(const char *zErr) {
+	if (!HighlightErrors()) {
 		utf8_printf(stderr, "%s\n", zErr);
-	} else {
-		utf8_printf(stderr, "Error: %s\n", zErr);
+		return;
 	}
+	ShellHighlight shell_highlight(*this);
+	shell_highlight.PrintError(zErr);
 }
 
 /*
 ** Print the current sqlite3_errmsg() value to stderr and return 1.
 */
-static int shellDatabaseError(sqlite3 *db) {
+int ShellState::ShellDatabaseError(sqlite3 *db) {
 	const char *zErr = sqlite3_errmsg(db);
-	printDatabaseError(zErr);
+	PrintDatabaseError(zErr);
 	return 1;
 }
 
@@ -2862,7 +2988,7 @@ MetadataResult ShowDatabases(ShellState &state, const char **azArg, idx_t nArg) 
 	renderer->col_sep = ": ";
 	sqlite3_exec(state.db, "SELECT name, file FROM pragma_database_list", callback, renderer.get(), &zErrMsg);
 	if (zErrMsg) {
-		printDatabaseError(zErrMsg);
+		state.PrintDatabaseError(zErrMsg);
 		sqlite3_free(zErrMsg);
 		return MetadataResult::FAIL;
 	}
@@ -2971,6 +3097,27 @@ MetadataResult ExitProcess(ShellState &state, const char **azArg, idx_t nArg) {
 MetadataResult ToggleHeaders(ShellState &state, const char **azArg, idx_t nArg) {
 	state.showHeader = booleanValue(azArg[1]);
 	state.shellFlgs |= SHFLG_HeaderSet;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetHighlightColors(ShellState &state, const char **azArg, idx_t nArg) {
+	if (nArg < 3 || nArg > 4) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	ShellHighlight highlighter(state);
+	if (!highlighter.SetColor(azArg[1], azArg[2], nArg == 3 ? nullptr : azArg[3])) {
+		return MetadataResult::FAIL;
+	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleHighlighErrors(ShellState &state, const char **azArg, idx_t nArg) {
+	highlight_errors = booleanValue(azArg[1]) ? OptionType::ON : OptionType::OFF;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ToggleHighlightResult(ShellState &state, const char **azArg, idx_t nArg) {
+	highlight_results = booleanValue(azArg[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
 }
 
@@ -3292,7 +3439,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	if (rc) {
 		if (pStmt)
 			sqlite3_finalize(pStmt);
-		shellDatabaseError(db);
+		ShellDatabaseError(db);
 		import_cleanup(&sCtx);
 		return false;
 	}
@@ -3320,7 +3467,7 @@ bool ShellState::ImportData(const char **azArg, idx_t nArg) {
 	rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, 0);
 	sqlite3_free(zSql);
 	if (rc) {
-		shellDatabaseError(db);
+		ShellDatabaseError(db);
 		if (pStmt)
 			sqlite3_finalize(pStmt);
 		import_cleanup(&sCtx);
@@ -3602,6 +3749,7 @@ bool ShellState::SetOutputFile(const char **azArg, idx_t nArg, char output_mode)
 			outfile = zFile;
 		}
 	}
+	stdout_is_console = false;
 	return true;
 }
 
@@ -3707,7 +3855,7 @@ bool ShellState::DisplaySchemas(const char **azArg, idx_t nArg) {
 		}
 	}
 	if (zErrMsg) {
-		printDatabaseError(zErrMsg);
+		PrintDatabaseError(zErrMsg);
 		sqlite3_free(zErrMsg);
 		return false;
 	} else if (rc != SQLITE_OK) {
@@ -3874,7 +4022,7 @@ MetadataResult ShellState::DisplayEntries(const char **azArg, idx_t nArg, char t
 		nRow++;
 	}
 	if (sqlite3_finalize(pStmt) != SQLITE_OK) {
-		rc = shellDatabaseError(db);
+		rc = ShellDatabaseError(db);
 	}
 
 	/* Pretty-print the contents of array azResult[] to the output */
@@ -3944,6 +4092,9 @@ static const MetadataCommand metadata_commands[] = {
     {"fullschema", 0, nullptr, "", "", 0},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0},
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0},
+    {"highlight_colors", 0, SetHighlightColors, "[element] [color] ([bold])?", "Configure highlighting colors", 0},
+    {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0},
+    {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0},
     {"import", 0, ImportData, "FILE TABLE", "Import data from FILE into TABLE", 0},
 
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
@@ -4068,7 +4219,7 @@ int ShellState::DoMetaCommand(char *zLine) {
 		const char *error = NULL;
 		if (linenoiseParseOption((const char **)azArg, nArg, &error)) {
 			if (error) {
-				printDatabaseError(error);
+				PrintDatabaseError(error);
 				rc = 1;
 			}
 		} else {
@@ -4168,11 +4319,11 @@ int ShellState::RunOneSqlLine(char *zSql) {
 	END_TIMER;
 	if (rc || zErrMsg) {
 		if (zErrMsg != 0) {
-			printDatabaseError(zErrMsg);
+			PrintDatabaseError(zErrMsg);
 			sqlite3_free(zErrMsg);
 			zErrMsg = 0;
 		} else {
-			shellDatabaseError(db);
+			ShellDatabaseError(db);
 		}
 		return 1;
 	} else if (ShellHasFlag(SHFLG_CountChanges)) {
@@ -4491,28 +4642,6 @@ static void main_init(ShellState *data) {
 }
 
 /*
-** Output text to the console in a font that attracts extra attention.
-*/
-#ifdef _WIN32
-static void printBold(const char *zText) {
-#if !SQLITE_OS_WINRT
-	HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
-	CONSOLE_SCREEN_BUFFER_INFO defaultScreenInfo;
-	GetConsoleScreenBufferInfo(out, &defaultScreenInfo);
-	SetConsoleTextAttribute(out, FOREGROUND_RED | FOREGROUND_INTENSITY);
-#endif
-	printf("%s", zText);
-#if !SQLITE_OS_WINRT
-	SetConsoleTextAttribute(out, defaultScreenInfo.wAttributes);
-#endif
-}
-#else
-static void printBold(const char *zText) {
-	printf("\033[1m%s\033[0m", zText);
-}
-#endif
-
-/*
 ** Get the argument to an --option.  Throw an error and die if no argument
 ** is available.
 */
@@ -4556,6 +4685,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	setvbuf(stderr, 0, _IONBF, 0); /* Make sure stderr is unbuffered */
 	stdin_is_interactive = isatty(0);
 	stdout_is_console = isatty(1);
+	stderr_is_console = isatty(2);
 
 #if USE_SYSTEM_SQLITE + 0 != 1
 	if (strncmp(sqlite3_sourceid(), SQLITE_SOURCE_ID, 60) != 0) {
@@ -4643,11 +4773,15 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				azCmd[nCmd - 1] = z;
 			}
 		}
-		if (z[1] == '-')
+		if (z[1] == '-') {
 			z++;
+		}
 		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 || strcmp(z, "-newline") == 0 ||
-		    strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
+		    strcmp(z, "-cmd") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
+		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
+			(void)cmdline_option_value(argc, argv, ++i);
+			stdin_is_interactive = false;
 		} else if (strcmp(z, "-init") == 0) {
 			zInitFile = cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-batch") == 0) {
@@ -4806,7 +4940,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				data.OpenDB(0);
 				rc = data.ExecuteSQL(z, &zErrMsg);
 				if (zErrMsg != 0) {
-					printDatabaseError(zErrMsg);
+					data.PrintDatabaseError(zErrMsg);
 					sqlite3_free(zErrMsg);
 					if (bail_on_error) {
 						free(azCmd);
@@ -4847,7 +4981,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				data.OpenDB(0);
 				rc = data.ExecuteSQL(azCmd[i], &zErrMsg);
 				if (zErrMsg != 0) {
-					printDatabaseError(zErrMsg);
+					data.PrintDatabaseError(zErrMsg);
 					sqlite3_free(zErrMsg);
 					free(azCmd);
 					return rc != 0 ? rc : 1;
@@ -4871,7 +5005,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			       sqlite3_libversion(), sqlite3_sourceid());
 			if (warnInmemoryDb) {
 				printf("Connected to a ");
-				printBold("transient in-memory database");
+				ShellHighlight highlighter(data);
+				highlighter.PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
+				                      PrintIntensity::BOLD);
 				printf(".\nUse \".open FILENAME\" to reopen on a "
 				       "persistent database.\n");
 			}

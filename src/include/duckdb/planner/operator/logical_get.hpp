@@ -62,11 +62,11 @@ public:
 	optional_ptr<TableCatalogEntry> GetTable() const;
 
 public:
-	void SetColumnIds(vector<column_t> &&column_ids);
+	void SetColumnIds(vector<ColumnIndex> &&column_ids);
 	void AddColumnId(column_t column_id);
 	void ClearColumnIds();
-	const vector<column_t> &GetColumnIds() const;
-	vector<column_t> &GetMutableColumnIds();
+	const vector<ColumnIndex> &GetColumnIds() const;
+	vector<ColumnIndex> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 
@@ -87,6 +87,6 @@ private:
 
 private:
 	//! Bound column IDs
-	vector<column_t> column_ids;
+	vector<ColumnIndex> column_ids;
 };
 } // namespace duckdb

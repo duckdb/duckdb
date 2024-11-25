@@ -53,6 +53,7 @@ def test_pragma(shell):
         .statement(".mode csv")
         .statement(".headers off")
         .statement(".sep |")
+        .statement('.nullvalue ""')
         .statement("CREATE TABLE t0(c0 INT);")
         .statement("PRAGMA table_info('t0');")
     )
@@ -592,12 +593,11 @@ def test_mode_json_infinity(shell):
     test = (
         ShellTest(shell)
         .statement(".mode json")
-        .statement("SELECT 'inf'::DOUBLE AS inf, '-inf'::DOUBLE AS ninf, 'nan'::DOUBLE AS nan;")
+        .statement("SELECT 'inf'::DOUBLE AS inf, '-inf'::DOUBLE AS ninf, 'nan'::DOUBLE AS nan, '-nan'::DOUBLE AS nnan;")
     )
     result = test.run()
-    result.check_stdout('[{"inf":1e999,"ninf":-1e999,"nan":nan}]')
+    result.check_stdout('[{"inf":1e999,"ninf":-1e999,"nan":null,"nnan":null}]')
 
-# Original comment: FIXME sqlite3_column_blob
 def test_mode_insert(shell):
     test = (
         ShellTest(shell)

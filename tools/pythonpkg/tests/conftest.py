@@ -246,7 +246,22 @@ def duckdb_cursor():
 def integers(duckdb_cursor):
     cursor = duckdb_cursor
     cursor.execute('CREATE TABLE integers (i integer)')
-    cursor.execute('INSERT INTO integers VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(NULL)')
+    cursor.execute(
+        """
+        INSERT INTO integers VALUES
+            (0),
+            (1),
+            (2),
+            (3),
+            (4),
+            (5),
+            (6),
+            (7),
+            (8),
+            (9),
+            (NULL)
+    """
+    )
     yield
     cursor.execute("drop table integers")
 

@@ -122,7 +122,7 @@ bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> &candidate) {
 	D_ASSERT(delim_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	GetDelimColumns(delim_join);
 
-	// LHS of the LOGICAL_DELIM_JOIN is a LOGICAL_WINDOW that contains a LOGICAL_PROJECTION
+	// LHS of the LOGICAL_DELIM_JOIN is a LOGICAL_WINDOW that contains a LOGICAL_PROJECTION/LOGICAL_CROSS_JOIN
 	// this lhs_proj later becomes the child of the UNNEST
 
 	idx_t delim_idx = delim_join.delim_flipped ? 1 : 0;
@@ -279,7 +279,7 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 
 			if (delim_binding.table_index == unnest_binding.table_index) {
 				unnest_binding.table_index = overwritten_tbl_idx;
-				unnest_binding.column_index++;
+				unnest_binding.column_index = i;
 				updater.replace_bindings.emplace_back(unnest_binding, delim_binding);
 				unnest_cols.erase(unnest_it);
 				break;

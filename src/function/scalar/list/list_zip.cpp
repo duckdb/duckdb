@@ -112,7 +112,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		offset += len;
 	}
 	for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
-		if (!(args.data[child_idx].GetType() == LogicalType::SQLNULL)) {
+		if (args.data[child_idx].GetType() != LogicalType::SQLNULL) {
 			struct_entries[child_idx]->Slice(ListVector::GetEntry(args.data[child_idx]), selections[child_idx],
 			                                 result_size);
 		}
@@ -161,7 +161,7 @@ ScalarFunction ListZipFun::GetFunction() {
 
 	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalTypeId::STRUCT), ListZipFunction, ListZipBind);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING; // Special handling needed?
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 

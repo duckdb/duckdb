@@ -240,10 +240,9 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 			}
 		}
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
-			return Value::TIMESTAMPTZ(timestamp_value);
-		} else {
-			return Value::TIMESTAMP(timestamp_value);
+			return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_value));
 		}
+		return Value::TIMESTAMP(timestamp_value);
 	}
 	case LogicalTypeId::TIMESTAMP_NS: {
 		timestamp_ns_t timestamp_value;
@@ -299,6 +298,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		auto &struct_reader = reader.Cast<StructColumnReader>();
 		// Recurse into child readers
 		for (idx_t i = 0; i < struct_reader.child_readers.size(); i++) {
+			if (!struct_reader.child_readers[i]) {
+				continue;
+			}
 			auto &child_reader = *struct_reader.child_readers[i];
 			auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_reader, columns);
 			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));

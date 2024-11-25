@@ -31,7 +31,6 @@ public:
 	                optional_ptr<ConflictInfo> conflict_info = nullptr);
 
 public:
-	void SetIndexCount(idx_t count);
 	// These methods return a boolean indicating whether we should throw or not
 	bool AddMiss(idx_t chunk_index);
 	bool AddHit(idx_t chunk_index, row_t row_id);
@@ -45,6 +44,9 @@ public:
 	const ConflictInfo &GetConflictInfo() const;
 	void FinishLookup();
 	void SetMode(ConflictManagerMode mode);
+	void AddIndex(BoundIndex &index);
+	bool MatchedIndex(BoundIndex &index);
+	const unordered_set<BoundIndex *> &MatchedIndexes() const;
 
 private:
 	bool IsConflict(LookupResultType type);
@@ -62,9 +64,9 @@ private:
 	VerifyExistenceType lookup_type;
 	idx_t input_size;
 	optional_ptr<ConflictInfo> conflict_info;
-	idx_t index_count;
 	bool finalized = false;
 	ManagedSelection conflicts;
+	unordered_set<BoundIndex *> matched_indexes;
 	unique_ptr<Vector> row_ids;
 	// Used to check if a given conflict is part of the conflict target or not
 	unique_ptr<unordered_set<idx_t>> conflict_set;

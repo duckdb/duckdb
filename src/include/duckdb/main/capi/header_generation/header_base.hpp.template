@@ -279,15 +279,32 @@ typedef struct {
 	int32_t offset;
 } duckdb_time_tz_struct;
 
-//! Timestamps are stored as microseconds since 1970-01-01
-//! Use the duckdb_from_timestamp/duckdb_to_timestamp function to extract individual information
+//! TIMESTAMP values are stored as microseconds since 1970-01-01.
+//! Use the duckdb_from_timestamp and duckdb_to_timestamp functions to extract individual information.
 typedef struct {
 	int64_t micros;
 } duckdb_timestamp;
+
+//! TIMESTAMP_S values are stored as seconds since 1970-01-01.
+typedef struct {
+	int64_t seconds;
+} duckdb_timestamp_s;
+
+//! TIMESTAMP_MS values are stored as milliseconds since 1970-01-01.
+typedef struct {
+	int64_t millis;
+} duckdb_timestamp_ms;
+
+//! TIMESTAMP_NS values are stored as nanoseconds since 1970-01-01.
+typedef struct {
+	int64_t nanos;
+} duckdb_timestamp_ns;
+
 typedef struct {
 	duckdb_date_struct date;
 	duckdb_time_struct time;
 } duckdb_timestamp_struct;
+
 typedef struct {
 	int32_t months;
 	int32_t days;

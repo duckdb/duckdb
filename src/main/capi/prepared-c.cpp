@@ -139,8 +139,14 @@ duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
 	}
+
+	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
+	if (identifier == duckdb::string()) {
+		return nullptr;
+	}
+
 	LogicalType param_type;
-	auto identifier = std::to_string(param_idx);
+
 	if (wrapper->statement->data->TryGetType(identifier, param_type)) {
 		return reinterpret_cast<duckdb_logical_type>(new LogicalType(param_type));
 	}
@@ -295,7 +301,7 @@ duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement,
 
 duckdb_state duckdb_bind_timestamp_tz(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                       duckdb_timestamp val) {
-	auto value = Value::TIMESTAMPTZ(timestamp_t(val.micros));
+	auto value = Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(val.micros));
 	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 

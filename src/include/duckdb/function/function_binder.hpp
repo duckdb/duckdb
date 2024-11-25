@@ -21,8 +21,10 @@ namespace duckdb {
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {
 public:
+	DUCKDB_API explicit FunctionBinder(Binder &binder);
 	DUCKDB_API explicit FunctionBinder(ClientContext &context);
 
+	optional_ptr<Binder> binder;
 	ClientContext &context;
 
 public:

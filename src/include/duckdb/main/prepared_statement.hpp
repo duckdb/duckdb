@@ -94,7 +94,7 @@ public:
 
 	template <class PAYLOAD>
 	static string ExcessValuesException(const case_insensitive_map_t<idx_t> &parameters,
-	                                    case_insensitive_map_t<PAYLOAD> &values) {
+	                                    const case_insensitive_map_t<PAYLOAD> &values) {
 		// Too many values
 		set<string> excess_set;
 		for (auto &pair : values) {
@@ -113,7 +113,7 @@ public:
 
 	template <class PAYLOAD>
 	static string MissingValuesException(const case_insensitive_map_t<idx_t> &parameters,
-	                                     case_insensitive_map_t<PAYLOAD> &values) {
+	                                     const case_insensitive_map_t<PAYLOAD> &values) {
 		// Missing values
 		set<string> missing_set;
 		for (auto &pair : parameters) {
@@ -131,7 +131,7 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static void VerifyParameters(case_insensitive_map_t<PAYLOAD> &provided,
+	static void VerifyParameters(const case_insensitive_map_t<PAYLOAD> &provided,
 	                             const case_insensitive_map_t<idx_t> &expected) {
 		if (expected.size() == provided.size()) {
 			// Same amount of identifiers, if
