@@ -99,6 +99,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 		if (StringUtil::CIEquals(entry.first, "row_group_size")) {
 			continue;
 		}
+		if (StringUtil::CIEquals(entry.first, "compatibility_version")) {
+			continue;
+		}
 		throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 	}
 

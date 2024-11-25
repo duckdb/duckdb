@@ -190,6 +190,10 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 		// Set options from config
 		string compatibility_version = StorageCompatibilityVersionSetting::GetSetting(config);
+		if (!storage_options.compatibility_version.empty()) {
+			compatibility_version = storage_options.compatibility_version;
+		}
+		// TODO fix handling for future version
 		db.SetCompatibilityVersion(compatibility_version);
 
 		// Initialize the block manager before creating a new database.
@@ -210,6 +214,27 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 
+		if (!storage_options.compatibility_version.empty()) {
+			const string storage_version_name = db.GetCompatibilityVersionName();
+			if (storage_options.compatibility_version != storage_version_name) {
+				const optional_idx provided_version =
+				    GetSerializationVersion(storage_options.compatibility_version.c_str());
+				const idx_t stored_version = db.GetCompatibilityVersion();
+				if (!provided_version.IsValid()) {
+					throw InvalidInputException(
+					    "compatibility_version parameter does not match the file's compatibility_version, got '%s' "
+					    "that correspond to an unknown version, expected '%s' that correspond to %llu",
+					    storage_options.compatibility_version, storage_version_name, stored_version);
+				}
+				if (provided_version.GetIndex() != stored_version) {
+					throw InvalidInputException(
+					    "compatibility_version parameter does not match the file's compatibility_version, got '%s' "
+					    "that correspond to version %llu, expected '%s' that correspond to %llu",
+					    storage_options.compatibility_version, provided_version.GetIndex(), storage_version_name,
+					    stored_version);
+				}
+			}
+		}
 		if (storage_options.block_alloc_size.IsValid()) {
 			// user-provided block alloc size
 			idx_t block_alloc_size = storage_options.block_alloc_size.GetIndex();
