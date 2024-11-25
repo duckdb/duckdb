@@ -22,8 +22,6 @@ TopLevelConstraint <- TopPrimaryKeyConstraint
 TopPrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i ColumnIdList
 ColumnIdList <- Parens(List(Identifier))
 
-TypeName <- Identifier
-
 PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
 Identifier <- QuotedIdentifier / PlainIdentifier

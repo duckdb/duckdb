@@ -102,6 +102,10 @@ enum class MatcherType {
 	VARIABLE
 };
 
+struct MatcherPrintState {
+	reference_set_t<const Matcher> stack;
+};
+
 class Matcher {
 public:
 	explicit Matcher(MatcherType type) : type(type) {}
@@ -111,7 +115,8 @@ public:
 	virtual MatchResultType Match(MatchState &state) const = 0;
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
-	virtual string ToString() const = 0;
+	string ToString(MatcherPrintState state) const;
+	virtual string ToStringInternal(MatcherPrintState state) const = 0;
 	void Print() const;
 
 	static Matcher &RootMatcher(MatcherAllocator &allocator);

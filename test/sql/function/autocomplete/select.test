@@ -1,0 +1,84 @@
+# name: test/sql/function/autocomplete/select.test
+# description: Test sql_auto_complete
+# group: [table]
+
+require autocomplete
+
+# main keywords
+query II
+FROM sql_auto_complete('SEL') LIMIT 1;
+----
+SELECT 	0
+
+query II
+FROM sql_auto_complete('WI') LIMIT 1;
+----
+WITH 	0
+
+query II
+FROM sql_auto_complete('SELECT * FR') LIMIT 1;
+----
+FROM 	9
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl WH') LIMIT 1;
+----
+WHERE 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl OR') LIMIT 1;
+----
+ORDER 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl ORDER B') LIMIT 1;
+----
+BY 	24
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl GR') LIMIT 1;
+----
+GROUP 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl GROUP B') LIMIT 1;
+----
+BY 	24
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl GROUP BY AL') LIMIT 1;
+----
+ALL 	27
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl GROUP BY ALL HAV') LIMIT 1;
+----
+HAVING 	31
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl LIM') LIMIT 1;
+----
+LIMIT 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl LIMIT 5 OF') LIMIT 1;
+----
+OFFSET 	26
+
+# from first
+query II
+FROM sql_auto_complete('FR') LIMIT 1;
+----
+FROM 	0
+
+query II
+FROM sql_auto_complete('FROM tbl SEL') LIMIT 1;
+----
+SELECT 	9
+
+query II
+FROM sql_auto_complete('FROM tbl OR') LIMIT 1;
+----
+ORDER 	9
+
+# expressions

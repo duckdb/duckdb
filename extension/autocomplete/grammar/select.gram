@@ -1,0 +1,34 @@
+SelectStatement <- SimpleSelect (SetopClause SimpleSelect)*
+
+SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) 'ALL'i?
+
+SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? OrderByClause? LimitClause? OffsetClause?
+
+SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
+WithStatement <- Identifier 'AS'i SubqueryReference
+WithClause <- 'WITH'i List(WithStatement)
+SelectClause <- 'SELECT'i ('*' / List(AliasedExpression))
+ColumnAliases <- Parens(List(Identifier))
+
+TableReference <-
+    (SubqueryReference 'AS'i? Identifier ColumnAliases?) /
+    (Identifier ('AS'i? Identifier)?)
+
+ExplicitJoin <- ('LEFT'i / 'FULL'i)? 'OUTER'i? 'JOIN'i TableReference 'ON'i Expression
+
+FromClause <- 'FROM'i TableReference ((',' TableReference) / ExplicitJoin)*
+WhereClause <- 'WHERE'i Expression
+GroupByClause <- 'GROUP'i 'BY'i GroupByExpressions
+HavingClause <- 'HAVING'i Expression
+
+GroupByExpressions <- List(Expression) / 'ALL'i
+
+SubqueryReference <- Parens(SelectStatement)
+
+OrderByExpression <- Expression ('DESC'i / 'ASC'i)?  ('NULLS'i 'FIRST'i / 'LAST'i)?
+OrderByClause <- 'ORDER'i 'BY'i List(OrderByExpression)
+
+LimitClause <- 'LIMIT'i NumberLiteral
+OffsetClause <- 'OFFSET'i NumberLiteral
+
+AliasedExpression <- Expression ('AS'i? Identifier)?

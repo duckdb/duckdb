@@ -1,0 +1,52 @@
+ColumnReference <- (Identifier '.')?Identifier
+FunctionExpression <- Identifier Parens(List(Expression))
+ParenthesisExpression <- Parens(Expression)
+LiteralExpression <- StringLiteral / NumberLiteral
+CastExpression <- 'CAST'i Parens(Expression 'AS'i TypeName)
+ExtractExpression <- 'EXTRACT'i Parens(ColumnReference 'FROM'i Expression)
+CountStarExpression <- 'COUNT'i Parens('*')
+SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference
+CaseExpression <- 'CASE'i ColumnReference? 'WHEN'i Expression 'THEN'i Expression ('ELSE'i Expression)? 'END'i # TODO strict
+DateExpression <- 'DATE'i Expression
+DistinctExpression <- 'DISTINCT'i Expression
+SubstringExpression <- 'SUBSTRING'i Parens(Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral)
+LiteralListExpression <- Parens(List(Expression))
+FrameClause <- 'ROWS'i 'BETWEEN'i (('UNBOUNDED'i 'PRECEDING'i)) 'AND' (('CURRENT'i 'ROW'i))
+WindowExpression <- Parens(('PARTITION'i 'BY'i List(Expression))? OrderByClause? FrameClause?)
+IsNullExpression <- ColumnReference 'IS'i 'NOT'i? 'NULL'i # TODO
+
+SingleExpression <-
+    SubqueryExpression /
+    LiteralListExpression /
+    ParenthesisExpression /
+    DateExpression /
+    DistinctExpression /
+    SubstringExpression /
+    IsNullExpression /
+    CaseExpression /
+    CountStarExpression /
+    CastExpression /
+    ExtractExpression /
+    WindowExpression /
+    FunctionExpression /
+    ColumnReference /
+    LiteralExpression
+
+ArithmeticOperator <- '+' / '-' / '*' / '/'
+LikeOperator <- 'NOT'i? 'LIKE'i
+InOperator <- 'NOT'i? 'IN'i !'T'i # special handling to not match INTERSECT
+BooleanOperator <- ('OR'i !'D'i) / 'AND'i # special handling to not match ORDER BY
+ComparisionOperator <-  '=' / '<=' / '>=' / '<' / '>'
+WindowOperator <- 'OVER'i
+BetweenOperator <- 'BETWEEN'i
+
+Operator <-
+    ArithmeticOperator /
+    ComparisionOperator /
+    BooleanOperator /
+    LikeOperator /
+    InOperator /
+    WindowOperator /
+    BetweenOperator
+
+Expression <- SingleExpression (Operator SingleExpression)*

@@ -20,8 +20,17 @@ SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	return AddSuggestionInternal(state);
 }
 
+string Matcher::ToString(MatcherPrintState state) const {
+	if (state.stack.find(*this) != state.stack.end()) {
+		return "RECURSIVE";
+	}
+	state.stack.insert(*this);
+	return ToStringInternal(state);
+}
+
 void Matcher::Print() const {
-	Printer::Print(ToString());
+	MatcherPrintState state;
+	Printer::Print(ToString(state));
 }
 
 class KeywordMatcher : public Matcher {
@@ -49,7 +58,7 @@ public:
 		return SuggestionType::MANDATORY;
 	}
 
-	string ToString() const override {
+	string ToStringInternal(MatcherPrintState state) const override {
 		return "'" + keyword + "'";
 	}
 
@@ -81,6 +90,9 @@ public:
 					}
 				}
 				state.token_index = list_state.token_index;
+				if (child_idx == matchers.size()) {
+					return MatchResultType::SUCCESS;
+				}
 				return MatchResultType::ADDED_SUGGESTION;
 			}
 			auto match_result = child_matcher.Match(list_state);
@@ -106,13 +118,13 @@ public:
 		return SuggestionType::OPTIONAL;
 	}
 
-	string ToString() const override {
+	string ToStringInternal(MatcherPrintState state) const override {
 		string result = "";
 		for(auto &matcher : matchers) {
 			if (!result.empty()) {
 				result += " ";
 			}
-			result += matcher.get().ToString();
+			result += matcher.get().ToString(state);
 		}
 		return "(" + result + ")";
 	}
@@ -145,8 +157,8 @@ public:
 		return SuggestionType::OPTIONAL;
 	}
 
-	string ToString() const override {
-		return matcher.ToString() + "?";
+	string ToStringInternal(MatcherPrintState state) const override {
+		return matcher.ToString(std::move(state)) + "?";
 	}
 
 private:
@@ -181,13 +193,13 @@ public:
 		return SuggestionType::MANDATORY;
 	}
 
-	string ToString() const override {
+	string ToStringInternal(MatcherPrintState state) const override {
 		string result = "";
 		for(auto &matcher : matchers) {
 			if (!result.empty()) {
 				result += " / ";
 			}
-			result += matcher.get().ToString();
+			result += matcher.get().ToString(state);
 		}
 		return result;
 	}
@@ -249,11 +261,11 @@ public:
 		return SuggestionType::MANDATORY;
 	}
 
-	string ToString() const override {
+	string ToStringInternal(MatcherPrintState state) const override {
 		if (separator) {
 			throw InternalException("eek separator");
 		}
-		return element.ToString() + "*";
+		return element.ToString(std::move(state)) + "*";
 	}
 
 private:
@@ -284,7 +296,7 @@ public:
 		return SuggestionType::MANDATORY;
 	}
 
-	string ToString() const override {
+	string ToStringInternal(MatcherPrintState ) const override {
 		switch(suggestion_type) {
 		case SuggestionState::SUGGEST_KEYWORD:
 			return "KEYWORD";
@@ -477,11 +489,8 @@ void PEGParser::ParseRules(const char *grammar) {
 			}
 			continue;
 		}
-		if (parse_state == PEGParseState::RULE_DEFINITION && StringUtil::CharacterIsNewline(grammar[c]) && bracket_count == 0 && !in_or_clause) {
+		if (parse_state == PEGParseState::RULE_DEFINITION && StringUtil::CharacterIsNewline(grammar[c]) && bracket_count == 0 && !in_or_clause && !rule.tokens.empty()) {
 			// if we see a newline while we are parsing a rule definition we can complete the rule
-			if (rule.tokens.empty()) {
-				throw InternalException("Failed to parse grammar - rule %s is empty", rule_name.GetString());
-			}
 			rules.insert(make_pair(rule_name, std::move(rule)));
 			rule_name = string_t();
 			rule.Clear();
@@ -553,6 +562,10 @@ void PEGParser::ParseRules(const char *grammar) {
 				c++;
 				idx_t literal_start = c;
 				while(grammar[c] && grammar[c] != '\'') {
+					if (grammar[c] == '\\') {
+						// escape
+						c++;
+					}
 					c++;
 				}
 				if (!grammar[c]) {
@@ -642,11 +655,11 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
 }
 
 struct MatcherListEntry {
-	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher) {}
-	MatcherListEntry(Matcher &matcher, string function_name_p) : matcher(matcher), function_name(std::move(function_name_p)) {}
+	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher), function_name(0U) {}
+	MatcherListEntry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {}
 
 	Matcher &matcher;
-	string function_name;
+	string_t function_name;
 };
 
 struct MatcherList {
@@ -683,16 +696,16 @@ public:
 	MatcherListEntry &GetLastRootMatcher() {
 		return matchers.back();
 	}
-	void BeginFunction(string function_name) {
+	void BeginFunction(string_t function_name) {
 		auto &parameter_list = factory.List();
-		matchers.emplace_back(parameter_list, std::move(function_name));
+		matchers.emplace_back(parameter_list, function_name);
 	}
 	void CloseBracket() {
 		if (matchers.size() <= 1) {
 			throw InternalException("PEG matcher create error - found too many close brackets");
 		}
 		auto &root_bracket_matcher = matchers.back();
-		if (root_bracket_matcher.function_name.empty()) {
+		if (root_bracket_matcher.function_name.GetSize() == 0) {
 			// not a function
 			auto &bracket_matcher = root_bracket_matcher.matcher;
 			// remove the last matcher from the stack
@@ -703,8 +716,13 @@ public:
 			// function matcher
 			auto &function_name = root_bracket_matcher.function_name;
 			auto &function_parameters = root_bracket_matcher.matcher.Cast<ListMatcher>();
+
+			// wrap the parameters in a list if there is more than one
+			auto &parameter = function_parameters.matchers.size() == 1 ? function_parameters.matchers[0].get() : factory.List(function_parameters.matchers);
+			vector<reference<Matcher>> parameters;
+			parameters.push_back(parameter);
 			// do the substitution of the function call
-			auto &function_call = factory.CreateMatcher(parser, function_name, function_parameters.matchers);
+			auto &function_call = factory.CreateMatcher(parser, function_name, parameters);
 			// remove the last matcher from the stack
 			matchers.pop_back();
 			// push it into the last matcher
@@ -744,6 +762,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 	list.AddRootMatcher(matcher);
 	// fill the matcher from the given set of rules
 	auto &rule = entry->second;
+	if (rule.parameters.size() > 1) {
+		throw InternalException("Only functions with a single parameter are supported");
+	}
 	if (parameters.size() != rule.parameters.size()) {
 		throw InternalException("Parameter count mismatch (rule %s expected %d parameters but got %d)", rule_name.GetString(), rule.parameters.size(), parameters.size());
 	}
@@ -762,15 +783,13 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				list.AddMatcher(parameters[param_entry->second].get());
 			} else {
 				// refers to a different rule - create the matcher for that rule
-				auto ref_name = token.text.GetString();
-				list.AddMatcher(CreateMatcher(parser, ref_name));
+				list.AddMatcher(CreateMatcher(parser, token.text));
 			}
 			break;
 		}
 		case PEGTokenType::FUNCTION_CALL: {
 			// function call - get the name of the function
-			auto function_name = token.text.GetString();
-			list.BeginFunction(function_name);
+			list.BeginFunction(token.text);
 			break;
 		}
 		case PEGTokenType::OPERATOR: {
@@ -832,7 +851,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				break;
 			}
 			case '!': {
-				throw InternalException("NOT operator not supported in PEG grammar");
+				// throw InternalException("NOT operator not supported in PEG grammar (found in rule %s)", rule_name.GetString());
+				// FIXME: we just ignore NOT operators here
+				break;
 			}
 			default:
 				throw InternalException("unrecognized peg operator type");
@@ -840,7 +861,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 			break;
 		}
 		case PEGTokenType::REGEX:
-			throw InternalException("REGEX operator not supported in PEG grammar");
+			throw InternalException("REGEX operator not supported in PEG grammar (found in rule %s)", rule_name.GetString());
 		default:
 			throw InternalException("unrecognized peg token type");
 		}
@@ -874,6 +895,8 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
+	AddRuleOverride("NumberLiteral", Variable());
+	AddRuleOverride("StringLiteral", Variable());
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);
