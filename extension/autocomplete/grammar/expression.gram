@@ -1,26 +1,32 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
 FunctionExpression <- Identifier Parens(List(Expression)?) WindowFunction?
-ParenthesisExpression <- Parens(Expression)
-LiteralExpression <- StringLiteral / NumberLiteral
-CastExpression <- 'CAST'i Parens(Expression 'AS'i TypeName)
+ParenthesisExpression <- Parens(List(Expression))
+LiteralExpression <- StringLiteral / NumberLiteral / 'NULL'i / 'TRUE'i / 'FALSE'i
+CastExpression <- CastOrTryCast Parens(Expression 'AS'i TypeName)
+CastOrTryCast <- 'CAST'i / 'TRY_CAST'i
 ExtractExpression <- 'EXTRACT'i Parens(ColumnReference 'FROM'i Expression)
 CountStarExpression <- 'COUNT'i Parens('*')
 SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference
-CaseExpression <- 'CASE'i ColumnReference? 'WHEN'i Expression 'THEN'i Expression ('ELSE'i Expression)? 'END'i # TODO strict
+CaseExpression <- 'CASE'i ColumnReference? CaseWhenThen CaseWhenThen* CaseElse? 'END'i
+CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression
+CaseElse <- 'ELSE'i Expression
 DateExpression <- 'DATE'i Expression
 DistinctExpression <- 'DISTINCT'i Expression
 SubstringExpression <- 'SUBSTRING'i Parens(Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral)
-LiteralListExpression <- Parens(List(Expression))
 FrameClause <- 'ROWS'i 'BETWEEN'i (('UNBOUNDED'i 'PRECEDING'i)) 'AND' (('CURRENT'i 'ROW'i))
 WindowFunction <- 'OVER'i WindowFrame
 WindowFrame <- Parens(WindowFrameContents)
 WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
 WindowPartition <- 'PARTITION'i 'BY'i List(Expression)
 IsNullExpression <- ColumnReference 'IS'i 'NOT'i? 'NULL'i # TODO
+PrefixExpression <- PrefixOperator Expression
+PrefixOperator <- '-' / '+'
+ListExpression <- 'ARRAY'i? '[' List(Expression) ']'
+StructExpression <- '{' List(StructField) '}'
+StructField <- StringLiteral ':'i Expression
 
 SingleExpression <-
     SubqueryExpression /
-    LiteralListExpression /
     ParenthesisExpression /
     DateExpression /
     DistinctExpression /
@@ -32,21 +38,34 @@ SingleExpression <-
     ExtractExpression /
     FunctionExpression /
     ColumnReference /
-    LiteralExpression
+    LiteralExpression /
+    PrefixExpression /
+    ListExpression /
+    StructExpression
 
-ArithmeticOperator <- '+' / '-' / '*' / '/'
+ArithmeticOperator <- '+' / '-' / '*' / '/' / '//' / '%' / '^' / '**'
 LikeOperator <- 'NOT'i? 'LIKE'i
-InOperator <- 'NOT'i? 'IN'i !'T'i # special handling to not match INTERSECT
-BooleanOperator <- ('OR'i !'D'i) / 'AND'i # special handling to not match ORDER BY
+InOperator <- 'NOT'i? 'IN'i
+ConjunctionOperator <- 'OR'i / 'AND'i
 ComparisonOperator <-  '=' / '<=' / '>=' / '<' / '>'
+DistinctOperator <- 'IS'i 'NOT'i? 'DISTINCT'i 'FROM'i
 BetweenOperator <- 'BETWEEN'i
+CollateOperator <- 'COLLATE'i
 
 Operator <-
     ArithmeticOperator /
     ComparisonOperator /
-    BooleanOperator /
+    ConjunctionOperator /
     LikeOperator /
     InOperator /
-    BetweenOperator
+    BetweenOperator /
+    CollateOperator /
+    DistinctOperator
 
-Expression <- SingleExpression (Operator SingleExpression)*
+CastOperator <- '::' TypeName
+
+BaseExpression <- SingleExpression CastOperator?
+Expression <- BaseExpression RecursiveExpression*
+RecursiveExpression <- (Operator Expression) / SliceExpression
+SliceExpression <- '[' SliceBound ']'
+SliceBound <- Expression? (':' Expression?)? (':' Expression?)?

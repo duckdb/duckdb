@@ -80,8 +80,8 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (name == "FunctionExpression") {
-			// Printer::Print("Window Function!");
+		if (name == "SingleExpression") {
+			Printer::Print("Found it!");
 		}
 		MatchState list_state(state);
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
@@ -97,9 +97,11 @@ public:
 				}
 				state.token_index = list_state.token_index;
 				if (child_idx == matchers.size()) {
+					// we managed to provide suggestions for all tokens
+					// that means all other tokens were optional - i.e. we succeeded in matching them
 					return MatchResultType::SUCCESS;
 				}
-				return MatchResultType::ADDED_SUGGESTION;
+				return MatchResultType::FAIL;
 			}
 			auto match_result = child_matcher.Match(list_state);
 			if (match_result != MatchResultType::SUCCESS) {

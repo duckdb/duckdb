@@ -60,7 +60,7 @@ struct AutoCompleteSuggestion {
 	idx_t pos;
 };
 
-enum class MatchResultType { SUCCESS, ADDED_SUGGESTION, FAIL };
+enum class MatchResultType { SUCCESS, FAIL };
 
 enum class SuggestionType { OPTIONAL, MANDATORY };
 

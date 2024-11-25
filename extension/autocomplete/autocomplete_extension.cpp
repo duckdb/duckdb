@@ -266,6 +266,20 @@ enum class WordState {
 	OPERATOR
 };
 
+static bool IsSingleByteOperator(char c) {
+	switch(c) {
+	case '(':
+	case ')':
+	case '{':
+	case '}':
+	case '[':
+	case ']':
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool TokenizeInput(const string &sql, MatchState &match_state, string &last_word, idx_t &last_pos) {
 	auto state = TokenizeState::STANDARD;
 
@@ -308,10 +322,10 @@ static bool TokenizeInput(const string &sql, MatchState &match_state, string &la
 					word_state = WordState::UNINITIALIZED;
 				}
 				last_pos = i + 1;
-			} else if (c == '(' || c == ')') {
-				// ( and ) are single-character operators
+			} else if (IsSingleByteOperator(c)) {
+				// single-byte operator
 				if (i > last_pos) {
-					// push a previous byte if there is any
+					// push a previous operator if there is any
 					auto next_word = sql.substr(last_pos, i - last_pos);
 					match_state.tokens.emplace_back(next_word);
 				}
