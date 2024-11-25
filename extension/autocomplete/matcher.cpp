@@ -6,7 +6,8 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "inlined_grammar.hpp"
+// #include "inlined_grammar.hpp"
+#include <fstream>
 
 namespace duckdb {
 struct PEGParser;
@@ -21,6 +22,9 @@ SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 }
 
 string Matcher::ToString(MatcherPrintState state) const {
+	if (!print_text.empty()) {
+		return print_text;
+	}
 	if (state.stack.find(*this) != state.stack.end()) {
 		return "RECURSIVE";
 	}
@@ -354,6 +358,7 @@ private:
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
+	void AddPrintOverride(const char *name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
 
@@ -361,6 +366,7 @@ private:
 	MatcherAllocator &allocator;
 	string_map_t<reference<Matcher>> matchers;
 	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
+	case_insensitive_set_t print_overrides;
 };
 
 Matcher &MatcherFactory::Keyword(const string &keyword) const {
@@ -869,6 +875,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 	if (list.GetRootMatcherCount() != 1) {
 		throw InternalException("PEG matcher create error - unclosed bracket found");
 	}
+	if (print_overrides.find(rule_name.GetString()) != print_overrides.end()) {
+		matcher.SetPrintText(rule_name.GetString());
+	}
 	return matcher;
 }
 
@@ -879,6 +888,10 @@ void MatcherFactory::AddKeywordOverride(const char *name, uint32_t score, char e
 
 void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
 	matchers.insert(make_pair(name, reference<Matcher>(matcher)));
+}
+
+void MatcherFactory::AddPrintOverride(const char *name) {
+	print_overrides.insert(name);
 }
 
 Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rule) {
@@ -895,8 +908,13 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("TypeName", TypeName());
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
+	AddRuleOverride("ColumnName", ColumnName());
 	AddRuleOverride("NumberLiteral", Variable());
 	AddRuleOverride("StringLiteral", Variable());
+
+	// print overrides
+	AddPrintOverride("SelectStatement");
+	AddPrintOverride("Expression");
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);
@@ -904,7 +922,13 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 
 Matcher &Matcher::RootMatcher(MatcherAllocator &allocator) {
 	MatcherFactory factory(allocator);
-	return factory.CreateMatcher(INLINED_PEG_GRAMMAR, "Statement");
+	std::ifstream t("extension/autocomplete/include/inlined_grammar.gram");
+	std::stringstream buffer;
+	buffer << t.rdbuf();
+	auto string = buffer.str();
+
+
+	return factory.CreateMatcher(string.c_str(), "Statement");
 }
 
 } // namespace duckdb

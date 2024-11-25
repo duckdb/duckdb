@@ -124,6 +124,9 @@ public:
 	MatcherType Type() const {
 		return type;
 	}
+	void SetPrintText(string print_text_p) {
+		print_text = std::move(print_text_p);
+	}
 
 public:
 	template <class TARGET>
@@ -144,6 +147,7 @@ public:
 
 private:
 	MatcherType type;
+	string print_text;
 };
 
 class MatcherAllocator {

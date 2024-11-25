@@ -7,8 +7,7 @@ IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
 QualifiedTableName <- CatalogQualification? SchemaQualification? Identifier
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
-CatalogName <- Identifier
-SchemaName <- Identifier
+TableQualification <- TableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint

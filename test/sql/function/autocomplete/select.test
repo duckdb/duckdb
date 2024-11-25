@@ -26,6 +26,11 @@ FROM sql_auto_complete('SELECT * FROM tbl WH') LIMIT 1;
 WHERE 	18
 
 query II
+FROM sql_auto_complete('SELECT * FROM tbl A') LIMIT 1;
+----
+AS 	18
+
+query II
 FROM sql_auto_complete('SELECT * FROM tbl OR') LIMIT 1;
 ----
 ORDER 	18
@@ -34,6 +39,11 @@ query II
 FROM sql_auto_complete('SELECT * FROM tbl ORDER B') LIMIT 1;
 ----
 BY 	24
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl ORDER BY AL') LIMIT 1;
+----
+ALL 	27
 
 query II
 FROM sql_auto_complete('SELECT * FROM tbl GR') LIMIT 1;
@@ -65,6 +75,33 @@ FROM sql_auto_complete('SELECT * FROM tbl LIMIT 5 OF') LIMIT 1;
 ----
 OFFSET 	26
 
+# joins
+query II
+FROM sql_auto_complete('SELECT * FROM tbl INN') LIMIT 1;
+----
+INNER 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl INNER JO') LIMIT 1;
+----
+JOIN 	24
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl LEF') LIMIT 1;
+----
+LEFT 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl LEFT OUT') LIMIT 1;
+----
+OUTER 	23
+
+# cross product
+#query II
+#FROM sql_auto_complete('SELECT * FROM tbl, tbl2 LEFT OUT') LIMIT 1;
+#----
+#OUTER 	23
+
 # from first
 query II
 FROM sql_auto_complete('FR') LIMIT 1;
@@ -81,4 +118,28 @@ FROM sql_auto_complete('FROM tbl OR') LIMIT 1;
 ----
 ORDER 	9
 
-# expressions
+# set ops
+query II
+FROM sql_auto_complete('SELECT * FROM tbl UN') LIMIT 1;
+----
+UNION 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl UNION AL') LIMIT 1;
+----
+ALL 	24
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl EX') LIMIT 1;
+----
+EXCEPT 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl INT') LIMIT 1;
+----
+INTERSECT 	18
+
+query II
+FROM sql_auto_complete('SELECT * FROM tbl UNION ALL SEL') LIMIT 1;
+----
+SELECT 	28

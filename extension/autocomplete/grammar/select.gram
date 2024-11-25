@@ -10,13 +10,22 @@ WithClause <- 'WITH'i List(WithStatement)
 SelectClause <- 'SELECT'i ('*' / List(AliasedExpression))
 ColumnAliases <- Parens(List(Identifier))
 
-TableReference <-
-    (SubqueryReference 'AS'i? Identifier ColumnAliases?) /
-    (Identifier ('AS'i? Identifier)?)
+InnerTableRef <- (SubqueryReference / BaseTableRef) TableAlias?
 
-ExplicitJoin <- ('LEFT'i / 'FULL'i)? 'OUTER'i? 'JOIN'i TableReference 'ON'i Expression
+TableRef <- InnerTableRef JoinClause?
+BaseTableRef <- CatalogQualification? SchemaQualification? TableName
 
-FromClause <- 'FROM'i TableReference ((',' TableReference) / ExplicitJoin)*
+TableAlias <- 'AS'i? Identifier ColumnAliases?
+
+JoinClause <- RegularJoinClause / JoinWithoutOnClause
+RegularJoinClause <- JoinType? InnerOuter? 'JOIN'i InnerTableRef 'ON'i Expression
+JoinWithoutOnClause <- JoinPrefix 'JOIN'i InnerTableRef
+
+InnerOuter <- 'INNER'i / 'OUTER'i
+JoinType <- 'LEFT'i / 'RIGHT'i / 'SEMI'i / 'ANTI'i
+JoinPrefix <- 'CROSS'i / ('NATURAL'i JoinType) / 'POSITIONAL'i
+
+FromClause <- 'FROM'i List(TableRef)
 WhereClause <- 'WHERE'i Expression
 GroupByClause <- 'GROUP'i 'BY'i GroupByExpressions
 HavingClause <- 'HAVING'i Expression
@@ -26,7 +35,8 @@ GroupByExpressions <- List(Expression) / 'ALL'i
 SubqueryReference <- Parens(SelectStatement)
 
 OrderByExpression <- Expression ('DESC'i / 'ASC'i)?  ('NULLS'i 'FIRST'i / 'LAST'i)?
-OrderByClause <- 'ORDER'i 'BY'i List(OrderByExpression)
+OrderByClause <- 'ORDER'i 'BY'i OrderByExpressions
+OrderByExpressions <- List(OrderByExpression) / 'ALL'i
 
 LimitClause <- 'LIMIT'i NumberLiteral
 OffsetClause <- 'OFFSET'i NumberLiteral

@@ -1,4 +1,4 @@
-ColumnReference <- (Identifier '.')?Identifier
+ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
 FunctionExpression <- Identifier Parens(List(Expression))
 ParenthesisExpression <- Parens(Expression)
 LiteralExpression <- StringLiteral / NumberLiteral

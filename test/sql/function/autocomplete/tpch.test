@@ -1,0 +1,45 @@
+# name: test/sql/function/autocomplete/tpch.test
+# description: Test sql_auto_complete
+# group: [table]
+
+require autocomplete
+
+require tpch
+
+# column names
+statement ok
+CALL dbgen(sf=0);
+
+query II
+FROM sql_auto_complete('SELECT l_ord') LIMIT 1;
+----
+l_orderkey	7
+
+# arithmetic
+query II
+FROM sql_auto_complete('SELECT 1 + l_ord') LIMIT 1;
+----
+l_orderkey	11
+
+# function calls
+query II
+FROM sql_auto_complete('SELECT min(l_ord') LIMIT 1;
+----
+l_orderkey	11
+
+query II
+FROM sql_auto_complete('SELECT min(42, l_ord') LIMIT 1;
+----
+l_orderkey	15
+
+# like
+query II
+FROM sql_auto_complete('SELECT ''test_string'' LIKE l_c') LIMIT 1;
+----
+l_comment	26
+
+
+query II
+FROM sql_auto_complete('SELECT l_orderkey FROM lin') LIMIT 1;
+----
+l_orderkey	7
