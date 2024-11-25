@@ -713,6 +713,19 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	unique_ptr<DataChunk> final_min_max;
 	if (filter_pushdown && ht.Count() > 0) {
 		final_min_max = filter_pushdown->PushFilters(context, ht, *sink.global_filter_state, *this);
+	} else if (!join_stats.empty()) {
+		// We didn't do join filter pushdown, fall back to statically determined stats (if available)
+		vector<LogicalType> key_types;
+		for (auto &condition : conditions) {
+			key_types.push_back(condition.right->return_type);
+		}
+		final_min_max = make_uniq<DataChunk>();
+		final_min_max->Initialize(context, key_types);
+		for (idx_t i = 0; i < key_types.size(); i++) {
+			auto &rhs_stats = *join_stats[2 * i + 1];
+			final_min_max->data[0].SetValue(0, NumericStats::Min((rhs_stats)));
+			final_min_max->data[0].SetValue(0, NumericStats::Max((rhs_stats)));
+		}
 	}
 
 	// check for possible perfect hash table
