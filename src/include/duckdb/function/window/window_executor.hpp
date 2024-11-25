@@ -18,27 +18,6 @@ namespace duckdb {
 
 class WindowCollection;
 
-//	Column indexes of the bounds chunk
-enum WindowBounds : uint8_t {
-	PARTITION_BEGIN,
-	PARTITION_END,
-	PEER_BEGIN,
-	PEER_END,
-	VALID_BEGIN,
-	VALID_END,
-	FRAME_BEGIN,
-	FRAME_END
-};
-
-// C++ 11 won't do this automatically...
-struct WindowBoundsHash {
-	inline uint64_t operator()(const WindowBounds &value) const {
-		return value;
-	}
-};
-
-using WindowBoundsSet = unordered_set<WindowBounds, WindowBoundsHash>;
-
 //! A shared set of expressions
 struct WindowSharedExpressions {
 	struct Shared {
