@@ -700,7 +700,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 			}
 			length = 0;
 			return;
-		} else {
+		} else if (!http_params.force_download){
 			// HEAD request fail, use Range request for another try (read only one byte)
 			if (flags.OpenForReading() && res->code != 404) {
 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
