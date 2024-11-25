@@ -1,6 +1,8 @@
 # name: test/sql/catalog/function/test_macro_default_arg_with_dependencies.test
 # group: [function]
 
+require skip_reload
+
 statement ok
 set storage_compatibility_version='v1.0.0'
 
