@@ -28,14 +28,14 @@ PhysicalInsert::PhysicalInsert(
     vector<unique_ptr<Expression>> set_expressions, vector<PhysicalIndex> set_columns, vector<LogicalType> set_types,
     idx_t estimated_cardinality, bool return_chunk, bool parallel, OnConflictAction action_type,
     unique_ptr<Expression> on_conflict_condition_p, unique_ptr<Expression> do_update_condition_p,
-    unordered_set<column_t> conflict_target_p, vector<column_t> columns_to_fetch_p)
+    unordered_set<column_t> conflict_target_p, vector<column_t> columns_to_fetch_p, bool update_is_del_and_insert)
     : PhysicalOperator(PhysicalOperatorType::INSERT, std::move(types_p), estimated_cardinality),
       column_index_map(std::move(column_index_map)), insert_table(&table), insert_types(table.GetTypes()),
       bound_defaults(std::move(bound_defaults)), bound_constraints(std::move(bound_constraints_p)),
       return_chunk(return_chunk), parallel(parallel), action_type(action_type),
       set_expressions(std::move(set_expressions)), set_columns(std::move(set_columns)), set_types(std::move(set_types)),
       on_conflict_condition(std::move(on_conflict_condition_p)), do_update_condition(std::move(do_update_condition_p)),
-      conflict_target(std::move(conflict_target_p)) {
+      conflict_target(std::move(conflict_target_p)), update_is_del_and_insert(update_is_del_and_insert) {
 
 	if (action_type == OnConflictAction::THROW) {
 		return;
@@ -58,7 +58,7 @@ PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry &schema, 
                                idx_t estimated_cardinality, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality), insert_table(nullptr),
       return_chunk(false), schema(&schema), info(std::move(info_p)), parallel(parallel),
-      action_type(OnConflictAction::THROW) {
+      action_type(OnConflictAction::THROW), update_is_del_and_insert(false) {
 	GetInsertInfo(*info, insert_types, bound_defaults);
 }
 
@@ -84,8 +84,11 @@ InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalT
                                    const vector<unique_ptr<Expression>> &bound_defaults,
                                    const vector<unique_ptr<BoundConstraint>> &bound_constraints)
     : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
-	insert_chunk.Initialize(Allocator::Get(context), types);
-	update_chunk.Initialize(Allocator::Get(context), types);
+
+	auto &allocator = Allocator::Get(context);
+	insert_chunk.Initialize(allocator, types);
+	update_chunk.Initialize(allocator, types);
+	mock_chunk.Initialize(allocator, types);
 }
 
 ConstraintState &InsertLocalState::GetConstraintState(DataTable &table, TableCatalogEntry &tableref) {
@@ -252,8 +255,8 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, Table
 }
 
 template <bool GLOBAL>
-static idx_t PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
-                                     Vector &row_ids, const PhysicalInsert &op) {
+static idx_t PerformOnConflictAction(InsertLocalState &lstate, ExecutionContext &context, DataChunk &chunk,
+                                     TableCatalogEntry &table, Vector &row_ids, const PhysicalInsert &op) {
 
 	if (op.action_type == OnConflictAction::NOTHING) {
 		return 0;
@@ -264,15 +267,55 @@ static idx_t PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk
 	CreateUpdateChunk(context, chunk, table, row_ids, update_chunk, op);
 
 	auto &data_table = table.GetStorage();
+	DataChunk &mock_chunk = lstate.mock_chunk;
+
+	// TODO: HERE
 	// Perform the update, using the results of the SET expressions
 	if (GLOBAL) {
-		auto update_state = data_table.InitializeUpdate(table, context.client, op.bound_constraints);
-		data_table.Update(*update_state, context.client, row_ids, set_columns, update_chunk);
-	} else {
-		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
+		if (!op.update_is_del_and_insert) {
+			auto update_state = data_table.InitializeUpdate(table, context.client, op.bound_constraints);
+			data_table.Update(*update_state, context.client, row_ids, set_columns, update_chunk);
+			return update_chunk.size();
+		}
+
+		//		auto row_id_data = FlatVector::GetData<row_t>(row_ids);
+		//		SelectionVector sel(STANDARD_VECTOR_SIZE);
+
+		// TODO: not so sure about this part
+		//		idx_t update_count = 0;
+		//		for (idx_t i = 0; i < update_chunk.size(); i++) {
+		//			auto row_id = row_id_data[i];
+		//			if (gstate.updated_columns.find(row_id) == gstate.updated_columns.end()) {
+		//				gstate.updated_columns.insert(row_id);
+		//				sel.set_index(update_count++, i);
+		//			}
+		//		}
+		//		if (update_count != update_chunk.size()) {
+		//			// we need to slice here
+		//			update_chunk.Slice(sel, update_count);
+		//		}
+		auto &delete_state = lstate.GetDeleteState(data_table, table, context.client);
+		data_table.Delete(delete_state, context.client, row_ids, update_chunk.size());
+		// for the append we need to arrange the columns in a specific manner (namely the "standard table order")
+		mock_chunk.SetCardinality(update_chunk);
+		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+			mock_chunk.data[i].Reference(chunk.data[i]);
+		}
+		for (idx_t i = 0; i < set_columns.size(); i++) {
+			mock_chunk.data[set_columns[i].index].Reference(update_chunk.data[i]);
+		}
+		data_table.LocalAppend(table, context.client, mock_chunk, op.bound_constraints);
+		return update_chunk.size();
+	}
+
+	auto &local_storage = LocalStorage::Get(context.client, data_table.db);
+	if (!op.update_is_del_and_insert) {
 		// Perform the update, using the results of the SET expressions
 		local_storage.Update(data_table, row_ids, set_columns, update_chunk);
+		return update_chunk.size();
 	}
+
+	// What to do here?
 	return update_chunk.size();
 }
 
@@ -467,7 +510,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		RegisterUpdatedRows(lstate, row_ids, combined_chunk.size());
 	}
 
-	affected_tuples += PerformOnConflictAction<GLOBAL>(context, combined_chunk, table, row_ids, op);
+	affected_tuples += PerformOnConflictAction<GLOBAL>(lstate, context, combined_chunk, table, row_ids, op);
 
 	// Remove the conflicting tuples from the insert chunk
 	SelectionVector sel_vec(tuples.size());

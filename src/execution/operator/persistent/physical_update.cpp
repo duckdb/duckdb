@@ -109,6 +109,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	lock_guard<mutex> glock(gstate.lock);
 	if (update_is_del_and_insert) {
+		// TODO: this
 		// index update or update on complex type, perform a delete and an append instead
 
 		// figure out which rows have not yet been deleted in this update
@@ -152,7 +153,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	gstate.updated_count += chunk.size();
-
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
