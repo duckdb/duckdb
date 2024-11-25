@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/types/value_map.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -24,8 +26,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
-#include "duckdb/common/types/value_map.hpp"
-#include "duckdb/optimizer/filter_combiner.hpp"
 
 namespace duckdb {
 
@@ -614,17 +614,18 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
-void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
-                                         const PhysicalOperator &op) const {
+unique_ptr<DataChunk> JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &ht,
+                                                          JoinFilterGlobalState &gstate,
+                                                          const PhysicalOperator &op) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
 		min_max_types.push_back(aggr_expr->return_type);
 	}
-	DataChunk final_min_max;
-	final_min_max.Initialize(Allocator::DefaultAllocator(), min_max_types);
+	auto final_min_max = make_uniq<DataChunk>();
+	final_min_max->Initialize(Allocator::DefaultAllocator(), min_max_types);
 
-	gstate.global_aggregate_state->Finalize(final_min_max);
+	gstate.global_aggregate_state->Finalize(*final_min_max);
 
 	auto dynamic_or_filter_threshold = ClientConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
@@ -634,8 +635,8 @@ void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &
 			auto min_idx = filter_idx * 2;
 			auto max_idx = min_idx + 1;
 
-			auto min_val = final_min_max.data[min_idx].GetValue(0);
-			auto max_val = final_min_max.data[max_idx].GetValue(0);
+			auto min_val = final_min_max->data[min_idx].GetValue(0);
+			auto max_val = final_min_max->data[max_idx].GetValue(0);
 			if (min_val.IsNull() || max_val.IsNull()) {
 				// min/max is NULL
 				// this can happen in case all values in the RHS column are NULL, but they are still pushed into the
@@ -664,6 +665,8 @@ void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &
 			info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<IsNotNullFilter>());
 		}
 	}
+
+	return final_min_max;
 }
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -708,12 +711,14 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	sink.local_hash_tables.clear();
 	ht.Unpartition();
 
+	bool can_do_perfect_hash_join = false;
 	if (filter_pushdown && ht.Count() > 0) {
-		filter_pushdown->PushFilters(context, ht, *sink.global_filter_state, *this);
+		auto final_min_max = filter_pushdown->PushFilters(context, ht, *sink.global_filter_state, *this);
+		can_do_perfect_hash_join = sink.perfect_join_executor->CanDoPerfectHashJoin(*this, *final_min_max);
 	}
 
 	// check for possible perfect hash table
-	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
+	auto use_perfect_hash = can_do_perfect_hash_join;
 	if (use_perfect_hash) {
 		D_ASSERT(ht.equality_types.size() == 1);
 		auto key_type = ht.equality_types[0];

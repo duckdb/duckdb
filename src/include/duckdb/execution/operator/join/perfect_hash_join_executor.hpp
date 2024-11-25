@@ -22,12 +22,9 @@ class PhysicalHashJoin;
 struct PerfectHashJoinStats {
 	Value build_min;
 	Value build_max;
-	Value probe_min;
-	Value probe_max;
 	bool is_build_small = false;
 	bool is_build_dense = false;
 	idx_t build_range = 0;
-	idx_t estimated_cardinality = 0;
 };
 
 //! PhysicalHashJoin represents a hash loop join between two tables
@@ -38,7 +35,7 @@ public:
 	explicit PerfectHashJoinExecutor(const PhysicalHashJoin &join, JoinHashTable &ht, PerfectHashJoinStats pjoin_stats);
 
 public:
-	bool CanDoPerfectHashJoin();
+	bool CanDoPerfectHashJoin(const PhysicalHashJoin &op, DataChunk &final_min_max);
 
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context);
 	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &lhs_output_columns,
