@@ -19,6 +19,10 @@
 
 namespace duckdb {
 
+static string StorageCompatibilityGetSettingHelper(const DBConfig &config) {
+	return config.options.serialization_compatibility.duckdb_version;
+}
+
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
     : db(db), path(std::move(path_p)), read_only(read_only) {
 
@@ -189,7 +193,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		}
 
 		// Set options from config
-		string compatibility_version = StorageCompatibilityVersionSetting::GetSetting(config);
+		string compatibility_version = StorageCompatibilityGetSettingHelper(config);
 		if (!storage_options.compatibility_version.empty()) {
 			compatibility_version = storage_options.compatibility_version;
 		}
