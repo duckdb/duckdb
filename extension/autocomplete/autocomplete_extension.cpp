@@ -21,12 +21,11 @@
 namespace duckdb {
 
 struct SQLAutoCompleteFunctionData : public TableFunctionData {
-	explicit SQLAutoCompleteFunctionData(vector<string> suggestions_p, idx_t start_pos)
-	    : suggestions(std::move(suggestions_p)), start_pos(start_pos) {
+	explicit SQLAutoCompleteFunctionData(vector<AutoCompleteSuggestion> suggestions_p)
+	    : suggestions(std::move(suggestions_p)) {
 	}
 
-	vector<string> suggestions;
-	idx_t start_pos;
+	vector<AutoCompleteSuggestion> suggestions;
 };
 
 struct SQLAutoCompleteData : public GlobalTableFunctionState {
@@ -36,7 +35,7 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix) {
+static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix) {
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(available_suggestions.size());
 
@@ -64,8 +63,9 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 		}
 		scores.emplace_back(str, score);
 	}
-	auto results = StringUtil::TopNStrings(scores, 20, 999);
-	for(auto &result : results) {
+	vector<AutoCompleteSuggestion> results;
+	auto top_strings = StringUtil::TopNStrings(scores, 20, 999);
+	for(auto &result : top_strings) {
 		auto entry = matches.find(result);
 		if (entry == matches.end()) {
 			throw InternalException("Auto-complete match not found");
@@ -83,6 +83,7 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 		if (suggestion.extra_char != '\0') {
 			result += suggestion.extra_char;
 		}
+		results.emplace_back(std::move(result), suggestion.suggestion_pos);
 	}
 	return results;
 }
@@ -379,7 +380,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	idx_t last_pos;
 	auto allow_complete = TokenizeInput(sql, state, last_word, last_pos);
 	if (!allow_complete) {
-		return make_uniq<SQLAutoCompleteFunctionData>(vector<string>(), 0);
+		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
 	}
 	if (state.suggestions.empty()) {
 		// no suggestions found during tokenizing
@@ -390,10 +391,11 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	}
 	if (state.suggestions.empty()) {
 		// still no suggestions - return
-		return make_uniq<SQLAutoCompleteFunctionData>(vector<string>(), 0);
+		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
 	}
 	vector<AutoCompleteCandidate> available_suggestions;
 	for (auto &suggestion : suggestions) {
+		idx_t suggestion_pos = last_pos;
 		// run the suggestions
 		vector<AutoCompleteCandidate> new_suggestions;
 		switch (suggestion.type) {
@@ -419,7 +421,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			new_suggestions = SuggestType(context);
 			break;
 		case SuggestionState::SUGGEST_FILE_NAME:
-			new_suggestions = SuggestFileName(context, last_word, last_pos);
+			new_suggestions = SuggestFileName(context, last_word, suggestion_pos);
 			break;
 		default:
 			throw InternalException("Unrecognized suggestion state");
@@ -428,11 +430,12 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			if (new_suggestion.extra_char == '\0') {
 				new_suggestion.extra_char = suggestion.extra_char;
 			}
+			new_suggestion.suggestion_pos = suggestion_pos;
 			available_suggestions.push_back(std::move(new_suggestion));
 		}
 	}
 	auto result_suggestions = ComputeSuggestions(available_suggestions, last_word);
-	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result_suggestions), last_pos);
+	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result_suggestions));
 }
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
@@ -467,10 +470,10 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 		auto &entry = bind_data.suggestions[data.offset++];
 
 		// suggestion, VARCHAR
-		output.SetValue(0, count, Value(entry));
+		output.SetValue(0, count, Value(entry.text));
 
 		// suggestion_start, INTEGER
-		output.SetValue(1, count, Value::INTEGER(bind_data.start_pos));
+		output.SetValue(1, count, Value::INTEGER(NumericCast<int32_t>(entry.pos)));
 
 		count++;
 	}

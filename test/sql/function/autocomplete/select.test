@@ -188,3 +188,9 @@ query II
 FROM sql_auto_complete('SELECT * FROM tbl UNION ALL SEL') LIMIT 1;
 ----
 SELECT 	28
+
+# quoted identifiers
+query II
+FROM sql_auto_complete('SELECT ''ORDER'' "WHERE" FR') LIMIT 1;
+----
+FROM 	23

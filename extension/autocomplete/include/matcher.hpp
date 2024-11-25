@@ -49,6 +49,15 @@ struct AutoCompleteCandidate {
 	CandidateMatchCase case_type;
 	//! Extra char to push at the back
 	char extra_char = '\0';
+	//! Suggestion position
+	idx_t suggestion_pos = 0;
+};
+
+struct AutoCompleteSuggestion {
+	AutoCompleteSuggestion(string text_p, idx_t pos) : text(std::move(text_p)), pos(pos) {}
+
+	string text;
+	idx_t pos;
 };
 
 enum class MatchResultType { SUCCESS, ADDED_SUGGESTION, FAIL };
@@ -91,6 +100,8 @@ struct MatchState {
 	vector<MatcherSuggestion> &suggestions;
 	reference_set_t<const Matcher> added_suggestions;
 	idx_t token_index;
+
+	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
 enum class MatcherType {
@@ -99,7 +110,8 @@ enum class MatcherType {
 	OPTIONAL,
 	CHOICE,
 	REPEAT,
-	VARIABLE
+	VARIABLE,
+	STRING_LITERAL
 };
 
 struct MatcherPrintState {

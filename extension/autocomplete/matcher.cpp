@@ -37,6 +37,10 @@ void Matcher::Print() const {
 	Printer::Print(ToString(state));
 }
 
+void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
+	suggestions.push_back(std::move(suggestion));
+}
+
 class KeywordMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::KEYWORD;
@@ -58,7 +62,7 @@ public:
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		AutoCompleteCandidate candidate(keyword, score_bonus, CandidateMatchCase::MATCH_CASE);
 		candidate.extra_char = extra_char;
-		state.suggestions.emplace_back(std::move(candidate));
+		state.AddSuggestion(MatcherSuggestion(std::move(candidate)));
 		return SuggestionType::MANDATORY;
 	}
 
@@ -290,7 +294,7 @@ public:
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
-		state.suggestions.emplace_back(suggestion_type);
+		state.AddSuggestion(MatcherSuggestion(suggestion_type));
 		return SuggestionType::MANDATORY;
 	}
 
@@ -318,6 +322,32 @@ public:
 	}
 
 	SuggestionState suggestion_type;
+};
+
+class StringLiteralMatcher : public Matcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::STRING_LITERAL;
+public:
+	explicit StringLiteralMatcher() : Matcher(TYPE) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		// variable matchers match anything except for reserved keywords
+		auto &token_text = state.tokens[state.token_index].text;
+		if (token_text.size() >= 2 && token_text.front() == '\'' && token_text.back() == '\'') {
+			state.token_index++;
+			return MatchResultType::SUCCESS;
+		}
+		return MatchResultType::FAIL;
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToStringInternal(MatcherPrintState ) const override {
+		return "STRING_LITERAL";
+	}
 };
 
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
@@ -349,6 +379,7 @@ private:
 	Matcher &TypeName() const;
 	Matcher &TableName() const;
 	Matcher &ColumnName() const;
+	Matcher &StringLiteral() const;
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
@@ -413,6 +444,10 @@ Matcher &MatcherFactory::ColumnName() const {
 
 Matcher &MatcherFactory::TypeName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
+}
+
+Matcher &MatcherFactory::StringLiteral() const {
+	return allocator.Allocate(make_uniq<StringLiteralMatcher>());
 }
 
 enum class PEGRuleType {
@@ -904,7 +939,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("SchemaName", SchemaName());
 	AddRuleOverride("ColumnName", ColumnName());
 	AddRuleOverride("NumberLiteral", Variable());
-	AddRuleOverride("StringLiteral", Variable());
+	AddRuleOverride("StringLiteral", StringLiteral());
 
 	// print overrides
 	AddPrintOverride("SelectStatement");
