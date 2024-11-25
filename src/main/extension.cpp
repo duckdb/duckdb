@@ -45,7 +45,8 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 
 	string result;
 
-	if (abi_type == ExtensionABIType::CPP) {
+	// CPP or C_STRUCT_UNSTABLE ABI versioning needs to match the DuckDB version exactly
+	if (abi_type == ExtensionABIType::CPP || abi_type == ExtensionABIType::C_STRUCT_UNSTABLE) {
 		const string engine_version = string(ExtensionHelper::GetVersionDirectoryName());
 
 		if (engine_version != duckdb_version) {
@@ -53,6 +54,7 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 			                             "built for DuckDB version '%s'.",
 			                             PrettyPrintString(duckdb_version), engine_version);
 		}
+	// C_STRUCT ABI versioning works when current duckdb version >= required version
 	} else if (abi_type == ExtensionABIType::C_STRUCT) {
 
 		if (!VersioningUtils::IsSupportedCAPIVersion(duckdb_capi_version)) {

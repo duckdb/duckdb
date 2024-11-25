@@ -99,19 +99,21 @@ struct ExtensionAccess {
 
 	//! Called by the extension get a pointer the correctly versioned extension C API struct.
 	static const void *GetAPI(duckdb_extension_info info, const char *version) {
-
 		string version_string = version;
-		idx_t major, minor, patch;
-		auto parsed = VersioningUtils::ParseSemver(version_string, major, minor, patch);
-
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
-		if (!parsed || !VersioningUtils::IsSupportedCAPIVersion(major, minor, patch)) {
-			load_state.has_error = true;
-			load_state.error_data =
-			    ErrorData(ExceptionType::UNKNOWN_TYPE,
-			              "Unsupported C CAPI version detected during extension initialization: " + string(version));
-			return nullptr;
+		// TODO: only allow this when ABI is specified as C_STRUCT_UNSTABLE
+		if (version_string != "dev") {
+			idx_t major, minor, patch;
+			auto parsed = VersioningUtils::ParseSemver(version_string, major, minor, patch);
+
+			if (!parsed || !VersioningUtils::IsSupportedCAPIVersion(major, minor, patch)) {
+				load_state.has_error = true;
+				load_state.error_data =
+					ErrorData(ExceptionType::UNKNOWN_TYPE,
+							  "Unsupported C CAPI version detected during extension initialization: " + string(version));
+				return nullptr;
+			}
 		}
 
 		load_state.api_struct = load_state.db.GetExtensionAPIV1();
@@ -207,6 +209,9 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(const char *meta
 	if (extension_abi_metadata == "C_STRUCT") {
 		result.abi_type = ExtensionABIType::C_STRUCT;
 		result.duckdb_capi_version = FilterZeroAtEnd(metadata_field[2]);
+	} else if (extension_abi_metadata == "C_STRUCT_UNSTABLE") {
+		result.abi_type = ExtensionABIType::C_STRUCT_UNSTABLE;
+		result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);
 	} else if (extension_abi_metadata == "CPP" || extension_abi_metadata.empty()) {
 		result.abi_type = ExtensionABIType::CPP;
 		result.duckdb_version = FilterZeroAtEnd(metadata_field[2]);

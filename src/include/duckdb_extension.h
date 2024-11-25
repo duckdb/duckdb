@@ -53,8 +53,8 @@
 #endif
 
 //! Set the DUCKDB_EXTENSION_API_VERSION_STRING which is passed to DuckDB on extension load
-#if DUCKDB_EXTENSION_API_VERSION_DEV
-#define DUCKDB_EXTENSION_API_VERSION_STRING "dev"
+#ifdef DUCKDB_EXTENSION_API_UNSTABLE_VERSION
+#define DUCKDB_EXTENSION_API_VERSION_STRING DUCKDB_EXTENSION_API_UNSTABLE_VERSION
 #else
 #define DUCKDB_EXTENSION_API_VERSION_STRING                                                                            \
 	DUCKDB_EXTENSION_SEMVER_STRING(DUCKDB_EXTENSION_API_VERSION_MAJOR, DUCKDB_EXTENSION_API_VERSION_MINOR,             \
@@ -93,10 +93,14 @@ typedef struct {
 	idx_t (*duckdb_column_count)(duckdb_result *result);
 	idx_t (*duckdb_rows_changed)(duckdb_result *result);
 	const char *(*duckdb_result_error)(duckdb_result *result);
+	duckdb_error_type (*duckdb_result_error_type)(duckdb_result *result);
+	duckdb_result_type (*duckdb_result_return_type)(duckdb_result result);
 	void *(*duckdb_malloc)(size_t size);
 	void (*duckdb_free)(void *ptr);
 	idx_t (*duckdb_vector_size)();
 	bool (*duckdb_string_is_inlined)(duckdb_string_t string);
+	uint32_t (*duckdb_string_t_length)(duckdb_string_t string);
+	const char *(*duckdb_string_t_data)(duckdb_string_t *string);
 	duckdb_date_struct (*duckdb_from_date)(duckdb_date date);
 	duckdb_date (*duckdb_to_date)(duckdb_date_struct date);
 	bool (*duckdb_is_finite_date)(duckdb_date date);
@@ -120,6 +124,7 @@ typedef struct {
 	idx_t (*duckdb_nparams)(duckdb_prepared_statement prepared_statement);
 	const char *(*duckdb_parameter_name)(duckdb_prepared_statement prepared_statement, idx_t index);
 	duckdb_type (*duckdb_param_type)(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+	duckdb_logical_type (*duckdb_param_logical_type)(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 	duckdb_state (*duckdb_clear_bindings)(duckdb_prepared_statement prepared_statement);
 	duckdb_statement_type (*duckdb_prepared_statement_type)(duckdb_prepared_statement statement);
 	duckdb_state (*duckdb_bind_value)(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_value val);
@@ -175,14 +180,62 @@ typedef struct {
 	void (*duckdb_destroy_value)(duckdb_value *value);
 	duckdb_value (*duckdb_create_varchar)(const char *text);
 	duckdb_value (*duckdb_create_varchar_length)(const char *text, idx_t length);
+	duckdb_value (*duckdb_create_bool)(bool input);
+	duckdb_value (*duckdb_create_int8)(int8_t input);
+	duckdb_value (*duckdb_create_uint8)(uint8_t input);
+	duckdb_value (*duckdb_create_int16)(int16_t input);
+	duckdb_value (*duckdb_create_uint16)(uint16_t input);
+	duckdb_value (*duckdb_create_int32)(int32_t input);
+	duckdb_value (*duckdb_create_uint32)(uint32_t input);
+	duckdb_value (*duckdb_create_uint64)(uint64_t input);
 	duckdb_value (*duckdb_create_int64)(int64_t val);
+	duckdb_value (*duckdb_create_hugeint)(duckdb_hugeint input);
+	duckdb_value (*duckdb_create_uhugeint)(duckdb_uhugeint input);
+	duckdb_value (*duckdb_create_float)(float input);
+	duckdb_value (*duckdb_create_double)(double input);
+	duckdb_value (*duckdb_create_date)(duckdb_date input);
+	duckdb_value (*duckdb_create_time)(duckdb_time input);
+	duckdb_value (*duckdb_create_time_tz_value)(duckdb_time_tz value);
+	duckdb_value (*duckdb_create_timestamp)(duckdb_timestamp input);
+	duckdb_value (*duckdb_create_interval)(duckdb_interval input);
+	duckdb_value (*duckdb_create_blob)(const uint8_t *data, idx_t length);
+	bool (*duckdb_get_bool)(duckdb_value val);
+	int8_t (*duckdb_get_int8)(duckdb_value val);
+	uint8_t (*duckdb_get_uint8)(duckdb_value val);
+	int16_t (*duckdb_get_int16)(duckdb_value val);
+	uint16_t (*duckdb_get_uint16)(duckdb_value val);
+	int32_t (*duckdb_get_int32)(duckdb_value val);
+	uint32_t (*duckdb_get_uint32)(duckdb_value val);
+	int64_t (*duckdb_get_int64)(duckdb_value val);
+	uint64_t (*duckdb_get_uint64)(duckdb_value val);
+	duckdb_hugeint (*duckdb_get_hugeint)(duckdb_value val);
+	duckdb_uhugeint (*duckdb_get_uhugeint)(duckdb_value val);
+	float (*duckdb_get_float)(duckdb_value val);
+	double (*duckdb_get_double)(duckdb_value val);
+	duckdb_date (*duckdb_get_date)(duckdb_value val);
+	duckdb_time (*duckdb_get_time)(duckdb_value val);
+	duckdb_time_tz (*duckdb_get_time_tz)(duckdb_value val);
+	duckdb_timestamp (*duckdb_get_timestamp)(duckdb_value val);
+	duckdb_interval (*duckdb_get_interval)(duckdb_value val);
+	duckdb_logical_type (*duckdb_get_value_type)(duckdb_value val);
+	duckdb_blob (*duckdb_get_blob)(duckdb_value val);
+	char *(*duckdb_get_varchar)(duckdb_value value);
 	duckdb_value (*duckdb_create_struct_value)(duckdb_logical_type type, duckdb_value *values);
 	duckdb_value (*duckdb_create_list_value)(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 	duckdb_value (*duckdb_create_array_value)(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
-	char *(*duckdb_get_varchar)(duckdb_value value);
-	int64_t (*duckdb_get_int64)(duckdb_value val);
+	idx_t (*duckdb_get_map_size)(duckdb_value value);
+	duckdb_value (*duckdb_get_map_key)(duckdb_value value, idx_t index);
+	duckdb_value (*duckdb_get_map_value)(duckdb_value value, idx_t index);
+	bool (*duckdb_is_null_value)(duckdb_value value);
+	duckdb_value (*duckdb_create_null_value)();
+	idx_t (*duckdb_get_list_size)(duckdb_value value);
+	duckdb_value (*duckdb_get_list_child)(duckdb_value value, idx_t index);
+	duckdb_value (*duckdb_create_enum_value)(duckdb_logical_type type, uint64_t value);
+	uint64_t (*duckdb_get_enum_value)(duckdb_value value);
+	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
 	duckdb_logical_type (*duckdb_create_logical_type)(duckdb_type type);
 	char *(*duckdb_logical_type_get_alias)(duckdb_logical_type type);
+	void (*duckdb_logical_type_set_alias)(duckdb_logical_type type, const char *alias);
 	duckdb_logical_type (*duckdb_create_list_type)(duckdb_logical_type type);
 	duckdb_logical_type (*duckdb_create_array_type)(duckdb_logical_type type, idx_t array_size);
 	duckdb_logical_type (*duckdb_create_map_type)(duckdb_logical_type key_type, duckdb_logical_type value_type);
@@ -211,7 +264,8 @@ typedef struct {
 	char *(*duckdb_union_type_member_name)(duckdb_logical_type type, idx_t index);
 	duckdb_logical_type (*duckdb_union_type_member_type)(duckdb_logical_type type, idx_t index);
 	void (*duckdb_destroy_logical_type)(duckdb_logical_type *type);
-	duckdb_data_chunk (*duckdb_fetch_chunk)(duckdb_result result);
+	duckdb_state (*duckdb_register_logical_type)(duckdb_connection con, duckdb_logical_type type,
+	                                             duckdb_create_type_info info);
 	duckdb_data_chunk (*duckdb_create_data_chunk)(duckdb_logical_type *types, idx_t column_count);
 	void (*duckdb_destroy_data_chunk)(duckdb_data_chunk *chunk);
 	void (*duckdb_data_chunk_reset)(duckdb_data_chunk chunk);
@@ -238,6 +292,9 @@ typedef struct {
 	duckdb_scalar_function (*duckdb_create_scalar_function)();
 	void (*duckdb_destroy_scalar_function)(duckdb_scalar_function *scalar_function);
 	void (*duckdb_scalar_function_set_name)(duckdb_scalar_function scalar_function, const char *name);
+	void (*duckdb_scalar_function_set_varargs)(duckdb_scalar_function scalar_function, duckdb_logical_type type);
+	void (*duckdb_scalar_function_set_special_handling)(duckdb_scalar_function scalar_function);
+	void (*duckdb_scalar_function_set_volatile)(duckdb_scalar_function scalar_function);
 	void (*duckdb_scalar_function_add_parameter)(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 	void (*duckdb_scalar_function_set_return_type)(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 	void (*duckdb_scalar_function_set_extra_info)(duckdb_scalar_function scalar_function, void *extra_info,
@@ -245,6 +302,39 @@ typedef struct {
 	void (*duckdb_scalar_function_set_function)(duckdb_scalar_function scalar_function,
 	                                            duckdb_scalar_function_t function);
 	duckdb_state (*duckdb_register_scalar_function)(duckdb_connection con, duckdb_scalar_function scalar_function);
+	void *(*duckdb_scalar_function_get_extra_info)(duckdb_function_info info);
+	void (*duckdb_scalar_function_set_error)(duckdb_function_info info, const char *error);
+	duckdb_scalar_function_set (*duckdb_create_scalar_function_set)(const char *name);
+	void (*duckdb_destroy_scalar_function_set)(duckdb_scalar_function_set *scalar_function_set);
+	duckdb_state (*duckdb_add_scalar_function_to_set)(duckdb_scalar_function_set set, duckdb_scalar_function function);
+	duckdb_state (*duckdb_register_scalar_function_set)(duckdb_connection con, duckdb_scalar_function_set set);
+	duckdb_aggregate_function (*duckdb_create_aggregate_function)();
+	void (*duckdb_destroy_aggregate_function)(duckdb_aggregate_function *aggregate_function);
+	void (*duckdb_aggregate_function_set_name)(duckdb_aggregate_function aggregate_function, const char *name);
+	void (*duckdb_aggregate_function_add_parameter)(duckdb_aggregate_function aggregate_function,
+	                                                duckdb_logical_type type);
+	void (*duckdb_aggregate_function_set_return_type)(duckdb_aggregate_function aggregate_function,
+	                                                  duckdb_logical_type type);
+	void (*duckdb_aggregate_function_set_functions)(duckdb_aggregate_function aggregate_function,
+	                                                duckdb_aggregate_state_size state_size,
+	                                                duckdb_aggregate_init_t state_init,
+	                                                duckdb_aggregate_update_t update,
+	                                                duckdb_aggregate_combine_t combine,
+	                                                duckdb_aggregate_finalize_t finalize);
+	void (*duckdb_aggregate_function_set_destructor)(duckdb_aggregate_function aggregate_function,
+	                                                 duckdb_aggregate_destroy_t destroy);
+	duckdb_state (*duckdb_register_aggregate_function)(duckdb_connection con,
+	                                                   duckdb_aggregate_function aggregate_function);
+	void (*duckdb_aggregate_function_set_special_handling)(duckdb_aggregate_function aggregate_function);
+	void (*duckdb_aggregate_function_set_extra_info)(duckdb_aggregate_function aggregate_function, void *extra_info,
+	                                                 duckdb_delete_callback_t destroy);
+	void *(*duckdb_aggregate_function_get_extra_info)(duckdb_function_info info);
+	void (*duckdb_aggregate_function_set_error)(duckdb_function_info info, const char *error);
+	duckdb_aggregate_function_set (*duckdb_create_aggregate_function_set)(const char *name);
+	void (*duckdb_destroy_aggregate_function_set)(duckdb_aggregate_function_set *aggregate_function_set);
+	duckdb_state (*duckdb_add_aggregate_function_to_set)(duckdb_aggregate_function_set set,
+	                                                     duckdb_aggregate_function function);
+	duckdb_state (*duckdb_register_aggregate_function_set)(duckdb_connection con, duckdb_aggregate_function_set set);
 	duckdb_table_function (*duckdb_create_table_function)();
 	void (*duckdb_destroy_table_function)(duckdb_table_function *table_function);
 	void (*duckdb_table_function_set_name)(duckdb_table_function table_function, const char *name);
@@ -285,14 +375,23 @@ typedef struct {
 	void (*duckdb_replacement_scan_set_function_name)(duckdb_replacement_scan_info info, const char *function_name);
 	void (*duckdb_replacement_scan_add_parameter)(duckdb_replacement_scan_info info, duckdb_value parameter);
 	void (*duckdb_replacement_scan_set_error)(duckdb_replacement_scan_info info, const char *error);
+	duckdb_profiling_info (*duckdb_get_profiling_info)(duckdb_connection connection);
+	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
+	duckdb_value (*duckdb_profiling_info_get_metrics)(duckdb_profiling_info info);
+	idx_t (*duckdb_profiling_info_get_child_count)(duckdb_profiling_info info);
+	duckdb_profiling_info (*duckdb_profiling_info_get_child)(duckdb_profiling_info info, idx_t index);
 	duckdb_state (*duckdb_appender_create)(duckdb_connection connection, const char *schema, const char *table,
 	                                       duckdb_appender *out_appender);
+	duckdb_state (*duckdb_appender_create_ext)(duckdb_connection connection, const char *catalog, const char *schema,
+	                                           const char *table, duckdb_appender *out_appender);
 	idx_t (*duckdb_appender_column_count)(duckdb_appender appender);
 	duckdb_logical_type (*duckdb_appender_column_type)(duckdb_appender appender, idx_t col_idx);
 	const char *(*duckdb_appender_error)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_flush)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_close)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_destroy)(duckdb_appender *appender);
+	duckdb_state (*duckdb_appender_add_column)(duckdb_appender appender, const char *name);
+	duckdb_state (*duckdb_appender_clear_columns)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_begin_row)(duckdb_appender appender);
 	duckdb_state (*duckdb_appender_end_row)(duckdb_appender appender);
 	duckdb_state (*duckdb_append_default)(duckdb_appender appender);
@@ -318,6 +417,15 @@ typedef struct {
 	duckdb_state (*duckdb_append_blob)(duckdb_appender appender, const void *data, idx_t length);
 	duckdb_state (*duckdb_append_null)(duckdb_appender appender);
 	duckdb_state (*duckdb_append_data_chunk)(duckdb_appender appender, duckdb_data_chunk chunk);
+	duckdb_state (*duckdb_table_description_create)(duckdb_connection connection, const char *schema, const char *table,
+	                                                duckdb_table_description *out);
+	duckdb_state (*duckdb_table_description_create_ext)(duckdb_connection connection, const char *catalog,
+	                                                    const char *schema, const char *table,
+	                                                    duckdb_table_description *out);
+	void (*duckdb_table_description_destroy)(duckdb_table_description *table_description);
+	const char *(*duckdb_table_description_error)(duckdb_table_description table_description);
+	duckdb_state (*duckdb_column_has_default)(duckdb_table_description table_description, idx_t index, bool *out);
+	char *(*duckdb_table_description_get_column_name)(duckdb_table_description table_description, idx_t index);
 	void (*duckdb_execute_tasks)(duckdb_database database, idx_t max_tasks);
 	duckdb_task_state (*duckdb_create_task_state)(duckdb_database database);
 	void (*duckdb_execute_tasks_state)(duckdb_task_state state);
@@ -326,97 +434,7 @@ typedef struct {
 	bool (*duckdb_task_state_is_finished)(duckdb_task_state state);
 	void (*duckdb_destroy_task_state)(duckdb_task_state state);
 	bool (*duckdb_execution_is_finished)(duckdb_connection con);
-	duckdb_profiling_info (*duckdb_get_profiling_info)(duckdb_connection connection);
-	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
-	idx_t (*duckdb_profiling_info_get_child_count)(duckdb_profiling_info info);
-	duckdb_profiling_info (*duckdb_profiling_info_get_child)(duckdb_profiling_info info, idx_t index);
-	duckdb_value (*duckdb_profiling_info_get_metrics)(duckdb_profiling_info info);
-	void (*duckdb_scalar_function_set_varargs)(duckdb_scalar_function scalar_function, duckdb_logical_type type);
-	void (*duckdb_scalar_function_set_special_handling)(duckdb_scalar_function scalar_function);
-	void (*duckdb_scalar_function_set_volatile)(duckdb_scalar_function scalar_function);
-	void *(*duckdb_scalar_function_get_extra_info)(duckdb_function_info info);
-	void (*duckdb_scalar_function_set_error)(duckdb_function_info info, const char *error);
-	duckdb_state (*duckdb_table_description_create)(duckdb_connection connection, const char *schema, const char *table,
-	                                                duckdb_table_description *out);
-	void (*duckdb_table_description_destroy)(duckdb_table_description *table_description);
-	const char *(*duckdb_table_description_error)(duckdb_table_description table_description);
-	duckdb_error_type (*duckdb_result_error_type)(duckdb_result *result);
-	uint32_t (*duckdb_string_t_length)(duckdb_string_t string);
-	const char *(*duckdb_string_t_data)(duckdb_string_t *string);
-	duckdb_value (*duckdb_create_bool)(bool input);
-	duckdb_value (*duckdb_create_int8)(int8_t input);
-	duckdb_value (*duckdb_create_uint8)(uint8_t input);
-	duckdb_value (*duckdb_create_int16)(int16_t input);
-	duckdb_value (*duckdb_create_uint16)(uint16_t input);
-	duckdb_value (*duckdb_create_int32)(int32_t input);
-	duckdb_value (*duckdb_create_uint32)(uint32_t input);
-	duckdb_value (*duckdb_create_uint64)(uint64_t input);
-	duckdb_value (*duckdb_create_hugeint)(duckdb_hugeint input);
-	duckdb_value (*duckdb_create_uhugeint)(duckdb_uhugeint input);
-	duckdb_value (*duckdb_create_float)(float input);
-	duckdb_value (*duckdb_create_double)(double input);
-	duckdb_value (*duckdb_create_date)(duckdb_date input);
-	duckdb_value (*duckdb_create_time)(duckdb_time input);
-	duckdb_value (*duckdb_create_time_tz_value)(duckdb_time_tz value);
-	duckdb_value (*duckdb_create_timestamp)(duckdb_timestamp input);
-	duckdb_value (*duckdb_create_interval)(duckdb_interval input);
-	duckdb_value (*duckdb_create_blob)(const uint8_t *data, idx_t length);
-	bool (*duckdb_get_bool)(duckdb_value val);
-	int8_t (*duckdb_get_int8)(duckdb_value val);
-	uint8_t (*duckdb_get_uint8)(duckdb_value val);
-	int16_t (*duckdb_get_int16)(duckdb_value val);
-	uint16_t (*duckdb_get_uint16)(duckdb_value val);
-	int32_t (*duckdb_get_int32)(duckdb_value val);
-	uint32_t (*duckdb_get_uint32)(duckdb_value val);
-	uint64_t (*duckdb_get_uint64)(duckdb_value val);
-	duckdb_hugeint (*duckdb_get_hugeint)(duckdb_value val);
-	duckdb_uhugeint (*duckdb_get_uhugeint)(duckdb_value val);
-	float (*duckdb_get_float)(duckdb_value val);
-	double (*duckdb_get_double)(duckdb_value val);
-	duckdb_date (*duckdb_get_date)(duckdb_value val);
-	duckdb_time (*duckdb_get_time)(duckdb_value val);
-	duckdb_time_tz (*duckdb_get_time_tz)(duckdb_value val);
-	duckdb_timestamp (*duckdb_get_timestamp)(duckdb_value val);
-	duckdb_interval (*duckdb_get_interval)(duckdb_value val);
-	duckdb_logical_type (*duckdb_get_value_type)(duckdb_value val);
-	duckdb_blob (*duckdb_get_blob)(duckdb_value val);
-	duckdb_scalar_function_set (*duckdb_create_scalar_function_set)(const char *name);
-	void (*duckdb_destroy_scalar_function_set)(duckdb_scalar_function_set *scalar_function_set);
-	duckdb_state (*duckdb_add_scalar_function_to_set)(duckdb_scalar_function_set set, duckdb_scalar_function function);
-	duckdb_state (*duckdb_register_scalar_function_set)(duckdb_connection con, duckdb_scalar_function_set set);
-	duckdb_aggregate_function_set (*duckdb_create_aggregate_function_set)(const char *name);
-	void (*duckdb_destroy_aggregate_function_set)(duckdb_aggregate_function_set *aggregate_function_set);
-	duckdb_state (*duckdb_add_aggregate_function_to_set)(duckdb_aggregate_function_set set,
-	                                                     duckdb_aggregate_function function);
-	duckdb_state (*duckdb_register_aggregate_function_set)(duckdb_connection con, duckdb_aggregate_function_set set);
-	idx_t (*duckdb_get_map_size)(duckdb_value value);
-	duckdb_value (*duckdb_get_map_key)(duckdb_value value, idx_t index);
-	duckdb_value (*duckdb_get_map_value)(duckdb_value value, idx_t index);
-	duckdb_aggregate_function (*duckdb_create_aggregate_function)();
-	void (*duckdb_destroy_aggregate_function)(duckdb_aggregate_function *aggregate_function);
-	void (*duckdb_aggregate_function_set_name)(duckdb_aggregate_function aggregate_function, const char *name);
-	void (*duckdb_aggregate_function_add_parameter)(duckdb_aggregate_function aggregate_function,
-	                                                duckdb_logical_type type);
-	void (*duckdb_aggregate_function_set_return_type)(duckdb_aggregate_function aggregate_function,
-	                                                  duckdb_logical_type type);
-	void (*duckdb_aggregate_function_set_functions)(duckdb_aggregate_function aggregate_function,
-	                                                duckdb_aggregate_state_size state_size,
-	                                                duckdb_aggregate_init_t state_init,
-	                                                duckdb_aggregate_update_t update,
-	                                                duckdb_aggregate_combine_t combine,
-	                                                duckdb_aggregate_finalize_t finalize);
-	void (*duckdb_aggregate_function_set_destructor)(duckdb_aggregate_function aggregate_function,
-	                                                 duckdb_aggregate_destroy_t destroy);
-	duckdb_state (*duckdb_register_aggregate_function)(duckdb_connection con,
-	                                                   duckdb_aggregate_function aggregate_function);
-	void (*duckdb_aggregate_function_set_special_handling)(duckdb_aggregate_function aggregate_function);
-	void (*duckdb_aggregate_function_set_extra_info)(duckdb_aggregate_function aggregate_function, void *extra_info,
-	                                                 duckdb_delete_callback_t destroy);
-	void *(*duckdb_aggregate_function_get_extra_info)(duckdb_function_info info);
-	void (*duckdb_aggregate_function_set_error)(duckdb_function_info info, const char *error);
-	void (*duckdb_logical_type_set_alias)(duckdb_logical_type type, const char *alias);
-	duckdb_state (*duckdb_register_logical_type)(duckdb_connection con, duckdb_logical_type type,
-	                                             duckdb_create_type_info info);
+	duckdb_data_chunk (*duckdb_fetch_chunk)(duckdb_result result);
 	duckdb_cast_function (*duckdb_create_cast_function)();
 	void (*duckdb_cast_function_set_source_type)(duckdb_cast_function cast_function, duckdb_logical_type source_type);
 	void (*duckdb_cast_function_set_target_type)(duckdb_cast_function cast_function, duckdb_logical_type target_type);
@@ -431,13 +449,17 @@ typedef struct {
 	                                           duckdb_vector output);
 	duckdb_state (*duckdb_register_cast_function)(duckdb_connection con, duckdb_cast_function cast_function);
 	void (*duckdb_destroy_cast_function)(duckdb_cast_function *cast_function);
+#endif
+
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE // unstable
+	// WARNING! the functions below are not (yet) stable
+
 	idx_t (*duckdb_row_count)(duckdb_result *result);
 	void *(*duckdb_column_data)(duckdb_result *result, idx_t col);
 	bool *(*duckdb_nullmask_data)(duckdb_result *result, idx_t col);
 	duckdb_data_chunk (*duckdb_result_get_chunk)(duckdb_result result, idx_t chunk_index);
 	bool (*duckdb_result_is_streaming)(duckdb_result result);
 	idx_t (*duckdb_result_chunk_count)(duckdb_result result);
-	duckdb_result_type (*duckdb_result_return_type)(duckdb_result result);
 	bool (*duckdb_value_boolean)(duckdb_result *result, idx_t col, idx_t row);
 	int8_t (*duckdb_value_int8)(duckdb_result *result, idx_t col, idx_t row);
 	int16_t (*duckdb_value_int16)(duckdb_result *result, idx_t col, idx_t row);
@@ -466,7 +488,6 @@ typedef struct {
 	                                                  duckdb_result *out_result);
 	duckdb_state (*duckdb_pending_prepared_streaming)(duckdb_prepared_statement prepared_statement,
 	                                                  duckdb_pending_result *out_result);
-	duckdb_state (*duckdb_column_has_default)(duckdb_table_description table_description, idx_t index, bool *out);
 	duckdb_state (*duckdb_query_arrow)(duckdb_connection connection, const char *query, duckdb_arrow *out_result);
 	duckdb_state (*duckdb_query_arrow_schema)(duckdb_arrow result, duckdb_arrow_schema *out_schema);
 	duckdb_state (*duckdb_prepared_arrow_schema)(duckdb_prepared_statement prepared, duckdb_arrow_schema *out_schema);
@@ -485,22 +506,6 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
-	duckdb_state (*duckdb_appender_create_ext)(duckdb_connection connection, const char *catalog, const char *schema,
-	                                           const char *table, duckdb_appender *out_appender);
-	duckdb_state (*duckdb_table_description_create_ext)(duckdb_connection connection, const char *catalog,
-	                                                    const char *schema, const char *table,
-	                                                    duckdb_table_description *out);
-	char *(*duckdb_table_description_get_column_name)(duckdb_table_description table_description, idx_t index);
-	duckdb_logical_type (*duckdb_param_logical_type)(duckdb_prepared_statement prepared_statement, idx_t param_idx);
-	bool (*duckdb_is_null_value)(duckdb_value value);
-	duckdb_value (*duckdb_create_null_value)();
-	idx_t (*duckdb_get_list_size)(duckdb_value value);
-	duckdb_value (*duckdb_get_list_child)(duckdb_value value, idx_t index);
-	duckdb_value (*duckdb_create_enum_value)(duckdb_logical_type type, uint64_t value);
-	uint64_t (*duckdb_get_enum_value)(duckdb_value value);
-	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
-	duckdb_state (*duckdb_appender_add_column)(duckdb_appender appender, const char *name);
-	duckdb_state (*duckdb_appender_clear_columns)(duckdb_appender appender);
 #endif
 
 } duckdb_ext_api_v1;
@@ -529,40 +534,10 @@ typedef struct {
 #define duckdb_result_statement_type                   duckdb_ext_api.duckdb_result_statement_type
 #define duckdb_column_logical_type                     duckdb_ext_api.duckdb_column_logical_type
 #define duckdb_column_count                            duckdb_ext_api.duckdb_column_count
-#define duckdb_row_count                               duckdb_ext_api.duckdb_row_count
 #define duckdb_rows_changed                            duckdb_ext_api.duckdb_rows_changed
-#define duckdb_column_data                             duckdb_ext_api.duckdb_column_data
-#define duckdb_nullmask_data                           duckdb_ext_api.duckdb_nullmask_data
 #define duckdb_result_error                            duckdb_ext_api.duckdb_result_error
 #define duckdb_result_error_type                       duckdb_ext_api.duckdb_result_error_type
-#define duckdb_result_get_chunk                        duckdb_ext_api.duckdb_result_get_chunk
-#define duckdb_result_is_streaming                     duckdb_ext_api.duckdb_result_is_streaming
-#define duckdb_result_chunk_count                      duckdb_ext_api.duckdb_result_chunk_count
 #define duckdb_result_return_type                      duckdb_ext_api.duckdb_result_return_type
-#define duckdb_value_boolean                           duckdb_ext_api.duckdb_value_boolean
-#define duckdb_value_int8                              duckdb_ext_api.duckdb_value_int8
-#define duckdb_value_int16                             duckdb_ext_api.duckdb_value_int16
-#define duckdb_value_int32                             duckdb_ext_api.duckdb_value_int32
-#define duckdb_value_int64                             duckdb_ext_api.duckdb_value_int64
-#define duckdb_value_hugeint                           duckdb_ext_api.duckdb_value_hugeint
-#define duckdb_value_uhugeint                          duckdb_ext_api.duckdb_value_uhugeint
-#define duckdb_value_decimal                           duckdb_ext_api.duckdb_value_decimal
-#define duckdb_value_uint8                             duckdb_ext_api.duckdb_value_uint8
-#define duckdb_value_uint16                            duckdb_ext_api.duckdb_value_uint16
-#define duckdb_value_uint32                            duckdb_ext_api.duckdb_value_uint32
-#define duckdb_value_uint64                            duckdb_ext_api.duckdb_value_uint64
-#define duckdb_value_float                             duckdb_ext_api.duckdb_value_float
-#define duckdb_value_double                            duckdb_ext_api.duckdb_value_double
-#define duckdb_value_date                              duckdb_ext_api.duckdb_value_date
-#define duckdb_value_time                              duckdb_ext_api.duckdb_value_time
-#define duckdb_value_timestamp                         duckdb_ext_api.duckdb_value_timestamp
-#define duckdb_value_interval                          duckdb_ext_api.duckdb_value_interval
-#define duckdb_value_varchar                           duckdb_ext_api.duckdb_value_varchar
-#define duckdb_value_string                            duckdb_ext_api.duckdb_value_string
-#define duckdb_value_varchar_internal                  duckdb_ext_api.duckdb_value_varchar_internal
-#define duckdb_value_string_internal                   duckdb_ext_api.duckdb_value_string_internal
-#define duckdb_value_blob                              duckdb_ext_api.duckdb_value_blob
-#define duckdb_value_is_null                           duckdb_ext_api.duckdb_value_is_null
 #define duckdb_malloc                                  duckdb_ext_api.duckdb_malloc
 #define duckdb_free                                    duckdb_ext_api.duckdb_free
 #define duckdb_vector_size                             duckdb_ext_api.duckdb_vector_size
@@ -620,13 +595,11 @@ typedef struct {
 #define duckdb_bind_blob                               duckdb_ext_api.duckdb_bind_blob
 #define duckdb_bind_null                               duckdb_ext_api.duckdb_bind_null
 #define duckdb_execute_prepared                        duckdb_ext_api.duckdb_execute_prepared
-#define duckdb_execute_prepared_streaming              duckdb_ext_api.duckdb_execute_prepared_streaming
 #define duckdb_extract_statements                      duckdb_ext_api.duckdb_extract_statements
 #define duckdb_prepare_extracted_statement             duckdb_ext_api.duckdb_prepare_extracted_statement
 #define duckdb_extract_statements_error                duckdb_ext_api.duckdb_extract_statements_error
 #define duckdb_destroy_extracted                       duckdb_ext_api.duckdb_destroy_extracted
 #define duckdb_pending_prepared                        duckdb_ext_api.duckdb_pending_prepared
-#define duckdb_pending_prepared_streaming              duckdb_ext_api.duckdb_pending_prepared_streaming
 #define duckdb_destroy_pending                         duckdb_ext_api.duckdb_destroy_pending
 #define duckdb_pending_error                           duckdb_ext_api.duckdb_pending_error
 #define duckdb_pending_execute_task                    duckdb_ext_api.duckdb_pending_execute_task
@@ -858,20 +831,6 @@ typedef struct {
 #define duckdb_table_description_error              duckdb_ext_api.duckdb_table_description_error
 #define duckdb_column_has_default                   duckdb_ext_api.duckdb_column_has_default
 #define duckdb_table_description_get_column_name    duckdb_ext_api.duckdb_table_description_get_column_name
-#define duckdb_query_arrow                          duckdb_ext_api.duckdb_query_arrow
-#define duckdb_query_arrow_schema                   duckdb_ext_api.duckdb_query_arrow_schema
-#define duckdb_prepared_arrow_schema                duckdb_ext_api.duckdb_prepared_arrow_schema
-#define duckdb_result_arrow_array                   duckdb_ext_api.duckdb_result_arrow_array
-#define duckdb_query_arrow_array                    duckdb_ext_api.duckdb_query_arrow_array
-#define duckdb_arrow_column_count                   duckdb_ext_api.duckdb_arrow_column_count
-#define duckdb_arrow_row_count                      duckdb_ext_api.duckdb_arrow_row_count
-#define duckdb_arrow_rows_changed                   duckdb_ext_api.duckdb_arrow_rows_changed
-#define duckdb_query_arrow_error                    duckdb_ext_api.duckdb_query_arrow_error
-#define duckdb_destroy_arrow                        duckdb_ext_api.duckdb_destroy_arrow
-#define duckdb_destroy_arrow_stream                 duckdb_ext_api.duckdb_destroy_arrow_stream
-#define duckdb_execute_prepared_arrow               duckdb_ext_api.duckdb_execute_prepared_arrow
-#define duckdb_arrow_scan                           duckdb_ext_api.duckdb_arrow_scan
-#define duckdb_arrow_array_scan                     duckdb_ext_api.duckdb_arrow_array_scan
 #define duckdb_execute_tasks                        duckdb_ext_api.duckdb_execute_tasks
 #define duckdb_create_task_state                    duckdb_ext_api.duckdb_create_task_state
 #define duckdb_execute_tasks_state                  duckdb_ext_api.duckdb_execute_tasks_state
@@ -880,7 +839,6 @@ typedef struct {
 #define duckdb_task_state_is_finished               duckdb_ext_api.duckdb_task_state_is_finished
 #define duckdb_destroy_task_state                   duckdb_ext_api.duckdb_destroy_task_state
 #define duckdb_execution_is_finished                duckdb_ext_api.duckdb_execution_is_finished
-#define duckdb_stream_fetch_chunk                   duckdb_ext_api.duckdb_stream_fetch_chunk
 #define duckdb_fetch_chunk                          duckdb_ext_api.duckdb_fetch_chunk
 #define duckdb_create_cast_function                 duckdb_ext_api.duckdb_create_cast_function
 #define duckdb_cast_function_set_source_type        duckdb_ext_api.duckdb_cast_function_set_source_type
@@ -894,6 +852,55 @@ typedef struct {
 #define duckdb_cast_function_set_row_error          duckdb_ext_api.duckdb_cast_function_set_row_error
 #define duckdb_register_cast_function               duckdb_ext_api.duckdb_register_cast_function
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
+
+// Version unstable
+#define duckdb_row_count                  duckdb_ext_api.duckdb_row_count
+#define duckdb_column_data                duckdb_ext_api.duckdb_column_data
+#define duckdb_nullmask_data              duckdb_ext_api.duckdb_nullmask_data
+#define duckdb_result_get_chunk           duckdb_ext_api.duckdb_result_get_chunk
+#define duckdb_result_is_streaming        duckdb_ext_api.duckdb_result_is_streaming
+#define duckdb_result_chunk_count         duckdb_ext_api.duckdb_result_chunk_count
+#define duckdb_value_boolean              duckdb_ext_api.duckdb_value_boolean
+#define duckdb_value_int8                 duckdb_ext_api.duckdb_value_int8
+#define duckdb_value_int16                duckdb_ext_api.duckdb_value_int16
+#define duckdb_value_int32                duckdb_ext_api.duckdb_value_int32
+#define duckdb_value_int64                duckdb_ext_api.duckdb_value_int64
+#define duckdb_value_hugeint              duckdb_ext_api.duckdb_value_hugeint
+#define duckdb_value_uhugeint             duckdb_ext_api.duckdb_value_uhugeint
+#define duckdb_value_decimal              duckdb_ext_api.duckdb_value_decimal
+#define duckdb_value_uint8                duckdb_ext_api.duckdb_value_uint8
+#define duckdb_value_uint16               duckdb_ext_api.duckdb_value_uint16
+#define duckdb_value_uint32               duckdb_ext_api.duckdb_value_uint32
+#define duckdb_value_uint64               duckdb_ext_api.duckdb_value_uint64
+#define duckdb_value_float                duckdb_ext_api.duckdb_value_float
+#define duckdb_value_double               duckdb_ext_api.duckdb_value_double
+#define duckdb_value_date                 duckdb_ext_api.duckdb_value_date
+#define duckdb_value_time                 duckdb_ext_api.duckdb_value_time
+#define duckdb_value_timestamp            duckdb_ext_api.duckdb_value_timestamp
+#define duckdb_value_interval             duckdb_ext_api.duckdb_value_interval
+#define duckdb_value_varchar              duckdb_ext_api.duckdb_value_varchar
+#define duckdb_value_string               duckdb_ext_api.duckdb_value_string
+#define duckdb_value_varchar_internal     duckdb_ext_api.duckdb_value_varchar_internal
+#define duckdb_value_string_internal      duckdb_ext_api.duckdb_value_string_internal
+#define duckdb_value_blob                 duckdb_ext_api.duckdb_value_blob
+#define duckdb_value_is_null              duckdb_ext_api.duckdb_value_is_null
+#define duckdb_execute_prepared_streaming duckdb_ext_api.duckdb_execute_prepared_streaming
+#define duckdb_pending_prepared_streaming duckdb_ext_api.duckdb_pending_prepared_streaming
+#define duckdb_query_arrow                duckdb_ext_api.duckdb_query_arrow
+#define duckdb_query_arrow_schema         duckdb_ext_api.duckdb_query_arrow_schema
+#define duckdb_prepared_arrow_schema      duckdb_ext_api.duckdb_prepared_arrow_schema
+#define duckdb_result_arrow_array         duckdb_ext_api.duckdb_result_arrow_array
+#define duckdb_query_arrow_array          duckdb_ext_api.duckdb_query_arrow_array
+#define duckdb_arrow_column_count         duckdb_ext_api.duckdb_arrow_column_count
+#define duckdb_arrow_row_count            duckdb_ext_api.duckdb_arrow_row_count
+#define duckdb_arrow_rows_changed         duckdb_ext_api.duckdb_arrow_rows_changed
+#define duckdb_query_arrow_error          duckdb_ext_api.duckdb_query_arrow_error
+#define duckdb_destroy_arrow              duckdb_ext_api.duckdb_destroy_arrow
+#define duckdb_destroy_arrow_stream       duckdb_ext_api.duckdb_destroy_arrow_stream
+#define duckdb_execute_prepared_arrow     duckdb_ext_api.duckdb_execute_prepared_arrow
+#define duckdb_arrow_scan                 duckdb_ext_api.duckdb_arrow_scan
+#define duckdb_arrow_array_scan           duckdb_ext_api.duckdb_arrow_array_scan
+#define duckdb_stream_fetch_chunk         duckdb_ext_api.duckdb_stream_fetch_chunk
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros

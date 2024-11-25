@@ -28,7 +28,7 @@ ALLOW_UNCOMMENTED_PARAMS = True
 DUCKDB_EXT_API_VAR_NAME = 'duckdb_ext_api'
 DUCKDB_EXT_API_STRUCT_TYPENAME = 'duckdb_ext_api_v1'
 
-DEV_VERSION_TAG = 'dev'
+DEV_VERSION_TAG = 'unstable'
 
 # Define the extension struct
 EXT_API_DEFINITION_PATTERN = 'src/include/duckdb/main/capi/header_generation/apis/v1/*/*.json'
@@ -444,7 +444,7 @@ def create_struct_version_defines(api_definition):
         if prev_version:
             prev_major, prev_minor, prev_patch = parse_semver(prev_version)
             if current_version == DEV_VERSION_TAG:
-                result += "#ifdef  DUCKDB_EXTENSION_API_VERSION_DEV\n"
+                result += "#ifdef  DUCKDB_EXTENSION_API_VERSION_UNSTABLE\n"
                 result += f"#define  DUCKDB_EXTENSION_API_VERSION_{prev_major}_{prev_minor}_{prev_patch}\n"
                 result += "#endif\n"
             else:
@@ -487,7 +487,7 @@ def create_extension_api_struct(
         version = api_version_entry['version']
         if version == DEV_VERSION_TAG:
             if add_version_defines:
-                extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_DEV // {version}\n"
+                extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_UNSTABLE // {version}\n"
             else:
                 extension_struct_finished += f"// {version}\n"
             extension_struct_finished += f'    // WARNING! the functions below are not (yet) stable \n\n'
@@ -597,8 +597,8 @@ def create_duckdb_ext_h(
 #endif
 
 //! Set the DUCKDB_EXTENSION_API_VERSION_STRING which is passed to DuckDB on extension load
-#if DUCKDB_EXTENSION_API_VERSION_DEV
-#define DUCKDB_EXTENSION_API_VERSION_STRING "dev"
+#ifdef DUCKDB_EXTENSION_API_UNSTABLE_VERSION
+#define DUCKDB_EXTENSION_API_VERSION_STRING DUCKDB_EXTENSION_API_UNSTABLE_VERSION
 #else
 #define DUCKDB_EXTENSION_API_VERSION_STRING DUCKDB_EXTENSION_SEMVER_STRING(DUCKDB_EXTENSION_API_VERSION_MAJOR, DUCKDB_EXTENSION_API_VERSION_MINOR, DUCKDB_EXTENSION_API_VERSION_PATCH)
 #endif
