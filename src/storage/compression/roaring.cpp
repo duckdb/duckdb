@@ -379,6 +379,7 @@ public:
 	}
 
 public:
+	template <bool EMPTY = false>
 	void AppendVector(Vector &input, idx_t input_size, const std::function<void()> &on_full_container) {
 		UnifiedVectorFormat unified;
 		input.ToUnifiedFormat(input_size, unified);
@@ -388,7 +389,7 @@ public:
 			idx_t appended = 0;
 			while (appended < input_size) {
 				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
-				Append(false, NumericCast<uint16_t>(to_append));
+				Append<EMPTY>(false, NumericCast<uint16_t>(to_append));
 				if (IsFull()) {
 					on_full_container();
 				}
@@ -401,7 +402,7 @@ public:
 				for (idx_t i = 0; i < to_append; i++) {
 					auto idx = unified.sel->get_index(appended + i);
 					auto is_null = validity.RowIsValidUnsafe(idx);
-					Append(!is_null);
+					Append<EMPTY>(!is_null);
 				}
 				if (IsFull()) {
 					on_full_container();
@@ -411,8 +412,10 @@ public:
 		}
 	}
 
+	template <bool EMPTY = false>
 	void Append(bool null, uint16_t amount = 1) {
 		if (uncompressed) {
+			D_ASSERT(!EMPTY);
 			if (null) {
 				ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
 				SetInvalidRange(mask, count, count + amount);
@@ -423,37 +426,43 @@ public:
 
 		// Adjust the run
 		if (count && (null != last_is_null) && !null && run_idx < MAX_RUN_IDX) {
-			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
-				auto &last_run = runs[run_idx];
-				// End the last run
-				last_run.length = (count - last_run.start) - 1;
+			if (!EMPTY) {
+				if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+					auto &last_run = runs[run_idx];
+					// End the last run
+					last_run.length = (count - last_run.start) - 1;
+				}
+				compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
+				run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 			}
-			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
-			run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 			run_idx++;
 		} else if (null && (!count || null != last_is_null) && run_idx < MAX_RUN_IDX) {
-			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
-				auto &current_run = runs[run_idx];
-				// Initialize a new run
-				current_run.start = count;
+			if (!EMPTY) {
+				if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+					auto &current_run = runs[run_idx];
+					// Initialize a new run
+					current_run.start = count;
+				}
+				compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
+				run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 			}
-			compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
-			run_counts[count / COMPRESSED_SEGMENT_SIZE]++;
 		}
 
 		// Add to the array
 		auto &current_array_idx = array_idx[null];
 		if (current_array_idx < MAX_ARRAY_IDX) {
-			if (current_array_idx + amount <= MAX_ARRAY_IDX) {
-				for (uint16_t i = 0; i < amount; i++) {
-					compressed_arrays[null][current_array_idx + i] =
-					    static_cast<uint8_t>((count + i) % COMPRESSED_SEGMENT_SIZE);
-					array_counts[null][(count + i) / COMPRESSED_SEGMENT_SIZE]++;
+			if (!EMPTY) {
+				if (current_array_idx + amount <= MAX_ARRAY_IDX) {
+					for (uint16_t i = 0; i < amount; i++) {
+						compressed_arrays[null][current_array_idx + i] =
+						    static_cast<uint8_t>((count + i) % COMPRESSED_SEGMENT_SIZE);
+						array_counts[null][(count + i) / COMPRESSED_SEGMENT_SIZE]++;
+					}
 				}
-			}
-			if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
-				for (uint16_t i = 0; i < amount; i++) {
-					arrays[null][current_array_idx + i] = count + i;
+				if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
+					for (uint16_t i = 0; i < amount; i++) {
+						arrays[null][current_array_idx + i] = count + i;
+					}
 				}
 			}
 			current_array_idx += amount;
@@ -657,54 +666,6 @@ public:
 		idx_t runs_count = metadata_collection.GetRunContainerCount();
 		idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
 
-#ifdef DEBUG
-		idx_t container_index = 0;
-		idx_t container_size = container_state.count;
-		if (!metadata.IsUncompressed()) {
-			unique_ptr<ContainerScanState> scan_state;
-			if (metadata.IsRun()) {
-				D_ASSERT(metadata.IsInverted());
-				auto number_of_runs = metadata.NumberOfRuns();
-				if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
-					auto segments = container_state.run_counts;
-					auto data_ptr = container_state.compressed_runs;
-					scan_state = make_uniq<CompressedRunContainerScanState>(container_index, container_size,
-					                                                        number_of_runs, segments, data_ptr);
-				} else {
-					auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.runs);
-					scan_state =
-					    make_uniq<RunContainerScanState>(container_index, container_size, number_of_runs, data_ptr);
-				}
-			} else {
-				auto cardinality = metadata.Cardinality();
-				if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
-					if (metadata.IsInverted()) {
-						auto segments = reinterpret_cast<data_ptr_t>(container_state.array_counts[NULLS]);
-						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.compressed_arrays[NULLS]);
-						scan_state = make_uniq<CompressedArrayContainerScanState<NULLS>>(
-						    container_index, container_size, cardinality, segments, data_ptr);
-					} else {
-						auto segments = reinterpret_cast<data_ptr_t>(container_state.array_counts[NON_NULLS]);
-						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.compressed_arrays[NON_NULLS]);
-						scan_state = make_uniq<CompressedArrayContainerScanState<NON_NULLS>>(
-						    container_index, container_size, cardinality, segments, data_ptr);
-					}
-				} else {
-					if (metadata.IsInverted()) {
-						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.arrays[NULLS]);
-						scan_state = make_uniq<ArrayContainerScanState<NULLS>>(container_index, container_size,
-						                                                       cardinality, data_ptr);
-					} else {
-						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.arrays[NON_NULLS]);
-						scan_state = make_uniq<ArrayContainerScanState<NON_NULLS>>(container_index, container_size,
-						                                                           cardinality, data_ptr);
-					}
-				}
-			}
-			scan_state->Verify();
-		}
-#endif
-
 		if (metadata.IsRun()) {
 			runs_count++;
 		} else {
@@ -726,7 +687,7 @@ public:
 
 	void Analyze(Vector &input, idx_t count) {
 		auto &self = *this;
-		container_state.AppendVector(input, count, [&self]() { self.FlushContainer(); });
+		container_state.AppendVector<true>(input, count, [&self]() { self.FlushContainer(); });
 
 		this->count += count;
 	}
@@ -924,8 +885,54 @@ public:
 #ifdef DEBUG
 		auto container_index = GetContainerIndex();
 		auto analyzed_metadata = container_metadata[container_index];
-		auto actual_metadata = container_state.GetResult();
-		D_ASSERT(analyzed_metadata == actual_metadata);
+		auto metadata = container_state.GetResult();
+		D_ASSERT(analyzed_metadata == metadata);
+
+		idx_t container_size = container_state.count;
+		if (!metadata.IsUncompressed()) {
+			unique_ptr<ContainerScanState> scan_state;
+			if (metadata.IsRun()) {
+				D_ASSERT(metadata.IsInverted());
+				auto number_of_runs = metadata.NumberOfRuns();
+				if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
+					auto segments = container_state.run_counts;
+					auto data_ptr = container_state.compressed_runs;
+					scan_state = make_uniq<CompressedRunContainerScanState>(container_index, container_size,
+					                                                        number_of_runs, segments, data_ptr);
+				} else {
+					auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.runs);
+					scan_state =
+					    make_uniq<RunContainerScanState>(container_index, container_size, number_of_runs, data_ptr);
+				}
+			} else {
+				auto cardinality = metadata.Cardinality();
+				if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
+					if (metadata.IsInverted()) {
+						auto segments = reinterpret_cast<data_ptr_t>(container_state.array_counts[NULLS]);
+						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.compressed_arrays[NULLS]);
+						scan_state = make_uniq<CompressedArrayContainerScanState<NULLS>>(
+						    container_index, container_size, cardinality, segments, data_ptr);
+					} else {
+						auto segments = reinterpret_cast<data_ptr_t>(container_state.array_counts[NON_NULLS]);
+						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.compressed_arrays[NON_NULLS]);
+						scan_state = make_uniq<CompressedArrayContainerScanState<NON_NULLS>>(
+						    container_index, container_size, cardinality, segments, data_ptr);
+					}
+				} else {
+					if (metadata.IsInverted()) {
+						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.arrays[NULLS]);
+						scan_state = make_uniq<ArrayContainerScanState<NULLS>>(container_index, container_size,
+						                                                       cardinality, data_ptr);
+					} else {
+						auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.arrays[NON_NULLS]);
+						scan_state = make_uniq<ArrayContainerScanState<NON_NULLS>>(container_index, container_size,
+						                                                           cardinality, data_ptr);
+					}
+				}
+			}
+			scan_state->Verify();
+		}
+
 #endif
 		count += container_state.count;
 		bool has_nulls = container_state.null_count != 0;
