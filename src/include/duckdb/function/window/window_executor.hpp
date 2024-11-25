@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/window_segment_tree.hpp"
+#include "duckdb/function/window/window_segment_tree.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 

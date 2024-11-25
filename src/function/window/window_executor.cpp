@@ -1,4 +1,4 @@
-#include "duckdb/execution/window_executor.hpp"
+#include "duckdb/function/window/window_executor.hpp"
 
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"

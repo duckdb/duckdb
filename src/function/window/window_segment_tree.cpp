@@ -1,4 +1,4 @@
-#include "duckdb/execution/window_segment_tree.hpp"
+#include "duckdb/function/window/window_segment_tree.hpp"
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
@@ -6,7 +6,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/execution/window_executor.hpp"
+#include "duckdb/function/window/window_executor.hpp"
 
 #include <numeric>
 #include <thread>
