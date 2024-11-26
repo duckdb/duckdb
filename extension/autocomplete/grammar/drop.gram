@@ -13,7 +13,7 @@ DropEntries <-
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- 'MACRO'i 'TABLE'i IfExists? List(TableFunctionName)
 DropFunction <- FunctionType IfExists? List(FunctionName)
-DropSchema <- 'SCHEMA'i IfExists? List(SchemaName)
+DropSchema <- 'SCHEMA'i IfExists? List(QualifiedSchemaName)
 DropIndex <- 'INDEX'i IfExists? List(IndexName)
 DropSequence <- 'SEQUENCE'i IfExists? List(SequenceName)
 DropCollation <- 'COLLATION'i IfExists? List(CollationName)
@@ -25,3 +25,4 @@ FunctionType <- 'MACRO'i / 'FUNCTION'i
 DropBehavior <- 'CASCADE'i / 'RESTRICT'i
 
 IfExists <- 'IF'i 'EXISTS'i
+QualifiedSchemaName <- CatalogName? SchemaName

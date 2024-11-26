@@ -1,4 +1,4 @@
-CreateStatement <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt)
+CreateStatement <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt)
 OrReplace <- 'OR'i 'REPLACE'i
 Temporary <- 'TEMP'i / 'TEMPORARY'i
 
@@ -16,16 +16,25 @@ TableQualification <- TableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
-ColumnDefinition <- Identifier Type ColumnConstraint*
-ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint
+ColumnDefinition <- Identifier TypeOrGenerated ColumnConstraint*
+TypeOrGenerated <- Type / GeneratedColumn
+ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint
 NotNullConstraint <- 'NOT'i 'NULL'i
 UniqueConstraint <- 'UNIQUE'i
 PrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i
+DefaultValue <- 'DEFAULT'i Expression
+CheckConstraint <- 'CHECK'i Parens(Expression)
 
-TopLevelConstraint <- TopPrimaryKeyConstraint
+TopLevelConstraint <- TopPrimaryKeyConstraint / CheckConstraint
 TopPrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i ColumnIdList
 ColumnIdList <- Parens(List(Identifier))
 
 PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
 Identifier <- QuotedIdentifier / PlainIdentifier
+
+GeneratedColumn <- Type? Generated? 'AS'i Parens(Expression)  GeneratedColumnType?
+
+Generated <- 'GENERATED'i AlwaysOrByDefault?
+AlwaysOrByDefault <- 'ALWAYS'i / ('BY'i 'DEFAULT'i)
+GeneratedColumnType <- 'VIRTUAL'i / 'STORED'i

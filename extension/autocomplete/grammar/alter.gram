@@ -1,0 +1,26 @@
+AlterStatement <- 'ALTER'i AlterOptions
+
+
+AlterOptions <- AlterTableStmt
+
+AlterTableStmt <- 'TABLE'i IfExists? InsertTarget AlterTableOptions
+
+
+AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability
+
+AddConstraint <- 'ADD'i TopLevelConstraint
+AddColumn <- 'ADD'i 'COLUMN'i? IfNotExists? ColumnDefinition
+DropColumn <- 'DROP'i 'COLUMN'i? IfExists? ColumnName DropBehavior?
+AlterColumn <- 'ALTER'i 'COLUMN'i? Identifier AlterColumnEntry
+
+AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
+
+AddOrDropDefault <- AddDefault / DropDefault
+AddDefault <- 'SET'i 'DEFAULT'i Expression
+DropDefault <- 'DROP'i 'DEFAULT'i
+
+ChangeNullability <- ('DROP'i / 'SET'i) 'NOT'i 'NULL'i
+
+AlterType <- SetData? 'TYPE'i Type? UsingExpression?
+SetData <- 'SET'i 'DATA'i?
+UsingExpression <- 'USING'i Expression

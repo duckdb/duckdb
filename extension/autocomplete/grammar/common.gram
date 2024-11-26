@@ -11,7 +11,13 @@ Statement <-
 	ExplainStatement /
 	UpdateStatement /
 	PrepareStatement /
-	ExecuteStatement
+	ExecuteStatement /
+	AlterStatement /
+	TransactionStatement /
+	DeleteStatement /
+	AttachStatement /
+	UseStatement /
+	DetachStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier
@@ -34,7 +40,7 @@ StringLiteral <- '\'' [^\']* '\''
 Type <- (TimeType / RowType / MapType / UnionType / SimpleType) ArrayBounds*
 SimpleType <- TypeName TypeModifiers?
 TypeModifiers <- Parens(List(Expression))
-RowType <- 'ROW'i Parens(List(IdentifierType))
+RowType <- RowOrStruct Parens(List(IdentifierType))
 UnionType <- 'UNION'i Parens(List(IdentifierType))
 MapType <- 'MAP'i Parens(List(Type))
 IdentifierType <- Identifier Type
@@ -43,6 +49,8 @@ TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- 'TIME'i / 'TIMESTAMP'i
 TimeZone <- WithOrWithout 'TIME'i 'ZONE'i
 WithOrWithout <- 'WITH'i / 'WITHOUT'i
+
+RowOrStruct <- 'ROW'i / 'STRUCT'i
 
 # keywords
 ReservedKeyword <- 'ALL'i /

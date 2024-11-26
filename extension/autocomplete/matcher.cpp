@@ -81,7 +81,7 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (name == "BaseTableRef") {
+		if (name == "JoinQualifier") {
 			// Printer::Print("Found it!");
 		}
 		MatchState list_state(state);

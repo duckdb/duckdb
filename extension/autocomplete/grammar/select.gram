@@ -37,7 +37,9 @@ TableAlias <- 'AS'i? Identifier ColumnAliases?
 JoinClause <- RegularJoinClause / JoinWithoutOnClause
 RegularJoinClause <- JoinType? 'JOIN'i InnerTableRef JoinQualifier
 JoinWithoutOnClause <- JoinPrefix 'JOIN'i InnerTableRef
-JoinQualifier <- ('ON'i Expression) / 'USING'i Parens(List(Identifier))
+JoinQualifier <- OnClause / UsingClause
+OnClause <- 'ON'i Expression
+UsingClause <- 'USING'i Parens(List(Identifier))
 
 OuterJoinType <- 'FULL'i / 'LEFT'i / 'RIGHT'i
 JoinType <- (OuterJoinType 'OUTER'i?) / 'SEMI'i / 'ANTI'i / 'INNER'i
@@ -51,7 +53,13 @@ QualifyClause <- 'QUALIFY'i Expression
 WindowClause <- 'WINDOW'i List(WindowDefinition)
 WindowDefinition <- Identifier 'AS'i WindowFrameDefinition
 
-GroupByExpressions <- List(Expression) / 'ALL'i
+GroupByExpressions <- GroupByList / 'ALL'i
+GroupByList <- List(GroupByExpression)
+GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
+EmptyGroupingItem <- '(' ')'
+CubeOrRollupClause <- CubeOrRollup Parens(List(Expression))
+CubeOrRollup <- 'CUBE'i / 'ROLLUP'i
+GroupingSetsClause <- 'GROUPING'i 'SETS'i Parens(GroupByList)
 
 SubqueryReference <- Parens(SelectStatement)
 
