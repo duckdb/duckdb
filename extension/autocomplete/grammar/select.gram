@@ -1,10 +1,11 @@
-SelectStatement <- SelectOrParens (SetopClause SelectStatement)*
+SelectStatement <- SelectOrParens (SetopClause SelectStatement)* ResultModifiers
 
 SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) DistinctOrAll? ByName?
 ByName <- 'BY'i 'NAME'i
 SelectOrParens <- BaseSelect / Parens(SelectStatement)
 
-BaseSelect <- (SimpleSelect / ValuesClause / DescribeStatement / TableStatement) OrderByClause? LimitClause? OffsetClause?
+BaseSelect <- (SimpleSelect / ValuesClause / DescribeStatement / TableStatement) ResultModifiers
+ResultModifiers <- OrderByClause? LimitClause? OffsetClause?
 TableStatement <- 'TABLE' BaseTableName
 
 SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
