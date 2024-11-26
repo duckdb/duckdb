@@ -475,9 +475,11 @@ ArrowTableFunction::ArrowScanInitLocalInternal(ClientContext &context, TableFunc
 	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
 	result->column_ids = input.column_ids;
 	result->filters = input.filters.get();
-	if (!input.projection_ids.empty()) {
+	if (input.CanRemoveFilterColumns()) {
 		auto &asgs = global_state_p->Cast<ArrowScanGlobalState>();
 		result->all_columns.Initialize(context, asgs.scanned_types);
+	} else {
+		result->column_ids.clear();
 	}
 	if (!ArrowScanParallelStateNext(context, input.bind_data.get(), *result, global_state)) {
 		return nullptr;

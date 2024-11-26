@@ -1340,7 +1340,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
                                        DataChunk &output, idx_t start, bool arrow_scan_is_projected) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
-		auto col_idx = scan_state.column_ids[idx];
+		auto col_idx = scan_state.column_ids.empty() ? idx : scan_state.column_ids[idx];
 
 		// If projection was not pushed down into the arrow scanner, but projection pushdown is enabled on the
 		// table function, we need to use original column ids here.
@@ -1361,7 +1361,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		}
 
 		D_ASSERT(arrow_convert_data.find(col_idx) != arrow_convert_data.end());
-		auto &arrow_type = *arrow_convert_data.at(col_idx);
+		auto &arrow_type = *arrow_convert_data.at(idx);
 		auto &array_state = scan_state.GetState(col_idx);
 
 		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
