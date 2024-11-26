@@ -207,10 +207,9 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	// recurse the query tree to find the LogicalGets in which we can push the filter info
 	GenerateJoinFiltersRecursive(*join.children[0], pushdown_columns, *pushdown_info);
 
-	if (pushdown_info->probe_info.empty()) {
-		// no table sources found in which we can push down filters
-		return;
-	}
+	// Even if we cannot find any table sources in which we can push down filters,
+	// we still initialize the aggregate states so that we have the possibility of doing a perfect hash join
+
 	// set up the min/max aggregates for each of the filters
 	vector<AggregateFunction> aggr_functions;
 	aggr_functions.push_back(MinFunction::GetFunction());

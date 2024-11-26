@@ -68,7 +68,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 		plan = make_uniq<PhysicalHashJoin>(
 		    op, std::move(left), std::move(right), std::move(op.conditions), op.join_type, op.left_projection_map,
 		    op.right_projection_map, std::move(op.mark_types), op.estimated_cardinality, std::move(op.filter_pushdown));
-
 	} else {
 		D_ASSERT(op.left_projection_map.empty());
 		if (left->estimated_cardinality <= client_config.nested_loop_join_threshold ||

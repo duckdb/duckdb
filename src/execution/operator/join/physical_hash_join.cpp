@@ -613,9 +613,9 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &ht,
-                                                          JoinFilterGlobalState &gstate,
-                                                          const PhysicalOperator &op) const {
+unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
+                                                       JoinFilterGlobalState &gstate,
+                                                       const PhysicalOperator &op) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
@@ -625,6 +625,10 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::PushFilters(ClientContext &context
 	final_min_max->Initialize(Allocator::DefaultAllocator(), min_max_types);
 
 	gstate.global_aggregate_state->Finalize(*final_min_max);
+
+	if (probe_info.empty()) {
+		return final_min_max; // There are not table souces in which we can push down filters
+	}
 
 	auto dynamic_or_filter_threshold = ClientConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
@@ -712,20 +716,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	unique_ptr<DataChunk> final_min_max;
 	if (filter_pushdown && ht.Count() > 0) {
-		final_min_max = filter_pushdown->PushFilters(context, ht, *sink.global_filter_state, *this);
-	} else if (!join_stats.empty()) {
-		// We didn't do join filter pushdown, fall back to statically determined stats (if available)
-		vector<LogicalType> key_types;
-		for (auto &condition : conditions) {
-			key_types.push_back(condition.right->return_type);
-		}
-		final_min_max = make_uniq<DataChunk>();
-		final_min_max->Initialize(context, key_types);
-		for (idx_t i = 0; i < key_types.size(); i++) {
-			auto &rhs_stats = *join_stats[2 * i + 1];
-			final_min_max->data[0].SetValue(0, NumericStats::Min((rhs_stats)));
-			final_min_max->data[0].SetValue(0, NumericStats::Max((rhs_stats)));
-		}
+		final_min_max = filter_pushdown->Finalize(context, ht, *sink.global_filter_state, *this);
 	}
 
 	// check for possible perfect hash table

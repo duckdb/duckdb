@@ -51,9 +51,6 @@ public:
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
 
-	//! Join Keys statistics (optional)
-	vector<unique_ptr<BaseStatistics>> join_stats;
-
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
