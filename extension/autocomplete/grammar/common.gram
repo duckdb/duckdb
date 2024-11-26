@@ -31,12 +31,12 @@ CatalogName <- Identifier
 SchemaName <- Identifier
 TableName <- Identifier
 ColumnName <- Identifier
+IndexName <- Identifier
 FunctionName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- Identifier
-IndexName <- Identifier
 SequenceName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- Identifier

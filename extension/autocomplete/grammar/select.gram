@@ -4,7 +4,7 @@ SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) DistinctOrAll? ByName?
 ByName <- 'BY'i 'NAME'i
 SelectOrParens <- BaseSelect / Parens(SelectStatement)
 
-BaseSelect <- (SimpleSelect / ValuesClause / DescribeStatement / TableStatement) ResultModifiers
+BaseSelect <- (SimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement) ResultModifiers
 ResultModifiers <- OrderByClause? LimitClause? OffsetClause?
 TableStatement <- 'TABLE' BaseTableName
 
@@ -24,11 +24,22 @@ DistinctOn <- 'ON'i Parens(List(Expression))
 
 InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
-TableRef <- InnerTableRef JoinClause*
+TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- Lateral? SubqueryReference TableAlias?
 BaseTableRef <- BaseTableName TableAlias?
 ValuesRef <- ValuesClause TableAlias?
 ParensTableRef <- Parens(TableRef)
+
+
+JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
+
+TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueLists GroupByClause?) TableAlias?
+TableUnpivotClause <- 'UNPIVOT' IncludeExcludeNulls? Parens(UnpivotHeader 'FOR' PivotValueLists) TableAlias?
+
+PivotHeader <- BaseExpression
+PivotValueLists <- PivotValueList PivotValueList*
+PivotValueList <- PivotHeader 'IN' PivotTargetList
+PivotTargetList <- Identifier / Parens(TargetList)
 
 Lateral <- 'LATERAL'i
 
