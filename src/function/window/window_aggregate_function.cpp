@@ -1,9 +1,13 @@
 #include "duckdb/function/window/window_aggregate_function.hpp"
+
 #include "duckdb/function/window/window_constant_aggregator.hpp"
 #include "duckdb/function/window/window_custom_aggregator.hpp"
+#include "duckdb/function/window/window_distinct_aggregator.hpp"
 #include "duckdb/function/window/window_naive_aggregator.hpp"
+#include "duckdb/function/window/window_segment_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
 

@@ -1,36 +1,15 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
-#include "duckdb/common/operator/add.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/radix_partitioning.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
-
-#include "duckdb/common/types/column/column_data_consumer.hpp"
-#include "duckdb/common/types/row/row_data_collection_scanner.hpp"
-#include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/windows_undefs.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
 #include "duckdb/function/window/window_cumedist_function.hpp"
 #include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/function/window/window_rank_function.hpp"
 #include "duckdb/function/window/window_rownumber_function.hpp"
-#include "duckdb/function/window/window_segment_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-
-#include <algorithm>
-#include <cmath>
+//
 #include <numeric>
 
 namespace duckdb {

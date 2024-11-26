@@ -7,6 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/function/window/window_executor.hpp"
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/function/window/window_aggregator.hpp"
 
 namespace duckdb {
 

@@ -8,12 +8,8 @@
 
 #pragma once
 
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/window/window_boundaries_state.hpp"
 #include "duckdb/function/window/window_collection.hpp"
-#include "duckdb/function/window/window_segment_tree.hpp"
-#include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 

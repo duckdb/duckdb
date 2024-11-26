@@ -9,6 +9,7 @@ add_library_unity(
   window_constant_aggregator.cpp
   window_custom_aggregator.cpp
   window_cumedist_function.cpp
+  window_distinct_aggregator.cpp
   window_executor.cpp
   window_naive_aggregator.cpp
   window_rank_function.cpp
