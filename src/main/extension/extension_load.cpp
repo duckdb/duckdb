@@ -526,18 +526,23 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
 	auto extension_init_result = InitialLoad(db, fs, extension);
-	auto init_fun_name = extension_init_result.filebase + "_init";
 
-	// "OLD WAY" of loading extensions. If the <ext_name>_init exists, we choose that
-	ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name,
-	                                                                 extension_init_result.filename);
-	if (init_fun) {
+
+	// C++ ABI
+	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
+		auto init_fun_name = extension_init_result.filebase + "_init";
+		ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name,
+																		 extension_init_result.filename);
+		if (!init_fun) {
+			throw IOException("Extension '%s' did not contain the expected entrypoint function '%s'", extension, init_fun_name);
+		}
+
 		try {
 			(*init_fun)(db);
 		} catch (std::exception &e) {
 			ErrorData error(e);
 			throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
-			                            init_fun_name, extension_init_result.filename, error.RawMessage());
+										init_fun_name, extension_init_result.filename, error.RawMessage());
 		}
 
 		D_ASSERT(extension_init_result.install_info);
@@ -546,41 +551,44 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 
-	// TODO: make this the only way of calling extensions?
-	// "NEW WAY" of loading extensions enabling C API only
-	init_fun_name = extension_init_result.filebase + "_init_c_api";
-	ext_init_c_api_fun_t init_fun_capi = TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(
-	    extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
+	// C ABI
+	if (extension_init_result.abi_type == ExtensionABIType::C_STRUCT || extension_init_result.abi_type == ExtensionABIType::C_STRUCT_UNSTABLE) {
+		auto init_fun_name = extension_init_result.filebase + "_init_c_api";
+		ext_init_c_api_fun_t init_fun_capi = TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(
+			extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
 
-	if (!init_fun_capi) {
-		throw IOException("File \"%s\" did not contain function \"%s\": %s", extension_init_result.filename,
-		                  init_fun_name, GetDLError());
+		if (!init_fun_capi) {
+			throw IOException("File \"%s\" did not contain function \"%s\": %s", extension_init_result.filename,
+							  init_fun_name, GetDLError());
+		}
+		// Create the load state
+		DuckDBExtensionLoadState load_state(db, extension_init_result);
+
+		auto access = ExtensionAccess::CreateAccessStruct();
+		auto result = (*init_fun_capi)(load_state.ToCStruct(), &access);
+
+		// Throw any error that the extension might have encountered
+		if (load_state.has_error) {
+			load_state.error_data.Throw("An error was thrown during initialization of the extension '" + extension + "': ");
+		}
+
+		// Extensions are expected to either set an error or return true indicating successful initialization
+		if (result == false) {
+			throw FatalException(
+				"Extension '%s' failed to initialize but did not return an error. This indicates an "
+				"error in the extension: C API extensions should return a boolean `true` to indicate succesful "
+				"initialization. "
+				"This means that the Extension may be partially initialized resulting in an inconsistent state of DuckDB.",
+				extension);
+		}
+
+		D_ASSERT(extension_init_result.install_info);
+
+		db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+		return;
 	}
 
-	// Create the load state
-	DuckDBExtensionLoadState load_state(db, extension_init_result);
-
-	auto access = ExtensionAccess::CreateAccessStruct();
-	auto result = (*init_fun_capi)(load_state.ToCStruct(), &access);
-
-	// Throw any error that the extension might have encountered
-	if (load_state.has_error) {
-		load_state.error_data.Throw("An error was thrown during initialization of the extension '" + extension + "': ");
-	}
-
-	// Extensions are expected to either set an error or return true indicating successful initialization
-	if (result == false) {
-		throw FatalException(
-		    "Extension '%s' failed to initialize but did not return an error. This indicates an "
-		    "error in the extension: C API extensions should return a boolean `true` to indicate succesful "
-		    "initialization. "
-		    "This means that the Extension may be partially initialized resulting in an inconsistent state of DuckDB.",
-		    extension);
-	}
-
-	D_ASSERT(extension_init_result.install_info);
-
-	db.SetExtensionLoaded(extension, *extension_init_result.install_info);
+	throw IOException("Unknown ABI type '%s' for extension '%s'", extension_init_result.abi_type, extension);
 #endif
 }
 
