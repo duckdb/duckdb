@@ -539,14 +539,14 @@ ErrorData ART::Append(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	return Insert(lock, expr_chunk, row_ids);
 }
 
-void ART::VerifyAppend(DataChunk &chunk) {
+void ART::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) {
 	ConflictManager conflict_manager(VerifyExistenceType::APPEND, chunk.size());
-	CheckConstraintsForChunk(chunk, conflict_manager);
+	CheckConstraintsForChunk(chunk, delete_art, conflict_manager);
 }
 
-void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
+void ART::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art, ConflictManager &conflict_manager) {
 	D_ASSERT(conflict_manager.LookupType() == VerifyExistenceType::APPEND);
-	CheckConstraintsForChunk(chunk, conflict_manager);
+	CheckConstraintsForChunk(chunk, delete_art, conflict_manager);
 }
 
 void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
@@ -975,20 +975,26 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 }
 
-void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) {
+void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> delete_art,
+                                   ConflictManager &conflict_manager) {
 	// Lock the index during constraint checking.
 	lock_guard<mutex> l(lock);
 
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
-	ExecuteExpressions(input, expr_chunk);
+	ExecuteExpressions(chunk, expr_chunk);
 
 	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	unsafe_vector<ARTKey> keys(expr_chunk.size());
 	GenerateKeys<>(arena_allocator, expr_chunk, keys);
 
+	optional_ptr<ART> cast_delete_art;
+	if (delete_art) {
+		cast_delete_art = delete_art->Cast<ART>();
+	}
+
 	auto found_conflict = DConstants::INVALID_INDEX;
-	for (idx_t i = 0; found_conflict == DConstants::INVALID_INDEX && i < input.size(); i++) {
+	for (idx_t i = 0; found_conflict == DConstants::INVALID_INDEX && i < chunk.size(); i++) {
 		if (keys[i].Empty()) {
 			if (conflict_manager.AddNull(i)) {
 				found_conflict = i;
@@ -1004,6 +1010,17 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 			continue;
 		}
 
+		// True hit?
+		if (cast_delete_art) {
+			auto deleted_leaf = cast_delete_art->Lookup(cast_delete_art->tree, keys[i], 0);
+			if (deleted_leaf) {
+				if (conflict_manager.AddMiss(i)) {
+					found_conflict = i;
+				}
+				continue;
+			}
+		}
+
 		// If we find a node, we need to update the 'matches' and 'row_ids'.
 		// We only perform constraint checking on unique indexes, i.e., all leaves are inlined.
 		D_ASSERT(leaf->GetType() == NType::LEAF_INLINED);
@@ -1017,7 +1034,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 		return;
 	}
 
-	auto key_name = GenerateErrorKeyName(input, found_conflict);
+	auto key_name = GenerateErrorKeyName(chunk, found_conflict);
 	auto exception_msg = GenerateConstraintErrorMessage(conflict_manager.LookupType(), key_name);
 	throw ConstraintException(exception_msg);
 }

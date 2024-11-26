@@ -17,6 +17,7 @@ namespace duckdb {
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
     : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table),
       merged_storage(false) {
+
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
 	auto &io_manager = TableIOManager::Get(table);
@@ -24,16 +25,25 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	row_groups->InitializeEmpty();
 
 	data_table_info->GetIndexes().BindAndScan<ART>(context, *data_table_info, [&](ART &art) {
-		if (art.GetConstraintType() != IndexConstraintType::NONE) {
-			// unique index: create a local ART index that maintains the same unique constraint
-			vector<unique_ptr<Expression>> unbound_expressions;
-			unbound_expressions.reserve(art.unbound_expressions.size());
-			for (auto &expr : art.unbound_expressions) {
-				unbound_expressions.push_back(expr->Copy());
-			}
-			indexes.AddIndex(make_uniq<ART>(art.GetIndexName(), art.GetConstraintType(), art.GetColumnIds(),
-			                                art.table_io_manager, std::move(unbound_expressions), art.db));
+		auto constraint_type = art.GetConstraintType();
+		if (constraint_type == IndexConstraintType::NONE) {
+			return false;
 		}
+
+		vector<unique_ptr<Expression>> expressions;
+		vector<unique_ptr<Expression>> delete_expressions;
+		for (auto &expr : art.unbound_expressions) {
+			expressions.push_back(expr->Copy());
+			delete_expressions.push_back(expr->Copy());
+		}
+
+		// UNIQUE constraint. Create a local index, and a delete index.
+		auto index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(), art.table_io_manager,
+		                            std::move(expressions), art.db);
+		indexes.AddIndex(std::move(index));
+		auto delete_index = make_uniq<ART>(art.GetIndexName(), IndexConstraintType::NONE, art.GetColumnIds(),
+		                                   art.table_io_manager, std::move(delete_expressions), art.db);
+		delete_indexes.AddIndex(std::move(delete_index));
 		return false;
 	});
 }
@@ -150,7 +160,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 }
 
 void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state,
-                                        idx_t append_count, bool append_to_table) {
+                                        bool append_to_table) {
 	auto &table = table_ref.get();
 	if (append_to_table) {
 		table.InitializeAppend(transaction, append_state);
@@ -160,6 +170,8 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// appending: need to scan entire
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
+			// TODO: we have the delete_art here: how do we flush the changes without a constraint exception?
+			// - temporarily have duplicates (idk..)
 			error = table.AppendToIndexes(chunk, append_state.current_row);
 			if (error.HasError()) {
 				return false;
@@ -468,7 +480,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// FIXME: we should be able to merge the transaction-local index directly into the main table index
 		// as long we just rewrite some row-ids
 		if (table.HasIndexes()) {
-			storage.AppendToIndexes(transaction, append_state, append_count, false);
+			storage.AppendToIndexes(transaction, append_state, false);
 		}
 		// finally move over the row groups
 		table.MergeStorage(*storage.row_groups, storage.indexes, commit_state);
@@ -478,7 +490,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// so we need to revert the data we have already written
 		storage.Rollback();
 		// append to the indexes and append to the base table
-		storage.AppendToIndexes(transaction, append_state, append_count, true);
+		storage.AppendToIndexes(transaction, append_state, true);
 	}
 
 	// possibly vacuum any excess index data
@@ -589,6 +601,14 @@ TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
 		throw InternalException("LocalStorage::GetIndexes - local storage not found");
 	}
 	return storage->indexes;
+}
+
+TableIndexList &LocalStorage::GetDeleteIndexes(DataTable &table) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		throw InternalException("LocalStorage::GetDeleteIndexes - local storage not found");
+	}
+	return storage->delete_indexes;
 }
 
 void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint) {

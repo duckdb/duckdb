@@ -81,8 +81,9 @@ public:
 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Constraint verification for a chunk.
-	void VerifyAppend(DataChunk &chunk) override;
-	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) override;
+	void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) override;
+	void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art,
+	                  ConflictManager &conflict_manager) override;
 
 	//! Delete a chunk from the ART.
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
@@ -129,7 +130,8 @@ private:
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) override;
+	void CheckConstraintsForChunk(DataChunk &input, optional_ptr<BoundIndex> delete_art,
+	                              ConflictManager &conflict_manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 
