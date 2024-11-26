@@ -134,18 +134,18 @@ void BaseReservoirSampling::UpdateMinWeightThreshold() {
 	min_weight_threshold = 1;
 }
 
-void BaseReservoirSampling::FillWeights(vector<idx_t> &actual_sample_indexes) {
+void BaseReservoirSampling::FillWeights(SelectionVector sel, idx_t sel_size) {
 	if (!reservoir_weights.empty()) {
 		return;
 	}
-	D_ASSERT(actual_sample_indexes.size() <= FIXED_SAMPLE_SIZE);
+	D_ASSERT(sel_size <= FIXED_SAMPLE_SIZE);
 	D_ASSERT(reservoir_weights.empty());
 	auto num_entries_seen_normalized = num_entries_seen_total / FIXED_SAMPLE_SIZE;
 	auto min_weight = GetMinWeightFromTuplesSeen(num_entries_seen_normalized);
-	for (auto &index : actual_sample_indexes) {
+	for (idx_t i = 0; i < sel_size; i++) {
 		RandomEngine new_random_engine;
 		auto weight = new_random_engine.NextRandom(min_weight, 1);
-		reservoir_weights.emplace(-weight, index);
+		reservoir_weights.emplace(-weight, sel.get_index(i));
 	}
 	D_ASSERT(reservoir_weights.size() <= FIXED_SAMPLE_SIZE);
 	SetNextEntry();

@@ -1,0 +1,11 @@
+# name: test/sql/sample/basic_sample_tests.test
+# group: [sample]
+
+statement ok
+create table t1 as select range a from range(204800);
+
+
+mode output_hash
+
+statement ok
+select * from duckdb_table_sample('t1');

@@ -2,8 +2,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 
-#include <sys/stat.h>
-
 namespace duckdb {
 
 idx_t IngestionSample::NumSamplesCollected() const {
@@ -13,8 +11,8 @@ idx_t IngestionSample::NumSamplesCollected() const {
 	return sample_chunk->size();
 }
 
-idx_t IngestionSample::NumActiveSamples() const {
-	auto ret = MaxValue<idx_t>(actual_sample_indexes.size(), base_reservoir_sample->reservoir_weights.size());
+idx_t IngestionSample::GetActiveSampleCount() const {
+	auto ret = MaxValue<idx_t>(sel_size, base_reservoir_sample->reservoir_weights.size());
 	D_ASSERT(ret <= FIXED_SAMPLE_SIZE);
 	return ret;
 }
@@ -33,54 +31,55 @@ unique_ptr<DataChunk> IngestionSample::CreateNewSampleChunk(vector<LogicalType> 
 	return new_sample_chunk;
 }
 
-SampleCopyHelper IngestionSample::GetSelToCopyData(idx_t sel_size) const {
-	SampleCopyHelper ret;
-	if (SamplingState() == SamplingMode::FAST) {
-		D_ASSERT(actual_sample_indexes.size() >= sel_size);
-		auto indexes_copy = actual_sample_indexes;
-		return SelFromSimpleIndexes(indexes_copy);
-	}
-	D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sel_size);
-	auto base_copy = base_reservoir_sample->Copy();
-	vector<std::pair<double, idx_t>> weights_indexes;
-	D_ASSERT(sel_size <= base_copy->reservoir_weights.size());
-	for (idx_t i = 0; i < sel_size; i++) {
-		weights_indexes.push_back(base_copy->reservoir_weights.top());
-		base_copy->reservoir_weights.pop();
-	}
-	// create one large chunk from the collected chunk samples.
-	D_ASSERT(sample_chunk->size() != 0);
+// SelectionVectorHelper IngestionSample::GetSelToCopyData(idx_t sel_size) const {
+// 	SelectionVectorHelper ret;
+// 	ret.sel = SelectionVector(sel);
+// 	ret.size = sel_size;
+// 	return ret;
 
-	// set up selection vector to copy IngestionSample to ReservoirSample
-	return SelFromReservoirWeights(weights_indexes);
-}
+// if (SamplingState() == SamplingMode::FAST) {
+// 	D_ASSERT(GetActiveSampleCount() >= sel_size);
+// 	auto indexes_copy = actual_sample_indexes;
+// 	return SelFromSimpleIndexes(indexes_copy);
+// }
+// D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sel_size);
+// auto base_copy = base_reservoir_sample->Copy();
+// vector<std::pair<double, idx_t>> weights_indexes;
+// D_ASSERT(sel_size <= base_copy->reservoir_weights.size());
+// for (idx_t i = 0; i < sel_size; i++) {
+// 	weights_indexes.push_back(base_copy->reservoir_weights.top());
+// 	base_copy->reservoir_weights.pop();
+// }
+// // create one large chunk from the collected chunk samples.
+// D_ASSERT(sample_chunk->size() != 0);
+//
+// // set up selection vector to copy IngestionSample to ReservoirSample
+// return SelFromReservoirWeights(weights_indexes);
+// }
 
 // Get a selection vector referring to the actual sample when the sample is in "Slow" mode
-SampleCopyHelper IngestionSample::SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const {
-	idx_t sample_to_keep = weights_indexes.size();
-	SampleCopyHelper ret;
-	ret.sel = SelectionVector(sample_to_keep);
-	for (idx_t i = 0; i < sample_to_keep; i++) {
-		ret.sel.set_index(i, weights_indexes[i].second);
-		ret.reservoir_weights.emplace(weights_indexes[i].first, i);
-	}
-	return ret;
-}
-
-// Get a selection vector referring to the actual sample when the sample is in "Fast" mode
-SampleCopyHelper IngestionSample::SelFromSimpleIndexes(vector<idx_t> &actual_indexes) const {
-	idx_t sample_to_keep = actual_indexes.size();
-	SampleCopyHelper ret;
-	ret.sel = SelectionVector(sample_to_keep);
-	vector<idx_t> new_indexes;
-	// reservoir weights should be empty. We are about to construct them again with indexes in the new_sample_chunk
-	for (idx_t i = 0; i < sample_to_keep; i++) {
-		new_indexes.push_back(i);
-		ret.sel.set_index(i, actual_indexes[i]);
-	}
-	ret.actual_indexes = new_indexes;
-	return ret;
-}
+// SelectionVectorHelper IngestionSample::SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes)
+// const { 	idx_t sample_to_keep = weights_indexes.size(); 	SampleCopyHelper ret; 	ret.sel =
+// SelectionVector(sample_to_keep); 	for (idx_t i = 0; i < sample_to_keep; i++) { 		ret.sel.set_index(i,
+// weights_indexes[i].second); 		ret.reservoir_weights.emplace(weights_indexes[i].first, i);
+// 	}
+// 	return ret;
+// }
+//
+// // Get a selection vector referring to the actual sample when the sample is in "Fast" mode
+// SelectionVectorHelper IngestionSample::SelFromSimpleIndexes(vector<idx_t> &actual_indexes) const {
+// 	idx_t sample_to_keep = actual_indexes.size();
+// 	SampleCopyHelper ret;
+// 	ret.sel = SelectionVector(sample_to_keep);
+// 	vector<idx_t> new_indexes;
+// 	// reservoir weights should be empty. We are about to construct them again with indexes in the new_sample_chunk
+// 	for (idx_t i = 0; i < sample_to_keep; i++) {
+// 		new_indexes.push_back(i);
+// 		ret.sel.set_index(i, actual_indexes[i]);
+// 	}
+// 	ret.actual_indexes = new_indexes;
+// 	return ret;
+// }
 
 SamplingMode IngestionSample::SamplingState() const {
 	if (base_reservoir_sample->reservoir_weights.empty()) {
@@ -98,24 +97,22 @@ void IngestionSample::Shrink() {
 
 	auto types = sample_chunk->GetTypes();
 	auto new_sample_chunk = CreateNewSampleChunk(types, FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
-	idx_t num_samples_to_keep = NumActiveSamples();
-	auto sample_copy_helper = GetSelToCopyData(num_samples_to_keep);
+	idx_t num_samples_to_keep = GetActiveSampleCount();
 
-	actual_sample_indexes = sample_copy_helper.actual_indexes;
-	base_reservoir_sample->reservoir_weights = sample_copy_helper.reservoir_weights;
 	if (SamplingState() != SamplingMode::FAST) {
 		base_reservoir_sample->min_weighted_entry_index = base_reservoir_sample->reservoir_weights.top().second;
 	}
 
 	std::swap(sample_chunk, new_sample_chunk);
 	// perform the copy
-	UpdateSampleAppend(*new_sample_chunk, sample_copy_helper.sel, num_samples_to_keep);
+	UpdateSampleAppend(*new_sample_chunk, sel, num_samples_to_keep);
+	D_ASSERT(sel_size == num_samples_to_keep);
 	D_ASSERT(sample_chunk->size() == num_samples_to_keep);
+	sel = SelectionVector(0, num_samples_to_keep);
 	Verify();
 	// We should only have one sample chunk now.
 	D_ASSERT(sample_chunk->size() > 0 && sample_chunk->size() <= FIXED_SAMPLE_SIZE);
 }
-
 
 unique_ptr<BlockingSample> IngestionSample::Copy() const {
 	auto ret = make_uniq<IngestionSample>(sample_count);
@@ -133,37 +130,34 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 	auto types = sample_chunk->GetTypes();
 	idx_t new_sample_chunk_size = FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
 	// how many values should be copied
-	idx_t values_to_copy = MinValue<idx_t>(NumActiveSamples(), FIXED_SAMPLE_SIZE);
+	idx_t values_to_copy = MinValue<idx_t>(GetActiveSampleCount(), FIXED_SAMPLE_SIZE);
 
 	auto new_sample_chunk = CreateNewSampleChunk(types, new_sample_chunk_size);
-
-	// set up selection vector to copy IngestionSample to ReservoirSample
-	SampleCopyHelper sel = GetSelToCopyData(values_to_copy);
-	ret->actual_sample_indexes = sel.actual_indexes;
-	ret->base_reservoir_sample->reservoir_weights = sel.reservoir_weights;
 
 	if (SamplingState() != SamplingMode::FAST) {
 		ret->base_reservoir_sample->min_weighted_entry_index =
 		    ret->base_reservoir_sample->reservoir_weights.top().second;
 	}
 
+	SelectionVector const_sel(sel);
 	ret->sample_chunk = std::move(new_sample_chunk);
-	ret->UpdateSampleAppend(*sample_chunk, sel.sel, values_to_copy);
+	ret->UpdateSampleAppend(*sample_chunk, const_sel, values_to_copy);
 	D_ASSERT(ret->sample_chunk->size() <= FIXED_SAMPLE_SIZE);
 	ret->Verify();
 	return unique_ptr_cast<IngestionSample, BlockingSample>(std::move(ret));
 }
 
 void IngestionSample::ConvertToSlowSample() {
-	base_reservoir_sample->FillWeights(actual_sample_indexes);
-	actual_sample_indexes.clear();
+	D_ASSERT(sel_size == STANDARD_VECTOR_SIZE);
+	base_reservoir_sample->FillWeights(sel, sel_size);
 }
 
-void IngestionSample::RandomizeActualSampleIndexes() {
-	if (actual_sample_indexes.size() <= 1) {
+template <typename T>
+void IngestionSample::RandomizeActualSampleIndexes(vector<T> actual_sample_indexes) {
+	if (GetActiveSampleCount() <= 1) {
 		return;
 	}
-	if (actual_sample_indexes.size() == 2) {
+	if (GetActiveSampleCount() == 2) {
 		if (base_reservoir_sample->random.NextRandom() > 0.5) {
 			std::swap(actual_sample_indexes[0], actual_sample_indexes[1]);
 			return;
@@ -184,12 +178,13 @@ void IngestionSample::SimpleMerge(IngestionSample &other) {
 	D_ASSERT(GetPriorityQueueSize() == 0);
 	D_ASSERT(other.GetPriorityQueueSize() == 0);
 
-	if (other.actual_sample_indexes.empty() && other.GetTuplesSeen() == 0) {
+	if (other.GetActiveSampleCount() == 0 && other.GetTuplesSeen() == 0) {
 		return;
 	}
 
-	if (actual_sample_indexes.empty() && GetTuplesSeen() == 0) {
-		actual_sample_indexes = std::move(other.actual_sample_indexes);
+	if (GetActiveSampleCount() == 0 && GetTuplesSeen() == 0) {
+		sel = SelectionVector(other.sel);
+		sel_size = other.sel_size;
 		base_reservoir_sample->num_entries_seen_total = other.GetTuplesSeen();
 		return;
 	}
@@ -210,17 +205,17 @@ void IngestionSample::SimpleMerge(IngestionSample &other) {
 	idx_t keep_from_this = 0;
 	idx_t keep_from_other = 0;
 	if (weight_tuples_this > weight_tuples_other) {
-		keep_from_this = MinValue<idx_t>(static_cast<idx_t>(round(FIXED_SAMPLE_SIZE * weight_tuples_this)),
-		                                 actual_sample_indexes.size());
-		keep_from_other = MinValue<idx_t>(FIXED_SAMPLE_SIZE - keep_from_this, other.actual_sample_indexes.size());
+		keep_from_this =
+		    MinValue<idx_t>(static_cast<idx_t>(round(FIXED_SAMPLE_SIZE * weight_tuples_this)), GetActiveSampleCount());
+		keep_from_other = MinValue<idx_t>(FIXED_SAMPLE_SIZE - keep_from_this, other.GetActiveSampleCount());
 	} else {
 		keep_from_other = MinValue<idx_t>(static_cast<idx_t>(round(FIXED_SAMPLE_SIZE * weight_tuples_other)),
-		                                  other.actual_sample_indexes.size());
-		keep_from_this = MinValue<idx_t>(FIXED_SAMPLE_SIZE - keep_from_other, actual_sample_indexes.size());
+		                                  other.GetActiveSampleCount());
+		keep_from_this = MinValue<idx_t>(FIXED_SAMPLE_SIZE - keep_from_other, GetActiveSampleCount());
 	}
 
-	D_ASSERT(keep_from_this <= actual_sample_indexes.size());
-	D_ASSERT(keep_from_other <= other.actual_sample_indexes.size());
+	D_ASSERT(keep_from_this <= GetActiveSampleCount());
+	D_ASSERT(keep_from_other <= other.GetActiveSampleCount());
 	D_ASSERT(keep_from_other + keep_from_this <= FIXED_SAMPLE_SIZE);
 	idx_t size_after_merge = MinValue<idx_t>(keep_from_other + keep_from_this, FIXED_SAMPLE_SIZE);
 
@@ -229,30 +224,28 @@ void IngestionSample::SimpleMerge(IngestionSample &other) {
 		Shrink();
 	}
 
-	RandomizeActualSampleIndexes();
-	other.RandomizeActualSampleIndexes();
-
-	D_ASSERT(size_after_merge <= other.actual_sample_indexes.size() + actual_sample_indexes.size());
-	SelectionVector sel(keep_from_other);
+	D_ASSERT(size_after_merge <= other.GetActiveSampleCount() + GetActiveSampleCount());
+	SelectionVector chunk_sel(keep_from_other);
 	auto offset = sample_chunk->size();
 	for (idx_t i = keep_from_this; i < size_after_merge; i++) {
-		if (i >= actual_sample_indexes.size()) {
-			actual_sample_indexes.push_back(offset);
+		if (i >= GetActiveSampleCount()) {
+			sel.set_index(GetActiveSampleCount(), offset);
+			sel_size += 1;
 		} else {
-			actual_sample_indexes[i] = offset;
+			sel.set_index(i, offset);
 		}
-		sel.set_index(i - keep_from_this, other.actual_sample_indexes[i - keep_from_this]);
+		chunk_sel.set_index(i - keep_from_this, other.sel.get_index(i - keep_from_this));
 		offset += 1;
 	}
 
-	D_ASSERT(actual_sample_indexes.size() == size_after_merge);
+	D_ASSERT(GetActiveSampleCount() == size_after_merge);
 
 	// fix, basically you only need to copy the required tuples from other and put them into this. You can
 	// save a number of the tuples in THIS.
-	UpdateSampleAppend(*other.sample_chunk, sel, keep_from_other);
+	UpdateSampleAppend(*other.sample_chunk, chunk_sel, keep_from_other);
 	base_reservoir_sample->num_entries_seen_total += other.GetTuplesSeen();
 
-	if (GetTuplesSeen() >= FIXED_SAMPLE_SIZE * IngestionSample::FAST_TO_SLOW_THRESHOLD) {
+	if (GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
 		ConvertToSlowSample();
 	}
 	Verify();
@@ -276,7 +269,8 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	if (!sample_chunk) {
 		base_reservoir_sample = std::move(other->base_reservoir_sample);
 		sample_chunk = std::move(other_ingest.sample_chunk);
-		actual_sample_indexes = other_ingest.actual_sample_indexes;
+		sel = SelectionVector(other_ingest.sel);
+		sel_size = other_ingest.sel_size;
 		Verify();
 		return;
 	}
@@ -294,18 +288,19 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 
 	D_ASSERT(SamplingState() == SamplingMode::SLOW && other_ingest.SamplingState() == SamplingMode::SLOW);
 
-	idx_t total_samples = GetPriorityQueueSize() + other_ingest.GetPriorityQueueSize();
+	idx_t total_samples = GetActiveSampleCount() + other_ingest.GetActiveSampleCount();
 	idx_t total_samples_seen =
 	    base_reservoir_sample->num_entries_seen_total + other_ingest.base_reservoir_sample->num_entries_seen_total;
 	idx_t num_samples_to_keep = MinValue<idx_t>(
 	    FIXED_SAMPLE_SIZE, static_cast<idx_t>(static_cast<double>(total_samples_seen) * SAVE_PERCENTAGE));
-	if (num_samples_to_keep < GetPriorityQueueSize()) {
-		num_samples_to_keep = GetPriorityQueueSize();
+	if (num_samples_to_keep < GetActiveSampleCount()) {
+		num_samples_to_keep = GetActiveSampleCount();
 	}
-	D_ASSERT(GetPriorityQueueSize() <= num_samples_to_keep);
+	D_ASSERT(GetActiveSampleCount() <= num_samples_to_keep);
 	D_ASSERT(total_samples <= FIXED_SAMPLE_SIZE * 2);
 
 	// pop from base base_reservoir samples and weights until there are num_samples_to_keep left.
+	vector<idx_t> indexes_to_replace;
 	for (idx_t i = num_samples_to_keep; i < total_samples; i++) {
 		auto min_weight_this = base_reservoir_sample->min_weight_threshold;
 		auto min_weight_other = other_ingest.base_reservoir_sample->min_weight_threshold;
@@ -315,7 +310,8 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 			other_ingest.base_reservoir_sample->reservoir_weights.pop();
 			other_ingest.base_reservoir_sample->UpdateMinWeightThreshold();
 		} else {
-			base_reservoir_sample->reservoir_weights.pop();
+			auto top_this = PopFromWeightQueue();
+			indexes_to_replace.push_back(top_this.second);
 			base_reservoir_sample->UpdateMinWeightThreshold();
 		}
 	}
@@ -333,8 +329,7 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 	idx_t chunk_offset = 0;
 	// now we are adding entries from the other base_reservoir_sampling object to this
 	// while also filling in the selection vector we wil use to copy values.
-	// TODO: This can be faster. Just pop weights from other until you have
-	// num samples to keep. Then copy with an offset.
+	idx_t i = 0;
 	while (other_ingest.GetPriorityQueueSize() > 0) {
 		auto other_top = other_ingest.PopFromWeightQueue();
 		auto other_weight = -other_top.first;
@@ -344,12 +339,19 @@ void IngestionSample::Merge(unique_ptr<BlockingSample> other) {
 			min_weight_index = index_for_new_pair;
 		}
 
+		// update this sel
 		sel_other.set_index(chunk_offset, other_top.second);
+		if (i < indexes_to_replace.size()) {
+			sel.set_index(indexes_to_replace[i], index_for_new_pair);
+		} else {
+			throw InternalException("wow, we need to check this out");
+		}
 
 		// make sure that the sample indexes are (this.sample_chunk.size() + chunk_offfset)
 		other_top.second = index_for_new_pair;
 		base_reservoir_sample->reservoir_weights.push(other_top);
 		chunk_offset += 1;
+		i += 1;
 	}
 
 	D_ASSERT(GetPriorityQueueSize() == num_samples_to_keep);
@@ -386,8 +388,6 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 	idx_t num_samples_to_keep =
 	    MinValue<idx_t>(FIXED_SAMPLE_SIZE, static_cast<idx_t>(SAVE_PERCENTAGE * static_cast<double>(GetTuplesSeen())));
 
-	auto copy_helper = GetSelToCopyData(num_samples_to_keep);
-
 	auto ret = make_uniq<ReservoirSample>(num_samples_to_keep);
 	if (num_samples_to_keep <= 0) {
 		ret->base_reservoir_sample = base_reservoir_sample->Copy();
@@ -417,8 +417,8 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 		auto col_type = types[i];
 		if (ValidSampleType(col_type)) {
 			D_ASSERT(sample_chunk->data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-			VectorOperations::Copy(sample_chunk->data[i], ret->reservoir_chunk->chunk.data[i], copy_helper.sel,
-			                       num_samples_to_keep, 0, 0);
+			VectorOperations::Copy(sample_chunk->data[i], ret->reservoir_chunk->chunk.data[i], sel, num_samples_to_keep,
+			                       0, 0);
 		} else {
 			ret->reservoir_chunk->chunk.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(ret->reservoir_chunk->chunk.data[i], true);
@@ -426,7 +426,6 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 	}
 	// set the cardinality
 	ret->reservoir_chunk->chunk.SetCardinality(new_size);
-	ret->base_reservoir_sample->reservoir_weights = copy_helper.reservoir_weights;
 	ret->base_reservoir_sample->num_entries_seen_total = base_reservoir_sample->num_entries_seen_total;
 	if (!ret->base_reservoir_sample->reservoir_weights.empty()) {
 		ret->base_reservoir_sample->SetNextEntry();
@@ -449,19 +448,20 @@ idx_t IngestionSample::FillReservoir(DataChunk &chunk) {
 		sample_chunk = CreateNewSampleChunk(types, FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER);
 	}
 
-	idx_t actual_sample_index_start = actual_sample_indexes.size();
+	idx_t actual_sample_index_start = GetActiveSampleCount();
 	D_ASSERT(sample_chunk->ColumnCount() == chunk.ColumnCount());
 	if (sample_chunk->size() < FIXED_SAMPLE_SIZE) {
 		ingested_count = MinValue<idx_t>(FIXED_SAMPLE_SIZE - sample_chunk->size(), chunk.size());
-		SelectionVector sel(ingested_count);
+		SelectionVector sel_for_input_chunk(ingested_count);
 		for (idx_t i = 0; i < ingested_count; i++) {
-			actual_sample_indexes.emplace_back(i + actual_sample_index_start);
-			sel.set_index(i, i);
+			sel.set_index(actual_sample_index_start + i, actual_sample_index_start + i);
+			sel_for_input_chunk.set_index(i, i);
 		}
-		UpdateSampleAppend(chunk, sel, ingested_count);
+		UpdateSampleAppend(chunk, sel_for_input_chunk, ingested_count);
 	}
-	D_ASSERT(actual_sample_indexes.size() <= FIXED_SAMPLE_SIZE);
-	D_ASSERT(actual_sample_indexes.size() >= ingested_count);
+	sel_size += ingested_count;
+	D_ASSERT(GetActiveSampleCount() <= FIXED_SAMPLE_SIZE);
+	D_ASSERT(GetActiveSampleCount() >= ingested_count);
 	// always return how many tuples were ingested
 	return ingested_count;
 }
@@ -471,6 +471,8 @@ IngestionSample::IngestionSample(idx_t sample_count, int64_t seed)
 	base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
 	type = SampleType::INGESTION_SAMPLE;
 	sample_chunk = nullptr;
+	sel_size = 0;
+	sel = SelectionVector(STANDARD_VECTOR_SIZE);
 }
 
 IngestionSample::IngestionSample(Allocator &allocator, int64_t seed)
@@ -478,56 +480,62 @@ IngestionSample::IngestionSample(Allocator &allocator, int64_t seed)
 	base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
 	type = SampleType::INGESTION_SAMPLE;
 	sample_chunk = nullptr;
+	sel_size = 0;
+	sel = SelectionVector(STANDARD_VECTOR_SIZE);
 }
 
 void IngestionSample::Destroy() {
 	destroyed = true;
 }
 
-unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset,
-                                                                   idx_t theoretical_chunk_length) {
+SelectionVectorHelper IngestionSample::GetReplacementIndexes(idx_t sample_chunk_offset,
+                                                             idx_t theoretical_chunk_length) {
 	if (GetPriorityQueueSize() == 0 && GetTuplesSeen() <= FIXED_SAMPLE_SIZE * IngestionSample::FAST_TO_SLOW_THRESHOLD) {
 		return GetReplacementIndexesFast(sample_chunk_offset, theoretical_chunk_length);
 	}
 	return GetReplacementIndexesSlow(sample_chunk_offset, theoretical_chunk_length);
 }
 
-unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t chunk_length) {
+SelectionVectorHelper IngestionSample::GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t chunk_length) {
 	idx_t num_to_pop =
 	    static_cast<idx_t>((static_cast<double>(chunk_length) / static_cast<double>(chunk_length + GetTuplesSeen())) *
 	                       static_cast<double>(chunk_length));
+	D_ASSERT(num_to_pop < chunk_length);
 
 	unordered_map<idx_t, idx_t> replacement_indexes;
-	replacement_indexes.reserve(num_to_pop);
-	vector<idx_t> indexes;
+	SelectionVector ret_sel(num_to_pop);
+	vector<idx_t> random_indexes;
 
-	for (idx_t i = 0; i < chunk_length; i++) {
-		indexes.push_back(i);
+	// Generate a list of indexes we could replace within the selection vector, then randomize.
+	for (uint32_t i = 0; i < num_to_pop; i++) {
+		random_indexes.push_back(i);
 	}
+	RandomizeActualSampleIndexes(random_indexes);
 
+	D_ASSERT(sel_size == STANDARD_VECTOR_SIZE);
 	// randomize the possible indexes to sample from the theoretical chunk length
 	for (idx_t i = 0; i < num_to_pop; i++) {
+		// update the selection vector for the reservoir sample
 		idx_t random_shuffle = base_reservoir_sample->random.NextRandomInteger(
-		    static_cast<uint32_t>(i + 1), static_cast<uint32_t>(actual_sample_indexes.size()));
-		// basically replacing the tuple that was at index actual_sample_indexes[random_shuffle]
-		actual_sample_indexes[random_shuffle] = actual_sample_indexes[i];
-		actual_sample_indexes[i] = sample_chunk_offset + i;
+		    static_cast<uint32_t>(i + 1), static_cast<uint32_t>(GetActiveSampleCount()));
+		// basically replacing the tuple that was at sel[random_shuffle].
+		auto tmp = sel.get_index(i);
+		sel.set_index(random_shuffle, tmp);
+		sel.set_index(i, sample_chunk_offset + i);
 
-		// also shuffle the first num_to_pop values in indexes to get a random range of values from the incoming chunk
-		idx_t random_index_from_sample = base_reservoir_sample->random.NextRandomInteger(
-		    static_cast<uint32_t>(i), static_cast<uint32_t>(chunk_length));
-		idx_t tmp = indexes[random_index_from_sample];
-		indexes[random_index_from_sample] = indexes[i];
-		indexes[i] = tmp;
-		replacement_indexes[indexes[i]] = i;
+		ret_sel.set_index(i, random_indexes[i]);
 	}
 
-	return replacement_indexes;
+	SelectionVectorHelper ret;
+	ret.sel = SelectionVector(ret_sel);
+	ret.size = static_cast<uint32_t>(num_to_pop);
+	return ret;
 }
 
-unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesSlow(idx_t sample_chunk_offset, idx_t chunk_length) {
+SelectionVectorHelper IngestionSample::GetReplacementIndexesSlow(const idx_t sample_chunk_offset,
+                                                                 const idx_t chunk_length) {
 	idx_t remaining = chunk_length;
-	unordered_map<idx_t, idx_t> ret;
+	unordered_map<idx_t, idx_t> ret_map;
 	idx_t sample_chunk_index = 0;
 
 	idx_t base_offset = 0;
@@ -538,12 +546,12 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesSlow(idx_t sam
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
 			base_reservoir_sample->num_entries_to_skip_b4_next_sample += remaining;
-			return ret;
+			break;
 		}
 		// in this chunk! replace the element
 		// ret[index_in_new_chunk] = index_in_sample_chunk (the sample chunk offset will be applied later)
 		// D_ASSERT(sample_chunk_index == ret.size());
-		ret[base_offset + offset] = sample_chunk_index;
+		ret_map[base_offset + offset] = sample_chunk_index;
 		double r2 = base_reservoir_sample->random.NextRandom(base_reservoir_sample->min_weight_threshold, 1);
 		// replace element in our max_hep
 		// sample_chunk_offset + sample_chunk_index
@@ -554,6 +562,27 @@ unordered_map<idx_t, idx_t> IngestionSample::GetReplacementIndexesSlow(idx_t sam
 		remaining -= offset;
 		base_offset += offset;
 	}
+
+	// create set of random indexes to update the ingestion sample selection vector.
+	vector<idx_t> random_indexes;
+	for (uint32_t i = 0; i < ret_map.size(); i++) {
+		random_indexes.push_back(i);
+	}
+	RandomizeActualSampleIndexes(random_indexes);
+
+	// create selection vector to return
+	SelectionVector ret_sel(ret_map.size());
+	idx_t i = 0;
+	D_ASSERT(sel_size == STANDARD_VECTOR_SIZE);
+	for (auto &kv : ret_map) {
+		ret_sel.set_index(kv.second, kv.first);
+		sel.set_index(random_indexes[i], kv.second + sample_chunk_offset);
+		i += 1;
+	}
+	SelectionVectorHelper ret;
+	ret.sel = SelectionVector(ret_sel);
+	ret.size = static_cast<uint32_t>(ret_map.size());
+	return ret;
 }
 
 void IngestionSample::Finalize() {
@@ -612,12 +641,12 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 		auto slice = make_uniq<DataChunk>();
 		auto samples_remaining = chunk.size() - tuples_consumed;
 		auto types = chunk.GetTypes();
-		SelectionVector sel(samples_remaining);
+		SelectionVector input_sel(samples_remaining);
 		for (idx_t i = 0; i < samples_remaining; i++) {
-			sel.set_index(i, tuples_consumed + i);
+			input_sel.set_index(i, tuples_consumed + i);
 		}
 		slice->Initialize(Allocator::DefaultAllocator(), types, samples_remaining);
-		slice->Slice(chunk, sel, samples_remaining);
+		slice->Slice(chunk, input_sel, samples_remaining);
 		slice->SetCardinality(samples_remaining);
 		AddToReservoir(*slice);
 		return;
@@ -626,23 +655,16 @@ void IngestionSample::AddToReservoir(DataChunk &chunk) {
 	// at this point our sample_chunk has at least FIXED SAMPLE SIZE samples.
 	D_ASSERT(sample_chunk->size() >= FIXED_SAMPLE_SIZE);
 
-	auto sample_chunk_ind_to_data_chunk_index = GetReplacementIndexes(sample_chunk->size(), chunk.size());
+	auto chunk_sel = GetReplacementIndexes(sample_chunk->size(), chunk.size());
 
-	if (sample_chunk_ind_to_data_chunk_index.empty()) {
+	if (chunk_sel.size == 0) {
 		// not adding any samples
 		return;
 	}
-	idx_t size = sample_chunk_ind_to_data_chunk_index.size();
+	idx_t size = chunk_sel.size;
 	D_ASSERT(size <= chunk.size());
-	SelectionVector sel(size);
-	for (auto &input_idx_res_idx : sample_chunk_ind_to_data_chunk_index) {
-		auto ind_in_input_chunk = input_idx_res_idx.first;
-		auto ind_in_sample_chunk = input_idx_res_idx.second;
-		sel.set_index(ind_in_sample_chunk, ind_in_input_chunk);
-	}
-	const SelectionVector const_sel(sel);
 
-	UpdateSampleAppend(chunk, sel, size);
+	UpdateSampleAppend(chunk, chunk_sel.sel, size);
 
 	base_reservoir_sample->num_entries_seen_total += chunk.size();
 	D_ASSERT(base_reservoir_sample->reservoir_weights.size() == 0 ||
@@ -665,8 +687,8 @@ void IngestionSample::Verify() {
 		return;
 	}
 	if (GetPriorityQueueSize() == 0) {
-		D_ASSERT(actual_sample_indexes.size() <= FIXED_SAMPLE_SIZE);
-		D_ASSERT(GetTuplesSeen() >= actual_sample_indexes.size());
+		D_ASSERT(GetActiveSampleCount() <= FIXED_SAMPLE_SIZE);
+		D_ASSERT(GetTuplesSeen() >= GetActiveSampleCount());
 		return;
 	}
 	if (NumSamplesCollected() > FIXED_SAMPLE_SIZE) {

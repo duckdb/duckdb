@@ -47,7 +47,7 @@ public:
 	//! Go from the naive sampling to the reservoir sampling
 	//! Naive samping will not collect weights, but when we serialize
 	//! we need to serialize weights again.
-	void FillWeights(vector<idx_t> &actual_sample_indexes);
+	void FillWeights(SelectionVector sel, idx_t sel_size);
 
 	unique_ptr<BaseReservoirSampling> Copy();
 	// BaseReservoirSampling Copy2();
@@ -252,6 +252,11 @@ struct SampleCopyHelper {
 	vector<idx_t> actual_indexes;
 };
 
+struct SelectionVectorHelper {
+	SelectionVector sel;
+	uint32_t size;
+};
+
 class IngestionSample : public BlockingSample {
 public:
 	static constexpr const SampleType TYPE = SampleType::INGESTION_SAMPLE;
@@ -283,9 +288,9 @@ public:
 	//! When shrinking or copying or merging, you need to create a selection vector
 	//! to select the correct rows to copy. During this copy process, sometimes underlying
 	//! statistics are changed. The SampleCopyHelper object stores the changes
-	SampleCopyHelper GetSelToCopyData(idx_t sel_size) const;
-	SampleCopyHelper SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const;
-	SampleCopyHelper SelFromSimpleIndexes(vector<idx_t> &actual_indexes) const;
+	// SelectionVectorHelper GetSelToCopyData(idx_t sel_size) const;
+	// SelectionVectorHelper SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const;
+	// SelectionVectorHelper SelFromSimpleIndexes(vector<idx_t> &actual_indexes) const;
 
 	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for
 	//! future sampling values
@@ -307,7 +312,7 @@ public:
 
 	idx_t GetTuplesSeen();
 	idx_t NumSamplesCollected() const;
-	idx_t NumActiveSamples() const;
+	idx_t GetActiveSampleCount() const;
 	static bool ValidSampleType(const LogicalType &type);
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
@@ -326,7 +331,7 @@ public:
 	// index_in_sample_chunk) this data is used to make a selection vector to copy samples from the input chunk to the
 	// sample chunk
 	//! Get indexes from current sample that can be replaced.
-	unordered_map<idx_t, idx_t> GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
+	SelectionVectorHelper GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
 
 	idx_t sample_count;
 	Allocator &allocator;
@@ -334,8 +339,8 @@ public:
 	unique_ptr<DataChunk> sample_chunk;
 
 private:
-	unordered_map<idx_t, idx_t> GetReplacementIndexesSlow(idx_t sample_chunk_offset, idx_t chunk_length);
-	unordered_map<idx_t, idx_t> GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t chunk_length);
+	SelectionVectorHelper GetReplacementIndexesSlow(const idx_t sample_chunk_offset, const idx_t chunk_length);
+	SelectionVectorHelper GetReplacementIndexesFast(const idx_t sample_chunk_offset, const idx_t chunk_length);
 	void SimpleMerge(IngestionSample &other);
 
 	// Helper methods for Shrink().
@@ -344,8 +349,11 @@ private:
 	// to copy the old sample chunk into
 	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const;
 
-	void RandomizeActualSampleIndexes();
-	vector<idx_t> actual_sample_indexes;
+	template <typename T>
+	void RandomizeActualSampleIndexes(vector<T> actual_sample_indexes);
+
+	SelectionVector sel;
+	idx_t sel_size;
 };
 
 } // namespace duckdb

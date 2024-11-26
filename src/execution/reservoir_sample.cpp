@@ -28,13 +28,7 @@ std::pair<double, idx_t> BlockingSample::PopFromWeightQueue() {
 	auto ret = base_reservoir_sample->reservoir_weights.top();
 	base_reservoir_sample->reservoir_weights.pop();
 
-	if (base_reservoir_sample->reservoir_weights.empty()) {
-		// 1 is maximum weight
-		base_reservoir_sample->min_weight_threshold = 1;
-		return ret;
-	}
-	auto &min_key = base_reservoir_sample->reservoir_weights.top();
-	base_reservoir_sample->min_weight_threshold = -min_key.first;
+	base_reservoir_sample->UpdateMinWeightThreshold();
 	D_ASSERT(base_reservoir_sample->min_weight_threshold > 0);
 	return ret;
 }
