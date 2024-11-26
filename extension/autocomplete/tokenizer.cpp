@@ -7,7 +7,8 @@ BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : 
 
 enum class TokenizeState {
 	STANDARD = 0,
-	IN_COMMENT,
+	SINGLE_LINE_COMMENT,
+	MULTI_LINE_COMMENT,
 	QUOTED_IDENTIFIER,
 	STRING_LITERAL,
 	KEYWORD,
@@ -129,7 +130,12 @@ bool BaseTokenizer::TokenizeInput() {
 			}
 			if (c == '-' && i + 1 < sql.size() && sql[i + 1] == '-') {
 				i++;
-				state = TokenizeState::IN_COMMENT;
+				state = TokenizeState::SINGLE_LINE_COMMENT;
+				break;
+			}
+			if (c == '/' && i + 1 < sql.size() && sql[i + 1] == '*') {
+				i++;
+				state = TokenizeState::MULTI_LINE_COMMENT;
 				break;
 			}
 			if (StringUtil::CharacterIsSpace(c)) {
@@ -217,8 +223,15 @@ bool BaseTokenizer::TokenizeInput() {
 				}
 			}
 			break;
-		case TokenizeState::IN_COMMENT:
+		case TokenizeState::SINGLE_LINE_COMMENT:
 			if (c == '\n' || c == '\r') {
+				last_pos = i + 1;
+				state = TokenizeState::STANDARD;
+			}
+			break;
+		case TokenizeState::MULTI_LINE_COMMENT:
+			if (c == '*' && i + 1 < sql.size() && sql[i + 1] == '/') {
+				i++;
 				last_pos = i + 1;
 				state = TokenizeState::STANDARD;
 			}
@@ -233,7 +246,8 @@ bool BaseTokenizer::TokenizeInput() {
 	case TokenizeState::STRING_LITERAL:
 		pos_offset = 1;
 		break;
-	case TokenizeState::IN_COMMENT:
+	case TokenizeState::SINGLE_LINE_COMMENT:
+	case TokenizeState::MULTI_LINE_COMMENT:
 		// no suggestions in comments
 		return false;
 	default:
