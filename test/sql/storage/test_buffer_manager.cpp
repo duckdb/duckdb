@@ -344,3 +344,21 @@ TEST_CASE("Test buffer allocator", "[storage][.]") {
 
 	allocator.FreeData(pointer, current_size);
 }
+
+TEST_CASE("Test buffer-managed query results", "[storage][.]") {
+	auto db_path = TestCreatePath("buffer_managed_query_result");
+	DeleteDatabase(db_path);
+
+	// Query result is buffer-managed since #14873, so it must keep the DB instance alive
+	// This makes sure the DB goes out of scope before the query result
+	// Destroying the relation after the DB should not result in a segfault
+	duckdb::unique_ptr<QueryResult> result;
+	{
+		DuckDB db(db_path);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("set memory_limit='10mb';"));
+		REQUIRE_NO_FAIL(con.Query("create table range as from range(10_000_000);"));
+		result = con.Query("from range;");
+	}
+	result.reset();
+}
