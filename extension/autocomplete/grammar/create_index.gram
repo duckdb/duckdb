@@ -1,5 +1,4 @@
 CreateIndexStmt <- Unique? 'INDEX'i IfNotExists? IndexName? 'ON'i BaseTableName IndexType? Parens(List(Expression))
 
 Unique <- 'UNIQUE'i
-IndexName <- Identifier
 IndexType <- 'USING'i Identifier

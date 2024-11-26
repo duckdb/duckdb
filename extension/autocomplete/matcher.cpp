@@ -577,6 +577,14 @@ struct PEGParser {
 public:
 	void ParseRules(const char *grammar);
 
+	void AddRule(string_t rule_name, PEGRule rule) {
+		auto entry = rules.find(rule_name);
+		if (entry != rules.end()) {
+			throw InternalException("Failed to parse grammar - duplicate rule name %s", rule_name.GetString());
+		}
+		rules.insert(make_pair(rule_name, std::move(rule)));
+	}
+
 	string_map_t<PEGRule> rules;
 };
 
@@ -618,7 +626,7 @@ void PEGParser::ParseRules(const char *grammar) {
 		}
 		if (parse_state == PEGParseState::RULE_DEFINITION && StringUtil::CharacterIsNewline(grammar[c]) && bracket_count == 0 && !in_or_clause && !rule.tokens.empty()) {
 			// if we see a newline while we are parsing a rule definition we can complete the rule
-			rules.insert(make_pair(rule_name, std::move(rule)));
+			AddRule(rule_name, std::move(rule));
 			rule_name = string_t();
 			rule.Clear();
 			// look for the subsequent rule
@@ -772,7 +780,7 @@ void PEGParser::ParseRules(const char *grammar) {
 		if (rule.tokens.empty()) {
 			throw InternalException("Failed to parse grammar - rule %s is empty", rule_name.GetString());
 		}
-		rules.insert(make_pair(rule_name, std::move(rule)));
+		AddRule(rule_name, std::move(rule));
 	}
 }
 

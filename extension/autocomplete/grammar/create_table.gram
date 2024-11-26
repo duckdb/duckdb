@@ -32,9 +32,9 @@ UpdateAction <- 'ON' 'UPDATE' KeyAction
 DeleteAction <- 'ON' 'DELETE' KeyAction
 KeyAction <- ('NO'i 'ACTION'i) / 'RESTRICT'i / 'CASCADE'i / ('SET'i 'NULL'i) / ('SET'i 'DEFAULT'i)
 
-TopLevelConstraint <- ConstraintName? TopLevelConstraintList
+TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
 TopLevelConstraintList <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
-ConstraintName <- 'CONSTRAINT'i Identifier
+ConstraintNameClause <- 'CONSTRAINT'i Identifier
 TopPrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i ColumnIdList
 TopUniqueConstraint <- 'UNIQUE'i ColumnIdList
 TopForeignKeyConstraint <- 'FOREIGN'i 'KEY'i ColumnIdList ForeignKeyConstraint
