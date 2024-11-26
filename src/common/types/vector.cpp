@@ -15,6 +15,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/types/varint.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -22,7 +23,6 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "fsst.h"
-#include "duckdb/common/types/varint.hpp"
 
 #include <cstring> // strlen() on Solaris
 
