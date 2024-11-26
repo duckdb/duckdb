@@ -1,0 +1,17 @@
+{
+    "version": "unstable_newly_added",
+    "description": "These functions have been recently added to DuckDB. They are candidate functions to be added to the stable API",
+    "entries": [
+        "duckdb_is_finite_timestamp_s",
+        "duckdb_is_finite_timestamp_ms",
+        "duckdb_is_finite_timestamp_ns",
+        "duckdb_create_timestamp_tz",
+        "duckdb_create_timestamp_s",
+        "duckdb_create_timestamp_ms",
+        "duckdb_create_timestamp_ns",
+        "duckdb_get_timestamp_tz",
+        "duckdb_get_timestamp_s",
+        "duckdb_get_timestamp_ms",
+        "duckdb_get_timestamp_ns"
+    ]
+}

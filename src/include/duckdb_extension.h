@@ -452,11 +452,8 @@ typedef struct {
 	void (*duckdb_destroy_cast_function)(duckdb_cast_function *cast_function);
 #endif
 
-#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE // unstable
-	// The functions below are not stable. This means that their signature, position in the struct, or even presence in
-	// the struct may change in future DuckDB releases. This means that for extensions using any of the functions below,
-	// extension binaries are tightly coupledto the DuckDB version they were built for.
-
+// These functions have been deprecated and may be removed in future versions of DuckDB
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	idx_t (*duckdb_row_count)(duckdb_result *result);
 	void *(*duckdb_column_data)(duckdb_result *result, idx_t col);
 	bool *(*duckdb_nullmask_data)(duckdb_result *result, idx_t col);
@@ -509,6 +506,10 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
+#endif
+
+// These functions have been recently added to DuckDB. They are candidate functions to be added to the stable API
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	bool (*duckdb_is_finite_timestamp_s)(duckdb_timestamp_s ts);
 	bool (*duckdb_is_finite_timestamp_ms)(duckdb_timestamp_ms ts);
 	bool (*duckdb_is_finite_timestamp_ns)(duckdb_timestamp_ns ts);
@@ -867,7 +868,7 @@ typedef struct {
 #define duckdb_register_cast_function               duckdb_ext_api.duckdb_register_cast_function
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
 
-// Version unstable
+// Version unstable_deprecated
 #define duckdb_row_count                  duckdb_ext_api.duckdb_row_count
 #define duckdb_column_data                duckdb_ext_api.duckdb_column_data
 #define duckdb_nullmask_data              duckdb_ext_api.duckdb_nullmask_data
@@ -898,19 +899,8 @@ typedef struct {
 #define duckdb_value_string_internal      duckdb_ext_api.duckdb_value_string_internal
 #define duckdb_value_blob                 duckdb_ext_api.duckdb_value_blob
 #define duckdb_value_is_null              duckdb_ext_api.duckdb_value_is_null
-#define duckdb_is_finite_timestamp_s      duckdb_ext_api.duckdb_is_finite_timestamp_s
-#define duckdb_is_finite_timestamp_ms     duckdb_ext_api.duckdb_is_finite_timestamp_ms
-#define duckdb_is_finite_timestamp_ns     duckdb_ext_api.duckdb_is_finite_timestamp_ns
 #define duckdb_execute_prepared_streaming duckdb_ext_api.duckdb_execute_prepared_streaming
 #define duckdb_pending_prepared_streaming duckdb_ext_api.duckdb_pending_prepared_streaming
-#define duckdb_create_timestamp_tz        duckdb_ext_api.duckdb_create_timestamp_tz
-#define duckdb_create_timestamp_s         duckdb_ext_api.duckdb_create_timestamp_s
-#define duckdb_create_timestamp_ms        duckdb_ext_api.duckdb_create_timestamp_ms
-#define duckdb_create_timestamp_ns        duckdb_ext_api.duckdb_create_timestamp_ns
-#define duckdb_get_timestamp_tz           duckdb_ext_api.duckdb_get_timestamp_tz
-#define duckdb_get_timestamp_s            duckdb_ext_api.duckdb_get_timestamp_s
-#define duckdb_get_timestamp_ms           duckdb_ext_api.duckdb_get_timestamp_ms
-#define duckdb_get_timestamp_ns           duckdb_ext_api.duckdb_get_timestamp_ns
 #define duckdb_query_arrow                duckdb_ext_api.duckdb_query_arrow
 #define duckdb_query_arrow_schema         duckdb_ext_api.duckdb_query_arrow_schema
 #define duckdb_prepared_arrow_schema      duckdb_ext_api.duckdb_prepared_arrow_schema
@@ -926,6 +916,19 @@ typedef struct {
 #define duckdb_arrow_scan                 duckdb_ext_api.duckdb_arrow_scan
 #define duckdb_arrow_array_scan           duckdb_ext_api.duckdb_arrow_array_scan
 #define duckdb_stream_fetch_chunk         duckdb_ext_api.duckdb_stream_fetch_chunk
+
+// Version unstable_newly_added
+#define duckdb_is_finite_timestamp_s  duckdb_ext_api.duckdb_is_finite_timestamp_s
+#define duckdb_is_finite_timestamp_ms duckdb_ext_api.duckdb_is_finite_timestamp_ms
+#define duckdb_is_finite_timestamp_ns duckdb_ext_api.duckdb_is_finite_timestamp_ns
+#define duckdb_create_timestamp_tz    duckdb_ext_api.duckdb_create_timestamp_tz
+#define duckdb_create_timestamp_s     duckdb_ext_api.duckdb_create_timestamp_s
+#define duckdb_create_timestamp_ms    duckdb_ext_api.duckdb_create_timestamp_ms
+#define duckdb_create_timestamp_ns    duckdb_ext_api.duckdb_create_timestamp_ns
+#define duckdb_get_timestamp_tz       duckdb_ext_api.duckdb_get_timestamp_tz
+#define duckdb_get_timestamp_s        duckdb_ext_api.duckdb_get_timestamp_s
+#define duckdb_get_timestamp_ms       duckdb_ext_api.duckdb_get_timestamp_ms
+#define duckdb_get_timestamp_ns       duckdb_ext_api.duckdb_get_timestamp_ns
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros

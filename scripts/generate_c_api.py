@@ -207,13 +207,14 @@ def parse_ext_api_definitions(ext_api_definition):
             try:
                 obj = json.loads(f.read())
                 api_definitions[obj['version']] = obj
-
-                if Path(file).stem != obj['version']:
-                    print(f"\nMismatch between filename and version in file for {file}")
-                    exit(1)
-                if obj['version'] == DEV_VERSION_TAG:
+                if obj['version'].startswith("unstable_"):
                     dev_versions.append(obj['version'])
                 else:
+                    if Path(file).stem != obj['version']:
+                        print(
+                            f"\nMismatch between filename and version in file for {file}. Note that unstable versions should have a version starting with 'unstable_' and that stable versions should have the version as their filename"
+                        )
+                        exit(1)
                     versions.append(obj['version'])
 
             except json.decoder.JSONDecodeError as err:
@@ -335,8 +336,7 @@ def to_camel_case(snake_str):
 
 def parse_semver(version):
     if version[0] != 'v':
-        print(f"\nVersion string {version} does not start with a v")
-        exit(1)
+        raise Exception(f"\nVersion string {version} does not start with a v")
 
     versions = version[1:].split(".")
 
@@ -485,17 +485,13 @@ def create_extension_api_struct(
         if len(api_version_entry['entries']) == 0:
             continue
         version = api_version_entry['version']
-        if version == DEV_VERSION_TAG:
+        if version.startswith("unstable_"):
+            if 'description' in api_version_entry:
+                extension_struct_finished += f"// {api_version_entry['description']}\n"
             if add_version_defines:
-                extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_UNSTABLE // {version}\n"
+                extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_UNSTABLE\n"
             else:
-                extension_struct_finished += f"// {version}\n"
-            extension_struct_finished += (
-                f'    // The functions below are not stable. This means that their signature, '
-                f'position in the struct, or even presence in the struct may change in future DuckDB releases. '
-                f'This means that for extensions using any of the functions below, extension binaries are tightly coupled'
-                f'to the DuckDB version they were built for.\n\n'
-            )
+                extension_struct_finished += f"\n"
         else:
             if add_version_defines:
                 major, minor, patch = parse_semver(version)
@@ -705,15 +701,15 @@ def create_duckdb_ext_internal_h(ext_api_version, function_groups, function_map,
 
 
 def get_extension_api_version(ext_api_definitions):
-    versions = []
+    latest_version = ""
 
     for version_entry in ext_api_definitions:
-        versions.append(version_entry['version'])
+        if version_entry['version'].startswith('v'):
+            latest_version = version_entry['version']
+        if version_entry['version'].startswith("unstable_"):
+            break
 
-    if versions[-1] == DEV_VERSION_TAG:
-        return versions[-2]
-    else:
-        return versions[-1]
+    return latest_version
 
 
 def create_struct_function_set(api_definitions):

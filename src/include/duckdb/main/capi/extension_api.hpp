@@ -386,10 +386,7 @@ typedef struct {
 	                                           duckdb_vector output);
 	duckdb_state (*duckdb_register_cast_function)(duckdb_connection con, duckdb_cast_function cast_function);
 	void (*duckdb_destroy_cast_function)(duckdb_cast_function *cast_function);
-	// unstable
-	// The functions below are not stable. This means that their signature, position in the struct, or even presence in
-	// the struct may change in future DuckDB releases. This means that for extensions using any of the functions below,
-	// extension binaries are tightly coupledto the DuckDB version they were built for.
+	// These functions have been deprecated and may be removed in future versions of DuckDB
 
 	idx_t (*duckdb_row_count)(duckdb_result *result);
 	void *(*duckdb_column_data)(duckdb_result *result, idx_t col);
@@ -443,6 +440,8 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
+	// These functions have been recently added to DuckDB. They are candidate functions to be added to the stable API
+
 	bool (*duckdb_is_finite_timestamp_s)(duckdb_timestamp_s ts);
 	bool (*duckdb_is_finite_timestamp_ms)(duckdb_timestamp_ms ts);
 	bool (*duckdb_is_finite_timestamp_ns)(duckdb_timestamp_ns ts);

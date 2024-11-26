@@ -1,5 +1,6 @@
 {
-    "version": "unstable",
+    "version": "unstable_deprecated",
+    "description": "These functions have been deprecated and may be removed in future versions of DuckDB",
     "entries": [
         "duckdb_row_count",
         "duckdb_column_data",
@@ -47,18 +48,6 @@
         "duckdb_execute_prepared_arrow",
         "duckdb_arrow_scan",
         "duckdb_arrow_array_scan",
-        "duckdb_stream_fetch_chunk",
-
-        "duckdb_is_finite_timestamp_s",
-        "duckdb_is_finite_timestamp_ms",
-        "duckdb_is_finite_timestamp_ns",
-        "duckdb_create_timestamp_tz",
-        "duckdb_create_timestamp_s",
-        "duckdb_create_timestamp_ms",
-        "duckdb_create_timestamp_ns",
-        "duckdb_get_timestamp_tz",
-        "duckdb_get_timestamp_s",
-        "duckdb_get_timestamp_ms",
-        "duckdb_get_timestamp_ns"
+        "duckdb_stream_fetch_chunk"
     ]
 }
