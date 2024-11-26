@@ -174,6 +174,53 @@ duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {
 	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetEntry(*v));
 }
 
+duckdb_vector duckdb_map_vector_get_keys(duckdb_vector vector) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_vector>(&duckdb::MapVector::GetKeys(*v));
+}
+
+duckdb_vector duckdb_map_vector_get_values(duckdb_vector vector) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_vector>(&duckdb::MapVector::GetValues(*v));
+}
+
+duckdb_vector duckdb_union_vector_get_tags(duckdb_vector vector) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() != duckdb::LogicalTypeId::UNION) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_vector>(&duckdb::UnionVector::GetTags(*v));
+}
+
+duckdb_vector duckdb_union_vector_get_member(duckdb_vector vector, idx_t tag) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() != duckdb::LogicalTypeId::UNION) {
+		return nullptr;
+	}
+	if (tag > duckdb::UnionType::GetMemberCount(v->GetType()) - 1) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_vector>(&duckdb::UnionVector::GetMember(*v, tag));
+}
+
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {
 	if (!validity) {
 		return true;

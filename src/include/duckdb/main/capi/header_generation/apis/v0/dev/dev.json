@@ -24,6 +24,10 @@
         "duckdb_get_timestamp_tz",
         "duckdb_get_timestamp_s",
         "duckdb_get_timestamp_ms",
-        "duckdb_get_timestamp_ns"
+        "duckdb_get_timestamp_ns",
+        "duckdb_map_vector_get_keys",
+        "duckdb_map_vector_get_values",
+        "duckdb_union_vector_get_tags",
+        "duckdb_union_vector_get_member"
     ]
 }

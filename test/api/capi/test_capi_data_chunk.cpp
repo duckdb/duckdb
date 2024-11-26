@@ -498,3 +498,125 @@ TEST_CASE("Test PK violation in the C API appender", "[capi]") {
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->row_count() == 0);
 }
+
+TEST_CASE("Test map vector functions", "[capi]") {
+	duckdb_database db;
+	duckdb_connection con;
+	duckdb_result result;
+
+	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
+
+	// Create a table with a map column. Insert some dummy data.
+	REQUIRE(duckdb_query(con, "CREATE TABLE test(i MAP(INTEGER, DOUBLE))", NULL) == DuckDBSuccess);
+	REQUIRE(duckdb_query(con, "INSERT INTO test VALUES (MAP {1: 1.0, 2: 2.0, 3: 3.0})", NULL) == DuckDBSuccess);
+
+	REQUIRE(duckdb_query(con, "SELECT * FROM test", &result) == DuckDBSuccess);
+
+	auto chunk = duckdb_result_get_chunk(result, 0);
+	REQUIRE(chunk);
+
+	auto map_vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	// Get the keys vector.
+	auto keys_vector = duckdb_map_vector_get_keys(map_vector);
+	REQUIRE(keys_vector);
+
+	// Get the values vector.
+	auto values_vector = duckdb_map_vector_get_values(map_vector);
+	REQUIRE(values_vector);
+
+	// Get the keys vector data.
+	auto keys_data = (int32_t *)duckdb_vector_get_data(keys_vector);
+
+	// Get the values vector data.
+	auto values_data = (double *)duckdb_vector_get_data(values_vector);
+
+	// Check the keys and values.
+	REQUIRE(keys_data[0] == 1);
+	REQUIRE(values_data[0] == 1.0);
+	REQUIRE(keys_data[1] == 2);
+	REQUIRE(values_data[1] == 2.0);
+	REQUIRE(keys_data[2] == 3);
+	REQUIRE(values_data[2] == 3.0);
+
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_result(&result);
+
+	// Test the inverse (i.e. use functions on a non-map vector).
+	REQUIRE(duckdb_query(con, "SELECT 1", &result) == DuckDBSuccess);
+
+	chunk = duckdb_result_get_chunk(result, 0);
+	REQUIRE(chunk);
+
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	REQUIRE(duckdb_map_vector_get_keys(vector) == nullptr);
+	REQUIRE(duckdb_map_vector_get_values(vector) == nullptr);
+
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_result(&result);
+
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+}
+
+TEST_CASE("Test union vector functions", "[capi]") {
+	duckdb_database db;
+	duckdb_connection con;
+	duckdb_result result;
+
+	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
+
+	// Create a table with a union column. Insert some dummy data.
+	REQUIRE(duckdb_query(con, "CREATE TABLE test(i UNION(i INTEGER, d DOUBLE))", NULL) == DuckDBSuccess);
+	REQUIRE(duckdb_query(con, "INSERT INTO test VALUES (1), (2.0)", NULL) == DuckDBSuccess);
+	REQUIRE(duckdb_query(con, "SELECT * FROM test", &result) == DuckDBSuccess);
+
+	auto chunk = duckdb_result_get_chunk(result, 0);
+	REQUIRE(chunk);
+
+	auto union_vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	// Get the member vectors
+	auto member1 = duckdb_union_vector_get_member(union_vector, 0);
+	auto member2 = duckdb_union_vector_get_member(union_vector, 1);
+	auto member3 = duckdb_union_vector_get_member(union_vector, 2);
+
+	// Check that member3 is nullptr (tag=2 is not valid)
+	REQUIRE(member3 == nullptr);
+
+	// Check the values
+	auto member1_ltype = duckdb_vector_get_column_type(member1);
+	auto member2_ltype = duckdb_vector_get_column_type(member2);
+	auto member1_type = duckdb_get_type_id(member1_ltype);
+	auto member2_type = duckdb_get_type_id(member2_ltype);
+	duckdb_destroy_logical_type(&member1_ltype);
+	duckdb_destroy_logical_type(&member2_ltype);
+
+	REQUIRE(member1_type == DUCKDB_TYPE_INTEGER);
+	REQUIRE(member2_type == DUCKDB_TYPE_DOUBLE);
+
+	REQUIRE(((int32_t *)duckdb_vector_get_data(member1))[0] == 1);
+	REQUIRE(((double *)duckdb_vector_get_data(member2))[1] == 2.0);
+
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_result(&result);
+
+	// Test the inverse (i.e. use functions on a non-union vector).
+	REQUIRE(duckdb_query(con, "SELECT 1", &result) == DuckDBSuccess);
+
+	chunk = duckdb_result_get_chunk(result, 0);
+	REQUIRE(chunk);
+
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	REQUIRE(duckdb_union_vector_get_member(vector, 0) == nullptr);
+
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_result(&result);
+
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+}
