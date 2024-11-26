@@ -1361,7 +1361,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		}
 
 		D_ASSERT(arrow_convert_data.find(col_idx) != arrow_convert_data.end());
-		auto &arrow_type = *arrow_convert_data.at(idx);
+		auto &arrow_type = *arrow_convert_data.at(col_idx);
 		auto &array_state = scan_state.GetState(col_idx);
 
 		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data

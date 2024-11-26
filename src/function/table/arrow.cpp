@@ -370,6 +370,15 @@ void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, Arr
 	}
 }
 
+unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBindDumb(ClientContext &context, TableFunctionBindInput &input,
+                                                               vector<LogicalType> &return_types,
+                                                               vector<string> &names) {
+	auto bind_data = ArrowScanBind(context, input, return_types, names);
+	auto &arrow_bind_data = bind_data->Cast<ArrowScanFunctionData>();
+	arrow_bind_data.projection_pushdown_enabled = false;
+	return bind_data;
+}
+
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	if (input.inputs[0].IsNull() || input.inputs[1].IsNull() || input.inputs[2].IsNull()) {
@@ -475,11 +484,12 @@ ArrowTableFunction::ArrowScanInitLocalInternal(ClientContext &context, TableFunc
 	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
 	result->column_ids = input.column_ids;
 	result->filters = input.filters.get();
-	if (input.CanRemoveFilterColumns()) {
+	auto &bind_data = input.bind_data->Cast<ArrowScanFunctionData>();
+	if (!bind_data.projection_pushdown_enabled) {
+		result->column_ids.clear();
+	} else if (!input.projection_ids.empty()) {
 		auto &asgs = global_state_p->Cast<ArrowScanGlobalState>();
 		result->all_columns.Initialize(context, asgs.scanned_types);
-	} else {
-		result->column_ids.clear();
 	}
 	if (!ArrowScanParallelStateNext(context, input.bind_data.get(), *result, global_state)) {
 		return nullptr;
@@ -596,7 +606,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(arrow);
 
 	TableFunction arrow_dumb("arrow_scan_dumb", {LogicalType::POINTER, LogicalType::POINTER, LogicalType::POINTER},
-	                         ArrowScanFunction, ArrowScanBind, ArrowScanInitGlobal, ArrowScanInitLocal);
+	                         ArrowScanFunction, ArrowScanBindDumb, ArrowScanInitGlobal, ArrowScanInitLocal);
 	arrow_dumb.cardinality = ArrowScanCardinality;
 	arrow_dumb.get_partition_data = ArrowGetPartitionData;
 	arrow_dumb.projection_pushdown = false;
