@@ -7,6 +7,7 @@ add_library_unity(
   window_boundaries_state.cpp
   window_collection.cpp
   window_constant_aggregator.cpp
+  window_custom_aggregator.cpp
   window_cumedist_function.cpp
   window_executor.cpp
   window_naive_aggregator.cpp
