@@ -154,10 +154,10 @@ void IngestionSample::ConvertToSlowSample() {
 
 template <typename T>
 void IngestionSample::RandomizeActualSampleIndexes(vector<T> actual_sample_indexes) {
-	if (GetActiveSampleCount() <= 1) {
+	if (actual_sample_indexes.size() <= 1) {
 		return;
 	}
-	if (GetActiveSampleCount() == 2) {
+	if (actual_sample_indexes.size() == 2) {
 		if (base_reservoir_sample->random.NextRandom() > 0.5) {
 			std::swap(actual_sample_indexes[0], actual_sample_indexes[1]);
 			return;
