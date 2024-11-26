@@ -13,6 +13,17 @@
         "duckdb_get_enum_value",
         "duckdb_get_struct_child",
         "duckdb_appender_add_column",
-        "duckdb_appender_clear_columns"
+        "duckdb_appender_clear_columns",
+        "duckdb_is_finite_timestamp_s",
+        "duckdb_is_finite_timestamp_ms",
+        "duckdb_is_finite_timestamp_ns",
+        "duckdb_create_timestamp_tz",
+        "duckdb_create_timestamp_s",
+        "duckdb_create_timestamp_ms",
+        "duckdb_create_timestamp_ns",
+        "duckdb_get_timestamp_tz",
+        "duckdb_get_timestamp_s",
+        "duckdb_get_timestamp_ms",
+        "duckdb_get_timestamp_ns"
     ]
 }

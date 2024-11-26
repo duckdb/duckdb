@@ -1067,9 +1067,21 @@ bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(timestamp_sec_t input, timestamp_sec_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
 bool TryCast::Operation(timestamp_t input, timestamp_sec_t &result, bool strict) {
 	D_ASSERT(Timestamp::IsFinite(input));
 	result.value = input.value / Interval::MICROS_PER_SEC;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ms_t input, timestamp_ms_t &result, bool strict) {
+	result.value = input.value;
 	return true;
 }
 
@@ -1081,11 +1093,23 @@ bool TryCast::Operation(timestamp_t input, timestamp_ms_t &result, bool strict) 
 }
 
 template <>
+bool TryCast::Operation(timestamp_ns_t input, timestamp_ns_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
 bool TryCast::Operation(timestamp_t input, timestamp_ns_t &result, bool strict) {
 	D_ASSERT(Timestamp::IsFinite(input));
 	if (!TryMultiplyOperator::Operation(input.value, Interval::NANOS_PER_MSEC, result.value)) {
 		throw ConversionException("Could not convert TIMESTAMP to TIMESTAMP_NS");
 	}
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool strict) {
+	result.value = input.value;
 	return true;
 }
 
