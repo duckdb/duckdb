@@ -452,7 +452,9 @@ typedef struct {
 #endif
 
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE // unstable
-	// WARNING! the functions below are not (yet) stable
+	// The functions below are not stable. This means that their signature, position in the struct, or even presence in
+	// the struct may change in future DuckDB releases. This means that for extensions using any of the functions below,
+	// extension binaries are tightly coupledto the DuckDB version they were built for.
 
 	idx_t (*duckdb_row_count)(duckdb_result *result);
 	void *(*duckdb_column_data)(duckdb_result *result, idx_t col);

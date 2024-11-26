@@ -490,7 +490,10 @@ def create_extension_api_struct(
                 extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_UNSTABLE // {version}\n"
             else:
                 extension_struct_finished += f"// {version}\n"
-            extension_struct_finished += f'    // WARNING! the functions below are not (yet) stable \n\n'
+            extension_struct_finished += (f'    // The functions below are not stable. This means that their signature, '
+                                          f'position in the struct, or even presence in the struct may change in future DuckDB releases. '
+                                          f'This means that for extensions using any of the functions below, extension binaries are tightly coupled'
+                                          f'to the DuckDB version they were built for.\n\n')
         else:
             if add_version_defines:
                 major, minor, patch = parse_semver(version)
