@@ -7,7 +7,7 @@ SelectOrParens <- BaseSelect / Parens(SelectStatement)
 BaseSelect <- (SimpleSelect / ValuesClause / DescribeStatement / TableStatement) OrderByClause? LimitClause? OffsetClause?
 TableStatement <- 'TABLE' BaseTableName
 
-SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause?
+SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
 WithStatement <- Identifier InsertColumnList? 'AS'i Materialized? SubqueryReference
@@ -56,8 +56,19 @@ WhereClause <- 'WHERE'i Expression
 GroupByClause <- 'GROUP'i 'BY'i GroupByExpressions
 HavingClause <- 'HAVING'i Expression
 QualifyClause <- 'QUALIFY'i Expression
+SampleClause <- 'USING'i 'SAMPLE'i SampleEntry
 WindowClause <- 'WINDOW'i List(WindowDefinition)
 WindowDefinition <- Identifier 'AS'i WindowFrameDefinition
+
+SampleEntry <- SampleEntryCount / SampleEntryFunction RepeatableSample?
+SampleEntryCount <- SampleCount Parens(SampleProperties)?
+SampleEntryFunction <- SampleFunction? Parens(SampleCount)
+SampleFunction <- Identifier
+SampleProperties <- Identifier (',' NumberLiteral)
+RepeatableSample <- 'REPEATABLE' Parens(NumberLiteral)
+
+SampleCount <- Expression SampleUnit?
+SampleUnit <- '%' / 'PERCENT'i / 'ROWS'i
 
 GroupByExpressions <- GroupByList / 'ALL'i
 GroupByList <- List(GroupByExpression)
