@@ -112,8 +112,9 @@ RecursiveExpression <- (Operator Expression)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? (':' Expression?)? (':' Expression?)?
 
-SpecialFunctionExpression <- CoalesceExpression / ExtractExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
+SpecialFunctionExpression <- CoalesceExpression / ColumnsExpression / ExtractExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE'i Parens(List(Expression))
+ColumnsExpression <- '*'? 'COLUMNS'i Parens(Expression)
 ExtractExpression <- 'EXTRACT'i Parens(Expression 'FROM'i Expression)
 NullIfExpression <- 'NULLIF'i Parens(Expression ',' Expression)
 PositionExpression <- 'POSITION'i Parens(Expression)

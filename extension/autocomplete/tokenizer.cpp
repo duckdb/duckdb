@@ -16,6 +16,47 @@ enum class TokenizeState {
 	OPERATOR
 };
 
+static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
+	for(idx_t i = 0; i < len; i++) {
+		if (str[i] != op[i]) {
+			return false;
+		}
+	}
+	op_len = len;
+	return true;
+}
+
+bool BaseTokenizer::IsSpecialOperator(idx_t pos, idx_t &op_len) const {
+	const char *op_start = sql.c_str() + pos;
+	if (pos + 1 >= sql.size()) {
+		// 2-byte operators are out-of-bounds
+		return false;
+	}
+	if (OperatorEquals(op_start, "::", 2, op_len)) {
+		return true;
+	}
+	if (OperatorEquals(op_start, ":=", 2, op_len)) {
+		return true;
+	}
+	if (OperatorEquals(op_start, "->", 2, op_len)) {
+		return true;
+	}
+	if (OperatorEquals(op_start, "**", 2, op_len)) {
+		return true;
+	}
+	if (OperatorEquals(op_start, "//", 2, op_len)) {
+		return true;
+	}
+	if (pos + 2 >= sql.size()) {
+		// 3-byte operators are out-of-bounds
+		return false;
+	}
+	if (OperatorEquals(op_start, "->>", 3, op_len)) {
+		return true;
+	}
+	return false;
+}
+
 bool BaseTokenizer::IsSingleByteOperator(char c) {
 	switch(c) {
 	case '(':
@@ -143,6 +184,14 @@ bool BaseTokenizer::TokenizeInput() {
 			}
 			if (StringUtil::CharacterIsSpace(c)) {
 				// space character - skip
+				last_pos = i + 1;
+				break;
+			}
+			idx_t op_len;
+			if (IsSpecialOperator(i, op_len)) {
+				// special operator - push the special operator
+				tokens.emplace_back(sql.substr(i, op_len));
+				i += op_len - 1;
 				last_pos = i + 1;
 				break;
 			}

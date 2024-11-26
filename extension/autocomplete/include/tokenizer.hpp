@@ -25,6 +25,7 @@ public:
 	virtual void OnStatementEnd(idx_t pos);
 	virtual void OnLastToken(string last_word, idx_t last_pos) = 0;
 
+	bool IsSpecialOperator(idx_t pos, idx_t &op_len) const;
 	static bool IsSingleByteOperator(char c);
 	static bool CharacterIsInitialNumber(char c);
 	static bool CharacterIsNumber(char c);
