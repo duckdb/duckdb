@@ -2,7 +2,10 @@ CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefiniti
 
 MacroOrFunction <- 'MACRO'i / 'FUNCTION'i
 
-MacroDefinition <- Parens(List(Identifier)?) 'AS'i (ScalarMacroDefinition / TableMacroDefinition)
+MacroDefinition <- Parens(MacroParameters?) 'AS'i (ScalarMacroDefinition / TableMacroDefinition)
+
+MacroParameters <- List(MacroParameter)
+MacroParameter <- NamedParameter / Identifier
 
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE'i SelectStatement

@@ -22,7 +22,8 @@ Statement <-
 	VacuumStatement /
 	ResetStatement /
 	ExportStatement /
-	ImportStatement
+	ImportStatement /
+	CommentStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier

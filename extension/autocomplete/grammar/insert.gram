@@ -9,7 +9,7 @@ InsertAlias <- 'AS'i Identifier
 ColumnList <- List(Identifier)
 InsertColumnList <- Parens(ColumnList)
 
-InsertValues <- SelectStatement / Parens(SelectStatement) / DefaultValues
+InsertValues <- SelectStatement / DefaultValues
 DefaultValues <- 'DEFAULT'i 'VALUES'i
 
 OnConflictClause <- 'ON'i 'CONFLICT'i OnConflictTarget? OnConflictAction
