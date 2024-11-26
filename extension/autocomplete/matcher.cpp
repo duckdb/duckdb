@@ -80,8 +80,8 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (name == "InnerTableRef") {
-			Printer::Print("Found it!");
+		if (name == "SingleExpression") {
+			// Printer::Print("SingleExpression!");
 		}
 		MatchState list_state(state);
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
@@ -283,7 +283,7 @@ public:
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		auto category = KeywordHelper::KeywordCategoryType(token_text);
-		if (category == KeywordCategory::KEYWORD_RESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC) {
+		if (category == KeywordCategory::KEYWORD_RESERVED || category == GetBannedCategory()) {
 			return MatchResultType::FAIL;
 		}
 		if (!IsIdentifier(token_text)) {
@@ -291,6 +291,16 @@ public:
 		}
 		state.token_index++;
 		return MatchResultType::SUCCESS;
+	}
+
+	KeywordCategory GetBannedCategory() const {
+		switch(suggestion_type) {
+		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
+		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+			return KeywordCategory::KEYWORD_COL_NAME;
+		default:
+			return KeywordCategory::KEYWORD_TYPE_FUNC;
+		}
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
@@ -314,6 +324,14 @@ public:
 			return "COLUMN_NAME";
 		case SuggestionState::SUGGEST_FILE_NAME:
 			return "FILE_NAME";
+		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
+			return "SCALAR_FUNCTION_NAME";
+		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+			return "TABLE_FUNCTION_NAME";
+		case SuggestionState::SUGGEST_PRAGMA_NAME:
+			return "PRAGMA_NAME";
+		case SuggestionState::SUGGEST_SETTING_NAME:
+			return "SETTING_NAME";
 		case SuggestionState::SUGGEST_VARIABLE:
 			return "VARIABLE";
 		default:
@@ -380,6 +398,10 @@ private:
 	Matcher &TableName() const;
 	Matcher &ColumnName() const;
 	Matcher &StringLiteral() const;
+	Matcher &ScalarFunctionName() const;
+	Matcher &TableFunctionName() const;
+	Matcher &PragmaName() const;
+	Matcher &SettingName() const;
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
@@ -443,6 +465,23 @@ Matcher &MatcherFactory::ColumnName() const {
 Matcher &MatcherFactory::TypeName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
 }
+
+Matcher &MatcherFactory::ScalarFunctionName() const {
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME));
+}
+
+Matcher &MatcherFactory::TableFunctionName() const {
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME));
+}
+
+Matcher &MatcherFactory::PragmaName() const {
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_PRAGMA_NAME));
+}
+
+Matcher &MatcherFactory::SettingName() const {
+	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME));
+}
+
 
 Matcher &MatcherFactory::StringLiteral() const {
 	return allocator.Allocate(make_uniq<StringLiteralMatcher>());
@@ -930,6 +969,10 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
 	AddRuleOverride("ColumnName", ColumnName());
+	AddRuleOverride("FunctionName", ScalarFunctionName());
+	AddRuleOverride("TableFunctionName", TableFunctionName());
+	AddRuleOverride("PragmaName", PragmaName());
+	AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("NumberLiteral", Variable());
 	AddRuleOverride("StringLiteral", StringLiteral());
 

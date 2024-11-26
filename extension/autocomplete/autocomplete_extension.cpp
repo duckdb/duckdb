@@ -376,12 +376,22 @@ public:
 				break;
 			case TokenizeState::STRING_LITERAL:
 				if (c == '\'') {
-					state = TokenizeState::STANDARD;
+					if (i + 1 < sql.size() && sql[i + 1] == '\'') {
+						// escaped - skip escape
+						i++;
+					} else {
+						state = TokenizeState::STANDARD;
+					}
 				}
 				break;
 			case TokenizeState::QUOTED_IDENTIFIER:
 				if (c == '"') {
-					state = TokenizeState::STANDARD;
+					if (i + 1 < sql.size() && sql[i + 1] == '"') {
+						// escaped - skip escape
+						i++;
+					} else {
+						state = TokenizeState::STANDARD;
+					}
 				}
 				break;
 			case TokenizeState::IN_COMMENT:
@@ -479,6 +489,12 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 			break;
 		case SuggestionState::SUGGEST_FILE_NAME:
 			new_suggestions = SuggestFileName(context, tokenizer.last_word, suggestion_pos);
+			break;
+		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
+		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+		case SuggestionState::SUGGEST_PRAGMA_NAME:
+		case SuggestionState::SUGGEST_SETTING_NAME:
+			// TODO:
 			break;
 		default:
 			throw InternalException("Unrecognized suggestion state");

@@ -200,6 +200,22 @@ FROM sql_auto_complete('SELECT * FROM tbl QUALIFY row_number() OVER () ORD') LIM
 ----
 ORDER 	47
 
+# operators with quotes
+query II
+FROM sql_auto_complete('SELECT col=''world'' FR') LIMIT 1;
+----
+FROM 	19
+
+query II
+FROM sql_auto_complete('SELECT col="quoted col2" FR') LIMIT 1;
+----
+FROM 	25
+
+query II
+FROM sql_auto_complete('SELECT "quoted col1"="quoted col2" + "quoted col3" FR') LIMIT 1;
+----
+FROM 	51
+
 # quoted identifiers
 query II
 FROM sql_auto_complete('SELECT ''ORDER'' "WHERE" FR') LIMIT 1;

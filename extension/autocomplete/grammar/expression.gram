@@ -1,17 +1,20 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(Expression)? OrderByClause?) OverClause?
 FunctionIdentifier <- CatalogQualification? SchemaQualification? TableQualification? FunctionName
+DistinctOrAll <- 'DISTINCT'i / 'ALL'i
+
 ParenthesisExpression <- Parens(List(Expression))
 LiteralExpression <- StringLiteral / NumberLiteral / 'NULL'i / 'TRUE'i / 'FALSE'i
 CastExpression <- CastOrTryCast Parens(Expression 'AS'i TypeName)
 CastOrTryCast <- 'CAST'i / 'TRY_CAST'i
+
 ExtractExpression <- 'EXTRACT'i Parens(ColumnReference 'FROM'i Expression)
-CountStarExpression <- 'COUNT'i Parens('*')
+StarExpression <- '*'i
 SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference
 CaseExpression <- 'CASE'i ColumnReference? CaseWhenThen CaseWhenThen* CaseElse? 'END'i
 CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression
 CaseElse <- 'ELSE'i Expression
-DateExpression <- 'DATE'i Expression
+TypeLiteral <- Identifier StringLiteral
 SubstringExpression <- 'SUBSTRING'i Parens(Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral)
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS'i / 'RANGE'i / 'GROUPS'i
@@ -34,11 +37,11 @@ StructField <- StringLiteral ':'i Expression
 SingleExpression <-
     SubqueryExpression /
     ParenthesisExpression /
-    DateExpression /
+    TypeLiteral /
     SubstringExpression /
     IsNullExpression /
     CaseExpression /
-    CountStarExpression /
+    StarExpression /
     CastExpression /
     ExtractExpression /
     FunctionExpression /

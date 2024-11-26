@@ -74,8 +74,9 @@ files.sort()
 start = args.offset if args.offset is not None else 0
 end = start + args.count if args.count is not None else len(files)
 
-for file in files[start:end]:
-    print(f"Run test {file}")
+for i in range(start, end):
+    file = files[i]
+    print(f"Run test {i}/{end}: {file}")
 
     statements = parse_test_file(file)
     for statement in statements:
