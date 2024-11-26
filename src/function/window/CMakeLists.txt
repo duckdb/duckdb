@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_func_window
   OBJECT
   window_aggregate_function.cpp
+  window_aggregate_states.cpp
   window_aggregator.cpp
   window_boundaries_state.cpp
   window_collection.cpp

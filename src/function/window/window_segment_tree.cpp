@@ -5,6 +5,7 @@
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
+#include "duckdb/function/window/window_aggregate_states.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/window/window_executor.hpp"
@@ -18,89 +19,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowConstantAggregator
 //===--------------------------------------------------------------------===//
-struct WindowAggregateStates {
-	explicit WindowAggregateStates(const AggregateObject &aggr);
-	~WindowAggregateStates() {
-		Destroy();
-	}
-
-	//! The number of states
-	idx_t GetCount() const {
-		return states.size() / state_size;
-	}
-	data_ptr_t *GetData() {
-		return FlatVector::GetData<data_ptr_t>(*statef);
-	}
-	data_ptr_t GetStatePtr(idx_t idx) {
-		return states.data() + idx * state_size;
-	}
-	const_data_ptr_t GetStatePtr(idx_t idx) const {
-		return states.data() + idx * state_size;
-	}
-	//! Initialise all the states
-	void Initialize(idx_t count);
-	//! Combine the states into the target
-	void Combine(WindowAggregateStates &target,
-	             AggregateCombineType combine_type = AggregateCombineType::PRESERVE_INPUT);
-	//! Finalize the states into an output vector
-	void Finalize(Vector &result);
-	//! Destroy the states
-	void Destroy();
-
-	//! A description of the aggregator
-	const AggregateObject aggr;
-	//! The size of each state
-	const idx_t state_size;
-	//! The allocator to use
-	ArenaAllocator allocator;
-	//! Data pointer that contains the state data
-	vector<data_t> states;
-	//! Reused result state container for the window functions
-	unique_ptr<Vector> statef;
-};
-
-WindowAggregateStates::WindowAggregateStates(const AggregateObject &aggr)
-    : aggr(aggr), state_size(aggr.function.state_size(aggr.function)), allocator(Allocator::DefaultAllocator()) {
-}
-
-void WindowAggregateStates::Initialize(idx_t count) {
-	states.resize(count * state_size);
-	auto state_ptr = states.data();
-
-	statef = make_uniq<Vector>(LogicalType::POINTER, count);
-	auto state_f_data = FlatVector::GetData<data_ptr_t>(*statef);
-
-	for (idx_t i = 0; i < count; ++i, state_ptr += state_size) {
-		state_f_data[i] = state_ptr;
-		aggr.function.initialize(aggr.function, state_ptr);
-	}
-
-	// Prevent conversion of results to constants
-	statef->SetVectorType(VectorType::FLAT_VECTOR);
-}
-
-void WindowAggregateStates::Combine(WindowAggregateStates &target, AggregateCombineType combine_type) {
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
-	aggr.function.combine(*statef, *target.statef, aggr_input_data, GetCount());
-}
-
-void WindowAggregateStates::Finalize(Vector &result) {
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	aggr.function.finalize(*statef, aggr_input_data, result, GetCount(), 0);
-}
-
-void WindowAggregateStates::Destroy() {
-	if (states.empty()) {
-		return;
-	}
-
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	if (aggr.function.destructor) {
-		aggr.function.destructor(*statef, aggr_input_data, GetCount());
-	}
-
-	states.clear();
-}
 
 class WindowConstantAggregatorGlobalState : public WindowAggregatorGlobalState {
 public:
