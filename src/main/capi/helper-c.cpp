@@ -280,6 +280,108 @@ duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
 	}
 }
 
+duckdb_table_filter_type TableFilterTypeToC(duckdb::TableFilterType filter_type) {
+	switch (filter_type) {
+	case duckdb::TableFilterType::CONSTANT_COMPARISON:
+		return DUCKDB_TABLE_FILTER_CONSTANT_COMPARISON;
+	case duckdb::TableFilterType::IS_NULL:
+		return DUCKDB_TABLE_FILTER_IS_NULL;
+	case duckdb::TableFilterType::IS_NOT_NULL:
+		return DUCKDB_TABLE_FILTER_IS_NOT_NULL;
+	case duckdb::TableFilterType::CONJUNCTION_OR:
+		return DUCKDB_TABLE_FILTER_CONJUNCTION_OR;
+	case duckdb::TableFilterType::CONJUNCTION_AND:
+		return DUCKDB_TABLE_FILTER_CONJUNCTION_AND;
+	case duckdb::TableFilterType::STRUCT_EXTRACT:
+		return DUCKDB_TABLE_FILTER_STRUCT_EXTRACT;
+	default:
+		return DUCKDB_TABLE_FILTER_INVALID;
+	}
+}
+
+duckdb::TableFilterType TableFilterTypeFromC(duckdb_table_filter_type filter_type) {
+	switch (filter_type) {
+	case DUCKDB_TABLE_FILTER_CONSTANT_COMPARISON:
+		return duckdb::TableFilterType::CONSTANT_COMPARISON;
+	case DUCKDB_TABLE_FILTER_IS_NULL:
+		return duckdb::TableFilterType::IS_NULL;
+	case DUCKDB_TABLE_FILTER_IS_NOT_NULL:
+		return duckdb::TableFilterType::IS_NOT_NULL;
+	case DUCKDB_TABLE_FILTER_CONJUNCTION_OR:
+		return duckdb::TableFilterType::CONJUNCTION_OR;
+	case DUCKDB_TABLE_FILTER_CONJUNCTION_AND:
+		return duckdb::TableFilterType::CONJUNCTION_AND;
+	case DUCKDB_TABLE_FILTER_STRUCT_EXTRACT:
+		return duckdb::TableFilterType::STRUCT_EXTRACT;
+	default: // LCOV_EXCL_START
+		D_ASSERT(0);
+		return duckdb::TableFilterType::CONSTANT_COMPARISON;
+	} // LCOV_EXCL_STOP
+}
+
+duckdb_table_filter_comparison_type TableFilterComparisonTypeToC(duckdb::ExpressionType comparison_type) {
+	switch (comparison_type) {
+	case duckdb::ExpressionType::COMPARE_EQUAL:
+		return DUCKDB_TABLE_FILTER_COMPARE_EQUAL;
+	case duckdb::ExpressionType::COMPARE_NOTEQUAL:
+		return DUCKDB_TABLE_FILTER_COMPARE_NOTEQUAL;
+	case duckdb::ExpressionType::COMPARE_LESSTHAN:
+		return DUCKDB_TABLE_FILTER_COMPARE_LESSTHAN;
+	case duckdb::ExpressionType::COMPARE_GREATERTHAN:
+		return DUCKDB_TABLE_FILTER_COMPARE_GREATERTHAN;
+	case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return DUCKDB_TABLE_FILTER_COMPARE_LESSTHANOREQUALTO;
+	case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return DUCKDB_TABLE_FILTER_COMPARE_GREATERTHANOREQUALTO;
+	case duckdb::ExpressionType::COMPARE_IN:
+		return DUCKDB_TABLE_FILTER_COMPARE_IN;
+	case duckdb::ExpressionType::COMPARE_NOT_IN:
+		return DUCKDB_TABLE_FILTER_COMPARE_NOT_IN;
+	case duckdb::ExpressionType::COMPARE_DISTINCT_FROM:
+		return DUCKDB_TABLE_FILTER_COMPARE_DISTINCT_FROM;
+	case duckdb::ExpressionType::COMPARE_BETWEEN:
+		return DUCKDB_TABLE_FILTER_COMPARE_BETWEEN;
+	case duckdb::ExpressionType::COMPARE_NOT_BETWEEN:
+		return DUCKDB_TABLE_FILTER_COMPARE_NOT_BETWEEN;
+	case duckdb::ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return DUCKDB_TABLE_FILTER_COMPARE_NOT_DISTINCT_FROM;
+	default:
+		return DUCKDB_TABLE_FILTER_COMPARE_INVALID;
+	}
+}
+
+duckdb::ExpressionType TableFilterComparisonTypeFromC(duckdb_table_filter_comparison_type comparison_type) {
+	switch (comparison_type) {
+	case DUCKDB_TABLE_FILTER_COMPARE_EQUAL:
+		return duckdb::ExpressionType::COMPARE_EQUAL;
+	case DUCKDB_TABLE_FILTER_COMPARE_NOTEQUAL:
+		return duckdb::ExpressionType::COMPARE_NOTEQUAL;
+	case DUCKDB_TABLE_FILTER_COMPARE_LESSTHAN:
+		return duckdb::ExpressionType::COMPARE_LESSTHAN;
+	case DUCKDB_TABLE_FILTER_COMPARE_GREATERTHAN:
+		return duckdb::ExpressionType::COMPARE_GREATERTHAN;
+	case DUCKDB_TABLE_FILTER_COMPARE_LESSTHANOREQUALTO:
+		return duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO;
+	case DUCKDB_TABLE_FILTER_COMPARE_GREATERTHANOREQUALTO:
+		return duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+	case DUCKDB_TABLE_FILTER_COMPARE_IN:
+		return duckdb::ExpressionType::COMPARE_IN;
+	case DUCKDB_TABLE_FILTER_COMPARE_NOT_IN:
+		return duckdb::ExpressionType::COMPARE_NOT_IN;
+	case DUCKDB_TABLE_FILTER_COMPARE_DISTINCT_FROM:
+		return duckdb::ExpressionType::COMPARE_DISTINCT_FROM;
+	case DUCKDB_TABLE_FILTER_COMPARE_BETWEEN:
+		return duckdb::ExpressionType::COMPARE_BETWEEN;
+	case DUCKDB_TABLE_FILTER_COMPARE_NOT_BETWEEN:
+		return duckdb::ExpressionType::COMPARE_NOT_BETWEEN;
+	case DUCKDB_TABLE_FILTER_COMPARE_NOT_DISTINCT_FROM:
+		return duckdb::ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+	default: // LCOV_EXCL_START
+		D_ASSERT(0);
+		return duckdb::ExpressionType::INVALID;
+	} // LCOV_EXCL_STOP
+}
+
 } // namespace duckdb
 
 void *duckdb_malloc(size_t size) {

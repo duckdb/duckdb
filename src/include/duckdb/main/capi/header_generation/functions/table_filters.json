@@ -1,0 +1,186 @@
+{
+    "group": "table_filters",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_table_filters_size",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_table_filters",
+                    "name": "filters"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of table filters.\n\n",
+                "param_comments": {
+                    "filters": "The table filters"
+                },
+                "return_value": "The number of table filters"
+            }
+        },
+        {
+            "name": "duckdb_table_filters_get_filter",
+            "return_type": "duckdb_table_filter",
+            "params": [
+                {
+                    "type": "duckdb_table_filters",
+                    "name": "filters"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "filter_index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the table filter at the specified index.\n\n",
+                "param_comments": {
+                    "filters": "The table filters",
+                    "filter_index": "The index of the filter"
+                },
+                "return_value": "The table filter"
+            }
+        },
+        {
+            "name": "duckdb_table_filter_get_type",
+            "return_type": "duckdb_table_filter_type",
+            "params": [
+                {
+                    "type": "duckdb_table_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the type of the table filter\n\n",
+                "param_comments": {
+                    "filter": "The table filter"
+                },
+                "return_value": "The type of the table filter"
+            }
+        },
+        {
+            "name": "duckdb_table_filter_get_children_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_table_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the number of children of the table filter\n\n",
+                "param_comments": {
+                    "filter": "The table filter"
+                },
+                "return_value": "The number of children of the table filter"
+            }
+        },
+        {
+            "name": "duckdb_table_filter_get_child",
+            "return_type": "duckdb_table_filter",
+            "params": [
+                {
+                    "type": "duckdb_table_filter",
+                    "name": "filter"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "child_index"
+                }
+            ],
+            "comment": {
+                "description": "Returns the child of the table filter at the specified index\n\n",
+                "param_comments": {
+                    "filter": "The table filter",
+                    "child_index": "The index of the child"
+                },
+                "return_value": "The child of the table filter"
+            }
+        },
+        {
+            "name": "duckdb_table_filter_get_comparison_type",
+            "return_type": "duckdb_table_filter_comparison_type",
+            "params": [
+                {
+                    "type": "duckdb_table_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the comparison type of the table filter\n\nOnly valid for filters of type DUCKDB_TABLE_FILTER_CONSTANT_COMPARISON\n\n",
+                "param_comments": {
+                    "filter": "The table filter"
+                },
+                "return_value": "The comparison type of the table filter"
+            }
+        },
+        {
+            "name": "duckdb_table_filter_get_constant",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_table_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the constant value of the table filter\n\nOnly valid for filters of type DUCKDB_TABLE_FILTER_CONSTANT_COMPARISON\n\n",
+                "param_comments": {
+                    "filter": "The table filter"
+                },
+                "return_value": "The constant value of the table filter"
+            }
+        },
+        {
+            "name": "duckdb_table_filter_get_struct_child_index",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_table_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the index of the struct child in the parent struct\n\nOnly valid for filters of type DUCKDB_TABLE_FILTER_STRUCT_EXTRACT\n\n",
+                "param_comments": {
+                    "filter": "The table filter"
+                },
+                "return_value": "The index of the struct child in the parent struct"
+            }
+        },
+        {
+            "name": "duckdb_table_filter_get_struct_child_name",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_table_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the name of the struct child in the parent struct\n\nOnly valid for filters of type DUCKDB_TABLE_FILTER_STRUCT_EXTRACT\n\n",
+                "param_comments": {
+                    "filter": "The table filter"
+                },
+                "return_value": "The name of the struct child in the parent struct"
+            }
+        },
+        {
+            "name": "duckdb_table_filter_get_struct_child_filter",
+            "return_type": "duckdb_table_filter",
+            "params": [
+                {
+                    "type": "duckdb_table_filter",
+                    "name": "filter"
+                }
+            ],
+            "comment": {
+                "description": "Returns the filter of the struct child in the parent struct\n\nOnly valid for filters of type DUCKDB_TABLE_FILTER_STRUCT_EXTRACT\n\n",
+                "param_comments": {
+                    "filter": "The table filter"
+                },
+                "return_value": "The filter of the struct child in the parent struct"
+            }
+        }
+    ]
+}
