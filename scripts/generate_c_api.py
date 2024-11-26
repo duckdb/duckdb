@@ -854,7 +854,9 @@ def create_struct_function_set(api_definitions):
 
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser(description='Generate the C API')
-    arg_parser.add_argument('-go', '--generate-go', type=bool, help='Emit the duckdb go extension header', required=False, default=False)
+    arg_parser.add_argument(
+        '-go', '--generate-go', type=bool, help='Emit the duckdb go extension header', required=False, default=False
+    )
     args = arg_parser.parse_args()
 
     # parse the api definition (which fields make it into the struct)
@@ -918,4 +920,3 @@ if __name__ == "__main__":
         os.system(f"python3 scripts/format.py {DUCKDB_HEADER_GO_OUT_FILE} --fix --noconfirm")
         print()
         print("Go C API headers generated successfully!")
-
