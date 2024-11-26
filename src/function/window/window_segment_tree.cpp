@@ -5,6 +5,7 @@
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
+#include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/window/window_executor.hpp"
 
@@ -13,115 +14,6 @@
 #include <utility>
 
 namespace duckdb {
-
-//===--------------------------------------------------------------------===//
-// WindowAggregator
-//===--------------------------------------------------------------------===//
-WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAllocator()) {
-}
-
-class WindowAggregatorGlobalState : public WindowAggregatorState {
-public:
-	WindowAggregatorGlobalState(ClientContext &context, const WindowAggregator &aggregator_p, idx_t group_count)
-	    : aggregator(aggregator_p), aggr(aggregator.wexpr), locals(0), finalized(0) {
-
-		if (aggr.filter) {
-			// 	Start with all invalid and set the ones that pass
-			filter_mask.Initialize(group_count, false);
-		} else {
-			filter_mask.InitializeEmpty(group_count);
-		}
-	}
-
-	//! The aggregator data
-	const WindowAggregator &aggregator;
-
-	//! The aggregate function
-	const AggregateObject aggr;
-
-	//! The filtered rows in inputs.
-	ValidityArray filter_mask;
-
-	//! Lock for single threading
-	mutable mutex lock;
-
-	//! Count of local tasks
-	mutable std::atomic<idx_t> locals;
-
-	//! Number of finalised states
-	std::atomic<idx_t> finalized;
-};
-
-class WindowAggregatorLocalState : public WindowAggregatorState {
-public:
-	using CollectionPtr = optional_ptr<WindowCollection>;
-
-	WindowAggregatorLocalState() {
-	}
-
-	void Sink(WindowAggregatorGlobalState &gastate, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t row_idx);
-	virtual void Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection);
-
-	//! The state used for reading the collection
-	unique_ptr<WindowCursor> cursor;
-};
-
-WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p)
-    : wexpr(wexpr), aggr(wexpr), result_type(wexpr.return_type), state_size(aggr.function.state_size(aggr.function)),
-      exclude_mode(exclude_mode_p) {
-
-	for (auto &child : wexpr.children) {
-		arg_types.emplace_back(child->return_type);
-	}
-}
-
-WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p,
-                                   WindowSharedExpressions &shared)
-    : WindowAggregator(wexpr, exclude_mode_p) {
-	for (auto &child : wexpr.children) {
-		child_idx.emplace_back(shared.RegisterCollection(child, false));
-	}
-}
-
-WindowAggregator::~WindowAggregator() {
-}
-
-unique_ptr<WindowAggregatorState> WindowAggregator::GetGlobalState(ClientContext &context, idx_t group_count,
-                                                                   const ValidityMask &) const {
-	return make_uniq<WindowAggregatorGlobalState>(context, *this, group_count);
-}
-
-void WindowAggregatorLocalState::Sink(WindowAggregatorGlobalState &gastate, DataChunk &sink_chunk,
-                                      DataChunk &coll_chunk, idx_t input_idx) {
-}
-
-void WindowAggregator::Sink(WindowAggregatorState &gstate, WindowAggregatorState &lstate, DataChunk &sink_chunk,
-                            DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
-                            idx_t filtered) {
-	auto &gastate = gstate.Cast<WindowAggregatorGlobalState>();
-	auto &lastate = lstate.Cast<WindowAggregatorLocalState>();
-	lastate.Sink(gastate, sink_chunk, coll_chunk, input_idx);
-	if (filter_sel) {
-		auto &filter_mask = gastate.filter_mask;
-		for (idx_t f = 0; f < filtered; ++f) {
-			filter_mask.SetValid(input_idx + filter_sel->get_index(f));
-		}
-	}
-}
-
-void WindowAggregatorLocalState::Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection) {
-	// Prepare to scan
-	if (!cursor) {
-		cursor = make_uniq<WindowCursor>(*collection, gastate.aggregator.child_idx);
-	}
-}
-
-void WindowAggregator::Finalize(WindowAggregatorState &gstate, WindowAggregatorState &lstate, CollectionPtr collection,
-                                const FrameStats &stats) {
-	auto &gasink = gstate.Cast<WindowAggregatorGlobalState>();
-	auto &lastate = lstate.Cast<WindowAggregatorLocalState>();
-	lastate.Finalize(gasink, collection);
-}
 
 //===--------------------------------------------------------------------===//
 // WindowConstantAggregator
