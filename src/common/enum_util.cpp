@@ -94,6 +94,7 @@
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_properties.hpp"
@@ -1919,6 +1920,28 @@ const char* EnumUtil::ToChars<LoadType>(LoadType value) {
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value) {
 	return static_cast<LoadType>(StringUtil::StringToEnum(GetLoadTypeValues(), 3, "LoadType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogLevelValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogLevel::DISABLED), "DISABLED" },
+		{ static_cast<uint32_t>(LogLevel::DEBUGGING), "DEBUGGING" },
+		{ static_cast<uint32_t>(LogLevel::INFORMATIVE), "INFORMATIVE" },
+		{ static_cast<uint32_t>(LogLevel::WARNING), "WARNING" },
+		{ static_cast<uint32_t>(LogLevel::ERROR), "ERROR" },
+		{ static_cast<uint32_t>(LogLevel::FATAL), "FATAL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogLevel>(LogLevel value) {
+	return StringUtil::EnumToString(GetLogLevelValues(), 6, "LogLevel", static_cast<uint32_t>(value));
+}
+
+template<>
+LogLevel EnumUtil::FromString<LogLevel>(const char *value) {
+	return static_cast<LogLevel>(StringUtil::StringToEnum(GetLogLevelValues(), 6, "LogLevel", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {

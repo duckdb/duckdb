@@ -26,6 +26,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/logging/logger.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -288,6 +289,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
 
+	auto shared = shared_from_this(); // tODO: why this madness?
+	logging_manager = make_shared_ptr<LoggingManager>(shared);
+
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
 
@@ -514,6 +518,10 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 
 ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
+}
+
+LoggingManager &DatabaseInstance::GetLoggingManager() {
+	return *logging_manager;
 }
 
 const duckdb_ext_api_v0 DatabaseInstance::GetExtensionAPIV0() {
