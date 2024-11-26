@@ -17,7 +17,7 @@ TableSubquery <- SubqueryReference TableAlias?
 BaseTableRef <- BaseTableName TableAlias?
 BaseTableName <- CatalogQualification? SchemaQualification? TableName
 
-TableFunction <- Identifier TableFunctionArguments TableAlias?
+TableFunction <- TableFunctionName TableFunctionArguments TableAlias?
 TableFunctionArguments <- Parens(List(Expression)?)
 
 TableAlias <- 'AS'i? Identifier ColumnAliases?

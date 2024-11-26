@@ -1,4 +1,9 @@
-Statement <- CreateStmt / SelectStatement / SetStmt
+Statement <-
+	CreateStmt /
+	SelectStatement /
+	SetStmt /
+	PragmaStmt /
+	CallStmt
 
 TypeName <- Identifier
 CatalogName <- Identifier
@@ -6,6 +11,9 @@ SchemaName <- Identifier
 TableName <- Identifier
 ColumnName <- Identifier
 FunctionName <- Identifier
+SettingName <- Identifier
+PragmaName <- Identifier
+TableFunctionName <- Identifier
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
