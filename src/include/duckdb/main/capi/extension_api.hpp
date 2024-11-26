@@ -406,6 +406,8 @@ typedef struct {
 	duckdb_state (*duckdb_append_varchar_length)(duckdb_appender appender, const char *val, idx_t length);
 	duckdb_state (*duckdb_append_blob)(duckdb_appender appender, const void *data, idx_t length);
 	duckdb_state (*duckdb_append_null)(duckdb_appender appender);
+	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value keys, duckdb_value values);
+	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, duckdb_value value, idx_t tag);
 	// These functions have been deprecated and may be removed in future versions of DuckDB
 
 	idx_t (*duckdb_row_count)(duckdb_result *result);
@@ -828,6 +830,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_append_varchar_length = duckdb_append_varchar_length;
 	result.duckdb_append_blob = duckdb_append_blob;
 	result.duckdb_append_null = duckdb_append_null;
+	result.duckdb_create_map_value = duckdb_create_map_value;
+	result.duckdb_create_union_value = duckdb_create_union_value;
 	result.duckdb_row_count = duckdb_row_count;
 	result.duckdb_column_data = duckdb_column_data;
 	result.duckdb_nullmask_data = duckdb_nullmask_data;

@@ -470,6 +470,8 @@ typedef struct {
 	duckdb_state (*duckdb_append_varchar_length)(duckdb_appender appender, const char *val, idx_t length);
 	duckdb_state (*duckdb_append_blob)(duckdb_appender appender, const void *data, idx_t length);
 	duckdb_state (*duckdb_append_null)(duckdb_appender appender);
+	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value keys, duckdb_value values);
+	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, duckdb_value value, idx_t tag);
 #endif
 
 // These functions have been deprecated and may be removed in future versions of DuckDB
@@ -697,6 +699,8 @@ typedef struct {
 #define duckdb_create_struct_value                     duckdb_ext_api.duckdb_create_struct_value
 #define duckdb_create_list_value                       duckdb_ext_api.duckdb_create_list_value
 #define duckdb_create_array_value                      duckdb_ext_api.duckdb_create_array_value
+#define duckdb_create_map_value                        duckdb_ext_api.duckdb_create_map_value
+#define duckdb_create_union_value                      duckdb_ext_api.duckdb_create_union_value
 #define duckdb_get_map_size                            duckdb_ext_api.duckdb_get_map_size
 #define duckdb_get_map_key                             duckdb_ext_api.duckdb_get_map_key
 #define duckdb_get_map_value                           duckdb_ext_api.duckdb_get_map_value
