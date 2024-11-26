@@ -72,3 +72,9 @@ query II
 FROM sql_auto_complete('SELECT 42, 83.5, -125, 1.25e375, [1, 2, 3, 4], {''name'': 42}, ARRAY[col, col2 + 1] FR') LIMIT 1;
 ----
 FROM 	82
+
+# complex types
+query II
+FROM sql_auto_complete('SELECT a::DECIMAL(42), b::INT[3], []::INT[][][], d::ROW(i INT[], c ROW(d INTE') LIMIT 1;
+----
+INTEGER	73

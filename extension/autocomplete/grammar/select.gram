@@ -24,7 +24,10 @@ BaseTableRef <- BaseTableName TableAlias?
 BaseTableName <- CatalogQualification? SchemaQualification? TableName
 
 TableFunction <- TableFunctionName TableFunctionArguments TableAlias?
-TableFunctionArguments <- Parens(List(Expression)?)
+TableFunctionArguments <- Parens(List(FunctionArgument)?)
+FunctionArgument <- NamedParameter / Expression
+NamedParameter <- Identifier NamedParameterAssignment Expression
+NamedParameterAssignment <- ':=' / '=>'
 
 TableAlias <- 'AS'i? Identifier ColumnAliases?
 

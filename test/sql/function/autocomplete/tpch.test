@@ -38,8 +38,12 @@ FROM sql_auto_complete('SELECT ''test_string'' LIKE l_c') LIMIT 1;
 ----
 l_comment	26
 
-
 query II
 FROM sql_auto_complete('SELECT l_orderkey FROM lin') LIMIT 1;
 ----
-l_orderkey	7
+lineitem	0
+
+query II
+FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;
+----
+lineitem	0

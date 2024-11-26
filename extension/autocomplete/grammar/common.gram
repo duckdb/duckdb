@@ -20,6 +20,15 @@ ConstraintName <- Identifier
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
+Type <- (RowType / MapType / UnionType / SimpleType) ArrayBounds*
+SimpleType <- TypeName TypeModifiers?
+TypeModifiers <- Parens(List(Expression))
+RowType <- 'ROW'i Parens(List(IdentifierType))
+UnionType <- 'UNION'i Parens(List(IdentifierType))
+MapType <- 'MAP'i Parens(List(Type))
+IdentifierType <- Identifier Type
+ArrayBounds <- '[' NumberLiteral? ']'
+
 # keywords
 ReservedKeyword <- 'ALL'i /
 'ANALYSE'i /

@@ -15,7 +15,7 @@ TableQualification <- TableName '.'
 
 CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
-ColumnDefinition <- Identifier TypeName ColumnConstraint*
+ColumnDefinition <- Identifier Type ColumnConstraint*
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint
 NotNullConstraint <- 'NOT'i 'NULL'i
 UniqueConstraint <- 'UNIQUE'i
