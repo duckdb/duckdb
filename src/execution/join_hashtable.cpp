@@ -772,7 +772,8 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
     : key_state(key_state_p), pointers(LogicalType::POINTER), count(0), sel_vector(STANDARD_VECTOR_SIZE),
       chain_match_sel_vector(STANDARD_VECTOR_SIZE), chain_no_match_sel_vector(STANDARD_VECTOR_SIZE),
       found_match(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
-      is_null(true) {
+      is_null(true), rhs_pointers(LogicalType::POINTER), lhs_sel_vector(STANDARD_VECTOR_SIZE), last_match_count(0),
+      last_sel_vector(STANDARD_VECTOR_SIZE) {
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -896,45 +897,99 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 	GatherResult(result, *FlatVector::IncrementalSelectionVector(), sel_vector, count, col_idx);
 }
 
+void ScanStructure::GatherResult(Vector &result, const idx_t count, const idx_t col_idx) {
+	ht.data_collection->Gather(rhs_pointers, *FlatVector::IncrementalSelectionVector(), count, col_idx, result,
+	                           *FlatVector::IncrementalSelectionVector(), nullptr);
+}
+
+void ScanStructure::UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count) {
+	// matches were found
+	// record the result
+	// on the LHS, we store result vector
+	for (idx_t i = 0; i < result_count; i++) {
+		lhs_sel_vector.set_index(base_count + i, result_vector.get_index(i));
+	}
+
+	// on the RHS, we collect their pointers
+	VectorOperations::Copy(pointers, rhs_pointers, result_vector, result_count, 0, base_count);
+}
+
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
 		D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.output_columns.size());
 	}
-	if (this->count == 0) {
-		// no pointers left to chase
-		return;
-	}
 
-	idx_t result_count = ScanInnerJoin(keys, chain_match_sel_vector);
-
-	if (result_count > 0) {
-		if (PropagatesBuildSide(ht.join_type)) {
-			// full/right outer join: mark join matches as FOUND in the HT
-			auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
-			for (idx_t i = 0; i < result_count; i++) {
-				auto idx = chain_match_sel_vector.get_index(i);
-				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
-				// threads Technically it is, but it does not matter, since the only value that can be written is
-				// "true"
-				Store<bool>(true, ptrs[idx] + ht.tuple_size);
-			}
+	idx_t base_count = 0;
+	idx_t result_count;
+	while (this->count > 0) {
+		// if we have saved the match result, we need not call ScanInnerJoin again
+		if (last_match_count == 0) {
+			result_count = ScanInnerJoin(keys, chain_match_sel_vector);
+		} else {
+			chain_match_sel_vector.Initialize(last_sel_vector);
+			result_count = last_match_count;
+			last_match_count = 0;
 		}
-		// for right semi join, just mark the entry as found and move on. Propagation happens later
-		if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
-			// matches were found
-			// construct the result
-			// on the LHS, we create a slice using the result vector
-			result.Slice(left, chain_match_sel_vector, result_count);
 
-			// on the RHS, we need to fetch the data from the hash table
-			for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-				auto &vector = result.data[left.ColumnCount() + i];
-				const auto output_col_idx = ht.output_columns[i];
-				D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
-				GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
+		if (result_count > 0) {
+			// the result chunk cannot contain more data, we record the match result for future use
+			if (base_count + result_count > STANDARD_VECTOR_SIZE) {
+				last_sel_vector.Initialize(chain_match_sel_vector);
+				last_match_count = result_count;
+				break;
+			}
+
+			if (PropagatesBuildSide(ht.join_type)) {
+				// full/right outer join: mark join matches as FOUND in the HT
+				auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
+				for (idx_t i = 0; i < result_count; i++) {
+					auto idx = chain_match_sel_vector.get_index(i);
+					// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
+					// threads Technically it is, but it does not matter, since the only value that can be written is
+					// "true"
+					Store<bool>(true, ptrs[idx] + ht.tuple_size);
+				}
+			}
+
+			if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
+				// Fast Path: if there is NO more than one element in the chain, we construct the result chunk directly
+				if (!ht.chains_longer_than_one) {
+					// matches were found
+					// on the LHS, we create a slice using the result vector
+					result.Slice(left, chain_match_sel_vector, result_count);
+
+					// on the RHS, we need to fetch the data from the hash table
+					for (idx_t i = 0; i < ht.output_columns.size(); i++) {
+						auto &vector = result.data[left.ColumnCount() + i];
+						const auto output_col_idx = ht.output_columns[i];
+						D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
+						GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
+					}
+
+					AdvancePointers();
+					return;
+				}
+
+				// Common Path: use a buffer to store temporary data
+				UpdateCompactionBuffer(base_count, chain_match_sel_vector, result_count);
+				base_count += result_count;
 			}
 		}
 		AdvancePointers();
+	}
+
+	if (base_count > 0) {
+		// create result chunk, we have two steps:
+		// 1) slice LHS vectors
+		result.Slice(left, lhs_sel_vector, base_count);
+
+		// 2) gather RHS vectors
+		for (idx_t i = 0; i < ht.output_columns.size(); i++) {
+			auto &vector = result.data[left.ColumnCount() + i];
+			const auto output_col_idx = ht.output_columns[i];
+			D_ASSERT(vector.GetType() == ht.layout.GetTypes()[output_col_idx]);
+			GatherResult(vector, base_count, output_col_idx);
+		}
 	}
 }
 

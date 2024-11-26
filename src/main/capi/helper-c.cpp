@@ -197,6 +197,7 @@ idx_t GetCTypeSize(duckdb_type type) {
 	case DUCKDB_TYPE_TIME:
 		return sizeof(duckdb_time);
 	case DUCKDB_TYPE_TIMESTAMP:
+	case DUCKDB_TYPE_TIMESTAMP_TZ:
 	case DUCKDB_TYPE_TIMESTAMP_S:
 	case DUCKDB_TYPE_TIMESTAMP_MS:
 	case DUCKDB_TYPE_TIMESTAMP_NS:
