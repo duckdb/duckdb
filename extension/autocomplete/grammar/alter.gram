@@ -1,17 +1,18 @@
 AlterStatement <- 'ALTER'i AlterOptions
 
 
-AlterOptions <- AlterTableStmt
+AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt
 
-AlterTableStmt <- 'TABLE'i IfExists? InsertTarget AlterTableOptions
+AlterTableStmt <- 'TABLE'i IfExists? BaseTableName AlterTableOptions
 
-
-AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability
+AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameEntry
 
 AddConstraint <- 'ADD'i TopLevelConstraint
 AddColumn <- 'ADD'i 'COLUMN'i? IfNotExists? ColumnDefinition
 DropColumn <- 'DROP'i 'COLUMN'i? IfExists? ColumnName DropBehavior?
 AlterColumn <- 'ALTER'i 'COLUMN'i? Identifier AlterColumnEntry
+RenameColumn <- 'RENAME'i 'COLUMN'i? ColumnName 'TO'i Identifier
+RenameEntry <- 'RENAME'i 'TO'i Identifier
 
 AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
 
@@ -24,3 +25,12 @@ ChangeNullability <- ('DROP'i / 'SET'i) 'NOT'i 'NULL'i
 AlterType <- SetData? 'TYPE'i Type? UsingExpression?
 SetData <- 'SET'i 'DATA'i?
 UsingExpression <- 'USING'i Expression
+
+AlterViewStmt <- 'VIEW'i IfExists? BaseTableName RenameEntry
+
+AlterSequenceStmt <- 'SEQUENCE'i IfExists? QualifiedSequenceName AlterSequenceOptions
+
+QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
+
+AlterSequenceOptions <- RenameEntry / SetSequenceOption
+SetSequenceOption <- List(SequenceOption)

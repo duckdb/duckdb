@@ -1,15 +1,15 @@
-CreateStatement <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt)
+CreateStatement <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt)
 OrReplace <- 'OR'i 'REPLACE'i
-Temporary <- 'TEMP'i / 'TEMPORARY'i
+Temporary <- 'TEMP'i / 'TEMPORARY'i / 'PERSISTENT'i
 
-CreateTableStmt <- 'TABLE'i IfNotExists? QualifiedTableName (CreateColumnList / CreateTableAs)
+CreateTableStmt <- 'TABLE'i IfNotExists? QualifiedName (CreateColumnList / CreateTableAs)
 
 CreateTableAs <- IdentifierList? 'AS'i SelectOrParens
 SelectOrParens <- SelectStatement / Parens(SelectStatement)
 IdentifierList <- List(Identifier)
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
-QualifiedTableName <- CatalogQualification? SchemaQualification? Identifier
+QualifiedName <- CatalogQualification? SchemaQualification? Identifier
 CatalogQualification <- CatalogName '.'
 SchemaQualification <- SchemaName '.'
 TableQualification <- TableName '.'
@@ -18,15 +18,18 @@ CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
 ColumnDefinition <- Identifier TypeOrGenerated ColumnConstraint*
 TypeOrGenerated <- Type / GeneratedColumn
-ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint
+ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint
 NotNullConstraint <- 'NOT'i 'NULL'i
 UniqueConstraint <- 'UNIQUE'i
 PrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i
 DefaultValue <- 'DEFAULT'i Expression
 CheckConstraint <- 'CHECK'i Parens(Expression)
+ForeignKeyConstraint <- 'REFERENCES'i BaseTableName Parens(ColumnList)?
 
-TopLevelConstraint <- TopPrimaryKeyConstraint / CheckConstraint
+TopLevelConstraint <- TopPrimaryKeyConstraint / CheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
 TopPrimaryKeyConstraint <- 'PRIMARY'i 'KEY'i ColumnIdList
+TopUniqueConstraint <- 'UNIQUE'i ColumnIdList
+TopForeignKeyConstraint <- 'FOREIGN'i 'KEY'i ColumnIdList ForeignKeyConstraint
 ColumnIdList <- Parens(List(Identifier))
 
 PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>

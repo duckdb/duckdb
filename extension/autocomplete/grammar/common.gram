@@ -17,7 +17,12 @@ Statement <-
 	DeleteStatement /
 	AttachStatement /
 	UseStatement /
-	DetachStatement
+	DetachStatement /
+	CheckpointStatement /
+	VacuumStatement /
+	ResetStatement /
+	ExportStatement /
+	ImportStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier
@@ -38,7 +43,8 @@ NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
 Type <- (TimeType / RowType / MapType / UnionType / SimpleType) ArrayBounds*
-SimpleType <- TypeName TypeModifiers?
+SimpleType <- QualifiedTypeName TypeModifiers?
+QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
 TypeModifiers <- Parens(List(Expression))
 RowType <- RowOrStruct Parens(List(IdentifierType))
 UnionType <- 'UNION'i Parens(List(IdentifierType))

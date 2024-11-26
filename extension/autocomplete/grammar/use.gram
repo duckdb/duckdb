@@ -1,1 +1,3 @@
-UseStatement <- 'USE'i (CatalogName / QualifiedSchemaName)
+UseStatement <- 'USE'i UseTarget
+
+UseTarget <- (CatalogName '.' SchemaName) / SchemaName / CatalogName

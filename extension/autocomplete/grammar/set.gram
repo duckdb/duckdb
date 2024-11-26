@@ -1,7 +1,7 @@
-SetStatement <- 'SET'i (SetSetting / SetVariable)
+SetStatement <- 'SET'i (SetSetting / SetVariable) SetAssignment
 
-SetSetting <- SettingScope? SettingName SetAssignment
-SetVariable <- 'VARIABLE'i Identifier SetAssignment
+SetSetting <- SettingScope? SettingName
+SetVariable <- 'VARIABLE'i Identifier
 
 SettingScope <- 'LOCAL'i / 'SESSION'i / 'GLOBAL'i
 
@@ -9,3 +9,5 @@ SetAssignment <- VariableAssign VariableList
 
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
+
+ResetStatement <- 'RESET'i (SetSetting / SetVariable)

@@ -11,8 +11,10 @@ LiteralExpression <- StringLiteral / NumberLiteral / 'NULL'i / 'TRUE'i / 'FALSE'
 CastExpression <- CastOrTryCast Parens(Expression 'AS'i Type)
 CastOrTryCast <- 'CAST'i / 'TRY_CAST'i
 
-ExtractExpression <- 'EXTRACT'i Parens(ColumnReference 'FROM'i Expression)
-StarExpression <- '*'i
+StarExpression <- '*'i ExcludeList? ReplaceList? RenameList?
+ExcludeList <- 'EXCLUDE'i Parens(List(ColumnReference))
+ReplaceList <- 'REPLACE'i Parens(List(Expression 'AS'i ColumnReference))
+RenameList <- 'RENAME'i Parens(List(ColumnReference 'AS'i Identifier))
 SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference
 CaseExpression <- 'CASE'i ColumnReference? CaseWhenThen CaseWhenThen* CaseElse? 'END'i
 CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression
@@ -21,7 +23,6 @@ TypeLiteral <- Identifier StringLiteral
 IntervalLiteral <- 'INTERVAL'i IntervalParameter IntervalUnit?
 IntervalParameter <- StringLiteral / NumberLiteral / Parens(Expression)
 IntervalUnit <- Identifier
-SubstringExpression <- 'SUBSTRING'i Parens(Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral)
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS'i / 'RANGE'i / 'GROUPS'i
 FrameExtent <- FrameBound / ('BETWEEN'i FrameBound 'AND'i FrameBound)
@@ -41,7 +42,10 @@ StructField <- Expression ':'i Expression
 MapExpression <- 'MAP'i StructExpression
 GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
 GroupingOrGroupingId <- 'GROUPING'i / 'GROUPING_ID'i
-Parameter <- '?'
+Parameter <- '?' / NumberedParameter
+NumberedParameter <- '$' NumberLiteral
+PositionalExpression <- '#' NumberLiteral
+DefaultExpression <- 'DEFAULT'i
 
 ListComprehensionExpression <- '['i Expression 'FOR'i Expression ListComprehensionFilter? ']'
 ListComprehensionFilter <- 'IF'i Expression
@@ -49,14 +53,13 @@ ListComprehensionFilter <- 'IF'i Expression
 SingleExpression <-
 	Parameter /
     SubqueryExpression /
+    SpecialFunctionExpression /
     ParenthesisExpression /
     IntervalLiteral /
     TypeLiteral /
-    SubstringExpression /
     CaseExpression /
     StarExpression /
     CastExpression /
-    ExtractExpression /
     GroupingExpression /
     FunctionExpression /
     ColumnReference /
@@ -65,7 +68,9 @@ SingleExpression <-
     ListComprehensionExpression /
     ListExpression /
     StructExpression /
-    MapExpression
+    MapExpression /
+    PositionalExpression /
+    DefaultExpression
 
 ArithmeticOperator <- '+' / '-' / '*' / '/' / '//' / '%' / '^' / '**' / '||'
 LikeOperator <- 'NOT'i? 'LIKE'i
@@ -76,6 +81,7 @@ ConjunctionOperator <- 'OR'i / 'AND'i
 ComparisonOperator <-  '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
 BetweenOperator <- 'BETWEEN'i
 CollateOperator <- 'COLLATE'i
+LambdaOperator <- '->'
 
 Operator <-
     ArithmeticOperator /
@@ -85,12 +91,25 @@ Operator <-
     InOperator /
     IsOperator /
     BetweenOperator /
-    CollateOperator
+    CollateOperator /
+    LambdaOperator
 
 CastOperator <- '::' Type
+DotOperator <- '.' Identifier
+Indirection <- CastOperator / DotOperator
 
-BaseExpression <- SingleExpression CastOperator*
+BaseExpression <- SingleExpression Indirection*
 Expression <- BaseExpression RecursiveExpression*
 RecursiveExpression <- (Operator Expression) / SliceExpression
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? (':' Expression?)? (':' Expression?)?
+
+SpecialFunctionExpression <- CoalesceExpression / ExtractExpression / NullIfExpression / SubstringExpression / TrimExpression
+CoalesceExpression <- 'COALESCE'i Parens(List(Expression))
+ExtractExpression <- 'EXTRACT'i Parens(ColumnReference 'FROM'i Expression)
+NullIfExpression <- 'NULLIF'i Parens(Expression ',' Expression)
+SubstringExpression <- 'SUBSTRING'i Parens(Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral)
+TrimExpression <- 'TRIM'i Parens(TrimDirection? TrimSource? List(Expression))
+
+TrimDirection <- 'BOTH'i / 'LEADING'i / 'TRAILING'i
+TrimSource <- Expression? 'FROM'i

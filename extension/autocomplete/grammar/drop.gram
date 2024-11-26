@@ -17,7 +17,7 @@ DropSchema <- 'SCHEMA'i IfExists? List(QualifiedSchemaName)
 DropIndex <- 'INDEX'i IfExists? List(IndexName)
 DropSequence <- 'SEQUENCE'i IfExists? List(SequenceName)
 DropCollation <- 'COLLATION'i IfExists? List(CollationName)
-DropType <- 'TYPE'i IfExists? List(TypeName)
+DropType <- 'TYPE'i IfExists? List(QualifiedTypeName)
 
 TableOrView <- 'TABLE'i / 'VIEW'i / ('MATERIALIZED'i 'VIEW'i)
 FunctionType <- 'MACRO'i / 'FUNCTION'i

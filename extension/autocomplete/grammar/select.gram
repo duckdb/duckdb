@@ -17,16 +17,18 @@ ColumnAliases <- Parens(List(Identifier))
 DistinctClause <- ('DISTINCT'i DistinctOn?) / 'ALL'i
 DistinctOn <- 'ON'i Parens(List(Expression))
 
-InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef
+InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinClause*
 TableSubquery <- SubqueryReference TableAlias?
 BaseTableRef <- BaseTableName TableAlias?
 ValuesRef <- ValuesClause TableAlias?
+ParensTableRef <- Parens(TableRef)
 
 BaseTableName <- CatalogQualification? SchemaQualification? TableName
 
-TableFunction <- TableFunctionName TableFunctionArguments TableAlias?
+TableFunction <- QualifiedTableFunction TableFunctionArguments TableAlias?
+QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
 NamedParameter <- Identifier NamedParameterAssignment Expression

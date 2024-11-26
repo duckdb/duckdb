@@ -61,7 +61,15 @@ def parse_test_file(filename):
     return statements
 
 files = []
-excluded_tests = {}
+excluded_tests = {
+    # reserved keyword mismatches
+    'test/sql/attach/attach_nested_types.test',           # table
+    'test/sql/binder/test_function_chainging_alias.test', # trim
+    'test/sql/cast/test_try_cast.test',                   # try_cast
+    # single quotes as identifier
+    'test/sql/binder/table_alias_single_quotes.test',
+    'test/sql/binder/test_string_alias.test'
+}
 if args.all_tests:
     # run all tests
     test_dir = os.path.join('test', 'sql')

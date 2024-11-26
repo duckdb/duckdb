@@ -25,6 +25,7 @@ bool BaseTokenizer::IsSingleByteOperator(char c) {
 	case ']':
 	case ',':
 	case '?':
+	case '$':
 		return true;
 	default:
 		return false;
@@ -46,6 +47,7 @@ bool BaseTokenizer::CharacterIsNumber(char c) {
 	case 'e': // exponents
 	case 'E':
 	case '-':
+	case '+':
 	case '_':
 		return true;
 	default:
