@@ -81,8 +81,9 @@ bool ArrowSchemaMetadata::IsNonCanonicalType(const string &type, const string &v
 	    extension_metadata_map.find("vendor_name") == extension_metadata_map.end()) {
 		return false;
 	}
-	return extension_metadata_map.find("vendor_name")->second == vendor &&
-	       extension_metadata_map.find("vendor_name")->second == type;
+	auto vendor_name = extension_metadata_map.find("vendor_name")->second;
+	auto type_name = extension_metadata_map.find("type_name")->second;
+	return vendor_name == vendor && type_name == type;
 }
 
 bool ArrowSchemaMetadata::HasExtension() const {
