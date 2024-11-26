@@ -48,7 +48,7 @@ void JSONScanData::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
-	auto json_type = deserializer.ReadProperty<JSONScanType>(100, "json_type");
+	auto type = deserializer.ReadProperty<JSONScanType>(100, "json_type");
 	auto options = deserializer.ReadProperty<BufferedJSONReaderOptions>(101, "options");
 	auto reader_bind = deserializer.ReadProperty<MultiFileReaderBindData>(102, "reader_bind");
 	auto files = deserializer.ReadPropertyWithDefault<vector<string>>(103, "files");
@@ -62,7 +62,7 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 	auto date_format = deserializer.ReadPropertyWithDefault<string>(111, "date_format");
 	auto timestamp_format = deserializer.ReadPropertyWithDefault<string>(112, "timestamp_format");
 	auto result = duckdb::unique_ptr<JSONScanData>(new JSONScanData(deserializer.Get<ClientContext &>(), std::move(files), std::move(date_format), std::move(timestamp_format)));
-	result->type = json_type;
+	result->type = type;
 	result->options = options;
 	result->reader_bind = reader_bind;
 	result->ignore_errors = ignore_errors;
