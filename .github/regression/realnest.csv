@@ -13,4 +13,3 @@ benchmark/realnest/13_multi_join_nested_data_with_filtering.benchmark
 benchmark/realnest/14_list_slice.benchmark
 benchmark/realnest/15_list_sort.benchmark
 benchmark/realnest/16_most_common_list_aggregates.benchmark
-benchmark/realnest/17_list_aggregates_histogram_stddev_mode.benchmark

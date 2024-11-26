@@ -224,8 +224,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Ninja and Pkg-config
-        run: brew install pkg-config ninja
+      - name: Install Ninja
+        run: brew install ninja
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
