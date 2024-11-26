@@ -7,7 +7,6 @@ Statement <-
 	InsertStatement /
 	DropStatement /
 	CopyStatement /
-	DescribeStatement /
 	ExplainStatement /
 	UpdateStatement /
 	PrepareStatement /
@@ -23,7 +22,8 @@ Statement <-
 	ResetStatement /
 	ExportStatement /
 	ImportStatement /
-	CommentStatement
+	CommentStatement /
+	DeallocateStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier
@@ -52,7 +52,7 @@ RowType <- RowOrStruct Parens(List(IdentifierType))
 UnionType <- 'UNION'i Parens(List(IdentifierType))
 MapType <- 'MAP'i Parens(List(Type))
 IdentifierType <- Identifier Type
-ArrayBounds <- '[' NumberLiteral? ']'
+ArrayBounds <- ('[' NumberLiteral? ']') / 'ARRAY'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- 'TIME'i / 'TIMESTAMP'i
 TimeZone <- WithOrWithout 'TIME'i 'ZONE'i

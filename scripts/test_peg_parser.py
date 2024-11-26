@@ -105,11 +105,41 @@ excluded_tests = {
     'test/sql/copy/csv/test_comment_midline.test',
     'test/sql/copy/csv/test_comment_option.test',
     'test/sql/copy/csv/test_csv_column_count_mismatch.test_slow',
+    'test/sql/copy/csv/test_csv_json.test',
+    'test/sql/copy/csv/test_csv_mixed_casts.test',
+    'test/sql/copy/csv/test_csv_projection_pushdown.test',
+    'test/sql/copy/csv/test_date.test',
+    'test/sql/copy/csv/test_date_sniffer.test',
+    'test/sql/copy/csv/test_dateformat.test',
+    'test/sql/copy/csv/test_decimal.test',
+    'test/sql/copy/csv/test_encodings.test',
+    'test/sql/copy/csv/test_greek_utf8.test',
+    'test/sql/copy/csv/test_headers_12089.test',
+    'test/sql/copy/csv/test_ignore_errors.test',
+    'test/sql/copy/csv/test_ignore_mid_null_line.test',
+    'test/sql/copy/csv/test_issue3562_assertion.test',
+    'test/sql/copy/csv/test_missing_row.test',
+    'test/sql/copy/csv/test_null_padding_projection.test',
+    'test/sql/copy/csv/test_quote_default.test',
+    'test/sql/copy/csv/test_read_csv.test',
+    'test/sql/copy/csv/test_skip_bom.test',
+    'test/sql/copy/csv/test_skip_header.test',
+    'test/sql/copy/csv/test_sniff_csv.test',
+    'test/sql/copy/csv/test_sniff_csv_options.test',
+    'test/sql/copy/csv/test_sniffer_tab_delimiter.test',
+    'test/sql/copy/csv/test_time.test',
+    'test/sql/copy/csv/test_validator.test',
+    'test/sql/copy/csv/tsv_copy.test',
+    'test/sql/copy/per_thread_output.test',
+    # struct keyword
+    'test/sql/copy/parquet/writer/write_struct.test',
     # single quotes as identifier
     'test/sql/binder/table_alias_single_quotes.test',
     'test/sql/binder/test_string_alias.test',
     # optional "AS" in UPDATE table alias
     'test/sql/catalog/function/test_complex_macro.test',
+    # env parameters (${PARAMETER})
+    ' test/sql/copy/s3/download_config.test',
 }
 if args.all_tests:
     # run all tests

@@ -11,7 +11,7 @@ LiteralExpression <- StringLiteral / NumberLiteral / 'NULL'i / 'TRUE'i / 'FALSE'
 CastExpression <- CastOrTryCast Parens(Expression 'AS'i Type)
 CastOrTryCast <- 'CAST'i / 'TRY_CAST'i
 
-StarExpression <- '*'i ExcludeList? ReplaceList? RenameList?
+StarExpression <- (Identifier '.')* '*'i ExcludeList? ReplaceList? RenameList?
 ExcludeList <- 'EXCLUDE'i Parens(List(ColumnReference))
 ReplaceList <- 'REPLACE'i Parens(List(Expression 'AS'i ColumnReference))
 RenameList <- 'RENAME'i Parens(List(ColumnReference 'AS'i Identifier))
@@ -47,7 +47,7 @@ NumberedParameter <- '$' NumberLiteral
 PositionalExpression <- '#' NumberLiteral
 DefaultExpression <- 'DEFAULT'i
 
-ListComprehensionExpression <- '['i Expression 'FOR'i Expression ListComprehensionFilter? ']'
+ListComprehensionExpression <- '['i Expression 'FOR'i List(Expression) ListComprehensionFilter? ']'
 ListComprehensionFilter <- 'IF'i Expression
 
 SingleExpression <-
@@ -72,7 +72,7 @@ SingleExpression <-
     PositionalExpression /
     DefaultExpression
 
-ArithmeticOperator <- '+' / '-' / '*' / '/' / '//' / '%' / '^' / '**' / '||'
+ArithmeticOperator <- '+' / '-' / '*' / '/' / '//' / '%' / '^' / '**' / '||' / '&&' / '<<' / '>>' / '&' / '|' / '~' / '^@'
 LikeOperator <- 'NOT'i? LikeOrSimilarTo
 LikeOrSimilarTo <- 'LIKE'i / 'ILIKE'i / 'GLOB'i / ('SIMILAR'i 'TO'i)
 InOperator <- 'NOT'i? 'IN'i
@@ -84,6 +84,8 @@ BetweenOperator <- 'BETWEEN'i
 CollateOperator <- 'COLLATE'i
 LambdaOperator <- '->'
 EscapeOperator <- 'ESCAPE'i
+
+PostfixOperator <- '!'
 
 Operator <-
     ArithmeticOperator /
@@ -99,19 +101,23 @@ Operator <-
 
 CastOperator <- '::' Type
 DotOperator <- '.' (FunctionExpression / Identifier)
-Indirection <- CastOperator / DotOperator
+NotNull <- 'NOT'i 'NULL'i
+Indirection <- CastOperator / DotOperator / SliceExpression / NotNull / PostfixOperator
 
 BaseExpression <- SingleExpression Indirection*
 Expression <- BaseExpression RecursiveExpression*
-RecursiveExpression <- (Operator Expression) / SliceExpression
+RecursiveExpression <- (Operator Expression)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? (':' Expression?)? (':' Expression?)?
 
-SpecialFunctionExpression <- CoalesceExpression / ExtractExpression / NullIfExpression / SubstringExpression / TrimExpression
+SpecialFunctionExpression <- CoalesceExpression / ExtractExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
 CoalesceExpression <- 'COALESCE'i Parens(List(Expression))
-ExtractExpression <- 'EXTRACT'i Parens(ColumnReference 'FROM'i Expression)
+ExtractExpression <- 'EXTRACT'i Parens(Expression 'FROM'i Expression)
 NullIfExpression <- 'NULLIF'i Parens(Expression ',' Expression)
-SubstringExpression <- 'SUBSTRING'i Parens(Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral)
+PositionExpression <- 'POSITION'i Parens(Expression)
+RowExpression <- 'ROW'i Parens(List(Expression))
+SubstringExpression <- 'SUBSTRING'i Parens(SubstringParameters / List(Expression))
+SubstringParameters <- Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral
 TrimExpression <- 'TRIM'i Parens(TrimDirection? TrimSource? List(Expression))
 
 TrimDirection <- 'BOTH'i / 'LEADING'i / 'TRAILING'i

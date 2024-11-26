@@ -4,12 +4,14 @@ SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) DistinctOrAll? ByName?
 ByName <- 'BY'i 'NAME'i
 SelectOrParens <- BaseSelect / Parens(SelectStatement)
 
-BaseSelect <- (SimpleSelect / ValuesClause) OrderByClause? LimitClause? OffsetClause?
+BaseSelect <- (SimpleSelect / ValuesClause / DescribeStatement / TableStatement) OrderByClause? LimitClause? OffsetClause?
+TableStatement <- 'TABLE' BaseTableName
 
 SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
-WithStatement <- Identifier InsertColumnList? 'AS'i SubqueryReference
+WithStatement <- Identifier InsertColumnList? 'AS'i Materialized? SubqueryReference
+Materialized <- 'NOT'i? 'MATERIALIZED'i
 WithClause <- 'WITH'i Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'i
 SelectClause <- 'SELECT'i DistinctClause? TargetList

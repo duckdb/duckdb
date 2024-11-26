@@ -5,7 +5,7 @@ FromOrTo <- 'FROM'i / 'TO'i
 
 CopySelect <- Parens(SelectStatement) 'TO'i CopyFileName CopyOptions?
 
-CopyFileName <- StringLiteral
+CopyFileName <- StringLiteral / Identifier
 CopyOptions <- 'WITH'i? (Parens(GenericCopyOptionList) / (SpecializedOptions*))
 SpecializedOptions <-
 	'BINARY'i / 'FREEZE'i / 'OIDS'i / 'CSV'i / 'HEADER'i /
@@ -20,7 +20,8 @@ SpecializedStringOption <- ('DELIMITER'i / 'NULL'i / 'QUOTE'i / 'ESCAPE'i) 'AS'i
 StarOrColumnList <- '*' / ColumnList
 
 GenericCopyOptionList <- List(GenericCopyOption)
-GenericCopyOption <- CopyOptionName Expression?
+GenericCopyOption <- GenericCopyOptionName Expression?
+GenericCopyOptionName <- 'NULL'i / CopyOptionName
 
 CopyFromDatabase <- 'FROM'i 'DATABASE'i Identifier 'TO'i Identifier CopyDatabaseFlag?
 
