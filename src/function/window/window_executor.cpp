@@ -3,6 +3,7 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
 
