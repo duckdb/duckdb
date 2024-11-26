@@ -25,7 +25,8 @@ namespace duckdb {
 
 //! State that is kept during the load phase of a C API extension
 struct DuckDBExtensionLoadState {
-	explicit DuckDBExtensionLoadState(DatabaseInstance &db_p, ExtensionInitResult &init_result_p) : db(db_p), init_result(init_result_p), database_data(nullptr) {
+	explicit DuckDBExtensionLoadState(DatabaseInstance &db_p, ExtensionInitResult &init_result_p)
+	    : db(db_p), init_result(init_result_p), database_data(nullptr) {
 	}
 
 	//! Create a DuckDBExtensionLoadState reference from a C API opaque pointer
@@ -43,7 +44,7 @@ struct DuckDBExtensionLoadState {
 	DatabaseInstance &db;
 
 	//! The init result from initializing the extension
-	ExtensionInitResult& init_result;
+	ExtensionInitResult &init_result;
 
 	//! This is the duckdb_database struct that will be passed to the extension during initialization. Note that the
 	//! extension does not need to free it.
@@ -118,13 +119,14 @@ struct ExtensionAccess {
 			}
 		} else if (load_state.init_result.abi_type == ExtensionABIType::C_STRUCT_UNSTABLE) {
 			// NOTE: we currently don't check anything here: the version of extensions of ABI type C_STRUCT_UNSTABLE is
-			// ignored because C_STRUCT_UNSTABLE extensions are tied 1:1 to duckdb verions meaning they will always receive
-			// the whole function pointer struct
+			// ignored because C_STRUCT_UNSTABLE extensions are tied 1:1 to duckdb verions meaning they will always
+			// receive the whole function pointer struct
 		} else {
 			load_state.has_error = true;
-			load_state.error_data = ErrorData(
-				ExceptionType::UNKNOWN_TYPE,
-				StringUtil::Format("Unknown ABI Type '%s' found when loading extension '%s'", load_state.init_result.abi_type, load_state.init_result.filename));
+			load_state.error_data =
+			    ErrorData(ExceptionType::UNKNOWN_TYPE,
+			              StringUtil::Format("Unknown ABI Type '%s' found when loading extension '%s'",
+			                                 load_state.init_result.abi_type, load_state.init_result.filename));
 			return nullptr;
 		}
 
@@ -473,8 +475,6 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		result.install_info->version = parsed_metadata.extension_version;
 	}
 
-
-
 	return true;
 #endif
 }
@@ -529,7 +529,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	auto init_fun_name = extension_init_result.filebase + "_init";
 
 	// "OLD WAY" of loading extensions. If the <ext_name>_init exists, we choose that
-	ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
+	ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name,
+	                                                                 extension_init_result.filename);
 	if (init_fun) {
 		try {
 			(*init_fun)(db);
@@ -548,11 +549,12 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	// TODO: make this the only way of calling extensions?
 	// "NEW WAY" of loading extensions enabling C API only
 	init_fun_name = extension_init_result.filebase + "_init_c_api";
-	ext_init_c_api_fun_t init_fun_capi =
-	    TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
+	ext_init_c_api_fun_t init_fun_capi = TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(
+	    extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
 
 	if (!init_fun_capi) {
-		throw IOException("File \"%s\" did not contain function \"%s\": %s", extension_init_result.filename, init_fun_name, GetDLError());
+		throw IOException("File \"%s\" did not contain function \"%s\": %s", extension_init_result.filename,
+		                  init_fun_name, GetDLError());
 	}
 
 	// Create the load state
