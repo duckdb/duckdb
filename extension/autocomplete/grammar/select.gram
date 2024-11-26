@@ -24,14 +24,16 @@ DistinctOn <- 'ON'i Parens(List(Expression))
 InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinClause*
-TableSubquery <- SubqueryReference TableAlias?
+TableSubquery <- Lateral? SubqueryReference TableAlias?
 BaseTableRef <- BaseTableName TableAlias?
 ValuesRef <- ValuesClause TableAlias?
 ParensTableRef <- Parens(TableRef)
 
+Lateral <- 'LATERAL'i
+
 BaseTableName <- CatalogQualification? SchemaQualification? TableName
 
-TableFunction <- QualifiedTableFunction TableFunctionArguments TableAlias?
+TableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments TableAlias?
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
 FunctionArgument <- NamedParameter / Expression
