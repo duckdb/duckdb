@@ -1,7 +1,7 @@
 DescribeStatement <- ShowSelect / ShowAllTables / ShowQualifiedName
 
 ShowSelect <- ShowOrDescribeOrSummarize SelectStatement
-ShowAllTables <- ShowOrDescribe 'ALL'i 'TABLES'?
+ShowAllTables <- ShowOrDescribe 'ALL'i? 'TABLES'?
 ShowQualifiedName <- ShowOrDescribeOrSummarize (QualifiedName / StringLiteral)
 
 ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'i

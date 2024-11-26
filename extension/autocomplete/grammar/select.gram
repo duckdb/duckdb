@@ -48,8 +48,8 @@ OnClause <- 'ON'i Expression
 UsingClause <- 'USING'i Parens(List(Identifier))
 
 OuterJoinType <- 'FULL'i / 'LEFT'i / 'RIGHT'i
-JoinType <- (OuterJoinType 'OUTER'i?) / 'SEMI'i / 'ANTI'i / 'INNER'i
-JoinPrefix <- 'CROSS'i / ('NATURAL'i JoinType?) / 'POSITIONAL'i / 'ASOF'i
+JoinType <- 'ASOF'i? ((OuterJoinType 'OUTER'i?) / 'SEMI'i / 'ANTI'i / 'INNER'i)
+JoinPrefix <- 'CROSS'i / ('NATURAL'i JoinType?) / 'POSITIONAL'i
 
 FromClause <- 'FROM'i List(TableRef)
 WhereClause <- 'WHERE'i Expression
@@ -78,7 +78,7 @@ OrderByAll <- 'ALL'i DescOrAsc? NullsFirstOrLast?
 
 LimitClause <- 'LIMIT'i LimitValue
 OffsetClause <- 'OFFSET'i LimitValue
-LimitValue <- 'ALL'i / (Expression '%'?) / (NumberLiteral 'PERCENT'i)
+LimitValue <- 'ALL'i / (NumberLiteral 'PERCENT'i) / (Expression '%'?)
 
 AliasedExpression <- Expression ('AS'i? Identifier)?
 

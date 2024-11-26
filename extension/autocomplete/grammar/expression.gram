@@ -12,9 +12,11 @@ CastExpression <- CastOrTryCast Parens(Expression 'AS'i Type)
 CastOrTryCast <- 'CAST'i / 'TRY_CAST'i
 
 StarExpression <- (Identifier '.')* '*'i ExcludeList? ReplaceList? RenameList?
-ExcludeList <- 'EXCLUDE'i Parens(List(ColumnReference))
-ReplaceList <- 'REPLACE'i Parens(List(Expression 'AS'i ColumnReference))
-RenameList <- 'RENAME'i Parens(List(ColumnReference 'AS'i Identifier))
+ExcludeList <- 'EXCLUDE'i (Parens(List(ColumnReference)) / ColumnReference)
+ReplaceList <- 'REPLACE'i (Parens(List(ReplaceEntry)) / ReplaceEntry)
+ReplaceEntry <- Expression 'AS'i ColumnReference
+RenameList <- 'RENAME'i (Parens(List(RenameEntry)) / RenameEntry)
+RenameEntry <- ColumnReference 'AS'i Identifier
 SubqueryExpression <- 'NOT'i? 'EXISTS'i? SubqueryReference
 CaseExpression <- 'CASE'i ColumnReference? CaseWhenThen CaseWhenThen* CaseElse? 'END'i
 CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression
@@ -35,7 +37,7 @@ WindowFrameDefinition <- Parens(WindowFrameContents)
 WindowFrameContents <- WindowPartition? OrderByClause? FrameClause?
 WindowPartition <- 'PARTITION'i 'BY'i List(Expression)
 PrefixExpression <- PrefixOperator Expression
-PrefixOperator <- '-' / '+'
+PrefixOperator <- 'NOT'i / '-' / '+'
 ListExpression <- 'ARRAY'i? '[' List(Expression)? ']'
 StructExpression <- '{' List(StructField) '}'
 StructField <- Expression ':'i Expression

@@ -23,7 +23,8 @@ Statement <-
 	ExportStatement /
 	ImportStatement /
 	CommentStatement /
-	DeallocateStatement
+	DeallocateStatement /
+	TruncateStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier

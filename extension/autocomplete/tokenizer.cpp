@@ -27,6 +27,9 @@ bool BaseTokenizer::IsSingleByteOperator(char c) {
 	case ',':
 	case '?':
 	case '$':
+	case '+':
+	case '-':
+	case '#':
 		return true;
 	default:
 		return false;
