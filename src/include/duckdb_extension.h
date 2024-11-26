@@ -69,7 +69,8 @@
 // Function pointer struct
 //===--------------------------------------------------------------------===//
 typedef struct {
-#if DUCKDB_EXTENSION_API_VERSION_MINOR >= 2 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 0 // v1.2.0
+#if DUCKDB_EXTENSION_API_VERSION_MINOR > 2 ||                                                                          \
+    (DUCKDB_EXTENSION_API_VERSION_MINOR == 2 && DUCKDB_EXTENSION_API_VERSION_PATCH >= 0) // v1.2.0
 	duckdb_state (*duckdb_open)(const char *path, duckdb_database *out_database);
 	duckdb_state (*duckdb_open_ext)(const char *path, duckdb_database *out_database, duckdb_config config,
 	                                char **out_error);

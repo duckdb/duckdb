@@ -490,15 +490,17 @@ def create_extension_api_struct(
                 extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_UNSTABLE // {version}\n"
             else:
                 extension_struct_finished += f"// {version}\n"
-            extension_struct_finished += (f'    // The functions below are not stable. This means that their signature, '
-                                          f'position in the struct, or even presence in the struct may change in future DuckDB releases. '
-                                          f'This means that for extensions using any of the functions below, extension binaries are tightly coupled'
-                                          f'to the DuckDB version they were built for.\n\n')
+            extension_struct_finished += (
+                f'    // The functions below are not stable. This means that their signature, '
+                f'position in the struct, or even presence in the struct may change in future DuckDB releases. '
+                f'This means that for extensions using any of the functions below, extension binaries are tightly coupled'
+                f'to the DuckDB version they were built for.\n\n'
+            )
         else:
             if add_version_defines:
                 major, minor, patch = parse_semver(version)
                 version_define = f" DUCKDB_EXTENSION_API_VERSION_{major}_{minor}_{patch}"
-                extension_struct_finished += f"#if  DUCKDB_EXTENSION_API_VERSION_MINOR >= {minor} &&  DUCKDB_EXTENSION_API_VERSION_PATCH >= {patch} // {version}\n"
+                extension_struct_finished += f"#if  DUCKDB_EXTENSION_API_VERSION_MINOR > {minor} || (DUCKDB_EXTENSION_API_VERSION_MINOR == {minor} &&  DUCKDB_EXTENSION_API_VERSION_PATCH >= {patch}) // {version}\n"
             else:
                 extension_struct_finished += f"// {version}\n"
         for function_name in api_version_entry['entries']:
@@ -718,6 +720,8 @@ def create_struct_function_set(api_definitions):
     result = set()
     for api in api_definitions:
         for entry in api['entries']:
+            if entry in result:
+                raise Exception(f"Duplicate entry found for function '{entry}'!")
             result.add(entry)
     return result
 

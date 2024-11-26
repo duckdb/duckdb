@@ -13,7 +13,7 @@ set(EXTENSION_FILES add_numbers.cpp capi_demo.cpp)
 option(
   USE_UNSTABLE_C_API
   "Use the unstable C Extension API (extension will be tied to exact DuckDB version)"
-  FALSE)
+  TRUE)
 
 if(USE_UNSTABLE_C_API)
   build_loadable_extension_capi_unstable(${EXTENSION_NAME} ${EXTENSION_FILES})
