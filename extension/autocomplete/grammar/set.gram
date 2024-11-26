@@ -1,4 +1,4 @@
-SetStmt <- 'SET'i (SetSetting / SetVariable)
+SetStatement <- 'SET'i (SetSetting / SetVariable)
 
 SetSetting <- SettingScope? SettingName SetAssignment
 SetVariable <- 'VARIABLE'i Identifier SetAssignment

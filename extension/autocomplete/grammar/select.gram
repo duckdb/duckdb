@@ -1,13 +1,16 @@
-SelectStatement <- SimpleSelect (SetopClause SimpleSelect)*
+SelectStatement <- BaseSelect (SetopClause BaseSelect)*
 
 SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) 'ALL'i?
+
+BaseSelect <- SimpleSelect / ValuesClause
 
 SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? OrderByClause? LimitClause? OffsetClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
 WithStatement <- Identifier 'AS'i SubqueryReference
 WithClause <- 'WITH'i List(WithStatement)
-SelectClause <- 'SELECT'i DistinctClause? List(AliasedExpression)
+SelectClause <- 'SELECT'i DistinctClause? TargetList
+TargetList <- List(AliasedExpression)
 ColumnAliases <- Parens(List(Identifier))
 
 DistinctClause <- ('DISTINCT'i DistinctOn?) / 'ALL'i
@@ -54,3 +57,6 @@ LimitClause <- 'LIMIT'i NumberLiteral
 OffsetClause <- 'OFFSET'i NumberLiteral
 
 AliasedExpression <- Expression ('AS'i? Identifier)?
+
+ValuesClause <- 'VALUES'i List(ValuesExpressions)
+ValuesExpressions <- Parens(List(Expression))

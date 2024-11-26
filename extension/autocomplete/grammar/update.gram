@@ -1,0 +1,4 @@
+
+
+UpdateSetClause <- List(UpdateSetElement)
+UpdateSetElement <- Identifier '=' Expression
