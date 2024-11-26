@@ -80,7 +80,7 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (name == "CopyOptions") {
+		if (name == "BaseTableRef") {
 			Printer::Print("Found it!");
 		}
 		MatchState list_state(state);
@@ -275,8 +275,17 @@ public:
 	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
 	}
 
-	static bool IsIdentifier(const string &text) {
-		return StringUtil::CharacterIsAlphaNumeric(text[0]) || text[0] == '"';
+	bool IsIdentifier(const string &text) const {
+		if (text.empty()) {
+			return false;
+		}
+		if (text.front() == '\'' && text.back() == '\'' && SupportsStringLiteral()) {
+			return true;
+		}
+		if (text.front() == '"' && text.back() == '"') {
+			return true;
+		}
+		return StringUtil::CharacterIsAlphaNumeric(text[0]);
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -291,6 +300,16 @@ public:
 		}
 		state.token_index++;
 		return MatchResultType::SUCCESS;
+	}
+
+	bool SupportsStringLiteral() const {
+		switch(suggestion_type) {
+		case SuggestionState::SUGGEST_TABLE_NAME:
+		case SuggestionState::SUGGEST_FILE_NAME:
+			return true;
+		default:
+			return false;
+		}
 	}
 
 	KeywordCategory GetBannedCategory() const {
@@ -966,6 +985,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	// rule overrides
 	AddRuleOverride("Identifier", Variable());
 	AddRuleOverride("TypeName", TypeName());
+	AddRuleOverride("TableName", TableName());
 	AddRuleOverride("CatalogName", CatalogName());
 	AddRuleOverride("SchemaName", SchemaName());
 	AddRuleOverride("ColumnName", ColumnName());

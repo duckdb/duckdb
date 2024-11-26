@@ -1,0 +1,1 @@
+CreateTypeStmt <- 'TYPE'i IfNotExists? QualifiedTableName 'AS'i Type

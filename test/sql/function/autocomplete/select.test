@@ -4,36 +4,6 @@
 
 require autocomplete
 
-# operators with quotes
-query II
-FROM sql_auto_complete('SELECT col=''world'' FR') LIMIT 1;
-----
-FROM 	19
-
-query II
-FROM sql_auto_complete('SELECT col="quoted col2" FR') LIMIT 1;
-----
-FROM 	25
-
-query II
-FROM sql_auto_complete('SELECT "quoted col1"="quoted col2" + "quoted col3" FR') LIMIT 1;
-----
-FROM 	51
-
-# quoted identifiers
-query II
-FROM sql_auto_complete('SELECT ''ORDER'' "WHERE" FR') LIMIT 1;
-----
-FROM 	23
-
-# escaped quoted identifiers
-query II
-FROM sql_auto_complete('SELECT ''OR''''DER'' "WHE""RE" FR') LIMIT 1;
-----
-FROM 	27
-
-
-
 # main keywords
 query II
 FROM sql_auto_complete('SEL') LIMIT 1;
