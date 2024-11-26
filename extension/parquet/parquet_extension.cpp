@@ -183,10 +183,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	duckdb_parquet::CompressionCodec::type codec = duckdb_parquet::CompressionCodec::SNAPPY;
 	vector<pair<string, string>> kv_metadata;
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
-
-	//! If row_group_size_bytes is not set, we default to row_group_size * BYTES_PER_ROW
-	static constexpr const idx_t BYTES_PER_ROW = 1024;
-	idx_t row_group_size_bytes;
+	idx_t row_group_size_bytes = NumericLimits<idx_t>::Maximum();
 
 	//! How/Whether to encrypt the data
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
@@ -1313,9 +1310,6 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			throw BinderException("ROW_GROUP_SIZE_BYTES does not work while preserving insertion order. Use \"SET "
 			                      "preserve_insertion_order=false;\" to disable preserving insertion order.");
 		}
-	} else {
-		// We always set a max row group size bytes so we don't use too much memory
-		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
 	}
 
 	if (compression_level_set && bind_data->codec != CompressionCodec::ZSTD) {
