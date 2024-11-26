@@ -439,7 +439,7 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 }
 
 bool FilterCombiner::ContainsNull(vector<Value> &in_list) {
-	for (idx_t i = 1; i < in_list.size(); i++) {
+	for (idx_t i = 0; i < in_list.size(); i++) {
 		if (in_list[i].IsNull()) {
 			return true;
 		}
@@ -460,9 +460,6 @@ bool FilterCombiner::IsDenseRange(vector<Value> &in_list) {
 	// check if the gap between each value is exactly one
 	hugeint_t prev_value = in_list[0].GetValue<hugeint_t>();
 	for (idx_t i = 1; i < in_list.size(); i++) {
-		if (in_list[i].IsNull()) {
-			return true;
-		}
 		hugeint_t current_value = in_list[i].GetValue<hugeint_t>();
 		hugeint_t diff;
 		if (!TrySubtractOperator::Operation(current_value, prev_value, diff)) {
