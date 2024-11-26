@@ -257,12 +257,9 @@ enum class TokenizeState {
 	STANDARD = 0,
 	IN_COMMENT,
 	QUOTED_IDENTIFIER,
-	STRING_LITERAL
-};
-
-enum class WordState {
-	UNINITIALIZED,
+	STRING_LITERAL,
 	KEYWORD,
+	NUMERIC,
 	OPERATOR
 };
 
@@ -274,104 +271,169 @@ static bool IsSingleByteOperator(char c) {
 	case '}':
 	case '[':
 	case ']':
+	case ',':
 		return true;
 	default:
 		return false;
 	}
 }
 
+static bool CharacterIsInitialNumber(char c) {
+	if (c >= '0' && c <= '9') {
+		return true;
+	}
+	return c == '.';
+}
+
+static bool CharacterIsNumber(char c) {
+	if (CharacterIsInitialNumber(c)) {
+		return true;
+	}
+	switch(c) {
+	case 'e': // exponents
+	case 'E':
+	case '_':
+	case '-':
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool CharacterIsControlFlow(char c) {
+	switch(c) {
+	case '\'':
+	case '-':
+	case ';':
+	case '"':
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool CharacterIsKeyword(char c) {
+	if (IsSingleByteOperator(c)) {
+		return false;
+	}
+	if (StringUtil::CharacterIsOperator(c)) {
+		return false;
+	}
+	if (StringUtil::CharacterIsSpace(c)) {
+		return false;
+	}
+	if (CharacterIsControlFlow(c)) {
+		return false;
+	}
+	return true;
+}
+
+static bool CharacterIsOperator(char c) {
+	if (IsSingleByteOperator(c)) {
+		return false;
+	}
+	if (CharacterIsControlFlow(c)) {
+		return false;
+	}
+	return StringUtil::CharacterIsOperator(c);
+}
+
 class BaseTokenizer {
 public:
+	BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {}
 	virtual ~BaseTokenizer() = default;
 
-	bool TokenizeInput(const string &sql, vector<MatcherToken> &tokens) {
+	void PushToken(idx_t start, idx_t end) {
+		if (start >= end) {
+			return;
+		}
+		string last_token = sql.substr(start, end - start);
+		tokens.emplace_back(std::move(last_token));
+	}
+
+	bool TokenizeInput() {
 		auto state = TokenizeState::STANDARD;
 
 		idx_t last_pos = 0;
 		idx_t pos_offset = 0;
-		WordState word_state = WordState::UNINITIALIZED;
 		for(idx_t i = 0; i < sql.size(); i++) {
 			auto c = sql[i];
 			switch(state) {
 			case TokenizeState::STANDARD:
 				if (c == '\'') {
-					if (i > last_pos) {
-						string last_token = sql.substr(last_pos, i - last_pos);
-						tokens.emplace_back(std::move(last_token));
-					}
 					state = TokenizeState::STRING_LITERAL;
 					last_pos = i;
 					break;
 				}
 				if (c == '"') {
-					if (i > last_pos) {
-						string last_token = sql.substr(last_pos, i - last_pos);
-						tokens.emplace_back(std::move(last_token));
-					}
 					state = TokenizeState::QUOTED_IDENTIFIER;
 					last_pos = i;
 					break;
 				}
 				if (c == ';') {
 					// end of statement
-					if (i > last_pos) {
-						string last_token = sql.substr(last_pos, i - last_pos);
-						tokens.emplace_back(std::move(last_token));
-					}
-					OnStatementEnd(std::move(tokens), i);
-					tokens.clear();
+					OnStatementEnd(i);
 					last_pos = i + 1;
-					word_state = WordState::UNINITIALIZED;
 					break;
 				}
 				if (c == '-' && i + 1 < sql.size() && sql[i + 1] == '-') {
 					i++;
 					state = TokenizeState::IN_COMMENT;
-					word_state = WordState::UNINITIALIZED;
 					break;
 				}
 				if (StringUtil::CharacterIsSpace(c)) {
-					// space character - check if this delineates a keyword
-					if (i > last_pos) {
-						// there is - push the keyword
-						auto next_word = sql.substr(last_pos, i - last_pos);
-						tokens.emplace_back(next_word);
-						word_state = WordState::UNINITIALIZED;
-					}
+					// space character - skip
 					last_pos = i + 1;
-				} else if (IsSingleByteOperator(c)) {
-					// single-byte operator
-					if (i > last_pos) {
-						// push a previous operator if there is any
-						auto next_word = sql.substr(last_pos, i - last_pos);
-						tokens.emplace_back(next_word);
-					}
+					break;
+				}
+				if (IsSingleByteOperator(c)) {
+					// single-byte operator - directly push the token
 					tokens.emplace_back(string(1, c));
 					last_pos = i + 1;
-					word_state = WordState::UNINITIALIZED;
-				} else if (StringUtil::CharacterIsOperator(c)) {
-					if (word_state == WordState::OPERATOR) {
-						continue;
-					}
-					// previous word is not an operator
-					if (i > last_pos) {
-						// we have a previous word - emit the token
-						auto next_word = sql.substr(last_pos, i - last_pos);
-						tokens.emplace_back(next_word);
-					}
+					break;
+				}
+				if (CharacterIsInitialNumber(c)) {
+					// parse a numeric literal
+					state = TokenizeState::NUMERIC;
 					last_pos = i;
-					word_state = WordState::OPERATOR;
-				} else {
-					if (word_state == WordState::KEYWORD) {
-						continue;
-					}
-					// previous word is an operator
-					if (i > last_pos) {
-						auto next_word = sql.substr(last_pos, i - last_pos);
-						tokens.emplace_back(next_word);
-					}
+					break;
+				}
+				if (StringUtil::CharacterIsOperator(c)) {
+					state = TokenizeState::OPERATOR;
 					last_pos = i;
-					word_state = WordState::KEYWORD;
+					break;
+				}
+				state = TokenizeState::KEYWORD;
+				last_pos = i;
+				break;
+			case TokenizeState::NUMERIC:
+				// numeric literal - check if this is still numeric
+				if (!CharacterIsNumber(c)) {
+					// not a number - return to standard state
+					PushToken(last_pos, i);
+					state = TokenizeState::STANDARD;
+					last_pos = i;
+					i--;
+				}
+				break;
+			case TokenizeState::OPERATOR:
+				// operator literal - check if this is still an operator
+				if (!CharacterIsOperator(c)) {
+					// not an operator - return to standard state
+					PushToken(last_pos, i);
+					state = TokenizeState::STANDARD;
+					last_pos = i;
+					i--;
+				}
+				break;
+			case TokenizeState::KEYWORD:
+				// keyword - check if this is still a keyword
+				if (!CharacterIsKeyword(c)) {
+					// not a keyword - return to standard state
+					PushToken(last_pos, i);
+					state = TokenizeState::STANDARD;
+					last_pos = i;
+					i--;
 				}
 				break;
 			case TokenizeState::STRING_LITERAL:
@@ -380,6 +442,8 @@ public:
 						// escaped - skip escape
 						i++;
 					} else {
+						PushToken(last_pos, i + 1);
+						last_pos = i + 1;
 						state = TokenizeState::STANDARD;
 					}
 				}
@@ -390,6 +454,7 @@ public:
 						// escaped - skip escape
 						i++;
 					} else {
+						PushToken(last_pos, i + 1);
 						state = TokenizeState::STANDARD;
 					}
 				}
@@ -418,18 +483,25 @@ public:
 		}
 		string last_word = sql.substr(last_pos, sql.size() - last_pos);
 		last_pos -= pos_offset;
-		OnLastToken(tokens, std::move(last_word), last_pos);
+		OnLastToken(std::move(last_word), last_pos);
 		return true;
 	}
 
-	virtual void OnStatementEnd(vector<MatcherToken> tokens, idx_t pos) {
+	virtual void OnStatementEnd(idx_t pos) {
+		tokens.clear();
 	}
-	virtual void OnLastToken(vector<MatcherToken> &tokens, string last_word, idx_t last_pos) = 0;
+	virtual void OnLastToken(string last_word, idx_t last_pos) = 0;
+
+protected:
+	const string &sql;
+	vector<MatcherToken> &tokens;
 };
 
 class AutoCompleteTokenizer : public BaseTokenizer {
 public:
-	void OnLastToken(vector<MatcherToken> &, string last_word_p, idx_t last_pos_p) override {
+	AutoCompleteTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {}
+
+	void OnLastToken(string last_word_p, idx_t last_pos_p) override {
 		last_word = std::move(last_word_p);
 		last_pos = last_pos_p;
 	}
@@ -444,8 +516,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	vector<MatcherSuggestion> suggestions;
 	MatchState state(tokens, suggestions);
 
-	AutoCompleteTokenizer tokenizer;
-	auto allow_complete = tokenizer.TokenizeInput(sql, state.tokens);
+	AutoCompleteTokenizer tokenizer(sql, state.tokens);
+	auto allow_complete = tokenizer.TokenizeInput();
 	if (!allow_complete) {
 		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
 	}
@@ -556,10 +628,12 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 
 class ParserTokenizer : public BaseTokenizer {
 public:
-	void OnStatementEnd(vector<MatcherToken> tokens, idx_t pos) override {
+	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {}
+	void OnStatementEnd(idx_t pos) override {
 		statements.push_back(std::move(tokens));
+		tokens.clear();
 	}
-	void OnLastToken(vector<MatcherToken> &tokens, string last_word, idx_t ) override {
+	void OnLastToken(string last_word, idx_t ) override {
 		if (last_word.empty()) {
 			return;
 		}
@@ -579,10 +653,10 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 
 	auto sql = StringValue::Get(input.inputs[0]);
 
-	ParserTokenizer tokenizer;
-
 	vector<MatcherToken> root_tokens;
-	auto allow_complete = tokenizer.TokenizeInput(sql, root_tokens);
+	ParserTokenizer tokenizer(sql, root_tokens);
+
+	auto allow_complete = tokenizer.TokenizeInput();
 	if (!allow_complete) {
 		return nullptr;
 	}

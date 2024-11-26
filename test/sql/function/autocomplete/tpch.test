@@ -47,3 +47,8 @@ query II
 FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;
 ----
 lineitem	0
+
+query II
+FROM sql_auto_complete('DROP TABLE lin') LIMIT 1;
+----
+lineitem	0

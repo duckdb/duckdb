@@ -50,6 +50,27 @@ FROM sql_auto_complete('SELECT CASE WH') LIMIT 1;
 ----
 WHEN 	12
 
+# functions
+query II
+FROM sql_auto_complete('SELECT sum(42) IS NOT NUL') LIMIT 1;
+----
+NULL 	22
+
+query II
+FROM sql_auto_complete('SELECT sum(disti') LIMIT 1;
+----
+distinct 	11
+
+query II
+FROM sql_auto_complete('SELECT sum(a, b orde') LIMIT 1;
+----
+order 	16
+
+query II
+FROM sql_auto_complete('SELECT sum(a) filt') LIMIT 1;
+----
+filter 	14
+
 query II
 FROM sql_auto_complete('SELECT CASE WHEN a=1 THEN 1 WHEN a=2 THEN 2 WHEN a=3 THEN 3 END FR') LIMIT 1;
 ----

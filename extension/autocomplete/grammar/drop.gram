@@ -1,0 +1,27 @@
+DropStatement <- 'DROP'i DropEntries DropBehavior?
+
+DropEntries <-
+	DropTable /
+	DropTableFunction /
+	DropFunction /
+	DropSchema /
+	DropIndex /
+	DropSequence /
+	DropCollation /
+	DropType
+
+DropTable <- TableOrView IfExists? List(BaseTableName)
+DropTableFunction <- 'MACRO'i 'TABLE'i IfExists? List(TableFunctionName)
+DropFunction <- FunctionType IfExists? List(FunctionName)
+DropSchema <- 'SCHEMA'i IfExists? List(SchemaName)
+DropIndex <- 'INDEX'i IfExists? List(IndexName)
+DropSequence <- 'SEQUENCE'i IfExists? List(SequenceName)
+DropCollation <- 'COLLATION'i IfExists? List(CollationName)
+DropType <- 'TYPE'i IfExists? List(TypeName)
+
+TableOrView <- 'TABLE'i / 'VIEW'i / ('MATERIALIZED'i 'VIEW'i)
+FunctionType <- 'MACRO'i / 'FUNCTION'i
+
+DropBehavior <- 'CASCADE'i / 'RESTRICT'i
+
+IfExists <- 'IF'i 'EXISTS'i

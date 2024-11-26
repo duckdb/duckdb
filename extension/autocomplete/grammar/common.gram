@@ -4,7 +4,8 @@ Statement <-
 	SetStatement /
 	PragmaStatement /
 	CallStatement /
-	InsertStatement
+	InsertStatement /
+	DropStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier
@@ -16,6 +17,9 @@ SettingName <- Identifier
 PragmaName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- Identifier
+IndexName <- Identifier
+SequenceName <- Identifier
+CollationName <- Identifier
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
@@ -109,5 +113,5 @@ ReservedKeyword <- 'ALL'i /
 
 # internal definitions
 %whitespace <- [ \t\n\r]*
-List(D) <- D (',' D)*
+List(D) <- D (',' D)* ','?
 Parens(D) <- '(' D ')'
