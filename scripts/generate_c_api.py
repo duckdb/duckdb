@@ -681,6 +681,7 @@ def create_duckdb_ext_h(
     with open(file, 'w+') as f:
         f.write(duckdb_ext_h)
 
+
 # Create duckdb_extension_internal.hpp
 def create_duckdb_ext_internal_h(ext_api_version, function_groups, function_map, ext_api_definitions, exclusion_set):
     duckdb_ext_h = fetch_header_template_ext()

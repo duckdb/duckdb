@@ -48,9 +48,11 @@ struct ParsedExtensionMetaData {
 	ExtensionABIType abi_type;
 
 	string platform;
-	// (For ExtensionABIType::CPP or ExtensionABIType::C_STRUCT_UNSTABLE) the DuckDB version this extension is compiled for
+	// (For ExtensionABIType::CPP or ExtensionABIType::C_STRUCT_UNSTABLE) the DuckDB version this extension is compiled
+	// for
 	string duckdb_version;
-	// (only for ExtensionABIType::C_STRUCT) the CAPI version of the C_STRUCT (Currently interpreted as the minimum DuckDB version)
+	// (only for ExtensionABIType::C_STRUCT) the CAPI version of the C_STRUCT (Currently interpreted as the minimum
+	// DuckDB version)
 	string duckdb_capi_version;
 	string extension_version;
 	string signature;

@@ -109,9 +109,9 @@ struct ExtensionAccess {
 
 			if (!parsed || !VersioningUtils::IsSupportedCAPIVersion(major, minor, patch)) {
 				load_state.has_error = true;
-				load_state.error_data =
-					ErrorData(ExceptionType::UNKNOWN_TYPE,
-							  "Unsupported C CAPI version detected during extension initialization: " + string(version));
+				load_state.error_data = ErrorData(
+				    ExceptionType::UNKNOWN_TYPE,
+				    "Unsupported C CAPI version detected during extension initialization: " + string(version));
 				return nullptr;
 			}
 		}
