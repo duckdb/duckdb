@@ -443,6 +443,17 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
+	bool (*duckdb_is_finite_timestamp_s)(duckdb_timestamp_s ts);
+	bool (*duckdb_is_finite_timestamp_ms)(duckdb_timestamp_ms ts);
+	bool (*duckdb_is_finite_timestamp_ns)(duckdb_timestamp_ns ts);
+	duckdb_value (*duckdb_create_timestamp_tz)(duckdb_timestamp input);
+	duckdb_value (*duckdb_create_timestamp_s)(duckdb_timestamp_s input);
+	duckdb_value (*duckdb_create_timestamp_ms)(duckdb_timestamp_ms input);
+	duckdb_value (*duckdb_create_timestamp_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp (*duckdb_get_timestamp_tz)(duckdb_value val);
+	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
+	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -834,6 +845,17 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_arrow_scan = duckdb_arrow_scan;
 	result.duckdb_arrow_array_scan = duckdb_arrow_array_scan;
 	result.duckdb_stream_fetch_chunk = duckdb_stream_fetch_chunk;
+	result.duckdb_is_finite_timestamp_s = duckdb_is_finite_timestamp_s;
+	result.duckdb_is_finite_timestamp_ms = duckdb_is_finite_timestamp_ms;
+	result.duckdb_is_finite_timestamp_ns = duckdb_is_finite_timestamp_ns;
+	result.duckdb_create_timestamp_tz = duckdb_create_timestamp_tz;
+	result.duckdb_create_timestamp_s = duckdb_create_timestamp_s;
+	result.duckdb_create_timestamp_ms = duckdb_create_timestamp_ms;
+	result.duckdb_create_timestamp_ns = duckdb_create_timestamp_ns;
+	result.duckdb_get_timestamp_tz = duckdb_get_timestamp_tz;
+	result.duckdb_get_timestamp_s = duckdb_get_timestamp_s;
+	result.duckdb_get_timestamp_ms = duckdb_get_timestamp_ms;
+	result.duckdb_get_timestamp_ns = duckdb_get_timestamp_ns;
 	return result;
 }
 

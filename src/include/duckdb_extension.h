@@ -509,6 +509,17 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
+	bool (*duckdb_is_finite_timestamp_s)(duckdb_timestamp_s ts);
+	bool (*duckdb_is_finite_timestamp_ms)(duckdb_timestamp_ms ts);
+	bool (*duckdb_is_finite_timestamp_ns)(duckdb_timestamp_ns ts);
+	duckdb_value (*duckdb_create_timestamp_tz)(duckdb_timestamp input);
+	duckdb_value (*duckdb_create_timestamp_s)(duckdb_timestamp_s input);
+	duckdb_value (*duckdb_create_timestamp_ms)(duckdb_timestamp_ms input);
+	duckdb_value (*duckdb_create_timestamp_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp (*duckdb_get_timestamp_tz)(duckdb_value val);
+	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
+	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
 #endif
 
 } duckdb_ext_api_v1;
@@ -887,8 +898,19 @@ typedef struct {
 #define duckdb_value_string_internal      duckdb_ext_api.duckdb_value_string_internal
 #define duckdb_value_blob                 duckdb_ext_api.duckdb_value_blob
 #define duckdb_value_is_null              duckdb_ext_api.duckdb_value_is_null
+#define duckdb_is_finite_timestamp_s      duckdb_ext_api.duckdb_is_finite_timestamp_s
+#define duckdb_is_finite_timestamp_ms     duckdb_ext_api.duckdb_is_finite_timestamp_ms
+#define duckdb_is_finite_timestamp_ns     duckdb_ext_api.duckdb_is_finite_timestamp_ns
 #define duckdb_execute_prepared_streaming duckdb_ext_api.duckdb_execute_prepared_streaming
 #define duckdb_pending_prepared_streaming duckdb_ext_api.duckdb_pending_prepared_streaming
+#define duckdb_create_timestamp_tz        duckdb_ext_api.duckdb_create_timestamp_tz
+#define duckdb_create_timestamp_s         duckdb_ext_api.duckdb_create_timestamp_s
+#define duckdb_create_timestamp_ms        duckdb_ext_api.duckdb_create_timestamp_ms
+#define duckdb_create_timestamp_ns        duckdb_ext_api.duckdb_create_timestamp_ns
+#define duckdb_get_timestamp_tz           duckdb_ext_api.duckdb_get_timestamp_tz
+#define duckdb_get_timestamp_s            duckdb_ext_api.duckdb_get_timestamp_s
+#define duckdb_get_timestamp_ms           duckdb_ext_api.duckdb_get_timestamp_ms
+#define duckdb_get_timestamp_ns           duckdb_ext_api.duckdb_get_timestamp_ns
 #define duckdb_query_arrow                duckdb_ext_api.duckdb_query_arrow
 #define duckdb_query_arrow_schema         duckdb_ext_api.duckdb_query_arrow_schema
 #define duckdb_prepared_arrow_schema      duckdb_ext_api.duckdb_prepared_arrow_schema

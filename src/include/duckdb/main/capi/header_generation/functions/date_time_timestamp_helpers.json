@@ -171,7 +171,58 @@
             "comment": {
                 "description": "Test a `duckdb_timestamp` to see if it is a finite value.\n\n",
                 "param_comments": {
-                    "ts": "The timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column."
+                    "ts": "The duckdb_timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column."
+                },
+                "return_value": "True if the timestamp is finite, false if it is \u00b1infinity."
+            }
+        },
+        {
+            "name": "duckdb_is_finite_timestamp_s",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_s",
+                    "name": "ts"
+                }
+            ],
+            "comment": {
+                "description": "Test a `duckdb_timestamp_s` to see if it is a finite value.\n\n",
+                "param_comments": {
+                    "ts": "The duckdb_timestamp_s object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column."
+                },
+                "return_value": "True if the timestamp is finite, false if it is \u00b1infinity."
+            }
+        },
+        {
+            "name": "duckdb_is_finite_timestamp_ms",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_ms",
+                    "name": "ts"
+                }
+            ],
+            "comment": {
+                "description": "Test a `duckdb_timestamp_ms` to see if it is a finite value.\n\n",
+                "param_comments": {
+                    "ts": "The duckdb_timestamp_ms object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column."
+                },
+                "return_value": "True if the timestamp is finite, false if it is \u00b1infinity."
+            }
+        },
+        {
+            "name": "duckdb_is_finite_timestamp_ns",
+            "return_type": "bool",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_ns",
+                    "name": "ts"
+                }
+            ],
+            "comment": {
+                "description": "Test a `duckdb_timestamp_ns` to see if it is a finite value.\n\n",
+                "param_comments": {
+                    "ts": "The duckdb_timestamp_ns object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column."
                 },
                 "return_value": "True if the timestamp is finite, false if it is \u00b1infinity."
             }
