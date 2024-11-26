@@ -295,11 +295,19 @@ public:
 			switch(state) {
 			case TokenizeState::STANDARD:
 				if (c == '\'') {
+					if (i > last_pos) {
+						string last_token = sql.substr(last_pos, i - last_pos);
+						tokens.emplace_back(std::move(last_token));
+					}
 					state = TokenizeState::STRING_LITERAL;
 					last_pos = i;
 					break;
 				}
 				if (c == '"') {
+					if (i > last_pos) {
+						string last_token = sql.substr(last_pos, i - last_pos);
+						tokens.emplace_back(std::move(last_token));
+					}
 					state = TokenizeState::QUOTED_IDENTIFIER;
 					last_pos = i;
 					break;

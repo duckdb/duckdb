@@ -1,5 +1,5 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
-FunctionExpression <- FunctionIdentifier Parens(List(Expression)?) OverClause?
+FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(Expression)? OrderByClause?) OverClause?
 FunctionIdentifier <- CatalogQualification? SchemaQualification? TableQualification? FunctionName
 ParenthesisExpression <- Parens(List(Expression))
 LiteralExpression <- StringLiteral / NumberLiteral / 'NULL'i / 'TRUE'i / 'FALSE'i
@@ -12,7 +12,6 @@ CaseExpression <- 'CASE'i ColumnReference? CaseWhenThen CaseWhenThen* CaseElse? 
 CaseWhenThen <- 'WHEN'i Expression 'THEN'i Expression
 CaseElse <- 'ELSE'i Expression
 DateExpression <- 'DATE'i Expression
-DistinctExpression <- 'DISTINCT'i Expression
 SubstringExpression <- 'SUBSTRING'i Parens(Expression 'FROM'i NumberLiteral 'FOR'i NumberLiteral)
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS'i / 'RANGE'i / 'GROUPS'i
@@ -36,7 +35,6 @@ SingleExpression <-
     SubqueryExpression /
     ParenthesisExpression /
     DateExpression /
-    DistinctExpression /
     SubstringExpression /
     IsNullExpression /
     CaseExpression /

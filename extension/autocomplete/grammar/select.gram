@@ -7,8 +7,9 @@ SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause?
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
 WithStatement <- Identifier 'AS'i SubqueryReference
 WithClause <- 'WITH'i List(WithStatement)
-SelectClause <- 'SELECT'i ('*' / List(AliasedExpression))
+SelectClause <- 'SELECT'i DistinctOrAll? ('*' / List(AliasedExpression))
 ColumnAliases <- Parens(List(Identifier))
+DistinctOrAll <- 'DISTINCT'i / 'ALL'i
 
 InnerTableRef <- TableFunction / TableSubquery / BaseTableRef
 

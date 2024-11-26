@@ -1,0 +1,8 @@
+CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedTableName List(MacroDefinition)
+
+MacroOrFunction <- 'MACRO'i / 'FUNCTION'i
+
+MacroDefinition <- Parens(List(Identifier)) 'AS'i (ScalarMacroDefinition / TableMacroDefinition)
+
+ScalarMacroDefinition <- Expression
+TableMacroDefinition <- 'TABLE'i SelectStatement

@@ -1,4 +1,4 @@
-CreateStmt <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt)
+CreateStmt <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt / CreateMacroStmt)
 OrReplace <- 'OR'i 'REPLACE'i
 Temporary <- 'TEMP'i / 'TEMPORARY'i
 
