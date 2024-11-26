@@ -518,17 +518,18 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 	return result;
 }
 
-string StringUtil::ToJSONMap(ExceptionType type, const string &message, const unordered_map<string, string> &map) {
-	D_ASSERT(map.find("exception_type") == map.end());
-	D_ASSERT(map.find("exception_message") == map.end());
+string StringUtil::ToJSONMap(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
+	if (doc == nullptr && root == nullptr) {
+		// We have to initialize them
+		doc = yyjson_mut_doc_new(nullptr);
+		root = yyjson_mut_obj(doc);
+		yyjson_mut_doc_set_root(doc, root);
+	} else if (doc == nullptr || root == nullptr) {
+		// They are either both not set, or both set.
+		throw InternalException("StringUtil::ToJSONMap is called with invalid doc and root parameters. They must be "
+		                        "both valid, or both set to null");
+	}
 
-	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
-	yyjson_mut_val *root = yyjson_mut_obj(doc);
-	yyjson_mut_doc_set_root(doc, root);
-
-	auto except_str = Exception::ExceptionTypeToString(type);
-	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
-	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
 	for (auto &entry : map) {
 		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
 		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
@@ -552,6 +553,22 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 
 	// Return the result
 	return result;
+}
+
+string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
+                                      const unordered_map<string, string> &map) {
+	D_ASSERT(map.find("exception_type") == map.end());
+	D_ASSERT(map.find("exception_message") == map.end());
+
+	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	yyjson_mut_val *root = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, root);
+
+	auto except_str = Exception::ExceptionTypeToString(type);
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
+
+	return ToJSONMap(map, doc, root);
 }
 
 string StringUtil::GetFileName(const string &file_path) {

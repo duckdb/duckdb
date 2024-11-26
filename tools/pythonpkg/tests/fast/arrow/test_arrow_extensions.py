@@ -259,4 +259,3 @@ class TestCanonicalExtensionTypes(object):
 
         assert arrow_table.schema[0].type.key_type.extension_name == "arrow.uuid"
         assert arrow_table.schema[0].type.item_type.extension_name == "arrow.opaque"
-
