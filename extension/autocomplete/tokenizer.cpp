@@ -24,6 +24,7 @@ bool BaseTokenizer::IsSingleByteOperator(char c) {
 	case '[':
 	case ']':
 	case ',':
+	case '?':
 		return true;
 	default:
 		return false;
@@ -58,6 +59,7 @@ bool BaseTokenizer::CharacterIsControlFlow(char c) {
 	case '-':
 	case ';':
 	case '"':
+	case '.':
 		return true;
 	default:
 		return false;

@@ -286,7 +286,7 @@ public:
 		if (text.front() == '"' && text.back() == '"') {
 			return true;
 		}
-		return StringUtil::CharacterIsAlphaNumeric(text[0]);
+		return BaseTokenizer::CharacterIsKeyword(text[0]);
 	}
 
 	MatchResultType Match(MatchState &state) const override {

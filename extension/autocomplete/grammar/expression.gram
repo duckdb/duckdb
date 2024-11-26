@@ -1,7 +1,8 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
-FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(Expression)? OrderByClause?) WithinGroupClause? FilterClause? OverClause?
+FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause?) WithinGroupClause? FilterClause? ExportClause? OverClause?
 FunctionIdentifier <- CatalogQualification? SchemaQualification? TableQualification? FunctionName
 DistinctOrAll <- 'DISTINCT'i / 'ALL'i
+ExportClause <- 'EXPORT_STATE'i
 WithinGroupClause <- 'WITHIN'i 'GROUP'i Parens(OrderByClause)
 FilterClause <- 'FILTER' Parens('WHERE'i? Expression)
 
@@ -38,11 +39,15 @@ ListExpression <- 'ARRAY'i? '[' List(Expression)? ']'
 StructExpression <- '{' List(StructField) '}'
 StructField <- Expression ':'i Expression
 MapExpression <- 'MAP'i StructExpression
+GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
+GroupingOrGroupingId <- 'GROUPING'i / 'GROUPING_ID'i
+Parameter <- '?'
 
 ListComprehensionExpression <- '['i Expression 'FOR'i Expression ListComprehensionFilter? ']'
 ListComprehensionFilter <- 'IF'i Expression
 
 SingleExpression <-
+	Parameter /
     SubqueryExpression /
     ParenthesisExpression /
     IntervalLiteral /
@@ -52,6 +57,7 @@ SingleExpression <-
     StarExpression /
     CastExpression /
     ExtractExpression /
+    GroupingExpression /
     FunctionExpression /
     ColumnReference /
     LiteralExpression /
@@ -83,7 +89,7 @@ Operator <-
 
 CastOperator <- '::' Type
 
-BaseExpression <- SingleExpression CastOperator?
+BaseExpression <- SingleExpression CastOperator*
 Expression <- BaseExpression RecursiveExpression*
 RecursiveExpression <- (Operator Expression) / SliceExpression
 SliceExpression <- '[' SliceBound ']'

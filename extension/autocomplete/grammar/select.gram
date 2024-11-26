@@ -8,7 +8,8 @@ SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
 WithStatement <- Identifier 'AS'i SubqueryReference
-WithClause <- 'WITH'i List(WithStatement)
+WithClause <- 'WITH'i Recursive? List(WithStatement)
+Recursive <- 'RECURSIVE'i
 SelectClause <- 'SELECT'i DistinctClause? TargetList
 TargetList <- List(AliasedExpression)
 ColumnAliases <- Parens(List(Identifier))
@@ -58,7 +59,8 @@ OrderByExpression <- Expression DescOrAsc? NullsFirstOrLast?
 DescOrAsc <- 'DESC'i / 'DESCENDING'i / 'ASC'i / 'ASCENDING'i
 NullsFirstOrLast <- 'NULLS'i 'FIRST'i / 'LAST'i
 OrderByClause <- 'ORDER'i 'BY'i OrderByExpressions
-OrderByExpressions <- List(OrderByExpression) / 'ALL'i
+OrderByExpressions <- List(OrderByExpression) / OrderByAll
+OrderByAll <- 'ALL'i DescOrAsc? NullsFirstOrLast?
 
 LimitClause <- 'LIMIT'i NumberLiteral
 OffsetClause <- 'OFFSET'i NumberLiteral

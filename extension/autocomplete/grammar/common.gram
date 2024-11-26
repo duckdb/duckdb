@@ -8,7 +8,10 @@ Statement <-
 	DropStatement /
 	CopyStatement /
 	DescribeStatement /
-	ExplainStatement
+	ExplainStatement /
+	UpdateStatement /
+	PrepareStatement /
+	ExecuteStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier

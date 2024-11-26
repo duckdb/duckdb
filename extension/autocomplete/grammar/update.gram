@@ -1,4 +1,4 @@
-
+UpdateStatement <- WithClause? 'UPDATE'i InsertTarget 'SET'i UpdateSetClause FromClause? WhereClause? ReturningClause?
 
 UpdateSetClause <- List(UpdateSetElement)
 UpdateSetElement <- Identifier '=' Expression
