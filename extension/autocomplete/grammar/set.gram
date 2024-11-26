@@ -1,0 +1,7 @@
+SetStmt <- 'SET'i VariableScope? SetAssignment
+VariableScope <- 'LOCAL'i / 'SESSION'i / 'GLOBAL'i / 'VARIABLE'i
+
+SetAssignment <- Identifier VariableAssign VariableList
+
+VariableAssign <- '=' / 'TO'
+VariableList <- List(Expression)

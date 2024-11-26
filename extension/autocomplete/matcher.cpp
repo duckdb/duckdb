@@ -80,9 +80,9 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		// if (name == "SingleExpression") {
-		// 	Printer::Print("Found it!");
-		// }
+		if (name == "InnerTableRef") {
+			Printer::Print("Found it!");
+		}
 		MatchState list_state(state);
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
 			auto &child_matcher = matchers[child_idx].get();

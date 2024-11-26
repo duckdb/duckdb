@@ -2,7 +2,11 @@ CreateStmt <- 'CREATE'i OrReplace? Temporary? (CreateTableStmt)
 OrReplace <- 'OR'i 'REPLACE'i
 Temporary <- 'TEMP'i / 'TEMPORARY'i
 
-CreateTableStmt <- 'TABLE'i IfNotExists? QualifiedTableName Parens(CreateTableColumnList)
+CreateTableStmt <- 'TABLE'i IfNotExists? QualifiedTableName (CreateColumnList / CreateTableAs)
+
+CreateTableAs <- IdentifierList? 'AS'i SelectStatement
+IdentifierList <- List(Identifier)
+CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
 QualifiedTableName <- CatalogQualification? SchemaQualification? Identifier
 CatalogQualification <- CatalogName '.'

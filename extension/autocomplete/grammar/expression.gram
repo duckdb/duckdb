@@ -1,5 +1,6 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
-FunctionExpression <- Identifier Parens(List(Expression)?) OverClause?
+FunctionExpression <- FunctionIdentifier Parens(List(Expression)?) OverClause?
+FunctionIdentifier <- CatalogQualification? SchemaQualification? TableQualification? FunctionName
 ParenthesisExpression <- Parens(List(Expression))
 LiteralExpression <- StringLiteral / NumberLiteral / 'NULL'i / 'TRUE'i / 'FALSE'i
 CastExpression <- CastOrTryCast Parens(Expression 'AS'i TypeName)
