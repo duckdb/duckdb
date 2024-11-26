@@ -1,6 +1,6 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
 FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause?) WithinGroupClause? FilterClause? ExportClause? OverClause?
-FunctionIdentifier <- CatalogQualification? SchemaQualification? TableQualification? FunctionName
+FunctionIdentifier <- CatalogQualification? SchemaQualification? FunctionName
 DistinctOrAll <- 'DISTINCT'i / 'ALL'i
 ExportClause <- 'EXPORT_STATE'i
 WithinGroupClause <- 'WITHIN'i 'GROUP'i Parens(OrderByClause)
@@ -73,7 +73,8 @@ SingleExpression <-
     DefaultExpression
 
 ArithmeticOperator <- '+' / '-' / '*' / '/' / '//' / '%' / '^' / '**' / '||'
-LikeOperator <- 'NOT'i? 'LIKE'i
+LikeOperator <- 'NOT'i? LikeOrSimilarTo
+LikeOrSimilarTo <- 'LIKE'i / 'ILIKE'i / 'GLOB'i / ('SIMILAR'i 'TO'i)
 InOperator <- 'NOT'i? 'IN'i
 IsOperator <- 'IS'i 'NOT'i? DistinctFrom?
 DistinctFrom <- 'DISTINCT'i 'FROM'i
@@ -82,6 +83,7 @@ ComparisonOperator <-  '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
 BetweenOperator <- 'BETWEEN'i
 CollateOperator <- 'COLLATE'i
 LambdaOperator <- '->'
+EscapeOperator <- 'ESCAPE'i
 
 Operator <-
     ArithmeticOperator /
@@ -92,10 +94,11 @@ Operator <-
     IsOperator /
     BetweenOperator /
     CollateOperator /
-    LambdaOperator
+    LambdaOperator /
+    EscapeOperator
 
 CastOperator <- '::' Type
-DotOperator <- '.' Identifier
+DotOperator <- '.' (FunctionExpression / Identifier)
 Indirection <- CastOperator / DotOperator
 
 BaseExpression <- SingleExpression Indirection*

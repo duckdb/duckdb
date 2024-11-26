@@ -39,6 +39,7 @@ IndexName <- Identifier
 SequenceName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- Identifier
+SecretName <- Identifier
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''

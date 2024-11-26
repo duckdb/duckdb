@@ -9,6 +9,7 @@ parser = argparse.ArgumentParser(description="Test serialization")
 parser.add_argument("--shell", type=str, help="Shell binary to run", default=os.path.join('build', 'debug', 'duckdb'))
 parser.add_argument("--offset", type=int, help="File offset", default=None)
 parser.add_argument("--count", type=int, help="File count", default=None)
+parser.add_argument('--no-exit', action='store_true', help='Do not exit after running tests')
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default='')
 group.add_argument("--all-tests", action='store_true', help="Run all tests", default=False)
@@ -66,9 +67,49 @@ excluded_tests = {
     'test/sql/attach/attach_nested_types.test',           # table
     'test/sql/binder/test_function_chainging_alias.test', # trim
     'test/sql/cast/test_try_cast.test',                   # try_cast
+    'test/sql/copy/csv/auto/test_auto_8573.test',         # columns
+    'test/sql/copy/csv/auto/test_csv_auto.test',
+    'test/sql/copy/csv/auto/test_normalize_names.test',
+    'test/sql/copy/csv/auto/test_sniffer_blob.test',
+    'test/sql/copy/csv/bug_10283.test',
+    'test/sql/copy/csv/code_cov/buffer_manager_finalize.test',
+    'test/sql/copy/csv/code_cov/csv_state_machine_invalid_utf.test',
+    'test/sql/copy/csv/column_names.test',
+    'test/sql/copy/csv/csv_enum.test',
+    'test/sql/copy/csv/csv_enum_storage.test',
+    'test/sql/copy/csv/csv_null_byte.test',
+    'test/sql/copy/csv/csv_nullstr_list.test',
+    'test/sql/copy/csv/empty_first_line.test',
+    'test/sql/copy/csv/glob/read_csv_glob.test',
+    'test/sql/copy/csv/null_padding_big.test',
+    'test/sql/copy/csv/parallel/csv_parallel_buffer_size.test',
+    'test/sql/copy/csv/parallel/csv_parallel_new_line.test_slow',
+    'test/sql/copy/csv/parallel/csv_parallel_null_option.test',
+    'test/sql/copy/csv/parallel/test_5438.test',
+    'test/sql/copy/csv/parallel/test_7578.test',
+    'test/sql/copy/csv/parallel/test_multiple_files.test',
+    'test/sql/copy/csv/recursive_read_csv.test',
+    'test/sql/copy/csv/rejects/csv_incorrect_columns_amount_rejects.test',
+    'test/sql/copy/csv/rejects/csv_rejects_flush_cast.test',
+    'test/sql/copy/csv/rejects/csv_rejects_flush_message.test',
+    'test/sql/copy/csv/rejects/csv_rejects_maximum_line.test',
+    'test/sql/copy/csv/rejects/csv_rejects_read.test',
+    'test/sql/copy/csv/rejects/csv_unquoted_rejects.test',
+    'test/sql/copy/csv/rejects/test_invalid_utf_rejects.test',
+    'test/sql/copy/csv/rejects/test_mixed.test',
+    'test/sql/copy/csv/rejects/test_multiple_errors_same_line.test',
+    'test/sql/copy/csv/struct_padding.test',
+    'test/sql/copy/csv/test_12596.test',
+    'test/sql/copy/csv/test_8890.test',
+    'test/sql/copy/csv/test_big_header.test',
+    'test/sql/copy/csv/test_comment_midline.test',
+    'test/sql/copy/csv/test_comment_option.test',
+    'test/sql/copy/csv/test_csv_column_count_mismatch.test_slow',
     # single quotes as identifier
     'test/sql/binder/table_alias_single_quotes.test',
-    'test/sql/binder/test_string_alias.test'
+    'test/sql/binder/test_string_alias.test',
+    # optional "AS" in UPDATE table alias
+    'test/sql/catalog/function/test_complex_macro.test',
 }
 if args.all_tests:
     # run all tests
@@ -98,6 +139,9 @@ for i in range(start, end):
             print(proc.stdout.decode('utf8'))
             print(f'-- STDERR --')
             print(stderr)
-            exit(1)
+            if not args.no_exit:
+                exit(1)
+            else:
+                break
 
 

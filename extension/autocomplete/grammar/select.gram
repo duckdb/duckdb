@@ -1,13 +1,15 @@
-SelectStatement <- BaseSelect (SetopClause BaseSelect)*
+SelectStatement <- SelectOrParens (SetopClause SelectStatement)*
 
 SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) DistinctOrAll? ByName?
 ByName <- 'BY'i 'NAME'i
+SelectOrParens <- BaseSelect / Parens(SelectStatement)
+
 BaseSelect <- (SimpleSelect / ValuesClause) OrderByClause? LimitClause? OffsetClause?
 
 SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
-WithStatement <- Identifier 'AS'i SubqueryReference
+WithStatement <- Identifier InsertColumnList? 'AS'i SubqueryReference
 WithClause <- 'WITH'i Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'i
 SelectClause <- 'SELECT'i DistinctClause? TargetList
@@ -72,8 +74,9 @@ OrderByClause <- 'ORDER'i 'BY'i OrderByExpressions
 OrderByExpressions <- List(OrderByExpression) / OrderByAll
 OrderByAll <- 'ALL'i DescOrAsc? NullsFirstOrLast?
 
-LimitClause <- 'LIMIT'i NumberLiteral
-OffsetClause <- 'OFFSET'i NumberLiteral
+LimitClause <- 'LIMIT'i LimitValue
+OffsetClause <- 'OFFSET'i LimitValue
+LimitValue <- 'ALL'i / (Expression '%'?) / (NumberLiteral 'PERCENT'i)
 
 AliasedExpression <- Expression ('AS'i? Identifier)?
 

@@ -9,10 +9,10 @@ SequenceOption <-
 	SeqOwnedBy
 
 SeqSetCycle <- 'NO'i? 'CYCLE'i
-SeqSetIncrement <- 'INCREMENT'i 'BY'i? NumberLiteral
-SeqSetMinMax <- SeqMinOrMax NumberLiteral
+SeqSetIncrement <- 'INCREMENT'i 'BY'i? Expression
+SeqSetMinMax <- SeqMinOrMax Expression
 SeqNoMinMax <- 'NO'i SeqMinOrMax
-SeqStartWith <- 'START'i 'WITH'i? NumberLiteral
+SeqStartWith <- 'START'i 'WITH'i? Expression
 SeqOwnedBy <- 'OWNED'i 'BY'i QualifiedName
 
 
