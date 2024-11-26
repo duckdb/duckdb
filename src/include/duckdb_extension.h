@@ -503,7 +503,6 @@ typedef struct {
 	duckdb_value (*duckdb_create_enum_value)(duckdb_logical_type type, uint64_t value);
 	uint64_t (*duckdb_get_enum_value)(duckdb_value value);
 	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
-<<<<<<< HEAD
 	duckdb_state (*duckdb_appender_add_column)(duckdb_appender appender, const char *name);
 	duckdb_state (*duckdb_appender_clear_columns)(duckdb_appender appender);
 	bool (*duckdb_is_finite_timestamp_s)(duckdb_timestamp_s ts);
@@ -517,12 +516,11 @@ typedef struct {
 	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
-=======
 	duckdb_vector (*duckdb_map_vector_get_keys)(duckdb_vector vector);
 	duckdb_vector (*duckdb_map_vector_get_values)(duckdb_vector vector);
 	duckdb_vector (*duckdb_union_vector_get_tags)(duckdb_vector vector);
-	duckdb_vector (*duckdb_union_vector_get_member)(duckdb_vector vector, idx_t tag);
->>>>>>> a447060e49 (merged with main)
+	duckdb_vector (*duckdb_union_vector_get_member)(duckdb_vector vector, uint8_t tag);
+	void (*duckdb_union_vector_set_tag)(duckdb_vector vector, idx_t index, uint8_t tag);
 #endif
 
 } duckdb_ext_api_v0;
@@ -928,6 +926,7 @@ typedef struct {
 #define duckdb_map_vector_get_values             duckdb_ext_api.duckdb_map_vector_get_values
 #define duckdb_union_vector_get_tags             duckdb_ext_api.duckdb_union_vector_get_tags
 #define duckdb_union_vector_get_member           duckdb_ext_api.duckdb_union_vector_get_member
+#define duckdb_union_vector_set_tag              duckdb_ext_api.duckdb_union_vector_set_tag
 #define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
 #define duckdb_appender_add_column               duckdb_ext_api.duckdb_appender_add_column
 #define duckdb_appender_clear_columns            duckdb_ext_api.duckdb_appender_clear_columns

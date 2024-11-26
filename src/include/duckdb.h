@@ -2938,7 +2938,16 @@ The resulting vector is valid as long as the parent vector is valid.
 * @param tag The tag of the member
 * @return The member vector
 */
-DUCKDB_API duckdb_vector duckdb_union_vector_get_member(duckdb_vector vector, idx_t tag);
+DUCKDB_API duckdb_vector duckdb_union_vector_get_member(duckdb_vector vector, uint8_t tag);
+
+/*!
+Sets the tag of a union vector at the specified index.
+
+* @param vector The vector to alter
+* @param index The row position in the vector to assign the tag to
+* @param tag The tag
+*/
+DUCKDB_API void duckdb_union_vector_set_tag(duckdb_vector vector, idx_t index, uint8_t tag);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions

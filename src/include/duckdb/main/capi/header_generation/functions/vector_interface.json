@@ -303,7 +303,7 @@
                     "name": "vector"
                 },
                 {
-                    "type": "idx_t",
+                    "type": "uint8_t",
                     "name": "tag"
                 }
             ],
@@ -314,6 +314,32 @@
                     "tag": "The tag of the member"
                 },
                 "return_value": "The member vector"
+            }
+        },
+        {
+            "name": "duckdb_union_vector_set_tag",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                },
+                {
+                    "type": "uint8_t",
+                    "name": "tag"
+                }
+            ],
+            "comment": {
+                "description": "Sets the tag of a union vector at the specified index.\n\n",
+                "param_comments": {
+                    "vector": "The vector to alter",
+                    "index": "The row position in the vector to assign the tag to",
+                    "tag": "The tag"
+                }
             }
         }
     ]

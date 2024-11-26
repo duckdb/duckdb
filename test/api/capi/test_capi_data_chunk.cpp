@@ -620,3 +620,40 @@ TEST_CASE("Test union vector functions", "[capi]") {
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
 }
+
+TEST_CASE("Test union vector set tag function", "[capi]") {
+	duckdb_data_chunk chunk;
+
+	duckdb_logical_type mtypes[2] = {duckdb_create_logical_type(DUCKDB_TYPE_INTEGER),
+	                                 duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE)};
+	const char *mnames[2] = {"i", "d"};
+	duckdb_logical_type union_type = duckdb_create_union_type(mtypes, mnames, 2);
+
+	// Create a data chunk with a union vector
+	chunk = duckdb_create_data_chunk(&union_type, 1);
+	auto union_vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	// Get the member vectors
+	auto member1 = duckdb_union_vector_get_member(union_vector, 0);
+	auto member2 = duckdb_union_vector_get_member(union_vector, 1);
+	duckdb_vector_ensure_validity_writable(member1);
+	duckdb_vector_ensure_validity_writable(member2);
+	uint64_t *validity1 = duckdb_vector_get_validity(member1);
+	uint64_t *validity2 = duckdb_vector_get_validity(member2);
+
+	// Set the tag to 0
+	duckdb_union_vector_set_tag(union_vector, 0, 0);
+
+	// Check that member1 is now valid and member2 is not
+	REQUIRE(duckdb_validity_row_is_valid(validity1, 0));
+	REQUIRE(!duckdb_validity_row_is_valid(validity2, 0));
+
+	// Set the tag to 1
+	duckdb_union_vector_set_tag(union_vector, 0, 1);
+
+	// Check that member2 is now valid and member1 is not
+	REQUIRE(!duckdb_validity_row_is_valid(validity1, 0));
+	REQUIRE(duckdb_validity_row_is_valid(validity2, 0));
+
+	duckdb_destroy_data_chunk(&chunk);
+}
