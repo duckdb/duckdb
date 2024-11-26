@@ -116,7 +116,8 @@ enum class MatcherType {
 	CHOICE,
 	REPEAT,
 	VARIABLE,
-	STRING_LITERAL
+	STRING_LITERAL,
+	NUMBER_LITERAL
 };
 
 class Matcher {

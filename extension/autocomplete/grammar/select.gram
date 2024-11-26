@@ -54,7 +54,9 @@ GroupByExpressions <- List(Expression) / 'ALL'i
 
 SubqueryReference <- Parens(SelectStatement)
 
-OrderByExpression <- Expression ('DESC'i / 'ASC'i)?  ('NULLS'i 'FIRST'i / 'LAST'i)?
+OrderByExpression <- Expression DescOrAsc? NullsFirstOrLast?
+DescOrAsc <- 'DESC'i / 'DESCENDING'i / 'ASC'i / 'ASCENDING'i
+NullsFirstOrLast <- 'NULLS'i 'FIRST'i / 'LAST'i
 OrderByClause <- 'ORDER'i 'BY'i OrderByExpressions
 OrderByExpressions <- List(OrderByExpression) / 'ALL'i
 

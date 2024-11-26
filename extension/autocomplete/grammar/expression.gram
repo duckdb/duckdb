@@ -1,7 +1,8 @@
 ColumnReference <- CatalogQualification? SchemaQualification? TableQualification? ColumnName
-FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(Expression)? OrderByClause?) FilterClause? OverClause?
+FunctionExpression <- FunctionIdentifier Parens(DistinctOrAll? List(Expression)? OrderByClause?) WithinGroupClause? FilterClause? OverClause?
 FunctionIdentifier <- CatalogQualification? SchemaQualification? TableQualification? FunctionName
 DistinctOrAll <- 'DISTINCT'i / 'ALL'i
+WithinGroupClause <- 'WITHIN'i 'GROUP'i Parens(OrderByClause)
 FilterClause <- 'FILTER' Parens('WHERE'i? Expression)
 
 ParenthesisExpression <- Parens(List(Expression))

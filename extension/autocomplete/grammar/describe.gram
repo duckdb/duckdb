@@ -1,0 +1,4 @@
+DescribeStatement <- ShowOrDescribeOrSummarize SelectStatement
+
+ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'i
+ShowOrDescribe <- 'SHOW'i / 'DESCRIBE'i / 'DESC'i

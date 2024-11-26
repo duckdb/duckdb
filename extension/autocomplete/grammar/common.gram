@@ -6,7 +6,9 @@ Statement <-
 	CallStatement /
 	InsertStatement /
 	DropStatement /
-	CopyStatement
+	CopyStatement /
+	DescribeStatement /
+	ExplainStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier

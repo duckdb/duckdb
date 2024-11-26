@@ -7,6 +7,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 // #include "inlined_grammar.hpp"
+#include "tokenizer.hpp"
 #include <fstream>
 
 namespace duckdb {
@@ -387,6 +388,37 @@ public:
 	}
 };
 
+class NumberLiteralMatcher : public Matcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::NUMBER_LITERAL;
+public:
+	explicit NumberLiteralMatcher() : Matcher(TYPE) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		// variable matchers match anything except for reserved keywords
+		auto &token_text = state.tokens[state.token_index].text;
+		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
+			return MatchResultType::FAIL;
+		}
+		for(idx_t i = 1; i < token_text.size(); i++) {
+			if (!BaseTokenizer::CharacterIsNumber(token_text[i])) {
+				return MatchResultType::FAIL;
+			}
+		}
+		state.token_index++;
+		return MatchResultType::SUCCESS;
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "NUMBER_LITERAL";
+	}
+};
+
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	auto &result = *matcher;
 	matchers.push_back(std::move(matcher));
@@ -417,6 +449,7 @@ private:
 	Matcher &TableName() const;
 	Matcher &ColumnName() const;
 	Matcher &StringLiteral() const;
+	Matcher &NumberLiteral() const;
 	Matcher &ScalarFunctionName() const;
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
@@ -501,6 +534,9 @@ Matcher &MatcherFactory::SettingName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME));
 }
 
+Matcher &MatcherFactory::NumberLiteral() const {
+	return allocator.Allocate(make_uniq<NumberLiteralMatcher>());
+}
 
 Matcher &MatcherFactory::StringLiteral() const {
 	return allocator.Allocate(make_uniq<StringLiteralMatcher>());
@@ -993,7 +1029,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("TableFunctionName", TableFunctionName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
-	AddRuleOverride("NumberLiteral", Variable());
+	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 
 	// now create the matchers for each of the rules recursively - starting at the root rule

@@ -4,7 +4,8 @@ Temporary <- 'TEMP'i / 'TEMPORARY'i
 
 CreateTableStmt <- 'TABLE'i IfNotExists? QualifiedTableName (CreateColumnList / CreateTableAs)
 
-CreateTableAs <- IdentifierList? 'AS'i SelectStatement
+CreateTableAs <- IdentifierList? 'AS'i SelectOrParens
+SelectOrParens <- SelectStatement / Parens(SelectStatement)
 IdentifierList <- List(Identifier)
 CreateColumnList <- Parens(CreateTableColumnList)
 IfNotExists <- 'IF'i 'NOT'i 'EXISTS'i
