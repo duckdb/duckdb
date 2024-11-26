@@ -289,7 +289,6 @@ public:
 
 	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for
 	//! future sampling values
-	unique_ptr<BlockingSample> Copy(bool for_serialization) const;
 	unique_ptr<BlockingSample> Copy() const override;
 
 	//! create the first chunk called by AddToReservoir()

@@ -116,11 +116,8 @@ void IngestionSample::Shrink() {
 	D_ASSERT(sample_chunk->size() > 0 && sample_chunk->size() <= FIXED_SAMPLE_SIZE);
 }
 
-unique_ptr<BlockingSample> IngestionSample::Copy() const {
-	return Copy(false);
-}
 
-unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
+unique_ptr<BlockingSample> IngestionSample::Copy() const {
 	auto ret = make_uniq<IngestionSample>(sample_count);
 
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
@@ -134,8 +131,7 @@ unique_ptr<BlockingSample> IngestionSample::Copy(bool for_serialization) const {
 
 	// create a new sample chunk to store new samples
 	auto types = sample_chunk->GetTypes();
-	idx_t new_sample_chunk_size =
-	    for_serialization ? NumActiveSamples() : FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
+	idx_t new_sample_chunk_size = FIXED_SAMPLE_SIZE * FIXED_SAMPLE_SIZE_MULTIPLIER;
 	// how many values should be copied
 	idx_t values_to_copy = MinValue<idx_t>(NumActiveSamples(), FIXED_SAMPLE_SIZE);
 
