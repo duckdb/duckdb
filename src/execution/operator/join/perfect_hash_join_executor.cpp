@@ -318,6 +318,9 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, Sel
 	case PhysicalType::INT64:
 		TemplatedFillSelectionVectorProbe<int64_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
+	case PhysicalType::INT128:
+		TemplatedFillSelectionVectorProbe<hugeint_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
+		break;
 	case PhysicalType::UINT8:
 		TemplatedFillSelectionVectorProbe<uint8_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
@@ -329,6 +332,9 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, Sel
 		break;
 	case PhysicalType::UINT64:
 		TemplatedFillSelectionVectorProbe<uint64_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedFillSelectionVectorProbe<uhugeint_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	default:
 		throw NotImplementedException("Type not supported");
