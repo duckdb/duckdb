@@ -54,6 +54,23 @@ void WindowAggregator::Sink(WindowAggregatorState &gstate, WindowAggregatorState
 	}
 }
 
+void WindowAggregatorLocalState::InitSubFrames(SubFrames &frames, const WindowExcludeMode exclude_mode) {
+	idx_t nframes = 0;
+	switch (exclude_mode) {
+	case WindowExcludeMode::NO_OTHER:
+		nframes = 1;
+		break;
+	case WindowExcludeMode::TIES:
+		nframes = 3;
+		break;
+	case WindowExcludeMode::CURRENT_ROW:
+	case WindowExcludeMode::GROUP:
+		nframes = 2;
+		break;
+	}
+	frames.resize(nframes, {0, 0});
+}
+
 void WindowAggregatorLocalState::Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection) {
 	// Prepare to scan
 	if (!cursor) {

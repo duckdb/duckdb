@@ -7,6 +7,7 @@ add_library_unity(
   window_collection.cpp
   window_cumedist_function.cpp
   window_executor.cpp
+  window_naive_aggregator.cpp
   window_rank_function.cpp
   window_rownumber_function.cpp
   window_segment_tree.cpp

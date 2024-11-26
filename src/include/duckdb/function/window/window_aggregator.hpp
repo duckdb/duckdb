@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+#include "duckdb/function/window/window_boundaries_state.hpp"
 
 namespace duckdb {
 
@@ -40,6 +41,63 @@ public:
 class WindowAggregator {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;
+
+	template <typename OP>
+	static void EvaluateSubFrames(const DataChunk &bounds, const WindowExcludeMode exclude_mode, idx_t count,
+	                              idx_t row_idx, SubFrames &frames, OP operation) {
+		auto begins = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
+		auto ends = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
+		auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
+		auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
+
+		for (idx_t i = 0, cur_row = row_idx; i < count; ++i, ++cur_row) {
+			idx_t nframes = 0;
+			if (exclude_mode == WindowExcludeMode::NO_OTHER) {
+				auto begin = begins[i];
+				auto end = ends[i];
+				frames[nframes++] = FrameBounds(begin, end);
+			} else {
+				//	The frame_exclusion option allows rows around the current row to be excluded from the frame,
+				//	even if they would be included according to the frame start and frame end options.
+				//	EXCLUDE CURRENT ROW excludes the current row from the frame.
+				//	EXCLUDE GROUP excludes the current row and its ordering peers from the frame.
+				//	EXCLUDE TIES excludes any peers of the current row from the frame, but not the current row itself.
+				//	EXCLUDE NO OTHERS simply specifies explicitly the default behavior
+				//	of not excluding the current row or its peers.
+				//	https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS
+				//
+				//	For the sake of the client, we make some guarantees about the subframes:
+				//	* They are in order left-to-right
+				//	* They do not intersect
+				//	* start <= end
+				//	* The number is always the same
+				//
+				//	Since we always have peer_begin <= cur_row < cur_row + 1 <= peer_end
+				//	this is not too hard to arrange, but it may be that some subframes are contiguous,
+				//	and some are empty.
+
+				//	WindowExcludePart::LEFT
+				auto begin = begins[i];
+				auto end = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? cur_row : peer_begin[i];
+				end = MaxValue(begin, end);
+				frames[nframes++] = FrameBounds(begin, end);
+
+				// with EXCLUDE TIES, in addition to the frame part right of the peer group's end,
+				// we also need to consider the current row
+				if (exclude_mode == WindowExcludeMode::TIES) {
+					frames[nframes++] = FrameBounds(cur_row, cur_row + 1);
+				}
+
+				//	WindowExcludePart::RIGHT
+				end = ends[i];
+				begin = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
+				begin = MinValue(begin, end);
+				frames[nframes++] = FrameBounds(begin, end);
+			}
+
+			operation(i);
+		}
+	}
 
 	WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p);
 	WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p,
@@ -112,6 +170,8 @@ public:
 class WindowAggregatorLocalState : public WindowAggregatorState {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;
+
+	static void InitSubFrames(SubFrames &frames, const WindowExcludeMode exclude_mode);
 
 	WindowAggregatorLocalState() {
 	}
