@@ -41,19 +41,39 @@ l_comment	26
 query II
 FROM sql_auto_complete('SELECT l_orderkey FROM lin') LIMIT 1;
 ----
-lineitem	0
+lineitem	23
+
+query II
+FROM sql_auto_complete('SELECT l_orderkey FROM lineitem, ord') LIMIT 1;
+----
+orders	33
+
+query II
+FROM sql_auto_complete('SELECT l_orderkey FROM lineitem JOIN ord') LIMIT 1;
+----
+orders	37
+
+query II
+FROM sql_auto_complete('SELECT (SELECT SUM(l_orderkey) FROM lineit') LIMIT 1;
+----
+lineitem	36
+
+query II
+FROM sql_auto_complete('SELECT * FROM (FROM lineit') LIMIT 1;
+----
+lineitem	20
 
 query II
 FROM sql_auto_complete('INSERT INTO lin') LIMIT 1;
 ----
-lineitem	0
+lineitem	12
 
 query II
 FROM sql_auto_complete('DROP TABLE lin') LIMIT 1;
 ----
-lineitem	0
+lineitem	11
 
 query II
 FROM sql_auto_complete('COPY lin') LIMIT 1;
 ----
-lineitem	0
+lineitem	5
