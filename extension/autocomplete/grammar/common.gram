@@ -5,7 +5,8 @@ Statement <-
 	PragmaStatement /
 	CallStatement /
 	InsertStatement /
-	DropStatement
+	DropStatement /
+	CopyStatement
 
 TypeName <- Identifier
 CatalogName <- Identifier
@@ -20,6 +21,7 @@ ConstraintName <- Identifier
 IndexName <- Identifier
 SequenceName <- Identifier
 CollationName <- Identifier
+CopyOptionName <- Identifier
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''

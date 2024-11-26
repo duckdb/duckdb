@@ -35,7 +35,7 @@ PrefixExpression <- PrefixOperator Expression
 PrefixOperator <- '-' / '+'
 ListExpression <- 'ARRAY'i? '[' List(Expression)? ']'
 StructExpression <- '{' List(StructField) '}'
-StructField <- StringLiteral ':'i Expression
+StructField <- Expression ':'i Expression
 MapExpression <- 'MAP'i StructExpression
 
 ListComprehensionExpression <- '['i Expression 'FOR'i Expression ListComprehensionFilter? ']'
@@ -60,13 +60,13 @@ SingleExpression <-
     StructExpression /
     MapExpression
 
-ArithmeticOperator <- '+' / '-' / '*' / '/' / '//' / '%' / '^' / '**'
+ArithmeticOperator <- '+' / '-' / '*' / '/' / '//' / '%' / '^' / '**' / '||'
 LikeOperator <- 'NOT'i? 'LIKE'i
 InOperator <- 'NOT'i? 'IN'i
 IsOperator <- 'IS'i 'NOT'i? DistinctFrom?
 DistinctFrom <- 'DISTINCT'i 'FROM'i
 ConjunctionOperator <- 'OR'i / 'AND'i
-ComparisonOperator <-  '=' / '<=' / '>=' / '<' / '>' / '<>' / '!='
+ComparisonOperator <-  '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
 BetweenOperator <- 'BETWEEN'i
 CollateOperator <- 'COLLATE'i
 

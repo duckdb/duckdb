@@ -1,0 +1,12 @@
+CreateSequenceStmt <- 'SEQUENCE'i IfNotExists? QualifiedTableName List(SequenceOption)?
+
+SequenceOption <-
+	'NO'i? 'CYCLE'i /
+	'INCREMENT'i 'BY'i? NumberLiteral /
+	SeqMinOrMax NumberLiteral /
+	'NO'i SeqMinOrMax /
+	'START'i 'WITH'i? NumberLiteral
+
+
+SeqMinOrMax <- 'MINVALUE'i / 'MAXVALUE'i
+

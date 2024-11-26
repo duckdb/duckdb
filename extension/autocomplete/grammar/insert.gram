@@ -6,7 +6,8 @@ ByNameOrPosition <- 'BY'i 'NAME'i / 'POSITION'i
 InsertTarget <- BaseTableName InsertAlias?
 InsertAlias <- 'AS'i Identifier
 
-InsertColumnList <- Parens(List(Identifier))
+ColumnList <- List(Identifier)
+InsertColumnList <- Parens(ColumnList)
 
 InsertValues <- SelectStatement / DefaultValues
 DefaultValues <- 'DEFAULT'i 'VALUES'i

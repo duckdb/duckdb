@@ -80,8 +80,8 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (name == "FunctionArgument") {
-			Printer::Print("SingleExpression!");
+		if (name == "CopyOptions") {
+			Printer::Print("Found it!");
 		}
 		MatchState list_state(state);
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
