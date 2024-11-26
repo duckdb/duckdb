@@ -45,8 +45,9 @@ SecretName <- Identifier
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
-Type <- (TimeType / RowType / MapType / UnionType / SimpleType) ArrayBounds*
+Type <- (TimeType / RowType / MapType / UnionType / DoubleType / SimpleType) ArrayBounds*
 SimpleType <- QualifiedTypeName TypeModifiers?
+DoubleType <- 'DOUBLE'i 'PRECISION'
 QualifiedTypeName <- CatalogQualification? SchemaQualification? TypeName
 TypeModifiers <- Parens(List(Expression))
 RowType <- RowOrStruct Parens(List(IdentifierType))
