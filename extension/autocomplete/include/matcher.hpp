@@ -117,7 +117,8 @@ enum class MatcherType {
 	REPEAT,
 	VARIABLE,
 	STRING_LITERAL,
-	NUMBER_LITERAL
+	NUMBER_LITERAL,
+	OPERATOR
 };
 
 class Matcher {

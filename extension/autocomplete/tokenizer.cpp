@@ -28,6 +28,11 @@ static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op
 
 bool BaseTokenizer::IsSpecialOperator(idx_t pos, idx_t &op_len) const {
 	const char *op_start = sql.c_str() + pos;
+	if (pos + 2 < sql.size()) {
+		if (OperatorEquals(op_start, "->>", 3, op_len)) {
+			return true;
+		}
+	}
 	if (pos + 1 >= sql.size()) {
 		// 2-byte operators are out-of-bounds
 		return false;
@@ -45,13 +50,6 @@ bool BaseTokenizer::IsSpecialOperator(idx_t pos, idx_t &op_len) const {
 		return true;
 	}
 	if (OperatorEquals(op_start, "//", 2, op_len)) {
-		return true;
-	}
-	if (pos + 2 >= sql.size()) {
-		// 3-byte operators are out-of-bounds
-		return false;
-	}
-	if (OperatorEquals(op_start, "->>", 3, op_len)) {
 		return true;
 	}
 	return false;

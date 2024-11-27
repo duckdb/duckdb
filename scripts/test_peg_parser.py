@@ -9,9 +9,11 @@ parser = argparse.ArgumentParser(description="Test serialization")
 parser.add_argument("--shell", type=str, help="Shell binary to run", default=os.path.join('build', 'debug', 'duckdb'))
 parser.add_argument("--offset", type=int, help="File offset", default=None)
 parser.add_argument("--count", type=int, help="File count", default=None)
-parser.add_argument('--no-exit', action='store_true', help='Do not exit after running tests')
+parser.add_argument('--no-exit', action='store_true', help='Do not exit after a test fails', default=False)
+parser.add_argument('--print-failing-only', action='store_true', help='Print failing tests only', default=False)
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default='')
+group.add_argument("--test-list", type=str, help="Path to the file that contains a newline separated list of test files", default='')
 group.add_argument("--all-tests", action='store_true', help="Run all tests", default=False)
 args = parser.parse_args()
 
@@ -28,6 +30,8 @@ def find_tests_recursive(dir, excluded_paths):
     return test_list
 
 def parse_test_file(filename):
+    if not os.path.isfile(filename):
+        raise Exception(f"File {filename} not found")
     parser = SQLLogicParser()
     try:
         out: Optional[SQLLogicTest] = parser.parse(filename)

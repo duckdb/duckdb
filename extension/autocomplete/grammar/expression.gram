@@ -74,7 +74,9 @@ SingleExpression <-
     PositionalExpression /
     DefaultExpression
 
-ArithmeticOperator <- '+' / '-' / '*' / '/' / '//' / '%' / '^' / '**' / '||' / '&&' / '<<' / '>>' / '&' / '|' / '~' / '^@'
+
+
+OperatorLiteral <- <[\+\-\*\/\%\^\<\>\=\~\!\@\&\|\`]+>
 LikeOperator <- 'NOT'i? LikeOrSimilarTo
 LikeOrSimilarTo <- 'LIKE'i / 'ILIKE'i / 'GLOB'i / ('SIMILAR'i 'TO'i)
 InOperator <- 'NOT'i? 'IN'i
@@ -82,16 +84,17 @@ IsOperator <- 'IS'i 'NOT'i? DistinctFrom?
 DistinctFrom <- 'DISTINCT'i 'FROM'i
 ConjunctionOperator <- 'OR'i / 'AND'i
 ComparisonOperator <-  '=' / '<=' / '>=' / '<' / '>' / '<>' / '!=' / '=='
-BetweenOperator <- 'BETWEEN'i
+BetweenOperator <- 'NOT'i? 'BETWEEN'i
 CollateOperator <- 'COLLATE'i
 LambdaOperator <- '->'
 EscapeOperator <- 'ESCAPE'i
-
+AtTimeZoneOperator <- 'AT'i 'TIME'i 'ZONE'i
 PostfixOperator <- '!'
+AnyAllOperator <- ComparisonOperator AnyOrAll
+AnyOrAll <- 'ANY' / 'ALL'
 
 Operator <-
-    ArithmeticOperator /
-    ComparisonOperator /
+	AnyAllOperator /
     ConjunctionOperator /
     LikeOperator /
     InOperator /
@@ -99,7 +102,9 @@ Operator <-
     BetweenOperator /
     CollateOperator /
     LambdaOperator /
-    EscapeOperator
+    EscapeOperator /
+    AtTimeZoneOperator /
+    OperatorLiteral
 
 CastOperator <- '::' Type
 DotOperator <- '.' (FunctionExpression / Identifier)

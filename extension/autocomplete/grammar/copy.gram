@@ -22,7 +22,7 @@ StarOrColumnList <- '*' / ColumnList
 GenericCopyOptionList <- List(GenericCopyOption)
 GenericCopyOption <- GenericCopyOptionName Expression?
 # FIXME: should not need to hard-code options here
-GenericCopyOptionName <- 'ARRAY'i / 'NULL'i / CopyOptionName
+GenericCopyOptionName <- 'ARRAY'i / 'NULL'i / 'ANALYZE'i / CopyOptionName
 
 CopyFromDatabase <- 'FROM'i 'DATABASE'i Identifier 'TO'i Identifier CopyDatabaseFlag?
 

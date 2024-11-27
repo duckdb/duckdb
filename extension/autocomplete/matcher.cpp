@@ -419,6 +419,49 @@ public:
 	}
 };
 
+class OperatorMatcher : public Matcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
+public:
+	explicit OperatorMatcher() : Matcher(TYPE) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		auto &token_text = state.tokens[state.token_index].text;
+		for(auto &c : token_text ) {
+			switch(c) {
+			case '+':
+			case '-':
+			case '*':
+			case '/':
+			case '%':
+			case '^':
+			case '<':
+			case '>':
+			case '=':
+			case '~':
+			case '!':
+			case '@':
+			case '&':
+			case '|':
+				break;
+			default:
+				return MatchResultType::FAIL;
+			}
+		}
+		state.token_index++;
+		return MatchResultType::SUCCESS;
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::MANDATORY;
+	}
+
+	string ToString() const override {
+		return "OPERATOR";
+	}
+};
+
 Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 	auto &result = *matcher;
 	matchers.push_back(std::move(matcher));
@@ -450,6 +493,7 @@ private:
 	Matcher &ColumnName() const;
 	Matcher &StringLiteral() const;
 	Matcher &NumberLiteral() const;
+	Matcher &Operator() const;
 	Matcher &ScalarFunctionName() const;
 	Matcher &TableFunctionName() const;
 	Matcher &PragmaName() const;
@@ -540,6 +584,10 @@ Matcher &MatcherFactory::NumberLiteral() const {
 
 Matcher &MatcherFactory::StringLiteral() const {
 	return allocator.Allocate(make_uniq<StringLiteralMatcher>());
+}
+
+Matcher &MatcherFactory::Operator() const {
+	return allocator.Allocate(make_uniq<OperatorMatcher>());
 }
 
 enum class PEGRuleType {
@@ -738,7 +786,13 @@ void PEGParser::ParseRules(const char *grammar) {
 				idx_t rule_start = c;
 				char final_char = grammar[c] == '[' ? ']' : '>';
 				while(grammar[c] && grammar[c] != final_char) {
-					c++;
+					if (grammar[c] == '\\') {
+						// handle escapes
+						c++;
+					}
+					if (grammar[c]) {
+						c++;
+					}
 				}
 				c++;
 				PEGToken token;
@@ -1039,6 +1093,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
+	AddRuleOverride("OperatorLiteral", Operator());
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);

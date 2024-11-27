@@ -16,7 +16,7 @@ TableQualification <- TableName '.'
 CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- ColumnDefinition / TopLevelConstraint
 ColumnDefinition <- Identifier TypeOrGenerated ColumnConstraint*
-TypeOrGenerated <- GeneratedColumn / Type
+TypeOrGenerated <- Type? GeneratedColumn?
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
 NotNullConstraint <- 'NOT'i 'NULL'i
 UniqueConstraint <- 'UNIQUE'i
@@ -44,7 +44,7 @@ PlainIdentifier <-  !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 QuotedIdentifier <- '"' [^"]* '"'
 Identifier <- QuotedIdentifier / PlainIdentifier
 
-GeneratedColumn <- Type? Generated? 'AS'i Parens(Expression)  GeneratedColumnType?
+GeneratedColumn <- Generated? 'AS'i Parens(Expression) GeneratedColumnType?
 
 Generated <- 'GENERATED'i AlwaysOrByDefault?
 AlwaysOrByDefault <- 'ALWAYS'i / ('BY'i 'DEFAULT'i)

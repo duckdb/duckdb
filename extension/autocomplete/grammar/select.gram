@@ -4,11 +4,11 @@ SetopClause <- ('UNION'i / 'EXCEPT'i / 'INTERSECT'i) DistinctOrAll? ByName?
 ByName <- 'BY'i 'NAME'i
 SelectOrParens <- BaseSelect / Parens(SelectStatement)
 
-BaseSelect <- (SimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement) ResultModifiers
+BaseSelect <- WithClause? (SimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement) ResultModifiers
 ResultModifiers <- OrderByClause? LimitClause? OffsetClause?
 TableStatement <- 'TABLE' BaseTableName
 
-SimpleSelect <- WithClause? SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
+SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
 
 SelectFrom <- (SelectClause FromClause?) / (FromClause SelectClause?)
 WithStatement <- Identifier InsertColumnList? 'AS'i Materialized? SubqueryReference
@@ -55,14 +55,14 @@ NamedParameterAssignment <- ':=' / '=>'
 TableAlias <- 'AS'i? Identifier ColumnAliases?
 
 JoinClause <- RegularJoinClause / JoinWithoutOnClause
-RegularJoinClause <- JoinType? 'JOIN'i InnerTableRef JoinQualifier
+RegularJoinClause <- 'ASOF'i? JoinType? 'JOIN'i InnerTableRef JoinQualifier
 JoinWithoutOnClause <- JoinPrefix 'JOIN'i InnerTableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON'i Expression
 UsingClause <- 'USING'i Parens(List(Identifier))
 
 OuterJoinType <- 'FULL'i / 'LEFT'i / 'RIGHT'i
-JoinType <- 'ASOF'i? ((OuterJoinType 'OUTER'i?) / 'SEMI'i / 'ANTI'i / 'INNER'i)
+JoinType <- (OuterJoinType 'OUTER'i?) / 'SEMI'i / 'ANTI'i / 'INNER'i
 JoinPrefix <- 'CROSS'i / ('NATURAL'i JoinType?) / 'POSITIONAL'i
 
 FromClause <- 'FROM'i List(TableRef)
