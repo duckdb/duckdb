@@ -196,10 +196,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
-		D_ASSERT(partition.inputs);
-		const auto &inputs = *partition.inputs;
-		D_ASSERT(inputs.ColumnCount() == 1);
-		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
+		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
@@ -268,7 +265,8 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
                                                                    const LogicalType &target_type) {
 	using STATE = QuantileState<INPUT_TYPE, QuantileStandardType>;
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
-	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
+	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
+	                                                       AggregateDestructorType::LEGACY>(input_type, target_type);
 	fun.bind = BindMAD;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 #ifndef DUCKDB_SMALLER_BINARY

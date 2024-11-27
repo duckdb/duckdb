@@ -21,7 +21,11 @@ void ReorderTableEntries(catalog_entry_vector_t &tables);
 
 using std::stringstream;
 
-void ReorderTableEntries(catalog_entry_vector_t &tables);
+PhysicalExport::PhysicalExport(vector<LogicalType> types, CopyFunction function, unique_ptr<CopyInfo> info,
+                               idx_t estimated_cardinality, unique_ptr<BoundExportData> exported_tables)
+    : PhysicalOperator(PhysicalOperatorType::EXPORT, std::move(types), estimated_cardinality),
+      function(std::move(function)), info(std::move(info)), exported_tables(std::move(exported_tables)) {
+}
 
 static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entries) {
 	for (auto &entry : entries) {
@@ -125,6 +129,10 @@ void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<Sch
                                     ExportEntries &result) {
 	for (auto &schema_p : schema_list) {
 		auto &schema = schema_p.get();
+		auto &catalog = schema.ParentCatalog();
+		if (catalog.IsSystemCatalog() || catalog.IsTemporaryCatalog()) {
+			continue;
+		}
 		if (!schema.internal) {
 			result.schemas.push_back(schema);
 		}
@@ -239,8 +247,8 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
 	stringstream load_ss;
-	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
-		auto exported_table_info = exported_tables.data[i].table_data;
+	for (idx_t i = 0; i < exported_tables->data.size(); i++) {
+		auto exported_table_info = exported_tables->data[i].table_data;
 		WriteCopyStatement(fs, load_ss, *info, exported_table_info, function);
 	}
 	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));

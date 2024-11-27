@@ -494,15 +494,16 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 }
 
-void ColumnReader::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now) {
+void ColumnReader::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now,
+                                       idx_t result_offset) {
 	D_ASSERT(read_now <= STANDARD_VECTOR_SIZE);
 	idx_t offset_idx = 0;
 	for (idx_t row_idx = 0; row_idx < read_now; row_idx++) {
-		if (HasDefines() && defines[row_idx] != max_define) {
+		if (HasDefines() && defines[row_idx + result_offset] != max_define) {
 			dictionary_selection_vector.set_index(row_idx, 0); // dictionary entry 0 is NULL
 			continue;                                          // we don't have a dict entry for NULLs
 		}
-		if (filter.test(row_idx)) {
+		if (filter.test(row_idx + result_offset)) {
 			auto offset = offsets[offset_idx++];
 			if (offset >= dictionary_size) {
 				throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
@@ -561,6 +562,11 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			}
 		}
 
+		if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
+			result.Flatten(result_offset);
+			result.Resize(result_offset, result_offset + read_now);
+		}
+
 		if (dict_decoder) {
 			if ((!dictionary || dictionary_size == 0) && null_count < read_now) {
 				throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
@@ -568,12 +574,12 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			offset_buffer.resize(reader.allocator, sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr),
-			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now);
-			if (read_now == num_values) {
-				D_ASSERT(result_offset == 0);
+			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now, result_offset);
+			if (result_offset == 0) {
 				result.Slice(*dictionary, dictionary_selection_vector, read_now);
 				D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 			} else {
+				D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 				VectorOperations::Copy(*dictionary, result, dictionary_selection_vector, read_now, 0, result_offset);
 			}
 		} else if (dbp_decoder) {
@@ -1173,14 +1179,19 @@ StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 }
 
-ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
-	D_ASSERT(child_idx < child_readers.size());
-	return child_readers[child_idx].get();
+ColumnReader &StructColumnReader::GetChildReader(idx_t child_idx) {
+	if (!child_readers[child_idx]) {
+		throw InternalException("StructColumnReader::GetChildReader(%d) - but this child reader is not set", child_idx);
+	}
+	return *child_readers[child_idx].get();
 }
 
 void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
                                         TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
 		child->InitializeRead(row_group_idx_p, columns, protocol_p);
 	}
 }
@@ -1194,34 +1205,51 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, da
 		ApplyPendingSkips(pending_skips);
 	}
 
-	idx_t read_count = num_values;
-	for (idx_t i = 0; i < struct_entries.size(); i++) {
-		auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
-		if (i == 0) {
+	optional_idx read_count;
+	for (idx_t i = 0; i < child_readers.size(); i++) {
+		auto &child = child_readers[i];
+		auto &target_vector = *struct_entries[i];
+		if (!child) {
+			// if we are not scanning this vector - set it to NULL
+			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(target_vector, true);
+			continue;
+		}
+		auto child_num_values = child->Read(num_values, filter, define_out, repeat_out, target_vector);
+		if (!read_count.IsValid()) {
 			read_count = child_num_values;
-		} else if (read_count != child_num_values) {
+		} else if (read_count.GetIndex() != child_num_values) {
 			throw std::runtime_error("Struct child row count mismatch");
 		}
 	}
+	if (!read_count.IsValid()) {
+		read_count = num_values;
+	}
 	// set the validity mask for this level
 	auto &validity = FlatVector::Validity(result);
-	for (idx_t i = 0; i < read_count; i++) {
+	for (idx_t i = 0; i < read_count.GetIndex(); i++) {
 		if (define_out[i] < max_define) {
 			validity.SetInvalid(i);
 		}
 	}
 
-	return read_count;
+	return read_count.GetIndex();
 }
 
 void StructColumnReader::Skip(idx_t num_values) {
-	for (auto &child_reader : child_readers) {
-		child_reader->Skip(num_values);
+	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
+		child->Skip(num_values);
 	}
 }
 
 void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
 		child->RegisterPrefetch(transport, allow_merge);
 	}
 }
@@ -1229,6 +1257,9 @@ void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool a
 uint64_t StructColumnReader::TotalCompressedSize() {
 	uint64_t size = 0;
 	for (auto &child : child_readers) {
+		if (!child) {
+			continue;
+		}
 		size += child->TotalCompressedSize();
 	}
 	return size;

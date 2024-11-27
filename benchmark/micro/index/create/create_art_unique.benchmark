@@ -1,0 +1,15 @@
+# name: benchmark/micro/index/create/create_art_unique.benchmark
+# description: Create UNIQUE ART on 10M integers, 2.5M distinct values
+# group: [create]
+
+name Create ART UNIQUE
+group art
+
+load
+CREATE TABLE art AS SELECT range AS id, random() AS pos FROM range(10000000) ORDER BY pos;
+
+run
+CREATE UNIQUE INDEX idx ON art USING ART(id);
+
+cleanup
+DROP INDEX idx;

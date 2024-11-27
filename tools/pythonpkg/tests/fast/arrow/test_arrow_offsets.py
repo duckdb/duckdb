@@ -671,3 +671,18 @@ class TestArrowOffsets(object):
             assert res[0] == None
         else:
             assert res[0]['a'][-1] == '131072'
+
+    def test_bools_with_offset(self, duckdb_cursor):
+        bools = [False, False, False, False, True, False, False, False, False, False]
+        bool_array = pa.array(bools, type=pa.bool_())
+
+        # Create schema using the same fields as the C++ version
+        schema = pa.schema([pa.field("bools", pa.bool_())])
+
+        # Create a RecordBatch with the arrays
+        record_batch = pa.RecordBatch.from_arrays([bool_array], schema=schema)
+
+        temp_record = record_batch.slice(4, 1)
+        temp_record_reader = pa.RecordBatchReader.from_batches(temp_record.schema, [temp_record])
+        res = duckdb_cursor.sql("select bools from temp_record_reader").fetchall()
+        assert res == [(True,)]

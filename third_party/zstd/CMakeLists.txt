@@ -40,8 +40,8 @@ set(ZSTD_FILES
 add_library(duckdb_zstd STATIC ${ZSTD_FILES})
 
 target_include_directories(
-  duckdb_zstd
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+		duckdb_zstd
+		PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 set_target_properties(duckdb_zstd PROPERTIES EXPORT_NAME duckdb_duckdb_zstd)
 
 install(TARGETS duckdb_zstd

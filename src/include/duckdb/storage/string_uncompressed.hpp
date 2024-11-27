@@ -41,6 +41,18 @@ struct StringScanState : public SegmentScanState {
 	BufferHandle handle;
 };
 
+//===--------------------------------------------------------------------===//
+// Append
+//===--------------------------------------------------------------------===//
+struct SerializedStringSegmentState : public ColumnSegmentState {
+public:
+	SerializedStringSegmentState();
+	explicit SerializedStringSegmentState(vector<block_id_t> blocks_p);
+
+public:
+	void Serialize(Serializer &serializer) const override;
+};
+
 struct UncompressedStringStorage {
 public:
 	//! Dictionary header size at the beginning of the string segment (offset + length)

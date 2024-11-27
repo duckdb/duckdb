@@ -40,7 +40,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
                                      idx_t changed_idx, const LogicalType &target_type,
-                                     const vector<column_t> &bound_columns, Expression &cast_expr)
+                                     const vector<StorageIndex> &bound_columns, Expression &cast_expr)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
       optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
       merged_storage(parent.merged_storage) {
@@ -122,15 +122,20 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
                                              row_t &start_row) {
 	// only need to scan for index append
 	// figure out which columns we need to scan for the set of indexes
-	auto columns = index_list.GetRequiredColumns();
+	auto index_columns = index_list.GetRequiredColumns();
+	vector<StorageIndex> required_columns;
+	for (auto &col : index_columns) {
+		required_columns.emplace_back(col);
+	}
 	// create an empty mock chunk that contains all the correct types for the table
 	DataChunk mock_chunk;
 	mock_chunk.InitializeEmpty(table_types);
 	ErrorData error;
-	source.Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
+	source.Scan(transaction, required_columns, [&](DataChunk &chunk) -> bool {
 		// construct the mock chunk by referencing the required columns
-		for (idx_t i = 0; i < columns.size(); i++) {
-			mock_chunk.data[columns[i]].Reference(chunk.data[i]);
+		for (idx_t i = 0; i < required_columns.size(); i++) {
+			auto col_id = required_columns[i].GetPrimaryIndex();
+			mock_chunk.data[col_id].Reference(chunk.data[i]);
 		}
 		mock_chunk.SetCardinality(chunk);
 		// append this chunk to the indexes of the table
@@ -324,7 +329,7 @@ void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state,
 	storage->InitializeScan(state, table_filters);
 }
 
-void LocalStorage::Scan(CollectionScanState &state, const vector<storage_t> &column_ids, DataChunk &result) {
+void LocalStorage::Scan(CollectionScanState &state, const vector<StorageIndex> &, DataChunk &result) {
 	state.Scan(transaction, result);
 }
 
@@ -447,7 +452,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		return;
 	}
 	idx_t append_count = storage.row_groups->GetTotalRows() - storage.deleted_rows;
-
 	table.InitializeIndexes(context);
 
 	const idx_t row_group_size = storage.row_groups->GetRowGroupSize();
@@ -558,7 +562,7 @@ void LocalStorage::DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t remove
 }
 
 void LocalStorage::ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
-                              const vector<column_t> &bound_columns, Expression &cast_expr) {
+                              const vector<StorageIndex> &bound_columns, Expression &cast_expr) {
 	// check if there are any pending appends for the old version of the table
 	auto storage = table_manager.MoveEntry(old_dt);
 	if (!storage) {
@@ -569,7 +573,7 @@ void LocalStorage::ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t change
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
-void LocalStorage::FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<column_t> &col_ids,
+void LocalStorage::FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
                               DataChunk &chunk, ColumnFetchState &fetch_state) {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {

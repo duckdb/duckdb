@@ -127,7 +127,7 @@ struct DictionaryCompressionStorage {
 // contains the offsets into the dictionary which are also used to determine the string lengths. Each value in the
 // dictionary gets a single unique index in the index buffer. Secondly, the selection buffer maps the tuples to an index
 // in the index buffer. The selection buffer is compressed with bitpacking. Finally, the dictionary contains simply all
-// the unique strings without lenghts or null termination as we can deduce the lengths from the index buffer. The
+// the unique strings without lengths or null termination as we can deduce the lengths from the index buffer. The
 // addition of the selection buffer is done for two reasons: firstly, to allow the scan to emit dictionary vectors by
 // scanning the whole dictionary at once and then scanning the selection buffer for each emitted vector. Secondly, it
 // allows for efficient bitpacking compression as the selection values should remain relatively small.
@@ -259,7 +259,7 @@ public:
 
 		auto segment_size = Finalize();
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(std::move(current_segment), segment_size);
+		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 		if (!final) {
 			CreateEmptySegment(next_start);

@@ -125,6 +125,9 @@ public:
 	//! Returns true if the needle string exists in the haystack
 	DUCKDB_API static bool Contains(const string &haystack, const string &needle);
 
+	//! Returns the position of needle string within the haystack
+	DUCKDB_API static optional_idx Find(const string &haystack, const string &needle);
+
 	//! Returns true if the target string starts with the given prefix
 	DUCKDB_API static bool StartsWith(string str, string prefix);
 
@@ -296,6 +299,18 @@ public:
 	DUCKDB_API static string GetFileExtension(const string &file_name);
 	DUCKDB_API static string GetFileStem(const string &file_name);
 	DUCKDB_API static string GetFilePath(const string &file_path);
+
+	struct EnumStringLiteral {
+		uint32_t number;
+		const char *string;
+	};
+
+	DUCKDB_API static uint32_t StringToEnum(const EnumStringLiteral enum_list[], idx_t enum_count,
+	                                        const char *enum_name, const char *str_value);
+	DUCKDB_API static const char *EnumToString(const EnumStringLiteral enum_list[], idx_t enum_count,
+	                                           const char *enum_name, uint32_t enum_value);
+	DUCKDB_API static const uint8_t ASCII_TO_LOWER_MAP[];
+	DUCKDB_API static const uint8_t ASCII_TO_UPPER_MAP[];
 };
 
 } // namespace duckdb

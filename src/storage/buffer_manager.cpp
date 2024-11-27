@@ -13,6 +13,10 @@ shared_ptr<BlockHandle> BufferManager::RegisterTransientMemory(const idx_t size,
 }
 
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(const idx_t size) {
+	return RegisterSmallMemory(MemoryTag::BASE_TABLE, size);
+}
+
+shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(MemoryTag tag, const idx_t size) {
 	throw NotImplementedException("This type of BufferManager can not create 'small-memory' blocks");
 }
 

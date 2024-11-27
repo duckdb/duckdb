@@ -15,6 +15,7 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
 
 namespace duckdb {
 
@@ -22,7 +23,7 @@ namespace duckdb {
 struct CSVGlobalState : public GlobalTableFunctionState {
 	CSVGlobalState(ClientContext &context, const shared_ptr<CSVBufferManager> &buffer_manager_p,
 	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-	               vector<column_t> column_ids_p, const ReadCSVData &bind_data);
+	               vector<ColumnIndex> column_ids_p, const ReadCSVData &bind_data);
 
 	~CSVGlobalState() override {
 	}
@@ -58,7 +59,7 @@ private:
 	//! Number of threads being used in this scanner
 	idx_t running_threads = 1;
 	//! The column ids to read
-	vector<column_t> column_ids;
+	vector<ColumnIndex> column_ids;
 
 	string sniffer_mismatch_error;
 
@@ -78,6 +79,8 @@ private:
 	unordered_map<idx_t, idx_t> threads_per_file;
 	//! We hold information on the current scanner boundary
 	CSVIterator current_boundary;
+
+	CSVValidator validator;
 };
 
 } // namespace duckdb

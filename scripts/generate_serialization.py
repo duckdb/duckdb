@@ -49,7 +49,7 @@ version_map = json.load(version_map_file)
 
 
 def verify_serialization_versions(version_map):
-    serialization = version_map['serialization']
+    serialization = version_map['serialization']['values']
     if list(serialization.keys())[-1] != 'latest':
         print(f"The version map ({version_map_path}) for serialization versions must end in 'latest'!")
         exit(1)
@@ -64,7 +64,7 @@ def lookup_serialization_version(version: str):
             f"'latest' is not an allowed 'version' to use in serialization JSON files, please provide a duckdb version"
         )
 
-    versions = version_map['serialization']
+    versions = version_map['serialization']['values']
     if version not in versions:
         from packaging.version import Version
 
@@ -771,7 +771,12 @@ for entry in file_list:
 
     for entry in json_data:
         if 'includes' in entry:
-            include_list += entry['includes']
+            if type(entry['includes']) != type([]):
+                print(f"Include list must be a list, found {type(entry['includes'])} (in {str(entry)})")
+                exit(1)
+            for include_entry in entry['includes']:
+                if include_entry not in include_list:
+                    include_list.append(include_entry)
         new_class = SerializableClass(entry)
         if new_class.is_base_class:
             # this class is a base class itself - construct the base class list
