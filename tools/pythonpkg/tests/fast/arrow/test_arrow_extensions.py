@@ -212,6 +212,8 @@ class TestCanonicalExtensionTypes(object):
         res_varint = con.execute(
             "SELECT '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::varint a FROM range(1) tbl(i)"
         ).arrow()
+        assert res_varint.column("a").type.type_name == 'varint'
+        assert res_varint.column("a").type.vendor_name == "DuckDB"
 
         assert con.execute("FROM res_varint").fetchall() == [
             (
@@ -227,3 +229,5 @@ class TestCanonicalExtensionTypes(object):
 
         assert arrow_table.schema[0].type.key_type.extension_name == "arrow.uuid"
         assert arrow_table.schema[0].type.item_type.extension_name == "arrow.opaque"
+        assert arrow_table.schema[0].type.item_type.type_name == "uhugeint"
+        assert arrow_table.schema[0].type.item_type.vendor_name == "DuckDB"
