@@ -2146,10 +2146,10 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 		}
 		// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
 		// returns NULL if there is no such row.
-		if (nth_col.CellIsNull(row_idx)) {
+		if (nth_col.CellIsNull(i)) {
 			FlatVector::SetNull(result, i, true);
 		} else {
-			auto n_param = nth_col.GetCell<int64_t>(row_idx);
+			auto n_param = nth_col.GetCell<int64_t>(i);
 			if (n_param < 1) {
 				FlatVector::SetNull(result, i, true);
 			} else {
