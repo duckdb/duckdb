@@ -1,14 +1,20 @@
 #include "matcher.hpp"
 
+// uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
+// #define PEG_PARSER_SOURCE_FILE "extension/autocomplete/include/inlined_grammar.gram"
+
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-// #include "inlined_grammar.hpp"
 #include "tokenizer.hpp"
+#ifdef PEG_PARSER_SOURCE_FILE
 #include <fstream>
+#else
+#include "inlined_grammar.hpp"
+#endif
 
 namespace duckdb {
 struct PEGParser;
@@ -81,9 +87,6 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (name == "JoinQualifier") {
-			// Printer::Print("Found it!");
-		}
 		MatchState list_state(state);
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
 			auto &child_matcher = matchers[child_idx].get();
@@ -1101,13 +1104,16 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 
 Matcher &Matcher::RootMatcher(MatcherAllocator &allocator) {
 	MatcherFactory factory(allocator);
-	std::ifstream t("extension/autocomplete/include/inlined_grammar.gram");
+#ifdef PEG_PARSER_SOURCE_FILE
+	std::ifstream t(PEG_PARSER_SOURCE_FILE);
 	std::stringstream buffer;
 	buffer << t.rdbuf();
 	auto string = buffer.str();
 
-
 	return factory.CreateMatcher(string.c_str(), "Statement");
+#else
+	return factory.CreateMatcher(INLINED_PEG_GRAMMAR, "Statement");
+#endif
 }
 
 } // namespace duckdb

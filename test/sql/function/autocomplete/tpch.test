@@ -77,3 +77,72 @@ query II
 FROM sql_auto_complete('COPY lin') LIMIT 1;
 ----
 lineitem	5
+
+# more complex queries
+query II
+FROM sql_auto_complete($$
+SELECT
+    nation,
+    o_year,
+    sum(amount) AS sum_profit
+FROM (
+    SELECT
+        n_name AS nation,
+        extract(year FROM o_orderdate) AS o_year,
+        l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity AS amount
+    FROM
+        part,
+        supplier,
+        lineitem,
+        partsupp,
+        orders,
+        nation
+    WHERE
+        s_suppkey = l_suppkey
+        AND ps_suppkey = l_suppkey
+        AND ps_partkey = l_partkey
+        AND p_partkey = l_partkey
+        AND o_orderkey = l_orderkey
+        AND s_nationkey = n_nat$$) LIMIT 1;
+----
+n_nationkey	552
+
+query II
+FROM sql_auto_complete($$
+SELECT
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) AS sum_qty,
+    sum(l_extendedprice) AS sum_base_price,
+    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+    avg(l_quantity) AS avg_qty,
+    avg(l_extendedprice) AS avg_price,
+    avg(l_discount) AS avg_disc,
+    count(*) AS count_order
+FROM
+    lineitem
+WHERE
+    l_shipdate <= CAST('1998-09-02' AS date)
+GROUP BY
+    l_ret$$) LIMIT 1;
+----
+l_returnflag	470
+
+query II
+FROM sql_auto_complete($$
+SELECT
+    nation,
+    o_year,
+    sum(amount) AS sum_profit
+FROM (
+    SELECT
+        n_name AS nation,
+        extract(year FROM o_orderdate) AS o_year,
+        l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity AS amount
+    FROM
+        part,
+        supplier,
+        line$$) LIMIT 1;
+----
+lineitem	287
