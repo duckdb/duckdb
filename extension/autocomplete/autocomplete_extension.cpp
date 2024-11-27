@@ -79,7 +79,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			} else if (prefix_is_upper) {
 				result = StringUtil::Upper(result);
 			}
-		} else {
+		} else if (suggestion.case_type == CandidateMatchCase::KEEP_CASE) {
 			result = KeywordHelper::WriteOptionallyQuoted(result, '"');
 		}
 		if (suggestion.extra_char != '\0') {
@@ -222,8 +222,8 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	}
 	auto &fs = FileSystem::GetFileSystem(context);
 	string search_dir;
-	D_ASSERT(last_pos >= prefix.size());
 	auto is_path_absolute = fs.IsPathAbsolute(prefix);
+	last_pos += prefix.size();
 	for (idx_t i = prefix.size(); i > 0; i--, last_pos--) {
 		if (prefix[i - 1] == '/' || prefix[i - 1] == '\\') {
 			search_dir = prefix.substr(0, i - 1);
@@ -251,20 +251,25 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 			score = 1;
 		}
 		result.emplace_back(std::move(suggestion), score);
+		result.back().case_type = CandidateMatchCase::LITERAL;
 	});
 	return result;
 }
 
 class AutoCompleteTokenizer : public BaseTokenizer {
 public:
-	AutoCompleteTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {
+	AutoCompleteTokenizer(const string &sql, MatchState &state) : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
 	}
 
-	void OnLastToken(string last_word_p, idx_t last_pos_p) override {
+	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
+		if (state == TokenizeState::STRING_LITERAL) {
+			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
+		}
 		last_word = std::move(last_word_p);
 		last_pos = last_pos_p;
 	}
 
+	vector<MatcherSuggestion> &suggestions;
 	string last_word;
 	idx_t last_pos;
 };
@@ -275,7 +280,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	vector<MatcherSuggestion> suggestions;
 	MatchState state(tokens, suggestions);
 
-	AutoCompleteTokenizer tokenizer(sql, state.tokens);
+	AutoCompleteTokenizer tokenizer(sql, state);
 	auto allow_complete = tokenizer.TokenizeInput();
 	if (!allow_complete) {
 		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
@@ -392,7 +397,7 @@ public:
 		statements.push_back(std::move(tokens));
 		tokens.clear();
 	}
-	void OnLastToken(string last_word, idx_t) override {
+	void OnLastToken(TokenizeState state, string last_word, idx_t) override {
 		if (last_word.empty()) {
 			return;
 		}
@@ -441,7 +446,6 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 					token_list += " ";
 				}
 				token_list += to_string(i) + ":" + tokens[i].text;
-				;
 			}
 			throw BinderException(
 			    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,

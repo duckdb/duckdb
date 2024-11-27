@@ -31,7 +31,7 @@ enum class SuggestionState : uint8_t {
 	SUGGEST_SETTING_NAME
 };
 
-enum class CandidateMatchCase { MATCH_CASE, KEEP_CASE };
+enum class CandidateMatchCase { MATCH_CASE, KEEP_CASE, LITERAL };
 
 struct AutoCompleteCandidate {
 	// NOLINTNEXTLINE: allow implicit conversion from string

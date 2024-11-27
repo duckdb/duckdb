@@ -6,17 +6,6 @@ namespace duckdb {
 BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
 }
 
-enum class TokenizeState {
-	STANDARD = 0,
-	SINGLE_LINE_COMMENT,
-	MULTI_LINE_COMMENT,
-	QUOTED_IDENTIFIER,
-	STRING_LITERAL,
-	KEYWORD,
-	NUMERIC,
-	OPERATOR
-};
-
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
 	for (idx_t i = 0; i < len; i++) {
 		if (str[i] != op[i]) {
@@ -150,7 +139,6 @@ bool BaseTokenizer::TokenizeInput() {
 	auto state = TokenizeState::STANDARD;
 
 	idx_t last_pos = 0;
-	idx_t pos_offset = 0;
 	for (idx_t i = 0; i < sql.size(); i++) {
 		auto c = sql[i];
 		switch (state) {
@@ -295,7 +283,7 @@ bool BaseTokenizer::TokenizeInput() {
 	// finished processing - check the final state
 	switch (state) {
 	case TokenizeState::STRING_LITERAL:
-		pos_offset = 1;
+		last_pos++;
 		break;
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
@@ -305,8 +293,7 @@ bool BaseTokenizer::TokenizeInput() {
 		break;
 	}
 	string last_word = sql.substr(last_pos, sql.size() - last_pos);
-	last_pos -= pos_offset;
-	OnLastToken(std::move(last_word), last_pos);
+	OnLastToken(state, std::move(last_word), last_pos);
 	return true;
 }
 
