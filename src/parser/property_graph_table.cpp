@@ -8,8 +8,9 @@ PropertyGraphTable::PropertyGraphTable() = default;
 
 PropertyGraphTable::PropertyGraphTable(string table_name_p, vector<string> column_names_p,
 		vector<string> labels_p, string catalog_p, string schema_p)
-    : table_name(std::move(table_name_p)), catalog_name(std::move(catalog_p)), schema_name(std::move(schema_p)),
-		column_names(std::move(column_names_p)), sub_labels(std::move(labels_p)) {
+    : table_name(std::move(table_name_p)),
+		column_names(std::move(column_names_p)), sub_labels(std::move(labels_p)),
+		catalog_name(std::move(catalog_p)), schema_name(std::move(schema_p)) {
 
 #ifdef DEBUG
 	for (auto &col_name : column_names) {
@@ -24,8 +25,9 @@ PropertyGraphTable::PropertyGraphTable(string table_name_p, vector<string> colum
 
 PropertyGraphTable::PropertyGraphTable(string table_name_p, string table_name_alias_p, vector<string> column_names_p,
                                        vector<string> labels_p, string catalog_p, string schema_p)
-    : table_name(std::move(table_name_p)), catalog_name(std::move(catalog_p)), table_name_alias(std::move(table_name_alias_p)), schema_name(std::move(schema_p)),
-      column_names(std::move(column_names_p)), sub_labels(std::move(labels_p)) {
+    : table_name(std::move(table_name_p)), table_name_alias(std::move(table_name_alias_p)),
+      column_names(std::move(column_names_p)), sub_labels(std::move(labels_p)),
+		catalog_name(std::move(catalog_p)), schema_name(std::move(schema_p)) {
 #ifdef DEBUG
 	for (auto &col_name : column_names) {
 		D_ASSERT(!col_name.empty());

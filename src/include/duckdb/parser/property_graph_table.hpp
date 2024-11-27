@@ -26,8 +26,6 @@ public:
 	PropertyGraphTable(string table_name, string table_alias,
 		vector<string> column_name, vector<string> label,
 		string catalog_name = "", string schema = DEFAULT_SCHEMA);
-	string catalog_name;
-	string schema_name;
 	string table_name;
 	string table_name_alias;
 
@@ -39,6 +37,9 @@ public:
 
 	vector<string> sub_labels;
 	string main_label;
+
+	string catalog_name;
+	string schema_name;
 
 	//! Associated with the PROPERTIES keyword not mentioned in the creation of table, equalling SELECT * in some sense
 	bool all_columns = false;
