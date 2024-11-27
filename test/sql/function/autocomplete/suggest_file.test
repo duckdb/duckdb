@@ -2,6 +2,8 @@
 # description: Test sql_auto_complete
 # group: [autocomplete]
 
+require notwindows
+
 require autocomplete
 
 # test file auto complete
