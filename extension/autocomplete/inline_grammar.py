@@ -38,17 +38,11 @@ if args.grammar_file:
 
 
 def get_grammar_bytes(contents, add_null_terminator=True):
-    text = contents.encode('utf8')
     result_text = ""
-    first = True
-    for byte in text:
-        if first:
-            result_text += str(byte)
-        else:
-            result_text += ", " + str(byte)
-        first = False
-    if add_null_terminator:
-        result_text += ", 0"
+    for line in contents.split('\n'):
+        if len(line) == 0:
+            continue
+        result_text += "\t\"" + line.replace('\\', '\\\\').replace('"', '\\"') + "\\n\"\n"
     return result_text
 
 
@@ -58,8 +52,8 @@ with open(target_file, 'w+') as f:
 
 namespace duckdb {
 
-const uint8_t INLINED_PEG_GRAMMAR[] = {
-    '''
+const char INLINED_PEG_GRAMMAR[] = {
+'''
         + get_grammar_bytes(contents)
         + '''
 };

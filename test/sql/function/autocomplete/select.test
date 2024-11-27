@@ -227,3 +227,29 @@ query II
 FROM sql_auto_complete('SELECT ''OR''''DER'' "WHE""RE" FR') LIMIT 1;
 ----
 FROM 	27
+
+statement ok
+CREATE TABLE my_table(my_column INTEGER);
+
+query II
+SELECT * FROM sql_auto_complete('SELECT my_') LIMIT 1;
+----
+my_column	7
+
+query II
+SELECT * FROM sql_auto_complete('UP') LIMIT 1;
+----
+UPDATE 	0
+
+query II
+SELECT * FROM sql_auto_complete('UPDATE my_table SET m') LIMIT 1;
+----
+my_column	20
+
+statement ok
+CREATE TABLE MyTable(MyColumn Varchar);
+
+query II
+SELECT * FROM sql_auto_complete('SELECT My') LIMIT 1;
+----
+MyColumn	7

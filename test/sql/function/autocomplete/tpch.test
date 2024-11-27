@@ -78,6 +78,16 @@ FROM sql_auto_complete('COPY lin') LIMIT 1;
 ----
 lineitem	5
 
+query II
+FROM sql_auto_complete('DROP TABLE na') LIMIT 1;
+----
+nation	11
+
+query II
+SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_') LIMIT 1;
+----
+ps_suppkey	44
+
 # more complex queries
 query II
 FROM sql_auto_complete($$

@@ -110,7 +110,7 @@ def test_autocomplete_update(shell, autocomplete_extension):
     test = (
         ShellTest(shell)
         .statement("CREATE TABLE my_table(my_column INTEGER);")
-        .statement("SELECT * FROM sql_auto_complete('U') LIMIT 1;")
+        .statement("SELECT * FROM sql_auto_complete('UP') LIMIT 1;")
     )
     result = test.run()
     result.check_stdout('UPDATE')

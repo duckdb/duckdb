@@ -185,19 +185,22 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 		auto &entry = entry_ref.get();
 		if (entry.type == CatalogType::TABLE_ENTRY) {
 			auto &table = entry.Cast<TableCatalogEntry>();
+			int32_t bonus = entry.internal ? 0 : 3;
 			for (auto &col : table.GetColumns().Logical()) {
-				suggestions.emplace_back(col.GetName(), 1);
+				suggestions.emplace_back(col.GetName(), bonus);
 			}
 		} else if (entry.type == CatalogType::VIEW_ENTRY) {
 			auto &view = entry.Cast<ViewCatalogEntry>();
+			int32_t bonus = entry.internal ? 0 : 3;
 			for (auto &col : view.aliases) {
-				suggestions.emplace_back(col, 1);
+				suggestions.emplace_back(col, bonus);
 			}
 		} else {
 			if (StringUtil::CharacterIsOperator(entry.name[0])) {
 				continue;
 			}
-			suggestions.emplace_back(entry.name);
+			int32_t bonus = entry.internal ? 0 : 2;
+			suggestions.emplace_back(entry.name, bonus);
 		};
 	}
 	return suggestions;

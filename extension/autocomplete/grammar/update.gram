@@ -3,4 +3,4 @@ UpdateStatement <- WithClause? 'UPDATE'i UpdateTarget 'SET'i UpdateSetClause Fro
 UpdateTarget <- BaseTableName UpdateAlias?
 UpdateAlias <- 'AS'i Identifier
 UpdateSetClause <- List(UpdateSetElement)
-UpdateSetElement <- Identifier '=' Expression
+UpdateSetElement <- ColumnName '=' Expression

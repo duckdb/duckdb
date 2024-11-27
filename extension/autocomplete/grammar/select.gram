@@ -59,7 +59,7 @@ RegularJoinClause <- 'ASOF'i? JoinType? 'JOIN'i InnerTableRef JoinQualifier
 JoinWithoutOnClause <- JoinPrefix 'JOIN'i InnerTableRef
 JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON'i Expression
-UsingClause <- 'USING'i Parens(List(Identifier))
+UsingClause <- 'USING'i Parens(List(ColumnName))
 
 OuterJoinType <- 'FULL'i / 'LEFT'i / 'RIGHT'i
 JoinType <- (OuterJoinType 'OUTER'i?) / 'SEMI'i / 'ANTI'i / 'INNER'i
