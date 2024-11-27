@@ -314,6 +314,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	result->discriminator = discriminator;
 
 	result->source_reference = source_reference;
+	result->source_pg_table = source_pg_table;
 
 	for (auto &key : source_fk) {
 		result->source_fk.push_back(key);
@@ -324,6 +325,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	}
 
 	result->destination_reference = destination_reference;
+	result->destination_pg_table = destination_pg_table;
 
 	for (auto &key : destination_fk) {
 		result->destination_fk.push_back(key);
