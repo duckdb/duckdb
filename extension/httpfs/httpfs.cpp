@@ -651,6 +651,27 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 	return nullptr;
 }
 
+void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache) {
+	// We are going to download the file at full, we don't need to do no head request.
+	const auto &cache_entry = state->GetCachedFile(path);
+	cached_file_handle = cache_entry->GetHandle();
+	if (!cached_file_handle->Initialized()) {
+		// Try to fully download the file first
+		const auto full_download_result = hfs.GetRequest(*this, path, {});
+		if (full_download_result->code != 200) {
+			throw HTTPException(*full_download_result, "Full download failed to to URL \"%s\": %s (%s)",
+			                    full_download_result->http_url, to_string(full_download_result->code),
+			                    full_download_result->error);
+		}
+		// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
+		cached_file_handle->SetInitialized(length);
+		// We shouldn't write these to cache
+		should_write_cache = false;
+	} else {
+		length = cached_file_handle->GetSize();
+	}
+}
+
 void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
@@ -667,24 +688,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 
 	bool should_write_cache = false;
 	if (http_params.force_download) {
-		// We are going to download the file at full, we don't need to do no head request.
-		auto &cache_entry = state->GetCachedFile(path);
-		cached_file_handle = cache_entry->GetHandle();
-		if (!cached_file_handle->Initialized()) {
-			// Try to fully download the file first
-			auto full_download_result = hfs.GetRequest(*this, path, {});
-			if (full_download_result->code != 200) {
-				throw HTTPException(*full_download_result, "Full download failed to to URL \"%s\": %s (%s)",
-				                    full_download_result->http_url, to_string(full_download_result->code),
-				                    full_download_result->error);
-			}
-			// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
-			cached_file_handle->SetInitialized(length);
-			// We shouldn't write these to cache
-			should_write_cache = false;
-		} else {
-			length = cached_file_handle->GetSize();
-		}
+		FullDownload(hfs, should_write_cache);
 		return;
 	}
 
@@ -779,6 +783,9 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 		} catch (std::out_of_range &e) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		}
+	}
+	if (state && length == 0) {
+		FullDownload(hfs, should_write_cache);
 	}
 	if (!res->headers["Last-Modified"].empty()) {
 		auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"]);
