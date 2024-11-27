@@ -31,25 +31,25 @@ enum class SuggestionState : uint8_t {
 	SUGGEST_SETTING_NAME
 };
 
-enum class CandidateMatchCase { MATCH_CASE, KEEP_CASE, LITERAL };
+enum class CandidateType { KEYWORD, IDENTIFIER, LITERAL };
 
 struct AutoCompleteCandidate {
 	// NOLINTNEXTLINE: allow implicit conversion from string
 	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0,
-	                      CandidateMatchCase case_type = CandidateMatchCase::KEEP_CASE)
-	    : candidate(std::move(candidate_p)), score_bonus(score_bonus), case_type(case_type) {
+	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
+	    : candidate(std::move(candidate_p)), score_bonus(score_bonus), candidate_type(candidate_type) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from const char*
 	AutoCompleteCandidate(const char *candidate_p, int32_t score_bonus = 0,
-	                      CandidateMatchCase case_type = CandidateMatchCase::KEEP_CASE)
-	    : AutoCompleteCandidate(string(candidate_p), score_bonus, case_type) {
+	                      CandidateType candidate_type = CandidateType::IDENTIFIER)
+	    : AutoCompleteCandidate(string(candidate_p), score_bonus, candidate_type) {
 	}
 
 	string candidate;
 	//! The higher the score bonus, the more likely this candidate will be chosen
 	int32_t score_bonus;
-	//! Whether or not we match the case of the original type or preserve the case of the candidate
-	CandidateMatchCase case_type;
+	//! The type of candidate we are suggesting - this modifies how we handle quoting/case sensitivity
+	CandidateType candidate_type;
 	//! Extra char to push at the back
 	char extra_char = '\0';
 	//! Suggestion position

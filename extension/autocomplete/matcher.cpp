@@ -64,7 +64,7 @@ public:
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
-		AutoCompleteCandidate candidate(keyword, score_bonus, CandidateMatchCase::MATCH_CASE);
+		AutoCompleteCandidate candidate(keyword, score_bonus, CandidateType::KEYWORD);
 		candidate.extra_char = extra_char;
 		state.AddSuggestion(MatcherSuggestion(std::move(candidate)));
 		return SuggestionType::MANDATORY;

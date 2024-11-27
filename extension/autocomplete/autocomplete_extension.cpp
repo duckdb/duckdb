@@ -73,13 +73,13 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			throw InternalException("Auto-complete match not found");
 		}
 		auto &suggestion = available_suggestions[entry->second];
-		if (suggestion.case_type == CandidateMatchCase::MATCH_CASE) {
+		if (suggestion.candidate_type == CandidateType::KEYWORD) {
 			if (prefix_is_lower) {
 				result = StringUtil::Lower(result);
 			} else if (prefix_is_upper) {
 				result = StringUtil::Upper(result);
 			}
-		} else if (suggestion.case_type == CandidateMatchCase::KEEP_CASE) {
+		} else if (suggestion.candidate_type == CandidateType::IDENTIFIER) {
 			result = KeywordHelper::WriteOptionallyQuoted(result, '"');
 		}
 		if (suggestion.extra_char != '\0') {
@@ -174,7 +174,7 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 static vector<AutoCompleteCandidate> SuggestType(ClientContext &) {
 	vector<AutoCompleteCandidate> suggestions;
 	for (auto &type_entry : BUILTIN_TYPES) {
-		suggestions.emplace_back(type_entry.name, 0, CandidateMatchCase::MATCH_CASE);
+		suggestions.emplace_back(type_entry.name, 0, CandidateType::KEYWORD);
 	}
 	return suggestions;
 }
@@ -251,14 +251,15 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 			score = 1;
 		}
 		result.emplace_back(std::move(suggestion), score);
-		result.back().case_type = CandidateMatchCase::LITERAL;
+		result.back().candidate_type = CandidateType::LITERAL;
 	});
 	return result;
 }
 
 class AutoCompleteTokenizer : public BaseTokenizer {
 public:
-	AutoCompleteTokenizer(const string &sql, MatchState &state) : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
+	AutoCompleteTokenizer(const string &sql, MatchState &state)
+	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
 	}
 
 	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
