@@ -13,9 +13,12 @@ parser.add_argument('--no-exit', action='store_true', help='Do not exit after a 
 parser.add_argument('--print-failing-only', action='store_true', help='Print failing tests only', default=False)
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument("--test-file", type=str, help="Path to the SQL logic file", default='')
-group.add_argument("--test-list", type=str, help="Path to the file that contains a newline separated list of test files", default='')
+group.add_argument(
+    "--test-list", type=str, help="Path to the file that contains a newline separated list of test files", default=''
+)
 group.add_argument("--all-tests", action='store_true', help="Run all tests", default=False)
 args = parser.parse_args()
+
 
 def find_tests_recursive(dir, excluded_paths):
     test_list = []
@@ -28,6 +31,7 @@ def find_tests_recursive(dir, excluded_paths):
         elif path.endswith('.test') or path.endswith('.test_slow'):
             test_list.append(path)
     return test_list
+
 
 def parse_test_file(filename):
     if not os.path.isfile(filename):
@@ -65,13 +69,14 @@ def parse_test_file(filename):
         statements.append(query)
     return statements
 
+
 files = []
 excluded_tests = {
     # reserved keyword mismatches
-    'test/sql/attach/attach_nested_types.test',           # table
-    'test/sql/binder/test_function_chainging_alias.test', # trim
-    'test/sql/cast/test_try_cast.test',                   # try_cast
-    'test/sql/copy/csv/auto/test_auto_8573.test',         # columns
+    'test/sql/attach/attach_nested_types.test',  # table
+    'test/sql/binder/test_function_chainging_alias.test',  # trim
+    'test/sql/cast/test_try_cast.test',  # try_cast
+    'test/sql/copy/csv/auto/test_auto_8573.test',  # columns
     'test/sql/copy/csv/auto/test_csv_auto.test',
     'test/sql/copy/csv/auto/test_normalize_names.test',
     'test/sql/copy/csv/auto/test_sniffer_blob.test',
@@ -164,15 +169,12 @@ excluded_tests = {
     'test/sql/catalog/function/test_complex_macro.test',
     # env parameters (${PARAMETER})
     'test/sql/copy/s3/download_config.test',
-
     # complex arithmetic
     'test/sql/function/operator/test_arithmetic_sqllogic.test',
-
     # dollar quoted strings
     'test/sql/parser/dollar_quotes_internal_issue2224.test',
     # unicode spaces
     'test/sql/parser/invisible_spaces.test',
-
     # NOT INVESTIGATED
     'test/sql/parser/join_alias.test',
     'test/sql/pg_catalog/sqlalchemy.test',
@@ -261,8 +263,7 @@ excluded_tests = {
     'test/sql/window/test_window_exclude.test',
     'test/sql/window/test_window_range.test',
     'test/sql/create/create_as.test',
-    'test/sql/function/autocomplete/tpch.test'
-
+    'test/sql/function/autocomplete/tpch.test',
 }
 if args.all_tests:
     # run all tests
@@ -304,5 +305,3 @@ for i in range(start, end):
             exit(1)
         else:
             break
-
-

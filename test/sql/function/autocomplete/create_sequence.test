@@ -1,6 +1,6 @@
 # name: test/sql/function/autocomplete/create_sequence.test
 # description: Test sql_auto_complete
-# group: [table]
+# group: [autocomplete]
 
 require autocomplete
 

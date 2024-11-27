@@ -36,14 +36,15 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix) {
+static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions,
+                                                         const string &prefix) {
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(available_suggestions.size());
 
 	case_insensitive_map_t<idx_t> matches;
 	bool prefix_is_lower = StringUtil::IsLower(prefix);
 	bool prefix_is_upper = StringUtil::IsUpper(prefix);
-	for(idx_t i = 0; i < available_suggestions.size(); i++) {
+	for (idx_t i = 0; i < available_suggestions.size(); i++) {
 		auto &suggestion = available_suggestions[i];
 		const int32_t BASE_SCORE = 10;
 		auto &str = suggestion.candidate;
@@ -66,7 +67,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 	}
 	vector<AutoCompleteSuggestion> results;
 	auto top_strings = StringUtil::TopNStrings(scores, 20, 999);
-	for(auto &result : top_strings) {
+	for (auto &result : top_strings) {
 		auto entry = matches.find(result);
 		if (entry == matches.end()) {
 			throw InternalException("Auto-complete match not found");
@@ -94,7 +95,7 @@ static vector<reference<AttachedDatabase>> GetAllCatalogs(ClientContext &context
 
 	auto &database_manager = DatabaseManager::Get(context);
 	auto databases = database_manager.GetDatabases(context);
-	for(auto &database : databases) {
+	for (auto &database : databases) {
 		result.push_back(database.get());
 	}
 	return result;
@@ -256,7 +257,8 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 
 class AutoCompleteTokenizer : public BaseTokenizer {
 public:
-	AutoCompleteTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {}
+	AutoCompleteTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {
+	}
 
 	void OnLastToken(string last_word_p, idx_t last_pos_p) override {
 		last_word = std::move(last_word_p);
@@ -382,15 +384,15 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(count);
 }
 
-
 class ParserTokenizer : public BaseTokenizer {
 public:
-	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {}
+	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {
+	}
 	void OnStatementEnd(idx_t pos) override {
 		statements.push_back(std::move(tokens));
 		tokens.clear();
 	}
-	void OnLastToken(string last_word, idx_t ) override {
+	void OnLastToken(string last_word, idx_t) override {
 		if (last_word.empty()) {
 			return;
 		}
@@ -401,7 +403,7 @@ public:
 };
 
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
-															vector<LogicalType> &return_types, vector<string> &names) {
+                                                           vector<LogicalType> &return_types, vector<string> &names) {
 	if (input.inputs[0].IsNull()) {
 		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}
@@ -431,16 +433,19 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		auto match_result = matcher.Match(state);
 		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
 			string token_list;
-			for(idx_t i = 0; i < tokens.size(); i++) {
+			for (idx_t i = 0; i < tokens.size(); i++) {
 				if (!token_list.empty()) {
 					token_list += "\n";
 				}
 				if (i < 10) {
 					token_list += " ";
 				}
-				token_list += to_string(i) + ":" + tokens[i].text;;
+				token_list += to_string(i) + ":" + tokens[i].text;
+				;
 			}
-			throw BinderException("Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql, state.token_index, tokens[state.token_index].text, token_list);
+			throw BinderException(
+			    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
+			    state.token_index, tokens[state.token_index].text, token_list);
 		}
 	}
 	return nullptr;
@@ -455,10 +460,9 @@ static void LoadInternal(DatabaseInstance &db) {
 	ExtensionUtil::RegisterFunction(db, auto_complete_fun);
 
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
-									CheckPEGParserBind, nullptr);
+	                                   CheckPEGParserBind, nullptr);
 	ExtensionUtil::RegisterFunction(db, check_peg_parser_fun);
 }
-
 
 void AutocompleteExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);

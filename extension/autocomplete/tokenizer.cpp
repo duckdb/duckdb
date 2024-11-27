@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {}
+BaseTokenizer::BaseTokenizer(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
+}
 
 enum class TokenizeState {
 	STANDARD = 0,
@@ -17,7 +18,7 @@ enum class TokenizeState {
 };
 
 static bool OperatorEquals(const char *str, const char *op, idx_t len, idx_t &op_len) {
-	for(idx_t i = 0; i < len; i++) {
+	for (idx_t i = 0; i < len; i++) {
 		if (str[i] != op[i]) {
 			return false;
 		}
@@ -56,7 +57,7 @@ bool BaseTokenizer::IsSpecialOperator(idx_t pos, idx_t &op_len) const {
 }
 
 bool BaseTokenizer::IsSingleByteOperator(char c) {
-	switch(c) {
+	switch (c) {
 	case '(':
 	case ')':
 	case '{':
@@ -86,7 +87,7 @@ bool BaseTokenizer::CharacterIsNumber(char c) {
 	if (CharacterIsInitialNumber(c)) {
 		return true;
 	}
-	switch(c) {
+	switch (c) {
 	case 'e': // exponents
 	case 'E':
 	case '-':
@@ -99,7 +100,7 @@ bool BaseTokenizer::CharacterIsNumber(char c) {
 }
 
 bool BaseTokenizer::CharacterIsControlFlow(char c) {
-	switch(c) {
+	switch (c) {
 	case '\'':
 	case '-':
 	case ';':
@@ -150,9 +151,9 @@ bool BaseTokenizer::TokenizeInput() {
 
 	idx_t last_pos = 0;
 	idx_t pos_offset = 0;
-	for(idx_t i = 0; i < sql.size(); i++) {
+	for (idx_t i = 0; i < sql.size(); i++) {
 		auto c = sql[i];
-		switch(state) {
+		switch (state) {
 		case TokenizeState::STANDARD:
 			if (c == '\'') {
 				state = TokenizeState::STRING_LITERAL;
@@ -218,9 +219,9 @@ bool BaseTokenizer::TokenizeInput() {
 			if (!CharacterIsNumber(c)) {
 				// not a number - return to standard state
 				// number must END with initial number
-				// i.e. we accept "_" in numbers (1_1), but "1_" is tokenized as the number "1" followed by the keyword "_"
-				// backtrack until it does
-				while(!CharacterIsInitialNumber(sql[i - 1])) {
+				// i.e. we accept "_" in numbers (1_1), but "1_" is tokenized as the number "1" followed by the keyword
+				// "_" backtrack until it does
+				while (!CharacterIsInitialNumber(sql[i - 1])) {
 					i--;
 				}
 				PushToken(last_pos, i);
@@ -292,7 +293,7 @@ bool BaseTokenizer::TokenizeInput() {
 	}
 
 	// finished processing - check the final state
-	switch(state) {
+	switch (state) {
 	case TokenizeState::STRING_LITERAL:
 		pos_offset = 1;
 		break;
@@ -313,4 +314,4 @@ void BaseTokenizer::OnStatementEnd(idx_t pos) {
 	tokens.clear();
 }
 
-}
+} // namespace duckdb

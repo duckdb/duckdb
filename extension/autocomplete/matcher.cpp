@@ -46,8 +46,10 @@ void MatchState::AddSuggestion(MatcherSuggestion suggestion) {
 class KeywordMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::KEYWORD;
+
 public:
-	explicit KeywordMatcher(string keyword_p, int32_t score_bonus = 0, char extra_char = '\0') : Matcher(TYPE), keyword(std::move(keyword_p)), score_bonus(score_bonus), extra_char(extra_char) {
+	explicit KeywordMatcher(string keyword_p, int32_t score_bonus = 0, char extra_char = '\0')
+	    : Matcher(TYPE), keyword(std::move(keyword_p)), score_bonus(score_bonus), extra_char(extra_char) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -81,8 +83,10 @@ private:
 class ListMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::LIST;
+
 public:
-	ListMatcher() : Matcher(TYPE) {}
+	ListMatcher() : Matcher(TYPE) {
+	}
 	explicit ListMatcher(vector<reference<Matcher>> matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
 	}
 
@@ -132,7 +136,7 @@ public:
 
 	string ToString() const override {
 		string result = "";
-		for(auto &matcher : matchers) {
+		for (auto &matcher : matchers) {
 			if (!result.empty()) {
 				result += " ";
 			}
@@ -148,6 +152,7 @@ public:
 class OptionalMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::OPTIONAL;
+
 public:
 	explicit OptionalMatcher(Matcher &matcher_p) : Matcher(TYPE), matcher(matcher_p) {
 	}
@@ -180,8 +185,10 @@ private:
 class ChoiceMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::CHOICE;
+
 public:
-	ChoiceMatcher() : Matcher(TYPE) {}
+	ChoiceMatcher() : Matcher(TYPE) {
+	}
 	explicit ChoiceMatcher(vector<reference<Matcher>> matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
 	}
 
@@ -207,7 +214,7 @@ public:
 
 	string ToString() const override {
 		string result = "";
-		for(auto &matcher : matchers) {
+		for (auto &matcher : matchers) {
 			if (!result.empty()) {
 				result += " / ";
 			}
@@ -223,9 +230,9 @@ public:
 class RepeatMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::REPEAT;
+
 public:
-	explicit RepeatMatcher(Matcher &element_p)
-	    : Matcher(TYPE), element(element_p) {
+	explicit RepeatMatcher(Matcher &element_p) : Matcher(TYPE), element(element_p) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
@@ -275,6 +282,7 @@ private:
 class IdentifierMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
+
 public:
 	explicit IdentifierMatcher(SuggestionState suggestion_type) : Matcher(TYPE), suggestion_type(suggestion_type) {
 	}
@@ -307,7 +315,7 @@ public:
 	}
 
 	bool SupportsStringLiteral() const {
-		switch(suggestion_type) {
+		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TABLE_NAME:
 		case SuggestionState::SUGGEST_FILE_NAME:
 			return true;
@@ -317,7 +325,7 @@ public:
 	}
 
 	KeywordCategory GetBannedCategory() const {
-		switch(suggestion_type) {
+		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
 		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
 			return KeywordCategory::KEYWORD_COL_NAME;
@@ -332,7 +340,7 @@ public:
 	}
 
 	string ToString() const override {
-		switch(suggestion_type) {
+		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_KEYWORD:
 			return "KEYWORD";
 		case SuggestionState::SUGGEST_CATALOG_NAME:
@@ -368,6 +376,7 @@ public:
 class StringLiteralMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::STRING_LITERAL;
+
 public:
 	explicit StringLiteralMatcher() : Matcher(TYPE) {
 	}
@@ -394,6 +403,7 @@ public:
 class NumberLiteralMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::NUMBER_LITERAL;
+
 public:
 	explicit NumberLiteralMatcher() : Matcher(TYPE) {
 	}
@@ -404,7 +414,7 @@ public:
 		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return MatchResultType::FAIL;
 		}
-		for(idx_t i = 1; i < token_text.size(); i++) {
+		for (idx_t i = 1; i < token_text.size(); i++) {
 			if (!BaseTokenizer::CharacterIsNumber(token_text[i])) {
 				return MatchResultType::FAIL;
 			}
@@ -425,14 +435,15 @@ public:
 class OperatorMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::OPERATOR;
+
 public:
 	explicit OperatorMatcher() : Matcher(TYPE) {
 	}
 
 	MatchResultType Match(MatchState &state) const override {
 		auto &token_text = state.tokens[state.token_index].text;
-		for(auto &c : token_text ) {
-			switch(c) {
+		for (auto &c : token_text) {
+			switch (c) {
 			case '+':
 			case '-':
 			case '*':
@@ -474,8 +485,10 @@ Matcher &MatcherAllocator::Allocate(unique_ptr<Matcher> matcher) {
 //! Class for building matchers
 class MatcherFactory {
 	friend struct MatcherList;
+
 public:
-	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {}
+	explicit MatcherFactory(MatcherAllocator &allocator) : allocator(allocator) {
+	}
 
 	//! Create a matcher from a PEG grammar
 	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
@@ -594,11 +607,11 @@ Matcher &MatcherFactory::Operator() const {
 }
 
 enum class PEGRuleType {
-	LITERAL,    // literal rule ('Keyword'i)
-	REFERENCE,  // reference to another rule (Rule)
-	OPTIONAL,   // optional rule (Rule?)
-	OR,         // or rule (Rule1 / Rule2)
-	REPEAT      // repeat rule (Rule1*
+	LITERAL,   // literal rule ('Keyword'i)
+	REFERENCE, // reference to another rule (Rule)
+	OPTIONAL,  // optional rule (Rule?)
+	OR,        // or rule (Rule1 / Rule2)
+	REPEAT     // repeat rule (Rule1*
 };
 
 enum class PEGTokenType {
@@ -667,15 +680,16 @@ void PEGParser::ParseRules(const char *grammar) {
 	bool in_or_clause = false;
 	// look for the rules
 	idx_t c = 0;
-	while(grammar[c]) {
+	while (grammar[c]) {
 		if (grammar[c] == '#') {
 			// comment - ignore until EOL
-			while(grammar[c] && !StringUtil::CharacterIsNewline(grammar[c])) {
+			while (grammar[c] && !StringUtil::CharacterIsNewline(grammar[c])) {
 				c++;
 			}
 			continue;
 		}
-		if (parse_state == PEGParseState::RULE_DEFINITION && StringUtil::CharacterIsNewline(grammar[c]) && bracket_count == 0 && !in_or_clause && !rule.tokens.empty()) {
+		if (parse_state == PEGParseState::RULE_DEFINITION && StringUtil::CharacterIsNewline(grammar[c]) &&
+		    bracket_count == 0 && !in_or_clause && !rule.tokens.empty()) {
 			// if we see a newline while we are parsing a rule definition we can complete the rule
 			AddRule(rule_name, std::move(rule));
 			rule_name = string_t();
@@ -698,7 +712,7 @@ void PEGParser::ParseRules(const char *grammar) {
 				// rules can start with % (%whitespace)
 				c++;
 			}
-			while(grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
+			while (grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
 				c++;
 			}
 			if (c == start_pos) {
@@ -717,13 +731,14 @@ void PEGParser::ParseRules(const char *grammar) {
 				// parameter
 				c++;
 				idx_t parameter_start = c;
-				while(grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
+				while (grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
 					c++;
 				}
 				if (parameter_start == c) {
 					throw InternalException("Failed to parse grammar - expected a parameter at position %d", c);
 				}
-				rule.parameters.insert(make_pair(string_t(grammar + parameter_start, c - parameter_start), rule.parameters.size()));
+				rule.parameters.insert(
+				    make_pair(string_t(grammar + parameter_start, c - parameter_start), rule.parameters.size()));
 				if (grammar[c] != ')') {
 					throw InternalException("Failed to parse grammar - expected closing bracket at position %d", c);
 				}
@@ -747,7 +762,7 @@ void PEGParser::ParseRules(const char *grammar) {
 				// parse literal
 				c++;
 				idx_t literal_start = c;
-				while(grammar[c] && grammar[c] != '\'') {
+				while (grammar[c] && grammar[c] != '\'') {
 					if (grammar[c] == '\\') {
 						// escape
 						c++;
@@ -770,7 +785,7 @@ void PEGParser::ParseRules(const char *grammar) {
 			} else if (StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
 				// alphanumeric character - this is a rule reference
 				idx_t rule_start = c;
-				while(grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
+				while (grammar[c] && StringUtil::CharacterIsAlphaNumeric(grammar[c])) {
 					c++;
 				}
 				PEGToken token;
@@ -788,7 +803,7 @@ void PEGParser::ParseRules(const char *grammar) {
 				// regular expression- [^"] or <...>
 				idx_t rule_start = c;
 				char final_char = grammar[c] == '[' ? ']' : '>';
-				while(grammar[c] && grammar[c] != final_char) {
+				while (grammar[c] && grammar[c] != final_char) {
 					if (grammar[c] == '\\') {
 						// handle escapes
 						c++;
@@ -807,7 +822,8 @@ void PEGParser::ParseRules(const char *grammar) {
 					bracket_count++;
 				} else if (grammar[c] == ')') {
 					if (bracket_count == 0) {
-						throw InternalException("Failed to parse grammar - unclosed bracket at position %d in rule %s", c, rule_name.GetString());
+						throw InternalException("Failed to parse grammar - unclosed bracket at position %d in rule %s",
+						                        c, rule_name.GetString());
 					}
 					bracket_count--;
 				} else if (grammar[c] == '/') {
@@ -820,7 +836,8 @@ void PEGParser::ParseRules(const char *grammar) {
 				rule.tokens.push_back(token);
 				c++;
 			} else {
-				throw InternalException("Unrecognized rule contents in rule %s (character %s)", rule_name.GetString(), string(1, grammar[c]));
+				throw InternalException("Unrecognized rule contents in rule %s (character %s)", rule_name.GetString(),
+				                        string(1, grammar[c]));
 			}
 		}
 		default:
@@ -847,8 +864,10 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
 }
 
 struct MatcherListEntry {
-	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher), function_name(0U) {}
-	MatcherListEntry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {}
+	explicit MatcherListEntry(Matcher &matcher) : matcher(matcher), function_name(0U) {
+	}
+	MatcherListEntry(Matcher &matcher, string_t function_name_p) : matcher(matcher), function_name(function_name_p) {
+	}
 
 	Matcher &matcher;
 	string_t function_name;
@@ -861,7 +880,7 @@ public:
 
 	void AddMatcher(Matcher &matcher) {
 		auto &root_matcher = matchers.back().matcher;
-		switch(root_matcher.Type()) {
+		switch (root_matcher.Type()) {
 		case MatcherType::LIST: {
 			auto &root_list = root_matcher.Cast<ListMatcher>();
 			root_list.matchers.push_back(matcher);
@@ -910,7 +929,8 @@ public:
 			auto &function_parameters = root_bracket_matcher.matcher.Cast<ListMatcher>();
 
 			// wrap the parameters in a list if there is more than one
-			auto &parameter = function_parameters.matchers.size() == 1 ? function_parameters.matchers[0].get() : factory.List(function_parameters.matchers);
+			auto &parameter = function_parameters.matchers.size() == 1 ? function_parameters.matchers[0].get()
+			                                                           : factory.List(function_parameters.matchers);
 			vector<reference<Matcher>> parameters;
 			parameters.push_back(parameter);
 			// do the substitution of the function call
@@ -958,11 +978,12 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		throw InternalException("Only functions with a single parameter are supported");
 	}
 	if (parameters.size() != rule.parameters.size()) {
-		throw InternalException("Parameter count mismatch (rule %s expected %d parameters but got %d)", rule_name.GetString(), rule.parameters.size(), parameters.size());
+		throw InternalException("Parameter count mismatch (rule %s expected %d parameters but got %d)",
+		                        rule_name.GetString(), rule.parameters.size(), parameters.size());
 	}
-	for(idx_t token_idx = 0; token_idx < rule.tokens.size(); token_idx++) {
+	for (idx_t token_idx = 0; token_idx < rule.tokens.size(); token_idx++) {
 		auto &token = rule.tokens[token_idx];
-		switch(token.type) {
+		switch (token.type) {
 		case PEGTokenType::LITERAL:
 			// literal - push the keyword
 			list.AddMatcher(Keyword(token.text.GetString()));
@@ -987,7 +1008,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		case PEGTokenType::OPERATOR: {
 			// tokens need to be one byte
 			auto op_type = token.text.GetData()[0];
-			switch(op_type) {
+			switch (op_type) {
 			case '?':
 			case '*': {
 				// optional/repeat - make the last rule optional/repeat
@@ -1043,7 +1064,8 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				break;
 			}
 			case '!': {
-				// throw InternalException("NOT operator not supported in PEG grammar (found in rule %s)", rule_name.GetString());
+				// throw InternalException("NOT operator not supported in PEG grammar (found in rule %s)",
+				// rule_name.GetString());
 				// FIXME: we just ignore NOT operators here
 				break;
 			}
@@ -1053,7 +1075,8 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 			break;
 		}
 		case PEGTokenType::REGEX:
-			throw InternalException("REGEX operator not supported in PEG grammar (found in rule %s)", rule_name.GetString());
+			throw InternalException("REGEX operator not supported in PEG grammar (found in rule %s)",
+			                        rule_name.GetString());
 		default:
 			throw InternalException("unrecognized peg token type");
 		}

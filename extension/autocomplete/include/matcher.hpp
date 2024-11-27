@@ -31,18 +31,17 @@ enum class SuggestionState : uint8_t {
 	SUGGEST_SETTING_NAME
 };
 
-enum class CandidateMatchCase {
-	MATCH_CASE,
-	KEEP_CASE
-};
+enum class CandidateMatchCase { MATCH_CASE, KEEP_CASE };
 
 struct AutoCompleteCandidate {
 	// NOLINTNEXTLINE: allow implicit conversion from string
-	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0, CandidateMatchCase case_type = CandidateMatchCase::KEEP_CASE)
+	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0,
+	                      CandidateMatchCase case_type = CandidateMatchCase::KEEP_CASE)
 	    : candidate(std::move(candidate_p)), score_bonus(score_bonus), case_type(case_type) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from const char*
-	AutoCompleteCandidate(const char *candidate_p, int32_t score_bonus = 0, CandidateMatchCase case_type = CandidateMatchCase::KEEP_CASE)
+	AutoCompleteCandidate(const char *candidate_p, int32_t score_bonus = 0,
+	                      CandidateMatchCase case_type = CandidateMatchCase::KEEP_CASE)
 	    : AutoCompleteCandidate(string(candidate_p), score_bonus, case_type) {
 	}
 
@@ -58,7 +57,8 @@ struct AutoCompleteCandidate {
 };
 
 struct AutoCompleteSuggestion {
-	AutoCompleteSuggestion(string text_p, idx_t pos) : text(std::move(text_p)), pos(pos) {}
+	AutoCompleteSuggestion(string text_p, idx_t pos) : text(std::move(text_p)), pos(pos) {
+	}
 
 	string text;
 	idx_t pos;
@@ -81,7 +81,8 @@ struct MatcherToken {
 
 struct MatcherSuggestion {
 	// NOLINTNEXTLINE: allow implicit conversion from auto-complete candidate
-	MatcherSuggestion(AutoCompleteCandidate keyword_p) : keyword(std::move(keyword_p)), type(SuggestionState::SUGGEST_KEYWORD) {
+	MatcherSuggestion(AutoCompleteCandidate keyword_p)
+	    : keyword(std::move(keyword_p)), type(SuggestionState::SUGGEST_KEYWORD) {
 	}
 	// NOLINTNEXTLINE: allow implicit conversion from suggestion state
 	MatcherSuggestion(SuggestionState type, char extra_char = '\0') : keyword(""), type(type), extra_char(extra_char) {
@@ -109,21 +110,12 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
-enum class MatcherType {
-	KEYWORD,
-	LIST,
-	OPTIONAL,
-	CHOICE,
-	REPEAT,
-	VARIABLE,
-	STRING_LITERAL,
-	NUMBER_LITERAL,
-	OPERATOR
-};
+enum class MatcherType { KEYWORD, LIST, OPTIONAL, CHOICE, REPEAT, VARIABLE, STRING_LITERAL, NUMBER_LITERAL, OPERATOR };
 
 class Matcher {
 public:
-	explicit Matcher(MatcherType type) : type(type) {}
+	explicit Matcher(MatcherType type) : type(type) {
+	}
 	virtual ~Matcher() = default;
 
 	//! Match
