@@ -99,9 +99,31 @@ public:
 		return d[len1][len2];
 	}
 
-	shared_ptr<PropertyGraphTable> GetTable(const string &table_name, bool error_not_found = true, bool is_vertex_table = true) {
+	shared_ptr<PropertyGraphTable> GetTableByName(const string &table_name, bool error_not_found = true, bool is_vertex_table = true) {
+		if (is_vertex_table) {
+			// search vertex tables
+			for (const auto &vertex_table : vertex_tables) {
+				if (vertex_table->table_name == table_name) {
+					return vertex_table;
+				}
+			}
+		} else {
+			// Search edge tables
+			for (const auto &edge_table : edge_tables) {
+				if (edge_table->table_name == table_name) {
+					return edge_table;
+				}
+			}
+		}
+		if (error_not_found) {
+			throw Exception(ExceptionType::INVALID, "Table '" + table_name + "' not found in the property graph " + property_graph_name + ".");
+		}
+		return nullptr; // Return nullptr if no match is found and error_not_found is false
+	}
+
+	shared_ptr<PropertyGraphTable> GetTableByLabel(const string &label, bool error_not_found = true, bool is_vertex_table = true) {
 	    // First, check if there is an exact match for the table name in label_map
-	    auto table_entry = label_map.find(table_name);
+	    auto table_entry = label_map.find(label);
 	    if (table_entry != label_map.end()) {
 	        // Exact table match found, but verify if it matches the vertex/edge type
 	        if (table_entry->second->is_vertex_table == is_vertex_table) {
@@ -109,7 +131,7 @@ public:
 	        }
 	    	if (error_not_found) {
 	            throw Exception(ExceptionType::INVALID,
-	                            "Exact label '" + table_name + "' found, but it is not a " +
+	                            "Exact label '" + label + "' found, but it is not a " +
 	                            (is_vertex_table ? "vertex" : "edge") + " table.");
 	        }
 	        return nullptr;
@@ -126,19 +148,19 @@ public:
 	        if (pg_table->is_vertex_table != is_vertex_table) {
 	            continue;
 	        }
-	    	if  (pg_table->table_name == table_name) {
-	    		throw Exception(ExceptionType::INVALID, "Table '" + table_name + "' found in the property graph, but does not have the correct label. Did you mean the label '" + pg_table->main_label + "' instead?");
+	    	if  (pg_table->table_name == label) {
+	    		throw Exception(ExceptionType::INVALID, "Table '" + label + "' found in the property graph, but does not have the correct label. Did you mean the label '" + pg_table->main_label + "' instead?");
 	    	}
 
 	        // Use int64_t for the distance calculations
-	        auto distance_main_label = LevenshteinDistance(table_name, pg_table->main_label);
+	        auto distance_main_label = LevenshteinDistance(label, pg_table->main_label);
 	        if (distance_main_label < min_distance) {
 	            min_distance = distance_main_label;
 	            closest_label = pg_table->main_label;
 	        }
 
 	        for (const auto &sub_label : pg_table->sub_labels) {
-	            auto distance_sub_label = LevenshteinDistance(table_name, sub_label);
+	            auto distance_sub_label = LevenshteinDistance(label, sub_label);
 	            if (distance_sub_label < min_distance) {
 	                min_distance = distance_sub_label;
 	                closest_label = sub_label;
@@ -150,14 +172,14 @@ public:
 	    // If a close label match is found, suggest it in the error message
 	    if (min_distance < std::numeric_limits<size_t>::max() && error_not_found) {
 	        throw Exception(ExceptionType::INVALID,
-	                        "Label '" + table_name + "' not found. Did you mean the " +
+	                        "Label '" + label + "' not found. Did you mean the " +
 	                        (is_vertex_table ? "vertex" : "edge") + " label '" + closest_label + "'?");
 	    }
 
 	    // If no match is found and error_not_found is true, throw an error
 	    if (error_not_found) {
 	        throw Exception(ExceptionType::INVALID,
-	                        "Label '" + table_name + "' not found in the property graph for a " +
+	                        "Label '" + label + "' not found in the property graph for a " +
 	                        (is_vertex_table ? "vertex" : "edge") + " table.");
 	    }
 

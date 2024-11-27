@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/vector.hpp"
+#include <duckdb/parser/tableref/basetableref.hpp>
 
 namespace duckdb {
 
@@ -18,10 +19,13 @@ public:
 	//! Used for Copy
 	PropertyGraphTable();
 	//! Specify both the column and table name
-	PropertyGraphTable(string table_name, vector<string> column_name, vector<string> label);
+	PropertyGraphTable(string table_name, vector<string> column_name,
+		vector<string> label, string catalog_name = "",
+		string schema = DEFAULT_SCHEMA);
 	//! Specify both the column and table name with alias
-	PropertyGraphTable(string table_name, string table_alias, vector<string> column_name, vector<string> label);
-
+	PropertyGraphTable(string table_name, string table_alias,
+		vector<string> column_name, vector<string> label,
+		string catalog_name = "", string schema = DEFAULT_SCHEMA);
 	string table_name;
 	string table_name_alias;
 
@@ -33,6 +37,9 @@ public:
 
 	vector<string> sub_labels;
 	string main_label;
+
+	string catalog_name;
+	string schema_name;
 
 	//! Associated with the PROPERTIES keyword not mentioned in the creation of table, equalling SELECT * in some sense
 	bool all_columns = false;
@@ -50,11 +57,15 @@ public:
 
 	string source_reference;
 
+	shared_ptr<PropertyGraphTable> source_pg_table;
+
 	vector<string> destination_fk;
 
 	vector<string> destination_pk;
 
 	string destination_reference;
+
+	shared_ptr<PropertyGraphTable> destination_pg_table;
 
 public:
 	string ToString() const;
@@ -66,11 +77,18 @@ public:
 
 	static shared_ptr<PropertyGraphTable> Deserialize(Deserializer &deserializer);
 
-	bool hasTableNameAlias() {
+	bool hasTableNameAlias() const {
 		return !table_name_alias.empty();
 	}
 
-	string ToLower(const std::string &str);
+	unique_ptr<BaseTableRef> CreateBaseTableRef(const string &alias = "") const {
+		auto base_table_ref = make_uniq<BaseTableRef>();
+		base_table_ref->catalog_name = catalog_name;
+		base_table_ref->schema_name = schema_name;
+		base_table_ref->table_name = table_name;
+		base_table_ref->alias = alias.empty() ? "" : alias;
+		return base_table_ref;
+	}
 
 	bool IsSourceTable(const string &table_name);
 };
