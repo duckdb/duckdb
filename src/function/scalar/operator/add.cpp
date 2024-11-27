@@ -90,7 +90,8 @@ template <>
 timestamp_t AddOperator::Operation(date_t left, interval_t right) {
 	if (left == date_t::infinity()) {
 		return timestamp_t::infinity();
-	} else if (left == date_t::ninfinity()) {
+	}
+	if (left == date_t::ninfinity()) {
 		return timestamp_t::ninfinity();
 	}
 	return Interval::Add(Timestamp::FromDatetime(left, dtime_t(0)), right);

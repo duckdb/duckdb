@@ -187,6 +187,7 @@ jobs:
     needs: linux-memory-leaks
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     env:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
@@ -212,6 +213,7 @@ jobs:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     needs: linux-memory-leaks
     env:
       CC: /usr/bin/gcc
@@ -284,6 +286,7 @@ jobs:
      runs-on: ubuntu-latest
      needs: linux-memory-leaks
      container: ubuntu:18.04
+     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
      env:
         GEN: ninja
         DUCKDEBUG: 1
@@ -978,6 +981,7 @@ jobs:
       DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
       DUCKDB_S3_USE_SSL: false
       HTTP_PROXY_PUBLIC: localhost:3128
+      TEST_PERSISTENT_SECRETS_AVAILABLE: true
 
       GEN: ninja
 
@@ -994,6 +998,9 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+    - name: Fix permissions of test secrets
+      shell: bash
+      run: chmod -R 700 data/secrets
 
     # TODO: fix the authenticated proxy here
     - name: Install and run http proxy squid

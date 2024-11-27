@@ -120,6 +120,7 @@ jobs:
     name: Linux Extensions (linux_amd64_gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     needs: linux-python3-9
     env:
       GEN: ninja

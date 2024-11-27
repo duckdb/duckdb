@@ -294,6 +294,7 @@ void StarExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
 	serializer.WritePropertyWithDefault<bool>(205, "unpacked", unpacked, false);
 	serializer.WritePropertyWithDefault<qualified_column_set_t>(206, "qualified_exclude_list", SerializedQualifiedExcludeList(), qualified_column_set_t());
+	serializer.WritePropertyWithDefault<qualified_column_map_t<string>>(207, "rename_list", rename_list, qualified_column_map_t<string>());
 }
 
 unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deserializer) {
@@ -310,6 +311,7 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 	result->columns = columns;
 	result->expr = std::move(expr);
 	result->unpacked = unpacked;
+	deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<string>>(207, "rename_list", result->rename_list, qualified_column_map_t<string>());
 	return std::move(result);
 }
 

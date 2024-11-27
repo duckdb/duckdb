@@ -122,7 +122,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
 		} else if (loption == "write_partition_columns") {
-			write_partition_columns = true;
+			write_partition_columns = GetBooleanArg(context, option.second);
 		} else {
 			stmt.info->options[option.first] = option.second;
 		}

@@ -19,6 +19,7 @@
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/parser/parsed_data/exported_table_data.hpp"
 
 namespace duckdb {
 
@@ -35,6 +36,9 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case ParseInfoType::ATTACH_INFO:
 		result = AttachInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::BOUND_EXPORT_DATA:
+		result = BoundExportData::Deserialize(deserializer);
 		break;
 	case ParseInfoType::COPY_DATABASE_INFO:
 		result = CopyDatabaseInfo::Deserialize(deserializer);
@@ -126,6 +130,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::ADD_COLUMN:
 		result = AddColumnInfo::Deserialize(deserializer);
 		break;
+	case AlterTableType::ADD_CONSTRAINT:
+		result = AddConstraintInfo::Deserialize(deserializer);
+		break;
 	case AlterTableType::ALTER_COLUMN_TYPE:
 		result = ChangeColumnTypeInfo::Deserialize(deserializer);
 		break;
@@ -187,6 +194,17 @@ unique_ptr<AlterTableInfo> AddColumnInfo::Deserialize(Deserializer &deserializer
 	return std::move(result);
 }
 
+void AddConstraintInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<Constraint>>(400, "constraint", constraint);
+}
+
+unique_ptr<AlterTableInfo> AddConstraintInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<AddConstraintInfo>(new AddConstraintInfo());
+	deserializer.ReadPropertyWithDefault<unique_ptr<Constraint>>(400, "constraint", result->constraint);
+	return std::move(result);
+}
+
 void AlterForeignKeyInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(400, "fk_table", fk_table);
@@ -222,6 +240,17 @@ unique_ptr<ParseInfo> AttachInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(201, "path", result->path);
 	deserializer.ReadPropertyWithDefault<unordered_map<string, Value>>(202, "options", result->options);
 	deserializer.ReadPropertyWithExplicitDefault<OnCreateConflict>(203, "on_conflict", result->on_conflict, OnCreateConflict::ERROR_ON_CONFLICT);
+	return std::move(result);
+}
+
+void BoundExportData::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<ExportedTableInfo>>(200, "data", data);
+}
+
+unique_ptr<ParseInfo> BoundExportData::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<BoundExportData>(new BoundExportData());
+	deserializer.ReadPropertyWithDefault<vector<ExportedTableInfo>>(200, "data", result->data);
 	return std::move(result);
 }
 

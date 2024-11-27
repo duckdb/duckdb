@@ -11,6 +11,11 @@
 #ifndef ZSTD_H_235446
 #define ZSTD_H_235446
 
+// DuckDB: just enable everything for amalgamation
+#ifdef DUCKDB_AMALGAMATION
+#define ZSTD_STATIC_LINKING_ONLY
+#endif
+
 /* ======   Dependencies   ======*/
 #include <limits.h>   /* INT_MAX */
 #include <stddef.h>   /* size_t */

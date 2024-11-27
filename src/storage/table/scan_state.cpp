@@ -16,7 +16,7 @@ TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 TableScanState::~TableScanState() {
 }
 
-void TableScanState::Initialize(vector<column_t> column_ids_p, optional_ptr<TableFilterSet> table_filters,
+void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<TableFilterSet> table_filters,
                                 optional_ptr<SampleOptions> table_sampling) {
 	this->column_ids = std::move(column_ids_p);
 	if (table_filters) {
@@ -28,7 +28,7 @@ void TableScanState::Initialize(vector<column_t> column_ids_p, optional_ptr<Tabl
 	}
 }
 
-const vector<column_t> &TableScanState::GetColumnIds() {
+const vector<StorageIndex> &TableScanState::GetColumnIds() {
 	D_ASSERT(!column_ids.empty());
 	return column_ids;
 }
@@ -44,11 +44,12 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 	return sampling_info;
 }
 
-ScanFilter::ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter)
-    : scan_column_index(index), table_column_index(column_ids[index]), filter(filter), always_true(false) {
+ScanFilter::ScanFilter(idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter)
+    : scan_column_index(index), table_column_index(column_ids[index].GetPrimaryIndex()), filter(filter),
+      always_true(false) {
 }
 
-void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<column_t> &column_ids) {
+void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<StorageIndex> &column_ids) {
 	D_ASSERT(!filters.filters.empty());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
@@ -142,7 +143,7 @@ void ColumnScanState::Next(idx_t count) {
 	}
 }
 
-const vector<storage_t> &CollectionScanState::GetColumnIds() {
+const vector<StorageIndex> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
 

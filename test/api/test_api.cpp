@@ -736,3 +736,22 @@ TEST_CASE("Test a logical execute still has types after an optimization pass", "
 	REQUIRE((query_plan->types.size() == 1));
 	REQUIRE((query_plan->types[0].id() == LogicalTypeId::INTEGER));
 }
+
+TEST_CASE("Test SqlStatement::ToString for UPDATE, INSERT, DELETE statements with alias of RETURNING clause", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	std::string sql;
+	con.Query("CREATE TABLE test(id INT);");
+
+	sql = "INSERT INTO test (id) VALUES (1) RETURNING id AS inserted";
+	auto stmts = con.ExtractStatements(sql);
+	REQUIRE(stmts[0]->ToString() == "INSERT INTO test (id ) (VALUES (1)) RETURNING id AS inserted");
+
+	sql = "UPDATE test SET id = 1 RETURNING id AS updated";
+	stmts = con.ExtractStatements(sql);
+	REQUIRE(stmts[0]->ToString() == sql);
+
+	sql = "DELETE FROM test WHERE (id = 1) RETURNING id AS deleted";
+	stmts = con.ExtractStatements(sql);
+	REQUIRE(stmts[0]->ToString() == sql);
+}

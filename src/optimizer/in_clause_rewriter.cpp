@@ -15,8 +15,12 @@ unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator
 	if (op->children.size() == 1) {
 		if (op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op->children[0]->Cast<LogicalGet>();
-			if (get.function.to_string && get.function.to_string(get.bind_data.get()) == "REMOTE") {
-				return op;
+			if (get.function.to_string) {
+				TableFunctionToStringInput input(get.function, get.bind_data.get());
+				auto to_string_result = get.function.to_string(input);
+				if (to_string_result["__text__"] == "REMOTE") {
+					return op;
+				}
 			}
 		}
 		root = std::move(op->children[0]);

@@ -1715,7 +1715,7 @@ void WindowDenseRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 		}
 
 		//	Count the the aligned bits.
-		ValidityMask tail_mask(order_mask.GetData() + begin_idx);
+		ValidityMask tail_mask(order_mask.GetData() + begin_idx, end_idx - begin_idx);
 		lpeer.dense_rank += tail_mask.CountValid(order_end - order_begin);
 	}
 
@@ -1791,7 +1791,15 @@ public:
 	      child_idx(executor.child_idx) {
 	}
 
+	void Finalize(CollectionPtr collection) {
+		if (child_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
+			lock_guard<mutex> ignore_nulls_guard(lock);
+			ignore_nulls = &collection->validities[child_idx];
+		}
+	}
+
 	// IGNORE NULLS
+	mutex lock;
 	ValidityMask all_valid;
 	optional_ptr<ValidityMask> ignore_nulls;
 
@@ -1877,10 +1885,8 @@ unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const 
 
 void WindowValueExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                    CollectionPtr collection) const {
-	if (child_idx != DConstants::INVALID_INDEX && wexpr.ignore_nulls) {
-		auto &gvstate = gstate.Cast<WindowValueGlobalState>();
-		gvstate.ignore_nulls = &collection->validities[child_idx];
-	}
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
+	gvstate.Finalize(collection);
 
 	WindowExecutor::Finalize(gstate, lstate, collection);
 }
@@ -2140,10 +2146,10 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 		}
 		// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
 		// returns NULL if there is no such row.
-		if (nth_col.CellIsNull(row_idx)) {
+		if (nth_col.CellIsNull(i)) {
 			FlatVector::SetNull(result, i, true);
 		} else {
-			auto n_param = nth_col.GetCell<int64_t>(row_idx);
+			auto n_param = nth_col.GetCell<int64_t>(i);
 			if (n_param < 1) {
 				FlatVector::SetNull(result, i, true);
 			} else {

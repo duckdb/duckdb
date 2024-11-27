@@ -46,12 +46,12 @@ struct CreateIndexInfo : public CreateInfo {
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
-
 	string ToString() const override;
-	vector<string> ExpressionsToList() const;
-	string ExpressionsToString() const;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+
+	vector<string> ExpressionsToList() const;
+	string ExpressionsToString() const;
 };
 
 } // namespace duckdb

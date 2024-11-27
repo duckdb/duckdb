@@ -88,7 +88,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
-		auto fname = SQLLogicTestRunner::LoopReplacement(values[0], context.running_loops);
+		auto fname = runner.LoopReplacement(values[0], context.running_loops);
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {

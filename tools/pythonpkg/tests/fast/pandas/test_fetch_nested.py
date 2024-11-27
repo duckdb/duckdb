@@ -433,8 +433,8 @@ class TestFetchNested(object):
             'a': [
                 {'i': 1, 'j': 2},
                 {'i': 1, 'j': 2},
-                np.nan,
-                np.nan
+                pd.NA,
+                pd.NA
             ]
         }),
         ("""
@@ -454,8 +454,8 @@ class TestFetchNested(object):
                     '1':3,
                     '2':4
                 },
-                np.nan,
-                np.nan
+                pd.NA,
+                pd.NA
             ]
         }),
     ])

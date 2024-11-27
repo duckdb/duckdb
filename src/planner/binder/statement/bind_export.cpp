@@ -188,7 +188,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
 
-	BoundExportData exported_tables;
+	auto exported_tables = make_uniq<BoundExportData>();
 
 	unordered_set<string> table_name_index;
 	vector<unique_ptr<LogicalOperator>> export_nodes;
@@ -241,7 +241,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		exported_data.file_path = info->file_path;
 
 		ExportedTableInfo table_info(table, std::move(exported_data), not_null_columns);
-		exported_tables.data.push_back(table_info);
+		exported_tables->data.push_back(table_info);
 		id++;
 
 		// generate the copy statement and bind it
@@ -266,7 +266,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	stmt.info->catalog = catalog;
 	// create the export node
-	auto export_node = make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), exported_tables);
+	auto export_node =
+	    make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), std::move(exported_tables));
 
 	if (child_operator) {
 		export_node->children.push_back(std::move(child_operator));
