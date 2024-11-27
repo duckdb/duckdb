@@ -401,6 +401,15 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	}
 }
 
+static FilterPropagateResult CheckRowIdFilter(TableFilter &filter, idx_t beg_row, idx_t end_row) {
+	// RowId columns dont have a zonemap, but we can trivially create stats to check the filter against.
+	BaseStatistics dummy_stats = NumericStats::CreateEmpty(LogicalType::ROW_TYPE);
+	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
+	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row));
+
+	return filter.CheckStatistics(dummy_stats);
+}
+
 bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 	auto &filter_list = filters.GetFilterList();
 	// new row group - label all filters as up for grabs again
@@ -409,7 +418,15 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		auto &entry = filter_list[i];
 		auto &filter = entry.filter;
 		auto base_column_index = entry.table_column_index;
-		auto prune_result = GetColumn(base_column_index).CheckZonemap(filter);
+
+		FilterPropagateResult prune_result;
+
+		if (base_column_index == COLUMN_IDENTIFIER_ROW_ID) {
+			prune_result = CheckRowIdFilter(filter, this->start, this->start + this->count);
+		} else {
+			prune_result = GetColumn(base_column_index).CheckZonemap(filter);
+		}
+
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
@@ -472,7 +489,13 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		auto base_column_idx = entry.table_column_index;
 		auto &filter = entry.filter;
 
-		auto prune_result = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], filter);
+		FilterPropagateResult prune_result;
+		if (base_column_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			prune_result = CheckRowIdFilter(filter, this->start, this->start + this->count);
+		} else {
+			prune_result = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], filter);
+		}
+
 		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			continue;
 		}
@@ -613,9 +636,39 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						continue;
 					}
 					auto scan_idx = filter.scan_column_index;
-					auto &col_data = GetColumn(filter.table_column_index);
-					col_data.Select(transaction, state.vector_index, state.column_scans[scan_idx],
-					                result.data[scan_idx], sel, approved_tuple_count, filter.filter);
+					auto column_idx = filter.table_column_index;
+
+					if (column_idx == COLUMN_IDENTIFIER_ROW_ID) {
+						// We do another quick statistics scan for row ids here
+						const auto rowid_start = this->start + current_row;
+						const auto rowid_end = this->start + current_row + count;
+						const auto prune_result = CheckRowIdFilter(filter.filter, rowid_start, rowid_end);
+						if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+							// We can just break out of the loop here.
+							approved_tuple_count = 0;
+							break;
+						}
+
+						// Generate row ids
+						D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
+						result.data[i].Sequence(UnsafeNumericCast<int64_t>(this->start + current_row), 1, count);
+
+						// Was this filter always true? If so, we dont need to apply it
+						if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+							continue;
+						}
+
+						// Now apply the filter
+						UnifiedVectorFormat vdata;
+						result.data[i].ToUnifiedFormat(count, vdata);
+						ColumnSegment::FilterSelection(sel, result.data[i], vdata, filter.filter, count,
+						                               approved_tuple_count);
+
+					} else {
+						auto &col_data = GetColumn(filter.table_column_index);
+						col_data.Select(transaction, state.vector_index, state.column_scans[scan_idx],
+						                result.data[scan_idx], sel, approved_tuple_count, filter.filter);
+					}
 				}
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
