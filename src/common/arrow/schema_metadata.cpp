@@ -61,12 +61,9 @@ ArrowSchemaMetadata ArrowSchemaMetadata::DuckDBInternalType(const string &type_n
 	ArrowSchemaMetadata metadata;
 	metadata.AddOption(ARROW_EXTENSION_NAME, ARROW_EXTENSION_NON_CANONICAL);
 	// We have to set the metadata key with type_name and vendor_name.
-	std::ostringstream metadata_key;
-	metadata_key << "{\"type_name\": \"";
-	metadata_key << type_name;
-	// Vendor name is always DuckDB
-	metadata_key << "\", \"vendor_name\": \"DuckDB\"}";
-	metadata.AddOption(ARROW_METADATA_KEY, metadata_key.str());
+	metadata.extension_metadata_map["vendor_name"] = "DuckDB";
+	metadata.extension_metadata_map["type_name"] = type_name;
+	metadata.AddOption(ARROW_METADATA_KEY, StringUtil::ToJSONMap(metadata.extension_metadata_map));
 	return metadata;
 }
 
