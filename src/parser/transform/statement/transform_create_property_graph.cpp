@@ -177,8 +177,10 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 				info->label_map[label] = pg_table;
 			}
 			info->label_map[pg_table->main_label] = pg_table;
-			pg_table->source_pg_table = info->label_map[pg_table->source_reference];
-			pg_table->destination_pg_table = info->label_map[pg_table->destination_reference];
+			pg_table->source_pg_table = info->GetTableByName(pg_table->source_reference);
+			D_ASSERT(pg_table->source_pg_table);
+			pg_table->destination_pg_table = info->GetTableByName(pg_table->destination_reference);
+			D_ASSERT(pg_table->destination_pg_table);
 			info->edge_tables.push_back(std::move(pg_table));
 		}
 	}
