@@ -124,6 +124,7 @@ public:
 
 	//! Returns true if the needle string exists in the haystack
 	DUCKDB_API static bool Contains(const string &haystack, const string &needle);
+	DUCKDB_API static bool Contains(const string &haystack, const char &needle_char);
 
 	//! Returns the position of needle string within the haystack
 	DUCKDB_API static optional_idx Find(const string &haystack, const string &needle);
@@ -139,6 +140,10 @@ public:
 
 	//! Split the input string based on newline char
 	DUCKDB_API static vector<string> Split(const string &str, char delimiter);
+
+	//! Split the input string, ignore delimiters within parentheses. Note: leading/trailing spaces are NOT stripped
+	DUCKDB_API static vector<string> SplitWithParentheses(const string &str, char delimiter = ',', char par_open = '(',
+	                                                      char par_close = ')');
 
 	//! Split the input string allong a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');

@@ -32,6 +32,27 @@ def create_pyarrow_dataset(rel):
     return ds.dataset(table)
 
 
+def test_decimal_filter_pushdown(duckdb_cursor):
+    pl = pytest.importorskip("polars")
+    np = pytest.importorskip("numpy")
+    np.random.seed(10)
+
+    df = pl.DataFrame({'x': pl.Series(np.random.uniform(-10, 10, 1000)).cast(pl.Decimal(18, 4))})
+
+    query = """
+        SELECT
+            x,
+            x > 0.05 AS is_x_good,
+            x::FLOAT > 0.05 AS is_float_x_good
+        FROM {}
+        WHERE
+            is_x_good
+        ORDER BY x ASC
+    """
+
+    assert len(duckdb_cursor.sql(query.format("df")).fetchall()) == 495
+
+
 def numeric_operators(connection, data_type, tbl_name, create_table):
     connection.execute(
         f"""
