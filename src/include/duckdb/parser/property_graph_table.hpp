@@ -80,11 +80,12 @@ public:
 		return !table_name_alias.empty();
 	}
 
-	unique_ptr<BaseTableRef> CreateBaseTableRef() const {
+	unique_ptr<BaseTableRef> CreateBaseTableRef(const string &alias = "") const {
 		auto base_table_ref = make_uniq<BaseTableRef>();
 		base_table_ref->catalog_name = catalog_name;
 		base_table_ref->schema_name = schema_name;
 		base_table_ref->table_name = table_name;
+		base_table_ref->alias = alias.empty() ? "" : alias;
 		return base_table_ref;
 	}
 
