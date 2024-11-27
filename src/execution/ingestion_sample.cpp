@@ -17,6 +17,12 @@ idx_t IngestionSample::GetActiveSampleCount() const {
 	return ret;
 }
 
+void PrintSel(SelectionVector sel, idx_t length) {
+	for (idx_t i = 0; i < length; i++) {
+		Printer::Print("Sel " + std::to_string(i) + " maps to " + std::to_string(sel[i]));
+	}
+}
+
 unique_ptr<DataChunk> IngestionSample::GetChunk(idx_t offset) {
 	throw InternalException("Invalid Call to Get Chunk");
 }
@@ -30,56 +36,6 @@ unique_ptr<DataChunk> IngestionSample::CreateNewSampleChunk(vector<LogicalType> 
 	new_sample_chunk->Initialize(Allocator::DefaultAllocator(), types, size);
 	return new_sample_chunk;
 }
-
-// SelectionVectorHelper IngestionSample::GetSelToCopyData(idx_t sel_size) const {
-// 	SelectionVectorHelper ret;
-// 	ret.sel = SelectionVector(sel);
-// 	ret.size = sel_size;
-// 	return ret;
-
-// if (SamplingState() == SamplingMode::FAST) {
-// 	D_ASSERT(GetActiveSampleCount() >= sel_size);
-// 	auto indexes_copy = actual_sample_indexes;
-// 	return SelFromSimpleIndexes(indexes_copy);
-// }
-// D_ASSERT(base_reservoir_sample->reservoir_weights.size() >= sel_size);
-// auto base_copy = base_reservoir_sample->Copy();
-// vector<std::pair<double, idx_t>> weights_indexes;
-// D_ASSERT(sel_size <= base_copy->reservoir_weights.size());
-// for (idx_t i = 0; i < sel_size; i++) {
-// 	weights_indexes.push_back(base_copy->reservoir_weights.top());
-// 	base_copy->reservoir_weights.pop();
-// }
-// // create one large chunk from the collected chunk samples.
-// D_ASSERT(sample_chunk->size() != 0);
-//
-// // set up selection vector to copy IngestionSample to ReservoirSample
-// return SelFromReservoirWeights(weights_indexes);
-// }
-
-// Get a selection vector referring to the actual sample when the sample is in "Slow" mode
-// SelectionVectorHelper IngestionSample::SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes)
-// const { 	idx_t sample_to_keep = weights_indexes.size(); 	SampleCopyHelper ret; 	ret.sel =
-// SelectionVector(sample_to_keep); 	for (idx_t i = 0; i < sample_to_keep; i++) { 		ret.sel.set_index(i,
-// weights_indexes[i].second); 		ret.reservoir_weights.emplace(weights_indexes[i].first, i);
-// 	}
-// 	return ret;
-// }
-//
-// // Get a selection vector referring to the actual sample when the sample is in "Fast" mode
-// SelectionVectorHelper IngestionSample::SelFromSimpleIndexes(vector<idx_t> &actual_indexes) const {
-// 	idx_t sample_to_keep = actual_indexes.size();
-// 	SampleCopyHelper ret;
-// 	ret.sel = SelectionVector(sample_to_keep);
-// 	vector<idx_t> new_indexes;
-// 	// reservoir weights should be empty. We are about to construct them again with indexes in the new_sample_chunk
-// 	for (idx_t i = 0; i < sample_to_keep; i++) {
-// 		new_indexes.push_back(i);
-// 		ret.sel.set_index(i, actual_indexes[i]);
-// 	}
-// 	ret.actual_indexes = new_indexes;
-// 	return ret;
-// }
 
 SamplingMode IngestionSample::SamplingState() const {
 	if (base_reservoir_sample->reservoir_weights.empty()) {
@@ -149,6 +105,7 @@ unique_ptr<BlockingSample> IngestionSample::Copy() const {
 
 void IngestionSample::ConvertToSlowSample() {
 	D_ASSERT(sel_size == STANDARD_VECTOR_SIZE);
+	PrintSel(sel, sel_size);
 	base_reservoir_sample->FillWeights(sel, sel_size);
 }
 
@@ -374,6 +331,7 @@ idx_t IngestionSample::GetTuplesSeen() {
 	return base_reservoir_sample->num_entries_seen_total;
 }
 
+
 unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 	Shrink();
 	Verify();
@@ -413,6 +371,7 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 	// TODO: We can use update append for this, but UpdateAppend needs to be fixed
 	//       to update append to a random chunk
 	D_ASSERT(sample_chunk->GetTypes() == ret->reservoir_chunk->chunk.GetTypes());
+	PrintSel(sel, sel_size);
 	for (idx_t i = 0; i < sample_chunk->ColumnCount(); i++) {
 		auto col_type = types[i];
 		if (ValidSampleType(col_type)) {
