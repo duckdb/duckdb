@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-CSVReaderOptions::CSVReaderOptions(CSVOption<char> single_byte_delimiter, CSVOption<string> multi_byte_delimiter) {
+CSVReaderOptions::CSVReaderOptions(CSVOption<char> single_byte_delimiter, const CSVOption<string>& multi_byte_delimiter) {
 	if (multi_byte_delimiter.GetValue().empty()) {
 		char single_byte_value = single_byte_delimiter.GetValue();
 		string value(1, single_byte_value);
