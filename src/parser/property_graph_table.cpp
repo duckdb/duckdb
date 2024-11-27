@@ -53,7 +53,7 @@ string PropertyGraphTable::ToString() const {
 				result += source_fk[i] + ") ";
 			}
 		}
-		result += " REFERENCES " + source_reference + " (";
+		result += " REFERENCES " + source_pg_table->ToString() + " (";
 		for (idx_t i = 0; i < source_pk.size(); i++) {
 			if (i != source_pk.size() - 1) {
 				result += source_pk[i] + ", ";
@@ -71,7 +71,7 @@ string PropertyGraphTable::ToString() const {
 				result += destination_fk[i] + ") ";
 			}
 		}
-		result += " REFERENCES " + destination_reference + " (";
+		result += " REFERENCES " + destination_pg_table->ToString() + " (";
 		for (idx_t i = 0; i < destination_pk.size(); i++) {
 			if (i != destination_pk.size() - 1) {
 				result += destination_pk[i] + ", ";
@@ -192,6 +192,10 @@ bool PropertyGraphTable::Equals(const PropertyGraphTable *other_p) const {
 		return false;
 	}
 
+	if (source_pg_table != other->source_pg_table) {
+		return false;
+	}
+
 	if (destination_fk.size() != other->destination_fk.size()) {
 		return false;
 	}
@@ -210,6 +214,10 @@ bool PropertyGraphTable::Equals(const PropertyGraphTable *other_p) const {
 		}
 	}
 	if (destination_reference != other->destination_reference) {
+		return false;
+	}
+
+	if (destination_pg_table != other->destination_pg_table) {
 		return false;
 	}
 
@@ -241,6 +249,9 @@ void PropertyGraphTable::Serialize(Serializer &serializer) const {
 		serializer.WriteProperty(115, "destination_pk", destination_pk);
 		serializer.WriteProperty(116, "destination_fk", destination_fk);
 		serializer.WriteProperty(117, "destination_reference", destination_reference);
+
+		serializer.WriteProperty(118, "source_pg_table", source_pg_table);
+		serializer.WriteProperty(119, "destination_pg_table", destination_pg_table);
 	}
 }
 
@@ -269,22 +280,15 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &des
 		deserializer.ReadProperty(115, "destination_pk", pg_table->destination_pk);
 		deserializer.ReadProperty(116, "destination_fk", pg_table->destination_fk);
 		deserializer.ReadProperty(117, "destination_reference", pg_table->destination_reference);
+
+		deserializer.ReadProperty(118, "source_pg_table", pg_table->source_pg_table);
+		deserializer.ReadProperty(119, "destination_pg_table", pg_table->destination_pg_table);
 	}
 	return pg_table;
 }
 
-
-// Helper function to convert a string to lowercase
-string PropertyGraphTable::ToLower(const std::string &str) {
-	string result = str;
-	transform(result.begin(), result.end(), result.begin(),
-				   [](unsigned char c){ return std::tolower(c); });
-	return result;
-}
-
-
 bool PropertyGraphTable::IsSourceTable(const string& table_name) {
-	return ToLower(this->source_reference) == ToLower(table_name);
+	return StringUtil::Lower(this->source_reference) == StringUtil::Lower(table_name);
 }
 
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {

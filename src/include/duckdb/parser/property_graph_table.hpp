@@ -56,11 +56,15 @@ public:
 
 	string source_reference;
 
+	shared_ptr<PropertyGraphTable> source_pg_table;
+
 	vector<string> destination_fk;
 
 	vector<string> destination_pk;
 
 	string destination_reference;
+
+	shared_ptr<PropertyGraphTable> destination_pg_table;
 
 public:
 	string ToString() const;
@@ -83,8 +87,6 @@ public:
 		base_table_ref->table_name = table_name;
 		return base_table_ref;
 	}
-
-	string ToLower(const std::string &str);
 
 	bool IsSourceTable(const string &table_name);
 };
