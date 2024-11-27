@@ -170,7 +170,7 @@ REFERENCE_LIST = ['ClientContext', 'bound_parameter_map_t']
 
 
 def is_container(type):
-    return '<' in type
+    return '<' in type and 'CSVOption' not in type
 
 
 def is_pointer(type):

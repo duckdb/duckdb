@@ -256,7 +256,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	auto encoding = deserializer.ReadPropertyWithDefault<string>(139, "encoding");
 	auto dialect_options_state_machine_options_rfc_4180 = deserializer.ReadProperty<CSVOption<bool>>(140, "rfc_4180");
 	auto multi_byte_delimiter = deserializer.ReadProperty<CSVOption<string>>(141, "multi_byte_delimiter");
-	CSVReaderOptions result(std::move(dialect_options_state_machine_options_delimiter), std::move(multi_byte_delimiter));
+	CSVReaderOptions result(dialect_options.state_machine_options.delimiter, multi_byte_delimiter);
 	result.ignore_errors = ignore_errors;
 	result.buffer_sample_size = buffer_sample_size;
 	result.null_str = std::move(null_str);
@@ -276,25 +276,25 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	result.force_quote = std::move(force_quote);
 	result.rejects_table_name = std::move(rejects_table_name);
 	result.rejects_limit = rejects_limit;
-	result.dialect_options.state_machine_options.quote = std::move(dialect_options_state_machine_options_quote);
-	result.dialect_options.state_machine_options.escape = std::move(dialect_options_state_machine_options_escape);
-	result.dialect_options.header = std::move(dialect_options_header);
+	result.dialect_options.state_machine_options.quote = dialect_options_state_machine_options_quote;
+	result.dialect_options.state_machine_options.escape = dialect_options_state_machine_options_escape;
+	result.dialect_options.header = dialect_options_header;
 	result.dialect_options.num_cols = dialect_options_num_cols;
-	result.dialect_options.state_machine_options.new_line = std::move(dialect_options_state_machine_options_new_line);
-	result.dialect_options.skip_rows = std::move(dialect_options_skip_rows);
-	result.dialect_options.date_format = std::move(dialect_options_date_format);
+	result.dialect_options.state_machine_options.new_line = dialect_options_state_machine_options_new_line;
+	result.dialect_options.skip_rows = dialect_options_skip_rows;
+	result.dialect_options.date_format = dialect_options_date_format;
 	result.sniffer_user_mismatch_error = std::move(sniffer_user_mismatch_error);
 	result.parallel = parallel;
 	result.was_type_manually_set = std::move(was_type_manually_set);
-	result.rejects_scan_name = std::move(rejects_scan_name);
+	result.rejects_scan_name = rejects_scan_name;
 	result.name_list = std::move(name_list);
 	result.sql_type_list = std::move(sql_type_list);
 	result.sql_types_per_column = std::move(sql_types_per_column);
 	result.columns_set = columns_set;
-	result.dialect_options.state_machine_options.comment = std::move(dialect_options_state_machine_options_comment);
+	result.dialect_options.state_machine_options.comment = dialect_options_state_machine_options_comment;
 	result.dialect_options.rows_until_header = dialect_options_rows_until_header;
 	result.encoding = std::move(encoding);
-	result.dialect_options.state_machine_options.rfc_4180 = std::move(dialect_options_state_machine_options_rfc_4180);
+	result.dialect_options.state_machine_options.rfc_4180 = dialect_options_state_machine_options_rfc_4180;
 	return result;
 }
 
