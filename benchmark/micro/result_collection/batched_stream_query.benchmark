@@ -9,8 +9,9 @@ subgroup result_collection
 resultmode streaming
 
 load
+set streaming_buffer_size = '100gb';
 create table tbl (a varchar);
-insert into tbl select 'this is a long string' from range(100000000)
+insert into tbl select 'this is a long string' from range(500000000) t(i) where i % 20 == 0;
 
 run
 select * from tbl;

@@ -2,14 +2,12 @@
 # description: Test nullpadding setting
 # group: [csv]
 
-require vector_size 512
-
 statement ok
 PRAGMA enable_verification
 
 # null padding with a header
 query IIII
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True)
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True, comment = '')
 ----
 one	two	three	four
 1	a	alice	NULL
@@ -25,7 +23,7 @@ one,two,three,four
 2,b,bob
 
 query I
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1, header = 0)
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1, header = 0, comment = '')
 ----
 one,two,three,four
 1,a,alice

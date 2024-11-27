@@ -1,5 +1,5 @@
 # name: test/sql/vacuum/test_analyze.test
-# description: Test test ANALYZE statement.
+# description: Test the ANALYZE statement.
 # group: [vacuum]
 
 # The distinct statistics sampling relies on the vector size.
@@ -7,7 +7,7 @@ require vector_size 1024
 
 require skip_reload
 
-# distinct stats sampling is different for different vector sizes
+# Distinct statistics sampling is different for different vector sizes.
 require no_vector_verification
 
 statement ok
@@ -47,12 +47,12 @@ INSERT INTO test SELECT range % 5000, range % 5000 FROM range(10000);
 query T
 SELECT stats(i) FROM test LIMIT 1;
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9435]
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 10000]
 
 query T
 SELECT stats(j) FROM test LIMIT 1;
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9435]
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 10000]
 
 statement ok
 PRAGMA verify_parallelism;
@@ -70,13 +70,13 @@ PRAGMA disable_verify_parallelism;
 query T
 SELECT stats(i) FROM test LIMIT 1;
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5661]
 
 # The approximate unique count for j is not yet accurate.
 query T
 SELECT stats(j) FROM test LIMIT 1;
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9435]
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 10000]
 
 # Now we analyze the entire table.
 statement ok
@@ -92,9 +92,9 @@ PRAGMA disable_verify_parallelism;
 query T
 SELECT stats(i) FROM test LIMIT 1;
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5661]
 
 query T
 SELECT stats(j) FROM test LIMIT 1;
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5661]

@@ -14,3 +14,6 @@ torch
 polars
 adbc_driver_manager
 tensorflow
+cxxheaderparser
+pcpp
+pyspark

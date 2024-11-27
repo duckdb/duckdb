@@ -7,7 +7,7 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
-foreach type TIMESTAMP TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S
+foreach type TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
 
 statement ok
 CREATE OR REPLACE TABLE timestamps(d ${type})
@@ -41,3 +41,39 @@ SELECT typeof(d) FROM '__TEST_DIR__/timestamps.parquet' LIMIT 1
 TIMESTAMP
 
 endloop
+
+# Nanoseconds are their own type
+statement ok
+CREATE OR REPLACE TABLE timestamps(d TIMESTAMP_NS)
+
+statement ok
+INSERT INTO timestamps VALUES
+    ('1992-01-01 12:03:27.123456789'),
+    ('1900-01-01 03:08:47.987654321'),
+    (NULL),
+    ('2020-09-27 13:12:01')
+
+query I nosort ns_scan
+SELECT * FROM timestamps
+----
+1992-01-01 12:03:27.123456789
+1900-01-01 03:08:47.987654321
+NULL
+2020-09-27 13:12:01
+
+statement ok
+COPY timestamps TO '__TEST_DIR__/timestamps.parquet' (FORMAT 'parquet');
+
+query I nosort ns_scan
+SELECT * FROM '__TEST_DIR__/timestamps.parquet'
+----
+
+query I
+SELECT * FROM '__TEST_DIR__/timestamps.parquet' WHERE d='1992-01-01 12:03:27.123456789'
+----
+1992-01-01 12:03:27.123456789
+
+query I
+SELECT typeof(d) FROM '__TEST_DIR__/timestamps.parquet' LIMIT 1
+----
+TIMESTAMP_NS

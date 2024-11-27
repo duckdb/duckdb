@@ -26,7 +26,6 @@ struct PerfectHashJoinStats {
 	Value probe_max;
 	bool is_build_small = false;
 	bool is_build_dense = false;
-	bool is_probe_in_domain = false;
 	idx_t build_range = 0;
 	idx_t estimated_cardinality = 0;
 };
@@ -42,8 +41,8 @@ public:
 	bool CanDoPerfectHashJoin();
 
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context);
-	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                         OperatorState &state);
+	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &lhs_output_columns,
+	                                         DataChunk &chunk, OperatorState &state);
 	bool BuildPerfectHashTable(LogicalType &type);
 
 private:

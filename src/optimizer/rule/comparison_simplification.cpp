@@ -3,6 +3,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 
 namespace duckdb {
 
@@ -16,6 +17,7 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 
 unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                            bool &changes_made, bool is_root) {
+
 	auto &expr = bindings[0].get().Cast<BoundComparisonExpression>();
 	auto &constant_expr = bindings[1].get();
 	bool column_ref_left = expr.left.get() != &constant_expr;
@@ -45,7 +47,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// Can we cast the constant at all?
 		string error_message;
 		Value cast_constant;
-		auto new_constant = constant_value.DefaultTryCastAs(target_type, cast_constant, &error_message, true);
+		auto new_constant =
+		    constant_value.TryCastAs(rewriter.context, target_type, cast_constant, &error_message, true);
 		if (!new_constant) {
 			return nullptr;
 		}
@@ -55,7 +58,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		    !BoundCastExpression::CastIsInvertible(cast_expression.return_type, target_type)) {
 			// Is it actually invertible?
 			Value uncast_constant;
-			if (!cast_constant.DefaultTryCastAs(constant_value.type(), uncast_constant, &error_message, true) ||
+			if (!cast_constant.TryCastAs(rewriter.context, constant_value.type(), uncast_constant, &error_message,
+			                             true) ||
 			    uncast_constant != constant_value) {
 				return nullptr;
 			}

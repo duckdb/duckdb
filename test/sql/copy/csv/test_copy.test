@@ -2,13 +2,17 @@
 # description: Test copy statement
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
+
 # generate CSV file with ',' as delimiter and complex strings
 # load CSV file into a table
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/test.csv';
+COPY test FROM 'data/csv/test/test.csv';
 ----
 5000
 
@@ -53,6 +57,7 @@ CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
 statement error
 COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0);
 ----
+It was not possible to automatically detect the CSV Parsing dialect
 
 # create CSV file from query
 query I
@@ -102,64 +107,77 @@ SELECT * FROM test4 ORDER BY 1 LIMIT 3;
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP ',', HEADER 0.2);
 ----
+"header" expects a boolean value (e.g. TRUE or 1)
 
 # empty delimiter
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP);
 ----
+"sep" expects a single argument as a string value
 
 # number as delimiter
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP 1);
 ----
+"sep" expects a string argument!
 
 # multiple format options
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'json');
 ----
+Copy Function with name "json" is not in the catalog, but it exists in the json extension.
 
 # number as escape string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE 1);
 ----
+"escape" expects a string argument!
 
 # no escape string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE);
 ----
+"escape" expects a single argument as a string value
 
 # number as quote string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE 1);
 ----
+"quote" expects a string argument!
 
 # no quote string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE);
 ----
+"quote" expects a single argument as a string value
 
 # no format string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT);
 ----
+Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
 
 # encoding must not be empty and must have the correct parameter type and value
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING);
 ----
+"encoding" expects a single argument as a string value
 
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 42);
 ----
+"encoding" expects a string argument!
 
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 'utf-42');
 ----
+The CSV Reader does not support the encoding: "utf-42"
 
 # don't allow for non-existant copy options
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (MAGIC '42');
 ----
+Unrecognized option for CSV reader "magic"
 
 # Try new_line option
 query I
@@ -232,34 +250,36 @@ statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/test_pipe.csv' (SEPARATOR '|');
+COPY test FROM 'data/csv/test/test_pipe.csv' (SEPARATOR '|');
 ----
 10
 
 # throw exception if a line contains too many values
 statement error
-COPY test FROM 'test/sql/copy/csv/data/test/too_many_values.csv';
+COPY test FROM 'data/csv/test/too_many_values.csv';
 ----
+It was not possible to automatically detect the CSV Parsing dialect
 
 # test default null string
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/test_null_csv.csv' DELIMITER '|';
+COPY test FROM 'data/csv/test/test_null_csv.csv' DELIMITER '|';
 ----
 1
 
 # test invalid UTF-8
 statement error
-COPY test FROM 'test/sql/copy/csv/data/test/invalid_utf.csv' DELIMITER '|';
+COPY test FROM 'data/csv/test/invalid_utf.csv' DELIMITER '|';
 ----
+Invalid unicode (byte sequence mismatch) detected.
 
 # empty file
 statement ok
 CREATE TABLE empty_table (a INTEGER, b INTEGER, c VARCHAR(10));
 
 statement error
-COPY empty_table FROM 'test/sql/copy/csv/data/test/empty.csv' (HEADER 0);
+COPY empty_table FROM 'data/csv/test/empty.csv' (HEADER 0);
 ----
-CSV options could not be auto-detected. Consider setting parser options manually.
+It was not possible to automatically detect the CSV Parsing dialect
 
 
 # unterminated quotes
@@ -267,7 +287,7 @@ statement ok
 CREATE TABLE unterminated (a VARCHAR);
 
 statement error
-COPY unterminated FROM 'test/sql/copy/csv/data/test/unterminated.csv' (HEADER 0, AUTO_DETECT FALSE);
+COPY unterminated FROM 'data/csv/test/unterminated.csv' (HEADER 0, AUTO_DETECT FALSE);
 ----
 Value with unterminated quote found.
 
@@ -277,7 +297,7 @@ statement ok
 CREATE TABLE vsize (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY vsize FROM 'test/sql/copy/csv/data/test/vsize.csv';
+COPY vsize FROM 'data/csv/test/vsize.csv';
 ----
 1024
 

@@ -21,7 +21,7 @@ INSERT INTO t2 SELECT * FROM range(100)
 query II
 EXPLAIN SELECT * FROM t1 INNER JOIN t2 on t1.a = t2.a + 1
 ----
-physical_plan	<REGEX>:.*Build Min: 0.*Build Max: 9.*
+physical_plan	<REGEX>:.*Build Min:.*\s0\s.*Build Max:.*\s9\s.*
 
 
 statement ok

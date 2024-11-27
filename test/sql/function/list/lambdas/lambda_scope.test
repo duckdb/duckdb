@@ -1,8 +1,8 @@
 # name: test/sql/function/list/lambdas/lambda_scope.test
-# description: Test the scoping of lambda variables
+# description: Test the scoping of lambda variables.
 # group: [lambdas]
 
-# lambda parameters have precedence over columns
+# Lambda parameters have precedence over columns.
 
 statement ok
 CREATE TABLE t1 AS SELECT [1, 2, 3] AS x;

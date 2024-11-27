@@ -15,3 +15,93 @@ from (values
 3	5
 4	NULL
 5	NULL
+
+# Lag > 2 with explicit constant default
+statement ok
+create table win(id int, v int, t int, f float, s varchar);
+
+statement ok
+insert into win values
+	(1, 1, 2, 0.54, 'h'),
+	(1, 1, 1, 0.21, 'e'),
+	(1, 2, 3, 0.001, 'l'),
+	(2, 10, 4, 0.04, 'l'),
+	(2, 11, -1, 10.45, 'o'),
+	(3, -1, 0, 13.32, ','),
+	(3, 5, -2, 9.87, 'wor'),
+	(3, null, 10, 6.56, 'ld'); 
+
+query IIII
+select id, v, t, lag(v, 2, NULL) over (partition by id order by t asc)
+from win
+order by id, t
+----
+1	1	1	NULL
+1	1	2	NULL
+1	2	3	1
+2	11	-1	NULL
+2	10	4	NULL
+3	5	-2	NULL
+3	-1	0	NULL
+3	NULL	10	5
+
+# Shifted lead optimisation with hash collisions
+statement ok
+CREATE TABLE issue14398 (date DATE, "group" INT, count INT, status STRING);
+
+statement ok
+INSERT INTO issue14398 VALUES
+('2024-01-01', 1, 1000, 'ordered'),
+('2024-02-01', 1, 1000, 'dispatched'),
+('2024-03-01', 1, 1000, 'dispatched'),
+('2024-01-01', 2, 2000, 'ordered'),
+('2024-02-01', 2, 2000, 'ordered'),
+('2024-03-01', 2, 2000, 'ordered'),
+('2024-01-01', 3, 3000, 'ordered'),
+('2024-02-01', 3, 3000, 'ordered'),
+('2024-03-01', 3, 3000, 'late'),
+('2024-01-01', 4, 4000, 'ordered'),
+('2024-02-01', 4, 4000, 'ordered'),
+('2024-03-01', 4, 4000, 'ordered'),
+('2024-01-01', 5, 5000, 'ordered'),
+('2024-02-01', 5, 5000, 'late'),
+('2024-03-01', 5, 5000, 'ordered'),
+('2024-01-01', 6, 1000, 'dispatched'),
+('2024-02-01', 6, 1000, 'dispatched'),
+('2024-03-01', 6, 1000, 'dispatched'),
+('2024-01-01', 7, 1000, 'late'),
+('2024-02-01', 7, 1000, 'dispatched'),
+('2024-03-01', 7, 1000, 'dispatched');
+
+query IIIIII
+SELECT
+  "t0"."date",
+  "t0"."group",
+  "t0"."count",
+  "t0"."status",
+  LEAD("t0"."date", 2) OVER (PARTITION BY "t0"."group" ORDER BY "t0"."date" ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS "end_date",
+  LEAD("t0"."status", 2) OVER (PARTITION BY "t0"."group" ORDER BY "t0"."date" ASC ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS "end_status"
+FROM "issue14398" AS "t0"
+ORDER BY 2, 1
+----
+2024-01-01	1	1000	ordered	2024-03-01	dispatched
+2024-02-01	1	1000	dispatched	NULL	NULL
+2024-03-01	1	1000	dispatched	NULL	NULL
+2024-01-01	2	2000	ordered	2024-03-01	ordered
+2024-02-01	2	2000	ordered	NULL	NULL
+2024-03-01	2	2000	ordered	NULL	NULL
+2024-01-01	3	3000	ordered	2024-03-01	late
+2024-02-01	3	3000	ordered	NULL	NULL
+2024-03-01	3	3000	late	NULL	NULL
+2024-01-01	4	4000	ordered	2024-03-01	ordered
+2024-02-01	4	4000	ordered	NULL	NULL
+2024-03-01	4	4000	ordered	NULL	NULL
+2024-01-01	5	5000	ordered	2024-03-01	ordered
+2024-02-01	5	5000	late	NULL	NULL
+2024-03-01	5	5000	ordered	NULL	NULL
+2024-01-01	6	1000	dispatched	2024-03-01	dispatched
+2024-02-01	6	1000	dispatched	NULL	NULL
+2024-03-01	6	1000	dispatched	NULL	NULL
+2024-01-01	7	1000	late	2024-03-01	dispatched
+2024-02-01	7	1000	dispatched	NULL	NULL
+2024-03-01	7	1000	dispatched	NULL	NULL

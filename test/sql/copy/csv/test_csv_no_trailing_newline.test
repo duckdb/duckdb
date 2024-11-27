@@ -2,13 +2,17 @@
 # description: Test CSV file without trailing newline
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
+
 # no newline at end of file with simple delimiter
 # load CSV file into a table
 statement ok
 CREATE TABLE no_newline (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY no_newline FROM 'test/sql/copy/csv/data/test/no_newline.csv';
+COPY no_newline FROM 'data/csv/test/no_newline.csv';
 ----
 1024
 
@@ -18,6 +22,6 @@ statement ok
 CREATE TABLE no_newline_unicode (a INTEGER, b INTEGER, c VARCHAR(10));
 
 statement error
-COPY no_newline_unicode FROM 'test/sql/copy/csv/data/test/no_newline_unicode.csv' DELIMITER '🦆';
+COPY no_newline_unicode FROM 'data/csv/test/no_newline_unicode.csv' DELIMITER '🦆';
 ----
 The delimiter option cannot exceed a size of 1 byte.

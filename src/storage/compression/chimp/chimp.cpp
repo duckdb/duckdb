@@ -1,11 +1,9 @@
-#include "duckdb/storage/compression/chimp/chimp.hpp"
-#include "duckdb/storage/compression/chimp/chimp_compress.hpp"
-#include "duckdb/storage/compression/chimp/chimp_scan.hpp"
-#include "duckdb/storage/compression/chimp/chimp_fetch.hpp"
-#include "duckdb/storage/compression/chimp/chimp_analyze.hpp"
-
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/chimp/chimp_analyze.hpp"
+#include "duckdb/storage/compression/chimp/chimp_compress.hpp"
+#include "duckdb/storage/compression/chimp/chimp_fetch.hpp"
+#include "duckdb/storage/compression/chimp/chimp_scan.hpp"
 
 namespace duckdb {
 
@@ -28,8 +26,8 @@ CompressionFunction ChimpCompressionFun::GetFunction(PhysicalType type) {
 	}
 }
 
-bool ChimpCompressionFun::TypeIsSupported(PhysicalType type) {
-	switch (type) {
+bool ChimpCompressionFun::TypeIsSupported(const PhysicalType physical_type) {
+	switch (physical_type) {
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return true;

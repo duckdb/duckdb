@@ -1,4 +1,7 @@
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
+#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
@@ -8,13 +11,10 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -91,6 +91,10 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	    !ExtractNumericValue(NumericStats::Max(stats_build), max_value)) {
 		return;
 	}
+	if (max_value < min_value) {
+		// empty table
+		return;
+	}
 	int64_t build_range;
 	if (!TrySubtractOperator::Operation(max_value, min_value, build_range)) {
 		return;
@@ -113,10 +117,6 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	if (join_state.build_range > MAX_BUILD_SIZE) {
 		return;
 	}
-	if (NumericStats::Min(stats_build) <= NumericStats::Min(stats_probe) &&
-	    NumericStats::Max(stats_probe) <= NumericStats::Max(stats_build)) {
-		join_state.is_probe_in_domain = true;
-	}
 	join_state.is_build_small = true;
 	return;
 }
@@ -127,29 +127,6 @@ static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 		ref.index += offset;
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
-}
-
-bool PhysicalPlanGenerator::HasEquality(vector<JoinCondition> &conds, idx_t &range_count) {
-	for (size_t c = 0; c < conds.size(); ++c) {
-		auto &cond = conds[c];
-		switch (cond.comparison) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			return true;
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			++range_count;
-			break;
-		case ExpressionType::COMPARE_NOTEQUAL:
-		case ExpressionType::COMPARE_DISTINCT_FROM:
-			break;
-		default:
-			throw NotImplementedException("Unimplemented comparison join");
-		}
-	}
-	return false;
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
@@ -169,7 +146,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 	}
 
 	idx_t has_range = 0;
-	bool has_equality = HasEquality(op.conditions, has_range);
+	bool has_equality = op.HasEquality(has_range);
 	bool can_merge = has_range > 0;
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 	switch (op.join_type) {
@@ -184,25 +161,33 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 	default:
 		break;
 	}
+	auto &client_config = ClientConfig::GetConfig(context);
 
 	//	TODO: Extend PWMJ to handle all comparisons and projection maps
-	const auto prefer_range_joins = (ClientConfig::GetConfig(context).prefer_range_joins && can_iejoin);
+	const auto prefer_range_joins = client_config.prefer_range_joins && can_iejoin;
 
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality && !prefer_range_joins) {
 		// Equality join with small number of keys : possible perfect join optimization
 		PerfectHashJoinStats perfect_join_stats;
 		CheckForPerfectJoinOpt(op, perfect_join_stats);
-		plan = make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
-		                                   op.join_type, op.left_projection_map, op.right_projection_map,
-		                                   std::move(op.mark_types), op.estimated_cardinality, perfect_join_stats);
+		plan =
+		    make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(op.conditions), op.join_type,
+		                                op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
+		                                op.estimated_cardinality, perfect_join_stats, std::move(op.filter_pushdown));
 
 	} else {
-		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;
-		if (left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
-		    right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) {
+		D_ASSERT(op.left_projection_map.empty());
+		if (left->estimated_cardinality <= client_config.nested_loop_join_threshold ||
+		    right->estimated_cardinality <= client_config.nested_loop_join_threshold) {
 			can_iejoin = false;
 			can_merge = false;
+		}
+		if (can_merge && can_iejoin) {
+			if (left->estimated_cardinality <= client_config.merge_join_threshold ||
+			    right->estimated_cardinality <= client_config.merge_join_threshold) {
+				can_iejoin = false;
+			}
 		}
 		if (can_iejoin) {
 			plan = make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(right), std::move(op.conditions),

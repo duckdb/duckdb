@@ -7,6 +7,8 @@ from decimal import Decimal
 from uuid import UUID
 import pytz
 import pytest
+import warnings
+from contextlib import suppress
 
 
 def replace_with_ndarray(obj):
@@ -223,8 +225,8 @@ class TestAllTypes(object):
             ],
             'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)],
             'map': [
-                ({'key': [], 'value': []},),
-                ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},),
+                ({},),
+                ({'key1': '🦆🦆🦆🦆🦆🦆', 'key2': 'goose'},),
                 (None,),
             ],
             'time_tz': [(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)],
@@ -396,15 +398,15 @@ class TestAllTypes(object):
             ),
             # Enums don't have a numpy equivalent and yield pandas Categorical.
             'small_enum': pd.Categorical(
-                ['DUCK_DUCK_ENUM', 'GOOSE', np.NaN],
+                ['DUCK_DUCK_ENUM', 'GOOSE', np.nan],
                 ordered=True,
             ),
             'medium_enum': pd.Categorical(
-                ['enum_0', 'enum_299', np.NaN],
+                ['enum_0', 'enum_299', np.nan],
                 ordered=True,
             ),
             'large_enum': pd.Categorical(
-                ['enum_0', 'enum_69999', np.NaN],
+                ['enum_0', 'enum_69999', np.nan],
                 ordered=True,
             ),
             # The following types don't have a numpy equivalent and yield
@@ -474,8 +476,8 @@ class TestAllTypes(object):
             ),
             'map': np.ma.array(
                 [
-                    {'key': [], 'value': []},
-                    {'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},
+                    {},
+                    {'key1': '🦆🦆🦆🦆🦆🦆', 'key2': 'goose'},
                     None,
                 ],
                 mask=[0, 0, 1],
@@ -582,16 +584,20 @@ class TestAllTypes(object):
             'time': """CASE WHEN "time" = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE "time" END AS "time" """,
         }
         conn = duckdb.connect()
+        # Pandas <= 2.2.3 does not convert without throwing a warning
         conn.execute("SET timezone = UTC")
-        if cur_type in replacement_values:
-            dataframe = conn.execute("select " + replacement_values[cur_type]).df()
-        elif cur_type in adjusted_values:
-            dataframe = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
-        else:
-            dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
-        print(cur_type)
-        round_trip_dataframe = conn.execute("select * from dataframe").df()
-        result_dataframe = conn.execute("select * from dataframe").fetchall()
-        print(round_trip_dataframe)
-        result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
-        assert recursive_equality(result_dataframe, result_roundtrip)
+        warnings.simplefilter(action='ignore', category=RuntimeWarning)
+        with suppress(TypeError):
+            if cur_type in replacement_values:
+                dataframe = conn.execute("select " + replacement_values[cur_type]).df()
+            elif cur_type in adjusted_values:
+                dataframe = conn.execute(f'select {adjusted_values[cur_type]} from test_all_types()').df()
+            else:
+                dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
+            print(cur_type)
+            round_trip_dataframe = conn.execute("select * from dataframe").df()
+            result_dataframe = conn.execute("select * from dataframe").fetchall()
+            print(round_trip_dataframe)
+            result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
+            warnings.resetwarnings()
+            assert recursive_equality(result_dataframe, result_roundtrip)

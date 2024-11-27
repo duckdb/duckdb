@@ -1,12 +1,13 @@
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -20,7 +21,7 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 }
 
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
-	D_ASSERT(filter_info.set.count >= 1);
+	D_ASSERT(filter_info.set.get().count >= 1);
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info.left_binding) != i_set.end()) {
@@ -36,11 +37,14 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 }
 
 bool CardinalityEstimator::SingleColumnFilter(duckdb::FilterInfo &filter_info) {
-	if (filter_info.left_set && filter_info.right_set && filter_info.set.count > 1) {
+	if (filter_info.left_set && filter_info.right_set && filter_info.set.get().count > 1) {
 		// Both set and are from different relations
 		return false;
 	}
 	if (EmptyFilter(filter_info)) {
+		return false;
+	}
+	if (filter_info.join_type == JoinType::SEMI || filter_info.join_type == JoinType::ANTI) {
 		return false;
 	}
 	return true;
@@ -212,7 +216,47 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	double new_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
 	case JoinType::INNER: {
-		new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+		bool set = false;
+		ExpressionType comparison_type = ExpressionType::COMPARE_EQUAL;
+		ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
+			if (expr.expression_class == ExpressionClass::BOUND_COMPARISON) {
+				comparison_type = expr.type;
+				set = true;
+				return;
+			}
+		});
+		if (!set) {
+			new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+			// no comparison is taking place, so the denominator is just the product of the left and right
+			return new_denom;
+		}
+		// extra_ratio helps represents how many tuples will be filtered out if the comparison evaluates to
+		// false. set to 1 to assume cross product.
+		double extra_ratio = 1;
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			// extra ration stays 1
+			extra_ratio = filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+			// start with the selectivity of equality
+			extra_ratio = filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+			// now assume every tuple will match 2.5 times (on average)
+			extra_ratio *= static_cast<double>(1) / CardinalityEstimator::DEFAULT_LT_GT_MULTIPLIER;
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			// basically assume cross product.
+			extra_ratio = 1;
+			break;
+		default:
+			break;
+		}
+		new_denom *= extra_ratio;
 		return new_denom;
 	}
 	case JoinType::SEMI:
@@ -247,10 +291,18 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// and we start to choose the filters that join relations in the set.
 
 	// edges are guaranteed to be in order of largest tdom to smallest tdom.
+	unordered_set<idx_t> unused_edge_tdoms;
 	auto edges = GetEdges(relations_to_tdoms, set);
 	for (auto &edge : edges) {
-		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
+		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
+			// the first subgraph has connected all the desired relations, just skip the rest of the edges
+			if (edge.has_tdom_hll) {
+				unused_edge_tdoms.insert(edge.tdom_hll);
+			}
+			continue;
+		}
 
+		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
 		if (subgraph_connections.empty()) {
 			// create a subgraph out of left and right, then merge right into left and add left to subgraphs.
 			// this helps cover a case where there are no subgraphs yet, and the only join filter is a SEMI JOIN
@@ -260,9 +312,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			left_subgraph.numerator_relations = edge.filter_info->left_set;
 			right_subgraph.relations = edge.filter_info->right_set;
 			right_subgraph.numerator_relations = edge.filter_info->right_set;
-
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
-			left_subgraph.relations = &edge.filter_info->set;
+			left_subgraph.relations = edge.filter_info->set.get();
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
 			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {
@@ -299,12 +350,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
 			subgraphs.erase(remove_start, subgraphs.end());
 		}
-		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
-			// the first subgraph has connected all the desired relations, no need to iterate
-			// through the rest of the edges.
-			break;
-		}
 	}
+
+	// Slight penalty to cardinality for unused edges
+	auto denom_multiplier = 1.0 + static_cast<double>(unused_edge_tdoms.size());
 
 	// It's possible cross-products were added and are not present in the filters in the relation_2_tdom
 	// structures. When that's the case, merge all remaining subgraphs.
@@ -324,7 +373,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
 		return DenomInfo(set, 1, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).numerator_relations, 1, subgraphs.at(0).denom);
+	return DenomInfo(*subgraphs.at(0).numerator_relations, 1, subgraphs.at(0).denom * denom_multiplier);
 }
 
 template <>

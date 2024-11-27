@@ -12,12 +12,14 @@
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
 class Catalog;
 class DataTable;
+class StorageCommitState;
 class Transaction;
 class WriteAheadLog;
 struct LocalAppendState;
@@ -29,7 +31,7 @@ public:
 	explicit LocalTableStorage(ClientContext &context, DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
-	                  const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
+	                  const LogicalType &target_type, const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 	// Create a LocalTableStorage from a DROP COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
@@ -52,6 +54,8 @@ public:
 	vector<unique_ptr<OptimisticDataWriter>> optimistic_writers;
 	//! Whether or not storage was merged
 	bool merged_storage = false;
+	//! Whether or not the storage was dropped
+	bool is_dropped = false;
 
 public:
 	void InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters = nullptr);
@@ -89,10 +93,6 @@ private:
 //! The LocalStorage class holds appends that have not been committed yet
 class LocalStorage {
 public:
-	// Threshold to merge row groups instead of appending
-	static constexpr const idx_t MERGE_THRESHOLD = Storage::ROW_GROUP_SIZE;
-
-public:
 	struct CommitState {
 		CommitState();
 		~CommitState();
@@ -110,7 +110,7 @@ public:
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable &table, CollectionScanState &state, optional_ptr<TableFilterSet> table_filters);
 	//! Scan
-	void Scan(CollectionScanState &state, const vector<storage_t> &column_ids, DataChunk &result);
+	void Scan(CollectionScanState &state, const vector<StorageIndex> &column_ids, DataChunk &result);
 
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
@@ -134,13 +134,14 @@ public:
 	void Update(DataTable &table, Vector &row_ids, const vector<PhysicalIndex> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
-	void Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction);
+	void Commit(optional_ptr<StorageCommitState> commit_state);
 	//! Rollback the local storage
 	void Rollback();
 
 	bool ChangesMade() noexcept;
 	idx_t EstimatedSize();
 
+	void DropTable(DataTable &table);
 	bool Find(DataTable &table);
 
 	idx_t AddedRows(DataTable &table);
@@ -149,11 +150,11 @@ public:
 	               ExpressionExecutor &default_executor);
 	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
-	                const vector<column_t> &bound_columns, Expression &cast_expr);
+	                const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 
 	void MoveStorage(DataTable &old_dt, DataTable &new_dt);
-	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<column_t> &col_ids, DataChunk &chunk,
-	                ColumnFetchState &fetch_state);
+	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
+	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	TableIndexList &GetIndexes(DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
@@ -163,7 +164,7 @@ private:
 	DuckTransaction &transaction;
 	LocalTableManager table_manager;
 
-	void Flush(DataTable &table, LocalTableStorage &storage);
+	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state);
 };
 
 } // namespace duckdb

@@ -5,4 +5,4 @@
 statement error
 SELECT DISTINCT MAP { * : ? IN ( SELECT TRUE ) } ;
 ----
-Invalid Error: Expected 1 parameters, but none were supplied
+Invalid Input Error: Expected 1 parameters, but none were supplied

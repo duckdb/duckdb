@@ -217,46 +217,6 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	}
 }
 
-TEST_CASE("Test DataChunk appending incorrect types in C API", "[capi]") {
-	CAPITester tester;
-	duckdb::unique_ptr<CAPIResult> result;
-	duckdb_state status;
-
-	REQUIRE(tester.OpenDatabase(nullptr));
-
-	REQUIRE(duckdb_vector_size() == STANDARD_VECTOR_SIZE);
-
-	tester.Query("CREATE TABLE test(i BIGINT, j SMALLINT)");
-
-	duckdb_logical_type types[2];
-	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
-	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_BOOLEAN);
-
-	auto data_chunk = duckdb_create_data_chunk(types, 2);
-	REQUIRE(data_chunk);
-
-	auto col1_ptr = (int64_t *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 0));
-	*col1_ptr = 42;
-	auto col2_ptr = (bool *)duckdb_vector_get_data(duckdb_data_chunk_get_vector(data_chunk, 1));
-	*col2_ptr = false;
-
-	duckdb_appender appender;
-	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
-	REQUIRE(status == DuckDBSuccess);
-
-	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBError);
-
-	auto error = duckdb_appender_error(appender);
-	REQUIRE(duckdb::StringUtil::Contains(error, "expected SMALLINT but got BOOLEAN for column 2"));
-
-	duckdb_appender_destroy(&appender);
-
-	duckdb_destroy_data_chunk(&data_chunk);
-
-	duckdb_destroy_logical_type(&types[0]);
-	duckdb_destroy_logical_type(&types[1]);
-}
-
 TEST_CASE("Test DataChunk varchar result fetch in C API", "[capi]") {
 	if (duckdb_vector_size() < 64) {
 		return;
@@ -402,6 +362,7 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	duckdb_logical_type schema[] = {list_type};
 	auto chunk = duckdb_create_data_chunk(schema, 1);
 	auto list_vector = duckdb_data_chunk_get_vector(chunk, 0);
+	duckdb_data_chunk_set_size(chunk, 3);
 
 	REQUIRE(duckdb_list_vector_reserve(list_vector, 123) == duckdb_state::DuckDBSuccess);
 	REQUIRE(duckdb_list_vector_get_size(list_vector) == 0);
@@ -417,11 +378,19 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	entries[0].offset = 0;
 	entries[0].length = 20;
 	entries[1].offset = 20;
-	entries[1].offset = 80;
+	entries[1].length = 80;
 	entries[2].offset = 100;
 	entries[2].length = 23;
 
-	auto vector = (Vector &)(*list_vector);
+	auto child_data = (int *)duckdb_vector_get_data(child);
+	int count = 0;
+	for (idx_t i = 0; i < duckdb_data_chunk_get_size(chunk); i++) {
+		for (idx_t j = 0; j < entries[i].length; j++) {
+			REQUIRE(child_data[entries[i].offset + j] == count);
+			count++;
+		}
+	}
+	auto &vector = (Vector &)(*list_vector);
 	for (int i = 0; i < 123; i++) {
 		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
 	}

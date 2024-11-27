@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class BlockHandle;
+class BufferHandle;
 class BufferManager;
 class ClientContext;
 class DatabaseInstance;
@@ -44,6 +45,8 @@ public:
 	virtual bool IsRootBlock(MetaBlockPointer root) = 0;
 	//! Mark a block as "free"; free blocks are immediately added to the free list and can be immediately overwritten
 	virtual void MarkBlockAsFree(block_id_t block_id) = 0;
+	//! Mark a block as "used"; either the block is removed from the free list, or the reference count is incremented
+	virtual void MarkBlockAsUsed(block_id_t block_id) = 0;
 	//! Mark a block as "modified"; modified blocks are added to the free list after a checkpoint (i.e. their data is
 	//! assumed to be rewritten)
 	virtual void MarkBlockAsModified(block_id_t block_id) = 0;
@@ -54,6 +57,8 @@ public:
 	virtual idx_t GetMetaBlock() = 0;
 	//! Read the content of the block from disk
 	virtual void Read(Block &block) = 0;
+	//! Read the content of the block from disk
+	virtual void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) = 0;
 	//! Writes the block to disk
 	virtual void Write(FileBuffer &block, block_id_t block_id) = 0;
 	//! Writes the block to disk
@@ -67,16 +72,28 @@ public:
 	virtual idx_t TotalBlocks() = 0;
 	//! Returns the number of free blocks
 	virtual idx_t FreeBlocks() = 0;
+	//! Whether or not the attached database is a remote file (e.g. attached over s3/https)
+	virtual bool IsRemote() {
+		return false;
+	}
+	//! Whether or not the attached database is in-memory
+	virtual bool InMemory() = 0;
 
+	//! Sync changes made to the block manager
+	virtual void FileSync() = 0;
 	//! Truncate the underlying database file after a checkpoint
 	virtual void Truncate();
 
 	//! Register a block with the given block id in the base file
 	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
+	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block,
+	                                            BufferHandle old_handle);
 	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
-	void UnregisterBlock(block_id_t block_id, bool can_destroy);
+	void UnregisterBlock(BlockHandle &block);
+	//! UnregisterBlock, only accepts non-temporary block ids
+	void UnregisterBlock(block_id_t id);
 
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
@@ -90,7 +107,7 @@ public:
 	}
 	//! Returns the block size of this block manager.
 	inline idx_t GetBlockSize() const {
-		return block_alloc_size.GetIndex() - Storage::BLOCK_HEADER_SIZE;
+		return block_alloc_size.GetIndex() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	}
 	//! Sets the block allocation size. This should only happen when initializing an existing database.
 	//! When initializing an existing database, we construct the block manager before reading the file header,
@@ -100,6 +117,10 @@ public:
 			throw InternalException("the block allocation size must be set once");
 		}
 		block_alloc_size = block_alloc_size_p.GetIndex();
+	}
+
+	//! Verify the block usage count
+	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
 	}
 
 private:

@@ -17,7 +17,7 @@
 #include <sys/bitops.h>	/* ilog2 */
 #endif
 #ifdef JEMALLOC_HAVE_VM_MAKE_TAG
-#define PAGES_FD_TAG VM_MAKE_TAG(101U)
+#define PAGES_FD_TAG VM_MAKE_TAG(254U)
 #else
 #define PAGES_FD_TAG -1
 #endif
@@ -649,7 +649,7 @@ os_overcommits_sysctl(void) {
 static bool
 os_overcommits_proc(void) {
 	int fd;
-	char buf[1];
+	char buf[1] = {'0'};
 
 #if defined(JEMALLOC_USE_SYSCALL) && defined(SYS_open)
 	#if defined(O_CLOEXEC)

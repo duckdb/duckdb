@@ -10,17 +10,23 @@
 
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/transaction/undo_buffer.hpp"
 
 namespace duckdb {
+class CheckpointLock;
+class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
+class StorageCommitState;
+struct DataTableInfo;
 struct UndoBufferProperties;
 
 class DuckTransaction : public Transaction {
 public:
 	DuckTransaction(DuckTransactionManager &manager, ClientContext &context, transaction_t start_time,
-	                transaction_t transaction_id);
+	                transaction_t transaction_id, idx_t catalog_version);
 	~DuckTransaction() override;
 
 	//! The start timestamp of this transaction
@@ -32,25 +38,30 @@ public:
 	//! Highest active query when the transaction finished, used for cleaning up
 	transaction_t highest_active_query;
 
+	atomic<idx_t> catalog_version;
+
 public:
 	static DuckTransaction &Get(ClientContext &context, AttachedDatabase &db);
 	static DuckTransaction &Get(ClientContext &context, Catalog &catalog);
 	LocalStorage &GetLocalStorage();
 
-	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data = nullptr, idx_t extra_data_size = 0);
+	void PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data, idx_t extra_data_size);
 
 	void SetReadWrite() override;
 
+	bool ShouldWriteToWAL(AttachedDatabase &db);
+	ErrorData WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
-	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id, bool checkpoint) noexcept;
+	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id,
+	                 unique_ptr<StorageCommitState> commit_state) noexcept;
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
 	bool AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties);
 
 	//! Rollback
-	void Rollback() noexcept;
+	ErrorData Rollback();
 	//! Cleanup the undo buffer
-	void Cleanup();
+	void Cleanup(transaction_t lowest_active_transaction);
 
 	bool ChangesMade();
 	UndoBufferProperties GetUndoProperties();
@@ -59,13 +70,21 @@ public:
 	                idx_t base_row);
 	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
-	UpdateInfo *CreateUpdateInfo(idx_t type_size, idx_t entries);
+	UndoBufferReference CreateUpdateInfo(idx_t type_size, idx_t entries);
 
 	bool IsDuckTransaction() const override {
 		return true;
 	}
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
+	bool HasWriteLock() const {
+		return write_lock.get();
+	}
+
+	void UpdateCollection(shared_ptr<RowGroupCollection> &collection);
+
+	//! Get a shared lock on a table
+	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
 
 private:
 	DuckTransactionManager &transaction_manager;
@@ -80,6 +99,16 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
+	//! Collections that are updated by this transaction
+	reference_map_t<RowGroupCollection, shared_ptr<RowGroupCollection>> updated_collections;
+	//! Lock for the active_locks map
+	mutex active_locks_lock;
+	struct ActiveTableLock {
+		mutex checkpoint_lock_mutex; // protects access to the checkpoint_lock field in this class
+		weak_ptr<CheckpointLock> checkpoint_lock;
+	};
+	//! Active locks on tables
+	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
 };
 
 } // namespace duckdb

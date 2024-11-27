@@ -1,12 +1,12 @@
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
 
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
 
 namespace duckdb {
 
-ScannerResult::ScannerResult(CSVStates &states_p, CSVStateMachine &state_machine_p)
-    : state_machine(state_machine_p), states(states_p) {
+ScannerResult::ScannerResult(CSVStates &states_p, CSVStateMachine &state_machine_p, idx_t result_size_p)
+    : result_size(result_size_p), state_machine(state_machine_p), states(states_p) {
 }
 
 BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_ptr<CSVStateMachine> state_machine_p,
@@ -25,7 +25,7 @@ BaseScanner::BaseScanner(shared_ptr<CSVBufferManager> buffer_manager_p, shared_p
 	}
 }
 
-bool BaseScanner::FinishedFile() {
+bool BaseScanner::FinishedFile() const {
 	if (!cur_buffer_handle) {
 		return true;
 	}
@@ -76,7 +76,7 @@ void BaseScanner::FinalizeChunkProcess() {
 	throw InternalException("FinalizeChunkProcess() from CSV Base Scanner is not implemented");
 }
 
-CSVStateMachine &BaseScanner::GetStateMachine() {
+CSVStateMachine &BaseScanner::GetStateMachine() const {
 	return *state_machine;
 }
 

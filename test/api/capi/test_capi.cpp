@@ -1,5 +1,4 @@
 #include "capi_tester.hpp"
-
 #include <regex>
 
 using namespace duckdb;
@@ -128,6 +127,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(duckdb_result_error(nullptr) == nullptr);
 	REQUIRE(duckdb_nullmask_data(nullptr, 0) == nullptr);
 	REQUIRE(duckdb_column_data(nullptr, 0) == nullptr);
+	REQUIRE(duckdb_result_error_type(nullptr) == DUCKDB_ERROR_INVALID);
 }
 
 TEST_CASE("Test different types of C API", "[capi]") {
@@ -567,7 +567,7 @@ TEST_CASE("Test C API config", "[capi]") {
 	REQUIRE(duckdb_set_config(config, "aaaa_invalidoption", "read_only") == DuckDBSuccess);
 	REQUIRE(((DBConfig *)config)->options.unrecognized_options["aaaa_invalidoption"] == "read_only");
 	REQUIRE(duckdb_open_ext(dbdir.c_str(), &db, config, &error) == DuckDBError);
-	REQUIRE_THAT(error, Catch::Matchers::Contains("Unrecognized configuration property"));
+	REQUIRE_THAT(error, Catch::Matchers::Contains("The following options were not recognized"));
 	duckdb_free(error);
 
 	// we can destroy the config right after duckdb_open

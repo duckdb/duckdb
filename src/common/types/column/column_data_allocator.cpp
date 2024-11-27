@@ -1,7 +1,9 @@
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -45,6 +47,21 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 	}
 }
 
+ColumnDataAllocator::~ColumnDataAllocator() {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return;
+	}
+	for (auto &block : blocks) {
+		block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+	}
+	const auto data_size = SizeInBytes();
+	blocks.clear();
+	if (Allocator::SupportsFlush() &&
+	    data_size > alloc.buffer_manager->GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
+		Allocator::FlushAll();
+	}
+}
+
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
 	shared_ptr<BlockHandle> handle;
@@ -61,13 +78,17 @@ BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 
 BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
-	auto block_size = MaxValue<idx_t>(size, Storage::BLOCK_SIZE);
+	auto max_size = MaxValue<idx_t>(size, GetBufferManager().GetBlockSize());
 	BlockMetaData data;
 	data.size = 0;
-	data.capacity = NumericCast<uint32_t>(block_size);
-	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, block_size, false, &data.handle);
+	data.capacity = NumericCast<uint32_t>(max_size);
+	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false);
+	data.handle = pin.GetBlockHandle();
 	blocks.push_back(std::move(data));
-	allocated_size += block_size;
+	if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
+		blocks.back().handle->SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
+	}
+	allocated_size += max_size;
 	return pin;
 }
 
@@ -75,7 +96,7 @@ void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
 	auto allocation_amount = MaxValue<idx_t>(NextPowerOfTwo(size), 4096);
 	if (!blocks.empty()) {
 		idx_t last_capacity = blocks.back().capacity;
-		auto next_capacity = MinValue<idx_t>(last_capacity * 2, last_capacity + Storage::BLOCK_SIZE);
+		auto next_capacity = MinValue<idx_t>(last_capacity * 2, last_capacity + Storage::DEFAULT_BLOCK_SIZE);
 		allocation_amount = MaxValue<idx_t>(next_capacity, allocation_amount);
 	}
 	D_ASSERT(type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
@@ -220,13 +241,22 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	}
 }
 
-void ColumnDataAllocator::DeleteBlock(uint32_t block_id) {
-	blocks[block_id].handle->SetCanDestroy(true);
+void ColumnDataAllocator::SetDestroyBufferUponUnpin(uint32_t block_id) {
+	blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {
-	return type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ? *alloc.allocator
-	                                                            : alloc.buffer_manager->GetBufferAllocator();
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		return *alloc.allocator;
+	}
+	return alloc.buffer_manager->GetBufferAllocator();
+}
+
+BufferManager &ColumnDataAllocator::GetBufferManager() {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		throw InternalException("cannot obtain the buffer manager for in memory allocations");
+	}
+	return *alloc.buffer_manager;
 }
 
 void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, ChunkMetaData &chunk) {

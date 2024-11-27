@@ -11,11 +11,11 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
+class TableCatalogEntry;
 
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
 struct IndexDataTableInfo {
 	IndexDataTableInfo(shared_ptr<DataTableInfo> info_p, const string &index_name_p);
-	~IndexDataTableInfo();
 
 	//! Pointer to the DataTableInfo
 	shared_ptr<DataTableInfo> info;
@@ -27,13 +27,16 @@ struct IndexDataTableInfo {
 class DuckIndexEntry : public IndexCatalogEntry {
 public:
 	//! Create a DuckIndexEntry
-	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
+	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
+	               TableCatalogEntry &table);
+	DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &create_info,
+	               shared_ptr<IndexDataTableInfo> storage_info);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+	void Rollback(CatalogEntry &prev_entry) override;
 
 	//! The indexed table information
 	shared_ptr<IndexDataTableInfo> info;
-
 	//! We need the initial size of the index after the CREATE INDEX statement,
 	//! as it is necessary to determine the auto checkpoint threshold
 	idx_t initial_index_size;

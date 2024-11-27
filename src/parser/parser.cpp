@@ -1,5 +1,7 @@
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/query_error_context.hpp"
@@ -8,7 +10,6 @@
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
@@ -42,6 +43,16 @@ static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<
 	return true;
 }
 
+static bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
+	// the first character can be between A-Z, a-z, or \200 - \377
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c >= 0x80;
+}
+
+static bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
+	// subsequent characters can also be between 0-9
+	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
+}
+
 // This function strips unicode space characters from the query and replaces them with regular spaces
 // It returns true if any unicode space characters were found and stripped
 // See here for a list of unicode space characters - https://jkorpela.fi/chars/spaces.html
@@ -50,6 +61,7 @@ bool Parser::StripUnicodeSpaces(const string &query_str, string &new_query) {
 	const idx_t USP_LEN = 3;
 	idx_t pos = 0;
 	unsigned char quote;
+	string_t dollar_quote_tag;
 	vector<UnicodeSpace> unicode_spaces;
 	auto query = const_uchar_ptr_cast(query_str.c_str());
 	auto qsize = query_str.size();
@@ -95,6 +107,24 @@ regular:
 			quote = query[pos];
 			pos++;
 			goto in_quotes;
+		} else if (query[pos] == '$' &&
+		           (query[pos + 1] == '$' || IsValidDollarQuotedStringTagFirstChar(query[pos + 1]))) {
+			// (optionally tagged) dollar-quoted string
+			auto start = &query[++pos];
+			for (; pos + 2 < qsize; pos++) {
+				if (query[pos] == '$') {
+					// end of tag
+					dollar_quote_tag =
+					    string_t(const_char_ptr_cast(start), NumericCast<uint32_t, int64_t>(&query[pos] - start));
+					goto in_dollar_quotes;
+				}
+
+				if (!IsValidDollarQuotedStringTagSubsequentChar(query[pos])) {
+					// invalid char in dollar-quoted string, continue as normal
+					goto regular;
+				}
+			}
+			goto end;
 		} else if (query[pos] == '-' && query[pos + 1] == '-') {
 			goto in_comment;
 		}
@@ -109,6 +139,17 @@ in_quotes:
 				continue;
 			}
 			pos++;
+			goto regular;
+		}
+	}
+	goto end;
+in_dollar_quotes:
+	for (; pos + 2 < qsize; pos++) {
+		if (query[pos] == '$' &&
+		    qsize - (pos + 1) >= dollar_quote_tag.GetSize() + 1 && // found '$' and enough space left
+		    query[pos + dollar_quote_tag.GetSize() + 1] == '$' &&  // ending '$' at the right spot
+		    memcmp(&query[pos + 1], dollar_quote_tag.GetData(), dollar_quote_tag.GetSize()) == 0) { // tags match
+			pos += dollar_quote_tag.GetSize() + 1;
 			goto regular;
 		}
 	}
@@ -299,8 +340,142 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	return result;
 }
 
-bool Parser::IsKeyword(const string &text) {
-	return PostgresParser::IsKeyword(text);
+vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
+	idx_t error_start = 0;
+	idx_t error_end = error_msg.size();
+
+	vector<SimplifiedToken> tokens;
+	// find "XXX Error:" - this marks the start of the error message
+	auto error = StringUtil::Find(error_msg, "Error: ");
+	if (error.IsValid()) {
+		SimplifiedToken token;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+		token.start = 0;
+		tokens.push_back(token);
+
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		token.start = error.GetIndex() + 6;
+		tokens.push_back(token);
+
+		error_start = error.GetIndex() + 7;
+	}
+
+	// find "LINE (number)" - this marks the end of the message
+	auto line_pos = StringUtil::Find(error_msg, "\nLINE ");
+	if (line_pos.IsValid()) {
+		// tokenize between
+		error_end = line_pos.GetIndex();
+	}
+
+	// now iterate over the
+	bool in_quotes = false;
+	for (idx_t i = error_start; i < error_end; i++) {
+		if (error_msg[i] == '"' || error_msg[i] == '\'') {
+			SimplifiedToken token;
+			token.start = i;
+			if (!in_quotes) {
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT;
+				token.start++;
+			} else {
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+			}
+			tokens.push_back(token);
+			in_quotes = !in_quotes;
+		}
+	}
+	if (in_quotes && error_end < error_msg.size()) {
+		SimplifiedToken token;
+		token.start = error_end;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+		tokens.push_back(token);
+	}
+	if (line_pos.IsValid()) {
+		SimplifiedToken token;
+		token.start = line_pos.GetIndex() + 1;
+		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
+		tokens.push_back(token);
+
+		// tokenize the LINE part
+		idx_t query_start;
+		for (query_start = line_pos.GetIndex() + 6; query_start < error_msg.size(); query_start++) {
+			if (error_msg[query_start] != ':' && !StringUtil::CharacterIsDigit(error_msg[query_start])) {
+				break;
+			}
+		}
+		if (query_start < error_msg.size()) {
+			token.start = query_start;
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+			tokens.push_back(token);
+
+			idx_t query_end;
+			for (query_end = query_start; query_end < error_msg.size(); query_end++) {
+				if (error_msg[query_end] == '\n') {
+					break;
+				}
+			}
+			// after LINE XXX: comes a caret - look for it
+			idx_t caret_position = error_msg.size();
+			bool place_caret = false;
+			idx_t caret_start = query_end + 1;
+			if (caret_start < error_msg.size()) {
+				for (idx_t i = caret_start; i < error_msg.size(); i++) {
+					if (error_msg[i] == '^') {
+						// found the caret
+						// to get the caret position in the query we need to
+						caret_position = i - caret_start - ((query_start - line_pos.GetIndex()) - 1);
+						place_caret = true;
+						break;
+					}
+				}
+			}
+			// tokenize the actual query
+			string query = error_msg.substr(query_start, query_end - query_start);
+			auto query_tokens = Tokenize(query);
+			for (auto &query_token : query_tokens) {
+				if (place_caret) {
+					if (query_token.start >= caret_position) {
+						// we need to place the caret here
+						query_token.start = query_start + caret_position;
+						query_token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+						tokens.push_back(query_token);
+
+						place_caret = false;
+						continue;
+					}
+				}
+				query_token.start += query_start;
+				tokens.push_back(query_token);
+			}
+			// FIXME: find the caret position and highlight/bold the identifier it points to
+			if (query_end < error_msg.size()) {
+				token.start = query_end;
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR;
+				tokens.push_back(token);
+			}
+		}
+	}
+	return tokens;
+}
+
+KeywordCategory ToKeywordCategory(duckdb_libpgquery::PGKeywordCategory type) {
+	switch (type) {
+	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_RESERVED:
+		return KeywordCategory::KEYWORD_RESERVED;
+	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_UNRESERVED:
+		return KeywordCategory::KEYWORD_UNRESERVED;
+	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_TYPE_FUNC:
+		return KeywordCategory::KEYWORD_TYPE_FUNC;
+	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_COL_NAME:
+		return KeywordCategory::KEYWORD_COL_NAME;
+	case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_NONE:
+		return KeywordCategory::KEYWORD_NONE;
+	default:
+		throw InternalException("Unrecognized keyword category");
+	}
+}
+
+KeywordCategory Parser::IsKeyword(const string &text) {
+	return ToKeywordCategory(PostgresParser::IsKeyword(text));
 }
 
 vector<ParserKeyword> Parser::KeywordList() {
@@ -309,22 +484,7 @@ vector<ParserKeyword> Parser::KeywordList() {
 	for (auto &kw : keywords) {
 		ParserKeyword res;
 		res.name = kw.text;
-		switch (kw.category) {
-		case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_RESERVED:
-			res.category = KeywordCategory::KEYWORD_RESERVED;
-			break;
-		case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_UNRESERVED:
-			res.category = KeywordCategory::KEYWORD_UNRESERVED;
-			break;
-		case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_TYPE_FUNC:
-			res.category = KeywordCategory::KEYWORD_TYPE_FUNC;
-			break;
-		case duckdb_libpgquery::PGKeywordCategory::PG_KEYWORD_COL_NAME:
-			res.category = KeywordCategory::KEYWORD_COL_NAME;
-			break;
-		default:
-			throw InternalException("Unrecognized keyword category");
-		}
+		res.category = ToKeywordCategory(kw.category);
 		result.push_back(res);
 	}
 	return result;

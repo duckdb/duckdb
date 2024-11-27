@@ -1,3 +1,4 @@
+import argparse
 import glob
 import json
 import os
@@ -14,31 +15,6 @@ ENABLE_PROFILING = "PRAGMA enable_profiling=json"
 PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
-
-
-def print_usage():
-    print(
-        f"Expected usage: python3 scripts/{os.path.basename(__file__)} --old=/old/duckdb_cli --new=/new/duckdb_cli --dir=/path/to/benchmark/dir"
-    )
-    exit(1)
-
-
-def parse_args():
-    old = None
-    new = None
-    benchmark_dir = None
-    for arg in sys.argv[1:]:
-        if arg.startswith("--old="):
-            old = arg.replace("--old=", "")
-        elif arg.startswith("--new="):
-            new = arg.replace("--new=", "")
-        elif arg.startswith("--dir="):
-            benchmark_dir = arg.replace("--dir=", "")
-        else:
-            print_usage()
-    if old == None or new == None or benchmark_dir == None:
-        print_usage()
-    return old, new, benchmark_dir
 
 
 def init_db(cli, dbname, benchmark_dir):
@@ -87,16 +63,29 @@ class PlanCost:
         return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
+def is_measured_join(op) -> bool:
+    if 'name' not in op:
+        return False
+    if op['name'] != 'HASH_JOIN':
+        return False
+    if 'Join Type' not in op['extra_info']:
+        return False
+    if op['extra_info']['Join Type'].startswith('MARK'):
+        return False
+    return True
+
+
 def op_inspect(op) -> PlanCost:
     cost = PlanCost()
     if 'Query' in op:
         cost.time = op['operator_timing']
-    if 'name' in op and op['name'] == 'HASH_JOIN' and not op['extra_info'].startswith('MARK'):
+    if is_measured_join(op):
         cost.total = op['operator_cardinality']
         if 'operator_cardinality' in op['children'][0]:
             cost.probe_side += op['children'][0]['operator_cardinality']
         if 'operator_cardinality' in op['children'][1]:
             cost.build_side += op['children'][1]['operator_cardinality']
+
         left_cost = op_inspect(op['children'][0])
         right_cost = op_inspect(op['children'][1])
         cost.probe_side += left_cost.probe_side + right_cost.probe_side
@@ -159,7 +148,18 @@ def print_diffs(diffs):
 
 
 def main():
-    old, new, benchmark_dir = parse_args()
+    parser = argparse.ArgumentParser(description="Plan cost regression test script with old and new versions.")
+
+    parser.add_argument("--old", type=str, help="Path to the old runner.", required=True)
+    parser.add_argument("--new", type=str, help="Path to the new runner.", required=True)
+    parser.add_argument("--dir", type=str, help="Path to the benchmark directory.", required=True)
+
+    args = parser.parse_args()
+
+    old = args.old
+    new = args.new
+    benchmark_dir = args.dir
+
     init_db(old, OLD_DB_NAME, benchmark_dir)
     init_db(new, NEW_DB_NAME, benchmark_dir)
 

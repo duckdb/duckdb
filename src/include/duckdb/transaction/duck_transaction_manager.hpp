@@ -14,6 +14,7 @@
 
 namespace duckdb {
 class DuckTransaction;
+struct UndoBufferProperties;
 
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
@@ -51,6 +52,12 @@ public:
 	//! Obtains a shared lock to the checkpoint lock
 	unique_ptr<StorageLockKey> SharedCheckpointLock();
 	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
+
+	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
+	DUCKDB_API idx_t GetCatalogVersion(Transaction &transaction);
+
+	void PushCatalogEntry(Transaction &transaction_p, CatalogEntry &entry, data_ptr_t extra_data = nullptr,
+	                      idx_t extra_data_size = 0);
 
 protected:
 	struct CheckpointDecision {
@@ -98,6 +105,11 @@ private:
 	StorageLock checkpoint_lock;
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
+	//! Mutex used to control writes to the WAL - separate from the transaction lock
+	mutex wal_lock;
+
+	atomic<idx_t> last_uncommitted_catalog_version = {TRANSACTION_ID_START};
+	idx_t last_committed_version = 0;
 
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {

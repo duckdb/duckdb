@@ -1,8 +1,11 @@
 import duckdb
+import pytest
 import pandas as pd
 import numpy
 import string
 from packaging import version
+import warnings
+from contextlib import suppress
 
 
 def round_trip(data, pandas_type):
@@ -74,6 +77,27 @@ class TestNumpyNullableTypes(object):
         data = numpy.array([True, False, False, True])
         round_trip(data, 'bool')
 
+    def test_pandas_masked_float64(self, duckdb_cursor, tmp_path):
+        pa = pytest.importorskip("pyarrow")
+        pq = pytest.importorskip("pyarrow.parquet")
+
+        # Create a sample DataFrame
+        testdf = pd.DataFrame({"value": [26.0, 26.0, 26.0, pd.NA, 27.0, pd.NA, pd.NA, pd.NA, pd.NA, 29.0]})
+
+        # Set the correct dtype for the 'value' column
+        testdf["value"] = testdf["value"].astype(pd.Float64Dtype())
+
+        # Write the DataFrame to a Parquet file using tmp_path fixture
+        parquet_path = tmp_path / "testdf.parquet"
+        pq.write_table(pa.Table.from_pandas(testdf), parquet_path)
+
+        # Read the Parquet file back into a DataFrame
+        testdf2 = pd.read_parquet(parquet_path)
+
+        # Use duckdb_cursor to query the parquet data
+        result = duckdb_cursor.execute("SELECT MIN(value) FROM testdf2").fetchall()
+        assert result[0][0] == 26
+
     def test_pandas_boolean(self, duckdb_cursor):
         data = numpy.array([True, None, pd.NA, numpy.nan, True])
         df_in = pd.DataFrame(
@@ -84,9 +108,9 @@ class TestNumpyNullableTypes(object):
 
         df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         assert df_out['object'][0] == df_in['object'][0]
-        assert numpy.isnan(df_out['object'][1])
-        assert numpy.isnan(df_out['object'][2])
-        assert numpy.isnan(df_out['object'][3])
+        assert pd.isna(df_out['object'][1])
+        assert pd.isna(df_out['object'][2])
+        assert pd.isna(df_out['object'][3])
         assert df_out['object'][4] == df_in['object'][4]
 
     def test_pandas_float32(self, duckdb_cursor):
@@ -102,7 +126,7 @@ class TestNumpyNullableTypes(object):
         assert df_out['object'][0] == df_in['object'][0]
         assert df_out['object'][1] == df_in['object'][1]
         assert df_out['object'][2] == df_in['object'][2]
-        assert numpy.isnan(df_out['object'][3])
+        assert pd.isna(df_out['object'][3])
 
     def test_pandas_float64(self):
         data = numpy.array([0.233, numpy.nan, 3456.2341231, float('-inf'), -23424.45345, float('+inf'), 0.0000000001])
@@ -114,7 +138,7 @@ class TestNumpyNullableTypes(object):
         df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
 
         for i in range(len(data)):
-            if numpy.isnan(df_out['object'][i]):
+            if pd.isna(df_out['object'][i]):
                 assert i == 1
                 continue
             assert df_out['object'][i] == df_in['object'][i]
@@ -142,3 +166,69 @@ class TestNumpyNullableTypes(object):
         df_in = pd.DataFrame({'object': pd.Series(data, dtype='object')})
         result = duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchone()[0]
         assert result == expected_result
+
+    @pytest.mark.parametrize(
+        'dtype',
+        [
+            'bool',
+            'utinyint',
+            'usmallint',
+            'uinteger',
+            'ubigint',
+            'tinyint',
+            'smallint',
+            'integer',
+            'bigint',
+            'float',
+            'double',
+        ],
+    )
+    def test_producing_nullable_dtypes(self, duckdb_cursor, dtype):
+        class Input:
+            def __init__(self, value, expected_dtype):
+                self.value = value
+                self.expected_dtype = expected_dtype
+
+        inputs = {
+            'bool': Input('true', 'BooleanDtype'),
+            'utinyint': Input('255', 'UInt8Dtype'),
+            'usmallint': Input('65535', 'UInt16Dtype'),
+            'uinteger': Input('4294967295', 'UInt32Dtype'),
+            'ubigint': Input('18446744073709551615', 'UInt64Dtype'),
+            'tinyint': Input('-128', 'Int8Dtype'),
+            'smallint': Input('-32768', 'Int16Dtype'),
+            'integer': Input('-2147483648', 'Int32Dtype'),
+            'bigint': Input('-9223372036854775808', 'Int64Dtype'),
+            'float': Input('268043421344044473239570760152672894976.0000000000', 'float32'),
+            'double': Input(
+                '14303088389124869511075243108389716684037132417196499782261853698893384831666205572097390431189931733040903060865714975797777061496396865611606109149583360363636503436181348332896211726552694379264498632046075093077887837955077425420408952536212326792778411457460885268567735875437456412217418386401944141824.0000000000',
+                'float64',
+            ),
+        }
+
+        input = inputs[dtype]
+        if not hasattr(pd, input.expected_dtype) and not hasattr(numpy, input.expected_dtype):
+            pytest.skip("Could not test this nullable type, the version of pandas does not provide it")
+
+        query = f"""
+            select
+                a::{dtype} a
+            from (VALUES
+                (NULL),
+                ({input.value}),
+                (NULL)
+            ) t(a)
+        """
+
+        rel = duckdb_cursor.sql(query)
+        # Pandas <= 2.2.3 does not convert without throwing a warning
+        warnings.simplefilter(action='ignore', category=RuntimeWarning)
+        with suppress(TypeError):
+            df = rel.df()
+            warnings.resetwarnings()
+
+            if hasattr(pd, input.expected_dtype):
+                expected_dtype = getattr(pd, input.expected_dtype)
+            else:
+                expected_dtype = numpy.dtype(input.expected_dtype)
+            assert isinstance(df['a'].dtype, expected_dtype)

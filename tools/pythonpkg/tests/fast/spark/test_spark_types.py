@@ -1,8 +1,16 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql.types import Row
-from duckdb.experimental.spark.sql.types import (
+
+from spark_namespace import USE_ACTUAL_SPARK
+
+if USE_ACTUAL_SPARK:
+    pytest.skip(
+        "Skipping these tests as they use test_all_types() which is specific to DuckDB", allow_module_level=True
+    )
+
+from spark_namespace.sql.types import Row
+from spark_namespace.sql.types import (
     StringType,
     BinaryType,
     BitstringType,
@@ -47,14 +55,15 @@ class TestTypes(object):
 				medium_enum,
 				large_enum,
 				'union',
-				fixed_int_array, 
-				fixed_varchar_array, 
+				fixed_int_array,
+				fixed_varchar_array,
 				fixed_nested_int_array,
-            	fixed_nested_varchar_array, 
-            	fixed_struct_array, 
-            	struct_of_fixed_array, 
+            	fixed_nested_varchar_array,
+            	fixed_struct_array,
+            	struct_of_fixed_array,
             	fixed_array_of_int_list,
-                list_of_fixed_int_array
+                list_of_fixed_int_array,
+                varint
 			) from test_all_types()
 		"""
         )

@@ -36,36 +36,18 @@ void StructColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	if (!state.segment_checked) {
-		if (!state.current) {
-			return true;
-		}
-		state.segment_checked = true;
-
-		FilterPropagateResult prune_result;
-		{
-			lock_guard<mutex> l(stats_lock);
-			prune_result = filter.CheckStatistics(state.current->stats.statistics);
-			if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return true;
-			}
-		}
-		lock_guard<mutex> l(update_lock);
-		if (updates) {
-			auto update_stats = updates->GetStatistics();
-			prune_result = filter.CheckStatistics(*update_stats);
-			return prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		} else {
-			return false;
-		}
-	} else {
-		return true;
-	}
-}
-
 idx_t StructColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
+}
+
+void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		if (!scan_state.scan_child_column[i]) {
+			continue;
+		}
+		sub_columns[i]->InitializePrefetch(prefetch_state, scan_state.child_states[i + 1], rows);
+	}
 }
 
 void StructColumnData::InitializeScan(ColumnScanState &state) {
@@ -78,6 +60,9 @@ void StructColumnData::InitializeScan(ColumnScanState &state) {
 
 	// initialize the sub-columns
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		if (!state.scan_child_column[i]) {
+			continue;
+		}
 		sub_columns[i]->InitializeScan(state.child_states[i + 1]);
 	}
 }
@@ -92,6 +77,9 @@ void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t ro
 
 	// initialize the sub-columns
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		if (!state.scan_child_column[i]) {
+			continue;
+		}
 		sub_columns[i]->InitializeScanWithOffset(state.child_states[i + 1], row_idx);
 	}
 }
@@ -101,7 +89,14 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], *child_entries[i], target_count);
+		auto &target_vector = *child_entries[i];
+		if (!state.scan_child_column[i]) {
+			// if we are not scanning this vector - set it to NULL
+			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(target_vector, true);
+			continue;
+		}
+		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], target_vector, target_count);
 	}
 	return scan_count;
 }
@@ -111,7 +106,14 @@ idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state
 	auto scan_count = validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		sub_columns[i]->ScanCommitted(vector_index, state.child_states[i + 1], *child_entries[i], allow_updates,
+		auto &target_vector = *child_entries[i];
+		if (!state.scan_child_column[i]) {
+			// if we are not scanning this vector - set it to NULL
+			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(target_vector, true);
+			continue;
+		}
+		sub_columns[i]->ScanCommitted(vector_index, state.child_states[i + 1], target_vector, allow_updates,
 		                              target_count);
 	}
 	return scan_count;
@@ -121,7 +123,14 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		sub_columns[i]->ScanCount(state.child_states[i + 1], *child_entries[i], count);
+		auto &target_vector = *child_entries[i];
+		if (!state.scan_child_column[i]) {
+			// if we are not scanning this vector - set it to NULL
+			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(target_vector, true);
+			continue;
+		}
+		sub_columns[i]->ScanCount(state.child_states[i + 1], target_vector, count);
 	}
 	return scan_count;
 }
@@ -131,6 +140,9 @@ void StructColumnData::Skip(ColumnScanState &state, idx_t count) {
 
 	// skip inside the sub-columns
 	for (idx_t child_idx = 0; child_idx < sub_columns.size(); child_idx++) {
+		if (!state.scan_child_column[child_idx]) {
+			continue;
+		}
 		sub_columns[child_idx]->Skip(state.child_states[child_idx + 1], count);
 	}
 }
@@ -148,7 +160,12 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 }
 
 void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
-	vector.Flatten(count);
+	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+		Vector append_vector(vector);
+		append_vector.Flatten(count);
+		Append(stats, state, append_vector, count);
+		return;
+	}
 
 	// append the null values
 	validity.Append(stats, state.child_appends[0], vector, count);
@@ -274,13 +291,13 @@ public:
 		return std::move(global_stats);
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		serializer.WriteObject(101, "validity",
-		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
-		serializer.WriteList(102, "sub_columns", child_states.size(), [&](Serializer::List &list, idx_t i) {
-			auto &state = child_states[i];
-			list.WriteObject([&](Serializer &serializer) { state->WriteDataPointers(writer, serializer); });
-		});
+	PersistentColumnData ToPersistentData() override {
+		PersistentColumnData data(PhysicalType::STRUCT);
+		data.child_columns.push_back(validity_state->ToPersistentData());
+		for (auto &child_state : child_states) {
+			data.child_columns.push_back(child_state->ToPersistentData());
+		}
+		return data;
 	}
 };
 
@@ -299,15 +316,33 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 	return std::move(checkpoint_state);
 }
 
-void StructColumnData::DeserializeColumn(Deserializer &deserializer, BaseStatistics &target_stats) {
-	deserializer.ReadObject(
-	    101, "validity", [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer, target_stats); });
+bool StructColumnData::IsPersistent() {
+	if (!validity.IsPersistent()) {
+		return false;
+	}
+	for (auto &child_col : sub_columns) {
+		if (!child_col->IsPersistent()) {
+			return false;
+		}
+	}
+	return true;
+}
 
-	deserializer.ReadList(102, "sub_columns", [&](Deserializer::List &list, idx_t i) {
-		auto &child_stats = StructStats::GetChildStats(target_stats, i);
-		list.ReadObject([&](Deserializer &item) { sub_columns[i]->DeserializeColumn(item, child_stats); });
-	});
+PersistentColumnData StructColumnData::Serialize() {
+	PersistentColumnData persistent_data(PhysicalType::STRUCT);
+	persistent_data.child_columns.push_back(validity.Serialize());
+	for (auto &sub_column : sub_columns) {
+		persistent_data.child_columns.push_back(sub_column->Serialize());
+	}
+	return persistent_data;
+}
 
+void StructColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
+	validity.InitializeColumn(column_data.child_columns[0], target_stats);
+	for (idx_t c_idx = 0; c_idx < sub_columns.size(); c_idx++) {
+		auto &child_stats = StructStats::GetChildStats(target_stats, c_idx);
+		sub_columns[c_idx]->InitializeColumn(column_data.child_columns[c_idx + 1], child_stats);
+	}
 	this->count = validity.count.load();
 }
 

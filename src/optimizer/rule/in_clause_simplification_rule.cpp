@@ -23,9 +23,12 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 	if (cast_expression.child->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
-	//! Here we check if we can apply the expression on the constant side
+	//! The goal here is to remove the cast from the probe expression
+	//! and apply a cast to the constant expressions. We can only do this
+	//! if the semantics do not change, which only happens when BOTH casts
+	//! are invertible.
 	auto target_type = cast_expression.source_type();
-	if (!BoundCastExpression::CastIsInvertible(cast_expression.return_type, target_type)) {
+	if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.return_type)) {
 		return nullptr;
 	}
 	vector<unique_ptr<BoundConstantExpression>> cast_list;
@@ -36,6 +39,9 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 		}
 		D_ASSERT(expr.children[i]->IsFoldable());
 		auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), *expr.children[i]);
+		if (!BoundCastExpression::CastIsInvertible(constant_value.type(), target_type)) {
+			return nullptr;
+		}
 		auto new_constant = constant_value.DefaultTryCastAs(target_type);
 		if (!new_constant) {
 			return nullptr;

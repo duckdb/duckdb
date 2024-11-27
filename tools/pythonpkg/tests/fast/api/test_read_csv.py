@@ -4,6 +4,7 @@ import pytest
 import platform
 import duckdb
 from io import StringIO, BytesIO
+from duckdb import CSVLineTerminator
 
 
 def TestFile(name):
@@ -122,6 +123,12 @@ class TestReadCSV(object):
         res = rel.fetchone()
         print(res)
         assert res == ('"AAA"BB',)
+
+    def test_quote(self, duckdb_cursor):
+        with pytest.raises(
+            duckdb.Error, match="The methods read_csv and read_csv_auto do not have the \"quote\" argument."
+        ):
+            rel = duckdb_cursor.read_csv(TestFile('unquote_without_delimiter.csv'), quote="", header=False)
 
     def test_escapechar(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('quote_escape.csv'), escapechar=";", header=False)
@@ -322,7 +329,7 @@ class TestReadCSV(object):
             def __init__(self):
                 pass
 
-            def read(self, amount):
+            def read(self, amount=-1):
                 raise ValueError(amount)
 
             def seek(self, loc):
@@ -332,19 +339,20 @@ class TestReadCSV(object):
             def __init__(self):
                 pass
 
-            def read(self, amount):
+            def read(self, amount=-1):
                 return b'test'
 
             def seek(self, loc):
                 raise ValueError(loc)
 
+        # The MemoryFileSystem reads the content into another object, so this fails instantly
         obj = ReadError()
         with pytest.raises(ValueError):
             res = duckdb_cursor.read_csv(obj).fetchall()
 
+        # For that same reason, this will not error, because the data is retrieved with 'read' and then SeekError is never used again
         obj = SeekError()
-        with pytest.raises(ValueError):
-            res = duckdb_cursor.read_csv(obj).fetchall()
+        res = duckdb_cursor.read_csv(obj).fetchall()
 
     def test_filelike_custom(self, duckdb_cursor):
         _ = pytest.importorskip("fsspec")
@@ -358,8 +366,11 @@ class TestReadCSV(object):
                 self.loc = loc
                 return loc
 
-            def read(self, amount):
-                out = b"c1,c2,c3\na,b,c"[self.loc : self.loc + amount : 1]
+            def read(self, amount=-1):
+                file = b"c1,c2,c3\na,b,c"
+                if amount == -1:
+                    return file
+                out = file[self.loc : self.loc + amount : 1]
                 self.loc += amount
                 return out
 
@@ -485,7 +496,7 @@ class TestReadCSV(object):
         assert rel.columns == ['a', 'b', 'c', 'd']
 
         # Duplicates are not okay
-        with pytest.raises(duckdb.BinderException, match="has duplicate column name"):
+        with pytest.raises(duckdb.BinderException, match="names must have unique values"):
             rel = con.read_csv(file, names=['a', 'b', 'a', 'b'])
             assert rel.columns == ['a', 'b', 'a', 'b']
 
@@ -568,4 +579,47 @@ class TestReadCSV(object):
         files = [str(file1), 'not_valid_path', str(file3)]
         with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
             rel = con.read_csv(files)
+            res = rel.fetchall()
+
+    @pytest.mark.parametrize(
+        'options',
+        [
+            {'lineterminator': '\\n'},
+            {'lineterminator': 'LINE_FEED'},
+            {'lineterminator': CSVLineTerminator.LINE_FEED},
+            {'columns': {'id': 'INTEGER', 'name': 'INTEGER', 'c': 'integer', 'd': 'INTEGER'}},
+            {'auto_type_candidates': ['INTEGER', 'INTEGER']},
+            {'max_line_size': 10000},
+            {'ignore_errors': True},
+            {'ignore_errors': False},
+            {'store_rejects': True},
+            {'store_rejects': False},
+            {'rejects_table': 'my_rejects_table'},
+            {'rejects_scan': 'my_rejects_scan'},
+            {'rejects_table': 'my_rejects_table', 'rejects_limit': 50},
+            {'force_not_null': ['one', 'two']},
+            {'buffer_size': 420000},
+            {'decimal': '.'},
+            {'allow_quoted_nulls': True},
+            {'allow_quoted_nulls': False},
+            {'filename': True},
+            {'filename': 'test'},
+            {'hive_partitioning': True},
+            {'hive_partitioning': False},
+            # {'union_by_name': True},
+            {'union_by_name': False},
+            {'hive_types_autocast': False},
+            {'hive_types_autocast': True},
+            {'hive_types': {'one': 'INTEGER', 'two': 'VARCHAR'}},
+        ],
+    )
+    def test_read_csv_options(self, duckdb_cursor, options, tmp_path):
+        file = tmp_path / "file.csv"
+        file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+        print(options)
+        if 'hive_types' in options:
+            with pytest.raises(duckdb.InvalidInputException, match=r'Unknown hive_type:'):
+                rel = duckdb_cursor.read_csv(file, **options)
+        else:
+            rel = duckdb_cursor.read_csv(file, **options)
             res = rel.fetchall()

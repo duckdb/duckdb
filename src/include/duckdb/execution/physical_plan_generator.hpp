@@ -45,8 +45,6 @@ public:
 	//! Whether or not we should preserve insertion order for executing the given sink
 	static bool PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan);
 
-	static bool HasEquality(vector<JoinCondition> &conds, idx_t &range_count);
-
 protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);
 
@@ -104,6 +102,9 @@ protected:
 private:
 	bool PreserveInsertionOrder(PhysicalOperator &plan);
 	bool UseBatchIndex(PhysicalOperator &plan);
+
+public:
+	idx_t delim_index = 0;
 
 private:
 	ClientContext &context;

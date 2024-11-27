@@ -1,12 +1,13 @@
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
+
 #include "duckdb/common/exception.hpp"
-#include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/database_manager.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,7 @@ TransactionContext::TransactionContext(ClientContext &context)
 TransactionContext::~TransactionContext() {
 	if (current_transaction) {
 		try {
-			Rollback();
+			Rollback(nullptr);
 		} catch (...) { // NOLINT
 		}
 	}
@@ -28,12 +29,11 @@ void TransactionContext::BeginTransaction() {
 		throw TransactionException("cannot start a transaction within a transaction");
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
-	auto catalog_version = Catalog::GetSystemCatalog(context).GetCatalogVersion();
-	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, catalog_version);
+	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp);
 
 	// Notify any registered state of transaction begin
-	for (auto const &s : context.registered_state) {
-		s.second->TransactionBegin(*current_transaction, context);
+	for (auto &state : context.registered_state->States()) {
+		state->TransactionBegin(*current_transaction, context);
 	}
 }
 
@@ -46,13 +46,13 @@ void TransactionContext::Commit() {
 	auto error = transaction->Commit();
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
-		for (auto const &s : context.registered_state) {
-			s.second->TransactionRollback(*transaction, context);
+		for (auto const &s : context.registered_state->States()) {
+			s->TransactionRollback(*transaction, context, error);
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	} else {
-		for (auto const &s : context.registered_state) {
-			s.second->TransactionCommit(*transaction, context);
+		for (auto &state : context.registered_state->States()) {
+			state->TransactionCommit(*transaction, context);
 		}
 	}
 }
@@ -64,16 +64,28 @@ void TransactionContext::SetAutoCommit(bool value) {
 	}
 }
 
-void TransactionContext::Rollback() {
+void TransactionContext::SetReadOnly() {
+	current_transaction->SetReadOnly();
+}
+
+void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
-	transaction->Rollback();
+	ErrorData rollback_error;
+	try {
+		transaction->Rollback();
+	} catch (std::exception &ex) {
+		rollback_error = ErrorData(ex);
+	}
 	// Notify any registered state of transaction rollback
-	for (auto const &s : context.registered_state) {
-		s.second->TransactionRollback(*transaction, context);
+	for (auto const &s : context.registered_state->States()) {
+		s->TransactionRollback(*transaction, context, error);
+	}
+	if (rollback_error.HasError()) {
+		rollback_error.Throw();
 	}
 }
 

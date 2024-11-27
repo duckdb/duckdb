@@ -18,12 +18,15 @@ from .duckdb import (
     ExplainType,
     StatementType,
     ExpectedResultType,
+	CSVLineTerminator,
     PythonExceptionHandling,
     RenderMode,
     Expression,
     ConstantExpression,
     ColumnExpression,
+    DefaultExpression,
     CoalesceOperator,
+    LambdaExpression,
     StarExpression,
     FunctionExpression,
     CaseExpression,
@@ -36,7 +39,9 @@ _exported_symbols.extend([
     "Expression",
     "ConstantExpression",
     "ColumnExpression",
+    "DefaultExpression",
     "CoalesceOperator",
+    "LambdaExpression",
     "StarExpression",
     "FunctionExpression",
     "CaseExpression",
@@ -250,7 +255,6 @@ from .duckdb import (
     __version__,
     apilevel,
     comment,
-    default_connection,
     identifier,
     keyword,
     numeric_const,
@@ -268,7 +272,6 @@ _exported_symbols.extend([
     "__version__",
     "apilevel",
     "comment",
-    "default_connection",
     "identifier",
     "keyword",
     "numeric_const",
@@ -282,11 +285,15 @@ _exported_symbols.extend([
 
 
 from .duckdb import (
-    connect
+    connect,
+    default_connection,
+    set_default_connection,
 )
 
 _exported_symbols.extend([
-    "connect"
+    "connect",
+    "default_connection",
+    "set_default_connection",
 ])
 
 # Exceptions

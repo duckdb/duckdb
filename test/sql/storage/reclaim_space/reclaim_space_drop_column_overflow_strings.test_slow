@@ -5,6 +5,9 @@
 load __TEST_DIR__/reclaim_space_drop_column_overflow_strings.db
 
 statement ok
+PRAGMA force_compression='Uncompressed';
+
+statement ok
 PRAGMA force_checkpoint;
 
 statement ok
@@ -21,7 +24,22 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 ----
 296.955	0	5000	44543527	(empty)	X
 
-loop i 0 10
+# For smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
+# therefore, we need to compare to a range of total block counts.
+statement ok
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+
+statement ok
+create type test_result as UNION(
+	ok BOOL,
+	err STRUCT(
+		old BIGINT,
+		allowed_max DECIMAL(21,1),
+		actual BIGINT
+	)
+);
+
+loop i 0 30
 
 statement ok
 ALTER TABLE strings DROP COLUMN s;
@@ -40,10 +58,30 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 statement ok
 CHECKPOINT;
 
-# ensure that the expected total storage size is the same as in the first iteration of the loop
+# Ensure that the total blocks don't exceed the total blocks by more than 1.2.
 
-query I nosort expected_blocks
-SELECT total_blocks FROM pragma_database_size();
+query I
+SELECT
+	CASE WHEN ${i} < 10
+		THEN True::test_result
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2
+		THEN True::test_result
+	ELSE {
+			'old': total_blocks_tbl.total_blocks,
+			'allowed_max': total_blocks_tbl.total_blocks * 1.2,
+			'actual': current.total_blocks
+		}::test_result
+	END
+FROM pragma_database_size() AS current, total_blocks_tbl;
+----
+true
+
+# Adjust total_blocks_tbl to the count after 10 warm-up iterations.
+
+statement ok
+UPDATE total_blocks_tbl SET total_blocks = (
+	SELECT CASE WHEN ${i} < 10 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		ELSE (total_blocks) END);
 
 restart
 

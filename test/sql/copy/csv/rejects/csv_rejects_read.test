@@ -8,7 +8,7 @@ require notwindows
 
 query III rowsort
 SELECT * FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/bad.csv',
+    'data/csv/error/mismatch/bad.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     store_rejects = true, auto_detect=true);
 ----
@@ -29,7 +29,7 @@ DROP TABLE reject_scans;
 # Test with multiple columns on the same row
 query III rowsort
 SELECT * FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/bad2.csv',
+    'data/csv/error/mismatch/bad2.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'INTEGER'},
     store_rejects = true, auto_detect=false);
 ----
@@ -51,7 +51,7 @@ DROP TABLE reject_scans;
 # Test with multiple files
 query III rowsort
 SELECT * FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/bad*.csv',
+    'data/csv/error/mismatch/bad*.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     store_rejects = true, auto_detect=false);
 ----
@@ -76,7 +76,7 @@ DROP TABLE reject_scans;
 
 query III rowsort
 SELECT * FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/bad*.csv',
+    'data/csv/error/mismatch/bad*.csv',
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     store_rejects = true,rejects_limit=2, ignore_errors=true, auto_detect=false);
 ----
@@ -100,7 +100,7 @@ DROP TABLE reject_scans;
 # Try with bigger files
 query I
 SELECT SUM(num) FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/big_bad.csv',
+    'data/csv/error/mismatch/big_bad.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true, auto_detect=false);
 ----
@@ -120,7 +120,7 @@ DROP TABLE reject_scans;
 
 query I
 SELECT SUM(num) FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/big_bad2.csv',
+    'data/csv/error/mismatch/big_bad2.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true,  auto_detect=false)
 ----
@@ -142,7 +142,7 @@ DROP TABLE reject_scans;
 # Test with multiple big files
 query I
 SELECT SUM(num) FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/big_*.csv',
+    'data/csv/error/mismatch/big_*.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true, auto_detect=false);
 ----
@@ -166,11 +166,11 @@ DROP TABLE reject_scans;
 query IIII rowsort
 SELECT *
 FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/small1.csv',
+    'data/csv/error/mismatch/small1.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true) as L
 JOIN read_csv(
-    'test/sql/copy/csv/data/error/mismatch/small2.csv',
+    'data/csv/error/mismatch/small2.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
    store_rejects = true) as R
 ON L.num = R.num;
@@ -178,20 +178,20 @@ ON L.num = R.num;
 1	A	1	A
 3	C	3	C
 
-query IIIIIIIIIIII
-SELECT * EXCLUDE (scan_id) FROM reject_scans ORDER BY ALL;
+query IIIIIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_scans ORDER BY ALL;
 ----
-0	test/sql/copy/csv/data/error/mismatch/small1.csv	,	"	"	\n	0	true	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
-1	test/sql/copy/csv/data/error/mismatch/small2.csv	,	"	"	\n	0	true	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
+data/csv/error/mismatch/small1.csv	,	\0	\0	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
+data/csv/error/mismatch/small2.csv	,	\0	\0	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
 
 
-query IIIIIIIII
-SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+query IIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY ALL;
 ----
-0	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-0	6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-1	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-1	5	23	23	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+5	23	23	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
 
 statement ok
 DROP TABLE reject_errors;
@@ -204,11 +204,11 @@ DROP TABLE reject_scans;
 query IIII rowsort
 SELECT *
 FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/small1.csv',
+    'data/csv/error/mismatch/small1.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true) as L
 JOIN read_csv(
-    'test/sql/copy/csv/data/error/mismatch/small2.csv',
+    'data/csv/error/mismatch/small2.csv',
     columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
     store_rejects = true, rejects_limit=1) as R
 ON L.num = R.num;
@@ -217,12 +217,12 @@ ON L.num = R.num;
 3	C	3	C
 
 
-query IIIIIIIII
-SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+query IIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY ALL;
 ----
-0	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-0	6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
-1	3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+3	15	15	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
+6	27	27	1	num	CAST	X,Y	Error when converting column "num". Could not convert string "X" to 'INTEGER'
 
 
 statement ok
@@ -236,14 +236,50 @@ FROM read_csv('data/csv/rejects/dr_who.csv', columns={ 'date': 'DATE', 'datetime
 ----
 
 
-query IIIIIIIII
-SELECT * EXCLUDE (scan_id) FROM reject_errors ORDER BY ALL;
+query IIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY column_name;
 ----
-0	2	38	38	1	date	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "date". Could not convert string "not-a-date" to 'DATE'
-0	2	38	64	3	time	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "time". Could not convert string "not-a-time" to 'TIME'
-0	2	38	75	4	timestamp	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "timestamp". Could not convert string "not-a-timestamp" to 'TIMESTAMP'
-0	2	38	NULL	2	datetime	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "datetime". Could not convert string "not-a-datetime" to 'TIMESTAMP WITH TIME ZONE'
-0	2	38	NULL	5	time_tz	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "time_tz". Could not convert string "not-a-time-tz" to 'TIME WITH TIME ZONE'
+2	38	38	1	date	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "date". Could not convert string "not-a-date" to 'DATE'
+2	38	49	2	datetime	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "datetime". Could not convert string "not-a-datetime" to 'TIMESTAMP WITH TIME ZONE'
+2	38	64	3	time	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "time". Could not convert string "not-a-time" to 'TIME'
+2	38	NULL	5	time_tz	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "time_tz". Could not convert string "not-a-time-tz" to 'TIME WITH TIME ZONE'
+2	38	75	4	timestamp	CAST	not-a-date,not-a-datetime,not-a-time,not-a-timestamp,not-a-time-tz	Error when converting column "timestamp". Could not convert string "not-a-timestamp" to 'TIMESTAMP'
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+
+# Test rejects table with comments
+statement ok
+FROM read_csv('data/csv/comments/error.csv', store_rejects = true, comment = '#');
+
+query IIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY column_name;
+----
+2726	10963	10963	1	a	CAST	oh no	Error when converting column "a". Could not convert string "oh no" to 'BIGINT'
+2733	11009	11009	1	a	CAST	oh no	Error when converting column "a". Could not convert string "oh no" to 'BIGINT'
+2726	10963	10968	1	b	MISSING COLUMNS	oh no	Expected Number of Columns: 2 Found: 1
+2733	11009	11014	1	b	MISSING COLUMNS	oh no	Expected Number of Columns: 2 Found: 1
+
+statement ok
+DROP TABLE reject_errors;
+
+statement ok
+DROP TABLE reject_scans;
+
+query II
+FROM read_csv('data/csv/error.csv', store_rejects=1);
+----
+true	false
+
+query IIIIIIII
+SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY column_name;
+----
+4	36	39	1	column2	MISSING COLUMNS	yes	Expected Number of Columns: 2 Found: 1
+3	24	31	3	NULL	TOO MANY COLUMNS	yes,yes,yes	Expected Number of Columns: 2 Found: 3
 
 statement ok
 DROP TABLE reject_errors;

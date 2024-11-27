@@ -4,11 +4,11 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -107,8 +107,9 @@ DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 	header.block_count = source.Read<uint64_t>();
 
 	header.block_alloc_size = source.Read<idx_t>();
+
+	// backwards compatibility
 	if (!header.block_alloc_size) {
-		// backwards compatibility
 		header.block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	}
 
@@ -142,7 +143,7 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size), db(db), path(path_p),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                    Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
+                    Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
 }
 
@@ -264,7 +265,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	// compute the checksum
 	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
-	uint64_t computed_checksum = Checksum(block.buffer, block.size);
+	auto computed_checksum = Checksum(block.buffer, block.size);
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
@@ -293,14 +294,6 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		                            "size: %llu, file block size: %llu",
 		                            GetBlockAllocSize(), header.block_alloc_size);
 	}
-
-	// NOTE: remove this once we start supporting different block sizes.
-	if (Storage::BLOCK_ALLOC_SIZE != header.block_alloc_size) {
-		throw NotImplementedException("cannot initialize a database with a different block size than the default block "
-		                              "size: default block size: %llu, file block size: %llu",
-		                              Storage::BLOCK_ALLOC_SIZE, header.block_alloc_size);
-	}
-
 	SetBlockAllocSize(header.block_alloc_size);
 }
 
@@ -369,6 +362,29 @@ void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 	newly_freed_list.insert(block_id);
 }
 
+void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
+	lock_guard<mutex> lock(block_lock);
+	D_ASSERT(block_id >= 0);
+	if (max_block <= block_id) {
+		// the block is past the current max_block
+		// in this case we need to increment  "max_block" to "block_id"
+		// any blocks in the middle are added to the free list
+		// i.e. if max_block = 0, and block_id = 3, we need to add blocks 1 and 2 to the free list
+		while (max_block < block_id) {
+			free_list.insert(max_block);
+			max_block++;
+		}
+		max_block++;
+	} else if (free_list.find(block_id) != free_list.end()) {
+		// block is currently in the free list - erase
+		free_list.erase(block_id);
+		newly_freed_list.erase(block_id);
+	} else {
+		// block is already in use - increase reference count
+		IncreaseBlockReferenceCountInternal(block_id);
+	}
+}
+
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
@@ -393,8 +409,7 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	modified_blocks.insert(block_id);
 }
 
-void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
-	lock_guard<mutex> lock(block_lock);
+void SingleFileBlockManager::IncreaseBlockReferenceCountInternal(block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
 	D_ASSERT(block_id < max_block);
 	D_ASSERT(free_list.find(block_id) == free_list.end());
@@ -404,6 +419,65 @@ void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
 	} else {
 		multi_use_blocks[block_id] = 2;
 	}
+}
+
+void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
+	// probably don't need this?
+	lock_guard<mutex> lock(block_lock);
+	// all blocks should be accounted for - either in the block_usage_count, or in the free list
+	set<block_id_t> referenced_blocks;
+	for (auto &block : block_usage_count) {
+		if (block.first == INVALID_BLOCK) {
+			continue;
+		}
+		if (block.first >= max_block) {
+			throw InternalException("Block %lld is used, but it is bigger than the max block %d", block.first,
+			                        max_block);
+		}
+		referenced_blocks.insert(block.first);
+		if (block.second > 1) {
+			// multi-use block
+			auto entry = multi_use_blocks.find(block.first);
+			if (entry == multi_use_blocks.end()) {
+				throw InternalException("Block %lld was used %llu times, but not present in multi_use_blocks",
+				                        block.first, block.second);
+			}
+			if (entry->second != block.second) {
+				throw InternalException(
+				    "Block %lld was used %llu times, but multi_use_blocks says it is used %llu times", block.first,
+				    block.second, entry->second);
+			}
+		} else {
+			D_ASSERT(block.second > 0);
+			auto entry = free_list.find(block.first);
+			if (entry != free_list.end()) {
+				throw InternalException("Block %lld was used, but it is present in the free list", block.first);
+			}
+		}
+	}
+	for (auto &free_block : free_list) {
+		referenced_blocks.insert(free_block);
+	}
+	if (referenced_blocks.size() != NumericCast<idx_t>(max_block)) {
+		// not all blocks are accounted for
+		string missing_blocks;
+		for (block_id_t i = 0; i < max_block; i++) {
+			if (referenced_blocks.find(i) == referenced_blocks.end()) {
+				if (!missing_blocks.empty()) {
+					missing_blocks += ", ";
+				}
+				missing_blocks += to_string(i);
+			}
+		}
+		throw InternalException(
+		    "Blocks %s were neither present in the free list or in the block_usage_count (max block %lld)",
+		    missing_blocks, max_block);
+	}
+}
+
+void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
+	lock_guard<mutex> lock(block_lock);
+	IncreaseBlockReferenceCountInternal(block_id);
 }
 
 idx_t SingleFileBlockManager::GetMetaBlock() {
@@ -420,8 +494,12 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 	return free_list.size();
 }
 
+bool SingleFileBlockManager::IsRemote() {
+	return !handle->OnDiskFile();
+}
+
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
-	D_ASSERT(source_buffer.AllocSize() == Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
 	return make_uniq<Block>(source_buffer, block_id);
 }
 
@@ -430,21 +508,50 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id);
+		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize());
 	}
 	result->Initialize(options.debug_initialize);
 	return result;
 }
 
+idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) {
+	return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
+}
+
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	ReadAndChecksum(block, BLOCK_START + NumericCast<idx_t>(block.id) * Storage::BLOCK_ALLOC_SIZE);
+	ReadAndChecksum(block, GetBlockLocation(block.id));
+}
+
+void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {
+	D_ASSERT(start_block >= 0);
+	D_ASSERT(block_count >= 1);
+
+	// read the buffer from disk
+	auto location = GetBlockLocation(start_block);
+	buffer.Read(*handle, location);
+
+	// for each of the blocks - verify the checksum
+	auto ptr = buffer.InternalBuffer();
+	for (idx_t i = 0; i < block_count; i++) {
+		// compute the checksum
+		auto start_ptr = ptr + i * GetBlockAllocSize();
+		auto stored_checksum = Load<uint64_t>(start_ptr);
+		uint64_t computed_checksum = Checksum(start_ptr + Storage::DEFAULT_BLOCK_HEADER_SIZE, GetBlockSize());
+		// verify the checksum
+		if (stored_checksum != computed_checksum) {
+			throw IOException(
+			    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+			    "at location %llu",
+			    computed_checksum, stored_checksum, location + i * GetBlockAllocSize());
+		}
+	}
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * Storage::BLOCK_ALLOC_SIZE);
+	ChecksumAndWrite(buffer, BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize());
 }
 
 void SingleFileBlockManager::Truncate() {
@@ -466,15 +573,16 @@ void SingleFileBlockManager::Truncate() {
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
-	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * Storage::BLOCK_ALLOC_SIZE));
+	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	vector<MetadataHandle> free_list_blocks;
+	auto &metadata_manager = GetMetadataManager();
 
 	// reserve all blocks that we are going to write the free list to
 	// since these blocks are no longer free we cannot just include them in the free list!
-	auto block_size = MetadataManager::METADATA_BLOCK_SIZE - sizeof(idx_t);
+	auto block_size = metadata_manager.GetMetadataBlockSize() - sizeof(idx_t);
 	idx_t allocated_size = 0;
 	while (true) {
 		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
@@ -585,6 +693,10 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	TrimFreeBlocks();
 }
 
+void SingleFileBlockManager::FileSync() {
+	handle->Sync();
+}
+
 void SingleFileBlockManager::TrimFreeBlocks() {
 	if (DBConfig::Get(db).options.trim_free_blocks) {
 		for (auto itr = newly_freed_list.begin(); itr != newly_freed_list.end(); ++itr) {
@@ -597,8 +709,8 @@ void SingleFileBlockManager::TrimFreeBlocks() {
 			// We are now one too far.
 			--itr;
 			// Trim the range.
-			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * Storage::BLOCK_ALLOC_SIZE),
-			             NumericCast<idx_t>(last + 1 - first) * Storage::BLOCK_ALLOC_SIZE);
+			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * GetBlockAllocSize()),
+			             NumericCast<idx_t>(last + 1 - first) * GetBlockAllocSize());
 		}
 	}
 	newly_freed_list.clear();

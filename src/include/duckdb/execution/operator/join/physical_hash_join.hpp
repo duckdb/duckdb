@@ -22,11 +22,17 @@ class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::HASH_JOIN;
 
+	struct JoinProjectionColumns {
+		vector<idx_t> col_idxs;
+		vector<LogicalType> col_types;
+	};
+
 public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
-	                 idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats);
+	                 idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats,
+	                 unique_ptr<JoinFilterPushdownInfo> pushdown_info);
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
 	                 PerfectHashJoinStats join_state);
@@ -37,15 +43,12 @@ public:
 	//! The types of the join keys
 	vector<LogicalType> condition_types;
 
-	//! The indices for getting the payload columns
-	vector<idx_t> payload_column_idxs;
-	//! The types of the payload columns
-	vector<LogicalType> payload_types;
-
-	//! Positions of the RHS columns that need to output
-	vector<idx_t> rhs_output_columns;
-	//! The types of the output
-	vector<LogicalType> rhs_output_types;
+	//! The indices/types of the payload columns
+	JoinProjectionColumns payload_columns;
+	//! The indices/types of the lhs columns that need to be output
+	JoinProjectionColumns lhs_output_columns;
+	//! The indices/types of the rhs columns that need to be output
+	JoinProjectionColumns rhs_output_columns;
 
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
@@ -53,7 +56,7 @@ public:
 	PerfectHashJoinStats perfect_join_statistics;
 
 public:
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 public:
 	// Operator Interface
@@ -92,6 +95,7 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
+	void PrepareFinalize(ClientContext &context, GlobalSinkState &global_state) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 

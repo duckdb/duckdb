@@ -24,6 +24,11 @@
         "id": 103,
         "name": "version",
         "type": "string"
+      },
+      {
+        "id": 104,
+        "name": "etag",
+        "type": "string"
       }
     ]
   }

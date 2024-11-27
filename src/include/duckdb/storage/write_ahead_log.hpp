@@ -36,6 +36,9 @@ class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
 class WriteAheadLogDeserializer;
+struct PersistentCollectionData;
+
+enum class WALInitState { NO_WAL, UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -44,29 +47,23 @@ class WriteAheadLogDeserializer;
 class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
-	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path);
+	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size = 0ULL,
+	                       WALInitState state = WALInitState::NO_WAL);
 	virtual ~WriteAheadLog();
 
-	//! Skip writing to the WAL
-	bool skip_writing;
-
 public:
-	//! Replay the WAL
-	static bool Replay(AttachedDatabase &database, unique_ptr<FileHandle> handle);
+	//! Replay and initialize the WAL
+	static unique_ptr<WriteAheadLog> Replay(FileSystem &fs, AttachedDatabase &database, const string &wal_path);
 
 	//! Gets the total bytes written to the WAL since startup
-	idx_t GetTotalWritten();
+	idx_t GetWALSize() const;
+	//! Gets the total bytes written to the WAL since startup
+	idx_t GetTotalWritten() const;
 
 	//! A WAL is initialized, if a writer to a file exists.
-	bool Initialized() {
-		return writer != nullptr;
-	}
+	bool Initialized() const;
 	//! Initializes the file of the WAL by creating the file writer.
 	BufferedFileWriter &Initialize();
-	//! Returns the WAL file writer.
-	BufferedFileWriter &GetWriter() {
-		return *writer;
-	}
 
 	void WriteVersion();
 
@@ -97,9 +94,10 @@ public:
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(const string &schema, const string &table);
 
-	void WriteAlter(const AlterInfo &info);
+	void WriteAlter(CatalogEntry &entry, const AlterInfo &info);
 
 	void WriteInsert(DataChunk &chunk);
+	void WriteRowGroupData(const PersistentCollectionData &data);
 	void WriteDelete(DataChunk &chunk);
 	//! Write a single (sub-) column update to the WAL. Chunk must be a pair of (COL, ROW_ID).
 	//! The column_path vector is a *path* towards a column within the table
@@ -112,7 +110,7 @@ public:
 	void WriteUpdate(DataChunk &chunk, const vector<column_t> &column_path);
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
-	void Truncate(int64_t size);
+	void Truncate(idx_t size);
 	//! Delete the WAL file on disk. The WAL should not be used after this point.
 	void Delete();
 	void Flush();
@@ -120,9 +118,15 @@ public:
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:
+	static unique_ptr<WriteAheadLog> ReplayInternal(AttachedDatabase &database, unique_ptr<FileHandle> handle);
+
+protected:
 	AttachedDatabase &database;
+	mutex wal_lock;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
+	atomic<idx_t> wal_size;
+	atomic<WALInitState> init_state;
 };
 
 } // namespace duckdb

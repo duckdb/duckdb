@@ -1,4 +1,5 @@
 #include "zstd_file_system.hpp"
+
 #include "zstd.h"
 
 namespace duckdb {
@@ -100,7 +101,7 @@ void ZstdStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t u
 			sd.out_buff_start = sd.out_buff.get();
 		}
 		uncompressed_data += input_consumed;
-		remaining -= input_consumed;
+		remaining -= UnsafeNumericCast<int64_t>(input_consumed);
 	}
 }
 
@@ -160,6 +161,10 @@ public:
 		Initialize(write);
 	}
 
+	FileCompressionType GetFileCompressionType() override {
+		return FileCompressionType::ZSTD;
+	}
+
 	ZStdFileSystem zstd_fs;
 };
 
@@ -178,6 +183,18 @@ idx_t ZStdFileSystem::InBufferSize() {
 
 idx_t ZStdFileSystem::OutBufferSize() {
 	return duckdb_zstd::ZSTD_DStreamOutSize();
+}
+
+int64_t ZStdFileSystem::DefaultCompressionLevel() {
+	return duckdb_zstd::ZSTD_defaultCLevel();
+}
+
+int64_t ZStdFileSystem::MinimumCompressionLevel() {
+	return duckdb_zstd::ZSTD_minCLevel();
+}
+
+int64_t ZStdFileSystem::MaximumCompressionLevel() {
+	return duckdb_zstd::ZSTD_maxCLevel();
 }
 
 } // namespace duckdb

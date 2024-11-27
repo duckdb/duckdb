@@ -1,6 +1,7 @@
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -8,28 +9,18 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
 
 namespace duckdb {
 
-static void InitializeTableRefDependency(TableRef &ref) {
-	if (ref.type == TableReferenceType::JOIN) {
-		auto &join_ref = ref.Cast<JoinRef>();
-		InitializeTableRefDependency(*join_ref.right);
-		InitializeTableRefDependency(*join_ref.left);
-	} else {
-		ref.external_dependency = make_shared_ptr<ExternalDependency>();
-	}
-}
-
 QueryRelation::QueryRelation(const shared_ptr<ClientContext> &context, unique_ptr<SelectStatement> select_stmt_p,
-                             string alias_p)
-    : Relation(context, RelationType::QUERY_RELATION), select_stmt(std::move(select_stmt_p)),
+                             string alias_p, const string &query_p)
+    : Relation(context, RelationType::QUERY_RELATION), select_stmt(std::move(select_stmt_p)), query(query_p),
       alias(std::move(alias_p)) {
-	if (select_stmt->node->type == QueryNodeType::SELECT_NODE) {
-		auto &ref = *select_stmt->node->Cast<SelectNode>().from_table;
-		InitializeTableRefDependency(ref);
+	if (query.empty()) {
+		query = select_stmt->ToString();
 	}
-	context->TryBindRelation(*this, this->columns);
+	TryBindRelation(columns);
 }
 
 QueryRelation::~QueryRelation() {
@@ -60,6 +51,42 @@ unique_ptr<QueryNode> QueryRelation::GetQueryNode() {
 unique_ptr<TableRef> QueryRelation::GetTableRef() {
 	auto subquery_ref = make_uniq<SubqueryRef>(GetSelectStatement(), GetAlias());
 	return std::move(subquery_ref);
+}
+
+BoundStatement QueryRelation::Bind(Binder &binder) {
+	auto saved_binding_mode = binder.GetBindingMode();
+	binder.SetBindingMode(BindingMode::EXTRACT_REPLACEMENT_SCANS);
+	bool first_bind = columns.empty();
+	auto result = Relation::Bind(binder);
+	auto &replacements = binder.GetReplacementScans();
+	if (first_bind) {
+		auto &query_node = *select_stmt->node;
+		auto &cte_map = query_node.cte_map;
+		for (auto &kv : replacements) {
+			auto &name = kv.first;
+			auto &tableref = kv.second;
+
+			if (!tableref->external_dependency) {
+				// Only push a CTE for objects that are out of our control (i.e Python)
+				// This makes sure replacement scans for files (parquet/csv/json etc) are not transformed into a CTE
+				continue;
+			}
+
+			auto select = make_uniq<SelectStatement>();
+			auto select_node = make_uniq<SelectNode>();
+			select_node->select_list.push_back(make_uniq<StarExpression>());
+			select_node->from_table = std::move(tableref);
+			select->node = std::move(select_node);
+
+			auto cte_info = make_uniq<CommonTableExpressionInfo>();
+			cte_info->query = std::move(select);
+
+			cte_map.map[name] = std::move(cte_info);
+		}
+	}
+	replacements.clear();
+	binder.SetBindingMode(saved_binding_mode);
+	return result;
 }
 
 string QueryRelation::GetAlias() {

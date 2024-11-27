@@ -12,6 +12,21 @@ INITIALIZE_METHOD = (
 END_MARKER = "} // END_OF_CONNECTION_METHODS"
 
 
+def is_py_kwargs(method):
+    return 'kwargs_as_dict' in method and method['kwargs_as_dict'] == True
+
+
+def is_py_args(method):
+    if 'args' not in method:
+        return False
+    args = method['args']
+    if len(args) == 0:
+        return False
+    if args[0]['name'] != '*args':
+        return False
+    return True
+
+
 def generate():
     # Read the PYCONNECTION_SOURCE file
     with open(PYCONNECTION_SOURCE, 'r') as source_file:
@@ -57,6 +72,8 @@ def generate():
     def create_arguments(arguments) -> list:
         result = []
         for arg in arguments:
+            if arg['name'] == '*args':
+                break
             argument = f"py::arg(\"{arg['name']}\")"
             if 'allow_none' in arg:
                 value = str(arg['allow_none']).lower()
@@ -74,15 +91,18 @@ def generate():
         definition += f"""&DuckDBPyConnection::{method['function']}"""
         definition += ", "
         definition += f"\"{method['docs']}\""
-        if 'args' in method:
+        if 'args' in method and not is_py_args(method):
             definition += ", "
             arguments = create_arguments(method['args'])
             definition += ', '.join(arguments)
         if 'kwargs' in method:
             definition += ", "
-            definition += "py::kw_only(), "
-            arguments = create_arguments(method['kwargs'])
-            definition += ', '.join(arguments)
+            if is_py_kwargs(method):
+                definition += "py::kw_only()"
+            else:
+                definition += "py::kw_only(), "
+                arguments = create_arguments(method['kwargs'])
+                definition += ', '.join(arguments)
         definition += ");"
         return definition
 

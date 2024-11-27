@@ -159,20 +159,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		duckdb_destroy_prepare(&stmt);
 	}
 
-	SECTION("test unsupported type") {
-		auto state = duckdb_query_arrow(tester.connection, "SELECT 0::UHUGEINT", &arrow_result);
-		REQUIRE(state == DuckDBSuccess);
-
-		ArrowSchema arrow_schema;
-		arrow_schema.Init();
-		auto arrow_schema_ptr = &arrow_schema;
-
-		state = duckdb_query_arrow_schema(arrow_result, reinterpret_cast<duckdb_arrow_schema *>(&arrow_schema_ptr));
-		REQUIRE(state == DuckDBError);
-
-		duckdb_destroy_arrow(&arrow_result);
-	}
-
 	SECTION("test scan") {
 
 		const auto logical_types = duckdb::vector<LogicalType> {LogicalType(LogicalTypeId::INTEGER)};

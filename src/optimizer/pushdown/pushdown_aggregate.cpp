@@ -50,18 +50,19 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		}
 		// no aggregate! we are filtering on a group
 		// we can only push this down if the filter is in all grouping sets
-		vector<ColumnBinding> bindings;
-		ExtractFilterBindings(*f.filter, bindings);
-
-		bool can_pushdown_filter = true;
 		if (aggr.grouping_sets.empty()) {
 			// empty grouping set - we cannot pushdown the filter
-			can_pushdown_filter = false;
+			continue;
 		}
+
+		vector<ColumnBinding> bindings;
+		ExtractFilterBindings(*f.filter, bindings);
 		if (bindings.empty()) {
 			// we can never push down empty grouping sets
 			continue;
 		}
+
+		bool can_pushdown_filter = true;
 		for (auto &grp : aggr.grouping_sets) {
 			// check for each of the grouping sets if they contain all groups
 			for (auto &binding : bindings) {

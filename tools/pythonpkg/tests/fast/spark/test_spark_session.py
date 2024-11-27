@@ -1,7 +1,12 @@
 import pytest
+from duckdb.experimental.spark.exception import (
+    ContributionsAcceptedError,
+)
+from spark_namespace.sql.types import Row
+from spark_namespace import USE_ACTUAL_SPARK
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql import SparkSession
+from spark_namespace.sql import SparkSession
 
 
 class TestSparkSession(object):
@@ -41,6 +46,7 @@ class TestSparkSession(object):
             .getOrCreate()
         )
 
+    @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="Different version numbers")
     def test_version(self, spark):
         version = spark.version
         assert version == '1.0.0'
@@ -68,10 +74,26 @@ class TestSparkSession(object):
         context = spark.sparkContext
         spark.stop()
 
+    @pytest.mark.skipif(
+        USE_ACTUAL_SPARK, reason="Can't create table with the local PySpark setup in the CI/CD pipeline"
+    )
     def test_table(self, spark):
         spark.sql('create table tbl(a varchar(10))')
         df = spark.table('tbl')
 
+    def test_range(self, spark):
+        res_1 = spark.range(3).collect()
+        res_2 = spark.range(3, 10, 2).collect()
+        res_3 = spark.range(3, 6).collect()
+
+        assert res_1 == [Row(id=0), Row(id=1), Row(id=2)]
+        assert res_2 == [Row(id=3), Row(id=5), Row(id=7), Row(id=9)]
+        assert res_3 == [Row(id=3), Row(id=4), Row(id=5)]
+
+        if not USE_ACTUAL_SPARK:
+            with pytest.raises(ContributionsAcceptedError):
+                # partition size is not supported
+                spark.range(0, 10, 2, 2)
+
     def test_udf(self, spark):
-        with pytest.raises(NotImplementedError):
-            udf_registration = spark.udf
+        udf_registration = spark.udf

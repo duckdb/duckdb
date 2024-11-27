@@ -15,7 +15,7 @@ namespace duckdb {
 
 struct ParquetMetaDataBindData : public TableFunctionData {
 	vector<LogicalType> return_types;
-	unique_ptr<MultiFileList> file_list;
+	shared_ptr<MultiFileList> file_list;
 	unique_ptr<MultiFileReader> multi_file_reader;
 };
 
@@ -166,8 +166,8 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.emplace_back(LogicalType::MAP(LogicalType::BLOB, LogicalType::BLOB));
 }
 
-Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele,
-                          bool stats_is_set, const std::string &stats) {
+Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele, bool stats_is_set,
+                          const std::string &stats) {
 	if (!stats_is_set) {
 		return Value(LogicalType::VARCHAR);
 	}
@@ -211,19 +211,19 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 			current_chunk.SetValue(0, count, file_path);
 
 			// row_group_id, LogicalType::BIGINT
-			current_chunk.SetValue(1, count, Value::BIGINT(row_group_idx));
+			current_chunk.SetValue(1, count, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_idx)));
 
 			// row_group_num_rows, LogicalType::BIGINT
 			current_chunk.SetValue(2, count, Value::BIGINT(row_group.num_rows));
 
 			// row_group_num_columns, LogicalType::BIGINT
-			current_chunk.SetValue(3, count, Value::BIGINT(row_group.columns.size()));
+			current_chunk.SetValue(3, count, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group.columns.size())));
 
 			// row_group_bytes, LogicalType::BIGINT
 			current_chunk.SetValue(4, count, Value::BIGINT(row_group.total_byte_size));
 
 			// column_id, LogicalType::BIGINT
-			current_chunk.SetValue(5, count, Value::BIGINT(col_idx));
+			current_chunk.SetValue(5, count, Value::BIGINT(UnsafeNumericCast<int64_t>(col_idx)));
 
 			// file_offset, LogicalType::BIGINT
 			current_chunk.SetValue(6, count, ParquetElementBigint(column.file_offset, row_group.__isset.file_offset));
@@ -352,7 +352,7 @@ void ParquetMetaDataOperatorData::BindSchema(vector<LogicalType> &return_types, 
 	return_types.emplace_back(LogicalType::VARCHAR);
 }
 
-Value ParquetLogicalTypeToString(const duckdb_parquet::format::LogicalType &type, bool is_set) {
+Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool is_set) {
 	if (!is_set) {
 		return Value();
 	}
@@ -545,7 +545,7 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 	//	num_rows
 	current_chunk.SetValue(2, 0, Value::BIGINT(meta_data->num_rows));
 	//	num_row_groups
-	current_chunk.SetValue(3, 0, Value::BIGINT(meta_data->row_groups.size()));
+	current_chunk.SetValue(3, 0, Value::BIGINT(UnsafeNumericCast<int64_t>(meta_data->row_groups.size())));
 	//	format_version
 	current_chunk.SetValue(4, 0, Value::BIGINT(meta_data->version));
 	//	encryption_algorithm

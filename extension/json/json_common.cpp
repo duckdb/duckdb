@@ -35,15 +35,23 @@ string ThrowPathError(const char *ptr, const char *end, const bool binder) {
 struct JSONKeyReadResult {
 public:
 	static inline JSONKeyReadResult Empty() {
-		return {idx_t(0), string()};
+		return {idx_t(0), false, string()};
 	}
 
 	static inline JSONKeyReadResult WildCard() {
-		return {1, "*"};
+		return {1, false, "*"};
+	}
+
+	static inline JSONKeyReadResult RecWildCard() {
+		return {2, true, "*"};
+	}
+
+	static inline JSONKeyReadResult RecWildCardShortcut() {
+		return {1, true, "*"};
 	}
 
 	inline bool IsValid() {
-		return chars_read != 0;
+		return (chars_read != 0);
 	}
 
 	inline bool IsWildCard() {
@@ -52,13 +60,14 @@ public:
 
 public:
 	idx_t chars_read;
+	bool recursive;
 	string key;
 };
 
 static inline JSONKeyReadResult ReadString(const char *ptr, const char *const end, const bool escaped) {
 	const char *const before = ptr;
 	if (escaped) {
-		auto key = make_unsafe_uniq_array<char>(end - ptr);
+		auto key = make_unsafe_uniq_array_uninitialized<char>(end - ptr);
 		idx_t key_len = 0;
 
 		bool backslash = false;
@@ -82,7 +91,7 @@ static inline JSONKeyReadResult ReadString(const char *ptr, const char *const en
 		if (ptr == end || backslash) {
 			return JSONKeyReadResult::Empty();
 		} else {
-			return {idx_t(ptr - before), string(key.get(), key_len)};
+			return {idx_t(ptr - before), false, string(key.get(), key_len)};
 		}
 	} else {
 		while (ptr != end) {
@@ -91,7 +100,7 @@ static inline JSONKeyReadResult ReadString(const char *ptr, const char *const en
 			}
 			ptr++;
 		}
-		return {idx_t(ptr - before), string(before, ptr - before)};
+		return {idx_t(ptr - before), false, string(before, ptr - before)};
 	}
 }
 
@@ -125,7 +134,22 @@ static inline idx_t ReadInteger(const char *ptr, const char *const end, idx_t &i
 static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) {
 	D_ASSERT(ptr != end);
 	if (*ptr == '*') { // Wildcard
+		if (*(ptr + 1) == '*') {
+			return JSONKeyReadResult::RecWildCard();
+		}
 		return JSONKeyReadResult::WildCard();
+	}
+	bool recursive = false;
+	if (*ptr == '.') {
+		char next = *(ptr + 1);
+		if (next == '*') {
+			return JSONKeyReadResult::RecWildCard();
+		}
+		if (next == '[') {
+			return JSONKeyReadResult::RecWildCardShortcut();
+		}
+		ptr++;
+		recursive = true;
 	}
 	bool escaped = false;
 	if (*ptr == '"') {
@@ -138,6 +162,10 @@ static inline JSONKeyReadResult ReadKey(const char *ptr, const char *const end) 
 	}
 	if (escaped) {
 		result.chars_read += 2; // Account for surrounding quotes
+	}
+	if (recursive) {
+		result.chars_read += 1;
+		result.recursive = true;
 	}
 	return result;
 }
@@ -197,7 +225,7 @@ JSONPathType JSONCommon::ValidatePath(const char *ptr, const idx_t &len, const b
 			auto key = ReadKey(ptr, end);
 			if (!key.IsValid()) {
 				ThrowPathError(ptr, end, binder);
-			} else if (key.IsWildCard()) {
+			} else if (key.IsWildCard() || key.recursive) {
 				path_type = JSONPathType::WILDCARD;
 			}
 			ptr += key.chars_read;
@@ -272,12 +300,39 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 		D_ASSERT(ptr != end);
 		switch (c) {
 		case '.': { // Object field
+			auto key_result = ReadKey(ptr, end);
+			D_ASSERT(key_result.IsValid());
+			if (key_result.recursive) {
+				if (key_result.IsWildCard()) {
+					ptr += key_result.chars_read;
+				}
+				vector<yyjson_val *> rec_vals;
+				rec_vals.emplace_back(val);
+				for (idx_t i = 0; i < rec_vals.size(); i++) {
+					yyjson_val *rec_val = rec_vals[i];
+					if (yyjson_is_arr(rec_val)) {
+						size_t idx, max;
+						yyjson_val *element;
+						yyjson_arr_foreach(rec_val, idx, max, element) {
+							rec_vals.emplace_back(element);
+						}
+					} else if (yyjson_is_obj(rec_val)) {
+						size_t idx, max;
+						yyjson_val *key, *element;
+						yyjson_obj_foreach(rec_val, idx, max, key, element) {
+							rec_vals.emplace_back(element);
+						}
+					}
+					if (i > 0 || ptr != end) {
+						GetWildcardPathInternal(rec_val, ptr, end, vals);
+					}
+				}
+				return;
+			}
+			ptr += key_result.chars_read;
 			if (!unsafe_yyjson_is_obj(val)) {
 				return;
 			}
-			auto key_result = ReadKey(ptr, end);
-			D_ASSERT(key_result.IsValid());
-			ptr += key_result.chars_read;
 			if (key_result.IsWildCard()) { // Wildcard
 				size_t idx, max;
 				yyjson_val *key, *obj_val;
@@ -325,6 +380,7 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 	if (val != nullptr) {
 		vals.emplace_back(val);
 	}
+	return;
 }
 
 void JSONCommon::GetWildcardPath(yyjson_val *val, const char *ptr, const idx_t &len, vector<yyjson_val *> &vals) {

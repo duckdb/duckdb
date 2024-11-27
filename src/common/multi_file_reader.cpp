@@ -7,7 +7,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
@@ -23,7 +23,7 @@ MultiFileReader::~MultiFileReader() {
 unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_function) {
 	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
-		res = table_function.get_multi_file_reader();
+		res = table_function.get_multi_file_reader(table_function);
 		res->function_name = table_function.name;
 	} else {
 		res = make_uniq<MultiFileReader>();
@@ -36,6 +36,14 @@ unique_ptr<MultiFileReader> MultiFileReader::CreateDefault(const string &functio
 	auto res = make_uniq<MultiFileReader>();
 	res->function_name = function_name;
 	return res;
+}
+
+Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) {
+	vector<Value> files;
+	for (auto &file : file_list) {
+		files.push_back(file);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(files));
 }
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
@@ -70,12 +78,8 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 	}
 }
 
-unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
+shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           FileGlobOptions options) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Scanning %s files is disabled through configuration", function_name);
-	}
 	vector<string> result_files;
 
 	auto res = make_uniq<GlobMultiFileList>(context, paths, options);
@@ -85,7 +89,7 @@ unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return std::move(res);
 }
 
-unique_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
+shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
                                                           FileGlobOptions options) {
 	auto paths = ParsePaths(input);
 	return CreateFileList(context, paths, options);
@@ -141,9 +145,19 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 }
 
 unique_ptr<MultiFileList> MultiFileReader::ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
-                                                                 const MultiFileReaderOptions &options, LogicalGet &get,
+                                                                 const MultiFileReaderOptions &options,
+                                                                 MultiFilePushdownInfo &info,
                                                                  vector<unique_ptr<Expression>> &filters) {
-	return files.ComplexFilterPushdown(context, options, get, filters);
+	return files.ComplexFilterPushdown(context, options, info, filters);
+}
+
+unique_ptr<MultiFileList> MultiFileReader::DynamicFilterPushdown(ClientContext &context, const MultiFileList &files,
+                                                                 const MultiFileReaderOptions &options,
+                                                                 const vector<string> &names,
+                                                                 const vector<LogicalType> &types,
+                                                                 const vector<column_t> &column_ids,
+                                                                 TableFilterSet &filters) {
+	return files.DynamicFilterPushdown(context, options, names, types, column_ids, filters);
 }
 
 bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
@@ -221,7 +235,7 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
                                    const string &filename, const vector<string> &local_names,
                                    const vector<LogicalType> &global_types, const vector<string> &global_names,
-                                   const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
+                                   const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
                                    ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 
 	// create a map of name -> column index
@@ -232,12 +246,13 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 		}
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		auto column_id = global_column_ids[i];
-		if (IsRowIdColumnId(column_id)) {
+		auto &col_idx = global_column_ids[i];
+		if (col_idx.IsRowIdColumn()) {
 			// row-id
 			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
 			continue;
 		}
+		auto column_id = col_idx.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
 			// filename
 			reader_data.constant_map.emplace_back(i, Value(filename));
@@ -278,15 +293,16 @@ unique_ptr<MultiFileReaderGlobalState>
 MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
                                        const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
                                        const vector<LogicalType> &global_types, const vector<string> &global_names,
-                                       const vector<column_t> &global_column_ids) {
+                                       const vector<ColumnIndex> &global_column_ids) {
 	// By default, the multifilereader does not require any global state
 	return nullptr;
 }
 
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                        const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                        MultiFileReaderData &reader_data, const string &initial_file,
+                                        const vector<string> &global_names,
+                                        const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+                                        const string &initial_file,
                                         optional_ptr<MultiFileReaderGlobalState> global_state) {
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
@@ -309,7 +325,8 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 			continue;
 		}
 		// not constant - look up the column in the name map
-		auto global_id = global_column_ids[i];
+		auto &global_idx = global_column_ids[i];
+		auto global_id = global_idx.GetPrimaryIndex();
 		if (global_id >= global_types.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
@@ -337,20 +354,25 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		D_ASSERT(local_id < local_types.size());
 		auto &global_type = global_types[global_id];
 		auto &local_type = local_types[local_id];
+		ColumnIndex local_index(local_id);
 		if (global_type != local_type) {
+			// the types are not the same - add a cast
 			reader_data.cast_map[local_id] = global_type;
+		} else {
+			local_index = ColumnIndex(local_id, global_idx.GetChildIndexes());
 		}
-		// the types are the same - create the mapping
+		// create the mapping
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
+		reader_data.column_indexes.push_back(std::move(local_index));
 	}
 
-	reader_data.empty_columns = reader_data.column_ids.empty();
+	reader_data.empty_columns = reader_data.column_indexes.empty();
 }
 
 void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                    const vector<string> &global_names, const vector<column_t> &global_column_ids,
+                                    const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
                                     const string &initial_file, const MultiFileReaderBindData &options,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
@@ -390,6 +412,49 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
 		chunk.data[entry.column_id].Reference(entry.value);
 	}
 	chunk.Verify();
+}
+
+void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
+                                       const MultiFileReaderData &reader_data,
+                                       optional_ptr<MultiFileReaderGlobalState> global_state,
+                                       const OperatorPartitionInfo &partition_info,
+                                       OperatorPartitionData &partition_data) {
+	for (auto &col : partition_info.partition_columns) {
+		bool found_constant = false;
+		for (auto &constant : reader_data.constant_map) {
+			if (constant.column_id == col) {
+				found_constant = true;
+				partition_data.partition_data.emplace_back(constant.value);
+				break;
+			}
+		}
+		if (!found_constant) {
+			throw InternalException(
+			    "MultiFileReader::GetPartitionData - did not find constant for the given partition");
+		}
+	}
+}
+
+TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, const MultiFileReaderBindData &bind_data,
+                                                     TableFunctionPartitionInput &input) {
+	// check if all of the columns are in the hive partition set
+	for (auto &partition_col : input.partition_ids) {
+		// check if this column is in the hive partitioned set
+		bool found = false;
+		for (auto &partition : bind_data.hive_partitioning_indexes) {
+			if (partition.index == partition_col) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			// the column is not partitioned - hive partitioning alone can't guarantee the groups are partitioned
+			return TablePartitionInfo::NOT_PARTITIONED;
+		}
+	}
+	// if all columns are in the hive partitioning set, we know that each partition will only have a single value
+	// i.e. if the hive partitioning is by (YEAR, MONTH), each partition will have a single unique (YEAR, MONTH)
+	return TablePartitionInfo::SINGLE_VALUE_PARTITIONS;
 }
 
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
@@ -434,35 +499,23 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 }
 
 bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {
-	std::unordered_set<string> partitions;
-	auto &fs = FileSystem::GetFileSystem(context);
-
 	auto first_file = files.GetFirstFile();
-	auto splits_first_file = StringUtil::Split(first_file, fs.PathSeparator(first_file));
-	if (splits_first_file.size() < 2) {
-		return false;
-	}
-	for (auto &split : splits_first_file) {
-		auto partition = StringUtil::Split(split, "=");
-		if (partition.size() == 2) {
-			partitions.insert(partition.front());
-		}
-	}
+	auto partitions = HivePartitioning::Parse(first_file);
 	if (partitions.empty()) {
+		// no partitions found in first file
 		return false;
 	}
 
 	for (const auto &file : files.Files()) {
-		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
-		if (splits.size() != splits_first_file.size()) {
+		auto new_partitions = HivePartitioning::Parse(file);
+		if (new_partitions.size() != partitions.size()) {
+			// partition count mismatch
 			return false;
 		}
-		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-			auto part = StringUtil::Split(*it, "=");
-			if (part.size() != 2) {
-				continue;
-			}
-			if (partitions.find(part.front()) == partitions.end()) {
+		for (auto &part : new_partitions) {
+			auto entry = partitions.find(part.first);
+			if (entry == partitions.end()) {
+				// differing partitions between files
 				return false;
 			}
 		}
@@ -472,21 +525,9 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(MultiFileList &f
 void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientContext &context) {
 	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
 
-	auto &fs = FileSystem::GetFileSystem(context);
-
 	unordered_map<string, LogicalType> detected_types;
 	for (const auto &file : files.Files()) {
-		unordered_map<string, string> partitions;
-		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
-		if (splits.size() < 2) {
-			return;
-		}
-		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-			auto part = StringUtil::Split(*it, "=");
-			if (part.size() == 2) {
-				partitions[part.front()] = part.back();
-			}
-		}
+		auto partitions = HivePartitioning::Parse(file);
 		if (partitions.empty()) {
 			return;
 		}
@@ -558,24 +599,18 @@ LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partit
 	}
 	return LogicalType::VARCHAR;
 }
-Value MultiFileReaderOptions::GetHivePartitionValue(const string &base, const string &entry,
+
+bool MultiFileReaderOptions::AnySet() {
+	return filename || hive_partitioning || union_by_name;
+}
+
+Value MultiFileReaderOptions::GetHivePartitionValue(const string &value, const string &key,
                                                     ClientContext &context) const {
-	Value value(base);
-	auto it = hive_types_schema.find(entry);
+	auto it = hive_types_schema.find(key);
 	if (it == hive_types_schema.end()) {
-		return value;
+		return HivePartitioning::GetValue(context, key, value, LogicalType::VARCHAR);
 	}
-
-	// Handle nulls
-	if (base.empty() || StringUtil::CIEquals(base, "NULL")) {
-		return Value(it->second);
-	}
-
-	if (!value.TryCastAs(context, it->second)) {
-		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
-		                            StringUtil::Upper(it->first), it->second.ToString());
-	}
-	return value;
+	return HivePartitioning::GetValue(context, key, value, it->second);
 }
 
 } // namespace duckdb

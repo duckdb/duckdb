@@ -1,0 +1,10 @@
+# name: test/sql/httpfs/internal_issue_2490.test
+# description: Internal issue 2490 - Wrong URL encoding leads to 404 for redirects with httplib v0.14.3
+# group: [httpfs]
+
+require httpfs
+
+require parquet
+
+statement ok
+FROM 'https://github.com/cwida/duckdb-data/releases/download/v1.0/us+er+da+ta.parquet' LIMIT 1;

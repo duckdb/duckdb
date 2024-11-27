@@ -52,12 +52,15 @@ public:
 	DUCKDB_API unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt,
 	                                                       TableCatalogEntry &table,
 	                                                       unique_ptr<LogicalOperator> plan) override;
+	CatalogSet &GetSchemaCatalogSet();
 
 	DatabaseSize GetDatabaseSize(ClientContext &context) override;
 	vector<MetadataBlockInfo> GetMetadataInfo(ClientContext &context) override;
 
 	DUCKDB_API bool InMemory() override;
 	DUCKDB_API string GetDBPath() override;
+
+	DUCKDB_API optional_idx GetCatalogVersion(ClientContext &context) override;
 
 private:
 	DUCKDB_API void DropSchema(CatalogTransaction transaction, DropInfo &info);

@@ -55,7 +55,8 @@ timestamp_t &timestamp_t::operator-=(const int64_t &delta) {
 	return *this;
 }
 
-bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset, string_t &tz) {
+bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset, string_t &tz,
+                                      optional_ptr<int32_t> nanos) {
 	idx_t pos;
 	date_t date;
 	dtime_t time;
@@ -82,7 +83,7 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 	// TryConvertTime may recursively call us, so we opt for a stricter
 	// operation. Note that we can't pass strict== true here because we
 	// want to process any suffix.
-	if (!Time::TryConvertInterval(str + pos, len - pos, time_pos, time)) {
+	if (!Time::TryConvertInterval(str + pos, len - pos, time_pos, time, false, nanos)) {
 		return false;
 	}
 	//	We parsed an interval, so make sure it is in range.
@@ -132,11 +133,12 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 	return true;
 }
 
-TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result) {
+TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
+                                                   optional_ptr<int32_t> nanos) {
 	string_t tz(nullptr, 0);
 	bool has_offset = false;
 	// We don't understand TZ without an extension, so fail if one was provided.
-	auto success = TryConvertTimestampTZ(str, len, result, has_offset, tz);
+	auto success = TryConvertTimestampTZ(str, len, result, has_offset, tz, nanos);
 	if (!success) {
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
@@ -153,6 +155,31 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 		}
 	}
 	return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
+}
+
+bool Timestamp::TryFromTimestampNanos(timestamp_t input, int32_t nanos, timestamp_ns_t &result) {
+	if (!IsFinite(input)) {
+		result.value = input.value;
+		return true;
+	}
+	// Scale to ns
+	if (!TryMultiplyOperator::Operation(input.value, Interval::NANOS_PER_MICRO, result.value)) {
+		return false;
+	}
+
+	return TryAddOperator::Operation(result.value, int64_t(nanos), result.value);
+}
+
+TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result) {
+	int32_t nanos = 0;
+	auto success = TryConvertTimestamp(str, len, result, &nanos);
+	if (success != TimestampCastResult::SUCCESS) {
+		return success;
+	}
+	if (!TryFromTimestampNanos(result, nanos, result)) {
+		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
+	}
+	return TimestampCastResult::SUCCESS;
 }
 
 string Timestamp::ConversionError(const string &str) {
@@ -175,9 +202,9 @@ string Timestamp::UnsupportedTimezoneError(string_t str) {
 	return Timestamp::UnsupportedTimezoneError(str.GetString());
 }
 
-timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
+timestamp_t Timestamp::FromCString(const char *str, idx_t len, optional_ptr<int32_t> nanos) {
 	timestamp_t result;
-	auto cast_result = Timestamp::TryConvertTimestamp(str, len, result);
+	auto cast_result = Timestamp::TryConvertTimestamp(str, len, result, nanos);
 	if (cast_result == TimestampCastResult::SUCCESS) {
 		return result;
 	}
@@ -243,9 +270,11 @@ timestamp_t Timestamp::FromString(const string &str) {
 string Timestamp::ToString(timestamp_t timestamp) {
 	if (timestamp == timestamp_t::infinity()) {
 		return Date::PINF;
-	} else if (timestamp == timestamp_t::ninfinity()) {
+	}
+	if (timestamp == timestamp_t::ninfinity()) {
 		return Date::NINF;
 	}
+
 	date_t date;
 	dtime_t time;
 	Timestamp::Convert(timestamp, date, time);
@@ -253,12 +282,14 @@ string Timestamp::ToString(timestamp_t timestamp) {
 }
 
 date_t Timestamp::GetDate(timestamp_t timestamp) {
-	if (timestamp == timestamp_t::infinity()) {
+	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::infinity())) {
 		return date_t::infinity();
-	} else if (timestamp == timestamp_t::ninfinity()) {
+	}
+	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::ninfinity())) {
 		return date_t::ninfinity();
 	}
-	return date_t((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY - (timestamp.value < 0));
+	return date_t(UnsafeNumericCast<int32_t>((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY -
+	                                         (timestamp.value < 0)));
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
@@ -310,6 +341,19 @@ void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_ti
 	D_ASSERT(timestamp == Timestamp::FromDatetime(out_date, out_time));
 }
 
+void Timestamp::Convert(timestamp_ns_t input, date_t &out_date, dtime_t &out_time, int32_t &out_nanos) {
+	timestamp_t ms(input.value / Interval::NANOS_PER_MICRO);
+	out_date = Timestamp::GetDate(ms);
+	int64_t days_nanos;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(out_date.days, Interval::NANOS_PER_DAY,
+	                                                               days_nanos)) {
+		throw ConversionException("Date out of range in timestamp_ns conversion");
+	}
+
+	out_time = dtime_t((input.value - days_nanos) / Interval::NANOS_PER_MICRO);
+	out_nanos = UnsafeNumericCast<int32_t>((input.value - days_nanos) % Interval::NANOS_PER_MICRO);
+}
+
 timestamp_t Timestamp::GetCurrentTimestamp() {
 	auto now = system_clock::now();
 	auto epoch_ms = duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
@@ -347,12 +391,30 @@ timestamp_t Timestamp::FromEpochMicroSeconds(int64_t micros) {
 }
 
 timestamp_t Timestamp::FromEpochNanoSecondsPossiblyInfinite(int64_t ns) {
-	return timestamp_t(ns / 1000);
+	return timestamp_t(ns / Interval::NANOS_PER_MICRO);
 }
 
 timestamp_t Timestamp::FromEpochNanoSeconds(int64_t ns) {
 	D_ASSERT(Timestamp::IsFinite(timestamp_t(ns)));
 	return FromEpochNanoSecondsPossiblyInfinite(ns);
+}
+
+timestamp_ns_t Timestamp::TimestampNsFromEpochMillis(int64_t millis) {
+	D_ASSERT(Timestamp::IsFinite(timestamp_t(millis)));
+	timestamp_ns_t result;
+	if (!TryMultiplyOperator::Operation(millis, Interval::NANOS_PER_MICRO, result.value)) {
+		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
+	}
+	return result;
+}
+
+timestamp_ns_t Timestamp::TimestampNsFromEpochMicros(int64_t micros) {
+	D_ASSERT(Timestamp::IsFinite(timestamp_t(micros)));
+	timestamp_ns_t result;
+	if (!TryMultiplyOperator::Operation(micros, Interval::NANOS_PER_MSEC, result.value)) {
+		throw ConversionException("Could not convert Timestamp(MS) to Timestamp(NS)");
+	}
+	return result;
 }
 
 int64_t Timestamp::GetEpochSeconds(timestamp_t timestamp) {
@@ -370,9 +432,8 @@ int64_t Timestamp::GetEpochMicroSeconds(timestamp_t timestamp) {
 }
 
 bool Timestamp::TryGetEpochNanoSeconds(timestamp_t timestamp, int64_t &result) {
-	constexpr static const int64_t NANOSECONDS_IN_MICROSECOND = 1000;
 	D_ASSERT(Timestamp::IsFinite(timestamp));
-	if (!TryMultiplyOperator::Operation(timestamp.value, NANOSECONDS_IN_MICROSECOND, result)) {
+	if (!TryMultiplyOperator::Operation(timestamp.value, Interval::NANOS_PER_MICRO, result)) {
 		return false;
 	}
 	return true;

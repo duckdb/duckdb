@@ -1,8 +1,11 @@
 #include "duckdb/catalog/catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
 
@@ -12,7 +15,7 @@ CatalogEntry::CatalogEntry(CatalogType type, string name_p, idx_t oid)
 }
 
 CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, string name_p)
-    : CatalogEntry(type, std::move(name_p), catalog.ModifyCatalog()) {
+    : CatalogEntry(type, std::move(name_p), catalog.GetDatabase().GetDatabaseManager().NextOid()) {
 }
 
 CatalogEntry::~CatalogEntry() {
@@ -104,6 +107,9 @@ unique_ptr<CreateInfo> CatalogEntry::Deserialize(Deserializer &deserializer) {
 }
 
 void CatalogEntry::Verify(Catalog &catalog_p) {
+}
+
+void CatalogEntry::Rollback(CatalogEntry &prev_entry) {
 }
 
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)

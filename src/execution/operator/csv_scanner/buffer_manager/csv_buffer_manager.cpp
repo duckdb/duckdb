@@ -4,10 +4,11 @@
 namespace duckdb {
 
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOptions &options, const string &file_path_p,
-                                   const idx_t file_idx_p)
-    : context(context_p), file_idx(file_idx_p), file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
+                                   const idx_t file_idx_p, bool per_file_single_threaded_p)
+    : context(context_p), per_file_single_threaded(per_file_single_threaded_p), file_idx(file_idx_p),
+      file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
 	D_ASSERT(!file_path.empty());
-	file_handle = ReadCSV::OpenCSV(file_path, options.compression, context);
+	file_handle = ReadCSV::OpenCSV(file_path, options, context);
 	is_pipe = file_handle->IsPipe();
 	skip_rows = options.dialect_options.skip_rows.GetValue();
 	auto file_size = file_handle->FileSize();
@@ -71,7 +72,7 @@ shared_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 			done = true;
 		}
 	}
-	if (pos != 0 && (sniffing || file_handle->CanSeek())) {
+	if (pos != 0 && (sniffing || file_handle->CanSeek() || per_file_single_threaded)) {
 		// We don't need to unpin the buffers here if we are not sniffing since we
 		// control it per-thread on the scan
 		if (cached_buffers[pos - 1]) {
@@ -118,15 +119,15 @@ void CSVBufferManager::ResetBuffer(const idx_t buffer_idx) {
 	}
 }
 
-idx_t CSVBufferManager::GetBufferSize() {
+idx_t CSVBufferManager::GetBufferSize() const {
 	return buffer_size;
 }
 
-idx_t CSVBufferManager::BufferCount() {
+idx_t CSVBufferManager::BufferCount() const {
 	return cached_buffers.size();
 }
 
-bool CSVBufferManager::Done() {
+bool CSVBufferManager::Done() const {
 	return done;
 }
 
@@ -143,8 +144,15 @@ void CSVBufferManager::ResetBufferManager() {
 	}
 }
 
-string CSVBufferManager::GetFilePath() {
+string CSVBufferManager::GetFilePath() const {
 	return file_path;
+}
+
+bool CSVBufferManager::IsBlockUnloaded(idx_t block_idx) {
+	if (block_idx < cached_buffers.size()) {
+		return cached_buffers[block_idx]->IsUnloaded();
+	}
+	return false;
 }
 
 } // namespace duckdb

@@ -10,13 +10,16 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/destroy_buffer_upon.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/storage/storage_info.hpp"
-#include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/enums/memory_tag.hpp"
 
 namespace duckdb {
+
 class BlockManager;
 class BufferHandle;
 class BufferPool;
@@ -52,38 +55,35 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 	}
 };
 
-class BlockHandle {
-	friend class BlockManager;
-	friend struct BufferEvictionNode;
-	friend class BufferHandle;
-	friend class BufferManager;
-	friend class StandardBufferManager;
-	friend class BufferPool;
-	friend struct EvictionQueue;
+using BlockLock = unique_lock<mutex>;
 
+class BlockHandle : public enable_shared_from_this<BlockHandle> {
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag);
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag, unique_ptr<FileBuffer> buffer,
-	            bool can_destroy, idx_t block_size, BufferPoolReservation &&reservation);
+	            DestroyBufferUpon destroy_buffer_upon, idx_t block_size, BufferPoolReservation &&reservation);
 	~BlockHandle();
 
 	BlockManager &block_manager;
 
 public:
-	block_id_t BlockId() {
+	block_id_t BlockId() const {
 		return block_id;
 	}
 
-	void ResizeBuffer(idx_t block_size, int64_t memory_delta) {
-		D_ASSERT(buffer);
-		// resize and adjust current memory
-		buffer->Resize(block_size);
-		memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage) + memory_delta);
-		D_ASSERT(memory_usage == buffer->AllocSize());
+	idx_t EvictionSequenceNumber() const {
+		return eviction_seq_num;
+	}
+
+	idx_t NextEvictionSequenceNumber() {
+		return ++eviction_seq_num;
 	}
 
 	int32_t Readers() const {
 		return readers;
+	}
+	int32_t DecrementReaders() {
+		return --readers;
 	}
 
 	inline bool IsSwizzled() const {
@@ -94,23 +94,91 @@ public:
 		unswizzled = unswizzler;
 	}
 
-	inline void SetCanDestroy(bool can_destroy_p) {
-		can_destroy = can_destroy_p;
+	MemoryTag GetMemoryTag() const {
+		return tag;
 	}
 
-	inline const idx_t &GetMemoryUsage() const {
+	inline void SetDestroyBufferUpon(DestroyBufferUpon destroy_buffer_upon_p) {
+		destroy_buffer_upon = destroy_buffer_upon_p;
+	}
+
+	inline bool MustAddToEvictionQueue() const {
+		return destroy_buffer_upon != DestroyBufferUpon::UNPIN;
+	}
+
+	inline bool MustWriteToTemporaryFile() const {
+		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
+	}
+
+	inline idx_t GetMemoryUsage() const {
 		return memory_usage;
 	}
-	bool IsUnloaded() {
+
+	bool IsUnloaded() const {
 		return state == BlockState::BLOCK_UNLOADED;
 	}
 
-private:
-	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
-	unique_ptr<FileBuffer> UnloadAndTakeBlock();
-	void Unload();
-	bool CanUnload();
+	void SetEvictionQueueIndex(const idx_t index) {
+		// can only be set once
+		D_ASSERT(eviction_queue_idx == DConstants::INVALID_INDEX);
+		// MANAGED_BUFFER only (at least, for now)
+		D_ASSERT(GetBufferType() == FileBufferType::MANAGED_BUFFER);
+		eviction_queue_idx = index;
+	}
 
+	idx_t GetEvictionQueueIndex() const {
+		return eviction_queue_idx;
+	}
+
+	FileBufferType GetBufferType() const {
+		return buffer_type;
+	}
+
+	BlockState GetState() const {
+		return state;
+	}
+
+	int64_t GetLRUTimestamp() const {
+		return lru_timestamp_msec;
+	}
+
+	void SetLRUTimestamp(int64_t timestamp_msec) {
+		lru_timestamp_msec = timestamp_msec;
+	}
+
+	BlockLock GetLock() {
+		return BlockLock(lock);
+	}
+
+	//! Gets a reference to the buffer - the lock must be held
+	unique_ptr<FileBuffer> &GetBuffer(BlockLock &l);
+
+	void ChangeMemoryUsage(BlockLock &l, int64_t delta);
+	BufferPoolReservation &GetMemoryCharge(BlockLock &l);
+	//! Merge a new memory reservation
+	void MergeMemoryReservation(BlockLock &, BufferPoolReservation reservation);
+	//! Resize the memory allocation
+	void ResizeMemory(BlockLock &, idx_t alloc_size);
+
+	//! Resize the actual buffer
+	void ResizeBuffer(BlockLock &, idx_t block_size, int64_t memory_delta);
+	BufferHandle Load(unique_ptr<FileBuffer> buffer = nullptr);
+	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
+	                            BufferPoolReservation reservation);
+	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &);
+	void Unload(BlockLock &);
+
+	//! Returns whether or not the block can be unloaded
+	//! Note that while this method does not require a lock, whether or not a block can be unloaded can change if the
+	//! lock is not held
+	bool CanUnload() const;
+
+	void ConvertToPersistent(BlockLock &, BlockHandle &new_block, unique_ptr<FileBuffer> new_buffer);
+
+private:
+	void VerifyMutex(unique_lock<mutex> &l) const;
+
+private:
 	//! The block-level lock
 	mutex lock;
 	//! Whether or not the block is loaded/unloaded
@@ -120,22 +188,26 @@ private:
 	//! The block id of the block
 	const block_id_t block_id;
 	//! Memory tag
-	MemoryTag tag;
+	const MemoryTag tag;
+	//! File buffer type
+	const FileBufferType buffer_type;
 	//! Pointer to loaded data (if any)
 	unique_ptr<FileBuffer> buffer;
 	//! Internal eviction sequence number
 	atomic<idx_t> eviction_seq_num;
 	//! LRU timestamp (for age-based eviction)
 	atomic<int64_t> lru_timestamp_msec;
-	//! Whether or not the buffer can be destroyed (only used for temporary buffers)
-	bool can_destroy;
+	//! When to destroy the data buffer
+	atomic<DestroyBufferUpon> destroy_buffer_upon;
 	//! The memory usage of the block (when loaded). If we are pinning/loading
 	//! an unloaded block, this tells us how much memory to reserve.
-	idx_t memory_usage;
+	atomic<idx_t> memory_usage;
 	//! Current memory reservation / usage
 	BufferPoolReservation memory_charge;
 	//! Does the block contain any memory pointers?
 	const char *unswizzled;
+	//! Index for eviction queue (FileBufferType::MANAGED_BUFFER only, for now)
+	atomic<idx_t> eviction_queue_idx;
 };
 
 } // namespace duckdb

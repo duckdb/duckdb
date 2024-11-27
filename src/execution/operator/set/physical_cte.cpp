@@ -102,12 +102,10 @@ vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
 	return children[1]->GetSources();
 }
 
-string PhysicalCTE::ParamsToString() const {
-	string result = "";
-	result += "\n[INFOSEPARATOR]\n";
-	result += ctename;
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("idx: %llu", table_index);
+InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["CTE Name"] = ctename;
+	result["Table Index"] = StringUtil::Format("%llu", table_index);
 	return result;
 }
 

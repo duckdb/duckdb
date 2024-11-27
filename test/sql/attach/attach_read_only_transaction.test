@@ -1,0 +1,33 @@
+# name: test/sql/attach/attach_read_only_transaction.test
+# description: Test attach with explicit READ ONLY transactions
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH ':memory:' AS db1;
+
+statement ok
+CREATE TABLE db1.integers(i INTEGER);
+
+statement ok
+INSERT INTO db1.integers VALUES (42);
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+query I
+FROM db1.integers
+----
+42
+
+statement error
+INSERT INTO db1.integers VALUES (48)
+----
+transaction is launched in read-only mode
+
+statement ok
+COMMIT

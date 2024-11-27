@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/function/function.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/map.hpp"
-#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/function/function.hpp"
 #include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -26,9 +26,30 @@ struct ColumnSegmentState;
 
 struct ColumnFetchState;
 struct ColumnScanState;
+struct PrefetchState;
 struct SegmentScanState;
 
+class CompressionInfo {
+public:
+	explicit CompressionInfo(const idx_t block_size) : block_size(block_size) {
+	}
+
+public:
+	//! The size below which the segment is compacted on flushing.
+	idx_t GetCompactionFlushLimit() const {
+		return block_size / 5 * 4;
+	}
+	//! The block size for blocks using this compression.
+	idx_t GetBlockSize() const {
+		return block_size;
+	}
+
+private:
+	idx_t block_size;
+};
+
 struct AnalyzeState {
+	explicit AnalyzeState(const CompressionInfo &info) : info(info) {};
 	virtual ~AnalyzeState() {
 	}
 
@@ -42,9 +63,12 @@ struct AnalyzeState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	CompressionInfo info;
 };
 
 struct CompressionState {
+	explicit CompressionState(const CompressionInfo &info) : info(info) {};
 	virtual ~CompressionState() {
 	}
 
@@ -58,6 +82,8 @@ struct CompressionState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	CompressionInfo info;
 };
 
 struct CompressedSegmentState {
@@ -67,6 +93,11 @@ struct CompressedSegmentState {
 	//! Display info for PRAGMA storage_info
 	virtual string GetSegmentInfo() const { // LCOV_EXCL_START
 		return "";
+	} // LCOV_EXCL_STOP
+
+	//! Get the block ids of additional pages created by the segment
+	virtual vector<block_id_t> GetAdditionalBlocks() const { // LCOV_EXCL_START
+		return vector<block_id_t>();
 	} // LCOV_EXCL_STOP
 
 	template <class TARGET>
@@ -128,6 +159,7 @@ typedef void (*compression_compress_finalize_t)(CompressionState &state);
 //===--------------------------------------------------------------------===//
 // Uncompress / Scan
 //===--------------------------------------------------------------------===//
+typedef void (*compression_init_prefetch_t)(ColumnSegment &segment, PrefetchState &prefetch_state);
 typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(ColumnSegment &segment);
 
 //! Function prototype used for reading an entire vector (STANDARD_VECTOR_SIZE)
@@ -178,13 +210,14 @@ public:
 	                    compression_revert_append_t revert_append = nullptr,
 	                    compression_serialize_state_t serialize_state = nullptr,
 	                    compression_deserialize_state_t deserialize_state = nullptr,
-	                    compression_cleanup_state_t cleanup_state = nullptr)
+	                    compression_cleanup_state_t cleanup_state = nullptr,
+	                    compression_init_prefetch_t init_prefetch = nullptr)
 	    : type(type), data_type(data_type), init_analyze(init_analyze), analyze(analyze), final_analyze(final_analyze),
 	      init_compression(init_compression), compress(compress), compress_finalize(compress_finalize),
-	      init_scan(init_scan), scan_vector(scan_vector), scan_partial(scan_partial), fetch_row(fetch_row), skip(skip),
-	      init_segment(init_segment), init_append(init_append), append(append), finalize_append(finalize_append),
-	      revert_append(revert_append), serialize_state(serialize_state), deserialize_state(deserialize_state),
-	      cleanup_state(cleanup_state) {
+	      init_prefetch(init_prefetch), init_scan(init_scan), scan_vector(scan_vector), scan_partial(scan_partial),
+	      fetch_row(fetch_row), skip(skip), init_segment(init_segment), init_append(init_append), append(append),
+	      finalize_append(finalize_append), revert_append(revert_append), serialize_state(serialize_state),
+	      deserialize_state(deserialize_state), cleanup_state(cleanup_state) {
 	}
 
 	//! Compression type
@@ -213,6 +246,8 @@ public:
 	//! compress_finalize is called after
 	compression_compress_finalize_t compress_finalize;
 
+	//! Initialize prefetch state with required I/O data to scan this segment
+	compression_init_prefetch_t init_prefetch;
 	//! init_scan is called to set up the scan state
 	compression_init_segment_scan_t init_scan;
 	//! scan_vector scans an entire vector using the scan state

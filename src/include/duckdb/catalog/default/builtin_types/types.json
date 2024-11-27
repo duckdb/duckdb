@@ -36,7 +36,7 @@
         "names": [
             "timestamp_ms"
         ],
-        "description": "combination of time and date (milisecond precision)"
+        "description": "combination of time and date (millisecond precision)"
     },
     {
         "id": "TIMESTAMP_NS",
@@ -220,6 +220,13 @@
             "bitstring"
         ],
         "description": "binary value"
+    },
+    {
+        "id": "VARINT",
+        "names": [
+            "varint"
+        ],
+        "description": "Integers with variable size."
     },
     {
         "id": "BOOLEAN",

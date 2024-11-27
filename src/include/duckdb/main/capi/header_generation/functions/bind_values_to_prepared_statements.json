@@ -1,0 +1,535 @@
+{
+    "group": "bind_values_to_prepared_statements",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_bind_value",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_parameter_index",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t *",
+                    "name": "param_idx_out"
+                },
+                {
+                    "type": "const char *",
+                    "name": "name"
+                }
+            ],
+            "comment": {
+                "description": "Retrieve the index of the parameter for the prepared statement, identified by name\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_boolean",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "bool",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a bool value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_int8",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "int8_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds an int8_t value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_int16",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "int16_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds an int16_t value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_int32",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "int32_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds an int32_t value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_int64",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "int64_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds an int64_t value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_hugeint",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_hugeint",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a duckdb_hugeint value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_uhugeint",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_uhugeint",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds an duckdb_uhugeint value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_decimal",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_decimal",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a duckdb_decimal value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_uint8",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "uint8_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds an uint8_t value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_uint16",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "uint16_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds an uint16_t value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_uint32",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "uint32_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds an uint32_t value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_uint64",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "uint64_t",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds an uint64_t value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_float",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "float",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a float value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_double",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "double",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a double value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_date",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_date",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a duckdb_date value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_time",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_time",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a duckdb_time value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_timestamp",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_timestamp",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a duckdb_timestamp value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_timestamp_tz",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_timestamp",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a duckdb_timestamp value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_interval",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "duckdb_interval",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a duckdb_interval value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_varchar",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "const char *",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Binds a null-terminated varchar value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_varchar_length",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "const char *",
+                    "name": "val"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "length"
+                }
+            ],
+            "comment": {
+                "description": "Binds a varchar value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_blob",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                },
+                {
+                    "type": "const void *",
+                    "name": "data"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "length"
+                }
+            ],
+            "comment": {
+                "description": "Binds a blob value to the prepared statement at the specified index.\n"
+            }
+        },
+        {
+            "name": "duckdb_bind_null",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "param_idx"
+                }
+            ],
+            "comment": {
+                "description": "Binds a NULL value to the prepared statement at the specified index.\n"
+            }
+        }
+    ]
+}

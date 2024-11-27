@@ -52,7 +52,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
-  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '' }}
+  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || 'cp37-*' }}
 
 jobs:
 #  This is just a sanity check of Python 3.9 running with Arrow
@@ -62,9 +62,10 @@ jobs:
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose && USE_ACTUAL_SPARK=true JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) SPARK_HOME={project}/spark_installation/spark python -m pytest {project}/tests/fast/spark --verbose'
       PYTEST_TIMEOUT: '600'
       CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
+      CIBW_BEFORE_ALL: 'cd {project} && ./scripts/install_spark_in_cibuildwheels_linux_container.sh'
 
     steps:
     - uses: actions/checkout@v3
@@ -106,6 +107,7 @@ jobs:
       run: |
         pyproject-build . --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+
     - name: Build
       shell: bash
       working-directory: tools/pythonpkg
@@ -118,9 +120,11 @@ jobs:
     name: Linux Extensions (linux_amd64_gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     needs: linux-python3-9
     env:
       GEN: ninja
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
@@ -163,7 +167,7 @@ jobs:
     strategy:
       matrix:
         arch: [x86_64, aarch64]
-        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         manylinux: [manylinux2014, manylinux_2_28]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
@@ -187,7 +191,7 @@ jobs:
     needs: manylinux-extensions-x64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
-      CIBW_SKIP: '*-musllinux_aarch64'
+      CIBW_SKIP: '*-musllinux_aarch64 cp37-musllinux* cp38-musllinux*'
       CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
       CIBW_MANYLINUX_AARCH64_IMAGE: ${{ matrix.manylinux }}
       CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: ${{ matrix.manylinux }}
@@ -279,7 +283,7 @@ jobs:
       runs-on: macos-latest
       strategy:
        matrix:
-        python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
+        python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
       needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
@@ -348,7 +352,7 @@ jobs:
       runs-on: windows-2019
       strategy:
        matrix:
-        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
         exclude:

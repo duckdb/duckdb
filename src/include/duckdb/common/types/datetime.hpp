@@ -24,7 +24,7 @@ struct dtime_t { // NOLINT
 		return micros;
 	}
 	explicit inline operator double() const {
-		return micros;
+		return static_cast<double>(micros);
 	}
 
 	// comparison operators
@@ -108,7 +108,10 @@ struct dtime_tz_t { // NOLINT
 	}
 
 	static inline uint64_t encode_micros(int64_t micros) { // NOLINT
-		return uint64_t(micros) << OFFSET_BITS;
+		return encode_micros(UnsafeNumericCast<uint64_t>(micros));
+	}
+	static inline uint64_t encode_micros(uint64_t micros) { // NOLINT
+		return micros << OFFSET_BITS;
 	}
 	static inline int64_t decode_micros(uint64_t bits) { // NOLINT
 		return int64_t(bits >> OFFSET_BITS);

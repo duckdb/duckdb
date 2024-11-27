@@ -1,0 +1,468 @@
+# name: test/sql/join/test_nested_payloads.test_slow
+# description: Test join with nested types in the payload
+# group: [join]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE integers(fk INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (5), (NULL)
+
+# Payload is LIST<INTEGER>
+statement ok
+CREATE VIEW intlists AS SELECT * FROM (VALUES
+	(1, [1]),
+	(2, [NULL]),
+	(3, []),
+	(4, [2, 3]),
+	(5, [9,10,11]),
+	(NULL::INTEGER, [13])
+	) lv(pk, p);
+
+query II
+SELECT DISTINCT * FROM intlists ORDER BY ALL
+----
+NULL	[13]
+1	[1]
+2	[NULL]
+3	[]
+4	[2, 3]
+5	[9, 10, 11]
+
+query II
+SELECT pk, p FROM intlists ORDER BY pk;
+----
+NULL	[13]
+1	[1]
+2	[NULL]
+3	[]
+4	[2, 3]
+5	[9, 10, 11]
+
+query III
+SELECT fk, pk, p FROM integers, intlists WHERE fk = pk ORDER BY ALL
+----
+1	1	[1]
+2	2	[NULL]
+3	3	[]
+5	5	[9, 10, 11]
+
+query III
+SELECT fk, pk, p FROM integers LEFT OUTER JOIN intlists ON integers.fk=intlists.pk ORDER BY ALL
+----
+NULL	NULL	NULL
+1	1	[1]
+2	2	[NULL]
+3	3	[]
+5	5	[9, 10, 11]
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN intlists ON integers.fk=intlists.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY ALL
+----
+2	2	[NULL]
+3	3	[]
+
+query III
+SELECT fk, pk, p FROM intlists RIGHT OUTER JOIN integers ON integers.fk=intlists.pk ORDER BY ALL
+----
+NULL	NULL	NULL
+1	1	[1]
+2	2	[NULL]
+3	3	[]
+5	5	[9, 10, 11]
+
+query III
+SELECT fk, pk, p FROM integers FULL OUTER JOIN intlists ON integers.fk=intlists.pk ORDER BY ALL
+----
+NULL	NULL	NULL
+NULL	NULL	[13]
+NULL	4	[2, 3]
+1	1	[1]
+2	2	[NULL]
+3	3	[]
+5	5	[9, 10, 11]
+
+# Payload is LIST<VARCHAR>
+statement ok
+CREATE VIEW strlists AS SELECT * FROM (VALUES
+	(1, ['a']),
+	(2, [NULL]),
+	(3, []),
+	(4, ['Branta Canadensis', 'c']),
+	(5, ['i','j','k']),
+	(NULL::INTEGER, ['Somateria mollissima'])
+	) lv(pk, p);
+
+query II
+SELECT DISTINCT * FROM strlists ORDER BY ALL
+----
+NULL	[Somateria mollissima]
+1	[a]
+2	[NULL]
+3	[]
+4	[Branta Canadensis, c]
+5	[i, j, k]
+
+query III
+SELECT fk, pk, p FROM integers, strlists WHERE fk = pk ORDER BY fk
+----
+1	1	[a]
+2	2	[NULL]
+3	3	[]
+5	5	[i, j, k]
+
+query III
+SELECT fk, pk, p FROM integers LEFT OUTER JOIN strlists ON integers.fk=strlists.pk ORDER BY fk
+----
+NULL	NULL	NULL
+1	1	[a]
+2	2	[NULL]
+3	3	[]
+5	5	[i, j, k]
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN strlists ON integers.fk=strlists.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY fk
+----
+2	2	[NULL]
+3	3	[]
+
+query III
+SELECT fk, pk, p FROM strlists RIGHT OUTER JOIN integers ON integers.fk=strlists.pk ORDER BY fk
+----
+NULL	NULL	NULL
+1	1	[a]
+2	2	[NULL]
+3	3	[]
+5	5	[i, j, k]
+
+query III
+SELECT fk, pk, p FROM integers FULL OUTER JOIN strlists ON integers.fk=strlists.pk ORDER BY ALL
+----
+NULL	NULL	NULL
+NULL	NULL	[Somateria mollissima]
+NULL	4	[Branta Canadensis, c]
+1	1	[a]
+2	2	[NULL]
+3	3	[]
+5	5	[i, j, k]
+
+# Payload is STRUCT<x: INTEGER, y: VARCHAR>
+statement ok
+CREATE VIEW structs AS SELECT * FROM (VALUES
+	(1, {'x': 1, 'y': 'a'}),
+	(2, {'x': NULL, 'y': NULL}),
+	(3, {'x': 0, 'y': ''}),
+	(4, {'x': 2, 'y': 'c'}),
+	(5, {'x': 9, 'y': 'i'}),
+	(NULL::INTEGER, {'x': 13, 'y': 'Somateria mollissima'})
+	) sv(pk, p);
+
+query II
+SELECT DISTINCT * FROM structs ORDER BY ALL
+----
+NULL	{'x': 13, 'y': Somateria mollissima}
+1	{'x': 1, 'y': a}
+2	{'x': NULL, 'y': NULL}
+3	{'x': 0, 'y': }
+4	{'x': 2, 'y': c}
+5	{'x': 9, 'y': i}
+
+query II
+SELECT pk, p FROM structs ORDER BY pk;
+----
+NULL	{'x': 13, 'y': Somateria mollissima}
+1	{'x': 1, 'y': a}
+2	{'x': NULL, 'y': NULL}
+3	{'x': 0, 'y': }
+4	{'x': 2, 'y': c}
+5	{'x': 9, 'y': i}
+
+query III
+SELECT fk, pk, p FROM integers, structs WHERE fk = pk ORDER BY ALL
+----
+1	1	{'x': 1, 'y': a}
+2	2	{'x': NULL, 'y': NULL}
+3	3	{'x': 0, 'y': }
+5	5	{'x': 9, 'y': i}
+
+query III
+SELECT fk, pk, p FROM integers LEFT OUTER JOIN structs ON integers.fk=structs.pk ORDER BY ALL
+----
+NULL	NULL	NULL
+1	1	{'x': 1, 'y': a}
+2	2	{'x': NULL, 'y': NULL}
+3	3	{'x': 0, 'y': }
+5	5	{'x': 9, 'y': i}
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN structs ON integers.fk=structs.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY ALL
+----
+2	2	{'x': NULL, 'y': NULL}
+3	3	{'x': 0, 'y': }
+
+query III
+SELECT fk, pk, p FROM structs RIGHT OUTER JOIN integers ON integers.fk=structs.pk ORDER BY ALL
+----
+NULL	NULL	NULL
+1	1	{'x': 1, 'y': a}
+2	2	{'x': NULL, 'y': NULL}
+3	3	{'x': 0, 'y': }
+5	5	{'x': 9, 'y': i}
+
+
+query III
+SELECT fk, pk, p FROM integers FULL OUTER JOIN structs ON integers.fk=structs.pk ORDER BY ALL
+----
+NULL	NULL	NULL
+NULL	NULL	{'x': 13, 'y': Somateria mollissima}
+NULL	4	{'x': 2, 'y': c}
+1	1	{'x': 1, 'y': a}
+2	2	{'x': NULL, 'y': NULL}
+3	3	{'x': 0, 'y': }
+5	5	{'x': 9, 'y': i}
+
+# Payload is STRUCT<x: LIST<INTEGER>, y: LIST<VARCHAR> >
+statement ok
+CREATE VIEW struct_lint_lstr AS SELECT * FROM (VALUES
+	(1, {'x': [1], 'y': ['a']}),
+	(2, {'x': [NULL], 'y': [NULL]}),
+	(3, {'x': [], 'y': []}),
+	(4, {'x': [2, 3], 'y': ['Branta Canadensis', 'c']}),
+	(5, {'x': [9,10,11], 'y': ['i','j','k']}),
+	(NULL::INTEGER, {'x': [13], 'y': ['Somateria mollissima']})
+	) lv(pk, p);
+
+query II
+SELECT DISTINCT * FROM struct_lint_lstr ORDER BY ALL
+----
+NULL	{'x': [13], 'y': [Somateria mollissima]}
+1	{'x': [1], 'y': [a]}
+2	{'x': [NULL], 'y': [NULL]}
+3	{'x': [], 'y': []}
+4	{'x': [2, 3], 'y': [Branta Canadensis, c]}
+5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p FROM integers, struct_lint_lstr WHERE fk = pk ORDER BY ALL
+----
+1	1	{'x': [1], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN struct_lint_lstr ON integers.fk=struct_lint_lstr.pk
+ORDER BY ALL
+----
+NULL	NULL	NULL
+1	1	{'x': [1], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN struct_lint_lstr ON integers.fk=struct_lint_lstr.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY ALL
+----
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+
+query III
+SELECT fk, pk, p
+FROM struct_lint_lstr RIGHT OUTER JOIN integers ON integers.fk=struct_lint_lstr.pk
+ORDER BY ALL
+----
+NULL	NULL	NULL
+1	1	{'x': [1], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers FULL OUTER JOIN struct_lint_lstr ON integers.fk=struct_lint_lstr.pk
+ORDER BY ALL
+----
+NULL	NULL	NULL
+NULL	NULL	{'x': [13], 'y': [Somateria mollissima]}
+NULL	4	{'x': [2, 3], 'y': [Branta Canadensis, c]}
+1	1	{'x': [1], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [9, 10, 11], 'y': [i, j, k]}
+
+# Payload is STRUCT<x: LIST<STRUCT<l4: LIST<INT>, i4 INT> >, y: LIST<VARCHAR> >.
+statement ok
+CREATE VIEW r2l3r4l5i4i2l3v AS SELECT * FROM (VALUES
+	(1, {'x': [{'l4': [51], 'i4': 41}], 'y': ['a']}),
+	(2, {'x': [NULL], 'y': [NULL]}),
+	(3, {'x': [], 'y': []}),
+	(4, {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': ['Branta Canadensis', 'c']}),
+	(5, {'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': ['i','j','k']}),
+	(NULL::INTEGER, {'x': [{'l4': [62], 'i4': 47}], 'y': ['Somateria mollissima']})
+	) lv(pk, p);
+
+query II
+SELECT DISTINCT * FROM r2l3r4l5i4i2l3v ORDER BY ALL
+----
+NULL	{'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}
+1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
+2	{'x': [NULL], 'y': [NULL]}
+3	{'x': [], 'y': []}
+4	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}
+5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p FROM integers, r2l3r4l5i4i2l3v WHERE fk = pk ORDER BY ALL
+----
+1	1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN r2l3r4l5i4i2l3v ON integers.fk=r2l3r4l5i4i2l3v.pk
+ORDER BY ALL
+----
+NULL	NULL	NULL
+1	1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN r2l3r4l5i4i2l3v ON integers.fk=r2l3r4l5i4i2l3v.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY ALL
+----
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+
+query III
+SELECT fk, pk, p
+FROM r2l3r4l5i4i2l3v RIGHT OUTER JOIN integers ON integers.fk=r2l3r4l5i4i2l3v.pk
+ORDER BY ALL
+----
+NULL	NULL	NULL
+1	1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
+
+query III
+SELECT fk, pk, p
+FROM integers FULL OUTER JOIN r2l3r4l5i4i2l3v ON integers.fk=r2l3r4l5i4i2l3v.pk
+ORDER BY ALL
+----
+NULL	NULL	NULL
+NULL	NULL	{'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}
+NULL	4	{'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}
+1	1	{'x': [{'l4': [51], 'i4': 41}], 'y': [a]}
+2	2	{'x': [NULL], 'y': [NULL]}
+3	3	{'x': [], 'y': []}
+5	5	{'x': [{'l4': [56], 'i4': 44}, {'l4': [57, 58], 'i4': 45}, {'l4': [59, 60, 61], 'i4': 46}], 'y': [i, j, k]}
+
+# Payload is LIST<INTEGER[2000]>
+statement ok
+CREATE VIEW longlists AS
+SELECT *
+FROM ((VALUES
+	(1, [1]),
+	(2, [NULL]),
+	(3, []),
+	(4, [2, 3]),
+	(NULL::INTEGER, [13])
+	)
+UNION ALL
+	select 5 as pk, list(i) as p from range(2000) tbl(i)
+) lv(pk, p);
+
+# mode output_hash
+
+query II
+SELECT DISTINCT * FROM longlists ORDER BY ALL
+----
+12 values hashing to 6ed3f1a5b7eb595d57083d74ce4a51df
+
+query I
+SELECT pk, p FROM longlists ORDER BY pk;
+----
+12 values hashing to 6ed3f1a5b7eb595d57083d74ce4a51df
+
+query III
+SELECT fk, pk, p FROM integers, longlists WHERE fk = pk ORDER BY ALL
+----
+12 values hashing to 74f807166632863aa7b71486777820b5
+
+query III
+SELECT fk, pk, p FROM integers LEFT OUTER JOIN longlists ON integers.fk=longlists.pk ORDER BY ALL
+----
+15 values hashing to e7e8557f5d71ca6b20614e6cd6c35bbf
+
+query III
+SELECT fk, pk, p
+FROM integers LEFT OUTER JOIN longlists ON integers.fk=longlists.pk
+WHERE pk < 5 AND fk > 1
+ORDER BY ALL
+----
+2	2	[NULL]
+3	3	[]
+
+query III
+SELECT fk, pk, p FROM longlists RIGHT OUTER JOIN integers ON integers.fk=longlists.pk ORDER BY ALL
+----
+15 values hashing to e7e8557f5d71ca6b20614e6cd6c35bbf
+
+query III
+SELECT fk, pk, p FROM integers FULL OUTER JOIN longlists ON integers.fk=longlists.pk ORDER BY ALL
+----
+21 values hashing to 397312e04f9a44a70a2672865240afb0
+
+# duckdb-fuzzer issue #132
+statement ok
+CREATE TABLE all_types("varchar" VARCHAR, nested_int_array INTEGER[][]);;
+
+statement ok
+INSERT INTO all_types VALUES('b',[[], NULL, [], [NULL]]);
+
+query T
+SELECT ref_1.nested_int_array AS c0
+FROM all_types AS ref_1
+INNER JOIN (SELECT NULL AS c8 FROM range(3)) AS subq_1 ON (ref_1."varchar" = ref_1."varchar")
+INNER JOIN range(3) AS ref_4(time_tz) ON (subq_1.c8 = ref_4.time_tz);
+----
+
+
+# duckdb-fuzzer issue #135
+statement ok
+CREATE TABLE nested(nested_int_array INTEGER[][]);
+
+statement ok
+INSERT INTO nested VALUES([[42, 999]]);
+SELECT (
+	SELECT ref_1.nested_int_array
+) AS c0
+FROM range(3), nested AS ref_1;

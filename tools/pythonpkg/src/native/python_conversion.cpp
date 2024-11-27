@@ -22,14 +22,6 @@ static Value EmptyMapValue() {
 
 vector<string> TransformStructKeys(py::handle keys, idx_t size, const LogicalType &type = LogicalType::UNKNOWN) {
 	vector<string> res;
-	if (type.id() == LogicalTypeId::STRUCT) {
-		auto &struct_keys = StructType::GetChildTypes(type);
-		res.reserve(struct_keys.size());
-		for (idx_t i = 0; i < struct_keys.size(); i++) {
-			res.push_back(struct_keys[i].first);
-		}
-		return res;
-	}
 	res.reserve(size);
 	for (idx_t i = 0; i < size; i++) {
 		res.emplace_back(py::str(keys.attr("__getitem__")(i)));
@@ -94,11 +86,18 @@ Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &t
 		                            dict.ToString(), target_type.ToString());
 	}
 
+	case_insensitive_map_t<idx_t> key_mapping;
+	for (idx_t i = 0; i < struct_keys.size(); i++) {
+		key_mapping[struct_keys[i]] = i;
+	}
+
 	child_list_t<Value> struct_values;
 	for (idx_t i = 0; i < dict.len; i++) {
+		auto &key = struct_target ? StructType::GetChildName(target_type, i) : struct_keys[i];
+		auto value_index = key_mapping[key];
 		auto &child_type = struct_target ? StructType::GetChildType(target_type, i) : LogicalType::UNKNOWN;
-		auto val = TransformPythonValue(dict.values.attr("__getitem__")(i), child_type);
-		struct_values.emplace_back(make_pair(std::move(struct_keys[i]), std::move(val)));
+		auto val = TransformPythonValue(dict.values.attr("__getitem__")(value_index), child_type);
+		struct_values.emplace_back(make_pair(std::move(key), std::move(val)));
 	}
 	return Value::STRUCT(std::move(struct_values));
 }
@@ -139,6 +138,12 @@ Value TransformStructFormatDictionaryToMap(const PyDictionary &dict, const Logic
 		struct_values.emplace_back(make_pair("value", std::move(new_value)));
 
 		elements.push_back(Value::STRUCT(std::move(struct_values)));
+	}
+	if (key_type.id() == LogicalTypeId::SQLNULL) {
+		key_type = key_target;
+	}
+	if (value_type.id() == LogicalTypeId::SQLNULL) {
+		value_type = value_target;
 	}
 
 	LogicalType map_type = LogicalType::MAP(key_type, value_type);
@@ -230,10 +235,6 @@ Value TransformTupleToStruct(py::handle ele, const LogicalType &target_type = Lo
 Value TransformListValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	auto size = py::len(ele);
 
-	if (size == 0) {
-		return Value::EMPTYLIST(LogicalType::SQLNULL);
-	}
-
 	vector<Value> values;
 	values.reserve(size);
 
@@ -252,10 +253,6 @@ Value TransformListValue(py::handle ele, const LogicalType &target_type = Logica
 
 Value TransformArrayValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	auto size = py::len(ele);
-
-	if (size == 0) {
-		return Value::EMPTYARRAY(LogicalType::SQLNULL, size);
-	}
 
 	vector<Value> values;
 	values.reserve(size);

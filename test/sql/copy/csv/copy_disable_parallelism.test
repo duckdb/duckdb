@@ -3,9 +3,13 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/test.csv';
+COPY test FROM 'data/csv/test/test.csv';
 ----
 5000

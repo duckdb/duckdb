@@ -32,7 +32,7 @@ public:
 public:
 	unique_ptr<MacroFunction> Copy() const override;
 
-	string ToSQL(const string &schema, const string &name) const override;
+	string ToSQL() const override;
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<MacroFunction> Deserialize(Deserializer &deserializer);

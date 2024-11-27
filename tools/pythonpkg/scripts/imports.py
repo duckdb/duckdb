@@ -13,6 +13,17 @@ pandas.NaT
 pandas.NA
 pandas.isnull
 pandas.ArrowDtype
+pandas.BooleanDtype
+pandas.UInt8Dtype
+pandas.UInt16Dtype
+pandas.UInt32Dtype
+pandas.UInt64Dtype
+pandas.Int8Dtype
+pandas.Int16Dtype
+pandas.Int32Dtype
+pandas.Int64Dtype
+pandas.Float32Dtype
+pandas.Float64Dtype
 
 import datetime
 
@@ -36,7 +47,7 @@ import IPython
 IPython.get_ipython
 IPython.display
 IPython.display.display
-
+IPython.display.HTML
 
 import ipywidgets
 
@@ -46,6 +57,7 @@ import numpy
 
 numpy.core.multiarray
 numpy.ma.masked
+numpy.ma.masked_array
 numpy.ndarray
 numpy.datetime64
 numpy.generic
@@ -101,3 +113,9 @@ typing._UnionGenericAlias
 import uuid
 
 uuid.UUID
+
+import collections
+import collections.abc
+
+collections.abc.Iterable
+collections.abc.Mapping

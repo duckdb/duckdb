@@ -1,0 +1,22 @@
+# name: test/sql/join/inner/empty_tinyint_column.test
+# description: Internal error on join of empty tinyint column
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1(c0 INT4, c1 VARCHAR);
+
+statement ok
+CREATE TABLE t2(c0 TINYINT, PRIMARY KEY(c0));
+
+statement ok
+INSERT INTO t1(c0) VALUES (14161972);
+
+statement ok
+INSERT INTO t1(c0, c1) VALUES (-1.438515327E9, 4.43806148E8);
+
+query III
+SELECT * FROM t1 INNER JOIN t2 ON t1.c0 = t2.c0;
+----

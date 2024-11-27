@@ -49,10 +49,11 @@ duckdb_bind_internal(stmt::Stmt, i::Integer, val::DateTime) =
     duckdb_bind_timestamp(stmt.handle, i, value_to_duckdb(val));
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Missing) = duckdb_bind_null(stmt.handle, i);
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Nothing) = duckdb_bind_null(stmt.handle, i);
-duckdb_bind_internal(stmt::Stmt, i::Integer, val::AbstractString) = duckdb_bind_varchar(stmt.handle, i, val);
+duckdb_bind_internal(stmt::Stmt, i::Integer, val::AbstractString) =
+    duckdb_bind_varchar_length(stmt.handle, i, val, ncodeunits(val));
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Vector{UInt8}) = duckdb_bind_blob(stmt.handle, i, val, sizeof(val));
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::WeakRefString{UInt8}) =
-    duckdb_bind_varchar(stmt.handle, i, val.ptr, val.len);
+    duckdb_bind_varchar_length(stmt.handle, i, val.ptr, val.len);
 
 function duckdb_bind_internal(stmt::Stmt, i::Integer, val::Any)
     println(val)

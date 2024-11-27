@@ -73,9 +73,14 @@ SELECT COLUMNS([x for x in COLUMNS(*)]) FROM integers
 COLUMNS expression is not allowed inside another COLUMNS expression
 
 statement error
+SELECT COLUMNS(COLUMNS(*)) FROM integers
+----
+COLUMNS expression is not allowed inside another COLUMNS expression
+
+statement error
 SELECT * + 42 FROM integers
 ----
-STAR expression is only allowed as the root element of an expression
+cannot be applied to a star expression
 
 # empty lambda
 statement error

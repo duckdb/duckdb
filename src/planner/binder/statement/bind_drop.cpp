@@ -24,7 +24,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::SCHEMA_ENTRY: {
 		// dropping a schema is never read-only because there are no temporary schemas
 		auto &catalog = Catalog::GetCatalog(context, stmt.info->catalog);
-		properties.modified_databases.insert(catalog.GetName());
+		properties.RegisterDBModify(catalog, context);
 		break;
 	}
 	case CatalogType::VIEW_ENTRY:
@@ -35,6 +35,11 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
+		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->catalog);
+		if (catalog) {
+			// mark catalog as accessed
+			properties.RegisterDBRead(*catalog, context);
+		}
 		auto entry = Catalog::GetEntry(context, stmt.info->type, stmt.info->catalog, stmt.info->schema, stmt.info->name,
 		                               stmt.info->if_not_found);
 		if (!entry) {
@@ -46,7 +51,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		stmt.info->catalog = entry->ParentCatalog().GetName();
 		if (!entry->temporary) {
 			// we can only drop temporary schema entries in read-only mode
-			properties.modified_databases.insert(stmt.info->catalog);
+			properties.RegisterDBModify(entry->ParentCatalog(), context);
 		}
 		stmt.info->schema = entry->ParentSchema().name;
 		break;

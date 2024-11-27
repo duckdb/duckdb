@@ -72,7 +72,6 @@ private:
 #endif
 
 		if (!mask.AllValid()) {
-			result_mask.EnsureWritable();
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				if (mask.RowIsValidUnsafe(idx)) {
@@ -83,9 +82,6 @@ private:
 				}
 			}
 		} else {
-			if (adds_nulls) {
-				result_mask.EnsureWritable();
-			}
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				result_data[i] =
@@ -94,6 +90,7 @@ private:
 		}
 	}
 
+#ifndef DUCKDB_SMALLER_BINARY
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
 	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               ValidityMask &mask, ValidityMask &result_mask, void *dataptr, bool adds_nulls) {
@@ -133,15 +130,13 @@ private:
 				}
 			}
 		} else {
-			if (adds_nulls) {
-				result_mask.EnsureWritable();
-			}
 			for (idx_t i = 0; i < count; i++) {
 				result_data[i] =
 				    OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(ldata[i], result_mask, i, dataptr);
 			}
 		}
 	}
+#endif
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
 	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, void *dataptr, bool adds_nulls) {
@@ -160,6 +155,7 @@ private:
 			}
 			break;
 		}
+#ifndef DUCKDB_SMALLER_BINARY
 		case VectorType::FLAT_VECTOR: {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
@@ -169,6 +165,7 @@ private:
 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
 			break;
 		}
+#endif
 		default: {
 			UnifiedVectorFormat vdata;
 			input.ToUnifiedFormat(count, vdata);

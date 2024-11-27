@@ -19,6 +19,7 @@ add_library_unity(
   time_casts.cpp
   union_casts.cpp
   uuid_casts.cpp
+  varint_casts.cpp
   vector_cast_helpers.cpp)
 
 set(ALL_OBJECT_FILES

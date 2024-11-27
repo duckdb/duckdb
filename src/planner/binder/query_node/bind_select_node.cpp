@@ -1,16 +1,19 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -22,12 +25,10 @@
 #include "duckdb/planner/expression_binder/having_binder.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/expression_binder/qualify_binder.hpp"
+#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
@@ -139,6 +140,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 					    make_uniq<ConstantExpression>(Value::INTEGER(UnsafeNumericCast<int32_t>(1 + i))));
 				}
 			}
+			order_binder.SetQueryComponent("DISTINCT ON");
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
 				auto expr = BindOrderExpression(order_binder, std::move(distinct_on_target));
 				if (!expr) {
@@ -146,10 +148,13 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				}
 				bound_distinct->target_distincts.push_back(std::move(expr));
 			}
+			order_binder.SetQueryComponent();
+
 			bound_modifier = std::move(bound_distinct);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
+
 			auto &order = mod->Cast<OrderModifier>();
 			auto bound_order = make_uniq<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
@@ -200,7 +205,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 #endif
 			for (auto &order_node : order.orders) {
 				vector<unique_ptr<ParsedExpression>> order_list;
-				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
+				order_binders[0].get().ExpandStarExpression(std::move(order_node.expression), order_list);
 
 				auto type = config.ResolveOrder(order_node.type);
 				auto null_order = config.ResolveNullOrder(type, order_node.null_order);
@@ -314,7 +319,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 				}
 			}
 			for (auto &expr : distinct.target_distincts) {
-				ExpressionBinder::PushCollation(context, expr, expr->return_type, true);
+				ExpressionBinder::PushCollation(context, expr, expr->return_type);
 			}
 			break;
 		}
@@ -361,6 +366,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 
 unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	D_ASSERT(statement.from_table);
+
 	// first bind the FROM table statement
 	auto from = std::move(statement.from_table);
 	auto from_table = Bind(*from);
@@ -451,7 +457,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// now bind all the result modifiers; including DISTINCT and ORDER BY targets
-	OrderBinder order_binder({this}, statement, bind_state);
+	OrderBinder order_binder({*this}, statement, bind_state);
 	PrepareModifiers(order_binder, statement, *result);
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
@@ -480,19 +486,20 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			bool contains_subquery = bound_expr_ref.HasSubquery();
 
 			// push a potential collation, if necessary
-			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type, true);
+			bool requires_collation = ExpressionBinder::PushCollation(context, bound_expr, group_type);
 			if (!contains_subquery && requires_collation) {
 				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 				info.collated_groups[i] = result->aggregates.size();
 
-				auto first_fun = FirstFun::GetFunction(LogicalType::VARCHAR);
+				auto first_fun = FirstFunctionGetter::GetFunction(bound_expr_ref.return_type);
 				vector<unique_ptr<Expression>> first_children;
 				// FIXME: would be better to just refer to this expression, but for now we copy
 				first_children.push_back(bound_expr_ref.Copy());
 
-				FunctionBinder function_binder(context);
+				FunctionBinder function_binder(*this);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
+				function->alias = "__collated_group";
 				result->aggregates.push_back(std::move(function));
 			}
 			result->groups.group_expressions.push_back(std::move(bound_expr));
@@ -511,7 +518,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	// bind the HAVING clause, if any
 	if (statement.having) {
 		HavingBinder having_binder(*this, context, *result, info, statement.aggregate_handling);
-		ExpressionBinder::QualifyColumnNames(*this, statement.having);
+		ExpressionBinder::QualifyColumnNames(having_binder, statement.having);
 		result->having = having_binder.Bind(statement.having);
 	}
 
@@ -609,12 +616,22 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// push the GROUP BY ALL expressions into the group set
+
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result->select_list[group_by_all_index];
 		auto group_ref = make_uniq<BoundColumnRefExpression>(
 		    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
 		result->groups.group_expressions.push_back(std::move(expr));
 		expr = std::move(group_ref);
+	}
+	set<idx_t> group_by_all_indexes_set;
+	if (!group_by_all_indexes.empty()) {
+		idx_t num_set_indexes = result->groups.group_expressions.size();
+		for (idx_t i = 0; i < num_set_indexes; i++) {
+			group_by_all_indexes_set.insert(i);
+		}
+		D_ASSERT(result->groups.grouping_sets.empty());
+		result->groups.grouping_sets.push_back(group_by_all_indexes_set);
 	}
 	result->column_count = new_names.size();
 	result->names = std::move(new_names);

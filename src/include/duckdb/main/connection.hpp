@@ -20,6 +20,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/main/profiling_node.hpp"
 
 namespace duckdb {
 
@@ -54,6 +55,9 @@ public:
 public:
 	//! Returns query profiling information for the current query
 	DUCKDB_API string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);
+
+	//! Returns the first node of the query profiling tree
+	DUCKDB_API optional_ptr<ProfilingNode> GetProfilingTree();
 
 	//! Interrupt execution of the current query
 	DUCKDB_API void Interrupt();
@@ -93,16 +97,30 @@ public:
 	//! Issues a query to the database and returns a Pending Query Result
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
 	                                                       bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
+	                                                       case_insensitive_map_t<BoundParameterData> &named_values,
+	                                                       bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query,
+	                                                       case_insensitive_map_t<BoundParameterData> &named_values,
+	                                                       bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, vector<Value> &values,
+	                                                       bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
+	                                                       bool allow_stream_result = false);
 
 	//! Prepare the specified query, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
 	//! Prepare the specified statement, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
-	//! Get the table info of a specific table (in the default schema), or nullptr if it cannot be found
-	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &table_name);
-	//! Get the table info of a specific table, or nullptr if it cannot be found
+	//! Get the table info of a specific table, or nullptr if it cannot be found.
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
+	                                                  const string &table_name);
+	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
+	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG and
+	//! DEFAULT_SCHEMA.
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &table_name);
 
 	//! Extract a set of SQL statements from a specific query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ExtractStatements(const string &query);
@@ -127,6 +145,7 @@ public:
 	DUCKDB_API shared_ptr<Relation> TableFunction(const string &tname, const vector<Value> &values);
 	//! Returns a relation that produces values
 	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values);
+	DUCKDB_API shared_ptr<Relation> Values(vector<vector<unique_ptr<ParsedExpression>>> &&values);
 	DUCKDB_API shared_ptr<Relation> Values(const vector<vector<Value>> &values, const vector<string> &column_names,
 	                                       const string &alias = "values");
 	DUCKDB_API shared_ptr<Relation> Values(const string &values);
@@ -145,7 +164,7 @@ public:
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(const string &query, const string &alias = "queryrelation",
 	                                                  const string &error = "Expected a single SELECT statement");
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(unique_ptr<SelectStatement> select_stmt,
-	                                                  const string &alias = "queryrelation");
+	                                                  const string &alias = "queryrelation", const string &query = "");
 
 	//! Returns a substrait BLOB from a valid query
 	DUCKDB_API string GetSubstrait(const string &query);

@@ -2,9 +2,6 @@
 # description: Tests attaching database files with different block allocation sizes.
 # group: [attach]
 
-# We currently throw 'Not implemented' exceptions for other block sizes.
-require block_size 262144
-
 require skip_reload
 
 statement ok
@@ -15,11 +12,13 @@ ATTACH '__TEST_DIR__/not_pow_of_two.db' (BLOCK_SIZE 123456);
 ----
 must be a power of two
 
-# FIXME: once we implement this feature, we expect this to work
 statement error
-ATTACH '__TEST_DIR__/not_default.db' (BLOCK_SIZE 16384);
+ATTACH '__TEST_DIR__/exceeds_maximum.db' (BLOCK_SIZE 2147483648);
 ----
-Not implemented
+the block size must be lesser or equal than the maximum block size
+
+statement ok
+ATTACH '__TEST_DIR__/not_default.db' (BLOCK_SIZE 16384);
 
 statement error
 ATTACH '__TEST_DIR__/too_small.db' (BLOCK_SIZE 128);
@@ -35,12 +34,10 @@ ATTACH '__TEST_DIR__/default_size.db' (BLOCK_SIZE 262144);
 statement ok
 DETACH default_size;
 
-# FIXME: once we implement this feature, we expect this to fail because the file
-# FIXME: already exists with a different block allocation size
 statement error
-ATTACH '__TEST_DIR__/default_size.dbe' (BLOCK_SIZE 16384);
+ATTACH '__TEST_DIR__/default_size.db' (BLOCK_SIZE 16384);
 ----
-not supported
+block size parameter does not match
 
 statement ok
 ATTACH '__TEST_DIR__/default_size.db';
@@ -48,21 +45,24 @@ ATTACH '__TEST_DIR__/default_size.db';
 statement ok
 DETACH default_size;
 
-# FIXME: once we implement the custom block size feature, we expect this to work.
 # We detect the block allocation size in the header.
-# ATTACH 'dbname.db' (BLOCK_SIZE 16384);
-# DETACH dbname;
-# ATTACH 'dbname.db';
+
+statement ok
+ATTACH '__TEST_DIR__/dbname.db' (BLOCK_SIZE 16384);
+
+statement ok
+DETACH dbname;
+
+statement ok
+ATTACH '__TEST_DIR__/dbname.db';
 
 statement error
 SET default_block_size = '123456';
 ----
 must be a power of two
 
-statement error
+statement ok
 SET default_block_size = '16384';
-----
-Not implemented
 
 statement error
 SET default_block_size = '128';
@@ -74,7 +74,3 @@ SET default_block_size = '262144';
 
 statement ok
 ATTACH '__TEST_DIR__/default_size.db';
-
-# FIXME: once we implement the custom block size feature, we need a test that (in a tx) attaches a new
-# database file. Then, we ROLLBACK the transaction. Then, we attach the same file with a different block size.
-# We'll create an error in SingleFileStorageManager::LoadDatabase, as we do not remove the file on ROLLBACK.

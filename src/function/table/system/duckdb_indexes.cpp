@@ -75,6 +75,20 @@ unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, T
 	return std::move(result);
 }
 
+Value GetIndexExpressions(IndexCatalogEntry &index) {
+	auto create_info = index.GetInfo();
+	auto &create_index_info = create_info->Cast<CreateIndexInfo>();
+
+	auto vec = create_index_info.ExpressionsToList();
+
+	vector<Value> content;
+	content.reserve(vec.size());
+	for (auto &item : vec) {
+		content.push_back(Value(item));
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(content));
+}
+
 void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBIndexesData>();
 	if (data.offset >= data.entries.size()) {
@@ -119,7 +133,7 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		// is_primary, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(index.IsPrimary()));
 		// expressions, VARCHAR
-		output.SetValue(col++, count, Value());
+		output.SetValue(col++, count, GetIndexExpressions(index).ToString());
 		// sql, VARCHAR
 		auto sql = index.ToSQL();
 		output.SetValue(col++, count, sql.empty() ? Value() : Value(std::move(sql)));

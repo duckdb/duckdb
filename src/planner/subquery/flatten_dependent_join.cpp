@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -87,8 +88,8 @@ bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op) {
 	return has_correlation;
 }
 
-unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan) {
-	bool propagate_null_values = true;
+unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan,
+                                                                         bool propagate_null_values) {
 	auto result = PushDownDependentJoinInternal(std::move(plan), propagate_null_values, 0);
 	if (!replacement_map.empty()) {
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
@@ -101,8 +102,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_
 bool SubqueryDependentFilter(Expression &expr) {
 	if (expr.expression_class == ExpressionClass::BOUND_CONJUNCTION &&
 	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		auto &bound_conjuction = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : bound_conjuction.children) {
+		auto &bound_conjunction = expr.Cast<BoundConjunctionExpression>();
+		for (auto &child : bound_conjunction.children) {
 			if (SubqueryDependentFilter(*child)) {
 				return true;
 			}
@@ -240,7 +241,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			delim_data_offset = aggr.groups.size();
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];
-				auto first_aggregate = FirstFun::GetFunction(col.type);
+				auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
 				auto colref = make_uniq<BoundColumnRefExpression>(
 				    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 				vector<unique_ptr<Expression>> aggr_children;
@@ -255,18 +256,32 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			delim_column_offset = aggr.groups.size() - correlated_columns.size();
 			delim_data_offset = aggr.groups.size();
 		}
-		if (aggr.groups.size() == new_group_count) {
-			// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
-			// FIXME: this does not always have to be a LEFT OUTER JOIN, depending on whether aggr.expressions return
+		bool ungrouped_join = false;
+		if (aggr.grouping_sets.empty()) {
+			ungrouped_join = aggr.groups.size() == new_group_count;
+		} else {
+			for (auto &grouping_set : aggr.grouping_sets) {
+				if (grouping_set.size() == new_group_count) {
+					ungrouped_join = true;
+				}
+			}
+		}
+		if (ungrouped_join) {
+			// we have to perform an INNER or LEFT OUTER JOIN between the result of this aggregate and the delim scan
+			// this does not always have to be a LEFT OUTER JOIN, depending on whether aggr.expressions return
 			// NULL or a value
-			unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+			JoinType join_type = JoinType::INNER;
+			if (any_join || !parent_propagate_null_values) {
+				join_type = JoinType::LEFT;
+			}
 			for (auto &aggr_exp : aggr.expressions) {
 				auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
-				if (!b_aggr_exp.PropagatesNullValues() || any_join || !parent_propagate_null_values) {
-					join = make_uniq<LogicalComparisonJoin>(JoinType::LEFT);
+				if (!b_aggr_exp.PropagatesNullValues()) {
+					join_type = JoinType::LEFT;
 					break;
 				}
 			}
+			unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(join_type);
 			auto left_index = binder.GenerateTableIndex();
 			delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
 			join->children.push_back(std::move(delim_scan));
@@ -286,7 +301,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
 				vector<LogicalType> arguments;
-				if (bound.function == CountFun::GetFunction() || bound.function == CountStarFun::GetFunction()) {
+				if (bound.function == CountFunctionBase::GetFunction() ||
+				    bound.function == CountStarFun::GetFunction()) {
 					// have to replace this ColumnBinding with the CASE expression
 					replacement_map[ColumnBinding(aggr.aggregate_index, i)] = i;
 				}
@@ -667,6 +683,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		this->delim_offset = get.returned_types.size();
 		this->data_offset = 0;
+
+		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
+		rewriter.VisitOperator(*plan);
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:

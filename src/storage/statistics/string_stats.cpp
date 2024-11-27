@@ -1,13 +1,12 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
 
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
-
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -115,7 +114,6 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 }
 
 static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {
-	D_ASSERT(len <= StringStatsData::MAX_STRING_MINMAX_SIZE);
 	for (idx_t i = 0; i < len; i++) {
 		if (data[i] < comparison[i]) {
 			return -1;
@@ -169,6 +167,9 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
+	if (other.GetType().id() == LogicalTypeId::SQLNULL) {
+		return;
+	}
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	auto &other_data = StringStats::GetDataUnsafe(other);
 	if (StringValueComparison(other_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.min) < 0) {
@@ -183,14 +184,30 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                const string &constant) {
+                                                array_ptr<Value> constants) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	auto data = const_data_ptr_cast(constant.c_str());
-	auto size = constant.size();
+	for (auto &constant_value : constants) {
+		D_ASSERT(constant_value.type() == stats.GetType());
+		D_ASSERT(!constant_value.IsNull());
+		auto &constant = StringValue::Get(constant_value);
+		auto prune_result = CheckZonemap(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max,
+		                                 StringStatsData::MAX_STRING_MINMAX_SIZE, comparison_type, constant);
+		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+	}
+	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+}
 
-	idx_t value_size = size > StringStatsData::MAX_STRING_MINMAX_SIZE ? StringStatsData::MAX_STRING_MINMAX_SIZE : size;
-	int min_comp = StringValueComparison(data, value_size, string_data.min);
-	int max_comp = StringValueComparison(data, value_size, string_data.max);
+FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t min_len, const_data_ptr_t max_data,
+                                                idx_t max_len, ExpressionType comparison_type, const string &constant) {
+	auto data = const_data_ptr_cast(constant.c_str());
+	idx_t size = constant.size();
+
+	int min_comp = StringValueComparison(data, MinValue(min_len, size), min_data);
+	int max_comp = StringValueComparison(data, MinValue(max_len, size), max_data);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		if (min_comp >= 0 && max_comp <= 0) {

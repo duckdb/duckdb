@@ -24,7 +24,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: "9f2f87b"
+  DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
@@ -71,13 +71,8 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
@@ -99,13 +94,51 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make relassert
+      run: UNSAFE_NUMERIC_CAST=1 make relassert
 
     - name: Test
       shell: bash
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
+  smaller-binary:
+    name: Smaller Binary
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;json"
+      SMALLER_BINARY: 1
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Measure Size
+      shell: bash
+      run: ls -trlah build/release/src/libduckdb*
+
+    - name: Test
+      shell: bash
+      run: |
+          build/release/test/unittest "*"
 
   linux-clang:
     name: Clang 14
@@ -117,7 +150,7 @@ jobs:
       CXX: /home/runner/work/llvm/bin/clang++
       LD: /home/runner/work/llvm/bin/ld.lld
       EXTENSION_STATIC_BUILD: 1
-      BUILD_JSON: 1
+      CORE_EXTENSIONS: "json"
       TREAT_WARNINGS_AS_ERRORS: 1
 
     steps:
@@ -154,6 +187,9 @@ jobs:
     needs: linux-memory-leaks
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
     - uses: actions/checkout@v3
       with:
@@ -177,10 +213,12 @@ jobs:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     needs: linux-memory-leaks
     env:
       CC: /usr/bin/gcc
       CXX: /usr/bin/g++
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - uses: actions/checkout@v3
@@ -198,11 +236,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DCORE_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
       - name: Test
         shell: bash
-        run: build/release/test/unittest "*"
+        run: build/release/test/unittest
 
   linux-tarball:
      name: Python 3 Tarball
@@ -248,10 +286,12 @@ jobs:
      runs-on: ubuntu-latest
      needs: linux-memory-leaks
      container: ubuntu:18.04
+     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
      env:
         GEN: ninja
         DUCKDEBUG: 1
         ASAN_OPTIONS: detect_leaks=0
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
      steps:
      - uses: actions/checkout@v3
@@ -401,7 +441,7 @@ jobs:
   extension-updating:
     name: Extension updating test
     runs-on: ubuntu-20.04
-#    needs: linux-memory-leaks TODO revert
+    needs: linux-memory-leaks
     env:
       CC: gcc-10
       CXX: g++-10
@@ -432,7 +472,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: BUILD_TPCH=1 make
+        run: CORE_EXTENSIONS="tpch" make
 
       - name: Start Minio
         shell: bash
@@ -456,16 +496,11 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
 
     steps:
       - uses: actions/checkout@v3
@@ -490,6 +525,42 @@ jobs:
         shell: bash
         run: build/relassert/test/unittest
 
+  latest-storage:
+    name: Latest Storage
+    runs-on: ubuntu-20.04
+    needs: linux-memory-leaks
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      CORE_EXTENSIONS: "parquet;json;tpch;tpcds"
+      LATEST_STORAGE: 1
+      BLOCK_VERIFICATION: 1
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make reldebug
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit --time_execution
+
   vector-verification:
     name: Vector Verification Tests (${{ matrix.vector_type }})
     runs-on: ubuntu-20.04
@@ -501,24 +572,18 @@ jobs:
           - vector_type: "dictionary_expression"
             test_parameter: '"*"'
           - vector_type: "dictionary_operator"
-            test_parameter: '"*"'
+            test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "constant_operator"
             test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "sequence_operator"
             test_parameter: '' # skip running all tests here because it is too slow
           - vector_type: "nested_shuffle"
-            test_parameter: '"*"'
+            test_parameter: '' # skip running all tests here because it is too slow
     env:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       VERIFY_VECTOR: ${{ matrix.vector_type }}
 
     steps:
@@ -552,13 +617,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
@@ -593,10 +652,8 @@ jobs:
      CXX: g++-10
      GEN: ninja
      BUILD_BENCHMARK: 1
-     BUILD_TPCH: 1
-     BUILD_TPCDS: 1
-     BUILD_HTTPFS: 1
      BUILD_JEMALLOC: 1
+     CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
    steps:
      - name: Checkout
@@ -630,7 +687,7 @@ jobs:
          make
 
          cd unsafe
-         DISABLE_MEMORY_SAFETY=1 make
+         UNSAFE_NUMERIC_CAST=1 DISABLE_MEMORY_SAFETY=1 make
 
      - name: Set up benchmarks
        shell: bash
@@ -641,48 +698,43 @@ jobs:
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --verbose --threads 2
 
      - name: Regression Test TPCH
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --verbose --threads 2
 
      - name: Regression Test TPCDS
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpcds.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --verbose --threads 2
 
      - name: Regression Test H2OAI
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/h2oai.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --verbose --threads 2
 
      - name: Regression Test IMDB
        if: always()
        shell: bash
        run: |
-         python scripts/regression_test_runner.py --old=unsafe/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/imdb.csv --verbose --threads=2
+         python scripts/regression/test_runner.py --old unsafe/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2
 
 
   threadsan:
     name: Thread Sanitizer
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: clang
+      CXX: clang++
       GEN: ninja
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
       BUILD_JEMALLOC: 1
-      BUILD_EXTENSIONS: "inet"
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
 
     steps:
@@ -692,7 +744,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -715,6 +767,7 @@ jobs:
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
 
+
   vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-20.04
@@ -722,25 +775,32 @@ jobs:
     env:
       CC: gcc-10
       CXX: g++-10
+      GEN: ninja
+      STANDARD_VECTOR_SIZE: 2
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.CCACHE_SAVE }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
 
-    - name: Test
-      shell: bash
-      run: python scripts/test_vector_sizes.py
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --time_execution
 
   block-sizes:
     name: Block Sizes
@@ -749,15 +809,18 @@ jobs:
     env:
       CC: gcc-10
       CXX: g++-10
+      GEN: ninja
+      BLOCK_ALLOC_SIZE: 16384
+      CORE_EXTENSIONS: "json;parquet"
 
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -765,18 +828,30 @@ jobs:
           key: ${{ github.job }}
           save: ${{ env.CCACHE_SAVE }}
 
-      - name: Test
+      - name: Build with standard vector size
         shell: bash
-        run: python scripts/test_block_sizes.py
+        run: make relassert
+
+      - name: Fast and storage tests
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
+
+      - name: Build with vector size of 512
+        shell: bash
+        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && STANDARD_VECTOR_SIZE=512 make relassert
+
+      - name: Fast and storage tests
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest --no-exit --time_execution
+          python3 scripts/run_tests_one_by_one.py ./build/relassert/test/unittest "test/sql/storage/*" --no-exit --time_execution
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
     - uses: mymindstorm/setup-emsdk@v12
       with:
         version: 'latest'
@@ -793,6 +868,18 @@ jobs:
         done
         git submodule init
         git submodule update
+        git rm -r submodules/duckdb
+
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        path: duckdb-wasm/submodules/duckdb
+
+    - name: Setup
+      shell: bash
+      run: |
+        cd duckdb-wasm
+        make patch_duckdb || echo "done"
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -809,19 +896,19 @@ jobs:
       shell: bash
       run: |
         cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/submodules/duckdb
 
     - name: Build WebAssembly EH
       shell: bash
       run: |
         cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/submodules/duckdb
 
     - name: Build WebAssembly COI
       shell: bash
       run: |
         cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/submodules/duckdb
 
     - name: Package
       shell: bash
@@ -886,17 +973,15 @@ jobs:
     name: Linux HTTPFS
     runs-on: ubuntu-20.04
     env:
-      BUILD_HTTPFS: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_PARQUET: 1
-      BUILD_JSON: 1
+      CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
       S3_TEST_SERVER_AVAILABLE: 1
       AWS_DEFAULT_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: minio_duckdb_user
       AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password
       DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000
       DUCKDB_S3_USE_SSL: false
+      HTTP_PROXY_PUBLIC: localhost:3128
+      TEST_PERSISTENT_SECRETS_AVAILABLE: true
 
       GEN: ninja
 
@@ -912,6 +997,17 @@ jobs:
     - name: Install Ninja
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Fix permissions of test secrets
+      shell: bash
+      run: chmod -R 700 data/secrets
+
+    # TODO: fix the authenticated proxy here
+    - name: Install and run http proxy squid
+      shell: bash
+      run: |
+        sudo apt-get install squid
+        ./scripts/run_squid.sh --port 3128 --log_dir squid_logs &
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main

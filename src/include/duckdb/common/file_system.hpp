@@ -68,6 +68,8 @@ public:
 	DUCKDB_API void Truncate(int64_t new_size);
 	DUCKDB_API string ReadLine();
 	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
+	DUCKDB_API virtual idx_t GetProgress();
+	DUCKDB_API virtual FileCompressionType GetFileCompressionType();
 
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsPipe();
@@ -238,6 +240,7 @@ public:
 
 	//! Whether or not a file is remote or local, based only on file path
 	DUCKDB_API static bool IsRemoteFile(const string &path);
+	DUCKDB_API static bool IsRemoteFile(const string &path, string &extension);
 
 	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
 

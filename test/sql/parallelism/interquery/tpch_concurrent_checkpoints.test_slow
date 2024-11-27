@@ -1,0 +1,45 @@
+# name: test/sql/parallelism/interquery/tpch_concurrent_checkpoints.test_slow
+# description: Run queries that reference the same table multiple times while doing checkpoints
+# group: [interquery]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.1);
+
+concurrentloop threadid 0 5
+
+loop i 0 20
+
+onlyif threadid=0
+query I
+INSERT INTO lineitem SELECT * FROM lineitem LIMIT 1000
+----
+1000
+
+onlyif threadid=0
+query I
+INSERT INTO orders SELECT * FROM orders LIMIT 1000
+----
+1000
+
+onlyif threadid=0
+query I
+CHECKPOINT
+
+endloop
+
+loop i 0 50
+
+skipif threadid=0
+statement ok
+SELECT COUNT(*)
+FROM lineitem
+WHERE l_orderkey IN (SELECT l_orderkey FROM lineitem WHERE l_shipdate >= DATE '1995-01-01') AND
+	  l_partkey IN (SELECT l_partkey FROM lineitem WHERE l_returnflag='R')
+
+endloop
+
+endloop
+
+

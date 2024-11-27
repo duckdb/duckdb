@@ -7,11 +7,12 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
 BoundStatement Binder::Bind(ExecuteStatement &stmt) {
-	auto parameter_count = stmt.n_param;
+	auto parameter_count = stmt.named_param_map.size();
 
 	// bind the prepared statement
 	auto &client_data = ClientData::Get(context);
@@ -30,24 +31,39 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	auto &mapped_named_values = stmt.named_values;
 	// bind any supplied parameters
-	case_insensitive_map_t<Value> bind_values;
+	case_insensitive_map_t<BoundParameterData> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
 	for (auto &pair : mapped_named_values) {
+		bool is_literal = pair.second->type == ExpressionType::VALUE_CONSTANT;
+
 		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
 		auto bound_expr = cbinder.Bind(pair.second);
-
-		Value value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
-		bind_values[pair.first] = std::move(value);
+		BoundParameterData parameter_data;
+		if (is_literal) {
+			auto &constant = bound_expr->Cast<BoundConstantExpression>();
+			LogicalType return_type;
+			if (constant.return_type == LogicalTypeId::VARCHAR &&
+			    StringType::GetCollation(constant.return_type).empty()) {
+				return_type = LogicalTypeId::STRING_LITERAL;
+			} else if (constant.return_type.IsIntegral()) {
+				return_type = LogicalType::INTEGER_LITERAL(constant.value);
+			} else {
+				return_type = constant.value.type();
+			}
+			parameter_data = BoundParameterData(std::move(constant.value), std::move(return_type));
+		} else {
+			auto value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
+			parameter_data = BoundParameterData(std::move(value));
+		}
+		bind_values[pair.first] = std::move(parameter_data);
 	}
 	unique_ptr<LogicalOperator> rebound_plan;
 
 	if (prepared->RequireRebind(context, &bind_values)) {
 		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
 		Planner prepared_planner(context);
-		for (auto &pair : bind_values) {
-			prepared_planner.parameter_data.emplace(std::make_pair(pair.first, BoundParameterData(pair.second)));
-		}
+		prepared_planner.parameter_data = bind_values;
 		prepared = prepared_planner.PrepareSQLStatement(entry->second->unbound_statement->Copy());
 		rebound_plan = std::move(prepared_planner.plan);
 		D_ASSERT(prepared->properties.bound_all_parameters);

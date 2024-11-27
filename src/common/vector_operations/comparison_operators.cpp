@@ -167,6 +167,9 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 		auto &result_validity = ConstantVector::Validity(result);
 		SelectionVector true_sel(1);
 		auto match_count = ComparisonSelector::Select<OP>(left, right, nullptr, 1, &true_sel, nullptr, result_validity);
+		// since we are dealing with nested types where the values are not NULL, the result is always valid (i.e true or
+		// false)
+		result_validity.SetAllValid(1);
 		auto result_data = ConstantVector::GetData<bool>(result);
 		result_data[0] = match_count > 0;
 		return;
@@ -182,6 +185,10 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 	if (!leftv.validity.AllValid() || !rightv.validity.AllValid()) {
 		ComparesNotNull(leftv, rightv, result_validity, count);
 	}
+	ValidityMask original_mask;
+	original_mask.SetAllValid(count);
+	original_mask.Copy(result_validity, count);
+
 	SelectionVector true_sel(count);
 	SelectionVector false_sel(count);
 	idx_t match_count =
@@ -190,12 +197,19 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 	for (idx_t i = 0; i < match_count; ++i) {
 		const auto idx = true_sel.get_index(i);
 		result_data[idx] = true;
+		// if the row was valid during the null check, set it to valid here as well
+		if (original_mask.RowIsValid(idx)) {
+			result_validity.SetValid(idx);
+		}
 	}
 
 	const idx_t no_match_count = count - match_count;
 	for (idx_t i = 0; i < no_match_count; ++i) {
 		const auto idx = false_sel.get_index(i);
 		result_data[idx] = false;
+		if (original_mask.RowIsValid(idx)) {
+			result_validity.SetValid(idx);
+		}
 	}
 }
 

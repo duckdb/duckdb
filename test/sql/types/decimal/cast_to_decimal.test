@@ -20,22 +20,27 @@ SELECT 100::TINYINT::DECIMAL(38,35), 100::TINYINT::DECIMAL(9,6)
 statement error
 SELECT 100::TINYINT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 1::TINYINT::DECIMAL(3,3)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::TINYINT::DECIMAL(18,17)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::TINYINT::DECIMAL(9,7)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::TINYINT::DECIMAL(38,37)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 # smallint
 query IIII
@@ -52,22 +57,27 @@ SELECT 100::SMALLINT::DECIMAL(38,35), 100::SMALLINT::DECIMAL(9,6)
 statement error
 SELECT 100::SMALLINT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 1::SMALLINT::DECIMAL(3,3)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::SMALLINT::DECIMAL(18,17)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::SMALLINT::DECIMAL(9,7)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::SMALLINT::DECIMAL(38,37)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 # integer
 query IIII
@@ -84,30 +94,37 @@ SELECT 100::INTEGER::DECIMAL(38,35), 100::INTEGER::DECIMAL(9,6), 2147483647::INT
 statement error
 SELECT 100::INTEGER::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 10000000::INTEGER::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT -10000000::INTEGER::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 1::INTEGER::DECIMAL(3,3)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::INTEGER::DECIMAL(18,17)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::INTEGER::DECIMAL(9,7)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::INTEGER::DECIMAL(38,37)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 # bigint
 query IIII
@@ -129,30 +146,37 @@ SELECT 922337203685477580::BIGINT::DECIMAL(18,0), (-922337203685477580)::BIGINT:
 statement error
 SELECT 100::BIGINT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 10000000::BIGINT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT -10000000::BIGINT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 1::BIGINT::DECIMAL(3,3)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::BIGINT::DECIMAL(18,17)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::BIGINT::DECIMAL(9,7)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::BIGINT::DECIMAL(38,37)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 # hugeint
 query IIII
@@ -169,50 +193,62 @@ SELECT 100::HUGEINT::DECIMAL(38,35), 100::HUGEINT::DECIMAL(9,6), 170141183460469
 statement error
 SELECT 100::HUGEINT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 10000000::HUGEINT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT -10000000::HUGEINT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 1::HUGEINT::DECIMAL(3,3)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::HUGEINT::DECIMAL(18,17)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::HUGEINT::DECIMAL(9,7)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::HUGEINT::DECIMAL(38,37)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(38,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(37,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(18,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(9,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::HUGEINT::DECIMAL(4,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 # float
 query IIII
@@ -234,50 +270,62 @@ SELECT 1.25::FLOAT::DECIMAL(3,2)
 statement error
 SELECT 100::FLOAT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 10000000::FLOAT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT -10000000::FLOAT::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 1::FLOAT::DECIMAL(3,3)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::FLOAT::DECIMAL(18,17)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::FLOAT::DECIMAL(9,7)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::FLOAT::DECIMAL(38,37)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(38,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(37,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(18,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(9,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::FLOAT::DECIMAL(4,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 # double
 query IIII
@@ -299,48 +347,59 @@ SELECT 1.25::DOUBLE::DECIMAL(3,2)
 statement error
 SELECT 100::DOUBLE::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 10000000::DOUBLE::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT -10000000::DOUBLE::DECIMAL(3,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 1::DOUBLE::DECIMAL(3,3)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::DOUBLE::DECIMAL(18,17)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::DOUBLE::DECIMAL(9,7)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 100::DOUBLE::DECIMAL(38,37)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(38,1)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(37,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(18,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(9,0)
 ----
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*
 
 statement error
 SELECT 17014118346046923173168730371588410572::DOUBLE::DECIMAL(4,0)
 ----
-
+<REGEX>:Conversion Error.*Could not cast.*to DECIMAL.*

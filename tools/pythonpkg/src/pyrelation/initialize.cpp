@@ -33,16 +33,19 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	DefineMethod({"to_parquet", "write_parquet"}, m, &DuckDBPyRelation::ToParquet,
 	             "Write the relation object to a Parquet file in 'file_name'", py::arg("file_name"), py::kw_only(),
 	             py::arg("compression") = py::none(), py::arg("field_ids") = py::none(),
-	             py::arg("row_group_size_bytes") = py::none(), py::arg("row_group_size") = py::none());
-
-	DefineMethod({"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV,
-	             "Write the relation object to a CSV file in 'file_name'", py::arg("file_name"), py::kw_only(),
-	             py::arg("sep") = py::none(), py::arg("na_rep") = py::none(), py::arg("header") = py::none(),
-	             py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
-	             py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
-	             py::arg("quoting") = py::none(), py::arg("encoding") = py::none(), py::arg("compression") = py::none(),
+	             py::arg("row_group_size_bytes") = py::none(), py::arg("row_group_size") = py::none(),
 	             py::arg("overwrite") = py::none(), py::arg("per_thread_output") = py::none(),
-	             py::arg("use_tmp_file") = py::none(), py::arg("partition_by") = py::none());
+	             py::arg("use_tmp_file") = py::none(), py::arg("partition_by") = py::none(),
+	             py::arg("write_partition_columns") = py::none(), py::arg("append") = py::none());
+
+	DefineMethod(
+	    {"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV, "Write the relation object to a CSV file in 'file_name'",
+	    py::arg("file_name"), py::kw_only(), py::arg("sep") = py::none(), py::arg("na_rep") = py::none(),
+	    py::arg("header") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
+	    py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(), py::arg("quoting") = py::none(),
+	    py::arg("encoding") = py::none(), py::arg("compression") = py::none(), py::arg("overwrite") = py::none(),
+	    py::arg("per_thread_output") = py::none(), py::arg("use_tmp_file") = py::none(),
+	    py::arg("partition_by") = py::none(), py::arg("write_partition_columns") = py::none());
 
 	m.def("fetchone", &DuckDBPyRelation::FetchOne, "Execute and fetch a single row as a tuple")
 	    .def("fetchmany", &DuckDBPyRelation::FetchMany, "Execute and fetch the next set of rows as a list of tuples",
@@ -67,9 +70,16 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	    .def("pl", &DuckDBPyRelation::ToPolars, "Execute and fetch all rows as a Polars DataFrame",
 	         py::arg("batch_size") = 1000000)
 	    .def("torch", &DuckDBPyRelation::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors")
-	    .def("tf", &DuckDBPyRelation::FetchTF, "Fetch a result as dict of TensorFlow Tensors")
-	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
-	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
+	    .def("tf", &DuckDBPyRelation::FetchTF, "Fetch a result as dict of TensorFlow Tensors");
+	const char *capsule_docs = R"(
+			Execute and return an ArrowArrayStream through the Arrow PyCapsule Interface.
+
+			https://arrow.apache.org/docs/dev/format/CDataInterface/PyCapsuleInterface.html
+		)";
+	m.def("__arrow_c_stream__", &DuckDBPyRelation::ToArrowCapsule, capsule_docs,
+	      py::arg("requested_schema") = py::none());
+	m.def("record_batch", &DuckDBPyRelation::ToRecordBatch,
+	      "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
 	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000);
 }
@@ -256,11 +266,16 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Join the relation object with another relation object in other_rel using the join condition expression "
 	         "in join_condition. Types supported are 'inner' and 'left'",
 	         py::arg("other_rel"), py::arg("condition"), py::arg("how") = "inner")
+	    .def("cross", &DuckDBPyRelation::Cross, "Create cross/cartesian product of two relational objects",
+	         py::arg("other_rel"))
+
 	    .def("distinct", &DuckDBPyRelation::Distinct, "Retrieve distinct rows from this relation object")
 	    .def("limit", &DuckDBPyRelation::Limit,
 	         "Only retrieve the first n rows from this relation object, starting at offset", py::arg("n"),
 	         py::arg("offset") = 0)
 	    .def("insert", &DuckDBPyRelation::Insert, "Inserts the given values into the relation", py::arg("values"))
+	    .def("update", &DuckDBPyRelation::Update, "Update the given relation with the provided expressions",
+	         py::arg("set"), py::kw_only(), py::arg("condition") = py::none())
 
 	    // This should be deprecated in favor of a replacement scan
 	    .def("query", &DuckDBPyRelation::Query,

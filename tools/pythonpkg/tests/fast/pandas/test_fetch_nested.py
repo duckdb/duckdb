@@ -201,50 +201,80 @@ class TestFetchNested(object):
         ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t", {
             'a': [
                 {
-                    'key': [1, 2, 3, 4],
-                    'value': [10, 9, 8, 7]
+                    '1':10,
+                    '2':9,
+                    '3':8,
+                    '4':7
                 }
             ]
         }, ""),
         ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t", {
             'a': [
                 {
-                    'key': [1, 2, 3, 4],
-                    'value': [10, 9, 8, 7]
+                    '1':10,
+                    '2':9,
+                    '3':8,
+                    '4':7
                 }
             ]
         }, ""),
         ("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t", {
             'a': [
-                {
-                    'key': [],
-                    'value': []
-                }
+                {}
             ]
         }, ""),
         ("SELECT m as a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)", {
             'a': [
-                {'key': [1], 'value': [2]},
-                {'key': [1], 'value': [2]},
-                {'key': [1], 'value': [2]},
-                {'key': [1], 'value': [2]},
-                {'key': [1], 'value': [2]},
+                {
+                    '1':2
+                },
+                {
+                    '1':2
+                },
+                {
+                    '1':2
+                },
+                {
+                    '1':2
+                },
+                {
+                    '1':2
+                }
             ]
         }, ""),
         ("SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5 order by all) as lst_tbl) as T", {
             'a': [
-                {'key': [0, 5], 'value': [0, 5]},
-                {'key': [1, 6], 'value': [1, 6]},
-                {'key': [2, 7], 'value': [2, 7]},
-                {'key': [3, 8], 'value': [3, 8]},
-                {'key': [4, 9], 'value': [4, 9]},
+                {
+                    '0':0,
+                    '5':5
+                },
+                {
+                    '1':1,
+                    '6':6
+                },
+                {
+                    '2':2,
+                    '7':7
+                },
+                {
+                    '3':3,
+                    '8':8
+                },
+                {
+                    '4':4,
+                    '9':9
+                }
             ]
         }, ""),
         ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t", {
             'a': [
                 {
-                    'key': [1, 2, 3, 4, 2, None],
-                    'value': [10, 9, 8, 7, 11, 42]
+                    '1':10,
+                    '2':9,
+                    '3':8,
+                    '4':7,
+                    '2':11,
+                    None:42,
                 }
             ]
         }, "Map keys must be unique"),
@@ -332,8 +362,18 @@ class TestFetchNested(object):
         """, {
             'a': [
                 {
-                    'i': {'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]},
-                    'j': {'key': [1, 2, 3, 5], 'value': [10, 9, 8, 7]}
+                    'i': {
+                        '1':10,
+                        '2':9,
+                        '3':8,
+                        '4':7
+                    },
+                    'j': {
+                        '1':10,
+                        '2':9,
+                        '3':8,
+                        '5':7
+                    },
                 }
             ]
         }),
@@ -341,7 +381,20 @@ class TestFetchNested(object):
             SELECT [mp,mp2] as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
         """, {
             'a': [
-                [{'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}, {'key': [1, 2, 3, 5], 'value': [10, 9, 8, 7]}]
+                [
+                    {
+                        '1':10,
+                        '2':9,
+                        '3':8,
+                        '4':7
+                    },
+                    {
+                        '1':10,
+                        '2':9,
+                        '3':8,
+                        '5':7
+                    }
+                ]
             ]
         }),
         ("""
@@ -380,8 +433,8 @@ class TestFetchNested(object):
             'a': [
                 {'i': 1, 'j': 2},
                 {'i': 1, 'j': 2},
-                np.nan,
-                np.nan
+                pd.NA,
+                pd.NA
             ]
         }),
         ("""
@@ -393,10 +446,16 @@ class TestFetchNested(object):
             ) t(a)
         """, {
             'a': [
-                {'key': [1, 2], 'value': [3, 4]},
-                {'key': [1, 2], 'value': [3, 4]},
-                np.nan,
-                np.nan
+                {
+                    '1':3,
+                    '2':4
+                },
+                {
+                    '1':3,
+                    '2':4
+                },
+                pd.NA,
+                pd.NA
             ]
         }),
     ])

@@ -10,6 +10,8 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
 
 namespace duckdb {
 
@@ -30,11 +32,17 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 	case TableFilterType::CONSTANT_COMPARISON:
 		result = ConstantFilter::Deserialize(deserializer);
 		break;
+	case TableFilterType::IN_FILTER:
+		result = InFilter::Deserialize(deserializer);
+		break;
 	case TableFilterType::IS_NOT_NULL:
 		result = IsNotNullFilter::Deserialize(deserializer);
 		break;
 	case TableFilterType::IS_NULL:
 		result = IsNullFilter::Deserialize(deserializer);
+		break;
+	case TableFilterType::OPTIONAL_FILTER:
+		result = OptionalFilter::Deserialize(deserializer);
 		break;
 	case TableFilterType::STRUCT_EXTRACT:
 		result = StructFilter::Deserialize(deserializer);
@@ -80,6 +88,17 @@ unique_ptr<TableFilter> ConstantFilter::Deserialize(Deserializer &deserializer) 
 	return std::move(result);
 }
 
+void InFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<Value>>(200, "values", values);
+}
+
+unique_ptr<TableFilter> InFilter::Deserialize(Deserializer &deserializer) {
+	auto values = deserializer.ReadPropertyWithDefault<vector<Value>>(200, "values");
+	auto result = duckdb::unique_ptr<InFilter>(new InFilter(std::move(values)));
+	return std::move(result);
+}
+
 void IsNotNullFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 }
@@ -95,6 +114,17 @@ void IsNullFilter::Serialize(Serializer &serializer) const {
 
 unique_ptr<TableFilter> IsNullFilter::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<IsNullFilter>(new IsNullFilter());
+	return std::move(result);
+}
+
+void OptionalFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", child_filter);
+}
+
+unique_ptr<TableFilter> OptionalFilter::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<OptionalFilter>(new OptionalFilter());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", result->child_filter);
 	return std::move(result);
 }
 

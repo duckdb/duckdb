@@ -2,17 +2,21 @@
 # description: Test copy statement with default values
 # group: [csv]
 
+statement ok
+PRAGMA enable_verification
+
+
 # load CSV file into a table
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR DEFAULT('hello'), c INTEGER DEFAULT(3+4));
 
 query I
-COPY test (a) FROM 'test/sql/copy/csv/data/test/test_default.csv';
+COPY test (a) FROM 'data/csv/test/test_default.csv';
 ----
 5000
 
 query I
-COPY test (c) FROM 'test/sql/copy/csv/data/test/test_default.csv';
+COPY test (c) FROM 'data/csv/test/test_default.csv';
 ----
 5000
 

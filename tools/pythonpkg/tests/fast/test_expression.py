@@ -6,6 +6,7 @@ from duckdb import (
     Expression,
     ConstantExpression,
     ColumnExpression,
+    LambdaExpression,
     CoalesceOperator,
     StarExpression,
     FunctionExpression,
@@ -58,6 +59,7 @@ class TestExpression(object):
         res = rel.fetchall()
         assert res == [(5,)]
 
+    @pytest.mark.skipif(platform.system() == 'Windows', reason="There is some weird interaction in Windows CI")
     def test_column_expression(self):
         con = duckdb.connect()
 
@@ -395,6 +397,70 @@ class TestExpression(object):
         res = rel2.fetchall()
         assert res == [(25,)]
 
+    def test_between_expression(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select
+                5 as a,
+                2 as b,
+                3 as c
+        """
+        )
+        a = ColumnExpression('a')
+        b = ColumnExpression('b')
+        c = ColumnExpression('c')
+
+        # 5 BETWEEN 2 AND 3 -> false
+        assert rel.select(a.between(b, c)).fetchall() == [(False,)]
+
+        # 2 BETWEEN 5 AND 3 -> false
+        assert rel.select(b.between(a, c)).fetchall() == [(False,)]
+
+        # 3 BETWEEN 5 AND 2 -> false
+        assert rel.select(c.between(a, b)).fetchall() == [(False,)]
+
+        # 3 BETWEEN 2 AND 5 -> true
+        assert rel.select(c.between(b, a)).fetchall() == [(True,)]
+
+    def test_collate_expression(self):
+        con = duckdb.connect()
+        rel = con.sql(
+            """
+            select
+                'a' as c0,
+                'A' as c1
+            """
+        )
+
+        col1 = ColumnExpression('c0')
+        col2 = ColumnExpression('c1')
+
+        lower_a = ConstantExpression('a')
+        upper_a = ConstantExpression('A')
+
+        # SELECT c0 LIKE 'a' == True
+        assert rel.select(FunctionExpression('~~', col1, lower_a)).fetchall() == [(True,)]
+
+        # SELECT c0 LIKE 'A' == False
+        assert rel.select(FunctionExpression('~~', col1, upper_a)).fetchall() == [(False,)]
+
+        # SELECT c0 LIKE 'A' COLLATE NOCASE == True
+        assert rel.select(FunctionExpression('~~', col1, upper_a.collate('NOCASE'))).fetchall() == [(True,)]
+
+        # SELECT c1 LIKE 'a' == False
+        assert rel.select(FunctionExpression('~~', col2, lower_a)).fetchall() == [(False,)]
+
+        # SELECT c1 LIKE 'a' COLLATE NOCASE == True
+        assert rel.select(FunctionExpression('~~', col2, lower_a.collate('NOCASE'))).fetchall() == [(True,)]
+
+        with pytest.raises(duckdb.BinderException, match='collations are only supported for type varchar'):
+            rel.select(FunctionExpression('~~', col2, lower_a).collate('NOCASE'))
+
+        with pytest.raises(duckdb.CatalogException, match='Collation with name non-existant does not exist'):
+            rel.select(FunctionExpression('~~', col2, lower_a.collate('non-existant')))
+
     def test_equality_expression(self):
         con = duckdb.connect()
 
@@ -414,6 +480,51 @@ class TestExpression(object):
         rel2 = rel.select(expr1, expr2)
         res = rel2.fetchall()
         assert res == [(False, True)]
+
+    def test_lambda_expression(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select
+                [1,2,3] as a,
+            """
+        )
+
+        # Use a tuple of strings as 'lhs'
+        func = FunctionExpression(
+            "list_reduce",
+            ColumnExpression('a'),
+            LambdaExpression(('x', 'y'), ColumnExpression('x') + ColumnExpression('y')),
+        )
+        rel2 = rel.select(func)
+        res = rel2.fetchall()
+        assert res == [(6,)]
+
+        # Use only a string name as 'lhs'
+        func = FunctionExpression("list_apply", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('x') + 3))
+        rel2 = rel.select(func)
+        res = rel2.fetchall()
+        assert res == [([4, 5, 6],)]
+
+        # 'row' is not a lambda function, so it doesn't accept a lambda expression
+        func = FunctionExpression("row", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('x') + 3))
+        with pytest.raises(duckdb.BinderException, match='This scalar function does not support lambdas'):
+            rel2 = rel.select(func)
+
+        # lhs has to be a tuple of strings or a single string
+        with pytest.raises(
+            ValueError, match="Please provide 'lhs' as either a tuple containing strings, or a single string"
+        ):
+            func = FunctionExpression(
+                "list_filter", ColumnExpression('a'), LambdaExpression(42, ColumnExpression('x') + 3)
+            )
+
+        func = FunctionExpression(
+            "list_filter", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('y') != 3)
+        )
+        with pytest.raises(duckdb.BinderException, match='Referenced column "y" not found in FROM clause'):
+            rel2 = rel.select(func)
 
     def test_inequality_expression(self):
         con = duckdb.connect()
@@ -834,3 +945,38 @@ class TestExpression(object):
         rel2 = rel.sort(b.desc().nulls_last())
         res = rel2.b.fetchall()
         assert res == [('c',), ('b',), ('a',), ('a',), (None,)]
+
+    def test_aggregate(self):
+        con = duckdb.connect()
+        rel = con.sql("select * from range(1000000) t(a)")
+        count = FunctionExpression("count", "a").cast("int")
+        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+
+    def test_aggregate_error(self):
+        con = duckdb.connect()
+
+        # Not necessarily an error, but even non-aggregates are accepted
+        rel = con.sql("select * from values (5) t(a)")
+        res = rel.aggregate(["a"]).execute().fetchone()[0]
+        assert res == 5
+
+        res = rel.aggregate([5]).execute().fetchone()[0]
+        assert res == 5
+
+        # Providing something that can not be converted into an expression is an error:
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Invalid Input Error: Please provide arguments of type Expression!'
+        ):
+
+            class MyClass:
+                def __init__(self):
+                    pass
+
+            res = rel.aggregate([MyClass()]).fetchone()[0]
+
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Please provide either a string or list of Expression objects, not <class 'int'>",
+        ):
+            res = rel.aggregate(5).execute().fetchone()

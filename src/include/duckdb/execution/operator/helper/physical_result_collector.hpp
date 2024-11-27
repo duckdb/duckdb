@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
@@ -44,6 +45,12 @@ public:
 
 	bool IsSource() const override {
 		return true;
+	}
+
+public:
+	//! Whether this is a streaming result collector
+	virtual bool IsStreaming() const {
+		return false;
 	}
 };
 

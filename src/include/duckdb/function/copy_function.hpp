@@ -74,6 +74,13 @@ struct CopyFunctionBindInput {
 	string file_extension;
 };
 
+struct CopyToSelectInput {
+	ClientContext &context;
+	case_insensitive_map_t<vector<Value>> &options;
+	vector<unique_ptr<Expression>> select_list;
+	CopyToType copy_to_type;
+};
+
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };
 
 typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
@@ -110,9 +117,7 @@ typedef bool (*copy_rotate_files_t)(FunctionData &bind_data, const optional_idx 
 typedef bool (*copy_rotate_next_file_t)(GlobalFunctionData &gstate, FunctionData &bind_data,
                                         const optional_idx &file_size_bytes);
 
-enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
-
-typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
+typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &input);
 
 enum class CopyFunctionReturnType : uint8_t { CHANGED_ROWS = 0, CHANGED_ROWS_AND_FILE_LIST = 1 };
 vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
@@ -121,16 +126,17 @@ vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType ret
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
 	explicit CopyFunction(const string &name)
-	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),
-	      copy_to_initialize_global(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
-	      copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr), flush_batch(nullptr),
-	      desired_batch_size(nullptr), rotate_files(nullptr), rotate_next_file(nullptr), serialize(nullptr),
-	      deserialize(nullptr), supports_type(nullptr), copy_from_bind(nullptr) {
+	    : Function(name), plan(nullptr), copy_to_select(nullptr), copy_to_bind(nullptr),
+	      copy_to_initialize_local(nullptr), copy_to_initialize_global(nullptr), copy_to_sink(nullptr),
+	      copy_to_combine(nullptr), copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr),
+	      flush_batch(nullptr), desired_batch_size(nullptr), rotate_files(nullptr), rotate_next_file(nullptr),
+	      serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
 	}
 
 	//! Plan rewrite copy function
 	copy_to_plan_t plan;
 
+	copy_to_select_t copy_to_select;
 	copy_to_bind_t copy_to_bind;
 	copy_to_initialize_local_t copy_to_initialize_local;
 	copy_to_initialize_global_t copy_to_initialize_global;
@@ -148,8 +154,6 @@ public:
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;
-
-	copy_supports_type_t supports_type;
 
 	copy_from_bind_t copy_from_bind;
 	TableFunction copy_from_function;

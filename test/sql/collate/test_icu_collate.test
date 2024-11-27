@@ -47,10 +47,12 @@ SELECT * FROM strings WHERE 'goethe' > s COLLATE NOCASE.de ORDER BY 1
 Gabel
 Göbel
 
-# but not with NOACCENT
-statement error
+# and with NOACCENT
+query I
 SELECT * FROM strings WHERE 'goethe' > s COLLATE NOACCENT.de ORDER BY 1
 ----
+Gabel
+Göbel
 
 # japanese collation
 statement ok
@@ -83,6 +85,12 @@ statement error
 SELECT icu_sort_key('goose', 'DUCK_DUCK_ENUM');
 ----
 Invalid Input Error
+
+statement ok
+select icu_sort_key('æ', 'icu_noaccent');
+
+statement ok
+select icu_sort_key('Æ', 'icu_noaccent');
 
 # issue duckdb/duckdb#9692
 query I
@@ -120,3 +128,25 @@ query I
 select count(*) from (select chr(2*16*256+1*256+2*16+11) union select chr(12*16+5)) as t(s) group by s collate nfc;
 ----
 2
+
+# ICU noaccent collate
+statement ok
+CREATE TABLE t1 (c1 CHAR(10))
+
+statement ok
+INSERT INTO t1 VALUES('z'),('Z'),('a'),('A'),('æ'),('Æ'),('à'),('À'),('á'),('Á'),('â'),('Â'),
+('ã'),('Ã'),('ä'),('Ä'),('å'),('Å'),('b'),('B')
+
+query I
+SELECT GROUP_CONCAT(c1, '') as group_c1 FROM t1 GROUP BY c1  COLLATE "NOCASE.ICU_NOACCENT" ORDER BY group_c1 COLLATE "NOCASE.ICU_NOACCENT"
+----
+aAàÀáÁâÂãÃäÄåÅ
+æÆ
+bB
+zZ
+
+statement ok
+SELECT 'Á' COLLATE "ICU_NOACCENT.NOACCENT"
+
+statement ok
+SELECT 'Á' COLLATE "NOACCENT.ICU_NOACCENT"

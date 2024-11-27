@@ -8,36 +8,32 @@ LogicalOrder::LogicalOrder(vector<BoundOrderByNode> orders)
 
 vector<ColumnBinding> LogicalOrder::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();
-	if (projections.empty()) {
+	if (!HasProjectionMap()) {
 		return child_bindings;
 	}
-
-	vector<ColumnBinding> result;
-	for (auto &col_idx : projections) {
-		result.push_back(child_bindings[col_idx]);
-	}
-	return result;
+	return MapBindings(child_bindings, projection_map);
 }
 
-string LogicalOrder::ParamsToString() const {
-	string result = "ORDERS:\n";
+InsertionOrderPreservingMap<string> LogicalOrder::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string orders_info;
 	for (idx_t i = 0; i < orders.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			orders_info += "\n";
 		}
-		result += orders[i].expression->GetName();
+		orders_info += orders[i].expression->GetName();
 	}
+	result["__order_by__"] = orders_info;
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 
 void LogicalOrder::ResolveTypes() {
 	const auto child_types = children[0]->types;
-	if (projections.empty()) {
+	if (!HasProjectionMap()) {
 		types = child_types;
 	} else {
-		for (auto &col_idx : projections) {
-			types.push_back(child_types[col_idx]);
-		}
+		types = MapTypes(child_types, projection_map);
 	}
 }
 

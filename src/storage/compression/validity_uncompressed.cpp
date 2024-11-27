@@ -1,11 +1,11 @@
-#include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/storage/table/append_state.hpp"
-
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -177,14 +177,15 @@ const validity_t ValidityUncompressed::UPPER_MASKS[] = {0x0,
 // Analyze
 //===--------------------------------------------------------------------===//
 struct ValidityAnalyzeState : public AnalyzeState {
-	ValidityAnalyzeState() : count(0) {
+	explicit ValidityAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), count(0) {
 	}
 
 	idx_t count;
 };
 
 unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<ValidityAnalyzeState>();
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	return make_uniq<ValidityAnalyzeState>(info);
 }
 
 bool ValidityAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -323,7 +324,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 		// now finally we can merge the input mask with the result mask
 		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			if (!result_data) {
-				result_mask.Initialize(result_mask.TargetCount());
+				result_mask.Initialize();
 				result_data = (validity_t *)result_mask.GetData();
 			}
 			result_data[current_result_idx] &= input_mask;
@@ -333,7 +334,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 
 #ifdef DEBUG
 	// verify that we actually accomplished the bitwise ops equivalent that we wanted to do
-	ValidityMask input_mask(input_data);
+	ValidityMask input_mask(input_data, segment.count);
 	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(start + i));
 	}
@@ -363,7 +364,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 				continue;
 			}
 			if (!result_data) {
-				result_mask.Initialize(result_mask.TargetCount());
+				result_mask.Initialize();
 				result_data = result_mask.GetData();
 			}
 			result_data[i] = input_entry;
@@ -382,7 +383,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	auto dataptr = handle.Ptr() + segment.GetBlockOffset();
-	ValidityMask mask(reinterpret_cast<validity_t *>(dataptr));
+	ValidityMask mask(reinterpret_cast<validity_t *>(dataptr), segment.count);
 	auto &result_mask = FlatVector::Validity(result);
 	if (!mask.RowIsValidUnsafe(NumericCast<idx_t>(row_id))) {
 		result_mask.SetInvalid(result_idx);
@@ -422,7 +423,7 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		return append_count;
 	}
 
-	ValidityMask mask(reinterpret_cast<validity_t *>(append_state.handle.Ptr()));
+	ValidityMask mask(reinterpret_cast<validity_t *>(append_state.handle.Ptr()), max_tuples);
 	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
@@ -450,7 +451,7 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
 		// handle sub-bit stuff (yay)
 		idx_t byte_pos = start_bit / 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
-		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr()));
+		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr()), segment.count);
 		for (idx_t i = start_bit; i < bit_end; i++) {
 			mask.SetValid(i);
 		}

@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "duckdb/storage/statistics/numeric_stats_union.hpp"
-#include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/storage/statistics/numeric_stats_union.hpp"
+#include "duckdb/common/array_ptr.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -55,7 +56,7 @@ struct NumericStats {
 
 	//! Check whether or not a given comparison with a constant could possibly be satisfied by rows given the statistics
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-	                                                     const Value &constant);
+	                                                     array_ptr<Value> constants);
 
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other_p);
 
@@ -66,17 +67,11 @@ struct NumericStats {
 
 	template <class T>
 	static inline void UpdateValue(T new_value, T &min, T &max) {
-		if (LessThan::Operation(new_value, min)) {
-			min = new_value;
-		}
-		if (GreaterThan::Operation(new_value, max)) {
-			max = new_value;
-		}
+		min = LessThan::Operation(new_value, min) ? new_value : min;
+		max = GreaterThan::Operation(new_value, max) ? new_value : max;
 	}
-
 	template <class T>
-	static inline void Update(BaseStatistics &stats, T new_value) {
-		auto &nstats = NumericStats::GetDataUnsafe(stats);
+	static inline void Update(NumericStatsData &nstats, T new_value) {
 		UpdateValue<T>(new_value, nstats.min.GetReferenceUnsafe<T>(), nstats.max.GetReferenceUnsafe<T>());
 	}
 
@@ -103,10 +98,5 @@ private:
 	template <class T>
 	static void TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 };
-
-template <>
-void NumericStats::Update<interval_t>(BaseStatistics &stats, interval_t new_value);
-template <>
-void NumericStats::Update<list_entry_t>(BaseStatistics &stats, list_entry_t new_value);
 
 } // namespace duckdb

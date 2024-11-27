@@ -1,0 +1,41 @@
+{
+    "group": "streaming_result_interface",
+    "deprecated": false,
+    "entries": [
+        {
+            "name": "duckdb_stream_fetch_chunk",
+            "deprecated": true,
+            "return_type": "duckdb_data_chunk",
+            "params": [
+                {
+                    "type": "duckdb_result",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nFetches a data chunk from the (streaming) duckdb_result. This function should be called repeatedly until the result is\nexhausted.\n\nThe result must be destroyed with `duckdb_destroy_data_chunk`.\n\nThis function can only be used on duckdb_results created with 'duckdb_pending_prepared_streaming'\n\nIf this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be\nmixed with the legacy result functions or the materialized result functions).\n\nIt is not known beforehand how many chunks will be returned by this result.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the data chunk from."
+                },
+                "return_value": "The resulting data chunk. Returns `NULL` if the result has an error."
+            }
+        },
+        {
+            "name": "duckdb_fetch_chunk",
+            "return_type": "duckdb_data_chunk",
+            "params": [
+                {
+                    "type": "duckdb_result",
+                    "name": "result"
+                }
+            ],
+            "comment": {
+                "description": "Fetches a data chunk from a duckdb_result. This function should be called repeatedly until the result is exhausted.\n\nThe result must be destroyed with `duckdb_destroy_data_chunk`.\n\nIt is not known beforehand how many chunks will be returned by this result.\n\n",
+                "param_comments": {
+                    "result": "The result object to fetch the data chunk from."
+                },
+                "return_value": "The resulting data chunk. Returns `NULL` if the result has an error."
+            }
+        }
+    ]
+}

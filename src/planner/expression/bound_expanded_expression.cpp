@@ -15,7 +15,7 @@ bool BoundExpandedExpression::Equals(const BaseExpression &other_p) const {
 	return false;
 }
 
-unique_ptr<Expression> BoundExpandedExpression::Copy() {
+unique_ptr<Expression> BoundExpandedExpression::Copy() const {
 	throw SerializationException("Cannot copy BoundExpandedExpression");
 }
 

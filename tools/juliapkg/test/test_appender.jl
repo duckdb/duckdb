@@ -51,78 +51,61 @@ end
     # Open the database
     db = DBInterface.connect(DuckDB.DB)
 
-    # Create the table the data is appended to
-    DuckDB.execute(
-        db,
-        "CREATE TABLE dtypes(
-            bool BOOLEAN, 
-            tint TINYINT, 
-            sint SMALLINT, 
-            int INTEGER, 
-            bint BIGINT, 
-            utint UTINYINT, 
-            usint USMALLINT, 
-            uint UINTEGER, 
-            ubint UBIGINT, 
-            float FLOAT, 
-            double DOUBLE, 
-            date DATE, 
-            time TIME,
-            timestamp TIMESTAMP, 
-            missingval INTEGER,
-            nothingval INTEGER,
-            varchar VARCHAR)"
-    )
+    uuid = Base.UUID("a36a5689-48ec-4104-b147-9fed600d8250")
 
-    # Create the appender
+    # Test data for the appender api test 
+    #   - `col_name`: DuckDB column name
+    #   - `duck_type`: DuckDB column type 
+    #   - `append_value`: Value to insert via DuckDB.append
+    #   - `ref_value`: (optional) Expected value from querying the DuckDB table. If not provided, uses `append_value`
+    test_data = [
+        (; col_name = :bool, duck_type = "BOOLEAN", append_value = true, ref_value = true),
+        (; col_name = :tint, duck_type = "TINYINT", append_value = -1, ref_value = Int8(-1)),
+        (; col_name = :sint, duck_type = "SMALLINT", append_value = -2, ref_value = Int16(-2)),
+        (; col_name = :int, duck_type = "INTEGER", append_value = -3, ref_value = Int32(-3)),
+        (; col_name = :bint, duck_type = "BIGINT", append_value = -4, ref_value = Int64(-4)),
+        (; col_name = :hint, duck_type = "HUGEINT", append_value = Int128(-5), ref_value = Int128(-5)),
+        (; col_name = :utint, duck_type = "UTINYINT", append_value = 1, ref_value = UInt8(1)),
+        (; col_name = :usint, duck_type = "USMALLINT", append_value = 2, ref_value = UInt16(2)),
+        (; col_name = :uint, duck_type = "UINTEGER", append_value = 3, ref_value = UInt32(3)),
+        (; col_name = :ubint, duck_type = "UBIGINT", append_value = 4, ref_value = UInt64(4)),
+        (; col_name = :uhint, duck_type = "UHUGEINT", append_value = UInt128(5), ref_value = UInt128(5)),
+        (; col_name = :dec16, duck_type = "DECIMAL(4,2)", append_value = FixedDecimal{Int16, 2}(1.01)),
+        (; col_name = :dec32, duck_type = "DECIMAL(9,2)", append_value = FixedDecimal{Int32, 2}(1.02)),
+        (; col_name = :dec64, duck_type = "DECIMAL(18,2)", append_value = FixedDecimal{Int64, 2}(1.03)),
+        (; col_name = :dec128, duck_type = "DECIMAL(38,2)", append_value = FixedDecimal{Int128, 2}(1.04)),
+        (; col_name = :float, duck_type = "FLOAT", append_value = 1.0, ref_value = Float32(1.0)),
+        (; col_name = :double, duck_type = "DOUBLE", append_value = 2.0, ref_value = Float64(2.0)),
+        (; col_name = :date, duck_type = "DATE", append_value = Dates.Date("1970-04-11")),
+        (; col_name = :time, duck_type = "TIME", append_value = Dates.Time(0, 0, 0, 0, 200)),
+        (; col_name = :timestamp, duck_type = "TIMESTAMP", append_value = Dates.DateTime("1970-01-02T01:23:45.678")),
+        (; col_name = :missingval, duck_type = "INTEGER", append_value = missing),
+        (; col_name = :nothingval, duck_type = "INTEGER", append_value = nothing, ref_value = missing),
+        (; col_name = :largeval, duck_type = "INTEGER", append_value = Int32(2^16)),
+        (; col_name = :uuid, duck_type = "UUID", append_value = uuid),
+        (; col_name = :varchar, duck_type = "VARCHAR", append_value = "Foo")
+    ]
+
+    sql = """CREATE TABLE dtypes(
+               $(join(("$(row.col_name) $(row.duck_type)" for row in test_data), ",\n"))
+            )"""
+    DuckDB.execute(db, sql)
     appender = DuckDB.Appender(db, "dtypes")
-
-    # Append the different data types
-    DuckDB.append(appender, true)
-    DuckDB.append(appender, -1)
-    DuckDB.append(appender, -2)
-    DuckDB.append(appender, -3)
-    DuckDB.append(appender, -4)
-    DuckDB.append(appender, 1)
-    DuckDB.append(appender, 2)
-    DuckDB.append(appender, 3)
-    DuckDB.append(appender, 4)
-    DuckDB.append(appender, 1.0)
-    DuckDB.append(appender, 2.0)
-    DuckDB.append(appender, Dates.Date("1970-04-11"))
-    DuckDB.append(appender, Dates.Time(0, 0, 0, 0, 200))
-    DuckDB.append(appender, Dates.DateTime("1970-01-02T01:23:45.678"))
-    DuckDB.append(appender, missing)
-    DuckDB.append(appender, nothing)
-    DuckDB.append(appender, "Foo")
+    for row in test_data
+        DuckDB.append(appender, row.append_value)
+    end
     # End the row of the appender
     DuckDB.end_row(appender)
     # Destroy the appender and flush the data
     DuckDB.flush(appender)
     DuckDB.close(appender)
 
-    # Retrive the data from the table and store it in  a vector
     results = DBInterface.execute(db, "select * from dtypes;")
     df = DataFrame(results)
-
-    # Test if the correct types have been appended to the table
-    @test df.bool == [true]
-    @test df.tint == [Int8(-1)]
-    @test df.sint == [Int16(-2)]
-    @test df.int == [Int32(-3)]
-    @test df.bint == [Int64(-4)]
-    @test df.utint == [UInt8(1)]
-    @test df.usint == [UInt16(2)]
-    @test df.uint == [UInt32(3)]
-    @test df.ubint == [UInt64(4)]
-    @test df.float == [Float32(1.0)]
-    @test df.double == [Float64(2.0)]
-    @test df.date == [Dates.Date("1970-04-11")]
-    @test df.time == [Dates.Time(0, 0, 0, 0, 200)]
-    @test df.timestamp == [Dates.DateTime("1970-01-02T01:23:45.678")]
-    @test isequal(df.missingval, [missing])
-    @test isequal(df.nothingval, [missing])
-    @test df.varchar == ["Foo"]
+    for row in test_data
+        ref_value = get(row, :ref_value, row.append_value)
+        @test isequal(df[!, row.col_name], [ref_value])
+    end
 
     # close the database 
     DBInterface.close!(db)

@@ -1,0 +1,23 @@
+# name: test/sql/parallelism/interquery/concurrent_update_drop.test_slow
+# description: Test concurrent updates and drops
+# group: [interquery]
+
+statement ok
+CREATE TABLE t1(i INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (3)
+
+concurrentloop threadid 0 2
+
+onlyif threadid=0
+statement maybe
+UPDATE t1 SET i = 4 WHERE i = 2
+----
+does not exist
+
+onlyif threadid=1
+statement ok
+DROP TABLE t1
+
+endloop

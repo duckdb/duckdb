@@ -15,7 +15,11 @@ void InitializeStaticMethods(py::module_ &m) {
 
 	// ColumnRef Expression
 	docs = "Create a column reference from the provided column name";
-	m.def("ColumnExpression", &DuckDBPyExpression::ColumnExpression, py::arg("name"), docs);
+	m.def("ColumnExpression", &DuckDBPyExpression::ColumnExpression, docs);
+
+	// Default Expression
+	docs = "";
+	m.def("DefaultExpression", &DuckDBPyExpression::DefaultExpression, docs);
 
 	// Case Expression
 	docs = "";
@@ -23,7 +27,7 @@ void InitializeStaticMethods(py::module_ &m) {
 
 	// Star Expression
 	docs = "";
-	m.def("StarExpression", &DuckDBPyExpression::StarExpression, py::kw_only(), py::arg("exclude") = py::list(), docs);
+	m.def("StarExpression", &DuckDBPyExpression::StarExpression, py::kw_only(), py::arg("exclude") = py::none(), docs);
 	m.def(
 	    "StarExpression", []() { return DuckDBPyExpression::StarExpression(); }, docs);
 
@@ -34,6 +38,10 @@ void InitializeStaticMethods(py::module_ &m) {
 	// Coalesce Operator
 	docs = "";
 	m.def("CoalesceOperator", &DuckDBPyExpression::Coalesce, docs);
+
+	// Lambda Expression
+	docs = "";
+	m.def("LambdaExpression", &DuckDBPyExpression::LambdaExpression, py::arg("lhs"), py::arg("rhs"), docs);
 }
 
 static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
@@ -257,7 +265,10 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 }
 
 static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
-	m.def(py::init<>([](const string &name) { return DuckDBPyExpression::ColumnExpression(name); }));
+	m.def(py::init<>([](const string &name) {
+		auto names = py::make_tuple(py::str(name));
+		return DuckDBPyExpression::ColumnExpression(names);
+	}));
 	m.def(py::init<>([](const py::object &obj) {
 		auto val = TransformPythonValue(obj);
 		return DuckDBPyExpression::InternalConstantExpression(std::move(val));
@@ -341,6 +352,8 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 	)";
 	expression.def("__repr__", &DuckDBPyExpression::ToString, docs);
 
+	expression.def("get_name", &DuckDBPyExpression::GetName, docs);
+
 	docs = R"(
 		Create a copy of this expression with the given alias.
 
@@ -385,6 +398,12 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 			CastExpression: self::type
 	)";
 	expression.def("cast", &DuckDBPyExpression::Cast, py::arg("type"), docs);
+
+	docs = "";
+	expression.def("between", &DuckDBPyExpression::Between, py::arg("lower"), py::arg("upper"), docs);
+
+	docs = "";
+	expression.def("collate", &DuckDBPyExpression::Collate, py::arg("collation"), docs);
 }
 
 } // namespace duckdb

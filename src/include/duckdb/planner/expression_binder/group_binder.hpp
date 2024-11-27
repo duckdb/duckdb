@@ -35,6 +35,7 @@ protected:
 	BindResult BindSelectRef(idx_t entry);
 	BindResult BindColumnRef(ColumnRefExpression &expr);
 	BindResult BindConstant(ConstantExpression &expr);
+	bool TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) override;
 
 	SelectNode &node;
 	SelectBindState &bind_state;

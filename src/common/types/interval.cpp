@@ -448,7 +448,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 interval_t Interval::FromMicro(int64_t delta_us) {
 	interval_t result;
 	result.months = 0;
-	result.days = delta_us / Interval::MICROS_PER_DAY;
+	result.days = UnsafeNumericCast<int32_t>(delta_us / Interval::MICROS_PER_DAY);
 	result.micros = delta_us % Interval::MICROS_PER_DAY;
 
 	return result;

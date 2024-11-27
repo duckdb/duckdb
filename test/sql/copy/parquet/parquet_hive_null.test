@@ -8,7 +8,7 @@ statement ok
 create table test as select i%5 as a, i%2 as b from range(0,10) tbl(i);
 
 statement ok
-copy (FROM test UNION ALL select 'NULL' as a, 'NULL' as b) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet');
+copy (FROM test UNION ALL select 'NULL' as a, 'NULL' as b) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', WRITE_PARTITION_COLUMNS);
 
 query II
 select * 
@@ -26,3 +26,26 @@ ORDER BY ALL
 4	0
 4	1
 NULL	NULL
+
+statement ok
+create table test2 as select i%5 as a, i%2 as b, i as c from range(0,10) tbl(i);
+
+statement ok
+copy (FROM test2 UNION ALL select 'NULL' as a, 'NULL' as b, 'NULL' as c) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', OVERWRITE);
+
+query III
+select * 
+from parquet_scan('__TEST_DIR__/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
+ORDER BY ALL
+----
+0	0	0
+1	1	1
+2	2	0
+3	3	1
+4	4	0
+5	0	1
+6	1	0
+7	2	1
+8	3	0
+9	4	1
+NULL	NULL	NULL

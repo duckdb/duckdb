@@ -60,4 +60,4 @@ US	Seattle	608	564	738
 statement error
 PIVOT Cities ON Year IN (SELECT xx FROM Cities) USING SUM(Population);
 ----
-
+<REGEX>:Binder Error.*Referenced column.*not found.*

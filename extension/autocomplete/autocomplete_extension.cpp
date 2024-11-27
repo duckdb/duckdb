@@ -62,7 +62,6 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 		} else {
 			score += StringUtil::SimilarityScore(str, prefix);
 		}
-		D_ASSERT(score >= 0);
 		scores.emplace_back(str, score);
 	}
 	auto results = StringUtil::TopNStrings(scores, 20, 999);
@@ -179,6 +178,12 @@ static bool KnownExtension(const string &fname) {
 }
 
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
+	vector<AutoCompleteCandidate> result;
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.options.enable_external_access) {
+		// if enable_external_access is disabled we don't search the file system
+		return result;
+	}
 	auto &fs = FileSystem::GetFileSystem(context);
 	string search_dir;
 	D_ASSERT(last_pos >= prefix.size());
@@ -195,7 +200,6 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	} else {
 		search_dir = fs.ExpandPath(search_dir);
 	}
-	vector<AutoCompleteCandidate> result;
 	fs.ListFiles(search_dir, [&](const string &fname, bool is_dir) {
 		string suggestion;
 		if (is_dir) {

@@ -13,9 +13,11 @@
 namespace duckdb {
 
 enum class NewLineIdentifier : uint8_t {
-	SINGLE = 1,   // Either \r or \n
+	SINGLE_N = 1, // \n
 	CARRY_ON = 2, // \r\n
-	NOT_SET = 3
+	NOT_SET = 3,
+	SINGLE_R = 4 // \r
+
 };
 
 class Serializer;
@@ -131,8 +133,10 @@ private:
 
 	std::string FormatValueInternal(const NewLineIdentifier &val) const {
 		switch (val) {
-		case NewLineIdentifier::SINGLE:
+		case NewLineIdentifier::SINGLE_N:
 			return "\\n";
+		case NewLineIdentifier::SINGLE_R:
+			return "\\r";
 		case NewLineIdentifier::CARRY_ON:
 			return "\\r\\n";
 		case NewLineIdentifier::NOT_SET:

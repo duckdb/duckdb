@@ -1,5 +1,6 @@
 #include "duckdb/common/bswap.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
@@ -203,16 +204,10 @@ unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer,
 
 ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) {
 	ScalarFunction result(StringCompressFunctionName(result_type), {LogicalType::VARCHAR}, result_type,
-	                      GetStringCompressFunctionSwitch(result_type), CompressedMaterializationFunctions::Bind);
+	                      GetStringCompressFunctionSwitch(result_type), CMUtils::Bind);
 	result.serialize = CMStringCompressSerialize;
 	result.deserialize = CMStringCompressDeserialize;
 	return result;
-}
-
-void CMStringCompressFun::RegisterFunction(BuiltinFunctions &set) {
-	for (const auto &result_type : CompressedMaterializationFunctions::StringTypes()) {
-		set.AddFunction(CMStringCompressFun::GetFunction(result_type));
-	}
 }
 
 static void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -223,13 +218,14 @@ static void CMStringDecompressSerialize(Serializer &serializer, const optional_p
 unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
+	function.return_type = deserializer.Get<const LogicalType &>();
 	return nullptr;
 }
 
 ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction result(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
-	                      GetStringDecompressFunctionSwitch(input_type), CompressedMaterializationFunctions::Bind,
-	                      nullptr, nullptr, StringDecompressLocalState::Init);
+	                      GetStringDecompressFunctionSwitch(input_type), CMUtils::Bind, nullptr, nullptr,
+	                      StringDecompressLocalState::Init);
 	result.serialize = CMStringDecompressSerialize;
 	result.deserialize = CMStringDecompressDeserialize;
 	return result;
@@ -237,14 +233,34 @@ ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type)
 
 static ScalarFunctionSet GetStringDecompressFunctionSet() {
 	ScalarFunctionSet set(StringDecompressFunctionName());
-	for (const auto &input_type : CompressedMaterializationFunctions::StringTypes()) {
+	for (const auto &input_type : CMUtils::StringTypes()) {
 		set.AddFunction(CMStringDecompressFun::GetFunction(input_type));
 	}
 	return set;
 }
 
-void CMStringDecompressFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetStringDecompressFunctionSet());
+ScalarFunction InternalCompressStringUtinyintFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::UTINYINT));
+}
+
+ScalarFunction InternalCompressStringUsmallintFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::USMALLINT));
+}
+
+ScalarFunction InternalCompressStringUintegerFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::UINTEGER));
+}
+
+ScalarFunction InternalCompressStringUbigintFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::UBIGINT));
+}
+
+ScalarFunction InternalCompressStringHugeintFun::GetFunction() {
+	return CMStringCompressFun::GetFunction(LogicalType(LogicalTypeId::HUGEINT));
+}
+
+ScalarFunctionSet InternalDecompressStringFun::GetFunctions() {
+	return GetStringDecompressFunctionSet();
 }
 
 } // namespace duckdb

@@ -2,9 +2,11 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_objects.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/arrow_util.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
@@ -16,8 +18,10 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/main/chunk_scan_state/query_result.hpp"
+#include "duckdb/common/arrow/arrow_query_result.hpp"
 
 namespace duckdb {
 
@@ -29,6 +33,7 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 
 DuckDBPyResult::~DuckDBPyResult() {
 	try {
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release gil;
 		result.reset();
 		current_chunk.reset();
@@ -63,6 +68,28 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &query_result) {
 		result_closed = true;
 		return nullptr;
 	}
+	if (query_result.type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = query_result.Cast<StreamQueryResult>();
+		StreamExecutionResult execution_result;
+		while (!StreamQueryResult::IsChunkReady(execution_result = stream_result.ExecuteTask())) {
+			{
+				py::gil_scoped_acquire gil;
+				if (PyErr_CheckSignals() != 0) {
+					throw std::runtime_error("Query interrupted");
+				}
+			}
+			if (execution_result == StreamExecutionResult::BLOCKED) {
+				stream_result.WaitForTask();
+			}
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_CANCELLED) {
+			throw InvalidInputException("The execution of the query was cancelled before it could finish, likely "
+			                            "caused by executing a different query");
+		}
+		if (execution_result == StreamExecutionResult::EXECUTION_ERROR) {
+			stream_result.ThrowError();
+		}
+	}
 	auto chunk = query_result.Fetch();
 	if (query_result.HasError()) {
 		query_result.ThrowError();
@@ -85,6 +112,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &query_result) {
 
 Optional<py::tuple> DuckDBPyResult::Fetchone() {
 	{
+		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
 		if (!result) {
 			throw InvalidInputException("result closed");
@@ -152,6 +180,9 @@ void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversi
 		res[name] = py::module::import("pandas")
 		                .attr("Categorical")
 		                .attr("from_codes")(conversion.ToArray(col_idx), py::arg("dtype") = categories_type[col_idx]);
+		if (!conversion.ToPandas()) {
+			res[name] = res[name].attr("to_numpy")();
+		}
 	} else {
 		res[name] = conversion.ToArray(col_idx);
 	}
@@ -219,6 +250,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 			}
 			unique_ptr<DataChunk> chunk;
 			{
+				D_ASSERT(py::gil_check());
 				py::gil_scoped_release release;
 				chunk = FetchNextRaw(stream_result);
 			}
@@ -257,23 +289,85 @@ void DuckDBPyResult::ChangeToTZType(PandasDataFrame &df) {
 	}
 }
 
-// TODO: unify these with an enum/flag to indicate which conversions to perform
-void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
-	auto names = df.attr("columns").cast<vector<string>>();
+static py::object ConvertNumpyDtype(py::handle numpy_array) {
+	D_ASSERT(py::gil_check());
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
-	for (idx_t i = 0; i < result->ColumnCount(); i++) {
-		if (result->types[i] == LogicalType::DATE) {
-			df.attr("__setitem__")(names[i].c_str(), df[names[i].c_str()].attr("dt").attr("date"));
-		}
+	auto dtype = numpy_array.attr("dtype");
+	if (!py::isinstance(numpy_array, import_cache.numpy.ma.masked_array())) {
+		return dtype;
+	}
+
+	auto numpy_type = ConvertNumpyType(dtype);
+	switch (numpy_type.type) {
+	case NumpyNullableType::BOOL: {
+		return import_cache.pandas.BooleanDtype()();
+	}
+	case NumpyNullableType::UINT_8: {
+		return import_cache.pandas.UInt8Dtype()();
+	}
+	case NumpyNullableType::UINT_16: {
+		return import_cache.pandas.UInt16Dtype()();
+	}
+	case NumpyNullableType::UINT_32: {
+		return import_cache.pandas.UInt32Dtype()();
+	}
+	case NumpyNullableType::UINT_64: {
+		return import_cache.pandas.UInt64Dtype()();
+	}
+	case NumpyNullableType::INT_8: {
+		return import_cache.pandas.Int8Dtype()();
+	}
+	case NumpyNullableType::INT_16: {
+		return import_cache.pandas.Int16Dtype()();
+	}
+	case NumpyNullableType::INT_32: {
+		return import_cache.pandas.Int32Dtype()();
+	}
+	case NumpyNullableType::INT_64: {
+		return import_cache.pandas.Int64Dtype()();
+	}
+	case NumpyNullableType::FLOAT_32:
+	case NumpyNullableType::FLOAT_64:
+	case NumpyNullableType::FLOAT_16: // there is no pandas.Float16Dtype
+	default:
+		return dtype;
 	}
 }
 
 PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
-	PandasDataFrame df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+	D_ASSERT(py::gil_check());
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto pandas = import_cache.pandas();
+
+	py::object items = o.attr("items")();
+	for (const py::handle &item : items) {
+		// Each item is a tuple of (key, value)
+		auto key_value = py::cast<py::tuple>(item);
+		py::handle key = key_value[0];   // Access the first element (key)
+		py::handle value = key_value[1]; // Access the second element (value)
+
+		auto dtype = ConvertNumpyDtype(value);
+		if (py::isinstance(value, import_cache.numpy.ma.masked_array())) {
+			// o[key] = pd.Series(value.filled(pd.NA), dtype=dtype)
+			auto series = pandas.attr("Series")(value.attr("data"), py::arg("dtype") = dtype);
+			series.attr("__setitem__")(value.attr("mask"), import_cache.pandas.NA());
+			o.attr("__setitem__")(key, series);
+		}
+	}
+
+	PandasDataFrame df = py::cast<PandasDataFrame>(pandas.attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
+
+	auto names = df.attr("columns").cast<vector<string>>();
+	D_ASSERT(result->ColumnCount() == names.size());
 	if (date_as_object) {
-		ChangeDateToDatetime(df);
+		for (idx_t i = 0; i < result->ColumnCount(); i++) {
+			if (result->types[i] == LogicalType::DATE) {
+				df.attr("__setitem__")(names[i].c_str(), df[names[i].c_str()].attr("dt").attr("date"));
+			}
+		}
 	}
 	return df;
 }
@@ -306,41 +400,6 @@ py::dict DuckDBPyResult::FetchTF() {
 	return result_dict;
 }
 
-bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch,
-                                     bool to_polars) {
-	ArrowArray data;
-	idx_t count;
-	auto &query_result = *result.get();
-	{
-		py::gil_scoped_release release;
-		count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data);
-	}
-	if (count == 0) {
-		return false;
-	}
-	ArrowSchema arrow_schema;
-	auto names = query_result.names;
-	if (to_polars) {
-		QueryResult::DeduplicateColumns(names);
-	}
-	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
-	TransformDuckToArrowChunk(arrow_schema, data, batches);
-	return true;
-}
-
-py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch, bool to_polars) {
-	if (!result) {
-		throw InvalidInputException("result closed");
-	}
-	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
-
-	py::list batches;
-	QueryResultChunkScanState scan_state(*result.get());
-	while (FetchArrowChunk(scan_state, batches, rows_per_batch, to_polars)) {
-	}
-	return batches;
-}
-
 duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, bool to_polars) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
@@ -349,8 +408,62 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 	if (to_polars) {
 		QueryResult::DeduplicateColumns(names);
 	}
-	return pyarrow::ToArrowTable(result->types, names, FetchAllArrowChunks(rows_per_batch, to_polars),
-	                             result->client_properties);
+
+	if (!result) {
+		throw InvalidInputException("result closed");
+	}
+	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+
+	py::list batches;
+	if (result->type == QueryResultType::ARROW_RESULT) {
+		auto &arrow_result = result->Cast<ArrowQueryResult>();
+		auto arrays = arrow_result.ConsumeArrays();
+		for (auto &array : arrays) {
+			ArrowSchema arrow_schema;
+			auto names = arrow_result.names;
+			if (to_polars) {
+				QueryResult::DeduplicateColumns(names);
+			}
+			ArrowArray data = array->arrow_array;
+			array->arrow_array.release = nullptr;
+			ArrowConverter::ToArrowSchema(&arrow_schema, arrow_result.types, names, arrow_result.client_properties);
+			TransformDuckToArrowChunk(arrow_schema, data, batches);
+		}
+	} else {
+		QueryResultChunkScanState scan_state(*result.get());
+		while (true) {
+			ArrowArray data;
+			idx_t count;
+			auto &query_result = *result.get();
+			{
+				D_ASSERT(py::gil_check());
+				py::gil_scoped_release release;
+				count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data);
+			}
+			if (count == 0) {
+				break;
+			}
+			ArrowSchema arrow_schema;
+			auto names = query_result.names;
+			if (to_polars) {
+				QueryResult::DeduplicateColumns(names);
+			}
+			ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
+			TransformDuckToArrowChunk(arrow_schema, data, batches);
+		}
+	}
+
+	return pyarrow::ToArrowTable(result->types, names, std::move(batches), result->client_properties);
+}
+
+ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
+	if (!result) {
+		throw InvalidInputException("There is no query result");
+	}
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
+	// The 'result_stream' is part of the 'private_data' of the ArrowArrayStream and its lifetime is bound to that of
+	// the ArrowArrayStream.
+	return result_stream->stream;
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {
@@ -360,10 +473,28 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t 
 	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
-	//! We have to construct an Arrow Array Stream
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
-	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream); // NOLINT
+	auto stream = FetchArrowArrayStream(rows_per_batch);
+	py::object record_batch_reader = record_batch_reader_func((uint64_t)&stream); // NOLINT
 	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
+}
+
+static void ArrowArrayStreamPyCapsuleDestructor(PyObject *object) {
+	auto data = PyCapsule_GetPointer(object, "arrow_array_stream");
+	if (!data) {
+		return;
+	}
+	auto stream = reinterpret_cast<ArrowArrayStream *>(data);
+	if (stream->release) {
+		stream->release(stream);
+	}
+	delete stream;
+}
+
+py::object DuckDBPyResult::FetchArrowCapsule(idx_t rows_per_batch) {
+	auto stream_p = FetchArrowArrayStream(rows_per_batch);
+	auto stream = new ArrowArrayStream();
+	*stream = stream_p;
+	return py::capsule(stream, "arrow_array_stream", ArrowArrayStreamPyCapsuleDestructor);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {

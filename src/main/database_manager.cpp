@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0), current_query_number(1) {
+DatabaseManager::DatabaseManager(DatabaseInstance &db) : next_oid(0), current_query_number(1) {
 	system = make_uniq<AttachedDatabase>(db);
 	databases = make_uniq<CatalogSet>(system->GetCatalog());
 }
@@ -25,7 +25,7 @@ DatabaseManager &DatabaseManager::Get(AttachedDatabase &db) {
 
 void DatabaseManager::InitializeSystemCatalog() {
 	// The SYSTEM_DATABASE has no persistent storage.
-	system->Initialize(optional_idx());
+	system->Initialize();
 }
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
@@ -49,7 +49,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 	}
 
 	const auto name = attached_db->GetName();
-	attached_db->oid = ModifyCatalog();
+	attached_db->oid = NextOid();
 	LogicalDependencyList dependencies;
 	if (default_database.empty()) {
 		default_database = name;
@@ -134,17 +134,21 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 	}
 }
 
+vector<string> DatabaseManager::GetAttachedDatabasePaths() {
+	lock_guard<mutex> path_lock(db_paths_lock);
+	vector<string> paths;
+	for (auto &path : db_paths) {
+		paths.push_back(path);
+	}
+	return paths;
+}
+
 void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
                                       AttachOptions &options) {
 
 	// Test if the database is a DuckDB database file.
 	if (StringUtil::CIEquals(options.db_type, "DUCKDB")) {
 		options.db_type = "";
-
-		// The DuckDB format does not allow unrecognized options.
-		if (!options.unrecognized_option.empty()) {
-			throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
-		}
 		return;
 	}
 
@@ -165,12 +169,6 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 			ExtensionHelper::LoadExternalExtension(context, options.db_type);
 		}
 		return;
-	}
-
-	// The DuckDB file format does not allow unrecognized options, except for the block_size option,
-	// which is specific to DuckDB files.
-	if (!options.unrecognized_option.empty() && options.unrecognized_option != "block_size") {
-		throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
 	}
 }
 

@@ -1,5 +1,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -8,6 +9,9 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
 
 namespace duckdb {
 
@@ -24,6 +28,17 @@ LogicalOperator::~LogicalOperator() {
 
 vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
 	return {ColumnBinding(0, 0)};
+}
+
+void LogicalOperator::SetParamsEstimatedCardinality(InsertionOrderPreservingMap<string> &result) const {
+	if (has_estimated_cardinality) {
+		result[RenderTreeNode::ESTIMATED_CARDINALITY] = StringUtil::Format("%llu", estimated_cardinality);
+	}
+}
+
+void LogicalOperator::SetEstimatedCardinality(idx_t _estimated_cardinality) {
+	estimated_cardinality = _estimated_cardinality;
+	has_estimated_cardinality = true;
 }
 
 // LCOV_EXCL_START
@@ -47,19 +62,21 @@ string LogicalOperator::GetName() const {
 	return LogicalOperatorToString(type);
 }
 
-string LogicalOperator::ParamsToString() const {
-	string result;
+InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string expressions_info;
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			expressions_info += "\n";
 		}
-		result += expressions[i]->GetName();
+		expressions_info += expressions[i]->GetName();
 	}
+	result["Expressions"] = expressions_info;
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 
 void LogicalOperator::ResolveOperatorTypes() {
-
 	types.clear();
 	// first resolve child types
 	for (auto &child : children) {
@@ -107,9 +124,12 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 	}
 }
 
-string LogicalOperator::ToString() const {
-	TreeRenderer renderer;
-	return renderer.ToString(*this);
+string LogicalOperator::ToString(ExplainFormat format) const {
+	auto renderer = TreeRenderer::CreateRenderer(format);
+	stringstream ss;
+	auto tree = RenderTree::CreateRenderTree(*this);
+	renderer->ToStream(*tree, ss);
+	return ss.str();
 }
 
 void LogicalOperator::Verify(ClientContext &context) {

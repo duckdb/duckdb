@@ -25,7 +25,7 @@ class StringValueScanner;
 
 class ReadCSV {
 public:
-	static unique_ptr<CSVFileHandle> OpenCSV(const string &file_path, FileCompressionType compression,
+	static unique_ptr<CSVFileHandle> OpenCSV(const string &file_path, const CSVReaderOptions &options,
 	                                         ClientContext &context);
 };
 
@@ -92,7 +92,7 @@ struct ReadCSVData : public BaseCSVData {
 	unique_ptr<CSVFileScan> initial_reader;
 	//! The union readers are created (when csv union_by_name option is on) during binding
 	//! Those readers can be re-used during ReadCSVFunction
-	vector<unique_ptr<CSVFileScan>> union_readers;
+	vector<unique_ptr<CSVUnionData>> union_readers;
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
 
@@ -100,6 +100,9 @@ struct ReadCSVData : public BaseCSVData {
 
 	void Initialize(unique_ptr<CSVFileScan> &reader) {
 		this->initial_reader = std::move(reader);
+	}
+	void Initialize(ClientContext &, unique_ptr<CSVUnionData> &data) {
+		this->initial_reader = std::move(data->reader);
 	}
 	void FinalizeRead(ClientContext &context);
 

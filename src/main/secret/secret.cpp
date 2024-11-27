@@ -1,13 +1,22 @@
 #include "duckdb/main/secret/secret.hpp"
+
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
 int64_t BaseSecret::MatchScore(const string &path) const {
 	int64_t longest_match = NumericLimits<int64_t>::Minimum();
+
+	if (prefix_paths.empty()) {
+		longest_match = 0;
+	}
+
 	for (const auto &prefix : prefix_paths) {
 		// Handle empty scope which matches all at lowest possible score
 		if (prefix.empty()) {
@@ -78,7 +87,8 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 		map_values.push_back(Value::STRUCT(map_struct));
 	}
 
-	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	// Warning: the secret map is serialized into a single MAP value with type ANY
+	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::ANY);
 	auto map = Value::MAP(ListType::GetChildType(map_type), map_values);
 	serializer.WriteProperty(201, "secret_map", map);
 
@@ -100,6 +110,140 @@ Value KeyValueSecret::TryGetValue(const string &key, bool error_on_missing) cons
 	}
 
 	return lookup->second;
+}
+
+KeyValueSecretReader::KeyValueSecretReader(DatabaseInstance &db_p, const char **secret_types, idx_t secret_types_len,
+                                           string path_p) {
+	db = db_p;
+	path = std::move(path_p);
+	Initialize(secret_types, secret_types_len);
+}
+
+KeyValueSecretReader::KeyValueSecretReader(DatabaseInstance &db_p, const char *secret_type, string path)
+    : KeyValueSecretReader(db_p, &secret_type, 1, std::move(path)) {
+}
+
+KeyValueSecretReader::KeyValueSecretReader(ClientContext &context_p, const char **secret_types, idx_t secret_types_len,
+                                           string path_p) {
+	context = context_p;
+	path = std::move(path_p);
+	Initialize(secret_types, secret_types_len);
+}
+KeyValueSecretReader::KeyValueSecretReader(ClientContext &context_p, const char *secret_type, string path)
+    : KeyValueSecretReader(context_p, &secret_type, 1, std::move(path)) {
+}
+
+KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info,
+                                           const char *secret_type)
+    : KeyValueSecretReader(opener_p, info, &secret_type, 1) {
+}
+
+void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_types_len) {
+	if (!db) {
+		// TODO does this even work?
+		return;
+	}
+
+	auto &secret_manager = db->GetSecretManager();
+	auto transaction = context ? CatalogTransaction::GetSystemCatalogTransaction(*context)
+	                           : CatalogTransaction::GetSystemTransaction(*db);
+
+	SecretMatch secret_match;
+	for (idx_t i = 0; i < secret_types_len; i++) {
+		auto &secret_type = secret_types[i];
+		secret_match = secret_manager.LookupSecret(transaction, path, secret_type);
+		if (secret_match.HasMatch()) {
+			break;
+		}
+	}
+
+	if (secret_match.HasMatch()) {
+		secret = dynamic_cast<const KeyValueSecret &>(secret_match.GetSecret());
+		secret_entry = std::move(secret_match.secret_entry);
+	}
+}
+
+KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info,
+                                           const char **secret_types, idx_t secret_types_len) {
+	db = opener_p.TryGetDatabase();
+	context = opener_p.TryGetClientContext();
+
+	if (info) {
+		path = info->file_path;
+	}
+
+	Initialize(secret_types, secret_types_len);
+}
+
+KeyValueSecretReader::~KeyValueSecretReader() {
+}
+
+SettingLookupResult KeyValueSecretReader::TryGetSecretKey(const string &secret_key, Value &result) {
+	if (secret && secret->TryGetValue(secret_key, result)) {
+		return SettingLookupResult(SettingScope::SECRET);
+	}
+	return SettingLookupResult();
+}
+
+SettingLookupResult KeyValueSecretReader::TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
+                                                                   Value &result) {
+	if (secret && secret->TryGetValue(secret_key, result)) {
+		return SettingLookupResult(SettingScope::SECRET);
+	}
+	if (context) {
+		auto res = context->TryGetCurrentSetting(setting_name, result);
+		if (res) {
+			return res;
+		}
+	}
+	if (db) {
+		db->TryGetCurrentSetting(setting_name, result);
+	}
+	return SettingLookupResult();
+}
+
+Value KeyValueSecretReader::GetSecretKey(const string &secret_key) {
+	Value result;
+	if (TryGetSecretKey(secret_key, result)) {
+		return result;
+	}
+	ThrowNotFoundError(secret_key);
+}
+
+Value KeyValueSecretReader::GetSecretKeyOrSetting(const string &secret_key, const string &setting_name) {
+	Value result;
+	if (TryGetSecretKeyOrSetting(secret_key, setting_name, result)) {
+		return result;
+	}
+	ThrowNotFoundError(secret_key, setting_name);
+}
+
+void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key) {
+	string base_message = "Failed to fetch required secret key '%s' from secret";
+
+	if (!secret) {
+		string secret_scope = path;
+		string secret_scope_hint_message = secret_scope.empty() ? "." : " for '" + secret_scope + "'.";
+		throw InvalidConfigurationException(base_message + ", because no secret was found%s", secret_key,
+		                                    secret_scope_hint_message);
+	}
+
+	throw InvalidConfigurationException(base_message + " '%s'.", secret_key, secret->GetName());
+}
+
+void KeyValueSecretReader::ThrowNotFoundError(const string &secret_key, const string &setting_name) {
+	string base_message = "Failed to fetch a parameter from either the secret key '%s' or the setting '%s'";
+
+	if (!secret) {
+		string secret_scope = path;
+		string secret_scope_hint_message = secret_scope.empty() ? "." : " for '" + secret_scope + "'.";
+		throw InvalidConfigurationException(base_message + ": no secret was found%s", secret_key, setting_name,
+		                                    secret_scope_hint_message);
+	}
+
+	throw InvalidConfigurationException(base_message +
+	                                        ": secret '%s' did not contain the key, also the setting was not found.",
+	                                    secret_key, setting_name, secret->GetName());
 }
 
 bool CreateSecretFunctionSet::ProviderExists(const string &provider_name) {

@@ -35,7 +35,7 @@ bool BoundBetweenExpression::Equals(const BaseExpression &other_p) const {
 	return lower_inclusive == other.lower_inclusive && upper_inclusive == other.upper_inclusive;
 }
 
-unique_ptr<Expression> BoundBetweenExpression::Copy() {
+unique_ptr<Expression> BoundBetweenExpression::Copy() const {
 	auto copy = make_uniq<BoundBetweenExpression>(input->Copy(), lower->Copy(), upper->Copy(), lower_inclusive,
 	                                              upper_inclusive);
 	copy->CopyProperties(*this);

@@ -1,0 +1,81 @@
+# name: test/sql/parser/dollar_quotes_internal_issue2224.test
+# description: Unexpected implicit conversion of string literal with full-width space
+# group: [parser]
+
+# we replace unicode spaces in query strings, except if they are quoted
+# internal issue 2224 found that this doesn't work properly for double-dollar quoting
+# lhs is regular space, rhs is a wider unicode space, so this should be false
+#query I
+#select $$ $$ = $$　$$;
+#----
+#false
+
+query I
+select $tag$ $tag$ = $tag$　$tag$;
+----
+false
+
+# worked properly before for these quotes
+query I
+select ' ' = '　';
+----
+false
+
+# just checking if parsing didn't break by fixing the dollar thing
+query I
+select $$$$ = '';
+----
+true
+
+query I
+select $tag$$tag$ = '';
+----
+true
+
+query I
+select '' = $$$$;
+----
+true
+
+query I
+select '' = $tag$$tag$;
+----
+true
+
+query I
+select $$ $$ = $$　$$ or ' ' = '　';
+----
+false
+
+query I
+select $tag$ $tag$ = $tag$　$tag$ or ' ' = '　';
+----
+false
+
+query I
+select ' ' = '　' or $$ $$ = $$　$$;
+----
+false
+
+query I
+select ' ' = '　' or $tag$ $tag$ = $tag$　$tag$;
+----
+false
+
+# we can nest dollars if tags don't match
+query I
+select $tag$ $duck$ $tag$ = $tag$　$duck$　$tag$;
+----
+false
+
+# of course we have to try this too
+query I
+select $🦆$du ck$🦆$ = $🦆$du　ck$🦆$;
+----
+false
+
+# and some more unicode
+query I
+select $ü$x x$ü$ = $ü$x　x$ü$;
+----
+false

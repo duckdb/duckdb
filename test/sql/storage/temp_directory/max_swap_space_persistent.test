@@ -1,5 +1,5 @@
 # name: test/sql/storage/temp_directory/max_swap_space_persistent.test
-# description: Test the maximum swap space for with temporary directories.
+# description: Test the maximum swap space for temporary directories.
 # group: [temp_directory]
 
 require skip_reload

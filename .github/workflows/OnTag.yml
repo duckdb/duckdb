@@ -13,10 +13,10 @@ jobs:
     uses: ./.github/workflows/TwineUpload.yml
     secrets: inherit
     with:
-      override_git_describe: ${{ inputs.override_git_describe || github.event.release.tag_name }}
+      override_git_describe: ${{ inputs.override_git_describe || github.ref_name }}
 
   staged_upload:
     uses: ./.github/workflows/StagedUpload.yml
     secrets: inherit
     with:
-      override_git_describe: ${{ inputs.override_git_describe || github.event.release.tag_name }}
+      target_git_describe: ${{ inputs.override_git_describe || github.ref_name }}

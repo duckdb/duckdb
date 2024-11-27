@@ -25,6 +25,8 @@ public:
 	//! Return a reference to the client context (from the optimizer)
 	ClientContext &GetContext();
 
+	void CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings);
+
 	struct Filter {
 		unordered_set<idx_t> bindings;
 		unique_ptr<Expression> filter;
@@ -55,6 +57,8 @@ private:
 	unique_ptr<LogicalOperator> PushdownJoin(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalProjection op
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
+	//! Push down a LogicalProjection op
+	unique_ptr<LogicalOperator> PushdownUnnest(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalSetOperation op
 	unique_ptr<LogicalOperator> PushdownSetOperation(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalGet op

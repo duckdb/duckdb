@@ -7,9 +7,16 @@ import pandas as pd
 import pytest
 from conftest import ArrowPandas, NumpyPandas
 import datetime
+import gc
 from duckdb import ColumnExpression
 
 from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
+
+
+@pytest.fixture(scope="session")
+def tmp_database(tmp_path_factory):
+    database = tmp_path_factory.mktemp("databases", numbered=True) / "tmp.duckdb"
+    return database
 
 
 def get_relation(conn):
@@ -186,6 +193,92 @@ class TestRelation(object):
             (3, 'three'),
             (4, 'four'),
         ]
+
+    def test_update_relation(self, duckdb_cursor):
+        duckdb_cursor.sql("create table tbl (a varchar default 'test', b int)")
+        duckdb_cursor.table('tbl').insert(['hello', 21])
+        duckdb_cursor.table('tbl').insert(['hello', 42])
+        # UPDATE tbl SET a = DEFAULT where b = 42
+        duckdb_cursor.table('tbl').update(
+            {'a': duckdb.DefaultExpression()}, condition=duckdb.ColumnExpression('b') == 42
+        )
+        assert duckdb_cursor.table('tbl').fetchall() == [('hello', 21), ('test', 42)]
+
+        rel = duckdb_cursor.table('tbl')
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide at least one set expression'):
+            rel.update({})
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Please provide the column name as the key of the dictionary'
+        ):
+            rel.update({1: 21})
+        with pytest.raises(duckdb.BinderException, match='Referenced update column c not found in table!'):
+            rel.update({'c': 21})
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Please provide 'set' as a dictionary of column name to Expression"
+        ):
+            rel.update(21)
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Please provide an object of type Expression as the value, not <class 'set'>",
+        ):
+            rel.update({'a': {21}})
+
+    def test_value_relation(self, duckdb_cursor):
+        # Needs at least one input
+        with pytest.raises(duckdb.InvalidInputException, match='Could not create a ValueRelation without any inputs'):
+            duckdb_cursor.values()
+
+        # From a list of (python) values
+        rel = duckdb_cursor.values([1, 2, 3])
+        assert rel.fetchall() == [(1, 2, 3)]
+
+        # From an Expression
+        rel = duckdb_cursor.values(duckdb.ConstantExpression('test'))
+        assert rel.fetchall() == [('test',)]
+
+        # From multiple Expressions
+        rel = duckdb_cursor.values(
+            duckdb.ConstantExpression('1'), duckdb.ConstantExpression('2'), duckdb.ConstantExpression('3')
+        )
+        assert rel.fetchall() == [('1', '2', '3')]
+
+        # From Expressions mixed with random values
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide arguments of type Expression!'):
+            rel = duckdb_cursor.values(
+                duckdb.ConstantExpression('1'),
+                {'test'},
+                duckdb.ConstantExpression('3'),
+            )
+
+        # From Expressions mixed with values that *can* be autocast to Expression
+        rel = duckdb_cursor.values(
+            duckdb.ConstantExpression('1'),
+            2,
+            duckdb.ConstantExpression('3'),
+        )
+
+        const = duckdb.ConstantExpression
+        # From a tuple of Expressions
+        rel = duckdb_cursor.values((const(1), const(2), const(3)))
+        assert rel.fetchall() == [(1, 2, 3)]
+
+        # From mismatching tuples of Expressions
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Mismatch between length of tuples in input, expected 3 but found 2'
+        ):
+            rel = duckdb_cursor.values((const(1), const(2), const(3)), (const(5), const(4)))
+
+        # From an empty tuple
+        with pytest.raises(duckdb.InvalidInputException, match='Please provide a non-empty tuple'):
+            rel = duckdb_cursor.values(())
+
+        # Mixing tuples with Expressions
+        with pytest.raises(duckdb.InvalidInputException, match='Expected objects of type tuple'):
+            rel = duckdb_cursor.values((const(1), const(2), const(3)), const(4))
+
+        # Using Expressions that can't be resolved:
+        with pytest.raises(duckdb.BinderException, match='Referenced column "a" not found in FROM clause!'):
+            duckdb_cursor.values(duckdb.ColumnExpression('a'))
 
     def test_insert_into_operator(self):
         conn = duckdb.connect()
@@ -465,11 +558,8 @@ class TestRelation(object):
         ):
             rel.insert([1, 2, 3, 4])
 
-        with pytest.raises(
-            duckdb.NotImplementedException, match='Creating a VIEW from a MaterializedRelation is not supported'
-        ):
-            query_rel = rel.query('x', "select 42 from x where column0 != 42")
-            assert query_rel.fetchall() == []
+        query_rel = rel.query('x', "select 42 from x where column0 != 42")
+        assert query_rel.fetchall() == []
 
         distinct_rel = rel.distinct()
         assert distinct_rel.fetchall() == [(42, 'test', 'this is a long string', True)]
@@ -477,7 +567,8 @@ class TestRelation(object):
         limited_rel = rel.limit(50)
         assert len(limited_rel.fetchall()) == 50
 
-        materialized_one = duckdb_cursor.sql("call range(10)").project(
+        # Using parameters also results in a MaterializedRelation
+        materialized_one = duckdb_cursor.sql("select * from range(?)", params=[10]).project(
             ColumnExpression('range').cast(str).alias('range')
         )
         materialized_two = duckdb_cursor.sql("call repeat('a', 5)")
@@ -514,23 +605,57 @@ class TestRelation(object):
 
         except_rel = unioned_rel.except_(materialized_one)
         res = except_rel.fetchall()
-        assert res == [('a',)]
+        assert res == [tuple('a') for _ in range(5)]
 
         intersect_rel = unioned_rel.intersect(materialized_one).order('range')
         res = intersect_rel.fetchall()
         assert res == [('0',), ('1',), ('2',), ('3',), ('4',), ('5',), ('6',), ('7',), ('8',), ('9',)]
 
     def test_materialized_relation_view(self, duckdb_cursor):
-        with pytest.raises(
-            duckdb.NotImplementedException, match='Creating a VIEW from a MaterializedRelation is not supported'
-        ):
+        def create_view(duckdb_cursor):
             duckdb_cursor.sql(
                 """
                 create table tbl(a varchar);
-                insert into tbl values ('test');
-                SELECT
-                    *
-                FROM tbl
+                insert into tbl values ('test') returning *
             """
             ).to_view('vw')
-            res = duckdb_cursor.sql("select * from vw").fetchone()
+
+        create_view(duckdb_cursor)
+        res = duckdb_cursor.sql("select * from vw").fetchone()
+        assert res == ('test',)
+
+    def test_materialized_relation_view2(self, duckdb_cursor):
+        # This creates a MaterializedRelation
+        rel = duckdb_cursor.sql("select * from (values ($1, $2))", params=[(2,), ("Alice",)])
+
+        # This creates a ProjectionRelation, wrapping the materialized rel
+        rel = rel.project("col0, col1")
+
+        # Create a VIEW that contains a ColumnDataRef
+        rel.create_view("test", True)
+        # Override the existing relation, the original MaterializedRelation has now gone out of scope
+        # The VIEW still works because the CDC that is being referenced is kept alive through the MaterializedDependency item
+        rel = duckdb_cursor.sql("select * from test")
+        res = rel.fetchall()
+        assert res == [([2], ['Alice'])]
+
+    def test_serialized_materialized_relation(self, tmp_database):
+        con = duckdb.connect(tmp_database)
+
+        def create_view(con, view_name: str):
+            rel = con.sql("select 'this is not a small string ' || range::varchar from range(?)", params=[10])
+            rel.to_view(view_name)
+
+        expected = [(f'this is not a small string {i}',) for i in range(10)]
+
+        create_view(con, 'vw')
+        res = con.sql("select * from vw").fetchall()
+        assert res == expected
+
+        # Make sure the VIEW has to be deserialized from disk
+        con.close()
+        gc.collect()
+        con = duckdb.connect(tmp_database)
+
+        res = con.sql("select * from vw").fetchall()
+        assert res == expected

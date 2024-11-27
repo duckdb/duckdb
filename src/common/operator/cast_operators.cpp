@@ -920,49 +920,12 @@ bool TryCast::Operation(double input, double &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
+
 template <>
 bool TryCast::Operation(string_t input, bool &result, bool strict) {
-	auto input_data = input.GetData();
+	auto input_data = reinterpret_cast<const char *>(input.GetData());
 	auto input_size = input.GetSize();
-
-	switch (input_size) {
-	case 1: {
-		char c = UnsafeNumericCast<char>(std::tolower(*input_data));
-		if (c == 't' || (!strict && c == '1')) {
-			result = true;
-			return true;
-		} else if (c == 'f' || (!strict && c == '0')) {
-			result = false;
-			return true;
-		}
-		return false;
-	}
-	case 4: {
-		char t = UnsafeNumericCast<char>(std::tolower(input_data[0]));
-		char r = UnsafeNumericCast<char>(std::tolower(input_data[1]));
-		char u = UnsafeNumericCast<char>(std::tolower(input_data[2]));
-		char e = UnsafeNumericCast<char>(std::tolower(input_data[3]));
-		if (t == 't' && r == 'r' && u == 'u' && e == 'e') {
-			result = true;
-			return true;
-		}
-		return false;
-	}
-	case 5: {
-		char f = UnsafeNumericCast<char>(std::tolower(input_data[0]));
-		char a = UnsafeNumericCast<char>(std::tolower(input_data[1]));
-		char l = UnsafeNumericCast<char>(std::tolower(input_data[2]));
-		char s = UnsafeNumericCast<char>(std::tolower(input_data[3]));
-		char e = UnsafeNumericCast<char>(std::tolower(input_data[4]));
-		if (f == 'f' && a == 'a' && l == 'l' && s == 's' && e == 'e') {
-			result = false;
-			return true;
-		}
-		return false;
-	}
-	default:
-		return false;
-	}
+	return TryCastStringBool(input_data, input_size, result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, int8_t &result, bool strict) {
@@ -1104,6 +1067,59 @@ bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(timestamp_sec_t input, timestamp_sec_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_sec_t &result, bool strict) {
+	D_ASSERT(Timestamp::IsFinite(input));
+	result.value = input.value / Interval::MICROS_PER_SEC;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ms_t input, timestamp_ms_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_ms_t &result, bool strict) {
+	D_ASSERT(Timestamp::IsFinite(input));
+	result.value = input.value / Interval::MICROS_PER_MSEC;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ns_t input, timestamp_ns_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_ns_t &result, bool strict) {
+	D_ASSERT(Timestamp::IsFinite(input));
+	if (!TryMultiplyOperator::Operation(input.value, Interval::NANOS_PER_MSEC, result.value)) {
+		throw ConversionException("Could not convert TIMESTAMP to TIMESTAMP_NS");
+	}
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
 bool TryCast::Operation(timestamp_t input, dtime_tz_t &result, bool strict) {
 	if (!Timestamp::IsFinite(input)) {
 		return false;
@@ -1125,8 +1141,8 @@ bool TryCast::Operation(interval_t input, interval_t &result, bool strict) {
 // Non-Standard Timestamps
 //===--------------------------------------------------------------------===//
 template <>
-duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_t input, Vector &result) {
-	return StringCast::Operation<timestamp_t>(CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input), result);
+duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_ns_t input, Vector &result) {
+	return StringCast::Operation<timestamp_ns_t>(input, result);
 }
 template <>
 duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, Vector &result) {
@@ -1258,20 +1274,8 @@ dtime_t CastTimestampSecToTime::Operation(timestamp_t input) {
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToTimestampNS::Operation(string_t input, timestamp_t &result, bool strict) {
-	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
-		return false;
-	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-
-	int64_t nanoseconds;
-	if (!Timestamp::TryGetEpochNanoSeconds(result, nanoseconds)) {
-		throw ConversionException("Could not convert VARCHAR value '%s' to Timestamp(NS)", input.GetString());
-	}
-	result = nanoseconds;
-	return true;
+bool TryCastToTimestampNS::Operation(string_t input, timestamp_ns_t &result, bool strict) {
+	return TryCast::Operation<string_t, timestamp_ns_t>(input, result, strict);
 }
 
 template <>
@@ -1293,7 +1297,7 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 }
 
 template <>
-bool TryCastToTimestampNS::Operation(date_t input, timestamp_t &result, bool strict) {
+bool TryCastToTimestampNS::Operation(date_t input, timestamp_ns_t &result, bool strict) {
 	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
 		return false;
 	}
@@ -1559,8 +1563,24 @@ bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict) {
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result) == TimestampCastResult::SUCCESS;
+}
+
+template <>
 timestamp_t Cast::Operation(string_t input) {
 	return Timestamp::FromCString(input.GetData(), input.GetSize());
+}
+
+template <>
+timestamp_ns_t Cast::Operation(string_t input) {
+	int32_t nanos;
+	const auto ts = Timestamp::FromCString(input.GetData(), input.GetSize(), &nanos);
+	timestamp_ns_t result;
+	if (!Timestamp::TryFromTimestampNanos(ts, nanos, result)) {
+		throw ConversionException(Timestamp::ConversionError(input));
+	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -2275,10 +2295,9 @@ bool TryCastToDecimal::Operation(uhugeint_t input, hugeint_t &result, CastParame
 template <class SRC, class DST>
 bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uint8_t width, uint8_t scale) {
 	double value = input * NumericHelper::DOUBLE_POWERS_OF_TEN[scale];
-	// Add the sign (-1, 0, 1) times a tiny value to fix floating point issues (issue 3091)
-	double sign = (double(0) < value) - (value < double(0));
-	value += 1e-9 * sign;
-	if (value <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] || value >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
+	double roundedValue = round(value);
+	if (roundedValue <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] ||
+	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
 		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
@@ -2612,8 +2631,87 @@ bool TryCastFromDecimal::Operation(hugeint_t input, uhugeint_t &result, CastPara
 // Decimal -> Float/Double Cast
 //===--------------------------------------------------------------------===//
 template <class SRC, class DST>
+static bool IsRepresentableExactly(SRC input, DST);
+
+template <>
+bool IsRepresentableExactly(int16_t input, float dst) {
+	return true;
+}
+
+const int64_t MAX_INT_REPRESENTABLE_IN_FLOAT = 0x001000000LL;
+const int64_t MAX_INT_REPRESENTABLE_IN_DOUBLE = 0x0020000000000000LL;
+
+template <>
+bool IsRepresentableExactly(int32_t input, float dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_FLOAT && input >= -MAX_INT_REPRESENTABLE_IN_FLOAT);
+}
+
+template <>
+bool IsRepresentableExactly(int64_t input, float dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_FLOAT && input >= -MAX_INT_REPRESENTABLE_IN_FLOAT);
+}
+
+template <>
+bool IsRepresentableExactly(hugeint_t input, float dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_FLOAT && input >= -MAX_INT_REPRESENTABLE_IN_FLOAT);
+}
+
+template <>
+bool IsRepresentableExactly(int16_t input, double dst) {
+	return true;
+}
+
+template <>
+bool IsRepresentableExactly(int32_t input, double dst) {
+	return true;
+}
+
+template <>
+bool IsRepresentableExactly(int64_t input, double dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_DOUBLE && input >= -MAX_INT_REPRESENTABLE_IN_DOUBLE);
+}
+
+template <>
+bool IsRepresentableExactly(hugeint_t input, double dst) {
+	return (input <= MAX_INT_REPRESENTABLE_IN_DOUBLE && input >= -MAX_INT_REPRESENTABLE_IN_DOUBLE);
+}
+
+template <class SRC>
+static SRC GetPowerOfTen(SRC input, uint8_t scale) {
+	return static_cast<SRC>(NumericHelper::POWERS_OF_TEN[scale]);
+}
+
+template <>
+hugeint_t GetPowerOfTen(hugeint_t input, uint8_t scale) {
+	return Hugeint::POWERS_OF_TEN[scale];
+}
+
+template <class SRC>
+static void GetDivMod(SRC lhs, SRC rhs, SRC &div, SRC &mod) {
+	div = lhs / rhs;
+	mod = lhs % rhs;
+}
+
+template <>
+void GetDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &div, hugeint_t &mod) {
+	div = Hugeint::DivMod(lhs, rhs, mod);
+}
+
+template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
-	result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0)) || scale == 0) {
+		// Fast path, integer is representable exaclty as a float/double
+		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+		return true;
+	}
+	auto power_of_ten = GetPowerOfTen(input, scale);
+
+	SRC div = 0;
+	SRC mod = 0;
+	GetDivMod(input, power_of_ten, div, mod);
+
+	result = Cast::Operation<SRC, DST>(div) +
+	         Cast::Operation<SRC, DST>(mod) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 	return true;
 }
 

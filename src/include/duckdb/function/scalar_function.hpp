@@ -51,8 +51,9 @@ struct ScalarFunctionInfo {
 
 class Binder;
 class BoundFunctionExpression;
-class LogicalDependencyList;
 class ScalarFunctionCatalogEntry;
+
+struct StatementProperties;
 
 struct FunctionStatisticsInput {
 	FunctionStatisticsInput(BoundFunctionExpression &expr_p, optional_ptr<FunctionData> bind_data_p,
@@ -67,12 +68,30 @@ struct FunctionStatisticsInput {
 };
 
 struct FunctionModifiedDatabasesInput {
-	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, unordered_set<string> &modified_databases_p)
-	    : bind_data(bind_data_p), modified_databases(modified_databases_p) {
+	FunctionModifiedDatabasesInput(optional_ptr<FunctionData> bind_data_p, StatementProperties &properties)
+	    : bind_data(bind_data_p), properties(properties) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
-	unordered_set<string> &modified_databases;
+	StatementProperties &properties;
+};
+
+struct FunctionBindExpressionInput {
+	FunctionBindExpressionInput(ClientContext &context_p, optional_ptr<FunctionData> bind_data_p,
+	                            BoundFunctionExpression &function_p)
+	    : context(context_p), bind_data(bind_data_p), function(function_p) {
+	}
+
+	ClientContext &context;
+	optional_ptr<FunctionData> bind_data;
+	BoundFunctionExpression &function;
+};
+
+struct ScalarFunctionBindInput {
+	explicit ScalarFunctionBindInput(Binder &binder) : binder(binder) {
+	}
+
+	Binder &binder;
 };
 
 //! The scalar function type
@@ -80,36 +99,41 @@ typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_fun
 //! The type to bind the scalar function and to create the function data
 typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &context, ScalarFunction &bound_function,
                                                            vector<unique_ptr<Expression>> &arguments);
+typedef unique_ptr<FunctionData> (*bind_scalar_function_extended_t)(ScalarFunctionBindInput &bind_input,
+                                                                    ScalarFunction &bound_function,
+                                                                    vector<unique_ptr<Expression>> &arguments);
 //! The type to initialize a thread local state for the scalar function
 typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &state,
                                                              const BoundFunctionExpression &expr,
                                                              FunctionData *bind_data);
-//! The type to add the dependencies of this BoundFunctionExpression to the set of dependencies
-typedef void (*dependency_function_t)(BoundFunctionExpression &expr, LogicalDependencyList &dependencies);
 //! The type to propagate statistics for this scalar function
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
 //! The type to bind lambda-specific parameter types
 typedef LogicalType (*bind_lambda_function_t)(const idx_t parameter_idx, const LogicalType &list_child_type);
 //! The type to bind lambda-specific parameter types
-typedef void (*get_modified_databases_t)(FunctionModifiedDatabasesInput &input);
+typedef void (*get_modified_databases_t)(ClientContext &context, FunctionModifiedDatabasesInput &input);
 
 typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                      const ScalarFunction &function);
 typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deserializer, ScalarFunction &function);
 
+//! The type to bind lambda-specific parameter types
+typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);
+
 class ScalarFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
-	                          dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
-	                          init_local_state_t init_local_state = nullptr,
+	                          bind_scalar_function_extended_t bind_extended = nullptr,
+	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
 	                          FunctionStability stability = FunctionStability::CONSISTENT,
 	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                          bind_lambda_function_t bind_lambda = nullptr);
 
 	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-	                          bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr,
+	                          bind_scalar_function_t bind = nullptr,
+	                          bind_scalar_function_extended_t bind_extended = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
 	                          FunctionStability stability = FunctionStability::CONSISTENT,
@@ -120,14 +144,16 @@ public:
 	scalar_function_t function;
 	//! The bind function (if any)
 	bind_scalar_function_t bind;
+	//! The bind function that receives extra input to perform more complex binding operations (if any)
+	bind_scalar_function_extended_t bind_extended = nullptr;
 	//! Init thread local state for the function (if any)
 	init_local_state_t init_local_state;
-	//! The dependency function (if any)
-	dependency_function_t dependency;
 	//! The statistics propagation function (if any)
 	function_statistics_t statistics;
 	//! The lambda bind function (if any)
 	bind_lambda_function_t bind_lambda;
+	//! Function to bind the result function expression directly (if any)
+	function_bind_expression_t bind_expression;
 	//! Gets the modified databases (if any)
 	get_modified_databases_t get_modified_databases;
 

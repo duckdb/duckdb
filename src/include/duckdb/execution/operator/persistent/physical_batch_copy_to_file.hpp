@@ -49,8 +49,8 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 
-	bool RequiresBatchIndex() const override {
-		return true;
+	OperatorPartitionInfo RequiredPartitionInfo() const override {
+		return OperatorPartitionInfo::BatchIndex();
 	}
 
 	bool IsSink() const override {
@@ -67,7 +67,7 @@ public:
 	                     unique_ptr<FixedRawBatchData> collection) const;
 	void RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
 	                        bool final = false) const;
-	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const;
+	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p) const;
 	bool ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const;
 	void ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const;
 	SinkFinalizeType FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const;

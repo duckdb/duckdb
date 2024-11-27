@@ -36,7 +36,6 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 		// constant-time lookup in the catalog for the db name
 		auto existing_db = db_manager.GetDatabase(context.client, name);
 		if (existing_db) {
-
 			if ((existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_WRITE) ||
 			    (!existing_db->IsReadOnly() && options.access_mode == AccessMode::READ_ONLY)) {
 
@@ -46,8 +45,24 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 				throw BinderException("Database \"%s\" is already attached in %s mode, cannot re-attach in %s mode",
 				                      name, existing_mode_str, attached_mode);
 			}
-
+			if (!options.default_table.name.empty()) {
+				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+			}
 			return SourceResultType::FINISHED;
+		}
+	}
+
+	string extension = "";
+	if (FileSystem::IsRemoteFile(path, extension)) {
+		if (!ExtensionHelper::TryAutoLoadExtension(context.client, extension)) {
+			throw MissingExtensionException("Attaching path '%s' requires extension '%s' to be loaded", path,
+			                                extension);
+		}
+		if (options.access_mode == AccessMode::AUTOMATIC) {
+			// Attaching of remote files gets bumped to READ_ONLY
+			// This is due to the fact that on most (all?) remote files writes to DB are not available
+			// and having this raised later is not super helpful
+			options.access_mode = AccessMode::READ_ONLY;
 		}
 	}
 
@@ -56,8 +71,11 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	auto attached_db = db_manager.AttachDatabase(context.client, *info, options);
 
 	//! Initialize the database.
-	const auto block_alloc_size = info->GetBlockAllocSize();
-	attached_db->Initialize(block_alloc_size);
+	const auto storage_options = info->GetStorageOptions();
+	attached_db->Initialize(storage_options);
+	if (!options.default_table.name.empty()) {
+		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
+	}
 	return SourceResultType::FINISHED;
 }
 

@@ -12,12 +12,15 @@ body:
           * APIs:
             * [duckdb-java](https://github.com/duckdb/duckdb-java/issues/new)
             * [duckdb-node](https://github.com/duckdb/duckdb-node/issues/new)
+            * [duckdb-node-neo](https://github.com/duckdb/duckdb-node-neo/issues/new)
+            * [duckdb-odbc](https://github.com/duckdb/duckdb-odbc/issues/new)
             * [duckdb-r](https://github.com/duckdb/duckdb-r/issues/new)
             * [duckdb-rs](https://github.com/duckdb/duckdb-rs/issues/new)
+            * [duckdb-swift](https://github.com/duckdb/duckdb-swift/issues/new)
             * [duckdb-wasm](https://github.com/duckdb/duckdb-wasm/issues/new)
             * [go-duckdb](https://github.com/marcboeker/go-duckdb/issues/new)
           * Extensions:
-            * [Arrow extension](https://github.com/duckdb/duckdb_arrow/issues/new)
+            * [Arrow extension](https://github.com/duckdb/arrow/issues/new)
             * [AWS extension](https://github.com/duckdb/duckdb_aws/issues/new)
             * [Azure extension](https://github.com/duckdb/duckdb_azure/issues/new)
             * [Delta extension](https://github.com/duckdb/duckdb_delta/issues/new)
@@ -44,7 +47,20 @@ body:
   - type: textarea
     attributes:
       label: To Reproduce
-      description: Steps to reproduce the behavior, preferably a [minimal reproducible example](https://en.wikipedia.org/wiki/Minimal_reproducible_example). Please format the code and the output as [code blocks](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks) and add the required imports for scripts (e.g., `import duckdb`). Bonus points if the steps only include SQL queries.
+      description: |
+        Please provide steps to reproduce the behavior, preferably a [minimal reproducible example](https://en.wikipedia.org/wiki/Minimal_reproducible_example). Please adhere the following guidelines:
+
+        * Format the code and the output as [code blocks](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-and-highlighting-code-blocks) using triple backticks:
+
+          ````
+          ```
+          CODE HERE
+          ```
+          ````
+        * Add all required imports for scripts, e.g., `import duckdb`, `import pandas as pd`.
+        * Remove all prompts from the scripts. This include DuckDB's 'D' prompt and Python's `>>>` prompt. Removing these prompts makes reproduction attempts quicker.
+        * Make sure that the script and its outputs are provided in separate code blocks.
+        * If applicable, please check whether the issue is reproducible via running plain SQL queries from the DuckDB CLI client.
     validations:
       required: true
 
@@ -55,7 +71,7 @@ body:
     attributes:
       label: "OS:"
       placeholder: e.g., iOS
-      description: Please include operating system version and architecture (e.g., aarch64, x86, x64, etc)
+      description: Please include operating system version and architecture (e.g., aarch64, x86_64, etc.).
     validations:
       required: true
   - type: input
@@ -70,7 +86,12 @@ body:
       placeholder: e.g., Python
     validations:
       required: true
-
+  - type: input
+    attributes:
+      label: "Hardware:"
+      placeholder: If your issue is performance-related, please include information on your CPU and memory.
+    validations:
+      required: false
   - type: markdown
     attributes:
       value: "# Identity Disclosure:"
@@ -83,7 +104,7 @@ body:
   - type: input
     attributes:
       label: "Affiliation:"
-      placeholder: e.g., Oracle
+      placeholder: e.g., Acme Corporation
     validations:
       required: true
 

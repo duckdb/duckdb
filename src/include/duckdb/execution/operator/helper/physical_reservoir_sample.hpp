@@ -41,14 +41,14 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 	bool ParallelSink() const override {
-		return true;
+		return !options->repeatable;
 	}
 
 	bool IsSink() const override {
 		return true;
 	}
 
-	string ParamsToString() const override;
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };
 
 } // namespace duckdb

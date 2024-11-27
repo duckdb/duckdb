@@ -10,11 +10,14 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
-#include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/transaction/undo_buffer_allocator.hpp"
 
 namespace duckdb {
-
+class BufferManager;
+class DuckTransaction;
+class StorageCommitState;
 class WriteAheadLog;
+struct UndoBufferPointer;
 
 struct UndoBufferProperties {
 	idx_t estimated_size = 0;
@@ -30,33 +33,36 @@ struct UndoBufferProperties {
 class UndoBuffer {
 public:
 	struct IteratorState {
-		ArenaChunk *current;
+		BufferHandle handle;
+		optional_ptr<UndoBufferEntry> current;
 		data_ptr_t start;
 		data_ptr_t end;
 	};
 
 public:
-	explicit UndoBuffer(ClientContext &context);
+	explicit UndoBuffer(DuckTransaction &transaction, ClientContext &context);
 
-	//! Reserve space for an entry of the specified type and length in the undo
-	//! buffer
-	data_ptr_t CreateEntry(UndoFlags type, idx_t len);
+	//! Write a specified entry to the undo buffer
+	UndoBufferReference CreateEntry(UndoFlags type, idx_t len);
 
 	bool ChangesMade();
 	UndoBufferProperties GetProperties();
 
 	//! Cleanup the undo buffer
-	void Cleanup();
+	void Cleanup(transaction_t lowest_active_transaction);
 	//! Commit the changes made in the UndoBuffer: should be called on commit
-	void Commit(UndoBuffer::IteratorState &iterator_state, optional_ptr<WriteAheadLog> log, transaction_t commit_id);
+	void WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state);
+	//! Commit the changes made in the UndoBuffer: should be called on commit
+	void Commit(UndoBuffer::IteratorState &iterator_state, transaction_t commit_id);
 	//! Revert committed changes made in the UndoBuffer up until the currently committed state
 	void RevertCommit(UndoBuffer::IteratorState &iterator_state, transaction_t transaction_id);
 	//! Rollback the changes made in this UndoBuffer: should be called on
 	//! rollback
-	void Rollback() noexcept;
+	void Rollback();
 
 private:
-	ArenaAllocator allocator;
+	DuckTransaction &transaction;
+	UndoBufferAllocator allocator;
 
 private:
 	template <class T>

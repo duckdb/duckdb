@@ -1,13 +1,24 @@
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
-#include "duckdb/optimizer/join_order/cost_model.hpp"
-#include "duckdb/optimizer/join_order/plan_enumerator.hpp"
+
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/optimizer/join_order/cost_model.hpp"
+#include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
+
+JoinOrderOptimizer::JoinOrderOptimizer(ClientContext &context) : context(context), query_graph_manager(context) {
+}
+
+JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
+	JoinOrderOptimizer child_optimizer(context);
+	child_optimizer.materialized_cte_stats = materialized_cte_stats;
+	child_optimizer.delim_scan_stats = delim_scan_stats;
+	return child_optimizer;
+}
 
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
                                                          optional_ptr<RelationStats> stats) {
@@ -17,7 +28,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// extract the relations that go into the hyper graph.
 	// We optimize the children of any non-reorderable operations we come across.
-	bool reorderable = query_graph_manager.Build(*op);
+	bool reorderable = query_graph_manager.Build(*this, *op);
 
 	// get relation_stats here since the reconstruction process will move all relations.
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
@@ -53,9 +64,39 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto new_stats = RelationStatisticsHelper::CombineStatsOfReorderableOperator(bindings, relation_stats);
 		new_stats.cardinality = cardinality;
 		RelationStatisticsHelper::CopyRelationStats(*stats, new_stats);
+	} else {
+		// starts recursively setting cardinality
+		new_logical_plan->EstimateCardinality(context);
+	}
+
+	if (new_logical_plan->type == LogicalOperatorType::LOGICAL_EXPLAIN) {
+		new_logical_plan->SetEstimatedCardinality(3);
 	}
 
 	return new_logical_plan;
+}
+
+void JoinOrderOptimizer::AddMaterializedCTEStats(idx_t index, RelationStats &&stats) {
+	materialized_cte_stats.emplace(index, std::move(stats));
+}
+
+RelationStats JoinOrderOptimizer::GetMaterializedCTEStats(idx_t index) {
+	auto it = materialized_cte_stats.find(index);
+	if (it == materialized_cte_stats.end()) {
+		throw InternalException("Unable to find materialized CTE stats with index %llu", index);
+	}
+	return it->second;
+}
+
+void JoinOrderOptimizer::AddDelimScanStats(RelationStats &stats) {
+	delim_scan_stats = &stats;
+}
+
+RelationStats JoinOrderOptimizer::GetDelimScanStats() {
+	if (!delim_scan_stats) {
+		throw InternalException("Unable to find delim scan stats!");
+	}
+	return *delim_scan_stats;
 }
 
 } // namespace duckdb

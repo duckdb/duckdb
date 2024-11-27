@@ -29,9 +29,6 @@ install_deps() {
     ./aws/install
     aws --version
 
-  elif [ "$1" = "odbc" ]; then
-    yum install -y unixODBC-devel
-
   elif [ "$1" = "vcpkg" ]; then
     # Note: it is preferred to use the lukka/run-vcpkg@v11 over this when running this
     # in a Github Actions job. When running locally or in the aarch64, these can be used instead

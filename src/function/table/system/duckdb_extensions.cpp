@@ -138,21 +138,32 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 #endif
 
 	// Finally, we check the list of currently loaded extensions
-	auto &loaded_extensions = db.LoadedExtensionsData();
-	for (auto &e : loaded_extensions) {
+	auto &extensions = db.GetExtensions();
+	for (auto &e : extensions) {
+		if (!e.second.is_loaded) {
+			continue;
+		}
 		auto &ext_name = e.first;
-		auto &ext_info = e.second;
-		auto entry = installed_extensions.find(ext_name);
-		if (entry == installed_extensions.end() || !entry->second.installed) {
-			ExtensionInformation &info = installed_extensions[ext_name];
-			info.name = ext_name;
-			info.loaded = true;
-			info.extension_version = ext_info.version;
-			info.installed = ext_info.mode == ExtensionInstallMode::STATICALLY_LINKED;
-			info.install_mode = ext_info.mode;
-		} else {
-			entry->second.loaded = true;
-			entry->second.extension_version = ext_info.version;
+		auto &ext_data = e.second;
+		if (auto &ext_install_info = ext_data.install_info) {
+			auto entry = installed_extensions.find(ext_name);
+			if (entry == installed_extensions.end() || !entry->second.installed) {
+				ExtensionInformation &info = installed_extensions[ext_name];
+				info.name = ext_name;
+				info.loaded = true;
+				info.extension_version = ext_install_info->version;
+				info.installed = ext_install_info->mode == ExtensionInstallMode::STATICALLY_LINKED;
+				info.install_mode = ext_install_info->mode;
+			} else {
+				entry->second.loaded = true;
+				entry->second.extension_version = ext_install_info->version;
+			}
+		}
+		if (auto &ext_load_info = ext_data.load_info) {
+			auto entry = installed_extensions.find(ext_name);
+			if (entry != installed_extensions.end()) {
+				entry->second.description = ext_load_info->description;
+			}
 		}
 	}
 

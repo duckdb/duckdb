@@ -1,5 +1,6 @@
 import duckdb
 import pytest
+import sys
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
@@ -57,3 +58,22 @@ class TestPolars(object):
             duckdb.InvalidInputException, match='Provided table/dataframe must have at least one column'
         ):
             duckdb_cursor.sql("from polars_empty_df")
+
+    def test_polars_from_json(self, duckdb_cursor):
+        from io import StringIO
+
+        duckdb_cursor.sql("set arrow_lossless_conversion=false")
+        string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
+        res = duckdb_cursor.read_json(string).pl()
+        assert str(res['entry'][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
+
+    @pytest.mark.skipif(
+        not hasattr(pl.exceptions, "PanicException"), reason="Polars has no PanicException in this version"
+    )
+    def test_polars_from_json_error(self, duckdb_cursor):
+        from io import StringIO
+
+        duckdb_cursor.sql("set arrow_lossless_conversion=true")
+        string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
+        with pytest.raises(pl.exceptions.PanicException):
+            res = duckdb_cursor.read_json(string).pl()

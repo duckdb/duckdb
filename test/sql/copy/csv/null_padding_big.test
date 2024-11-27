@@ -2,7 +2,9 @@
 # description: Test null_padding big/mixed
 # group: [csv]
 
-require vector_size 512
+statement ok
+PRAGMA enable_verification
+
 
 statement ok
 CREATE TABLE test (a VARCHAR, b INTEGER, c INTEGER);
@@ -47,9 +49,9 @@ require notwindows
 statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', buffer_size=55)
 ----
-CSV options could not be auto-detected. Consider setting parser options manually.
+It was not possible to automatically detect the CSV Parsing dialect
 
 statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', buffer_size=55, null_padding=False)
 ----
-CSV options could not be auto-detected. Consider setting parser options manually.
+It was not possible to automatically detect the CSV Parsing dialect

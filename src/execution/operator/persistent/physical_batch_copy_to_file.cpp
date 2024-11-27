@@ -160,15 +160,14 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 	auto batch_index = state.partition_info.batch_index.GetIndex();
 	if (state.current_task == FixedBatchCopyState::PROCESSING_TASKS) {
 		ExecuteTasks(context.client, gstate);
-		FlushBatchData(context.client, gstate, memory_manager.GetMinimumBatchIndex());
+		FlushBatchData(context.client, gstate);
 
 		if (!memory_manager.IsMinimumBatchIndex(batch_index) && memory_manager.OutOfMemory(batch_index)) {
-			lock_guard<mutex> l(memory_manager.GetBlockedTaskLock());
+			auto guard = memory_manager.Lock();
 			if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
 				// no tasks to process, we are not the minimum batch index and we have no memory available to buffer
 				// block the task for now
-				memory_manager.BlockTask(input.interrupt_state);
-				return SinkResultType::BLOCKED;
+				return memory_manager.BlockSink(guard, input.interrupt_state);
 			}
 		}
 		state.current_task = FixedBatchCopyState::SINKING_DATA;
@@ -234,7 +233,7 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		while (op.ExecuteTask(context, gstate)) {
-			op.FlushBatchData(context, gstate, 0);
+			op.FlushBatchData(context, gstate);
 		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
@@ -281,8 +280,8 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	if (gstate.task_manager.TaskCount() != 0) {
 		throw InternalException("Unexecuted tasks are remaining in PhysicalFixedBatchCopy::FinalFlush!?");
 	}
-	auto min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
-	FlushBatchData(context, gstate_p, min_batch_index);
+
+	FlushBatchData(context, gstate_p);
 	if (gstate.scheduled_batch_index != gstate.flushed_batch_index) {
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
 	}
@@ -325,7 +324,7 @@ public:
 	}
 
 	void Execute(const PhysicalBatchCopyToFile &op, ClientContext &context, GlobalSinkState &gstate_p) override {
-		op.FlushBatchData(context, gstate_p, 0);
+		op.FlushBatchData(context, gstate_p);
 	}
 };
 
@@ -477,7 +476,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 	}
 }
 
-void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const {
+void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
 
@@ -556,14 +555,18 @@ void PhysicalBatchCopyToFile::AddLocalBatch(ClientContext &context, GlobalSinkSt
 	// attempt to repartition to our desired batch size
 	RepartitionBatches(context, gstate, min_batch_index);
 	// unblock tasks so they can help process batches (if any are blocked)
-	auto any_unblocked = memory_manager.UnblockTasks();
+	bool any_unblocked;
+	{
+		auto guard = memory_manager.Lock();
+		any_unblocked = memory_manager.UnblockTasks(guard);
+	}
 	// if any threads were unblocked they can pick up execution of the tasks
 	// otherwise we will execute a task and flush here
 	if (!any_unblocked) {
 		//! Execute a single repartition task
 		ExecuteTask(context, gstate);
 		//! Flush batch data to disk (if any is ready)
-		FlushBatchData(context, gstate, memory_manager.GetMinimumBatchIndex());
+		FlushBatchData(context, gstate);
 	}
 }
 

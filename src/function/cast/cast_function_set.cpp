@@ -3,6 +3,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/planner/collation_binding.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
@@ -34,8 +35,16 @@ CastFunctionSet &CastFunctionSet::Get(ClientContext &context) {
 	return DBConfig::GetConfig(context).GetCastFunctions();
 }
 
+CollationBinding &CollationBinding::Get(ClientContext &context) {
+	return DBConfig::GetConfig(context).GetCollationBinding();
+}
+
 CastFunctionSet &CastFunctionSet::Get(DatabaseInstance &db) {
 	return DBConfig::GetConfig(db).GetCastFunctions();
+}
+
+CollationBinding &CollationBinding::Get(DatabaseInstance &db) {
+	return DBConfig::GetConfig(db).GetCollationBinding();
 }
 
 BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const LogicalType &target,

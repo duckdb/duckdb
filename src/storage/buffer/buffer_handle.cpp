@@ -7,11 +7,11 @@ namespace duckdb {
 BufferHandle::BufferHandle() : handle(nullptr), node(nullptr) {
 }
 
-BufferHandle::BufferHandle(shared_ptr<BlockHandle> handle_p, FileBuffer *node_p)
+BufferHandle::BufferHandle(shared_ptr<BlockHandle> handle_p, optional_ptr<FileBuffer> node_p)
     : handle(std::move(handle_p)), node(node_p) {
 }
 
-BufferHandle::BufferHandle(BufferHandle &&other) noexcept {
+BufferHandle::BufferHandle(BufferHandle &&other) noexcept : node(nullptr) {
 	std::swap(node, other.node);
 	std::swap(handle, other.handle);
 }

@@ -1,0 +1,175 @@
+# name: test/sql/types/struct/nested_struct_projection_pushdown.test
+# description: Test nested struct projection pushdown
+# group: [struct]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# 2 layers of nesting
+statement ok
+CREATE TABLE test_structs(id INT, s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool)));
+
+statement ok
+INSERT INTO test_structs
+VALUES (1, {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}),
+       (2, NULL),
+       (3, {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}),
+       (4, {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}});
+
+statement ok
+COPY test_structs TO '__TEST_DIR__/test_structs.parquet'
+
+foreach source test_structs read_parquet('__TEST_DIR__/test_structs.parquet')
+
+query I
+SELECT s.nested_struct FROM ${source}
+----
+{'a': 42, 'b': true}
+NULL
+{'a': 84, 'b': NULL}
+{'a': NULL, 'b': false}
+
+query I
+SELECT s.nested_struct.a FROM ${source}
+----
+42
+NULL
+84
+NULL
+
+query II
+SELECT s.nested_struct.a, s.name.v FROM ${source}
+----
+42	Row 1
+NULL	NULL
+84	Row 3
+NULL	NULL
+
+query III
+SELECT s.nested_struct.a, s.nested_struct.b, s.nested_struct FROM ${source}
+----
+42	true	{'a': 42, 'b': true}
+NULL	NULL	NULL
+84	NULL	{'a': 84, 'b': NULL}
+NULL	false	{'a': NULL, 'b': false}
+
+query II
+SELECT s.nested_struct.a, s.nested_struct FROM ${source}
+----
+42	{'a': 42, 'b': true}
+NULL	NULL
+84	{'a': 84, 'b': NULL}
+NULL	{'a': NULL, 'b': false}
+
+query II
+SELECT s.nested_struct, s.nested_struct.a FROM ${source}
+----
+{'a': 42, 'b': true}	42
+NULL	NULL
+{'a': 84, 'b': NULL}	84
+{'a': NULL, 'b': false}	NULL
+
+query II
+SELECT s.name.id, s.nested_struct.b,  FROM ${source}
+----
+1	true
+NULL	NULL
+3	NULL
+NULL	false
+
+query I
+SELECT s.name.v FROM ${source} WHERE s.nested_struct.b
+----
+Row 1
+
+endloop
+
+# 3 layers of nesting
+statement ok
+CREATE TABLE test_structs_nested(id INT, base STRUCT(s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool))));
+
+statement ok
+INSERT INTO test_structs_nested
+VALUES (1, {'s': {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}}),
+       (2, NULL),
+       (3, {'s': {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}}),
+       (4, {'s': {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}});
+
+
+statement ok
+COPY test_structs_nested TO '__TEST_DIR__/test_structs.parquet'
+
+foreach source test_structs_nested read_parquet('__TEST_DIR__/test_structs.parquet')
+
+query I
+SELECT base.s.nested_struct FROM ${source}
+----
+{'a': 42, 'b': true}
+NULL
+{'a': 84, 'b': NULL}
+{'a': NULL, 'b': false}
+
+query I
+SELECT base.s.nested_struct.a FROM ${source}
+----
+42
+NULL
+84
+NULL
+
+query II
+SELECT base.s.nested_struct.a, base.s.name.v FROM ${source}
+----
+42	Row 1
+NULL	NULL
+84	Row 3
+NULL	NULL
+
+query III
+SELECT base.s.nested_struct.a, base.s.nested_struct.b, base.s.nested_struct FROM ${source}
+----
+42	true	{'a': 42, 'b': true}
+NULL	NULL	NULL
+84	NULL	{'a': 84, 'b': NULL}
+NULL	false	{'a': NULL, 'b': false}
+
+query II
+SELECT base.s.nested_struct.a, base.s.nested_struct FROM ${source}
+----
+42	{'a': 42, 'b': true}
+NULL	NULL
+84	{'a': 84, 'b': NULL}
+NULL	{'a': NULL, 'b': false}
+
+query II
+SELECT base.s.nested_struct.a, base.s FROM ${source}
+----
+42	{'name': {'v': Row 1, 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}
+NULL	NULL
+84	{'name': {'v': Row 3, 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}
+NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}
+
+query II
+SELECT base.s.nested_struct, base.s.nested_struct.a FROM ${source}
+----
+{'a': 42, 'b': true}	42
+NULL	NULL
+{'a': 84, 'b': NULL}	84
+{'a': NULL, 'b': false}	NULL
+
+query II
+SELECT base.s.name.id, base.s.nested_struct.b,  FROM ${source}
+----
+1	true
+NULL	NULL
+3	NULL
+NULL	false
+
+query I
+SELECT base.s.name.v FROM ${source} WHERE base.s.nested_struct.b
+----
+Row 1
+
+endloop
