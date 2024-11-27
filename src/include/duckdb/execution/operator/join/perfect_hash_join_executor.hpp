@@ -22,7 +22,6 @@ class PhysicalHashJoin;
 struct PerfectHashJoinStats {
 	Value build_min;
 	Value build_max;
-	bool is_build_small = false;
 	bool is_build_dense = false;
 	idx_t build_range = 0;
 };

@@ -70,6 +70,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, u
 	    op.conditions[0].comparison != ExpressionType::COMPARE_EQUAL || !TypeIsInteger(key_type.InternalType())) {
 		return false;
 	}
+
 	// We bail out if there are nested types on the RHS
 	for (auto &type : op.children[1]->types) {
 		switch (type.InternalType()) {
@@ -90,6 +91,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, u
 		perfect_join_statistics.build_min = Value::MinimumValue(key_type);
 		perfect_join_statistics.build_max = Value::MaximumValue(key_type);
 	}
+
 	hugeint_t min_value, max_value;
 	if (!ExtractNumericValue(perfect_join_statistics.build_min, min_value) ||
 	    !ExtractNumericValue(perfect_join_statistics.build_max, max_value)) {
@@ -98,18 +100,20 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, u
 	if (max_value < min_value) {
 		return false; // Empty table
 	}
+
 	hugeint_t build_range;
 	if (!TrySubtractOperator::Operation(max_value, min_value, build_range)) {
 		return false;
 	}
+	perfect_join_statistics.build_range = NumericCast<idx_t>(build_range);
 
 	// The max size our build must have to run the perfect HJ
 	static constexpr idx_t MAX_BUILD_SIZE = 1048576;
-	if (build_range > MAX_BUILD_SIZE) {
+	// If range is too large, or ht count is larger than range (duplicates), we bail out
+	if (perfect_join_statistics.build_range > MAX_BUILD_SIZE || ht.Count() > perfect_join_statistics.build_range) {
 		return false;
 	}
-	perfect_join_statistics.build_range = NumericCast<idx_t>(build_range);
-	perfect_join_statistics.is_build_small = true;
+
 	return true;
 }
 
