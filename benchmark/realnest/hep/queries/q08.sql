@@ -18,7 +18,7 @@ WITH uniform_structure_leptons AS (
   WHERE len(Muon) + len(Electron) > 2
 ),
 lepton_pairs AS (
-  WITH m as (select unnest(Leptons) as m from hep_singleMu)
+  WITH m AS (select unnest(Leptons) AS m FROM hep_singleMu)
   SELECT
     *,
     CAST(
@@ -34,12 +34,12 @@ lepton_pairs AS (
     idx2 AS l2_idx
   FROM uniform_structure_leptons
   CROSS JOIN (
-    SELECT l1, row_number() over (Partition by event) idx1
-    FROM (select unnest(Leptons) l1, event from uniform_structure_leptons)
+    SELECT l1, row_number()OVER (PARTITION BY event) idx1
+    FROM (select unnest(Leptons) l1, event FROM uniform_structure_leptons)
   ) AS _l1
   CROSS JOIN (
-    SELECT l2, row_number() over (Partition by event) idx2
-    FROM (select unnest(Leptons) l2, event from uniform_structure_leptons)
+    SELECT l2, row_number()OVER (PARTITION BY event) idx2
+    FROM (select unnest(Leptons) l2, event FROM uniform_structure_leptons)
   ) AS _l2
   WHERE idx1 < idx2 AND l1.type = l2.type AND l1.charge != l2.charge
 ),
@@ -63,8 +63,8 @@ other_max_pt AS (
   SELECT event, CAST(max_by(sqrt(2 * system[4] * l.pt * (1.0 - cos((system[5]- l.phi + pi()) % (2 * pi()) - pi()))), l.pt) AS REAL) AS pt
   FROM processed_pairs
   CROSS JOIN (
-    SELECT l, row_number() over (partition by row_id) idx
-    FROM (select unnest(system[3]) as l, event row_id from processed_pairs)
+    SELECT l, row_number()OVER (PARTITION BY row_id) idx
+    FROM (select unnest(system[3]) AS l, event row_id FROM processed_pairs)
   )
   WHERE idx != system[1] AND idx != system[2]
   GROUP BY event

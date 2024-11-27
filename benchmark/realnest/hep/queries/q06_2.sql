@@ -6,24 +6,24 @@ WITH xyze_jets AS (
                             j.pt * cos(j.phi),
                             j.pt * sin(j.phi),
                             j.pt * ( ( exp(j.eta) - exp(-j.eta) ) / 2.0 ),
-                            sqrt(j.pt * cosh(j.eta) * j.pt * cosh(j.eta) + j.mass * j.mass)) AS
+                            sqrt(j.pt * cosh(j.eta) * j.pt * cosh(j.eta) + j.mASs * j.mASs)) AS
                         ROW (btag REAL, x REAL, y REAL, z REAL, e REAL))) AS Jet
   FROM hep_singleMu
 ),
 tri_jets AS (
-  WITH m as (select unnest(Jet) as m from hep_singleMu)
+  WITH m AS (SELECT unnest(Jet) AS m FROM hep_singleMu)
   SELECT m1, m2, m3, idx1, idx2, idx3
   FROM (
-    SELECT row_number() OVER (Partition by rowid) idx1, m1
-    FROM (select rowid, unnest(jet) as m1 from xyze_jets)
+    SELECT row_number() OVER (Partition BY rowid) idx1, m1
+    FROM (SELECT rowid, unnest(jet) AS m1 FROM xyze_jets)
   ) AS _m1
   CROSS JOIN (
-    SELECT row_number() OVER (Partition by rowid) idx2, m2
-    FROM (select rowid, unnest(jet) as m2 from xyze_jets)
+    SELECT row_number() OVER (Partition BY rowid) idx2, m2
+    FROM (SELECT rowid, unnest(jet) AS m2 FROM xyze_jets)
   ) AS _m2
   CROSS JOIN (
-    SELECT row_number() OVER (Partition by rowid) idx3, m3
-    FROM (select rowid, unnest(jet) as m3 from xyze_jets)
+    SELECT row_number() OVER (Partition BY rowid) idx3, m3
+    FROM (SELECT rowid, unnest(jet) AS m3 FROM xyze_jets)
   ) AS _m3
   WHERE idx1 < idx2 AND idx2 < idx3
 ),
