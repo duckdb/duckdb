@@ -47,7 +47,7 @@ public:
 	//! Go from the naive sampling to the reservoir sampling
 	//! Naive samping will not collect weights, but when we serialize
 	//! we need to serialize weights again.
-	void FillWeights(SelectionVector sel, idx_t sel_size);
+	void FillWeights(SelectionVector &sel, idx_t &sel_size);
 
 	unique_ptr<BaseReservoirSampling> Copy();
 	// BaseReservoirSampling Copy2();
@@ -271,8 +271,8 @@ public:
 	// of values we save when serializing/returning a sample.
 	constexpr static double SAVE_PERCENTAGE = 0.01;
 
-	IngestionSample(Allocator &allocator, int64_t seed = 1);
-	explicit IngestionSample(idx_t sample_count, int64_t seed = 1);
+	IngestionSample(Allocator &allocator, int64_t seed = -1);
+	explicit IngestionSample(idx_t sample_count, int64_t seed = -1);
 
 	unique_ptr<BlockingSample> ConvertToReservoirSample();
 
@@ -349,8 +349,8 @@ private:
 	// to copy the old sample chunk into
 	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const;
 
-	template <typename T>
-	void RandomizeActualSampleIndexes(vector<T> actual_sample_indexes);
+	vector<uint32_t> GetRandomizedVector(uint32_t size) const;
+	void ShuffleSel();
 
 	SelectionVector sel;
 	idx_t sel_size;
