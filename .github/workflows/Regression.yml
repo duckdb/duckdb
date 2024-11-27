@@ -66,7 +66,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - name: Checkout Private Regression
-        if: github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main'
+        if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
         uses: actions/checkout@v4
         with:
           repository: duckdblabs/fivetran_regression
@@ -74,11 +74,23 @@ jobs:
           token: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
           path: benchmark/fivetran
 
-      - name: Build
+      - name: Build Current and Base Branch
+        if: ${{ !(github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
-          make
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+          make
+          cd duckdb
+          make
+          cd ..
+
+      - name: Build Main and Previous Successful Regression Hash
+        if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
+        shell: bash
+        run: |
+          git clone https://github.com/duckdb/duckdb.git
+          git checkout $(gh run list --repo duckdb/duckdb --workflow=Regression --status=success --json=headSha --limit=1 --jq '.[0].headSha')
+          make
           cd duckdb
           make
           cd ..
@@ -147,7 +159,7 @@ jobs:
           python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/realnest.csv --verbose --threads 2
 
       - name: Regression Test Fivetran
-        if: github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main'
+        if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/fivetran.csv --verbose --threads 2
