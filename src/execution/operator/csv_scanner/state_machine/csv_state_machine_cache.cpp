@@ -22,7 +22,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	auto &transition_array = state_machine_cache[state_machine_options];
 
 	for (uint32_t i = 0; i < StateMachine::NUM_STATES; i++) {
-		CSVState cur_state = static_cast<CSVState>(i);
+		const auto cur_state = static_cast<CSVState>(i);
 		switch (cur_state) {
 		case CSVState::QUOTED:
 		case CSVState::QUOTED_NEW_LINE:
@@ -30,7 +30,13 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::UNQUOTED:
-			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
+			if (state_machine_options.rfc_4180.GetValue()) {
+				// If we have an unquoted state, following rfc 4180, our base state is invalid
+				InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
+			} else {
+				// This will allow us to accept unescaped quotes
+				InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
+			}
 			break;
 		case CSVState::COMMENT:
 			InitializeTransitionArray(transition_array, cur_state, CSVState::COMMENT);
@@ -41,15 +47,15 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 	}
 
-	uint8_t delimiter = static_cast<uint8_t>(state_machine_options.delimiter.GetValue());
-	uint8_t quote = static_cast<uint8_t>(state_machine_options.quote.GetValue());
-	uint8_t escape = static_cast<uint8_t>(state_machine_options.escape.GetValue());
-	uint8_t comment = static_cast<uint8_t>(state_machine_options.comment.GetValue());
+	const uint8_t delimiter = static_cast<uint8_t>(state_machine_options.delimiter.GetValue());
+	const uint8_t quote = static_cast<uint8_t>(state_machine_options.quote.GetValue());
+	const uint8_t escape = static_cast<uint8_t>(state_machine_options.escape.GetValue());
+	const uint8_t comment = static_cast<uint8_t>(state_machine_options.comment.GetValue());
 
-	auto new_line_id = state_machine_options.new_line.GetValue();
+	const auto new_line_id = state_machine_options.new_line.GetValue();
 
-	bool enable_unquoted_escape = state_machine_options.rfc_4180.GetValue() == false &&
-	                              state_machine_options.quote != state_machine_options.escape;
+	const bool enable_unquoted_escape = state_machine_options.rfc_4180.GetValue() == false &&
+	                                    state_machine_options.quote != state_machine_options.escape;
 
 	// Now set values depending on configuration
 	// 1) Standard/Invalid State

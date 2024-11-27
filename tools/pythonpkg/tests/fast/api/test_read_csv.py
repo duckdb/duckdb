@@ -572,8 +572,8 @@ class TestReadCSV(object):
         file1.write_text('one|two|three|four\n1|2|3|4')
 
         con = duckdb.connect()
-        rel = con.read_csv(str(file1), columns = {'a':'VARCHAR'}, auto_detect =False)
-        assert rel.fetchall() ==  [('one,two,three,four',), ('1,2,3,4',), ('1,2,3,4',), ('1,2,3,4',)] 
+        rel = con.read_csv(str(file1), columns={'a': 'VARCHAR'}, auto_detect=False)
+        assert rel.fetchall() == [('one,two,three,four',), ('1,2,3,4',), ('1,2,3,4',), ('1,2,3,4',)]
 
     def test_read_csv_list_invalid_path(self, tmp_path):
         con = duckdb.connect()
