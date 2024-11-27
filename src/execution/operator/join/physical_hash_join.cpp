@@ -142,7 +142,8 @@ public:
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
-		if (op.join_stats.size() == 2 && TypeIsIntegral(op.conditions[0].right->return_type.InternalType())) {
+		if (op.join_stats.size() == 2 && op.join_stats[1] &&
+		    TypeIsIntegral(op.conditions[0].right->return_type.InternalType())) {
 			perfect_join_executor->CanDoPerfectHashJoin(op, NumericStats::Min(*op.join_stats[1]),
 			                                            NumericStats::Max(*op.join_stats[1]));
 		}
