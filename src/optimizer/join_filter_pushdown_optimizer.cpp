@@ -209,7 +209,8 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 
 	// Even if we cannot find any table sources in which we can push down filters,
 	// we still initialize the aggregate states so that we have the possibility of doing a perfect hash join
-	const auto compute_aggregates_anyway = join.conditions.size() == 1 && pushdown_info->join_condition.size() == 1;
+	const auto compute_aggregates_anyway = join.conditions.size() == 1 && pushdown_info->join_condition.size() == 1 &&
+	                                       TypeIsIntegral(join.conditions[0].right->return_type.InternalType());
 	if (pushdown_info->probe_info.empty() && !compute_aggregates_anyway) {
 		// no table sources found in which we can push down filters
 		return;
