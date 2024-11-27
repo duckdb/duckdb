@@ -438,6 +438,15 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	return inner_filter;
 }
 
+bool FilterCombiner::ContainsNull(vector<Value> &in_list) {
+	for (idx_t i = 0; i < in_list.size(); i++) {
+		if (in_list[i].IsNull()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool FilterCombiner::IsDenseRange(vector<Value> &in_list) {
 	if (in_list.empty()) {
 		return true;
