@@ -17,6 +17,61 @@ MaterializedQueryResult::MaterializedQueryResult(ErrorData error)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)), scan_initialized(false) {
 }
 
+std::vector<vector<unique_ptr<Base>>> MaterializedQueryResult::getContents() {
+	std::vector<vector<unique_ptr<Base>>> overallResult;     
+	if(success) {
+		auto &coll = Collection();
+		for (auto &row : coll.Rows()) {
+			std::vector<unique_ptr<Base>> dataVector;
+			for (idx_t col_idx = 0; col_idx < coll.ColumnCount(); col_idx++) {
+				auto val = row.GetValue(col_idx);	
+				if(val.IsNull() == false) {
+					//std::cout<<val<<std::endl;
+					auto dataType = val.GetTypeMutable();
+					string typeName = dataType.ToString();
+					//std::cout<<typeName<<std::endl;
+					// std::cout<<typeid(val).name()<<std::endl;
+
+					// if(typeName == "BOOLEAN") {
+					// 	bool native_bool = val.GetValue<bool>();
+					// 	duckdb::BoolData boolData(native_bool);
+					// 	dataVector.push_back(make_uniq<duckdb::BoolData>(boolData));
+					// }
+					// else if(typeName == "BIGINT"){
+					// 	int64_t native_bigint = val.GetValue<int64_t>();
+					// 	duckdb::BigIntData bigintData = duckdb::BigIntData(native_bigint);
+					// 	dataVector.push_back(make_uniq<duckdb::BigIntData>(bigintData));
+					// }
+					// else if(typeName == "UBIGINT"){
+					// 	uint64_t native_bigint = val.GetValue<uint64_t>();
+					// 	duckdb::UBigIntData bigintData = duckdb::UBigIntData(native_bigint);
+					// 	dataVector.push_back(make_uniq<duckdb::UBigIntData>(bigintData));
+					// }     
+					// else if(typeName == "USMALLINT" || typeName == "UTINYINT" || typeName == "INTEGER" || typeName=="SMALLINT" || typeName == "TINYINT") {
+					// 	int native_int = val.GetValue<int>();
+					// 	duckdb::IntData intData = duckdb::IntData(native_int);
+					// 	dataVector.push_back(make_uniq<duckdb::IntData>(intData));
+					// }
+					if(typeName == "DOUBLE" || typeName == "FLOAT" || typeName == "DECIMAL") {
+						double native_double = val.GetValue<double>();
+						duckdb::DoubleData doubleData = duckdb::DoubleData(native_double);
+						dataVector.push_back(make_uniq<duckdb::DoubleData>(doubleData));
+					}
+					else {
+						string native_string = val.GetValue<string>();
+						duckdb::StringData strData = duckdb::StringData(native_string);
+						dataVector.push_back(make_uniq<duckdb::StringData>(strData));
+					}
+				}
+			}
+			overallResult.push_back(std::move(dataVector));	
+		}
+	}
+	return overallResult;
+}
+
+
+
 string MaterializedQueryResult::ToString() {
 	string result;
 	if (success) {
