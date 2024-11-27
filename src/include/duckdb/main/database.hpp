@@ -30,7 +30,7 @@ struct AttachInfo;
 struct AttachOptions;
 class DatabaseFileSystem;
 struct DatabaseCacheEntry;
-class LoggingManager;
+class LogManager;
 
 struct ExtensionInfo {
 	bool is_loaded;
@@ -58,7 +58,7 @@ public:
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
-	DUCKDB_API LoggingManager &GetLoggingManager();
+	DUCKDB_API LogManager &GetLogManager();
 	DUCKDB_API void SetExtensionLoaded(const string &extension_name, ExtensionInstallInfo &install_info);
 
 	DUCKDB_API const duckdb_ext_api_v0 GetExtensionAPIV0();
@@ -96,7 +96,7 @@ private:
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
-	shared_ptr<LoggingManager> logging_manager;
+	shared_ptr<LogManager> log_manager;
 
 	duckdb_ext_api_v0 (*create_api_v0)();
 };

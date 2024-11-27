@@ -1924,7 +1924,6 @@ LoadType EnumUtil::FromString<LoadType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetLogLevelValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(LogLevel::DISABLED), "DISABLED" },
 		{ static_cast<uint32_t>(LogLevel::DEBUGGING), "DEBUGGING" },
 		{ static_cast<uint32_t>(LogLevel::INFORMATIVE), "INFORMATIVE" },
 		{ static_cast<uint32_t>(LogLevel::WARNING), "WARNING" },
@@ -1936,12 +1935,32 @@ const StringUtil::EnumStringLiteral *GetLogLevelValues() {
 
 template<>
 const char* EnumUtil::ToChars<LogLevel>(LogLevel value) {
-	return StringUtil::EnumToString(GetLogLevelValues(), 6, "LogLevel", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogLevelValues(), 5, "LogLevel", static_cast<uint32_t>(value));
 }
 
 template<>
 LogLevel EnumUtil::FromString<LogLevel>(const char *value) {
-	return static_cast<LogLevel>(StringUtil::StringToEnum(GetLogLevelValues(), 6, "LogLevel", value));
+	return static_cast<LogLevel>(StringUtil::StringToEnum(GetLogLevelValues(), 5, "LogLevel", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogMode::DISABLED), "DISABLED" },
+		{ static_cast<uint32_t>(LogMode::LEVEL_ONLY), "LEVEL_ONLY" },
+		{ static_cast<uint32_t>(LogMode::DISABLE_SELECTED), "DISABLE_SELECTED" },
+		{ static_cast<uint32_t>(LogMode::ENABLE_SELECTED), "ENABLE_SELECTED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogMode>(LogMode value) {
+	return StringUtil::EnumToString(GetLogModeValues(), 4, "LogMode", static_cast<uint32_t>(value));
+}
+
+template<>
+LogMode EnumUtil::FromString<LogMode>(const char *value) {
+	return static_cast<LogMode>(StringUtil::StringToEnum(GetLogModeValues(), 4, "LogMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {

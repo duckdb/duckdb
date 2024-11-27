@@ -290,7 +290,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	connection_manager = make_uniq<ConnectionManager>();
 
 	auto shared = shared_from_this(); // tODO: why this madness?
-	logging_manager = make_shared_ptr<LoggingManager>(shared);
+
+	log_manager = make_shared_ptr<LogManager>(shared, LogConfig::Create(LogLevel::WARNING));
 
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
@@ -520,8 +521,8 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
 }
 
-LoggingManager &DatabaseInstance::GetLoggingManager() {
-	return *logging_manager;
+LogManager &DatabaseInstance::GetLogManager() {
+	return *log_manager;
 }
 
 const duckdb_ext_api_v0 DatabaseInstance::GetExtensionAPIV0() {
