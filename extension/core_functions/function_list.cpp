@@ -282,6 +282,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(MonthNameFun),
 	DUCKDB_SCALAR_FUNCTION_SET(NanosecondsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(NextAfterFun),
+	DUCKDB_SCALAR_FUNCTION(NormalizedIntervalFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(NowFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(OrdFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ParseDirnameFun),
