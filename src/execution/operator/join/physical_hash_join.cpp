@@ -142,6 +142,10 @@ public:
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
+		if (op.join_stats.size() == 2) {
+			perfect_join_executor->CanDoPerfectHashJoin(op, NumericStats::Min(*op.join_stats[1]),
+			                                            NumericStats::Max(*op.join_stats[1]));
+		}
 		// For external hash join
 		external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
 		// Set probe types
@@ -714,13 +718,16 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	sink.local_hash_tables.clear();
 	ht.Unpartition();
 
-	unique_ptr<DataChunk> final_min_max;
+	Value min = Value::MinimumValue(conditions[0].right->return_type);
+	Value max = Value::MaximumValue(conditions[0].right->return_type);
 	if (filter_pushdown && ht.Count() > 0) {
-		final_min_max = filter_pushdown->Finalize(context, ht, *sink.global_filter_state, *this);
+		auto final_min_max = filter_pushdown->Finalize(context, ht, *sink.global_filter_state, *this);
+		min = final_min_max->data[0].GetValue(0);
+		max = final_min_max->data[1].GetValue(0);
 	}
 
 	// check for possible perfect hash table
-	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin(*this, std::move(final_min_max));
+	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin(*this, min, max);
 	if (use_perfect_hash) {
 		D_ASSERT(ht.equality_types.size() == 1);
 		auto key_type = ht.equality_types[0];

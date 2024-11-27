@@ -22,6 +22,7 @@ class PhysicalHashJoin;
 struct PerfectHashJoinStats {
 	Value build_min;
 	Value build_max;
+	bool is_build_small = false;
 	bool is_build_dense = false;
 	idx_t build_range = 0;
 };
@@ -34,7 +35,7 @@ public:
 	PerfectHashJoinExecutor(const PhysicalHashJoin &join, JoinHashTable &ht);
 
 public:
-	bool CanDoPerfectHashJoin(const PhysicalHashJoin &op, unique_ptr<DataChunk> final_min_max);
+	bool CanDoPerfectHashJoin(const PhysicalHashJoin &op, const Value &min, const Value &max);
 
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context);
 	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &lhs_output_columns,

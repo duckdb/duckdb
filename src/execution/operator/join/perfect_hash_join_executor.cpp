@@ -63,7 +63,11 @@ bool ExtractNumericValue(Value val, hugeint_t &result) {
 	return true;
 }
 
-bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, unique_ptr<DataChunk> final_min_max) {
+bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, const Value &min, const Value &max) {
+	if (perfect_join_statistics.is_build_small) {
+		return true; // Already true based on static statistics
+	}
+
 	// We only do this optimization for inner joins with one integer equality condition
 	const auto key_type = op.conditions[0].left->return_type;
 	if (op.join_type != JoinType::INNER || op.conditions.size() != 1 ||
@@ -84,14 +88,8 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, u
 	}
 
 	// And when the build range is smaller than the threshold
-	if (final_min_max) {
-		perfect_join_statistics.build_min = final_min_max->data[0].GetValue(0);
-		perfect_join_statistics.build_max = final_min_max->data[1].GetValue(0);
-	} else {
-		perfect_join_statistics.build_min = Value::MinimumValue(key_type);
-		perfect_join_statistics.build_max = Value::MaximumValue(key_type);
-	}
-
+	perfect_join_statistics.build_min = min;
+	perfect_join_statistics.build_max = max;
 	hugeint_t min_value, max_value;
 	if (!ExtractNumericValue(perfect_join_statistics.build_min, min_value) ||
 	    !ExtractNumericValue(perfect_join_statistics.build_max, max_value)) {
@@ -114,6 +112,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, u
 		return false;
 	}
 
+	perfect_join_statistics.is_build_small = true;
 	return true;
 }
 
