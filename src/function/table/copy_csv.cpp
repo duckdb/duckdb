@@ -51,9 +51,6 @@ void WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape) {
 
 void BaseCSVData::Finalize() {
 	// verify that the options are correct in the final pass
-	if (options.dialect_options.state_machine_options.escape == '\0') {
-		options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
-	}
 	// escape and delimiter must not be substrings of each other
 	AreOptionsEqual(options.dialect_options.state_machine_options.delimiter.GetValue(),
 	                options.dialect_options.state_machine_options.escape.GetValue(), "DELIMITER", "ESCAPE");

@@ -31,7 +31,7 @@ struct CSVStateMachineOptions {
 	//! New Line separator
 	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
 	//! RFC 4180 conformance
-	CSVOption<bool> rfc_4180 = true;
+	CSVOption<bool> rfc_4180 = false;
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape &&

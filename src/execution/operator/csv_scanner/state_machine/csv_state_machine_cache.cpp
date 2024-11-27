@@ -35,7 +35,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 				InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
 			} else {
 				// This will allow us to accept unescaped quotes
-				InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
+				InitializeTransitionArray(transition_array, cur_state, CSVState::UNQUOTED);
 			}
 			break;
 		case CSVState::COMMENT:
@@ -146,7 +146,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array['\n'][static_cast<uint8_t>(CSVState::QUOTED)] = CSVState::QUOTED_NEW_LINE;
 	transition_array['\r'][static_cast<uint8_t>(CSVState::QUOTED)] = CSVState::QUOTED_NEW_LINE;
 
-	if (state_machine_options.quote != state_machine_options.escape) {
+	if (state_machine_options.quote != state_machine_options.escape &&
+	    state_machine_options.escape.GetValue() != '\0') {
 		transition_array[escape][static_cast<uint8_t>(CSVState::QUOTED)] = CSVState::ESCAPE;
 	}
 	// 6) Unquoted State
@@ -189,7 +190,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	// 9) Quoted NewLine
 	transition_array[quote][static_cast<uint8_t>(CSVState::QUOTED_NEW_LINE)] = CSVState::UNQUOTED;
-	if (state_machine_options.quote != state_machine_options.escape) {
+	if (state_machine_options.quote != state_machine_options.escape &&
+	    state_machine_options.escape.GetValue() != '\0') {
 		transition_array[escape][static_cast<uint8_t>(CSVState::QUOTED_NEW_LINE)] = CSVState::ESCAPE;
 	}
 

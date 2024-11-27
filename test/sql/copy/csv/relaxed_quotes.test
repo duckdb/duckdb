@@ -1,0 +1,10 @@
+# name: test/sql/copy/csv/relaxed_quotes.test
+# description: Test relaxed quote reading
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+from read_csv('data/csv/stops.csv', header=true, delim=',', quote = '"', columns = {'a':'varchar','b':'varchar','c':'double','d':'double'}, auto_detect = false);
+----
