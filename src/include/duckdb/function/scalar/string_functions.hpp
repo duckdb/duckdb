@@ -125,9 +125,9 @@ struct EndsWithFun {
 
 struct ContainsFun {
 	static constexpr const char *Name = "contains";
-	static constexpr const char *Parameters = "string,search_string";
-	static constexpr const char *Description = "Return true if search_string is found within string.";
-	static constexpr const char *Example = "contains('abc', 'a')";
+	static constexpr const char *Parameters = "string::VARCHAR,search_string::VARCHAR\1list::ANY[],element::ANY\1map::MAP(ANY,ANY),key::ANY";
+	static constexpr const char *Description = "Returns true if search_string is found within string.\1Returns true if the list contains the element.\1Checks if a map contains a given key.";
+	static constexpr const char *Example = "contains('abc', 'a')\1contains([1, 2, NULL], 1)\1contains(MAP {'key1': 10, 'key2': 20, 'key3': 30}, 'key2')";
 
 	static ScalarFunctionSet GetFunctions();
 };
