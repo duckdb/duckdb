@@ -1135,7 +1135,7 @@ Matcher &Matcher::RootMatcher(MatcherAllocator &allocator) {
 
 	return factory.CreateMatcher(string.c_str(), "Statement");
 #else
-	return factory.CreateMatcher(INLINED_PEG_GRAMMAR, "Statement");
+	return factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
 #endif
 }
 
