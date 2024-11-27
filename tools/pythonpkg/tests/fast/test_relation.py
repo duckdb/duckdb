@@ -659,3 +659,16 @@ class TestRelation(object):
 
         res = con.sql("select * from vw").fetchall()
         assert res == expected
+
+    def test_buffer_managed_materialized_relation(self):
+        conn = duckdb.connect()
+        # Anything that is not a SELECT statement becomes a materialized relation, so we use `CALL`
+        query = "call repeat_row(42, 'test', 'this is a long string', true, num_rows=10)"
+        rel = conn.sql(query)
+
+        # close connection before the materialized relation goes out of scope
+        # materialized relation is buffer-managed so it keeps the DB instance alive
+        conn.close()
+
+        # deleting rel after closing conn deallocates buffer-managed memory (requires DB): should not segfault
+        del rel
