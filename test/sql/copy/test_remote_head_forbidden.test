@@ -6,14 +6,6 @@ require httpfs
 
 require json
 
-statement error
-FROM read_json('https://api.spring.io/projects/spring-boot/generations')
-----
-This can be achieved by: SET force_download=true;
-
-statement ok
-SET force_download=true;
-
 query II
 FROM read_json('https://api.spring.io/projects/spring-boot/generations')
 ----

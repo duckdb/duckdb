@@ -729,36 +729,20 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 			// HEAD request fail, use Range request for another try (read only one byte)
 			if (flags.OpenForReading() && res->code != 404) {
 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
-				if (range_res->code != 206) {
-					throw IOException(
-					    "Unable to connect to URL \"%s\": %d (%s).\nA possible solution is to skip the head request by "
-					    "downloading the entire file upfront.\nThis can be achieved by: SET force_download=true;",
-					    path, res->code, res->error);
+				if (range_res->code != 206 && range_res->code != 202 && range_res->code != 200) {
+					throw IOException("Unable to connect to URL \"%s\": %d (%s).", path, res->code, res->error);
 				}
 				auto range_find = range_res->headers["Content-Range"].find("/");
-
-				if (range_find == std::string::npos || range_res->headers["Content-Range"].size() < range_find + 1) {
-					throw IOException("Unknown Content-Range Header \"The value of Content-Range Header\":  (%s).\nA "
-					                  "possible solution is to skip the head request by downloading the entire file "
-					                  "upfront.\nThis can be achieved by: SET force_download=true;",
-					                  range_res->headers["Content-Range"]);
+				if (!(range_find == std::string::npos || range_res->headers["Content-Range"].size() < range_find + 1)) {
+					range_length = range_res->headers["Content-Range"].substr(range_find + 1);
+					if (range_length != "*") {
+						res = std::move(range_res);
+					}
 				}
-
-				range_length = range_res->headers["Content-Range"].substr(range_find + 1);
-				if (range_length == "*") {
-					throw IOException("Unknown total length of the document \"%s\": %d (%s).\nA possible solution is "
-					                  "to skip the head request by downloading the entire file upfront.\nThis can be "
-					                  "achieved by: SET force_download=true;",
-					                  path, res->code, res->error);
-				}
-				res = std::move(range_res);
 			} else {
 				// It failed again
-				throw HTTPException(
-				    *res,
-				    "Unable to connect to URL \"%s\": %s (%s).\nA possible solution is to skip the head request by "
-				    "downloading the entire file upfront.\nThis can be achieved by: SET force_download=true;",
-				    res->http_url, to_string(res->code), res->error);
+				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s).", res->http_url,
+				                    to_string(res->code), res->error);
 			}
 		}
 	}
