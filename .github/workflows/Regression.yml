@@ -74,6 +74,7 @@ jobs:
           token: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
           path: benchmark/fivetran
 
+      # For PRs we compare against the base branch
       - name: Build Current and Base Branch
         if: ${{ !(github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main') }}
         shell: bash
@@ -84,6 +85,7 @@ jobs:
           make
           cd ..
 
+      # For NightlyTest we fetch the last commit hash that successfully completed Regression on main
       - name: Build Main and Previous Successful Regression Hash
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
         shell: bash
@@ -162,7 +164,7 @@ jobs:
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/fivetran.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2
 
   regression-test-storage:
     name: Storage Size Regression Test
