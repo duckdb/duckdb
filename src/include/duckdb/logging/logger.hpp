@@ -8,10 +8,13 @@
 
 #pragma once
 
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unordered_set.hpp"
+
+#include <duckdb/parallel/thread_context.hpp>
 
 namespace duckdb {
 class TableDescription;
@@ -19,6 +22,8 @@ class DatabaseInstance;
 class DataChunk;
 class LogManager;
 class ColumnDataCollection;
+class ThreadContext;
+class FileOpener;
 
 enum class LogLevel : uint8_t {
 	DEBUGGING = 10,
@@ -35,7 +40,7 @@ struct LoggingContext {
 	optional_idx query_id;
 	optional_idx transaction_id;
 
-	string default_log_type;
+	string default_log_type = "";
 };
 
 // TODO: class ColumnDataCollectionLogStorage : public LogStorage
@@ -48,13 +53,13 @@ public:
 	void WriteLogEntries(DataChunk &chunk, const LoggingContext& context);
 	void Flush();
 
+	unique_ptr<ColumnDataCollection> log_entries;
+
 private:
 	// Cache for direct logging
 	unique_ptr<DataChunk> buffer;
-	idx_t buffer_size;
 	idx_t max_buffer_size;
 
-	unique_ptr<ColumnDataCollection> log_entries;
 };
 
 enum class LogMode : uint8_t {
@@ -100,50 +105,48 @@ protected:
 	unordered_set<string> disabled_loggers;
 };
 
-// TODO
-//! Allow creating a "Logger" object from a logger string and log level that will avoid needing to check these on every log call
-//! e.g:
-
-//!     GlobalLogManager in DatabaseInstance (GlobalLogManager::Get(db)) <- or maybe this is just a log configuration?
-//!     LogManager in MetaTransaction (LoggingManager used by that connection, LogManager::Get(context))
-//!     Logger in ThreadContext (similar to OperatorProfiler, maybe unify with that?) - Logger::Get(thread_context)
-
-// afhankelijk van waar je bent krijg je een ander soort logger die wel of niet thread safe is, eigen caches heeft, en eigen context heeft
-// Logger::Get(thread_context)
-// Logger::Get(client_context)
-// Logger::Get(database_instance)
-
-//!     Logger::Log(LogTypeId, string &log_message);
-//!     Logger::Log(string &log_type, string &log_message) { Log(GetLogType(log_type), log_message); }
-//!     LogTypeId Logger::GetLogType(string &log_type); <- allows for caching of LogTypeId
-//!     Logger::GetLogType("HTTPFS") -> // has httpfs been registered? if so hand out the LogTypeId, otherwise the next log type
-
-//!     Flush -> configurable after each message
 
 
-//! Main interface to log stuff
-//! - holds an immutable copy of the config to ensure fast determining of ShouldLog()
+//! Main logging interface
 class Logger {
 public:
-	explicit Logger() : config(LogConfig()){
+	explicit Logger() {
 	}
-	explicit Logger(LogConfig &config_p) : config(config_p){
+	explicit Logger(LogManager &manager) : manager(manager){
 	}
 
 	virtual ~Logger() = default;
 
 	//! Log message with default log type (empty string?)
 	virtual void Log(LogLevel log_level, const string &log_type, const string &log_message) = 0;
+	virtual void Log(LogLevel log_level, const string &log_message) = 0;
 	virtual void Flush() = 0;
 
-	// Debug is special because it only works in debug mode
-	void Debug(const string &log_type, const string &log_message) {
-#ifdef DEBUG
-		return Log(LogLevel::DEBUGGING, log_type, log_message);
-#endif
+	// Get the Logger to write log messages to. In decreasing order of preference(!) so the ThreadContext getter is the
+	// most preferred way of fetching the logger and the DatabaseInstance getter the least preferred. This has to do both
+	// with logging performance and level of detail of logging context that is provided.
+	static Logger& Get(ThreadContext &thread_context);
+	static Logger& Get(ClientContext &client_context);
+	static Logger& Get(FileOpener &opener);
+	static Logger& Get(DatabaseInstance &db);
+
+	template <class T>
+	static void Log(T& log_context_source, const string &log_type, LogLevel log_level, const string &log_message) {
+		Logger::Get(log_context_source).Log(log_level, log_type, log_message);
+	}
+	template <class T>
+	static void Log(T& log_context_source, LogLevel log_level, const string &log_message) {
+		Logger::Get(log_context_source).Log(log_level, log_message);
 	}
 
-	//! TODO: implement log_type enum-ify interface
+	// TODO: implement specializations for:
+	// Logger::Debug, Logger::Warning, etc. for all types of parameters, e.g.:
+	//	- Logger::Debug(T source, string log_type, string message)
+	//	- Logger::Debug(T source, string log_type, string message)
+	//	- Logger::Debug(T source, string log_type, string format_string, ...format string params)
+	//	- Logger::Debug(T source, string format_string, [](){ return ConstructExpensiveString() })
+
+	//! TODO: implement log_type enum-ify interface:
 	// //! Log message with specified log type (SLOW!)
 	// virtual void Log(const string &log_type, LogLevel log_level, string &log_message)  = 0;
 	// //! Log message using a specific log_type_id (FASTER)
@@ -152,31 +155,39 @@ public:
 	// virtual idx_t GetLogType(const string &log_type) = 0;
 
 	virtual bool IsThreadSafe() = 0;
+	virtual bool IsMutable() {
+		return false;
+	};
+	virtual void UpdateConfig(LogConfig &new_config) {
+		throw InternalException("Cannot update the config of this logger!");
+	}
 
 protected:
-	// Cached config from manager
-	const LogConfig config;
-	// Pointer to manager (should be weak?) TODO: set
+	// Pointer to manager (should be weak?)
 	// Log entries are generally accumulated in loggers and then synced with the loggingManager
-	shared_ptr<LogManager> manager;
+	// TODO: lifetime issues?
+	optional_ptr<LogManager> manager;
 };
 
 // Thread-safe logger
 class ThreadSafeLogger : public Logger {
 public:
-	explicit ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p) : Logger(config_p), context(context_p) {
+	explicit ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager) : Logger(manager), config(config_p), context(context_p) {
 		// NopLogger should be used instead
 		D_ASSERT(config_p.Mode() != LogMode::DISABLED);
 	}
 
 	// Main Logger API
 	void Log(LogLevel log_level, const string &log_type, const string &log_message) override;
+	void Log(LogLevel log_level, const string &log_message) override;
+
 	void Flush() override;
 	bool IsThreadSafe() override {
 		return true;
 	}
 
 protected:
+	const LogConfig config;
 	mutex lock;
 	const LoggingContext context;
 };
@@ -185,13 +196,14 @@ protected:
 // - will cache log entries locally
 class ThreadLocalLogger : public Logger {
 public:
-	explicit ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p) : Logger(config_p), context(context_p) {
+	explicit ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager) : Logger(manager), config(config_p), context(context_p) {
 		// NopLogger should be used instead
 		D_ASSERT(config_p.Mode() != LogMode::DISABLED);
 	}
 
 	// Main Logger API
 	void Log(LogLevel log_level, const string &log_type, const string &log_message) override;
+	void Log(LogLevel log_level, const string &log_message) override;
 	void Flush() override;
 
 	bool IsThreadSafe() override {
@@ -199,7 +211,38 @@ public:
 	}
 
 protected:
-	LoggingContext context;
+	const LogConfig config;
+	const LoggingContext context;
+};
+
+// Thread-safe Logger with mutable log settings
+class MutableLogger : public Logger {
+public:
+	explicit MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager) : Logger(manager), config(config_p), context(context_p) {
+		level = config.Level();
+		mode = config.Mode();
+	}
+
+	// Main Logger API
+	void Log(LogLevel log_level, const string &log_type, const string &log_message) override;
+	void Log(LogLevel log_level, const string &log_message) override;
+	void Flush() override;
+	bool IsThreadSafe() override {
+		return true;
+	}
+	bool IsMutable() override {
+		return true;
+	}
+	void UpdateConfig(LogConfig &new_config) override;
+
+protected:
+	// Atomics for lock-free log setting checks
+	duckdb::atomic<LogMode> mode;
+	duckdb::atomic<LogLevel> level;
+
+	mutex lock;
+	LogConfig config;
+	const LoggingContext context;
 };
 
 // For when logging is disabled: NOPs everything
@@ -209,6 +252,9 @@ public:
 	}
 	void Log(LogLevel log_level, const string &log_type, const string &log_message) override {
 	}
+	void Log(LogLevel log_level, const string &log_message) override {
+	}
+
 	void Flush() override {
 	}
 
@@ -222,19 +268,24 @@ public:
 // - Creates Loggers with cached configuration
 // - Main sink for logs (either by logging directly into this, or by syncing a pre-cached set of log entries)
 // - Holds the logs (in case of in-memory
-class LogManager {
+class LogManager : public enable_shared_from_this<LogManager> {
 friend class ThreadSafeLogger;
 friend class ThreadLocalLogger;
+friend class MutableLogger;
 public:
-	explicit LogManager(shared_ptr<DatabaseInstance> &db, LogConfig config);
-	unique_ptr<Logger> CreateLogger(LoggingContext &context, bool thread_safe = true);
+	// Note: two step initialization because Logger needs shared pointer to log manager TODO: can we clean up?
+	explicit LogManager(shared_ptr<DatabaseInstance> &db, LogConfig config = LogConfig());
+	void Initialize();
+
+	static LogManager &Get(ClientContext &context);
+	unique_ptr<Logger> CreateLogger(LoggingContext &context, bool thread_safe = true, bool mutable_settings = false);
+
+	//! The global logger can be used whe
+	Logger &GlobalLogger();
 
 	// TODO: allow modifying log settings
 
-	// static Logger& Get(ThreadContext &thread_context);
-	// static Logger& Get(ClientContext &client_context);
-	// static Logger& Get(DatabaseInstance &db);
-	// static Logger& Get(FileOpener &opener);
+	unique_ptr<LogStorage> log_storage;
 
 protected:
 	// This is to be called by the Loggers only, it does not verify log_level and log_type
@@ -244,7 +295,8 @@ protected:
 
 	mutex lock;
 	LogConfig config;
-	unique_ptr<LogStorage> log_storage;
+
+	unique_ptr<Logger> global_logger;
 };
 
 } // namespace duckdb

@@ -140,6 +140,9 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 #ifdef DEBUG
 	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
 #endif
+	LoggingContext context;
+	context.default_log_type = "client_context";
+	logger = db->GetLogManager().CreateLogger(context, true);
 }
 
 ClientContext::~ClientContext() {
@@ -201,6 +204,14 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	for (auto &state : registered_state->States()) {
 		state->QueryBegin(*this);
 	}
+
+	// Flush the old Logger
+	logger->Flush();
+
+	// Refresh the logger to ensure we are in sync with global log settings
+	LoggingContext context;
+	context.default_log_type = "client_context";
+	logger = db->GetLogManager().CreateLogger(context, true);
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
@@ -282,6 +293,10 @@ Executor &ClientContext::GetExecutor() {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->executor);
 	return *active_query->executor;
+}
+
+Logger &ClientContext::GetLogger() {
+	return *logger;
 }
 
 const string &ClientContext::GetCurrentQuery() {

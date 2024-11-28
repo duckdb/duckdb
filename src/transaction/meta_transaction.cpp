@@ -1,14 +1,19 @@
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
+
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+
+#include <duckdb/main/database.hpp>
 
 namespace duckdb {
 
 MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p)
     : context(context_p), start_timestamp(start_timestamp_p), active_query(MAXIMUM_QUERY_ID),
       modified_database(nullptr), is_read_only(false) {
+
+	Logger::Log(context, LogLevel::INFORMATIVE, "MetaTransaction");
 }
 
 MetaTransaction &MetaTransaction::Get(ClientContext &context) {

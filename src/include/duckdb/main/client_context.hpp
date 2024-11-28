@@ -199,6 +199,9 @@ public:
 	//! Returns the current executor
 	Executor &GetExecutor();
 
+	//! Return the current logger
+	Logger &GetLogger();
+
 	//! Returns the current query string (if any)
 	const string &GetCurrentQuery();
 
@@ -294,6 +297,12 @@ private:
 	                                optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 
 private:
+	//! The logger to be used by this ClientContext
+	//! Thread-safety of this is a little special: This logger will be re-created when on query start. This ensures the settings
+	//! are synchronized with the global log settings on every query. However during query execution, this logger will be accessed
+	//! without holding the context_lock
+	unique_ptr<Logger> logger;
+
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
 	//! The currently active query context
