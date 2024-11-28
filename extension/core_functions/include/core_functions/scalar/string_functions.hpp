@@ -362,9 +362,9 @@ struct TranslateFun {
 
 struct TrimFun {
 	static constexpr const char *Name = "trim";
-	static constexpr const char *Parameters = "string,characters";
-	static constexpr const char *Description = "Removes any occurrences of any of the characters from either side of the string";
-	static constexpr const char *Example = "trim('>>>>test<<', '><')";
+	static constexpr const char *Parameters = "string::VARCHAR\1string::VARCHAR,characters::VARCHAR";
+	static constexpr const char *Description = "Removes any spaces from either side of the string.\1Removes any occurrences of any of the characters from either side of the string";
+	static constexpr const char *Example = "trim(' test ')\1trim('>>>>test<<', '><')";
 
 	static ScalarFunctionSet GetFunctions();
 };

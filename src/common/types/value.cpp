@@ -739,16 +739,37 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
 }
 
+void MapKeyCheck(unordered_set<hash_t> &unique_keys, const Value &key) {
+	// NULL key check.
+	if (key.IsNull()) {
+		MapVector::EvalMapInvalidReason(MapInvalidReason::NULL_KEY);
+	}
+
+	// Duplicate key check.
+	auto key_hash = key.Hash();
+	if (unique_keys.find(key_hash) != unique_keys.end()) {
+		MapVector::EvalMapInvalidReason(MapInvalidReason::DUPLICATE_KEY);
+	}
+	unique_keys.insert(key_hash);
+}
+
 Value Value::MAP(const LogicalType &child_type, vector<Value> values) { // NOLINT
 	vector<Value> map_keys;
 	vector<Value> map_values;
+	unordered_set<hash_t> unique_keys;
+
 	for (auto &val : values) {
 		D_ASSERT(val.type().InternalType() == PhysicalType::STRUCT);
 		auto &children = StructValue::GetChildren(val);
 		D_ASSERT(children.size() == 2);
-		map_keys.push_back(children[0]);
+
+		auto &key = children[0];
+		MapKeyCheck(unique_keys, key);
+
+		map_keys.push_back(key);
 		map_values.push_back(children[1]);
 	}
+
 	auto &key_type = StructType::GetChildType(child_type, 0);
 	auto &value_type = StructType::GetChildType(child_type, 1);
 	return Value::MAP(key_type, value_type, std::move(map_keys), std::move(map_values));
@@ -760,13 +781,20 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 
 	result.type_ = LogicalType::MAP(key_type, value_type);
 	result.is_null = false;
+	unordered_set<hash_t> unique_keys;
+
 	for (idx_t i = 0; i < keys.size(); i++) {
 		child_list_t<Value> new_children;
 		new_children.reserve(2);
-		new_children.push_back(std::make_pair("key", keys[i].DefaultCastAs(key_type)));
+
+		auto key = keys[i].DefaultCastAs(key_type);
+		MapKeyCheck(unique_keys, key);
+
+		new_children.push_back(std::make_pair("key", key));
 		new_children.push_back(std::make_pair("value", values[i].DefaultCastAs(value_type)));
 		values[i] = Value::STRUCT(std::move(new_children));
 	}
+
 	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
 	return result;
 }
@@ -1514,7 +1542,7 @@ hash_t Value::Hash() const {
 		return 0;
 	}
 	Vector input(*this);
-	Vector result(LogicalType::HASH);
+	Vector result(LogicalType::HASH, 1);
 	VectorOperations::Hash(input, result, 1);
 
 	auto data = FlatVector::GetData<hash_t>(result);
