@@ -218,6 +218,7 @@ public:
 
 	void InitializeIndexes(ClientContext &context);
 	bool HasIndexes() const;
+	bool HasUniqueIndexes() const;
 	bool HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type);
 	void SetIndexStorageInfo(vector<IndexStorageInfo> index_storage_info);
 	void VacuumIndexes();

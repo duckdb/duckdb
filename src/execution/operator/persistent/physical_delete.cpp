@@ -44,27 +44,39 @@ public:
 };
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
-	auto &gstate = input.global_state.Cast<DeleteGlobalState>();
-	auto &ustate = input.local_state.Cast<DeleteLocalState>();
+	auto &g_state = input.global_state.Cast<DeleteGlobalState>();
+	auto &l_state = input.local_state.Cast<DeleteLocalState>();
 
-	// get rows and
 	auto &transaction = DuckTransaction::Get(context.client, table.db);
-	auto &row_identifiers = chunk.data[row_id_index];
+	auto &row_ids = chunk.data[row_id_index];
 
 	vector<StorageIndex> column_ids;
 	for (idx_t i = 0; i < table.ColumnCount(); i++) {
 		column_ids.emplace_back(i);
 	};
-	auto cfs = ColumnFetchState();
+	auto fetch_state = ColumnFetchState();
 
-	lock_guard<mutex> delete_guard(gstate.delete_lock);
-	if (return_chunk) {
-		ustate.delete_chunk.Reset();
-		row_identifiers.Flatten(chunk.size());
-		table.Fetch(transaction, ustate.delete_chunk, column_ids, row_identifiers, chunk.size(), cfs);
-		gstate.return_collection.Append(ustate.delete_chunk);
+	lock_guard<mutex> delete_guard(g_state.delete_lock);
+	auto has_unique_indexes = table.HasUniqueIndexes();
+	if (!return_chunk && !has_unique_indexes) {
+		g_state.deleted_count += table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
+		return SinkResultType::NEED_MORE_INPUT;
 	}
-	gstate.deleted_count += table.Delete(*ustate.delete_state, context.client, row_identifiers, chunk.size());
+
+	// Fetch the to-be-deleted chunk.
+	l_state.delete_chunk.Reset();
+	row_ids.Flatten(chunk.size());
+	table.Fetch(transaction, l_state.delete_chunk, column_ids, row_ids, chunk.size(), fetch_state);
+
+	if (has_unique_indexes) {
+		// Append to the delete-ARTs.
+		// TODO: add to any potential delete ARTs
+	}
+	if (return_chunk) {
+		g_state.return_collection.Append(l_state.delete_chunk);
+	}
+
+	g_state.deleted_count += table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

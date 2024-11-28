@@ -311,6 +311,21 @@ bool DataTable::HasIndexes() const {
 	return !info->indexes.Empty();
 }
 
+bool DataTable::HasUniqueIndexes() const {
+	if (!HasIndexes()) {
+		return false;
+	}
+	bool has_unique_index = false;
+	info->indexes.Scan([&](Index &index) {
+		if (index.IsUnique()) {
+			has_unique_index = true;
+			return true;
+		}
+		return false;
+	});
+	return has_unique_index;
+}
+
 void DataTable::AddIndex(unique_ptr<Index> index) {
 	info->indexes.AddIndex(std::move(index));
 }
@@ -655,18 +670,6 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
-bool HasUniqueIndexes(TableIndexList &list) {
-	bool has_unique_index = false;
-	list.Scan([&](Index &index) {
-		if (index.IsUnique()) {
-			has_unique_index = true;
-			return true;
-		}
-		return false;
-	});
-	return has_unique_index;
-}
-
 void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
                                     DataChunk &chunk, unique_ptr<Vector> row_ids,
                                     optional_ptr<ConflictManager> manager) {
@@ -769,7 +772,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 		}
 	}
 
-	if (HasUniqueIndexes(info->indexes)) {
+	if (HasUniqueIndexes()) {
 		if (local_storage) {
 			VerifyUniqueIndexes(info->indexes, local_storage->delete_indexes, chunk, std::move(row_ids), manager);
 		} else {

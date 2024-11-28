@@ -1,0 +1,27 @@
+# name: test/sql/index/art/updates/test_art_simple_update.test
+# description: Test a simple update on a PK with a LIST column.
+# group: [updates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t2 (i BIGINT PRIMARY KEY, l1 BIGINT[]);
+
+statement ok
+INSERT INTO t2 VALUES(1, [1, 2, 3]), (2, [42]);
+
+query III
+SELECT i, l1, rowid FROM t2 ORDER BY ALL;
+----
+1	[1, 2, 3]	0
+2	[42]	1
+
+statement ok
+UPDATE t2 SET l1 = [1, 2, 4] WHERE i = 1;
+
+query III
+SELECT i, l1, rowid FROM t2 ORDER BY ALL;
+----
+1	[1, 2, 4]	2
+2	[42]	1

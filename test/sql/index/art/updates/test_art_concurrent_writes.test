@@ -1,0 +1,64 @@
+# name: test/sql/index/art/updates/test_art_concurrent_writes.test
+# description: Test DELETE + INSERT in the main connection with concurrent writes in other connections.
+# group: [updates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'first payload');
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+DELETE FROM tbl;
+
+statement ok con1
+INSERT INTO tbl VALUES (1, 'con1 payload');
+
+statement
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM tbl;
+
+statement ok
+INSERT INTO tbl VALUES (1, 'second payload');
+
+statement ok
+COMMIT;
+
+statement ok con2
+BEGIN TRANSACTION;
+
+statement ok con2
+DELETE FROM tbl;
+
+statement ok con2;
+INSERT INTO tbl VALUES (1, 'con2 payload');
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DELETE FROM tbl;
+
+statement ok
+INSERT INTO tbl VALUES (1, 'third payload');
+
+statement ok
+COMMIT;
+
+statement error con1
+COMMIT;
+----
+asdf
+
+statement error con2
+COMMIT
+----
+asdf
