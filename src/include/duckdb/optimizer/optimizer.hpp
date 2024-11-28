@@ -39,6 +39,10 @@ private:
 	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
 	void Verify(LogicalOperator &op);
 
+public:
+	// helper functions
+	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> p1, unique_ptr<Expression> p2);
+
 private:
 	unique_ptr<LogicalOperator> plan;
 };

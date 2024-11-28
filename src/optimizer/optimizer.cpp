@@ -29,6 +29,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
+#include "duckdb/optimizer/sum_rewriter.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -107,6 +108,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
+
+	// transform ORDER BY + LIMIT to TopN
+	RunOptimizer(OptimizerType::SUM_REWRITER, [&]() {
+		SumRewriterOptimizer optimizer(*this);
+		optimizer.Optimize(plan);
+	});
 
 	// perform filter pullup
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
@@ -262,6 +269,21 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	Planner::VerifyPlan(context, plan);
 
 	return std::move(plan);
+}
+
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> p1,
+                                                     unique_ptr<Expression> p2) {
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(std::move(p1));
+	expressions.push_back(std::move(p2));
+
+	FunctionBinder binder(context);
+	ErrorData error;
+	auto expr = binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(expressions), error);
+	if (error.HasError()) {
+		throw InternalException("Optimizer exception - failed to bind function %s: %s", name, error.Message());
+	}
+	return expr;
 }
 
 } // namespace duckdb

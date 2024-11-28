@@ -1,0 +1,30 @@
+# name: test/optimizer/test_sum_rewrite.test
+# description: Test SUM rewrite
+# group: [optimizer]
+
+statement ok
+CREATE TABLE integers AS FROM range(10000) t(i);
+
+query IIII
+SELECT SUM(i + 1), SUM(i + 2), SUM(i + 3), SUM(i + 4) FROM integers
+----
+50005000	50015000	50025000	50035000
+
+query IIII
+SELECT SUM(i + 1), SUM(2 + i), SUM(i + 3), SUM(4 + i) FROM integers
+----
+50005000	50015000	50025000	50035000
+
+query IIII
+SELECT SUM(i + 1), SUM(2 + i), SUM(i + 3), SUM(4 + i) FROM integers GROUP BY i//100000
+----
+50005000	50015000	50025000	50035000
+
+# check that we did the rewrite using explain
+statement ok
+pragma explain_output='optimized_only'
+
+query II
+EXPLAIN SELECT SUM(i + 1), SUM(i + 2), SUM(i + 3), SUM(i + 4) FROM integers
+----
+logical_opt	<REGEX>:.*sum_no_overflow\(i\).*
