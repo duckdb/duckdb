@@ -18,8 +18,8 @@ class Optimizer;
 //! Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)
 class SumRewriterOptimizer : public LogicalOperatorVisitor {
 public:
-	SumRewriterOptimizer(Optimizer &optimizer);
-	~SumRewriterOptimizer();
+	explicit SumRewriterOptimizer(Optimizer &optimizer);
+	~SumRewriterOptimizer() override;
 
 	void Optimize(unique_ptr<LogicalOperator> &op);
 	void VisitOperator(LogicalOperator &op) override;

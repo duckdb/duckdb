@@ -32,10 +32,11 @@
 #include "duckdb/optimizer/sum_rewriter.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
-Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
+Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(*this) {
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
@@ -271,15 +272,24 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	return std::move(plan);
 }
 
-unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> p1,
-                                                     unique_ptr<Expression> p2) {
-	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(std::move(p1));
-	expressions.push_back(std::move(p2));
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(c1));
+	return BindScalarFunction(name, std::move(children));
+}
 
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+                                                     unique_ptr<Expression> c2) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(c1));
+	children.push_back(std::move(c2));
+	return BindScalarFunction(name, std::move(children));
+}
+
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, vector<unique_ptr<Expression>> children) {
 	FunctionBinder binder(context);
 	ErrorData error;
-	auto expr = binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(expressions), error);
+	auto expr = binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error);
 	if (error.HasError()) {
 		throw InternalException("Optimizer exception - failed to bind function %s: %s", name, error.Message());
 	}

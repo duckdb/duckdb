@@ -10,21 +10,21 @@
 
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class ClientContext;
+class Optimizer;
 
 //! The ExpressionRewriter performs a set of fixed rewrite rules on the expressions that occur in a SQL statement
 class ExpressionRewriter : public LogicalOperatorVisitor {
 public:
-	explicit ExpressionRewriter(ClientContext &context) : context(context) {
-	}
+	explicit ExpressionRewriter(Optimizer &optimizer);
 
 public:
 	//! The set of rules as known by the Expression Rewriter
 	vector<unique_ptr<Rule>> rules;
 
+	Optimizer &optimizer;
 	ClientContext &context;
 
 public:

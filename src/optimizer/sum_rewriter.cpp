@@ -1,6 +1,5 @@
 #include "duckdb/optimizer/sum_rewriter.hpp"
 
-#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -8,7 +7,7 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
