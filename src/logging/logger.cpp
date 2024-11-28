@@ -110,40 +110,80 @@ Logger& Logger::Get(FileOpener &opener) {
 	throw NotImplementedException("Logger::Get(FileOpener)");
 }
 
-void ThreadSafeLogger::Log(LogLevel log_level, const string &log_type, const string &log_message) {
-	if (config.Level() < log_level) {
-		return;
+void Logger::Log(const char *log_type, LogLevel log_level, const char *log_message) {
+	if (ShouldLog(log_type, log_level)) {
+		WriteLog(log_type, log_level, log_message);
 	}
-	if (config.Mode() == LogMode::ENABLE_SELECTED && config.EnabledLoggers().find(log_type) == config.EnabledLoggers().end()) {
-		return;
-	}
-	if (config.Mode() == LogMode::DISABLE_SELECTED && config.DisabledLoggers().find(log_type) != config.DisabledLoggers().end()) {
-		return;
-	}
-
-	manager->WriteLogEntry(log_level, log_type, log_message, context);
 }
 
-void ThreadSafeLogger::Log(LogLevel log_level, const string &log_message) {
+void Logger::Log(LogLevel log_level, const char *log_message) {
+	if (ShouldLog(log_level)) {
+		WriteLog(log_level, log_message);
+	}
+}
+
+void Logger::Log(const char *log_type, LogLevel log_level, std::function<string()> callback) {
+	if (ShouldLog(log_type, log_level)) {
+		auto string = callback();
+		WriteLog(log_type, log_level, string.c_str());
+	}
+}
+void Logger::Log(LogLevel log_level, std::function<string()> callback) {
+	if (ShouldLog(log_level)) {
+		auto string = callback();
+		WriteLog(log_level, string.c_str());
+	}
+}
+
+bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	if (config.Level() < log_level) {
-		return;
+		return false;
+	}
+	if (config.Mode() == LogMode::ENABLE_SELECTED && config.EnabledLoggers().find(log_type) == config.EnabledLoggers().end()) {
+		return false;
+	}
+	if (config.Mode() == LogMode::DISABLE_SELECTED && config.DisabledLoggers().find(log_type) != config.DisabledLoggers().end()) {
+		return false;
+	}
+	return true;
+}
+
+bool ThreadSafeLogger::ShouldLog(LogLevel log_level) {
+	if (config.Level() < log_level) {
+		return false;
 	}
 	if (config.Mode() != LogMode::LEVEL_ONLY) {
-		return;
+		return false;
 	}
-	manager->WriteLogEntry(log_level, context.default_log_type, log_message, context);
+	return true;
+}
+
+void ThreadSafeLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
+	manager->WriteLogEntry(log_type, log_level, log_message, context);
+}
+
+void ThreadSafeLogger::WriteLog(LogLevel log_level, const char *log_message) {
+	manager->WriteLogEntry(context.default_log_type, log_level, log_message, context);
 }
 
 void ThreadSafeLogger::Flush() {
 	// NOP
 }
 
-void ThreadLocalLogger::Log(LogLevel log_level, const string &log_type, const string &log_message) {
-	throw NotImplementedException("ThreadLocalLogger::Log");
+bool ThreadLocalLogger::ShouldLog(const char *log_type, LogLevel log_level) {
+	throw NotImplementedException("ThreadLocalLogger::ShouldLog");
 }
 
-void ThreadLocalLogger::Log(LogLevel log_level, const string &log_message) {
-	throw NotImplementedException("ThreadLocalLogger::Log");
+bool ThreadLocalLogger::ShouldLog(LogLevel log_level) {
+	throw NotImplementedException("ThreadLocalLogger::ShouldLog");
+}
+
+void ThreadLocalLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
+	throw NotImplementedException("ThreadLocalLogger::WriteLog");
+}
+
+void ThreadLocalLogger::WriteLog(LogLevel log_level, const char *log_message) {
+	throw NotImplementedException("ThreadLocalLogger::WriteLog");
 }
 
 void ThreadLocalLogger::Flush() {
@@ -159,48 +199,52 @@ void MutableLogger::UpdateConfig(LogConfig &new_config) {
 	mode = config.Mode();
 }
 
-void MutableLogger::Log(LogLevel log_level, const string &log_type, const string &log_message) {
-	// check atomic mode to early out if disabled
+void MutableLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
+	manager->WriteLogEntry(log_type, log_level, log_message, context);
+}
+
+void MutableLogger::WriteLog(LogLevel log_level, const char *log_message) {
+	manager->WriteLogEntry(context.default_log_type, log_level, log_message, context);
+}
+
+bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	if (mode == LogMode::DISABLED) {
-		return;
+		return false;
 	}
 
 	// check atomic level to early out if level too low
 	if (level < log_level) {
-		return;
+		return false;
 	}
 
 	if (config.Mode() == LogMode::LEVEL_ONLY) {
-		manager->WriteLogEntry(log_level, log_type, log_message, context);
+		return true;
 	}
 
 	// ENABLE_SELECTED and DISABLE_SELECTED are expensive and need full global lock TODO: can we do better here?
-	bool should_log = false;
 	{
 		unique_lock<mutex> lck(lock);
 		if (config.Mode() == LogMode::ENABLE_SELECTED && config.EnabledLoggers().find(log_type) == config.EnabledLoggers().end()) {
-			should_log = true;
+			return true;
 		} else if (config.Mode() == LogMode::DISABLE_SELECTED && config.DisabledLoggers().find(log_type) != config.DisabledLoggers().end()) {
-			should_log = true;
+			return true;
 		}
 	}
-	if (should_log) {
-		manager->WriteLogEntry(log_level, log_type, log_message, context);
-	}
+	throw InternalException("Should be unreachable (MutableLogger::ShouldLog)");
 }
 
-void MutableLogger::Log(LogLevel log_level, const string &log_message) {
+bool MutableLogger::ShouldLog(LogLevel log_level) {
 	// check atomic mode to early out if disabled
 	if (mode != LogMode::LEVEL_ONLY) {
-		return;
+		return false;
 	}
 
 	// check atomic level to early out if level too low
 	if (level < log_level) {
-		return;
+		return false;
 	}
 
-	manager->WriteLogEntry(log_level, context.default_log_type, log_message, context);
+	return true;
 }
 
 void MutableLogger::Flush() {
@@ -242,7 +286,7 @@ LogManager &LogManager::Get(ClientContext &context) {
 	return context.db->GetLogManager();
 }
 
-void LogManager::WriteLogEntry(LogLevel log_level, const string &log_type, const string &log_message, const LoggingContext &context) {
+void LogManager::WriteLogEntry(const char *log_type, LogLevel log_level, const char *log_message, const LoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 	log_storage->WriteLogEntry(log_level, log_type, log_message, context);
 }
