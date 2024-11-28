@@ -37,7 +37,7 @@ string Exception::ToJSON(ExceptionType type, const string &message, const unorde
 	extended_extra_info["stack_trace"] = Exception::GetStackTrace();
 	return StringUtil::ToJSONMap(type, message, extended_extra_info);
 #else
-	return StringUtil::ToJSONMap(type, message, extra_info);
+	return StringUtil::ExceptionToJSONMap(type, message, extra_info);
 #endif
 }
 
