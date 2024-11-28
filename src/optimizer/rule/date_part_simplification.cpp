@@ -8,7 +8,6 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
@@ -90,7 +89,16 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 		return nullptr;
 	}
 	// found a replacement function: bind it
-	return rewriter.optimizer.BindScalarFunction(new_function_name, std::move(date_part.children[1]));
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(date_part.children[1]));
+
+	ErrorData error;
+	FunctionBinder binder(rewriter.context);
+	auto function = binder.BindScalarFunction(DEFAULT_SCHEMA, new_function_name, std::move(children), error, false);
+	if (!function) {
+		error.Throw();
+	}
+	return function;
 }
 
 } // namespace duckdb
