@@ -1531,6 +1531,7 @@ void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &prob
 	const auto false_count = probe_keys.size() - true_count;
 
 	// can't probe these values right now, append to spill
+	spill_chunk.Reset();
 	spill_chunk.Reference(probe_chunk);
 	spill_chunk.data.back().Reference(hashes);
 	spill_chunk.Slice(false_sel, false_count);
