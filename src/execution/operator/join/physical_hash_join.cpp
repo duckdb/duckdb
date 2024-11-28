@@ -142,10 +142,11 @@ public:
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
-		if (op.join_stats.size() == 2 && op.join_stats[1] &&
-		    TypeIsIntegral(op.conditions[0].right->return_type.InternalType())) {
-			perfect_join_executor->CanDoPerfectHashJoin(op, NumericStats::Min(*op.join_stats[1]),
-			                                            NumericStats::Max(*op.join_stats[1]));
+		bool use_perfect_hash = false;
+		if (op.conditions.size() == 1 && !op.join_stats.empty() && op.join_stats[1] &&
+		    TypeIsIntegral(op.join_stats[1]->GetType().InternalType()) && NumericStats::HasMinMax(*op.join_stats[1])) {
+			use_perfect_hash = perfect_join_executor->CanDoPerfectHashJoin(op, NumericStats::Min(*op.join_stats[1]),
+			                                                               NumericStats::Max(*op.join_stats[1]));
 		}
 		// For external hash join
 		external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
@@ -154,6 +155,10 @@ public:
 		probe_types.emplace_back(LogicalType::HASH);
 
 		if (op.filter_pushdown) {
+			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
+				// Only computing min/max to check for perfect HJ, but we already can
+				skip_filter_pushdown = true;
+			}
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
 	}
@@ -194,6 +199,7 @@ public:
 	//! Whether or not we have started scanning data using GetData
 	atomic<bool> scanned_data;
 
+	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
 };
 
@@ -314,13 +320,14 @@ void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate
 }
 
 SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
 
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
 	lstate.join_key_executor.Execute(chunk, lstate.join_keys);
 
-	if (filter_pushdown) {
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
 		filter_pushdown->Sink(lstate.join_keys, *lstate.local_filter_state);
 	}
 
@@ -358,7 +365,7 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
-	if (filter_pushdown) {
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
 		filter_pushdown->Combine(*gstate.global_filter_state, *lstate.local_filter_state);
 	}
 
@@ -722,7 +729,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	Value min;
 	Value max;
-	if (filter_pushdown && ht.Count() > 0) {
+	if (filter_pushdown && !sink.skip_filter_pushdown && ht.Count() > 0) {
 		auto final_min_max = filter_pushdown->Finalize(context, ht, *sink.global_filter_state, *this);
 		min = final_min_max->data[0].GetValue(0);
 		max = final_min_max->data[1].GetValue(0);
