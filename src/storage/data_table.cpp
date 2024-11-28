@@ -684,7 +684,7 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 
 			auto delete_index = delete_indexes->Find(index.GetIndexName());
 			D_ASSERT(delete_index);
-			delete_index->Cast<BoundIndex>().Append(chunk, *row_ids);
+			delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
 			index.Cast<BoundIndex>().VerifyAppend(chunk, delete_index->Cast<BoundIndex>());
 			return false;
 		});
@@ -709,7 +709,7 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 
 		auto delete_index = delete_indexes->Find(index.GetIndexName());
 		D_ASSERT(delete_index);
-		delete_index->Cast<BoundIndex>().Append(chunk, *row_ids);
+		delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
 		manager->AddIndex(index.Cast<BoundIndex>(), delete_index->Cast<BoundIndex>());
 		return false;
 	});
@@ -740,7 +740,7 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 
 		auto delete_index = delete_indexes->Find(index.GetIndexName());
 		D_ASSERT(delete_index);
-		delete_index->Cast<BoundIndex>().Append(chunk, *row_ids);
+		delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
 		bound_index.VerifyAppend(chunk, delete_index->Cast<BoundIndex>(), *manager);
 		return false;
 	});
@@ -1101,11 +1101,13 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start) {
+ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
+                                     DataChunk &chunk, row_t row_start) {
 	ErrorData error;
 	if (indexes.Empty()) {
 		return error;
 	}
+
 	// first generate the vector of row identifiers
 	Vector row_identifiers(LogicalType::ROW_TYPE);
 	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
@@ -1115,13 +1117,21 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, 
 	// now append the entries to the indices
 	indexes.Scan([&](Index &index_to_append) {
 		if (!index_to_append.IsBound()) {
-			error = ErrorData("Unbound index found in DataTable::AppendToIndexes");
-			append_failed = true;
-			return true;
+			throw InternalException("unbound index in DataTable::AppendToIndexes");
 		}
 		auto &index = index_to_append.Cast<BoundIndex>();
+
+		// Try to find the matching delete index.
+		optional_ptr<BoundIndex> delete_index;
+		if (delete_indexes) {
+			auto unbound_delete_index = delete_indexes->Find(index.name);
+			if (unbound_delete_index) {
+				delete_index = unbound_delete_index->Cast<BoundIndex>();
+			}
+		}
+
 		try {
-			error = index.Append(chunk, row_identifiers);
+			error = index.Append(chunk, row_identifiers, delete_index);
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 		}
@@ -1143,9 +1153,9 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, 
 	return error;
 }
 
-ErrorData DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
+ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start) {
 	D_ASSERT(is_root);
-	return AppendToIndexes(info->indexes, chunk, row_start);
+	return AppendToIndexes(info->indexes, delete_indexes, chunk, row_start);
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {

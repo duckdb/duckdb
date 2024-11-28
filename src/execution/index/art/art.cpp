@@ -477,7 +477,7 @@ bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids,
 // Insert and Constraint Checking
 //===--------------------------------------------------------------------===//
 
-ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
+ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	auto row_count = input.size();
 
@@ -486,6 +486,11 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	unsafe_vector<ARTKey> row_id_keys(row_count);
 	GenerateKeyVectors(allocator, input, row_ids, keys, row_id_keys);
 
+	optional_ptr<ART> delete_art;
+	if (delete_index) {
+		delete_art = delete_index->Cast<ART>();
+	}
+
 	// Insert the entries into the index.
 	idx_t failed_index = DConstants::INVALID_INDEX;
 	auto was_empty = !tree.HasMetadata();
@@ -493,7 +498,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		if (!Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus())) {
+		if (!Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus(), delete_art)) {
 			// Insertion failure due to a constraint violation.
 			failed_index = i;
 			break;
@@ -531,12 +536,14 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	return ErrorData();
 }
 
-ErrorData ART::Append(IndexLock &lock, DataChunk &input, Vector &row_ids) {
+ErrorData ART::Append(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_art) {
 	// Execute all column expressions before inserting the data chunk.
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 	ExecuteExpressions(input, expr_chunk);
-	return Insert(lock, expr_chunk, row_ids);
+
+	// Now insert the data chunk.
+	return Insert(lock, expr_chunk, row_ids, delete_art);
 }
 
 void ART::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) {
@@ -567,14 +574,14 @@ void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, cons
 }
 
 bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-                         const GateStatus status) {
+                         const GateStatus status, optional_ptr<ART> delete_art) {
 	D_ASSERT(depth < key.len);
 	auto child = node.GetChildMutable(*this, key[depth]);
 
 	// Recurse, if a child exists at key[depth].
 	if (child) {
 		D_ASSERT(child->HasMetadata());
-		bool success = Insert(*child, key, depth + 1, row_id, status);
+		bool success = Insert(*child, key, depth + 1, row_id, status, delete_art);
 		node.ReplaceChild(*this, key[depth], *child);
 		return success;
 	}
@@ -583,7 +590,7 @@ bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const
 	if (status == GateStatus::GATE_SET) {
 		Node remainder;
 		auto byte = key[depth];
-		auto success = Insert(remainder, key, depth + 1, row_id, status);
+		auto success = Insert(remainder, key, depth + 1, row_id, status, delete_art);
 		Node::InsertChild(*this, node, byte, remainder);
 		return success;
 	}
@@ -604,7 +611,9 @@ bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const
 	return true;
 }
 
-bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status) {
+// TODO: Maybe return ENUM with different failure states instead of just bool.
+bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
+                 optional_ptr<ART> delete_art) {
 	if (!node.HasMetadata()) {
 		InsertIntoEmpty(node, key, depth, row_id, status);
 		return true;
@@ -612,25 +621,55 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 
 	// Enter a nested leaf.
 	if (status == GateStatus::GATE_NOT_SET && node.GetGateStatus() == GateStatus::GATE_SET) {
-		return Insert(node, row_id, 0, row_id, GateStatus::GATE_SET);
+		if (IsUnique()) {
+			// Unique indexes can have duplicates, if another transaction DELETE + INSERT
+			// the same key. In that case, the previous value must be kept alive until all
+			// other transactions do not depend on it anymore.
+
+			// We restrict this transactionality to two-value leaves, so any subsequent
+			// incoming transaction must fail here.
+			return false;
+		}
+		return Insert(node, row_id, 0, row_id, GateStatus::GATE_SET, delete_art);
 	}
 
 	auto type = node.GetType();
 	switch (type) {
 	case NType::LEAF_INLINED: {
-		if (IsUnique()) {
+		if (IsUnique() && !delete_art) {
 			return false;
+		}
+		if (IsUnique()) {
+			// Lookup in the delete_art.
+			auto delete_leaf = delete_art->Lookup(delete_art->tree, key, 0);
+
+			// Not a deleted leaf.
+			if (!delete_leaf) {
+				return false;
+			}
+
+			// The row ID has changed.
+			D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
+			row_t delete_row_id = delete_leaf->GetRowId();
+			auto global_row_id = node.GetRowId();
+			if (delete_row_id != global_row_id) {
+				return false;
+			}
+
+			// Else, we insert the value.
 		}
 		Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
 		return true;
 	}
 	case NType::LEAF: {
+		D_ASSERT(!IsUnique());
 		Leaf::TransformToNested(*this, node);
-		return Insert(node, key, depth, row_id, status);
+		return Insert(node, key, depth, row_id, status, delete_art);
 	}
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
 	case NType::NODE_256_LEAF: {
+		// Row IDs are unique, so there are never any duplicate byte conflicts here.
 		auto byte = key[Prefix::ROW_ID_COUNT];
 		Node::InsertChild(*this, node, byte);
 		return true;
@@ -639,11 +678,11 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 	case NType::NODE_16:
 	case NType::NODE_48:
 	case NType::NODE_256:
-		return InsertIntoNode(node, key, depth, row_id, status);
+		return InsertIntoNode(node, key, depth, row_id, status, delete_art);
 	case NType::PREFIX:
-		return Prefix::Insert(*this, node, key, depth, row_id, status);
+		return Prefix::Insert(*this, node, key, depth, row_id, status, delete_art);
 	default:
-		throw InternalException("Invalid node type for Insert.");
+		throw InternalException("Invalid node type for ART::Insert.");
 	}
 }
 

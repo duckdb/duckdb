@@ -160,10 +160,11 @@ public:
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
 	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, optional_ptr<StorageCommitState> commit_state);
 
-	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
-	//! whether or not the append succeeded
-	ErrorData AppendToIndexes(DataChunk &chunk, row_t row_start);
-	static ErrorData AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start);
+	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
+	//! Returns empty ErrorData, if the append was successful.
+	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start);
+	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
+	                                 DataChunk &chunk, row_t row_start);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table

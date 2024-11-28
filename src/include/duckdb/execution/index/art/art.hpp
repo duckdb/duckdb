@@ -75,10 +75,11 @@ public:
 	bool Scan(IndexScanState &state, idx_t max_count, unsafe_vector<row_t> &row_ids);
 
 	//! Append a chunk by first executing the ART's expressions.
-	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids) override;
+	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_art) override;
 	//! Insert a chunk.
-	bool Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status);
-	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+	bool Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
+	            optional_ptr<ART> delete_art);
+	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids, optional_ptr<BoundIndex> delete_index) override;
 
 	//! Constraint verification for a chunk.
 	void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) override;
@@ -125,8 +126,8 @@ private:
 
 	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
 	                     const GateStatus status);
-	bool InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                    const GateStatus status);
+	bool InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const GateStatus status,
+	                    optional_ptr<ART> delete_art);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);

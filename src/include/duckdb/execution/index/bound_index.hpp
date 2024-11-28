@@ -68,9 +68,10 @@ public: // Index interface
 	//! Obtain a lock on the index
 	void InitializeLock(IndexLock &state);
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-	virtual ErrorData Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
+	virtual ErrorData Append(IndexLock &state, DataChunk &entries, Vector &row_ids,
+	                         optional_ptr<BoundIndex> delete_art) = 0;
 	//! Obtains a lock and calls Append while holding that lock
-	ErrorData Append(DataChunk &entries, Vector &row_identifiers);
+	ErrorData Append(DataChunk &entries, Vector &row_ids, optional_ptr<BoundIndex> delete_art);
 	//! Verify that data can be appended to the index without a constraint violation.
 	virtual void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) = 0;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager.
@@ -90,7 +91,8 @@ public: // Index interface
 	void Delete(DataChunk &entries, Vector &row_identifiers);
 
 	//! Insert a chunk of entries into the index
-	virtual ErrorData Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
+	virtual ErrorData Insert(IndexLock &lock, DataChunk &input, Vector &row_ids,
+	                         optional_ptr<BoundIndex> delete_art) = 0;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
