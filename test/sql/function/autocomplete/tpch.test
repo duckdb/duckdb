@@ -84,7 +84,7 @@ FROM sql_auto_complete('DROP TABLE na') LIMIT 1;
 nation	11
 
 query II
-SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_') LIMIT 1;
+SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_su') LIMIT 1;
 ----
 ps_suppkey	44
 

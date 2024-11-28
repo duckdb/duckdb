@@ -264,7 +264,7 @@ def test_autocomplete_tpch(shell, autocomplete_extension):
         .statement("CREATE TABLE partsupp(ps_suppkey int);")
         .statement("CREATE TABLE supplier(s_suppkey int);")
         .statement("CREATE TABLE nation(n_nationkey int);")
-        .statement("SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_') LIMIT 1;")
+        .statement("SELECT * FROM sql_auto_complete('SELECT * FROM partsupp JOIN supplier USING (ps_su') LIMIT 1;")
     )
     result = test.run()
     result.check_stdout('ps_suppkey')
