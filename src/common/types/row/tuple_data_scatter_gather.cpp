@@ -1214,7 +1214,8 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
-	uint64_t target_list_offset = 0;
+	auto list_size_before = ListVector::GetListSize(target);
+	uint64_t target_list_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
 		const auto &source_row = source_locations[scan_sel.get_index(i)];
 		ValidityBytes row_mask(source_row, layout.ColumnCount());
@@ -1237,9 +1238,8 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 			target_list_validity.SetInvalid(target_idx);
 		}
 	}
-	auto list_size_before = ListVector::GetListSize(target);
-	ListVector::Reserve(target, list_size_before + target_list_offset);
-	ListVector::SetListSize(target, list_size_before + target_list_offset);
+	ListVector::Reserve(target, target_list_offset);
+	ListVector::SetListSize(target, target_list_offset);
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);

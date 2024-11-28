@@ -166,18 +166,20 @@ public:
 	}
 };
 void interval_t::Normalize(int64_t &months, int64_t &days, int64_t &micros) const {
-	auto input = *this;
-	int64_t extra_months_d = input.days / Interval::DAYS_PER_MONTH;
-	int64_t extra_months_micros = input.micros / Interval::MICROS_PER_MONTH;
-	input.days -= UnsafeNumericCast<int32_t>(extra_months_d * Interval::DAYS_PER_MONTH);
-	input.micros -= extra_months_micros * Interval::MICROS_PER_MONTH;
+	auto &input = *this;
 
-	int64_t extra_days_micros = input.micros / Interval::MICROS_PER_DAY;
-	input.micros -= extra_days_micros * Interval::MICROS_PER_DAY;
-
-	months = input.months + extra_months_d + extra_months_micros;
-	days = input.days + extra_days_micros;
+	//  Carry left
 	micros = input.micros;
+	int64_t carry_days = micros / Interval::MICROS_PER_DAY;
+	micros -= carry_days * Interval::MICROS_PER_DAY;
+
+	days = input.days;
+	days += carry_days;
+	int64_t carry_months = days / Interval::DAYS_PER_MONTH;
+	days -= carry_months * Interval::DAYS_PER_MONTH;
+
+	months = input.months;
+	months += carry_months;
 }
 
 } // namespace duckdb

@@ -63,6 +63,38 @@ def get_struct_name(function_name):
     return function_name.replace('_', ' ').title().replace(' ', '') + 'Fun'
 
 
+def get_parameter_line(variants):
+    return "\\1".join(
+        ",".join(
+            param['name'] + "::" + param['type'] if ('type' in param) else param['name']
+            for param in variant['parameters']
+        )
+        for variant in variants
+    )
+
+
+def get_description_line(variants):
+    return "\\1".join([variant['description'] for variant in variants])
+
+
+def get_example_line(variants):
+    return "\\1".join([example_from_json(variant) for variant in variants])
+
+
+def example_from_json(json_record):
+    if 'example' in json_record:
+        example_line = sanitize_string(json_record['example'])
+    elif 'examples' in json_record:
+        example_line = examples_to_line(json_record['examples'])
+    else:
+        example_line = ''
+    return example_line
+
+
+def examples_to_line(example_list):
+    return "\\2".join([sanitize_string(example) for example in example_list])
+
+
 def sanitize_string(text):
     return text.replace('\\', '\\\\').replace('"', '\\"')
 
@@ -100,6 +132,14 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
         else:
             print("Unknown entry type " + entry['type'] + ' for entry ' + struct_name)
             exit(1)
+        if 'variants' in entry:
+            parameter_line = get_parameter_line(entry['variants'])
+            description_line = get_description_line(entry['variants'])
+            example_line = get_example_line(entry['variants'])
+        else:
+            parameter_line = entry['parameters'] if 'parameters' in entry else ''
+            description_line = sanitize_string(entry['description'])
+            example_line = example_from_json(entry)
         if 'extra_functions' in entry:
             for func_text in entry['extra_functions']:
                 function_text += '\n	' + func_text
@@ -117,9 +157,9 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
                 '{STRUCT}', struct_name
             )
             .replace('{NAME}', entry['name'])
-            .replace('{PARAMETERS}', entry['parameters'] if 'parameters' in entry else '')
-            .replace('{DESCRIPTION}', sanitize_string(entry['description']))
-            .replace('{EXAMPLE}', sanitize_string(entry['example']))
+            .replace('{PARAMETERS}', parameter_line)
+            .replace('{DESCRIPTION}', description_line)
+            .replace('{EXAMPLE}', example_line)
             .replace('{FUNCTION}', function_text)
         )
         alias_count = 1
