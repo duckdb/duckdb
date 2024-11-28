@@ -770,6 +770,7 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
+	D_ASSERT(keys.size() == left.size());
 	if (finished) {
 		return;
 	}
@@ -1011,7 +1012,6 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 template <bool MATCH>
 void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	D_ASSERT(left.ColumnCount() == result.ColumnCount());
-	D_ASSERT(keys.size() == left.size());
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t result_count = 0;
@@ -1515,51 +1515,41 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 	return true;
 }
 
-static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &payload, Vector &hashes) {
-	D_ASSERT(spill_chunk.ColumnCount() == payload.ColumnCount() + 1);
-	spill_chunk.Reset();
-	spill_chunk.Reference(payload);
-	spill_chunk.data.back().Reference(hashes);
-	spill_chunk.SetCardinality(payload);
-}
-
-void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-                                  ProbeState &probe_state, DataChunk &payload, ProbeSpill &probe_spill,
+void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &probe_keys, TupleDataChunkState &key_state,
+                                  ProbeState &probe_state, DataChunk &probe_chunk, ProbeSpill &probe_spill,
                                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
-	Hash(keys, *FlatVector::IncrementalSelectionVector(), keys.size(), hashes);
+	Hash(probe_keys, *FlatVector::IncrementalSelectionVector(), probe_keys.size(), hashes);
 
 	// find out which keys we can match with the current pinned partitions
-	SelectionVector true_sel;
-	SelectionVector false_sel;
-	true_sel.Initialize();
-	false_sel.Initialize();
-	auto true_count = RadixPartitioning::Select(hashes, FlatVector::IncrementalSelectionVector(), keys.size(),
-	                                            radix_bits, partition_end, &true_sel, &false_sel);
-	auto false_count = keys.size() - true_count;
-
-	CreateSpillChunk(spill_chunk, payload, hashes);
+	SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector false_sel(STANDARD_VECTOR_SIZE);
+	const auto true_count =
+	    RadixPartitioning::Select(hashes, FlatVector::IncrementalSelectionVector(), probe_keys.size(), radix_bits,
+	                              partition_end, &true_sel, &false_sel);
+	const auto false_count = probe_keys.size() - true_count;
 
 	// can't probe these values right now, append to spill
+	spill_chunk.Reference(probe_chunk);
+	spill_chunk.data.back().Reference(hashes);
 	spill_chunk.Slice(false_sel, false_count);
-	spill_chunk.Verify();
 	probe_spill.Append(spill_chunk, spill_state);
 
 	// slice the stuff we CAN probe right now
 	hashes.Slice(true_sel, true_count);
-	keys.Slice(true_sel, true_count);
-	payload.Slice(true_sel, true_count);
+	probe_keys.Slice(true_sel, true_count);
+	probe_chunk.Slice(true_sel, true_count);
 
 	const SelectionVector *current_sel;
-	InitializeScanStructure(scan_structure, keys, key_state, current_sel);
+	InitializeScanStructure(scan_structure, probe_keys, key_state, current_sel);
 	if (scan_structure.count == 0) {
 		return;
 	}
 
 	// now initialize the pointers of the scan structure based on the hashes
-	GetRowPointers(keys, key_state, probe_state, hashes, *current_sel, scan_structure.count, scan_structure.pointers,
-	               scan_structure.sel_vector);
+	GetRowPointers(probe_keys, key_state, probe_state, hashes, *current_sel, scan_structure.count,
+	               scan_structure.pointers, scan_structure.sel_vector);
 }
 
 ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types)

@@ -116,6 +116,7 @@ bool DataChunk::AllConstant() const {
 
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
+	Reset();
 	SetCapacity(chunk);
 	SetCardinality(chunk);
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
@@ -185,13 +186,14 @@ void DataChunk::Fuse(DataChunk &other) {
 void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &column_ids) {
 	D_ASSERT(ColumnCount() == column_ids.size());
 	Reset();
+	SetCapacity(other.size());
+	SetCardinality(other.size());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 		auto &other_col = other.data[column_ids[col_idx]];
 		auto &this_col = data[col_idx];
 		D_ASSERT(other_col.GetType() == this_col.GetType());
 		this_col.Reference(other_col);
 	}
-	SetCardinality(other.size());
 }
 
 void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel, idx_t sel_count) {
