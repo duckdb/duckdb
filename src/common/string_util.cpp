@@ -518,24 +518,12 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 	return result;
 }
 
-string StringUtil::ToJSONMap(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
-	if (doc == nullptr && root == nullptr) {
-		// We have to initialize them
-		doc = yyjson_mut_doc_new(nullptr);
-		root = yyjson_mut_obj(doc);
-		yyjson_mut_doc_set_root(doc, root);
-	} else if (doc == nullptr || root == nullptr) {
-		// They are either both not set, or both set.
-		throw InternalException("StringUtil::ToJSONMap is called with invalid doc and root parameters. They must be "
-		                        "both valid, or both set to null");
-	}
-
+string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
 	for (auto &entry : map) {
 		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
 		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
 		yyjson_mut_obj_add(root, key, value);
 	}
-
 	yyjson_write_err err;
 	size_t len;
 	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
@@ -554,6 +542,13 @@ string StringUtil::ToJSONMap(const unordered_map<string, string> &map, yyjson_mu
 	// Return the result
 	return result;
 }
+string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
+	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	yyjson_mut_val *root = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, root);
+
+	return ToJsonMapInternal(map, doc, root);
+}
 
 string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
                                       const unordered_map<string, string> &map) {
@@ -568,7 +563,7 @@ string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
 	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
 	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
 
-	return ToJSONMap(map, doc, root);
+	return ToJsonMapInternal(map, doc, root);
 }
 
 string StringUtil::GetFileName(const string &file_path) {

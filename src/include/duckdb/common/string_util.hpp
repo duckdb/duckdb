@@ -16,7 +16,6 @@
 #include "duckdb/common/vector.hpp"
 
 #include <cstring>
-#include "yyjson.hpp"
 
 namespace duckdb {
 
@@ -296,9 +295,7 @@ public:
 	DUCKDB_API static string ExceptionToJSONMap(ExceptionType type, const string &message,
 	                                            const unordered_map<string, string> &map);
 
-	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map,
-	                                   duckdb_yyjson::yyjson_mut_doc *doc = nullptr,
-	                                   duckdb_yyjson::yyjson_mut_val *root = nullptr);
+	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
 
 	DUCKDB_API static string GetFileName(const string &file_path);
 	DUCKDB_API static string GetFileExtension(const string &file_name);

@@ -71,7 +71,7 @@ bool ArrowSchemaMetadata::IsNonCanonicalType(const string &type, const string &v
 	if (schema_metadata_map.find(ARROW_EXTENSION_NAME) == schema_metadata_map.end()) {
 		return false;
 	}
-	if (schema_metadata_map.find(ARROW_EXTENSION_NAME)->second != "arrow.opaque") {
+	if (schema_metadata_map.find(ARROW_EXTENSION_NAME)->second != ARROW_EXTENSION_NON_CANONICAL) {
 		return false;
 	}
 	if (extension_metadata_map.find("type_name") == extension_metadata_map.end() ||
