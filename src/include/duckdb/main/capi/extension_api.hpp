@@ -452,6 +452,11 @@ typedef struct {
 	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
+	duckdb_vector (*duckdb_map_vector_get_keys)(duckdb_vector vector);
+	duckdb_vector (*duckdb_map_vector_get_values)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_tags)(duckdb_vector vector);
+	duckdb_vector (*duckdb_union_vector_get_member)(duckdb_vector vector, uint8_t tag);
+	void (*duckdb_union_vector_set_tag)(duckdb_vector vector, idx_t index, uint8_t tag);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -854,6 +859,11 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_get_timestamp_s = duckdb_get_timestamp_s;
 	result.duckdb_get_timestamp_ms = duckdb_get_timestamp_ms;
 	result.duckdb_get_timestamp_ns = duckdb_get_timestamp_ns;
+	result.duckdb_map_vector_get_keys = duckdb_map_vector_get_keys;
+	result.duckdb_map_vector_get_values = duckdb_map_vector_get_values;
+	result.duckdb_union_vector_get_tags = duckdb_union_vector_get_tags;
+	result.duckdb_union_vector_get_member = duckdb_union_vector_get_member;
+	result.duckdb_union_vector_set_tag = duckdb_union_vector_set_tag;
 	return result;
 }
 

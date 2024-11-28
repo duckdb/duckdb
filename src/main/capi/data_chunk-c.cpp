@@ -1,7 +1,7 @@
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/common/type_visitor.hpp"
 
 #include <string.h>
 
@@ -172,6 +172,82 @@ duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
 	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetEntry(*v));
+}
+
+duckdb_vector duckdb_map_vector_get_keys(duckdb_vector vector) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_vector>(&duckdb::MapVector::GetKeys(*v));
+}
+
+duckdb_vector duckdb_map_vector_get_values(duckdb_vector vector) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_vector>(&duckdb::MapVector::GetValues(*v));
+}
+
+duckdb_vector duckdb_union_vector_get_tags(duckdb_vector vector) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() != duckdb::LogicalTypeId::UNION) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_vector>(&duckdb::UnionVector::GetTags(*v));
+}
+
+duckdb_vector duckdb_union_vector_get_member(duckdb_vector vector, uint8_t tag) {
+	if (!vector) {
+		return nullptr;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() != duckdb::LogicalTypeId::UNION) {
+		return nullptr;
+	}
+	if (tag > duckdb::UnionType::GetMemberCount(v->GetType()) - 1) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_vector>(&duckdb::UnionVector::GetMember(*v, tag));
+}
+
+void duckdb_union_vector_set_tag(duckdb_vector vector, idx_t index, uint8_t tag) {
+	if (!vector) {
+		return;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() != duckdb::LogicalTypeId::UNION) {
+		return;
+	}
+
+	// Set the tag
+	auto &tags = duckdb::UnionVector::GetTags(*v);
+	auto tag_v = duckdb::Value::UTINYINT(tag);
+	tags.SetValue(index, tag_v);
+
+	// Set the corresponding member as valid
+	auto &child = duckdb::UnionVector::GetMember(*v, tag);
+	duckdb::FlatVector::SetNull(child, index, false);
+
+	// Set every member to NULL except for the one that is set
+	// This recursively sets all children to NULL as well
+	for (idx_t i = 0; i < duckdb::UnionType::GetMemberCount(v->GetType()); i++) {
+		if (i == tag) {
+			continue;
+		}
+		auto &child = duckdb::UnionVector::GetMember(*v, i);
+		duckdb::FlatVector::SetNull(child, index, true);
+	}
 }
 
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {
