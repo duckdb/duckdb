@@ -55,7 +55,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	const auto new_line_id = state_machine_options.new_line.GetValue();
 
 	const bool enable_unquoted_escape = state_machine_options.rfc_4180.GetValue() == false &&
-	                                    state_machine_options.quote != state_machine_options.escape;
+	                                    state_machine_options.quote != state_machine_options.escape &&
+	                                    state_machine_options.escape != '\0';
 
 	// Now set values depending on configuration
 	// 1) Standard/Invalid State
