@@ -1592,7 +1592,9 @@ void StringValueScanner::SetStart() {
 		auto &state_machine_cache = CSVStateMachineCache::Get(buffer_manager->context);
 		auto state_options = state_machine->state_machine_options;
 		// To set the state machine to be strict we ensure that rfc_4180 is set to true
-		state_options.rfc_4180 = true;
+		if (!state_options.rfc_4180.IsSetByUser()) {
+			state_options.rfc_4180 = true;
+		}
 		state_machine_strict =
 		    make_shared_ptr<CSVStateMachine>(state_machine_cache.Get(state_options), state_machine->options);
 	}
