@@ -145,6 +145,29 @@ void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 	    expr, [&](unique_ptr<Expression> &child) { ReplaceColumnBindings(*child, source, dest); });
 }
 
+// TODO: combine with table_catalog_entry.cpp.
+static bool TypeSupportsRegularUpdate(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
+		// lists and maps and unions don't support updates directly
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto &child_types = StructType::GetChildTypes(type);
+		for (auto &entry : child_types) {
+			if (!TypeSupportsRegularUpdate(entry.second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
+}
+
 void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
                                         TableCatalogEntry &table, TableStorageInfo &storage_info) {
 	D_ASSERT(insert.children.size() == 1);
@@ -168,6 +191,11 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		    insert.set_columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
+
+		if (!TypeSupportsRegularUpdate(column.Type())) {
+			insert.update_is_del_and_insert = true;
+		}
+
 		insert.set_columns.push_back(column.Physical());
 		logical_column_ids.push_back(column.Oid());
 		insert.set_types.push_back(column.Type());
