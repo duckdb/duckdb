@@ -506,9 +506,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				if (!TryGetBoundColumnIndex(column_ids, expr, column_index)) {
 					continue;
 				}
-				if (column_index.IsRowIdColumn()) {
-					break;
-				}
 
 				auto &constant_list = constant_values.find(equiv_set)->second;
 				for (auto &constant_cmp : constant_list) {
@@ -518,7 +515,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				}
 				// We need to apply a IS NOT NULL filter to the column expression because any comparison with NULL
 				// is always false.
-				table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, make_uniq<IsNotNullFilter>()));
+				// However, the rowid pseudocolumn can never be NULL.
+				if (!column_index.IsRowIdColumn()) {
+					table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, make_uniq<IsNotNullFilter>()));
+				}
 
 				equivalence_map.erase(filter_exp);
 			}

@@ -197,8 +197,13 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 					filters_info += "\n";
 				}
 				first_item = false;
-				auto &col_name = names[column_ids[column_index].GetPrimaryIndex()];
-				filters_info += filter->ToString(col_name);
+
+				const auto col_id = column_ids[column_index].GetPrimaryIndex();
+				if (col_id == COLUMN_IDENTIFIER_ROW_ID) {
+					filters_info += filter->ToString("rowid");
+				} else {
+					filters_info += filter->ToString(names[col_id]);
+				}
 			}
 		}
 		result["Filters"] = filters_info;
