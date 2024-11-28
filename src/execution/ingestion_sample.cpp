@@ -17,11 +17,6 @@ idx_t IngestionSample::GetActiveSampleCount() const {
 	return ret;
 }
 
-void PrintSel(SelectionVector sel, idx_t length) {
-	for (idx_t i = 0; i < length; i++) {
-		Printer::Print("Sel " + std::to_string(i) + " maps to " + std::to_string(sel[i]));
-	}
-}
 
 unique_ptr<DataChunk> IngestionSample::GetChunk(idx_t offset) {
 	throw InternalException("Invalid Call to Get Chunk");
@@ -394,13 +389,13 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 
 	// TODO: this could use CreateNewSampleChunk
 	ret->reservoir_chunk->chunk.Initialize(Allocator::DefaultAllocator(), sample_chunk->GetTypes(),
-	                                       num_samples_to_keep);
-	for (idx_t col_idx = 0; col_idx < ret->reservoir_chunk->chunk.ColumnCount(); col_idx++) {
-		FlatVector::Validity(ret->reservoir_chunk->chunk.data[col_idx]).Initialize(num_samples_to_keep);
-	}
+                                       num_samples_to_keep);
 
 	idx_t new_size = ret->reservoir_chunk->chunk.size() + num_samples_to_keep;
 
+	// The current selection vector can potentially have 2048 valid mappings.
+	// If we want to save less tuples than that, we need to remove the lowest
+	// weighted mappings from the reservoir weights.
 	SelectionVector new_sel(num_samples_to_keep);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < num_samples_to_keep + selections_to_delete.size(); i++) {
@@ -412,21 +407,9 @@ unique_ptr<BlockingSample> IngestionSample::ConvertToReservoirSample() {
 		}
 	}
 
-	// now do the copy.
-	// TODO: We can use update append for this, but UpdateAppend needs to be fixed
-	//       to update append to a random chunk
 	D_ASSERT(sample_chunk->GetTypes() == ret->reservoir_chunk->chunk.GetTypes());
-	for (idx_t i = 0; i < sample_chunk->ColumnCount(); i++) {
-		auto col_type = types[i];
-		if (ValidSampleType(col_type)) {
-			D_ASSERT(sample_chunk->data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-			VectorOperations::Copy(sample_chunk->data[i], ret->reservoir_chunk->chunk.data[i], new_sel, num_samples_to_keep,
-			                       0, 0);
-		} else {
-			ret->reservoir_chunk->chunk.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(ret->reservoir_chunk->chunk.data[i], true);
-		}
-	}
+
+	UpdateSampleWithTypes(ret->reservoir_chunk->chunk, *sample_chunk, new_sel, num_samples_to_keep, 0, 0);
 	// set the cardinality
 	ret->reservoir_chunk->chunk.SetCardinality(new_size);
 	ret->base_reservoir_sample->num_entries_seen_total = base_reservoir_sample->num_entries_seen_total;
@@ -571,12 +554,9 @@ SelectionVectorHelper IngestionSample::GetReplacementIndexesSlow(const idx_t sam
 
 	// create selection vector to return
 	SelectionVector ret_sel(ret_map.size());
-	idx_t i = 0;
 	D_ASSERT(sel_size == STANDARD_VECTOR_SIZE);
 	for (auto &kv : ret_map) {
 		ret_sel.set_index(kv.second, kv.first);
-		// sel.set_index(random_indexes[i], kv.second + sample_chunk_offset);
-		i += 1;
 	}
 	SelectionVectorHelper ret;
 	ret.sel = SelectionVector(ret_sel);
@@ -592,7 +572,7 @@ bool IngestionSample::ValidSampleType(const LogicalType &type) {
 	return type.IsNumeric();
 }
 
-void IngestionSample::UpdateSampleWithTypes(DataChunk &other, SelectionVector &sel, idx_t source_count,
+void IngestionSample::UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &sel, idx_t source_count,
                                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(sample_chunk->GetTypes() == other.GetTypes());
 	auto types = sample_chunk->GetTypes();
@@ -600,8 +580,8 @@ void IngestionSample::UpdateSampleWithTypes(DataChunk &other, SelectionVector &s
 	for (idx_t i = 0; i < sample_chunk->ColumnCount(); i++) {
 		auto col_type = types[i];
 		if (ValidSampleType(col_type)) {
-			D_ASSERT(sample_chunk->data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-			VectorOperations::Copy(other.data[i], sample_chunk->data[i], sel, source_count, source_offset,
+			D_ASSERT(this_.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+			VectorOperations::Copy(other.data[i], this_.data[i], sel, source_count, source_offset,
 			                       target_offset);
 		}
 	}
@@ -614,7 +594,7 @@ void IngestionSample::UpdateSampleAppend(DataChunk &other, SelectionVector &sel,
 	}
 	D_ASSERT(sample_chunk->GetTypes() == other.GetTypes());
 
-	UpdateSampleWithTypes(other, sel, append_count, 0, sample_chunk->size());
+	UpdateSampleWithTypes(*sample_chunk, other, sel, append_count, 0, sample_chunk->size());
 	sample_chunk->SetCardinality(new_size);
 }
 
@@ -714,6 +694,12 @@ void IngestionSample::Verify() {
 		sample_chunk->Verify();
 	}
 #endif
+}
+
+void PrintSel(SelectionVector sel, idx_t length) {
+	for (idx_t i = 0; i < length; i++) {
+		Printer::Print("Sel " + std::to_string(i) + " maps to " + std::to_string(sel[i]));
+	}
 }
 
 } // namespace duckdb

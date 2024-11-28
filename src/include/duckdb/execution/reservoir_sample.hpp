@@ -307,8 +307,11 @@ public:
 	//! The new sample rows are the tuples rows resulting from applying sel to other
 	void UpdateSampleAppend(DataChunk &other, SelectionVector &sel, idx_t append_count);
 	//! Actually appends the new tuples. TODO: rename function to AppendToSample
-	void UpdateSampleWithTypes(DataChunk &other, SelectionVector &sel, idx_t source_count, idx_t source_offset,
-	                           idx_t target_offset);
+	// void UpdateSampleWithTypes(DataChunk &other, SelectionVector &sel, idx_t source_count, idx_t source_offset,
+	//                            idx_t target_offset);
+	//! Actually appends the new tuples. TODO: rename function to AppendToSample
+	void UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &sel, idx_t source_count, idx_t source_offset,
+				   idx_t target_offset);
 
 	idx_t GetTuplesSeen();
 	idx_t NumSamplesCollected() const;
