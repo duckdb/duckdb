@@ -36,7 +36,7 @@
 
 namespace duckdb {
 
-Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(*this) {
+Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));

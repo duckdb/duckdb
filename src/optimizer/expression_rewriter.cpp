@@ -7,12 +7,8 @@
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
-
-ExpressionRewriter::ExpressionRewriter(Optimizer &optimizer) : optimizer(optimizer), context(optimizer.context) {
-}
 
 unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
                                                       unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
