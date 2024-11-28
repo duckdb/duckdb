@@ -2,6 +2,9 @@
 # description: ${DESCRIPTION}
 # group: [hep]
 
+# The HEP benckmarks repository: https://github.com/iris-hep/adl-benchmarks-index/?tab=readme-ov-file
+# The paper: https://www.vldb.org/pvldb/vol15/p154-muller.pdf
+
 require httpfs
 
 cache hep_singleMu.duckdb
