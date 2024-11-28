@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-//! A table function in the catalog
+//! A scalar function in the catalog
 class ScalarFunctionCatalogEntry : public FunctionEntry {
 public:
 	static constexpr const CatalogType Type = CatalogType::SCALAR_FUNCTION_ENTRY;

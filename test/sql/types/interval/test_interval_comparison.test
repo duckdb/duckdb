@@ -46,3 +46,8 @@ SELECT INTERVAL '1' YEAR = INTERVAL '12' MONTH
 ----
 1
 
+# Double carry left
+query I
+select interval '28 days 432000 seconds' = interval '1 month 3 days';
+----
+True
