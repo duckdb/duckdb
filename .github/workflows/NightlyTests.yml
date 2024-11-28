@@ -500,6 +500,7 @@ jobs:
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
+      DISABLE_POINTER_SALT: 1
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
 
     steps:

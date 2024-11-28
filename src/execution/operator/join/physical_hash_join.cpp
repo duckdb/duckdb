@@ -331,17 +331,14 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 		filter_pushdown->Sink(lstate.join_keys, *lstate.local_filter_state);
 	}
 
-	// build the HT
-	auto &ht = *lstate.hash_table;
-	if (payload_columns.col_types.empty()) {
-		// there are only keys: place an empty chunk in the payload
+	if (payload_columns.col_types.empty()) { // there are only keys: place an empty chunk in the payload
 		lstate.payload_chunk.SetCardinality(chunk.size());
-		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
-	} else {
-		// there are payload columns
+	} else { // there are payload columns
 		lstate.payload_chunk.ReferenceColumns(chunk, payload_columns.col_idxs);
-		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	}
+
+	// build the HT
+	lstate.hash_table->Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -816,21 +813,18 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	D_ASSERT(sink.finalized);
 	D_ASSERT(!sink.scanned_data);
 
-	if (state.scan_structure.is_null || sink.perfect_join_executor) {
-		// place the lhs projected columns in the chunk
-		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
-	}
-
 	if (sink.hash_table->Count() == 0) {
 		if (EmptyResultIfRHSIsEmpty()) {
 			return OperatorResultType::FINISHED;
 		}
+		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
 		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_output, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	if (sink.perfect_join_executor) {
 		D_ASSERT(!sink.external);
+		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
 		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, state.lhs_output, chunk,
 		                                                         *state.perfect_hash_join_state);
 	}
@@ -858,6 +852,8 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 			sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state);
 		}
 	}
+
+	state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
 	state.scan_structure.Next(state.lhs_join_keys, state.lhs_output, chunk);
 
 	if (state.scan_structure.PointersExhausted() && chunk.size() == 0) {
@@ -1226,7 +1222,6 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	lhs_join_keys.Reset();
 	lhs_join_key_executor.Execute(lhs_probe_chunk, lhs_join_keys);
 	lhs_output.ReferenceColumns(lhs_probe_chunk, sink.op.lhs_output_columns.col_idxs);
-	auto precomputed_hashes = &lhs_probe_chunk.data.back();
 
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
 		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_output, chunk);
@@ -1235,6 +1230,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	}
 
 	// Perform the probe
+	auto precomputed_hashes = &lhs_probe_chunk.data.back();
 	sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, precomputed_hashes);
 	scan_structure.Next(lhs_join_keys, lhs_output, chunk);
 }
