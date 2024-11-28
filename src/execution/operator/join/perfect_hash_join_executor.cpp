@@ -103,12 +103,16 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 	if (!TrySubtractOperator::Operation(max_value, min_value, build_range)) {
 		return false;
 	}
-	perfect_join_statistics.build_range = NumericCast<idx_t>(build_range);
 
 	// The max size our build must have to run the perfect HJ
 	static constexpr idx_t MAX_BUILD_SIZE = 1048576;
-	// If range is too large, or ht count is larger than range (duplicates), we bail out
-	if (perfect_join_statistics.build_range > MAX_BUILD_SIZE || ht.Count() > perfect_join_statistics.build_range) {
+	if (build_range > Hugeint::Convert(MAX_BUILD_SIZE)) {
+		return false;
+	}
+	perfect_join_statistics.build_range = NumericCast<idx_t>(build_range);
+
+	// If count is larger than range (duplicates), we bail out
+	if (ht.Count() > perfect_join_statistics.build_range) {
 		return false;
 	}
 
