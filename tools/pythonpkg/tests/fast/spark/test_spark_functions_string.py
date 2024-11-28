@@ -354,3 +354,61 @@ class TestSparkFunctionsString(object):
         )
         res = df.select(F.repeat(df.s, 3).alias('s')).collect()
         assert res == [Row(s='ababab')]
+
+    def test_reverse(self, spark):
+        data = [
+            ("firstRowFirstColumn",),
+            ("2ndRowFirstColumn",),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("reversed", F.reverse(F.col("firstColumn")))
+        res = df.select("reversed").collect()
+        assert res == [
+            Row(reversed=data[0][0][::-1]),
+            Row(reversed=data[1][0][::-1]),
+        ]
+
+    def test_concat(self, spark):
+        data = [
+            ("firstRow", "FirstColumn"),
+            ("2ndRow", "FirstColumn"),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+        df = df.withColumn("concatenated", F.concat(F.col("firstColumn"), F.col("secondColumn")))
+        res = df.select("concatenated").collect()
+        assert res == [
+            Row(concatenated="firstRowFirstColumn"),
+            Row(concatenated="2ndRowFirstColumn"),
+        ]
+
+    def test_substring(self, spark):
+        data = [("abcd",)]
+        df = spark.createDataFrame(data, ["s"])
+        res = df.select(F.substring(df.s, 1, 2).alias("s")).collect()
+        assert res == [Row(s="ab")]
+
+    def test_contains(self, spark):
+        data = [
+            ("firstRowFirstColumn",),
+            ("2ndRowFirstColumn",),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("contains", F.contains(F.col("firstColumn"), F.lit("Row")))
+        res = df.select("contains").collect()
+        assert res == [
+            Row(contains=True),
+            Row(contains=True),
+        ]
+
+    def test_instr(self, spark):
+        data = [
+            ("firstRowFirstColumn",),
+            ("2ndRowFirstColumn",),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("instr", F.instr(F.col("firstColumn"), "Row"))
+        res = df.select("instr").collect()
+        assert res == [
+            Row(instr=6),
+            Row(instr=4),
+        ]

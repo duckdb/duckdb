@@ -7,37 +7,6 @@ import datetime
 
 pa = pytest.importorskip('pyarrow', '18.0.0')
 
-from arrow_canonical_extensions import UHugeIntType, HugeIntType, VarIntType
-
-
-"""
-    These fixtures make sure that the extension_type is registered at the start of the function,
-    and unregistered at the end.
-    
-    No matter if an error occurred or the function ended early for whatever reason
-"""
-
-
-@pytest.fixture(scope='function')
-def arrow_duckdb_hugeint():
-    pa.register_extension_type(HugeIntType())
-    yield
-    pa.unregister_extension_type("duckdb.hugeint")
-
-
-@pytest.fixture(scope='function')
-def arrow_duckdb_uhugeint():
-    pa.register_extension_type(UHugeIntType())
-    yield
-    pa.unregister_extension_type("duckdb.uhugeint")
-
-
-@pytest.fixture(scope='function')
-def arrow_duckdb_varint():
-    pa.register_extension_type(VarIntType())
-    yield
-    pa.unregister_extension_type("duckdb.varint")
-
 
 class TestCanonicalExtensionTypes(object):
 
@@ -171,13 +140,14 @@ class TestCanonicalExtensionTypes(object):
         # This works because we project ze unknown extension array
         assert duck_res == [(29,)]
 
-    def test_hugeint(self, arrow_duckdb_hugeint):
+    def test_hugeint(self):
         con = duckdb.connect()
 
         con.execute("SET arrow_lossless_conversion = true")
 
         storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
-        hugeint_type = HugeIntType()
+        hugeint_type = pa.opaque(pa.binary(16), "hugeint", "DuckDB")
+
         storage_array = hugeint_type.wrap_array(storage_array)
 
         arrow_table = pa.Table.from_arrays([storage_array], names=['numbers'])
@@ -190,9 +160,9 @@ class TestCanonicalExtensionTypes(object):
 
         assert not con.execute('FROM arrow_table').arrow().equals(arrow_table)
 
-    def test_uhugeint(self, duckdb_cursor, arrow_duckdb_uhugeint):
+    def test_uhugeint(self, duckdb_cursor):
         storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
-        uhugeint_type = UHugeIntType()
+        uhugeint_type = pa.opaque(pa.binary(16), "uhugeint", "DuckDB")
         storage_array = uhugeint_type.wrap_array(storage_array)
 
         arrow_table = pa.Table.from_arrays([storage_array], names=['numbers'])
@@ -237,16 +207,27 @@ class TestCanonicalExtensionTypes(object):
             (datetime.time(2, 30, tzinfo=datetime.timezone(datetime.timedelta(seconds=14400))),)
         ]
 
-    def test_varint(self, arrow_duckdb_varint):
+    def test_varint(self):
         con = duckdb.connect()
         res_varint = con.execute(
             "SELECT '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::varint a FROM range(1) tbl(i)"
         ).arrow()
-
-        assert res_varint.column("a").type == VarIntType()
+        assert res_varint.column("a").type.type_name == 'varint'
+        assert res_varint.column("a").type.vendor_name == "DuckDB"
 
         assert con.execute("FROM res_varint").fetchall() == [
             (
                 '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368',
             )
         ]
+
+    def test_nested_types_with_extensions(self):
+        duckdb_cursor = duckdb.connect()
+        duckdb_cursor.execute("SET arrow_lossless_conversion = true")
+
+        arrow_table = duckdb_cursor.execute("select map {uuid(): 1::uhugeint, uuid(): 2::uhugeint} as li").arrow()
+
+        assert arrow_table.schema[0].type.key_type.extension_name == "arrow.uuid"
+        assert arrow_table.schema[0].type.item_type.extension_name == "arrow.opaque"
+        assert arrow_table.schema[0].type.item_type.type_name == "uhugeint"
+        assert arrow_table.schema[0].type.item_type.vendor_name == "DuckDB"

@@ -600,9 +600,10 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	}
 	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
 
-	// generating the OR filter only makes sense if the range is not dense
+	// generating the OR filter only makes sense if the range is
+	// not dense and that the range does not contain NULL
 	// i.e. if we have the values [0, 1, 2, 3, 4] - the min/max is fully equivalent to the OR filter
-	if (FilterCombiner::IsDenseRange(in_list)) {
+	if (FilterCombiner::ContainsNull(in_list) || FilterCombiner::IsDenseRange(in_list)) {
 		return;
 	}
 
