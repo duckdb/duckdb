@@ -55,6 +55,7 @@ jobs:
     name: Linux (x64)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    needs: linux-extensions-64
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
@@ -135,10 +136,10 @@ jobs:
  linux-release-aarch64:
    # Builds binaries for linux_arm64
    name: Linux (aarch64)
-   if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
    runs-on: ubuntu-latest
-   needs: linux-release-64
+   needs: linux-extensions-64
    container: ubuntu:18.04
+   if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
    env:
      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
      ENABLE_EXTENSION_AUTOLOADING: 1
@@ -191,7 +192,7 @@ jobs:
     name: Linux Extensions (x64)
     runs-on: ubuntu-latest
     container: ubuntu:18.04
-    needs: linux-release-64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     env:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
@@ -240,10 +241,10 @@ jobs:
  linux-extensions-64-aarch64:
     # Builds extensions for linux_arm64
     name: Linux Extensions (aarch64)
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     container: ubuntu:18.04
-    needs: linux-release-64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+    needs: linux-extensions-64
     env:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
@@ -367,7 +368,7 @@ jobs:
     name: Symbol Leakage
     if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-20.04
-    needs: linux-release-64
+    needs: linux-extensions-64
 
     steps:
     - uses: actions/checkout@v3
@@ -396,7 +397,7 @@ jobs:
  amalgamation-tests:
     name: Amalgamation Tests
     if: ${{ inputs.skip_tests != 'true' }}
-    needs: linux-release-64
+    needs: linux-extensions-64
     runs-on: ubuntu-20.04
     env:
       CC: clang
@@ -427,7 +428,8 @@ jobs:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-release-64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+    needs: linux-extensions-64
     env:
       CC: /usr/bin/gcc
       CXX: /usr/bin/g++
