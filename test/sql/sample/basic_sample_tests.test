@@ -22,4 +22,3 @@ query II
 select avg(a) > 20480, avg(a) < (0.9*204800) from duckdb_table_sample('t1');
 ----
 true	true
-

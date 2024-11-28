@@ -260,6 +260,7 @@ unique_ptr<IngestionSample> ReservoirSample::ConvertToIngestionSample() {
 
 	// then assign the weights
 	ingestion_sample->base_reservoir_sample = std::move(base_reservoir_sample);
+
 	ingestion_sample->Verify();
 	return ingestion_sample;
 }

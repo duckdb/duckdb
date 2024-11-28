@@ -310,8 +310,8 @@ public:
 	// void UpdateSampleWithTypes(DataChunk &other, SelectionVector &sel, idx_t source_count, idx_t source_offset,
 	//                            idx_t target_offset);
 	//! Actually appends the new tuples. TODO: rename function to AppendToSample
-	void UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &sel, idx_t source_count, idx_t source_offset,
-				   idx_t target_offset);
+	void UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &sel, idx_t source_count,
+	                           idx_t source_offset, idx_t target_offset);
 
 	idx_t GetTuplesSeen();
 	idx_t NumSamplesCollected() const;
@@ -342,6 +342,12 @@ public:
 	unique_ptr<DataChunk> sample_chunk;
 
 private:
+	// when we serialize, we may have collected too many samples since we fill a standard vector size, then
+	// truncate if the table is still <=204800 values. The problem is, in our weights, we store indexes into
+	// the selection vector. If throw away values at selection vector index i = 5 , we need to update all indexes
+	// i > 5. Otherwise we will have indexes in the weights that are greater than the length of our sample.
+	void NormalizeWeights(BaseReservoirSampling &base_sampling);
+
 	SelectionVectorHelper GetReplacementIndexesSlow(const idx_t sample_chunk_offset, const idx_t chunk_length);
 	SelectionVectorHelper GetReplacementIndexesFast(const idx_t sample_chunk_offset, const idx_t chunk_length);
 	void SimpleMerge(IngestionSample &other);
@@ -352,6 +358,8 @@ private:
 	// to copy the old sample chunk into
 	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const;
 
+	// Get a vector where each index is a random int in the range 0, size.
+	// This is used to shuffle selection vector indexes
 	vector<uint32_t> GetRandomizedVector(uint32_t size) const;
 	void ShuffleSel();
 
