@@ -1,0 +1,35 @@
+# name: test/sql/function/autocomplete/create_schema.test
+# description: Test sql_auto_complete
+# group: [autocomplete]
+
+require autocomplete
+
+query II
+FROM sql_auto_complete('CREATE SCH') LIMIT 1;
+----
+SCHEMA 	7
+
+query II
+FROM sql_auto_complete('CREATE SCHEMA I') LIMIT 1;
+----
+IF 	14
+
+query II
+FROM sql_auto_complete('CREATE SCHEMA IF NO') LIMIT 1;
+----
+NOT 	17
+
+query II
+FROM sql_auto_complete('CREATE SCHEMA IF NOT EX') LIMIT 1;
+----
+EXISTS 	21
+
+# attached database
+# suggest a catalog
+statement ok
+ATTACH ':memory:' AS attached_in_memory;
+
+query II
+FROM sql_auto_complete('CREATE SCHEMA attac') LIMIT 1;
+----
+attached_in_memory.	14
