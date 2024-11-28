@@ -11,7 +11,7 @@ query III
 SELECT * FROM read_csv(
     'data/csv/rejects/frankstein/nightmare.csv',
     columns = {'a': 'INTEGER', 'b': 'INTEGER', 'c': 'VARCHAR'},
-    store_rejects = true, auto_detect=false, header = 1, max_line_size=20);
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=20, rfc_4180=true);
 ----
 1	2	pedro
 1	2	pedro
