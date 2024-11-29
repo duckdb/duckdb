@@ -1,13 +1,14 @@
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
 
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/storage/table/delete_state.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -37,10 +38,19 @@ public:
 	DeleteLocalState(ClientContext &context, TableCatalogEntry &table,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 		delete_chunk.Initialize(Allocator::Get(context), table.GetTypes());
-		delete_state = table.GetStorage().InitializeDelete(table, context, bound_constraints);
+		auto &storage = table.GetStorage();
+		delete_state = storage.InitializeDelete(table, context, bound_constraints);
+
+		// We need to append deletes to the local delete-ART.
+		if (storage.HasUniqueIndexes()) {
+			storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
+		}
 	}
+
+public:
 	DataChunk delete_chunk;
 	unique_ptr<TableDeleteState> delete_state;
+	LocalAppendState append_state;
 };
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -69,8 +79,19 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	table.Fetch(transaction, l_state.delete_chunk, column_ids, row_ids, chunk.size(), fetch_state);
 
 	if (has_unique_indexes) {
-		// Append to the delete-ARTs.
-		// TODO: add to any potential delete ARTs
+		auto &local_storage = LocalStorage::Get(context.client, table.db);
+		auto &delete_indexes = local_storage.GetDeleteIndexes(table);
+		delete_indexes.Scan([&](Index &index) {
+			if (!index.IsBound()) {
+				return false;
+			}
+			auto &bound_index = index.Cast<BoundIndex>();
+			auto error = bound_index.Append(l_state.delete_chunk, row_ids, nullptr);
+			if (error.HasError()) {
+				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
+			}
+			return false;
+		});
 	}
 	if (return_chunk) {
 		g_state.return_collection.Append(l_state.delete_chunk);

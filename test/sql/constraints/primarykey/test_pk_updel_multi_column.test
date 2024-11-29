@@ -3,6 +3,9 @@
 # group: [primarykey]
 
 statement ok
+PRAGMA enable_verification;
+
+statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));
 
 statement ok
@@ -31,12 +34,12 @@ SELECT * FROM test ORDER BY ALL;
 statement error
 UPDATE test SET a = 13 WHERE a = 12;
 ----
-violates primary key constraint
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement error
 UPDATE test SET a = 4;
 ----
-PRIMARY KEY or UNIQUE constraint violation
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
 
 query IT
 SELECT * FROM test ORDER BY a;
@@ -77,7 +80,7 @@ SELECT * FROM test ORDER BY a;
 statement error
 INSERT INTO test VALUES (12, 'pandas');
 ----
-violates primary key constraint
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement ok
 DELETE FROM test WHERE a = 12;
@@ -107,4 +110,4 @@ SELECT * FROM test ORDER BY a;
 statement error
 UPDATE test SET b = NULL WHERE a = 13;
 ----
-NOT NULL constraint failed
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*

@@ -854,7 +854,6 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.InitializeAppend(state, *this);
-
 	state.constraint_state = InitializeConstraintState(table, bound_constraints);
 }
 

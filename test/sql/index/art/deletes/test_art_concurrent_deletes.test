@@ -2,9 +2,6 @@
 # description: Test DELETE + INSERT in the main connection with concurrent deletes in other connections.
 # group: [deletes]
 
-# TODO
-mode skip
-
 statement ok
 PRAGMA enable_verification
 
@@ -13,6 +10,8 @@ CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR);
 
 statement ok
 INSERT INTO tbl VALUES (1, 'first payload');
+
+# con1 open.
 
 statement ok con1
 BEGIN TRANSACTION;
@@ -23,45 +22,45 @@ DELETE FROM tbl;
 statement ok con1
 INSERT INTO tbl VALUES (1, 'con1 payload');
 
-statement
+statement ok
 BEGIN TRANSACTION
 
-statement ok
+statement error
 DELETE FROM tbl;
-
-statement ok
-INSERT INTO tbl VALUES (1, 'second payload');
-
-statement ok
-COMMIT;
-
-statement ok con2
-BEGIN TRANSACTION;
-
-statement ok con2
-DELETE FROM tbl;
-
-statement ok con2;
-INSERT INTO tbl VALUES (1, 'con2 payload');
-
-statement ok
-BEGIN TRANSACTION;
-
-statement ok
-DELETE FROM tbl;
-
-statement ok
-INSERT INTO tbl VALUES (1, 'third payload');
-
-statement ok
-COMMIT;
-
-statement error con1
-COMMIT;
 ----
-asdf
+<REGEX>:TransactionContext Error.*Conflict on tuple deletion.*
+
+statement ok
+COMMIT;
+
+# con1 and con2 open.
+
+statement ok con2
+BEGIN TRANSACTION;
 
 statement error con2
-COMMIT
+DELETE FROM tbl;
 ----
-asdf
+<REGEX>:TransactionContext Error.*Conflict on tuple deletion.*
+
+statement ok
+BEGIN TRANSACTION;
+
+statement error
+DELETE FROM tbl;
+----
+<REGEX>:TransactionContext Error.*Conflict on tuple deletion.*
+
+statement ok
+COMMIT;
+
+statement ok con1
+COMMIT;
+
+statement ok con2
+COMMIT
+
+query III
+SELECT id, payload, rowid FROM tbl ORDER BY ALL;
+----
+1	con1 payload	1

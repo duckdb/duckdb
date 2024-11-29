@@ -144,6 +144,25 @@
 
 namespace duckdb {
 
+const StringUtil::EnumStringLiteral *GetARTConflictTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTConflictType::NO_CONFLICT), "NO_CONFLICT" },
+		{ static_cast<uint32_t>(ARTConflictType::CONSTRAINT), "CONSTRAINT" },
+		{ static_cast<uint32_t>(ARTConflictType::TRANSACTION), "TRANSACTION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value) {
+	return StringUtil::EnumToString(GetARTConflictTypeValues(), 3, "ARTConflictType", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
+	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 3, "ARTConflictType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AccessMode::UNDEFINED), "UNDEFINED" },

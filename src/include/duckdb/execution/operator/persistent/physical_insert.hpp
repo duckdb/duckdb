@@ -43,10 +43,10 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 
 public:
-	ConstraintState &GetConstraintState(DataTable &table, TableCatalogEntry &tableref);
-	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &tableref, ClientContext &context) {
+	ConstraintState &GetConstraintState(DataTable &table, TableCatalogEntry &table_ref);
+	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &table_ref, ClientContext &context) {
 		if (!delete_state) {
-			delete_state = table.InitializeDelete(tableref, context, bound_constraints);
+			delete_state = table.InitializeDelete(table_ref, context, bound_constraints);
 		}
 		return *delete_state;
 	}
