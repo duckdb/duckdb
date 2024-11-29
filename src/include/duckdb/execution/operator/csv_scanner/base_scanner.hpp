@@ -21,13 +21,18 @@ class ScannerResult {
 public:
 	ScannerResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
 
-	//! Adds a Value to the result
 	static inline void SetQuoted(ScannerResult &result, idx_t quoted_position) {
 		if (!result.quoted) {
 			result.quoted_position = quoted_position;
 		}
 		result.quoted = true;
+		result.unquoted = true;
 	}
+
+	static inline void SetUnquoted(ScannerResult &result) {
+		result.quoted = true;
+	}
+
 	static inline void SetEscaped(ScannerResult &result) {
 		result.escaped = true;
 	}
@@ -44,8 +49,11 @@ public:
 
 	//! Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
+	//! If the current quoted value is unquoted
+	bool unquoted = false;
+	//! If the current value has been escaped
 	bool escaped = false;
-	//! Variable to keep track if we are in a comment row. Hence won't add it
+	//! Variable to keep track if we are in a comment row. Hence, won't add it
 	bool comment = false;
 	idx_t quoted_position = 0;
 
@@ -254,6 +262,11 @@ protected:
 					iterator.pos.buffer_pos++;
 				}
 			} break;
+			case CSVState::UNQUOTED: {
+				T::SetUnquoted(result);
+				iterator.pos.buffer_pos++;
+				break;
+			}
 			case CSVState::ESCAPE:
 			case CSVState::UNQUOTED_ESCAPE:
 			case CSVState::ESCAPED_RETURN:

@@ -23,6 +23,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
     : ScannerResult(states, state_machine, result_size_p),
       number_of_columns(NumericCast<uint32_t>(state_machine.dialect_options.num_cols)),
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
+      extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
       error_handler(error_hander_p), iterator(iterator_p), store_line_size(store_line_size_p),
       csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p),
       current_errors(state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(std::move(path_p)) {
@@ -487,6 +488,9 @@ void StringValueResult::Reset() {
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
+	if (!result.unquoted) {
+		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
+	}
 	AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.quoted_position + 1,
 	                        buffer_pos - result.quoted_position - 2, buffer_pos < result.last_position.buffer_pos + 2);
 	result.quoted = false;
@@ -539,19 +543,35 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 	result.escaped = false;
 }
 
+inline idx_t StringValueResult::HandleMultiDelimiter(const idx_t buffer_pos) const {
+	idx_t size = buffer_pos - last_position.buffer_pos - extra_delimiter_bytes;
+	if (buffer_pos < last_position.buffer_pos + extra_delimiter_bytes) {
+		// If this is a scenario where the value is null, that is fine (e.g., delim = '||' and line is: A||)
+		if (buffer_pos == last_position.buffer_pos) {
+			size = 0;
+		} else {
+			// Otherwise something went wrong.
+			throw InternalException(
+			    "Value size is lower than the number of extra delimiter bytes in the HandleMultiDelimiter(). "
+			    "buffer_pos = %d, last_position.buffer_pos = %d, extra_delimiter_bytes = %d",
+			    buffer_pos, last_position.buffer_pos, extra_delimiter_bytes);
+		}
+	}
+	return size;
+}
+
 void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_pos) {
 	if (result.last_position.buffer_pos > buffer_pos) {
 		return;
 	}
 	if (result.quoted) {
-		StringValueResult::AddQuotedValue(result, buffer_pos);
+		AddQuotedValue(result, buffer_pos - result.extra_delimiter_bytes);
 	} else if (result.escaped) {
-		StringValueResult::AddPossiblyEscapedValue(result, buffer_pos,
-		                                           result.buffer_ptr + result.last_position.buffer_pos,
-		                                           buffer_pos - result.last_position.buffer_pos, false);
+		AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.last_position.buffer_pos,
+		                        buffer_pos - result.last_position.buffer_pos, false);
 	} else {
 		result.AddValueToVector(result.buffer_ptr + result.last_position.buffer_pos,
-		                        buffer_pos - result.last_position.buffer_pos);
+		                        result.HandleMultiDelimiter(buffer_pos));
 	}
 	result.last_position.buffer_pos = buffer_pos + 1;
 }
@@ -1163,6 +1183,11 @@ void StringValueScanner::ProcessExtraRow() {
 				iterator.pos.buffer_pos++;
 			}
 			break;
+		case CSVState::UNQUOTED: {
+			result.SetUnquoted(result);
+			iterator.pos.buffer_pos++;
+			break;
+		}
 		case CSVState::COMMENT:
 			result.SetComment(result, iterator.pos.buffer_pos);
 			iterator.pos.buffer_pos++;
@@ -1217,12 +1242,12 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 
 void StringValueScanner::ProcessOverBufferValue() {
 	// Process first string
-	states.Initialize();
+	if (result.last_position.buffer_pos != previous_buffer_handle->actual_size) {
+		states.Initialize();
+	}
+
 	string over_buffer_string;
 	auto previous_buffer = previous_buffer_handle->Ptr();
-	if (result.last_position.buffer_pos == previous_buffer_handle->actual_size) {
-		state_machine->Transition(states, previous_buffer[result.last_position.buffer_pos - 1]);
-	}
 	idx_t j = 0;
 	result.quoted = false;
 	for (idx_t i = result.last_position.buffer_pos; i < previous_buffer_handle->actual_size; i++) {
@@ -1239,6 +1264,9 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
+		}
+		if (states.IsUnquoted()) {
+			result.SetUnquoted(result);
 		}
 		if (states.IsEscaped()) {
 			result.escaped = true;
@@ -1317,7 +1345,17 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
 		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
-			result.AddValueToVector(value.GetData(), value.GetSize(), true);
+			idx_t value_size = value.GetSize();
+			if (states.IsDelimiter()) {
+				idx_t extra_delimiter_bytes =
+				    result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1;
+				if (extra_delimiter_bytes > value_size) {
+					throw InternalException(
+					    "Value size is lower than the number of extra delimiter bytes in the ProcesOverBufferValue()");
+				}
+				value_size -= extra_delimiter_bytes;
+			}
+			result.AddValueToVector(value.GetData(), value_size, true);
 		}
 	} else {
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
@@ -1387,6 +1425,10 @@ bool StringValueScanner::MoveToNextBuffer() {
 				if (result.IsCommentSet(result)) {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
+					if (result.quoted && states.IsDelimiterBytes()) {
+						result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
+						                             result.last_position);
+					}
 					result.AddRow(result, previous_buffer_handle->actual_size);
 				}
 				lines_read++;

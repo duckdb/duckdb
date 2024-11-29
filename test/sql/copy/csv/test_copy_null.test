@@ -88,12 +88,12 @@ DELIMITER must not appear in the NULL specification and vice versa
 statement error
 COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (DELIMITER 'null', NULL 'null');
 ----
-The delimiter option cannot exceed a size of 1 byte.
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 COPY test_null_option FROM 'data/csv/test/test_null_option.csv' (DELIMITER 'null', NULL 'nu');
 ----
-The delimiter option cannot exceed a size of 1 byte.
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 # no parameter type
 statement error
