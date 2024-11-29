@@ -15,7 +15,7 @@ from spark_namespace.sql.types import (
     ArrayType,
     MapType,
 )
-from spark_namespace.sql.functions import col, struct, when
+from spark_namespace.sql.functions import col, struct, when, rand
 from spark_namespace.sql.column import Column
 import duckdb
 import re
@@ -421,3 +421,11 @@ class TestDataFrame(object):
         assert df.drop("two", "three").columns == expected
         assert df.drop("two", col("three")).columns == expected
         assert df.drop("two", col("three"), col("missing")).columns == expected
+
+    def test_cache(self, spark):
+        df = spark.range(0, 10).withColumn('rnd_value', rand())
+        cached_df = df.cache()
+
+        assert df.collect() != df.collect()
+        assert cached_df.collect() == cached_df.collect()
+        assert cached_df.collect() == cached_df.collect()

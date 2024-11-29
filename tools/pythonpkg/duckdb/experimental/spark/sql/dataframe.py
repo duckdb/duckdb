@@ -1403,5 +1403,14 @@ class DataFrame:
         rows = [construct_row(x, columns) for x in result]
         return rows
 
+    def cache(self)-> "DataFrame":
+        tmp_cte_name = f"tmp_cte_{uuid.uuid1().hex}"
+        return self.session.sql(
+            f"""
+                WITH "{tmp_cte_name}" AS MATERIALIZED ({self.relation.sql_query()})
+                FROM "{tmp_cte_name}"
+            """
+        )
+
 
 __all__ = ["DataFrame"]
