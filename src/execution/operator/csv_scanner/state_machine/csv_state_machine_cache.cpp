@@ -58,7 +58,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	const bool multi_byte_delimiter = delimiter_value.size() != 1;
 
 	bool enable_unquoted_escape = state_machine_options.rfc_4180.GetValue() == false &&
-	                              state_machine_options.quote != state_machine_options.escape && state_machine_options.escape != '\0';
+	                              state_machine_options.quote != state_machine_options.escape &&
+	                              state_machine_options.escape != '\0';
 	// Now set values depending on configuration
 	// 1) Standard/Invalid State
 	vector<uint8_t> std_inv {static_cast<uint8_t>(CSVState::STANDARD), static_cast<uint8_t>(CSVState::INVALID),
