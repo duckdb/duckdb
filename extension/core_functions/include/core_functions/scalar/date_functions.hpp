@@ -372,6 +372,15 @@ struct NanosecondsFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct NormalizedIntervalFun {
+	static constexpr const char *Name = "normalized_interval";
+	static constexpr const char *Parameters = "interval";
+	static constexpr const char *Description = "Normalizes an INTERVAL to an equivalent interval";
+	static constexpr const char *Example = "normalized_interval(INTERVAL '30 days')";
+
+	static ScalarFunction GetFunction();
+};
+
 struct QuarterFun {
 	static constexpr const char *Name = "quarter";
 	static constexpr const char *Parameters = "ts";
