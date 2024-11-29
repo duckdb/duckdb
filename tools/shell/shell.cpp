@@ -1568,7 +1568,8 @@ columnar_end:
 
 extern "C" {
 extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                                  int columns, char thousands, char decimal, duckdb::BaseResultRenderer *renderer);
+                                  int columns, char thousands, char decimal, bool readable_number,
+                                  duckdb::BaseResultRenderer *renderer);
 }
 
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
@@ -1631,7 +1632,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statement to ru
 		size_t max_width = outfile.empty() || outfile[0] == '|' ? this->max_width : (size_t)-1;
 		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
-		                      decimal_separator, &renderer);
+		                      decimal_separator, readable_numbers, &renderer);
 		return;
 	}
 
@@ -2170,6 +2171,7 @@ static const char *azHelp[] = {
     ".prompt MAIN CONTINUE    Replace the standard prompts",
     ".quit                    Exit this program",
     ".read FILE               Read input from FILE",
+    ".readable_numbers on|off Turn rendering readable numbers on or off (duckbox only)",
     ".rows                    Row-wise rendering of query results (default)",
     ".schema ?PATTERN?        Show the CREATE statements matching PATTERN",
     "     Options:",
@@ -2986,6 +2988,11 @@ MetadataResult SetDecimalSep(ShellState &state, const char **azArg, idx_t nArg) 
 
 MetadataResult SetThousandSep(ShellState &state, const char **azArg, idx_t nArg) {
 	return SetSeparator(state, azArg, nArg, "thousand", state.thousand_separator);
+}
+
+MetadataResult ToggleReadableNumbers(ShellState &state, const char **azArg, idx_t nArg) {
+	state.readable_numbers = booleanValue(azArg[1]);
+	return MetadataResult::SUCCESS;
 }
 
 MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
@@ -4081,6 +4088,8 @@ static const MetadataCommand metadata_commands[] = {
 
     {"quit", 0, QuitProcess, "", "Exit this program", 0},
     {"read", 2, ReadFromFile, "FILE", "Read input from FILE", 3},
+    {"readable_numbers", 2, ToggleReadableNumbers, "on|off", "Turn rendering readable numbers on or off (duckbox only)",
+     0},
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
     {"restore", 0, nullptr, "", "", 3},
     {"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},

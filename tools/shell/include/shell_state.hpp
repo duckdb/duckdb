@@ -115,6 +115,8 @@ public:
 	char decimal_separator = '\0';
 	//! Thousand separator (if any)
 	char thousand_separator = '\0';
+	//! Whether or not to render readable numbers in DuckBox mode
+	bool readable_numbers = true;
 
 public:
 	void PushOutputMode();
