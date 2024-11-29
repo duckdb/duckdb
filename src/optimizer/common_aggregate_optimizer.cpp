@@ -8,7 +8,9 @@ namespace duckdb {
 
 void CommonAggregateOptimizer::StandardVisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
-	VisitOperatorExpressions(op);
+	if (!aggregate_map.empty()) {
+		VisitOperatorExpressions(op);
+	}
 }
 
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
