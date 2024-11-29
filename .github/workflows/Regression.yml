@@ -92,8 +92,8 @@ jobs:
         run: |
           make
           git clone https://github.com/duckdb/duckdb.git
-          git checkout $(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --status=success --json=headSha --limit=1 --jq '.[0].headSha')
           cd duckdb
+          git checkout $(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --status=success --json=headSha --limit=1 --jq '.[0].headSha')
           make
           cd ..
 
