@@ -16,6 +16,7 @@ LogStorage::LogStorage(shared_ptr<DatabaseInstance> &db_p) : entry_buffer(make_u
 	// LogEntry Schema
 	vector<LogicalType> log_entry_schema = {
 		LogicalType::UBIGINT, // context_id
+		LogicalType::TIMESTAMP, // timestamp
 		LogicalType::VARCHAR, // log_type
 		LogicalType::VARCHAR, // level
 		LogicalType::VARCHAR, // message
@@ -38,17 +39,19 @@ LogStorage::LogStorage(shared_ptr<DatabaseInstance> &db_p) : entry_buffer(make_u
 
 LogStorage::~LogStorage() = default;
 
-void LogStorage::WriteLogEntry(LogLevel level, const string& log_type, const string& log_message, const RegisteredLoggingContext& context) {
+void LogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string& log_type, const string& log_message, const RegisteredLoggingContext& context) {
 	auto size = entry_buffer->size();
 	auto context_id_data = FlatVector::GetData<idx_t>(entry_buffer->data[0]);
-	auto level_data = FlatVector::GetData<string_t>(entry_buffer->data[1]);
-	auto type_data = FlatVector::GetData<string_t>(entry_buffer->data[2]);
-	auto message_data = FlatVector::GetData<string_t>(entry_buffer->data[3]);
+	auto timestamp_data = FlatVector::GetData<timestamp_t>(entry_buffer->data[1]);
+	auto level_data = FlatVector::GetData<string_t>(entry_buffer->data[2]);
+	auto type_data = FlatVector::GetData<string_t>(entry_buffer->data[3]);
+	auto message_data = FlatVector::GetData<string_t>(entry_buffer->data[4]);
 
 	context_id_data[size] = context.context_id;
-	level_data[size] = StringVector::AddString(entry_buffer->data[1], EnumUtil::ToString(level));
-	type_data[size] = StringVector::AddString(entry_buffer->data[2], log_type);
-	message_data[size] = StringVector::AddString(entry_buffer->data[3], log_message);
+	timestamp_data[size] = timestamp;
+	level_data[size] = StringVector::AddString(entry_buffer->data[2], EnumUtil::ToString(level));
+	type_data[size] = StringVector::AddString(entry_buffer->data[3], log_type);
+	message_data[size] = StringVector::AddString(entry_buffer->data[4], log_message);
 
 	entry_buffer->SetCardinality(size+1);
 
@@ -210,11 +213,11 @@ bool ThreadSafeLogger::ShouldLog(LogLevel log_level) {
 }
 
 void ThreadSafeLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
-	manager->WriteLogEntry(log_type, log_level, log_message, context);
+	manager->WriteLogEntry(Timestamp::GetCurrentTimestamp(), log_type, log_level, log_message, context);
 }
 
 void ThreadSafeLogger::WriteLog(LogLevel log_level, const char *log_message) {
-	manager->WriteLogEntry(context.context.default_log_type, log_level, log_message, context);
+	manager->WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message, context);
 }
 
 void ThreadSafeLogger::Flush() {
@@ -263,11 +266,11 @@ void MutableLogger::UpdateConfig(LogConfig &new_config) {
 }
 
 void MutableLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
-	manager->WriteLogEntry(log_type, log_level, log_message, context);
+	manager->WriteLogEntry(Timestamp::GetCurrentTimestamp(), log_type, log_level, log_message, context);
 }
 
 void MutableLogger::WriteLog(LogLevel log_level, const char *log_message) {
-	manager->WriteLogEntry(context.context.default_log_type, log_level, log_message, context);
+	manager->WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message, context);
 }
 
 bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
@@ -385,9 +388,9 @@ LogManager &LogManager::Get(ClientContext &context) {
 	return context.db->GetLogManager();
 }
 
-void LogManager::WriteLogEntry(const char *log_type, LogLevel log_level, const char *log_message, const RegisteredLoggingContext &context) {
+void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogLevel log_level, const char *log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
-	log_storage->WriteLogEntry(log_level, log_type, log_message, context);
+	log_storage->WriteLogEntry(timestamp, log_level, log_type, log_message, context);
 }
 
 void LogManager::FlushCachedLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {

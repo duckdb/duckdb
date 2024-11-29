@@ -53,7 +53,7 @@ public:
 	explicit LogStorage(shared_ptr<DatabaseInstance> &db);
 	~LogStorage();
 
-	void WriteLogEntry(LogLevel level, const string &log_type, const string &log_message,
+	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
 	                   const RegisteredLoggingContext &context);
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context);
 	void Flush();
@@ -366,7 +366,7 @@ public:
 
 protected:
 	// This is to be called by the Loggers only, it does not verify log_level and log_type
-	void WriteLogEntry(const char *log_type, LogLevel log_level, const char *log_message,
+	void WriteLogEntry(timestamp_t, const char *log_type, LogLevel log_level, const char *log_message,
 	                   const RegisteredLoggingContext &context);
 	// This allows efficiently pushing a cached set of log entries into the log manager
 	void FlushCachedLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context);

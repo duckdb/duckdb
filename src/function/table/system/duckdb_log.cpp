@@ -23,6 +23,9 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 	names.emplace_back("context_id");
 	return_types.emplace_back(LogicalType::UBIGINT);
 
+	names.emplace_back("timestamp");
+	return_types.emplace_back(LogicalType::TIMESTAMP);
+
 	names.emplace_back("type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -31,7 +34,6 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 
 	names.emplace_back("message");
 	return_types.emplace_back(LogicalType::VARCHAR);
-
 
 	const char* format_string = "formatted string: '%s'";
 	Logger::Info(context, "my first log message");
