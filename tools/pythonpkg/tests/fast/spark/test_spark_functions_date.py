@@ -2,7 +2,7 @@ import warnings
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from datetime import date, datetime, UTC
+from datetime import date, datetime, timezone
 
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
@@ -181,7 +181,7 @@ class TestsSparkFunctionsDate(object):
         if USE_ACTUAL_SPARK:
             assert res == [Row(dt=datetime(1997, 2, 28, 10, 30))]
         else:
-            assert res == [Row(dt=datetime(1997, 2, 28, 10, 30, tzinfo=UTC))]
+            assert res == [Row(dt=datetime(1997, 2, 28, 10, 30, tzinfo=timezone.utc))]
 
     def test_to_timestamp_ltz(self, spark):
         df = spark.createDataFrame([("2016-12-31",)], ["e"])
@@ -190,7 +190,7 @@ class TestsSparkFunctionsDate(object):
         if USE_ACTUAL_SPARK:
             assert res == [Row(r=datetime(2016, 12, 31, 0, 0))]
         else:
-            assert res == [Row(r=datetime(2016, 12, 31, 0, 0, tzinfo=UTC))]
+            assert res == [Row(r=datetime(2016, 12, 31, 0, 0, tzinfo=timezone.utc))]
 
     def test_to_timestamp_ntz(self, spark):
         df = spark.createDataFrame([("2016-04-08",)], ["e"])
