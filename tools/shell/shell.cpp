@@ -1670,7 +1670,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 	}
 	if (cMode == RenderMode::TRASH) {
 		TrashRenderer renderer;
-		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', &renderer);
+		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', false, &renderer);
 		return;
 	}
 
