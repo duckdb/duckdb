@@ -56,16 +56,9 @@ SELECT 42
 statement ok
 PRAGMA disable_profiling
 
-statement ok
-PRAGMA profiling_output='__TEST_DIR__/test_2.json'
-
-statement error
+query I nosort json_output
 SELECT * FROM read_csv('__TEST_DIR__/test.json', columns={'json': 'VARCHAR'}, sep='🦆');
 ----
-The delimiter option cannot exceed a size of 1 byte.
-
-statement ok
-PRAGMA profiling_output='__TEST_DIR__/test.json'
 
 statement ok
 PRAGMA enable_profiling='json'
@@ -81,10 +74,9 @@ PRAGMA disable_profiling
 statement ok
 PRAGMA profiling_output='__TEST_DIR__/test_2.json'
 
-statement error
+query I nosort json_output
 SELECT * FROM read_csv('__TEST_DIR__/test.json', columns={'json': 'VARCHAR'}, sep='🦆');
 ----
-The delimiter option cannot exceed a size of 1 byte.
 
 query II
 EXPLAIN (ANALYZE, FORMAT graphviz) SELECT SUM(i) FROM integers
