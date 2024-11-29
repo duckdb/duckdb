@@ -142,6 +142,7 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 #endif
 	LoggingContext context;
 	context.default_log_type = "client_context";
+	context.client_context = reinterpret_cast<idx_t>(this);
 	logger = db->GetLogManager().CreateLogger(context, true);
 }
 
@@ -211,6 +212,8 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	// Refresh the logger to ensure we are in sync with global log settings
 	LoggingContext context;
 	context.default_log_type = "client_context";
+	context.client_context = reinterpret_cast<idx_t>(this);
+	context.transaction_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(context, true);
 }
 
@@ -250,6 +253,13 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	} catch (...) { // LCOV_EXCL_START
 		error = ErrorData("Unhandled exception!");
 	} // LCOV_EXCL_STOP
+
+	// Refresh the logger
+	logger->Flush();
+	LoggingContext context;
+	context.default_log_type = "client_context";
+	context.client_context = reinterpret_cast<idx_t>(this);
+	logger = db->GetLogManager().CreateLogger(context, true);
 
 	// Notify any registered state of query end
 	for (auto const &s : registered_state->States()) {

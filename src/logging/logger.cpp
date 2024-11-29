@@ -12,49 +12,94 @@
 
 namespace duckdb {
 
-LogStorage::LogStorage(shared_ptr<DatabaseInstance> &db_p) : buffer(make_uniq<DataChunk>()) {
-	// TODO: add context to schema
+LogStorage::LogStorage(shared_ptr<DatabaseInstance> &db_p) : entry_buffer(make_uniq<DataChunk>()), log_context_buffer(make_uniq<DataChunk>()) {
 	// LogEntry Schema
-	vector<LogicalType> types = {
-		LogicalType::VARCHAR, // level
+	vector<LogicalType> log_entry_schema = {
+		LogicalType::UBIGINT, // context_id
 		LogicalType::VARCHAR, // log_type
+		LogicalType::VARCHAR, // level
 		LogicalType::VARCHAR, // message
 	};
+
+	// LogContext Schema
+	vector<LogicalType> log_context_schema = {
+		LogicalType::UBIGINT, // context_id
+		LogicalType::UBIGINT, // client_context
+		LogicalType::UBIGINT, // transaction_id
+		LogicalType::UBIGINT, // thread
+	};
+
 	max_buffer_size = 1;
-	buffer->Initialize(Allocator::DefaultAllocator(), types, max_buffer_size);
-	log_entries = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	entry_buffer->Initialize(Allocator::DefaultAllocator(), log_entry_schema, max_buffer_size);
+	log_context_buffer->Initialize(Allocator::DefaultAllocator(), log_context_schema, max_buffer_size);
+	log_entries = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), log_entry_schema);
+	log_contexts = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), log_context_schema);
 }
 
 LogStorage::~LogStorage() = default;
 
-void LogStorage::WriteLogEntry(LogLevel level, const string& log_type, const string& log_message, const LoggingContext& context) {
-	auto size = buffer->size();
-	auto level_data = FlatVector::GetData<string_t>(buffer->data[0]);
-	auto type_data = FlatVector::GetData<string_t>(buffer->data[1]);
-	auto message_data = FlatVector::GetData<string_t>(buffer->data[2]);
+void LogStorage::WriteLogEntry(LogLevel level, const string& log_type, const string& log_message, const RegisteredLoggingContext& context) {
+	auto size = entry_buffer->size();
+	auto context_id_data = FlatVector::GetData<idx_t>(entry_buffer->data[0]);
+	auto level_data = FlatVector::GetData<string_t>(entry_buffer->data[1]);
+	auto type_data = FlatVector::GetData<string_t>(entry_buffer->data[2]);
+	auto message_data = FlatVector::GetData<string_t>(entry_buffer->data[3]);
 
-	level_data[size] = StringVector::AddString(buffer->data[0], EnumUtil::ToString(level));
-	type_data[size] = StringVector::AddString(buffer->data[1], log_type);
-	message_data[size] = StringVector::AddString(buffer->data[2], log_message);
+	context_id_data[size] = context.context_id;
+	level_data[size] = StringVector::AddString(entry_buffer->data[1], EnumUtil::ToString(level));
+	type_data[size] = StringVector::AddString(entry_buffer->data[2], log_type);
+	message_data[size] = StringVector::AddString(entry_buffer->data[3], log_message);
 
-	// TODO: write context
-	buffer->SetCardinality(size+1);
+	entry_buffer->SetCardinality(size+1);
 
 	if (size+1 >= max_buffer_size) {
 		Flush();
 	}
 }
 
-void LogStorage::WriteLogEntries(DataChunk &chunk, const LoggingContext &context) {
-	// TODO: figure out what schema the input chunks should have here
+void LogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
 	log_entries->Append(chunk);
 }
 
 void LogStorage::Flush() {
-	log_entries->Append(*buffer);
-	buffer->Reset();
+	log_entries->Append(*entry_buffer);
+	entry_buffer->Reset();
+
+	log_contexts->Append(*log_context_buffer);
+	log_context_buffer->Reset();
 }
 
+void LogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {
+	auto size = log_context_buffer->size();
+
+	auto context_id_data = FlatVector::GetData<idx_t>(log_context_buffer->data[0]);
+	context_id_data[size] = context.context_id;
+
+	if (context.context.client_context.IsValid()) {
+		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[1]);
+		client_context_data[size] = context.context.client_context.GetIndex();
+	} else {
+		FlatVector::Validity(log_context_buffer->data[1]).SetInvalid(size);
+	}
+	if (context.context.transaction_id.IsValid()) {
+		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[2]);
+		client_context_data[size] = context.context.transaction_id.GetIndex();
+	} else {
+		FlatVector::Validity(log_context_buffer->data[1]).SetInvalid(size);
+	}
+	if (context.context.thread.IsValid()) {
+		auto thread_data = FlatVector::GetData<idx_t>(log_context_buffer->data[3]);
+		thread_data[size] = context.context.thread.GetIndex();
+	} else {
+		FlatVector::Validity(log_context_buffer->data[3]).SetInvalid(size);
+	}
+
+	log_context_buffer->SetCardinality(size + 1);
+
+	if (size + 1 >= max_buffer_size) {
+		Flush();
+	}
+}
 LogConfig::LogConfig() : mode(LogMode::DISABLED), level(LogLevel::WARNING) {
 }
 
@@ -135,6 +180,12 @@ void Logger::Log(LogLevel log_level, std::function<string()> callback) {
 	}
 }
 
+ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
+		: Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
+	// NopLogger should be used instead
+	D_ASSERT(config_p.Mode() != LogMode::DISABLED);
+}
+
 bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	if (config.Level() < log_level) {
 		return false;
@@ -163,11 +214,17 @@ void ThreadSafeLogger::WriteLog(const char *log_type, LogLevel log_level, const 
 }
 
 void ThreadSafeLogger::WriteLog(LogLevel log_level, const char *log_message) {
-	manager->WriteLogEntry(context.default_log_type, log_level, log_message, context);
+	manager->WriteLogEntry(context.context.default_log_type, log_level, log_message, context);
 }
 
 void ThreadSafeLogger::Flush() {
 	// NOP
+}
+
+ThreadLocalLogger::ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
+		: Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
+	// NopLogger should be used instead
+	D_ASSERT(config_p.Mode() != LogMode::DISABLED);
 }
 
 bool ThreadLocalLogger::ShouldLog(const char *log_type, LogLevel log_level) {
@@ -190,6 +247,12 @@ void ThreadLocalLogger::Flush() {
 	throw NotImplementedException("");
 }
 
+MutableLogger::MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
+		: Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
+	level = config.Level();
+	mode = config.Mode();
+}
+
 void MutableLogger::UpdateConfig(LogConfig &new_config) {
 	unique_lock<mutex> lck(lock);
 	config = new_config;
@@ -204,7 +267,7 @@ void MutableLogger::WriteLog(const char *log_type, LogLevel log_level, const cha
 }
 
 void MutableLogger::WriteLog(LogLevel log_level, const char *log_message) {
-	manager->WriteLogEntry(context.default_log_type, log_level, log_message, context);
+	manager->WriteLogEntry(context.context.default_log_type, log_level, log_message, context);
 }
 
 bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
@@ -252,20 +315,56 @@ void MutableLogger::Flush() {
 }
 
 unique_ptr<Logger> LogManager::CreateLogger(LoggingContext &context, bool thread_safe, bool mutable_settings) {
-	unique_lock<mutex> lck(lock);
-	if (!config.IsConsistent()) {
+	// Make a copy of the config holding the lock
+	LogConfig config_copy;
+	{
+		unique_lock<mutex> lck(lock);
+		config_copy = config;
+	}
+
+	// With lock released, we create the logger TODO: clean up?
+
+	if (!config_copy.IsConsistent()) {
 		throw InvalidConfigurationException("Log configuration is inconsistent");
 	}
 	if (mutable_settings) {
-		return make_uniq<MutableLogger>(config, context, *this);
+		return make_uniq<MutableLogger>(config_copy, context, *this);
 	}
-	if (config.Mode() == LogMode::DISABLED) {
+	if (config_copy.Mode() == LogMode::DISABLED) {
 		return make_uniq<NopLogger>();
 	}
 	if (!thread_safe) {
-		return make_uniq<ThreadLocalLogger>(config, context, *this);
+		return make_uniq<ThreadLocalLogger>(config_copy, context, *this);
 	}
-	return make_uniq<ThreadSafeLogger>(config, context, *this);
+	return make_uniq<ThreadSafeLogger>(config_copy, context, *this);
+}
+
+RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &context) {
+	unique_lock<mutex> lck(lock);
+
+	// TODO: can this realistically happen?
+	if (registered_log_contexts.find(next_registered_logging_context_index) != registered_log_contexts.end()) {
+		throw InternalException("LogManager ran out of available LoggingContext indices!");
+	}
+
+	auto res = registered_log_contexts.insert({next_registered_logging_context_index, context});
+
+	next_registered_logging_context_index++;
+
+	RegisteredLoggingContext result = {
+		res.first->first,
+		res.first->second
+	};
+
+	log_storage->WriteLoggingContext(result);
+
+	return result;
+}
+
+void LogManager::DropLoggingContext(RegisteredLoggingContext &context) {
+	if (registered_log_contexts.find(context.context_id) != registered_log_contexts.end()) {
+		registered_log_contexts.erase(context.context_id);
+	}
 }
 
 Logger &LogManager::GlobalLogger() {
@@ -286,12 +385,12 @@ LogManager &LogManager::Get(ClientContext &context) {
 	return context.db->GetLogManager();
 }
 
-void LogManager::WriteLogEntry(const char *log_type, LogLevel log_level, const char *log_message, const LoggingContext &context) {
+void LogManager::WriteLogEntry(const char *log_type, LogLevel log_level, const char *log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 	log_storage->WriteLogEntry(log_level, log_type, log_message, context);
 }
 
-void LogManager::FlushCachedLogEntries(DataChunk &chunk, const LoggingContext &context) {
+void LogManager::FlushCachedLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
 	throw NotImplementedException("FlushCachedLogEntries");
 }
 

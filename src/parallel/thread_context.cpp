@@ -8,7 +8,11 @@ namespace duckdb {
 ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
 	LoggingContext log_context;
 	log_context.default_log_type = "thread_context";
-	// TODO: set to not thread safe
+	log_context.client_context = reinterpret_cast<idx_t>(&context);
+	log_context.thread = TaskScheduler::GetEstimatedCPUId();
+	if (context.transaction.HasActiveTransaction()) {
+		log_context.transaction_id = context.transaction.GetActiveQuery();
+	}
 	logger = context.db->GetLogManager().CreateLogger(log_context, true);
 }
 

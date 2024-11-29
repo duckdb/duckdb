@@ -20,10 +20,13 @@ struct DuckDBLogData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
-	names.emplace_back("log_level");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("context_id");
+	return_types.emplace_back(LogicalType::UBIGINT);
 
 	names.emplace_back("type");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("log_level");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("message");

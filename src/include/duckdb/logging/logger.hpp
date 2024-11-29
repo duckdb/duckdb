@@ -35,12 +35,16 @@ enum class LogLevel : uint8_t {
 
 struct LoggingContext {
 	// TODO: potentially we might want to add stuff to identify which connection and thread the log came from
-	optional_idx thread_id;     // maybe: TaskScheduler::GetEstimatedCPUId ?
-	optional_idx connection_id; // maybe: use the address of the connection pointer
-	optional_idx query_id;
+	optional_idx thread;
+	optional_idx client_context;
 	optional_idx transaction_id;
 
 	const char *default_log_type = "";
+};
+
+struct RegisteredLoggingContext {
+	idx_t context_id;
+	LoggingContext context;
 };
 
 // TODO: class ColumnDataCollectionLogStorage : public LogStorage
@@ -50,15 +54,19 @@ public:
 	~LogStorage();
 
 	void WriteLogEntry(LogLevel level, const string &log_type, const string &log_message,
-	                   const LoggingContext &context);
-	void WriteLogEntries(DataChunk &chunk, const LoggingContext &context);
+	                   const RegisteredLoggingContext &context);
+	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context);
 	void Flush();
 
+	void WriteLoggingContext(RegisteredLoggingContext &context);
+
 	unique_ptr<ColumnDataCollection> log_entries;
+	unique_ptr<ColumnDataCollection> log_contexts;
 
 private:
 	// Cache for direct logging
-	unique_ptr<DataChunk> buffer;
+	unique_ptr<DataChunk> entry_buffer;
+	unique_ptr<DataChunk> log_context_buffer;
 	idx_t max_buffer_size;
 };
 
@@ -116,11 +124,11 @@ public:
 
 	virtual ~Logger() = default;
 
-	//! Main logger functions (can be overridden for NopLogger)
-	virtual void Log(const char *log_type, LogLevel log_level, const char *log_message);
-	virtual void Log(LogLevel log_level, const char *log_message);
-	virtual void Log(const char *log_type, LogLevel log_level, std::function<string()>);
-	virtual void Log(LogLevel log_level, std::function<string()>);
+	//! Main logger functions
+	void Log(const char *log_type, LogLevel log_level, const char *log_message);
+	void Log(LogLevel log_level, const char *log_message);
+	void Log(const char *log_type, LogLevel log_level, std::function<string()>);
+	void Log(LogLevel log_level, std::function<string()>);
 
 	// Main interface for subclasses
 	virtual bool ShouldLog(const char *log_type, LogLevel log_level) = 0;
@@ -211,16 +219,7 @@ public:
 		Log(log_type, log_context_source, LogLevel::FATAL, params...);
 	}
 
-	// TODO: implement specializations for:
-	// Logger::Debug, Logger::Warning, etc. for all types of parameters, e.g.:
-	//	- Logger::Debug(T source, string log_type, string message)
-	//	- Logger::Debug(T source, string log_type, string message)
-	//	- Logger::Debug(T source, string log_type, string format_string, ...format string params)
-	//	- Logger::Debug(T source, string format_string, [](){ return ConstructExpensiveString() })
-
-	//! TODO: implement log_type enum-ify interface:
-	// //! Log message with specified log type (SLOW!)
-	// virtual void Log(const char *log_type, LogLevel log_level, string &log_message)  = 0;
+	//! TODO: implement log_type enum-ify interface?
 	// //! Log message using a specific log_type_id (FASTER)
 	// virtual void Log(idx_t log_type_id, LogLevel log_level, const char *log_message)  = 0;
 	// //! Get the logging type
@@ -244,11 +243,7 @@ protected:
 // Thread-safe logger
 class ThreadSafeLogger : public Logger {
 public:
-	explicit ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-	    : Logger(manager), config(config_p), context(context_p) {
-		// NopLogger should be used instead
-		D_ASSERT(config_p.Mode() != LogMode::DISABLED);
-	}
+	explicit ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager);
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
@@ -264,18 +259,14 @@ public:
 protected:
 	const LogConfig config;
 	mutex lock;
-	const LoggingContext context;
+	const RegisteredLoggingContext context;
 };
 
 // Non Thread-safe logger
 // - will cache log entries locally
 class ThreadLocalLogger : public Logger {
 public:
-	explicit ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-	    : Logger(manager), config(config_p), context(context_p) {
-		// NopLogger should be used instead
-		D_ASSERT(config_p.Mode() != LogMode::DISABLED);
-	}
+	explicit ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager);
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
@@ -290,17 +281,13 @@ public:
 
 protected:
 	const LogConfig config;
-	const LoggingContext context;
+	const RegisteredLoggingContext context;
 };
 
 // Thread-safe Logger with mutable log settings
 class MutableLogger : public Logger {
 public:
-	explicit MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-	    : Logger(manager), config(config_p), context(context_p) {
-		level = config.Level();
-		mode = config.Mode();
-	}
+	explicit MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager);
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
@@ -324,7 +311,7 @@ protected:
 
 	mutex lock;
 	LogConfig config;
-	const LoggingContext context;
+	const RegisteredLoggingContext context;
 };
 
 // For when logging is disabled: NOPs everything
@@ -332,10 +319,7 @@ class NopLogger : public Logger {
 public:
 	explicit NopLogger() {
 	}
-	void Log(const char *log_type, LogLevel log_level, const char *log_message) override {
-	}
-	void Log(LogLevel log_level, const char *log_message) override {
-	}
+	// TODO: can we do better than a virtual method always returning false?
 	bool ShouldLog(const char *log_type, LogLevel log_level) override {
 		return false;
 	}
@@ -369,6 +353,10 @@ public:
 	static LogManager &Get(ClientContext &context);
 	unique_ptr<Logger> CreateLogger(LoggingContext &context, bool thread_safe = true, bool mutable_settings = false);
 
+	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
+	// TODO: never called yet
+	void DropLoggingContext(RegisteredLoggingContext &logging_id);
+
 	//! The global logger can be used whe
 	Logger &GlobalLogger();
 
@@ -379,14 +367,19 @@ public:
 protected:
 	// This is to be called by the Loggers only, it does not verify log_level and log_type
 	void WriteLogEntry(const char *log_type, LogLevel log_level, const char *log_message,
-	                   const LoggingContext &context);
+	                   const RegisteredLoggingContext &context);
 	// This allows efficiently pushing a cached set of log entries into the log manager
-	void FlushCachedLogEntries(DataChunk &chunk, const LoggingContext &context);
+	void FlushCachedLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context);
 
 	mutex lock;
 	LogConfig config;
 
 	unique_ptr<Logger> global_logger;
+
+	idx_t next_registered_logging_context_index = 0;
+
+	// TOOD: this can be a set? Should we store at all?
+	unordered_map<idx_t, LoggingContext> registered_log_contexts;
 };
 
 } // namespace duckdb

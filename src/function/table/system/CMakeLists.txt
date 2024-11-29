@@ -9,6 +9,7 @@ add_library_unity(
   duckdb_functions.cpp
   duckdb_keywords.cpp
   duckdb_log.cpp
+  duckdb_log_contexts.cpp
   duckdb_indexes.cpp
   duckdb_memory.cpp
   duckdb_optimizers.cpp

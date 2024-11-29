@@ -24,6 +24,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBFunctionsFun::RegisterFunction(*this);
 	DuckDBKeywordsFun::RegisterFunction(*this);
 	DuckDBLogFun::RegisterFunction(*this);
+	DuckDBLogContextFun::RegisterFunction(*this);
 	DuckDBIndexesFun::RegisterFunction(*this);
 	DuckDBSchemasFun::RegisterFunction(*this);
 	DuckDBDependenciesFun::RegisterFunction(*this);
