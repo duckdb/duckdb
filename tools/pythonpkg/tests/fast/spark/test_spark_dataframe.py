@@ -423,19 +423,8 @@ class TestDataFrame(object):
         assert df.drop("two", col("three"), col("missing")).columns == expected
 
     def test_cache(self, spark):
-        df = spark.range(0, 10).select(rand().alias('rnd_value'), col("range").alias("id"))
-        uncached_count = (
-            df.join(df.withColumnRenamed("rnd_value", "rnd_value_2"), on="id")
-            .where(col("rnd_value") != col("rnd_value_2"))
-            .count()
-        )
-
+        df = spark.range(0, 10).select(rand().alias('rnd_value'))
         cached_df = df.cache()
-        cached_count = (
-            cached_df.join(cached_df.withColumnRenamed("rnd_value", "rnd_value_2"), on="id")
-            .where(col("rnd_value") != col("rnd_value_2"))
-            .count()
-        )
 
-        assert uncached_count > 0
-        assert cached_count == 0
+        assert df.union(df).union(df).distinct().count() > 10
+        assert cached_df.union(cached_df).union(cached_df).distinct().count() == 10
