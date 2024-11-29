@@ -290,7 +290,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	connection_manager = make_uniq<ConnectionManager>();
 
 	auto shared = shared_from_this(); // tODO: why this madness?
-	log_manager = make_shared_ptr<LogManager>(shared, LogConfig::Create(LogLevel::WARNING)); // TODO: disable here
+	log_manager = make_shared_ptr<LogManager>(shared, LogConfig());
 	log_manager->Initialize();
 
 	// initialize the secret manager
@@ -501,6 +501,7 @@ void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallIn
 	for (auto &callback : callbacks) {
 		callback->OnExtensionLoaded(*this, name);
 	}
+	Logger::Info(*this, "Loaded extension '%s'", name);
 }
 
 SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {

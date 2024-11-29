@@ -215,6 +215,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	context.client_context = reinterpret_cast<idx_t>(this);
 	context.transaction_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(context, true);
+	Logger::Info(*this, "Beginning query: '%s'", query);
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
@@ -225,7 +226,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		active_query->executor->CancelTasks();
 	}
 	active_query->progress_bar.reset();
-
+	Logger::Info(*this, "Ending Query '%s'", active_query->query);
 	D_ASSERT(active_query.get());
 	active_query.reset();
 	query_progress.Initialize();

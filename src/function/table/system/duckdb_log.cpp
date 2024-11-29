@@ -35,15 +35,6 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 	names.emplace_back("message");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	const char* format_string = "formatted string: '%s'";
-	Logger::Info(context, "my first log message");
-	Logger::Warn(context, format_string, "my first formatted log message");
-	Logger::Debug(*context.db, format_string, "using the global logger");
-	Logger::Info("custom_log_type", *context.db, format_string, "this has a custom log type, fancy!");
-	Logger::Info("using_callback", context, [&](){
-		return StringUtil::Format(format_string, "using explicit callback");
-	});
-
 	return nullptr;
 }
 

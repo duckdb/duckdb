@@ -393,6 +393,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
+		Logger::Info(db, "Autoloaded extension '%s'", extension_name);
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		throw AutoloadException(extension_name, error.RawMessage());

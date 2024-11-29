@@ -1922,11 +1922,28 @@ LoadType EnumUtil::FromString<LoadType>(const char *value) {
 	return static_cast<LoadType>(StringUtil::StringToEnum(GetLoadTypeValues(), 3, "LoadType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetLogDestinationTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogDestinationType::IN_MEMORY), "IN_MEMORY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogDestinationType>(LogDestinationType value) {
+	return StringUtil::EnumToString(GetLogDestinationTypeValues(), 1, "LogDestinationType", static_cast<uint32_t>(value));
+}
+
+template<>
+LogDestinationType EnumUtil::FromString<LogDestinationType>(const char *value) {
+	return static_cast<LogDestinationType>(StringUtil::StringToEnum(GetLogDestinationTypeValues(), 1, "LogDestinationType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetLogLevelValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LogLevel::DEBUGGING), "DEBUGGING" },
-		{ static_cast<uint32_t>(LogLevel::INFORMATIVE), "INFORMATIVE" },
-		{ static_cast<uint32_t>(LogLevel::WARNING), "WARNING" },
+		{ static_cast<uint32_t>(LogLevel::INFO), "INFO" },
+		{ static_cast<uint32_t>(LogLevel::WARN), "WARN" },
 		{ static_cast<uint32_t>(LogLevel::ERROR), "ERROR" },
 		{ static_cast<uint32_t>(LogLevel::FATAL), "FATAL" }
 	};
@@ -1945,7 +1962,6 @@ LogLevel EnumUtil::FromString<LogLevel>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetLogModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(LogMode::DISABLED), "DISABLED" },
 		{ static_cast<uint32_t>(LogMode::LEVEL_ONLY), "LEVEL_ONLY" },
 		{ static_cast<uint32_t>(LogMode::DISABLE_SELECTED), "DISABLE_SELECTED" },
 		{ static_cast<uint32_t>(LogMode::ENABLE_SELECTED), "ENABLE_SELECTED" }
@@ -1955,12 +1971,12 @@ const StringUtil::EnumStringLiteral *GetLogModeValues() {
 
 template<>
 const char* EnumUtil::ToChars<LogMode>(LogMode value) {
-	return StringUtil::EnumToString(GetLogModeValues(), 4, "LogMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogModeValues(), 3, "LogMode", static_cast<uint32_t>(value));
 }
 
 template<>
 LogMode EnumUtil::FromString<LogMode>(const char *value) {
-	return static_cast<LogMode>(StringUtil::StringToEnum(GetLogModeValues(), 4, "LogMode", value));
+	return static_cast<LogMode>(StringUtil::StringToEnum(GetLogModeValues(), 3, "LogMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {

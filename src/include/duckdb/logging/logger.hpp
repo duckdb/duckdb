@@ -25,10 +25,11 @@ class ColumnDataCollection;
 class ThreadContext;
 class FileOpener;
 
+// TODO: should we reconsider these logging levels?
 enum class LogLevel : uint8_t {
 	DEBUGGING = 10,
-	INFORMATIVE = 20,
-	WARNING = 30,
+	INFO = 20,
+	WARN = 30,
 	ERROR = 40,
 	FATAL = 50,
 };
@@ -71,10 +72,9 @@ private:
 };
 
 enum class LogMode : uint8_t {
-	DISABLED = 0,
-	LEVEL_ONLY = 1,
-	DISABLE_SELECTED = 2,
-	ENABLE_SELECTED = 3,
+	LEVEL_ONLY = 0,
+	DISABLE_SELECTED = 1,
+	ENABLE_SELECTED = 2,
 };
 
 enum class LogDestinationType : uint8_t {
@@ -84,34 +84,22 @@ enum class LogDestinationType : uint8_t {
 struct LogConfig {
 	LogConfig();
 
-	static LogConfig Create(LogLevel level);
-	static LogConfig CreateFromEnabled(LogLevel level, unordered_set<string> &enabled_loggers);
-	static LogConfig CreateFromDisabled(LogLevel level, unordered_set<string> &disabled_loggers);
-
-	LogMode Mode() const {
-		return mode;
-	}
-	LogLevel Level() const {
-		return level;
-	}
-	const unordered_set<string> &EnabledLoggers() const {
-		return enabled_loggers;
-	}
-	const unordered_set<string> &DisabledLoggers() const {
-		return disabled_loggers;
-	}
+	static LogConfig Create(bool enabled, LogLevel level);
+	static LogConfig CreateFromEnabled(bool enabled, LogLevel level, unordered_set<string> &enabled_loggers);
+	static LogConfig CreateFromDisabled(bool enabled, LogLevel level, unordered_set<string> &disabled_loggers);
 
 	bool IsConsistent() const;
 
-protected:
-	LogConfig(LogLevel level, LogMode mode, optional_ptr<unordered_set<string>> enabled_loggers,
-	          optional_ptr<unordered_set<string>> disable_loggers);
-
+	bool enabled;
 	LogMode mode;
 	LogLevel level;
 	LogDestinationType output;
 	unordered_set<string> enabled_loggers;
 	unordered_set<string> disabled_loggers;
+
+protected:
+	LogConfig(bool enabled, LogLevel level, LogMode mode, optional_ptr<unordered_set<string>> enabled_loggers,
+		  optional_ptr<unordered_set<string>> disable_loggers);
 };
 
 //! Main logging interface
@@ -149,7 +137,7 @@ public:
 	//! Logger::Log with raw C-String
 	template <class T>
 	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, const char *log_message) {
-		Logger::Get(log_context_source).Log(log_level, log_type, log_message);
+		Logger::Get(log_context_source).Log(log_type, log_level, log_message);
 	}
 	template <class T>
 	static void Log(T &log_context_source, LogLevel log_level, const char *log_message) {
@@ -188,19 +176,19 @@ public:
 	}
 	template <class T, typename... ARGS>
 	static void Info(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::INFORMATIVE, params...);
+		Log(log_context_source, LogLevel::INFO, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Info(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::INFORMATIVE, params...);
+		Log(log_type, log_context_source, LogLevel::INFO, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Warn(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::WARNING, params...);
+		Log(log_context_source, LogLevel::WARN, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Warn(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::WARNING, params...);
+		Log(log_type, log_context_source, LogLevel::WARN, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Error(T &log_context_source, ARGS... params) {
@@ -232,6 +220,7 @@ public:
 	virtual void UpdateConfig(LogConfig &new_config) {
 		throw InternalException("Cannot update the config of this logger!");
 	}
+	virtual const LogConfig &GetConfig() const = 0;
 
 protected:
 	// Pointer to manager (should be weak?)
@@ -255,6 +244,9 @@ public:
 	bool IsThreadSafe() override {
 		return true;
 	}
+	const LogConfig &GetConfig() const override {
+		return config;
+	}
 
 protected:
 	const LogConfig config;
@@ -277,6 +269,9 @@ public:
 
 	bool IsThreadSafe() override {
 		return false;
+	}
+	const LogConfig &GetConfig() const override {
+		return config;
 	}
 
 protected:
@@ -302,10 +297,13 @@ public:
 	bool IsMutable() override {
 		return true;
 	}
+	const LogConfig &GetConfig() const override {
+		return config;
+	}
 	void UpdateConfig(LogConfig &new_config) override;
-
 protected:
 	// Atomics for lock-free log setting checks
+	duckdb::atomic<bool> enabled;
 	duckdb::atomic<LogMode> mode;
 	duckdb::atomic<LogLevel> level;
 
@@ -332,6 +330,9 @@ public:
 	}
 	bool IsThreadSafe() override {
 		return true;
+	}
+	const LogConfig &GetConfig() const override {
+		throw InternalException("Called GetConfig on NopLogger");
 	}
 };
 
@@ -363,6 +364,11 @@ public:
 	// TODO: allow modifying log settings
 
 	unique_ptr<LogStorage> log_storage;
+
+	void SetEnableLogging(bool enable);
+	void SetLogLevel(LogLevel level);
+	void SetEnabledLoggers(unordered_set <string> &enabled_loggers);
+	void SetDisabledLoggers(unordered_set <string> &disabled_loggers);
 
 protected:
 	// This is to be called by the Loggers only, it does not verify log_level and log_type

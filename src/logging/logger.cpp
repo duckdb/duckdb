@@ -49,8 +49,8 @@ void LogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const stri
 
 	context_id_data[size] = context.context_id;
 	timestamp_data[size] = timestamp;
-	level_data[size] = StringVector::AddString(entry_buffer->data[2], EnumUtil::ToString(level));
-	type_data[size] = StringVector::AddString(entry_buffer->data[3], log_type);
+	type_data[size] = StringVector::AddString(entry_buffer->data[2], log_type);
+	level_data[size] = StringVector::AddString(entry_buffer->data[3], EnumUtil::ToString(level));
 	message_data[size] = StringVector::AddString(entry_buffer->data[4], log_message);
 
 	entry_buffer->SetCardinality(size+1);
@@ -103,11 +103,11 @@ void LogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {
 		Flush();
 	}
 }
-LogConfig::LogConfig() : mode(LogMode::DISABLED), level(LogLevel::WARNING) {
+LogConfig::LogConfig() : enabled(false), mode(LogMode::LEVEL_ONLY), level(LogLevel::INFO) {
 }
 
 bool LogConfig::IsConsistent() const {
-	if (mode == LogMode::DISABLED || mode == LogMode::LEVEL_ONLY) {
+	if (mode == LogMode::LEVEL_ONLY) {
 		return enabled_loggers.empty() && disabled_loggers.empty();
 	}
 	if (mode == LogMode::DISABLE_SELECTED) {
@@ -119,19 +119,20 @@ bool LogConfig::IsConsistent() const {
 	return false;
 }
 
-LogConfig LogConfig::Create(LogLevel level) {
-	return LogConfig(level, LogMode::LEVEL_ONLY, nullptr, nullptr);
+LogConfig LogConfig::Create(bool enabled, LogLevel level) {
+	return LogConfig(enabled, level, LogMode::LEVEL_ONLY, nullptr, nullptr);
 }
-LogConfig LogConfig::CreateFromEnabled(LogLevel level, unordered_set<string> &enabled_loggers) {
-	return LogConfig(level, LogMode::ENABLE_SELECTED, enabled_loggers, nullptr);
-}
-
-LogConfig LogConfig::CreateFromDisabled(LogLevel level, unordered_set<string> &disabled_loggers) {
-	return LogConfig(level, LogMode::DISABLE_SELECTED, nullptr, disabled_loggers);
+LogConfig LogConfig::CreateFromEnabled(bool enabled, LogLevel level, unordered_set<string> &enabled_loggers) {
+	return LogConfig(enabled, level, LogMode::ENABLE_SELECTED, enabled_loggers, nullptr);
 }
 
-LogConfig::LogConfig(LogLevel level_p, LogMode mode_p, optional_ptr<unordered_set<string>> enabled_loggers_p, optional_ptr<unordered_set<string>> disabled_loggers_p)
-:  mode(mode_p), level(level_p), enabled_loggers(enabled_loggers_p), disabled_loggers(disabled_loggers_p) {
+LogConfig LogConfig::CreateFromDisabled(bool enabled, LogLevel level, unordered_set<string> &disabled_loggers) {
+	return LogConfig(enabled, level, LogMode::DISABLE_SELECTED, nullptr, disabled_loggers);
+}
+
+LogConfig::LogConfig(bool enabled, LogLevel level_p, LogMode mode_p, optional_ptr<unordered_set<string>> enabled_loggers_p, optional_ptr<unordered_set<string>> disabled_loggers_p)
+:  enabled(enabled), mode(mode_p), level(level_p), enabled_loggers(enabled_loggers_p), disabled_loggers(disabled_loggers_p) {
+	output = LogDestinationType::IN_MEMORY;
 }
 
 Logger &Logger::Get(DatabaseInstance &db) {
@@ -186,27 +187,27 @@ void Logger::Log(LogLevel log_level, std::function<string()> callback) {
 ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
 		: Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
 	// NopLogger should be used instead
-	D_ASSERT(config_p.Mode() != LogMode::DISABLED);
+	D_ASSERT(config_p.enabled);
 }
 
 bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
-	if (config.Level() < log_level) {
+	if (config.level < log_level) {
 		return false;
 	}
-	if (config.Mode() == LogMode::ENABLE_SELECTED && config.EnabledLoggers().find(log_type) == config.EnabledLoggers().end()) {
+	if (config.mode == LogMode::ENABLE_SELECTED && config.enabled_loggers.find(log_type) == config.enabled_loggers.end()) {
 		return false;
 	}
-	if (config.Mode() == LogMode::DISABLE_SELECTED && config.DisabledLoggers().find(log_type) != config.DisabledLoggers().end()) {
+	if (config.mode == LogMode::DISABLE_SELECTED && config.disabled_loggers.find(log_type) != config.disabled_loggers.end()) {
 		return false;
 	}
 	return true;
 }
 
 bool ThreadSafeLogger::ShouldLog(LogLevel log_level) {
-	if (config.Level() < log_level) {
+	if (config.level < log_level) {
 		return false;
 	}
-	if (config.Mode() != LogMode::LEVEL_ONLY) {
+	if (config.mode != LogMode::LEVEL_ONLY) {
 		return false;
 	}
 	return true;
@@ -227,7 +228,7 @@ void ThreadSafeLogger::Flush() {
 ThreadLocalLogger::ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
 		: Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
 	// NopLogger should be used instead
-	D_ASSERT(config_p.Mode() != LogMode::DISABLED);
+	D_ASSERT(config_p.enabled);
 }
 
 bool ThreadLocalLogger::ShouldLog(const char *log_type, LogLevel log_level) {
@@ -252,8 +253,9 @@ void ThreadLocalLogger::Flush() {
 
 MutableLogger::MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
 		: Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
-	level = config.Level();
-	mode = config.Mode();
+	enabled = config.enabled;
+	level = config.level;
+	mode = config.mode;
 }
 
 void MutableLogger::UpdateConfig(LogConfig &new_config) {
@@ -261,8 +263,8 @@ void MutableLogger::UpdateConfig(LogConfig &new_config) {
 	config = new_config;
 
 	// Update atomics for lock-free access
-	level = config.Level();
-	mode = config.Mode();
+	level = config.level;
+	mode = config.mode;
 }
 
 void MutableLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
@@ -274,7 +276,7 @@ void MutableLogger::WriteLog(LogLevel log_level, const char *log_message) {
 }
 
 bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
-	if (mode == LogMode::DISABLED) {
+	if (!enabled) {
 		return false;
 	}
 
@@ -283,16 +285,16 @@ bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 		return false;
 	}
 
-	if (config.Mode() == LogMode::LEVEL_ONLY) {
+	if (config.mode == LogMode::LEVEL_ONLY) {
 		return true;
 	}
 
 	// ENABLE_SELECTED and DISABLE_SELECTED are expensive and need full global lock TODO: can we do better here?
 	{
 		unique_lock<mutex> lck(lock);
-		if (config.Mode() == LogMode::ENABLE_SELECTED && config.EnabledLoggers().find(log_type) == config.EnabledLoggers().end()) {
+		if (config.mode == LogMode::ENABLE_SELECTED && config.enabled_loggers.find(log_type) == config.enabled_loggers.end()) {
 			return true;
-		} else if (config.Mode() == LogMode::DISABLE_SELECTED && config.DisabledLoggers().find(log_type) != config.DisabledLoggers().end()) {
+		} else if (config.mode == LogMode::DISABLE_SELECTED && config.disabled_loggers.find(log_type) != config.disabled_loggers.end()) {
 			return true;
 		}
 	}
@@ -300,6 +302,9 @@ bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 }
 
 bool MutableLogger::ShouldLog(LogLevel log_level) {
+	if (!enabled) {
+		return false;
+	}
 	// check atomic mode to early out if disabled
 	if (mode != LogMode::LEVEL_ONLY) {
 		return false;
@@ -333,7 +338,7 @@ unique_ptr<Logger> LogManager::CreateLogger(LoggingContext &context, bool thread
 	if (mutable_settings) {
 		return make_uniq<MutableLogger>(config_copy, context, *this);
 	}
-	if (config_copy.Mode() == LogMode::DISABLED) {
+	if (!config_copy.enabled) {
 		return make_uniq<NopLogger>();
 	}
 	if (!thread_safe) {
@@ -396,5 +401,34 @@ void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogL
 void LogManager::FlushCachedLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
 	throw NotImplementedException("FlushCachedLogEntries");
 }
+
+void LogManager::SetEnableLogging(bool enable) {
+	unique_lock<mutex> lck(lock);
+	auto config_copy = global_logger->GetConfig();
+	config_copy.enabled = enable;
+	global_logger->UpdateConfig(config_copy);
+}
+
+void LogManager::SetLogLevel(LogLevel level) {
+	unique_lock<mutex> lck(lock);
+	auto config_copy = global_logger->GetConfig();
+	config_copy.level = level;
+	global_logger->UpdateConfig(config_copy);
+}
+
+void LogManager::SetEnabledLoggers(unordered_set <string> &enabled_loggers) {
+	unique_lock<mutex> lck(lock);
+	auto config_copy = global_logger->GetConfig();
+	config_copy.enabled_loggers = enabled_loggers;
+	global_logger->UpdateConfig(config_copy);
+}
+
+void LogManager::SetDisabledLoggers(unordered_set <string> &disabled_loggers) {
+	unique_lock<mutex> lck(lock);
+	auto config_copy = global_logger->GetConfig();
+	config_copy.enabled_loggers = disabled_loggers;
+	global_logger->UpdateConfig(config_copy);
+}
+
 
 } // namespace duckdb
