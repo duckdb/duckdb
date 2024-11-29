@@ -284,9 +284,9 @@ struct LastDayFun {
 
 struct MakeDateFun {
 	static constexpr const char *Name = "make_date";
-	static constexpr const char *Parameters = "year,month,day";
-	static constexpr const char *Description = "The date for the given parts";
-	static constexpr const char *Example = "make_date(1992, 9, 20)";
+	static constexpr const char *Parameters = "year,month,day\1date-struct::STRUCT(year BIGINT, month BIGINT, day BIGINT)";
+	static constexpr const char *Description = "The date for the given parts\1The date for the given struct.";
+	static constexpr const char *Example = "make_date(1992, 9, 20)\1make_date({'year': 2024, 'month': 11, 'day': 14})";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -370,6 +370,15 @@ struct NanosecondsFun {
 	static constexpr const char *Example = "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789') => 44123456789";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct NormalizedIntervalFun {
+	static constexpr const char *Name = "normalized_interval";
+	static constexpr const char *Parameters = "interval";
+	static constexpr const char *Description = "Normalizes an INTERVAL to an equivalent interval";
+	static constexpr const char *Example = "normalized_interval(INTERVAL '30 days')";
+
+	static ScalarFunction GetFunction();
 };
 
 struct QuarterFun {

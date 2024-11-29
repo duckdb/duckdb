@@ -33,10 +33,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
-                                   PerfectHashJoinStats perfect_join_stats,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
-      delim_types(std::move(delim_types)), perfect_join_statistics(std::move(perfect_join_stats)) {
+      delim_types(std::move(delim_types)) {
 
 	filter_pushdown = std::move(pushdown_info_p);
 
@@ -105,9 +104,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_state)
+                                   idx_t estimated_cardinality)
     : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {},
-                       estimated_cardinality, std::move(perfect_join_state), nullptr) {
+                       estimated_cardinality, nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -142,7 +141,13 @@ public:
 		hash_table = op.InitializeHashTable(context);
 
 		// For perfect hash join
-		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table, op.perfect_join_statistics);
+		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
+		bool use_perfect_hash = false;
+		if (op.conditions.size() == 1 && !op.join_stats.empty() && op.join_stats[1] &&
+		    TypeIsIntegral(op.join_stats[1]->GetType().InternalType()) && NumericStats::HasMinMax(*op.join_stats[1])) {
+			use_perfect_hash = perfect_join_executor->CanDoPerfectHashJoin(op, NumericStats::Min(*op.join_stats[1]),
+			                                                               NumericStats::Max(*op.join_stats[1]));
+		}
 		// For external hash join
 		external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
 		// Set probe types
@@ -150,6 +155,10 @@ public:
 		probe_types.emplace_back(LogicalType::HASH);
 
 		if (op.filter_pushdown) {
+			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
+				// Only computing min/max to check for perfect HJ, but we already can
+				skip_filter_pushdown = true;
+			}
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
 	}
@@ -190,6 +199,7 @@ public:
 	//! Whether or not we have started scanning data using GetData
 	atomic<bool> scanned_data;
 
+	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
 };
 
@@ -310,27 +320,25 @@ void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate
 }
 
 SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
 
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
 	lstate.join_key_executor.Execute(chunk, lstate.join_keys);
 
-	if (filter_pushdown) {
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
 		filter_pushdown->Sink(lstate.join_keys, *lstate.local_filter_state);
 	}
 
-	// build the HT
-	auto &ht = *lstate.hash_table;
-	if (payload_columns.col_types.empty()) {
-		// there are only keys: place an empty chunk in the payload
+	if (payload_columns.col_types.empty()) { // there are only keys: place an empty chunk in the payload
 		lstate.payload_chunk.SetCardinality(chunk.size());
-		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
-	} else {
-		// there are payload columns
+	} else { // there are payload columns
 		lstate.payload_chunk.ReferenceColumns(chunk, payload_columns.col_idxs);
-		ht.Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 	}
+
+	// build the HT
+	lstate.hash_table->Build(lstate.append_state, lstate.join_keys, lstate.payload_chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -354,7 +362,7 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this);
 	client_profiler.Flush(context.thread.profiler);
-	if (filter_pushdown) {
+	if (filter_pushdown && !gstate.skip_filter_pushdown) {
 		filter_pushdown->Combine(*gstate.global_filter_state, *lstate.local_filter_state);
 	}
 
@@ -600,9 +608,10 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	}
 	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
 
-	// generating the OR filter only makes sense if the range is not dense
+	// generating the OR filter only makes sense if the range is
+	// not dense and that the range does not contain NULL
 	// i.e. if we have the values [0, 1, 2, 3, 4] - the min/max is fully equivalent to the OR filter
-	if (FilterCombiner::IsDenseRange(in_list)) {
+	if (FilterCombiner::ContainsNull(in_list) || FilterCombiner::IsDenseRange(in_list)) {
 		return;
 	}
 
@@ -614,17 +623,22 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
-void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
-                                         const PhysicalOperator &op) const {
+unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
+                                                       JoinFilterGlobalState &gstate,
+                                                       const PhysicalOperator &op) const {
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
 		min_max_types.push_back(aggr_expr->return_type);
 	}
-	DataChunk final_min_max;
-	final_min_max.Initialize(Allocator::DefaultAllocator(), min_max_types);
+	auto final_min_max = make_uniq<DataChunk>();
+	final_min_max->Initialize(Allocator::DefaultAllocator(), min_max_types);
 
-	gstate.global_aggregate_state->Finalize(final_min_max);
+	gstate.global_aggregate_state->Finalize(*final_min_max);
+
+	if (probe_info.empty()) {
+		return final_min_max; // There are not table souces in which we can push down filters
+	}
 
 	auto dynamic_or_filter_threshold = ClientConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
@@ -634,8 +648,8 @@ void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &
 			auto min_idx = filter_idx * 2;
 			auto max_idx = min_idx + 1;
 
-			auto min_val = final_min_max.data[min_idx].GetValue(0);
-			auto max_val = final_min_max.data[max_idx].GetValue(0);
+			auto min_val = final_min_max->data[min_idx].GetValue(0);
+			auto max_val = final_min_max->data[max_idx].GetValue(0);
 			if (min_val.IsNull() || max_val.IsNull()) {
 				// min/max is NULL
 				// this can happen in case all values in the RHS column are NULL, but they are still pushed into the
@@ -664,6 +678,8 @@ void JoinFilterPushdownInfo::PushFilters(ClientContext &context, JoinHashTable &
 			info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<IsNotNullFilter>());
 		}
 	}
+
+	return final_min_max;
 }
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -708,12 +724,19 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	sink.local_hash_tables.clear();
 	ht.Unpartition();
 
-	if (filter_pushdown && ht.Count() > 0) {
-		filter_pushdown->PushFilters(context, ht, *sink.global_filter_state, *this);
+	Value min;
+	Value max;
+	if (filter_pushdown && !sink.skip_filter_pushdown && ht.Count() > 0) {
+		auto final_min_max = filter_pushdown->Finalize(context, ht, *sink.global_filter_state, *this);
+		min = final_min_max->data[0].GetValue(0);
+		max = final_min_max->data[1].GetValue(0);
+	} else if (TypeIsIntegral(conditions[0].right->return_type.InternalType())) {
+		min = Value::MinimumValue(conditions[0].right->return_type);
+		max = Value::MaximumValue(conditions[0].right->return_type);
 	}
 
 	// check for possible perfect hash table
-	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
+	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin(*this, min, max);
 	if (use_perfect_hash) {
 		D_ASSERT(ht.equality_types.size() == 1);
 		auto key_type = ht.equality_types[0];
@@ -790,21 +813,18 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	D_ASSERT(sink.finalized);
 	D_ASSERT(!sink.scanned_data);
 
-	if (state.scan_structure.is_null || sink.perfect_join_executor) {
-		// place the lhs projected columns in the chunk
-		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
-	}
-
 	if (sink.hash_table->Count() == 0) {
 		if (EmptyResultIfRHSIsEmpty()) {
 			return OperatorResultType::FINISHED;
 		}
+		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
 		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_output, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	if (sink.perfect_join_executor) {
 		D_ASSERT(!sink.external);
+		state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
 		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, state.lhs_output, chunk,
 		                                                         *state.perfect_hash_join_state);
 	}
@@ -832,6 +852,8 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 			sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state);
 		}
 	}
+
+	state.lhs_output.ReferenceColumns(input, lhs_output_columns.col_idxs);
 	state.scan_structure.Next(state.lhs_join_keys, state.lhs_output, chunk);
 
 	if (state.scan_structure.PointersExhausted() && chunk.size() == 0) {
@@ -1200,7 +1222,6 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	lhs_join_keys.Reset();
 	lhs_join_key_executor.Execute(lhs_probe_chunk, lhs_join_keys);
 	lhs_output.ReferenceColumns(lhs_probe_chunk, sink.op.lhs_output_columns.col_idxs);
-	auto precomputed_hashes = &lhs_probe_chunk.data.back();
 
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
 		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_output, chunk);
@@ -1209,6 +1230,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	}
 
 	// Perform the probe
+	auto precomputed_hashes = &lhs_probe_chunk.data.back();
 	sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, precomputed_hashes);
 	scan_structure.Next(lhs_join_keys, lhs_output, chunk);
 }
@@ -1316,11 +1338,6 @@ InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
 	}
 	result["Conditions"] = condition_info;
 
-	if (perfect_join_statistics.is_build_small) {
-		// perfect hash join
-		result["Build Min"] = perfect_join_statistics.build_min.ToString();
-		result["Build Max"] = perfect_join_statistics.build_max.ToString();
-	}
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

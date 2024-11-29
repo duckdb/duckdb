@@ -7,9 +7,6 @@ from conftest import pandas_supports_arrow_backend
 import sys
 from packaging.version import Version
 
-from arrow_canonical_extensions import HugeIntType, UHugeIntType
-
-
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 ds = pytest.importorskip("pyarrow.dataset")
@@ -182,13 +179,6 @@ def string_check_or_pushdown(connection, tbl_name, create_table):
 
 
 class TestArrowFilterPushdown(object):
-    @classmethod
-    def setup_class(cls):
-        pa.register_extension_type(HugeIntType())
-
-    @classmethod
-    def teardown_class(cls):
-        pa.unregister_extension_type("duckdb.hugeint")
 
     @pytest.mark.parametrize(
         'data_type',
@@ -902,8 +892,6 @@ class TestArrowFilterPushdown(object):
         }
 
     def test_filter_pushdown_not_supported(self):
-        pa.register_extension_type(UHugeIntType())
-
         con = duckdb.connect()
         con.execute(
             "CREATE TABLE T as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d FROM range(5) tbl(i)"
@@ -937,8 +925,6 @@ class TestArrowFilterPushdown(object):
         assert con.execute(
             "select a, b from arrow_tbl where a > 2 and c < 40 and b == '28' and g > 15 and e < 30"
         ).fetchall() == [(28, '28')]
-
-        pa.unregister_extension_type("duckdb.uhugeint")
 
     def test_join_filter_pushdown(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()

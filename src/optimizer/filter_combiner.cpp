@@ -438,6 +438,15 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	return inner_filter;
 }
 
+bool FilterCombiner::ContainsNull(vector<Value> &in_list) {
+	for (idx_t i = 0; i < in_list.size(); i++) {
+		if (in_list[i].IsNull()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool FilterCombiner::IsDenseRange(vector<Value> &in_list) {
 	if (in_list.empty()) {
 		return true;
@@ -620,7 +629,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
 				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
 				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
-				remaining_filters.erase_at(rem_fil_idx);
+				remaining_filters.erase_at(rem_fil_idx--); // decrement to stay on the same idx next iteration
 				continue;
 			}
 
@@ -646,7 +655,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				table_filters.PushFilter(column_index, std::move(upper_bound));
 				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
-				remaining_filters.erase_at(rem_fil_idx);
+				remaining_filters.erase_at(rem_fil_idx--); // decrement to stay on the same idx next iteration
 			} else {
 				// if this is not a dense range we can push a zone-map filter
 				auto optional_filter = make_uniq<OptionalFilter>();

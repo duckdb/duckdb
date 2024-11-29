@@ -137,22 +137,20 @@ public:
 
 public:
 	struct SharedState {
-
 		SharedState();
 
 		// The ptrs to the row to which a key should be inserted into during building
 		// or matched against during probing
 		Vector rhs_row_locations;
+		Vector salt_v;
 
 		SelectionVector salt_match_sel;
 		SelectionVector key_no_match_sel;
 	};
 
 	struct ProbeState : SharedState {
-
 		ProbeState();
 
-		Vector salt_v;
 		Vector ht_offsets_v;
 		Vector ht_offsets_dense_v;
 
@@ -419,8 +417,8 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize(const idx_t max_ht_size);
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-	                   ProbeState &probe_state, DataChunk &payload, ProbeSpill &probe_spill,
+	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &probe_keys, TupleDataChunkState &key_state,
+	                   ProbeState &probe_state, DataChunk &probe_chunk, ProbeSpill &probe_spill,
 	                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
 
 private:
