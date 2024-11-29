@@ -14,8 +14,8 @@ bool IsQuoteDefault(char quote) {
 	return false;
 }
 
-vector<char> DialectCandidates::GetDefaultDelimiter() {
-	return {',', '|', ';', '\t'};
+vector<string> DialectCandidates::GetDefaultDelimiter() {
+	return {",", "|", ";", "\t"};
 }
 
 vector<vector<char>> DialectCandidates::GetDefaultQuote() {

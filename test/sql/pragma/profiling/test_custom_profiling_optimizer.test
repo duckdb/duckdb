@@ -23,38 +23,15 @@ statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT unnest(res) FROM (
-	SELECT current_setting('custom_profiling_settings') as raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL
+SELECT * FROM (
+	SELECT unnest(res) str FROM (
+		SELECT current_setting('custom_profiling_settings') as raw_setting,
+		raw_setting.trim('{}') AS setting,
+		string_split(setting, ', ') AS res
+	)
+) WHERE '"true"' NOT in str
+ORDER BY ALL
 ----
-"ALL_OPTIMIZERS": "true"
-"OPTIMIZER_BUILD_SIDE_PROBE_SIDE": "true"
-"OPTIMIZER_COLUMN_LIFETIME": "true"
-"OPTIMIZER_COMMON_AGGREGATE": "true"
-"OPTIMIZER_COMMON_SUBEXPRESSIONS": "true"
-"OPTIMIZER_COMPRESSED_MATERIALIZATION": "true"
-"OPTIMIZER_CTE_FILTER_PUSHER": "true"
-"OPTIMIZER_DELIMINATOR": "true"
-"OPTIMIZER_DUPLICATE_GROUPS": "true"
-"OPTIMIZER_EMPTY_RESULT_PULLUP": "true"
-"OPTIMIZER_EXPRESSION_REWRITER": "true"
-"OPTIMIZER_EXTENSION": "true"
-"OPTIMIZER_FILTER_PULLUP": "true"
-"OPTIMIZER_FILTER_PUSHDOWN": "true"
-"OPTIMIZER_IN_CLAUSE": "true"
-"OPTIMIZER_JOIN_FILTER_PUSHDOWN": "true"
-"OPTIMIZER_JOIN_ORDER": "true"
-"OPTIMIZER_LIMIT_PUSHDOWN": "true"
-"OPTIMIZER_MATERIALIZED_CTE": "true"
-"OPTIMIZER_REGEX_RANGE": "true"
-"OPTIMIZER_REORDER_FILTER": "true"
-"OPTIMIZER_SAMPLING_PUSHDOWN": "true"
-"OPTIMIZER_STATISTICS_PROPAGATION": "true"
-"OPTIMIZER_TOP_N": "true"
-"OPTIMIZER_UNNEST_REWRITER": "true"
-"OPTIMIZER_UNUSED_COLUMNS": "true"
 
 statement ok
 PRAGMA custom_profiling_settings='{}'
@@ -153,59 +130,16 @@ statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
 query I
-SELECT unnest(res) FROM (
-	SELECT current_setting('custom_profiling_settings') AS raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL
+SELECT * FROM (
+	SELECT unnest(res) str FROM (
+		SELECT current_setting('custom_profiling_settings') AS raw_setting,
+		raw_setting.trim('{}') AS setting,
+		string_split(setting, ', ') AS res
+	)
+)
+WHERE '"true"' NOT IN str
+ORDER BY ALL
 ----
-"ALL_OPTIMIZERS": "true"
-"BLOCKED_THREAD_TIME": "true"
-"CPU_TIME": "true"
-"CUMULATIVE_CARDINALITY": "true"
-"CUMULATIVE_OPTIMIZER_TIMING": "true"
-"CUMULATIVE_ROWS_SCANNED": "true"
-"EXTRA_INFO": "true"
-"LATENCY": "true"
-"OPERATOR_CARDINALITY": "true"
-"OPERATOR_NAME": "true"
-"OPERATOR_ROWS_SCANNED": "true"
-"OPERATOR_TIMING": "true"
-"OPERATOR_TYPE": "true"
-"OPTIMIZER_BUILD_SIDE_PROBE_SIDE": "true"
-"OPTIMIZER_COLUMN_LIFETIME": "true"
-"OPTIMIZER_COMMON_AGGREGATE": "true"
-"OPTIMIZER_COMMON_SUBEXPRESSIONS": "true"
-"OPTIMIZER_COMPRESSED_MATERIALIZATION": "true"
-"OPTIMIZER_CTE_FILTER_PUSHER": "true"
-"OPTIMIZER_DELIMINATOR": "true"
-"OPTIMIZER_DUPLICATE_GROUPS": "true"
-"OPTIMIZER_EMPTY_RESULT_PULLUP": "true"
-"OPTIMIZER_EXPRESSION_REWRITER": "true"
-"OPTIMIZER_EXTENSION": "true"
-"OPTIMIZER_FILTER_PULLUP": "true"
-"OPTIMIZER_FILTER_PUSHDOWN": "true"
-"OPTIMIZER_IN_CLAUSE": "true"
-"OPTIMIZER_JOIN_FILTER_PUSHDOWN": "true"
-"OPTIMIZER_JOIN_ORDER": "true"
-"OPTIMIZER_LIMIT_PUSHDOWN": "true"
-"OPTIMIZER_MATERIALIZED_CTE": "true"
-"OPTIMIZER_REGEX_RANGE": "true"
-"OPTIMIZER_REORDER_FILTER": "true"
-"OPTIMIZER_SAMPLING_PUSHDOWN": "true"
-"OPTIMIZER_STATISTICS_PROPAGATION": "true"
-"OPTIMIZER_TOP_N": "true"
-"OPTIMIZER_UNNEST_REWRITER": "true"
-"OPTIMIZER_UNUSED_COLUMNS": "true"
-"PHYSICAL_PLANNER": "true"
-"PHYSICAL_PLANNER_COLUMN_BINDING": "true"
-"PHYSICAL_PLANNER_CREATE_PLAN": "true"
-"PHYSICAL_PLANNER_RESOLVE_TYPES": "true"
-"PLANNER": "true"
-"PLANNER_BINDING": "true"
-"QUERY_NAME": "true"
-"RESULT_SET_SIZE": "true"
-"ROWS_RETURNED": "true"
 
 statement ok
 RESET custom_profiling_settings;

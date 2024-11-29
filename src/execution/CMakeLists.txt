@@ -18,9 +18,7 @@ add_library_unity(
   physical_operator.cpp
   physical_plan_generator.cpp
   radix_partitioned_hashtable.cpp
-  reservoir_sample.cpp
-  window_executor.cpp
-  window_segment_tree.cpp)
+  reservoir_sample.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution>
     PARENT_SCOPE)

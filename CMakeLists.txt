@@ -382,6 +382,7 @@ option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
+option(DISABLE_POINTER_SALT "Debug setting: verify correct results without pointer salt" FALSE)
 option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
@@ -458,6 +459,10 @@ endif()
 
 if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
+endif()
+
+if(DISABLE_POINTER_SALT)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_POINTER_SALT")
 endif()
 
 if(LATEST_STORAGE)
