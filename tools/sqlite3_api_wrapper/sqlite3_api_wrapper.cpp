@@ -308,6 +308,7 @@ void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_widt
 		config.decimal_separator = decimal_separator;
 		config.thousand_separator = thousand_separator;
 		config.max_width = max_width;
+		config.add_readable_numbers = materialized.Collection().Count() == 1;
 		BoxRenderer renderer(config);
 		renderer.Render(*pStmt->db->con->context, pStmt->result->names, materialized.Collection(), *result_renderer);
 	} catch (std::exception &ex) {

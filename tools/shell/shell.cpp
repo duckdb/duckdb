@@ -1624,7 +1624,7 @@ private:
 /*
 ** Run a prepared statement
 */
-void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statment to run */
+void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt /* Statement to run */
 ) {
 	if (cMode == RenderMode::DUCKBOX) {
 		size_t max_rows = outfile.empty() || outfile[0] == '|' ? this->max_rows : (size_t)-1;

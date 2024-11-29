@@ -78,6 +78,8 @@ struct BoxRendererConfig {
 	char thousand_separator = '\0';
 	//! Whether or not to render row-wise or column-wise
 	RenderMode render_mode = RenderMode::ROWS;
+	//! If there is a single row, adds a second row with a readable summarization of numbers (e.g. "(59.9 million)")
+	bool add_readable_numbers = false;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *LTCORNER = "\342\224\214"; // NOLINT: "┌";
@@ -164,6 +166,7 @@ private:
 	string FormatNumber(const string &input);
 	string ConvertRenderValue(const string &input, const LogicalType &type);
 	string ConvertRenderValue(const string &input);
+	string GetReadableNumber(const string &numeric);
 };
 
 } // namespace duckdb
