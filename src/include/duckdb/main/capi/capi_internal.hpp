@@ -84,4 +84,9 @@ idx_t GetCTypeSize(duckdb_type type);
 duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result, duckdb_result *out);
 bool DeprecatedMaterializeResult(duckdb_result *result);
 duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type);
+duckdb_table_filter_type TableFilterTypeToC(duckdb::TableFilterType filter_type);
+duckdb::TableFilterType TableFilterTypeFromC(duckdb_table_filter_type filter_type);
+duckdb_table_filter_comparison_type TableFilterComparisonTypeToC(duckdb::ExpressionType comparison_type);
+duckdb::ExpressionType TableFilterComparisonTypeFromC(duckdb_table_filter_comparison_type comparison_type);
+
 } // namespace duckdb

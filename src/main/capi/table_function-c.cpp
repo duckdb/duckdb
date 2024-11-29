@@ -6,6 +6,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
 
@@ -318,6 +320,22 @@ void duckdb_table_function_supports_projection_pushdown(duckdb_table_function ta
 	tf.projection_pushdown = pushdown;
 }
 
+void duckdb_table_function_supports_filter_pushdown(duckdb_table_function table_function, bool pushdown) {
+	if (!table_function) {
+		return;
+	}
+	auto &tf = GetCTableFunction(table_function);
+	tf.filter_pushdown = pushdown;
+}
+
+void duckdb_table_function_supports_filter_prune(duckdb_table_function table_function, bool prune) {
+	if (!table_function) {
+		return;
+	}
+	auto &tf = GetCTableFunction(table_function);
+	tf.filter_prune = prune;
+}
+
 duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb_table_function function) {
 	if (!connection || !function) {
 		return DuckDBError;
@@ -476,6 +494,154 @@ void duckdb_init_set_error(duckdb_init_info info, const char *error) {
 	auto &init_info = GetCInitInfo(info);
 	init_info.error = error;
 	init_info.success = false;
+}
+
+duckdb_table_filters duckdb_init_get_table_filters(duckdb_init_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto &init_info = GetCInitInfo(info);
+	return reinterpret_cast<duckdb_table_filters>(init_info.filters.get());
+}
+
+idx_t duckdb_table_filters_size(duckdb_table_filters filters) {
+	if (!filters) {
+		return 0;
+	}
+	auto &filter_set = *reinterpret_cast<duckdb::TableFilterSet *>(filters);
+	return filter_set.filters.size();
+}
+
+duckdb_table_filter duckdb_table_filters_get_filter(duckdb_table_filters filters, idx_t filter_index) {
+	if (!filters) {
+		return nullptr;
+	}
+	auto &filter_set = *reinterpret_cast<duckdb::TableFilterSet *>(filters);
+	if (filter_index >= filter_set.filters.size()) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_table_filter>(filter_set.filters[filter_index].get());
+}
+
+duckdb_table_filter_type duckdb_table_filter_get_type(duckdb_table_filter filter) {
+	if (!filter) {
+		return DUCKDB_TABLE_FILTER_INVALID;
+	}
+	auto &filter_info = *reinterpret_cast<duckdb::TableFilter *>(filter);
+	return TableFilterTypeToC(filter_info.filter_type);
+}
+
+idx_t duckdb_table_filter_get_children_count(duckdb_table_filter filter) {
+	if (!filter) {
+		return 0;
+	}
+	auto &tfilter = *reinterpret_cast<duckdb::TableFilter *>(filter);
+
+	switch (tfilter.filter_type) {
+	case duckdb::TableFilterType::CONJUNCTION_OR: {
+		auto &f = reinterpret_cast<duckdb::ConjunctionOrFilter &>(tfilter);
+		return f.child_filters.size();
+	} break;
+
+	case duckdb::TableFilterType::CONJUNCTION_AND: {
+		auto &f = reinterpret_cast<duckdb::ConjunctionAndFilter &>(tfilter);
+		return f.child_filters.size();
+	} break;
+
+	default:
+		return 0;
+	}
+}
+
+duckdb_table_filter duckdb_table_filter_get_child(duckdb_table_filter filter, idx_t child_index) {
+	if (!filter) {
+		return nullptr;
+	}
+	auto &tfilter = *reinterpret_cast<duckdb::TableFilter *>(filter);
+
+	switch (tfilter.filter_type) {
+	case duckdb::TableFilterType::CONJUNCTION_OR: {
+		auto &f = reinterpret_cast<duckdb::ConjunctionOrFilter &>(tfilter);
+		if (child_index >= f.child_filters.size()) {
+			return nullptr;
+		}
+		return reinterpret_cast<duckdb_table_filter>(f.child_filters[child_index].get());
+	} break;
+
+	case duckdb::TableFilterType::CONJUNCTION_AND: {
+		auto &f = reinterpret_cast<duckdb::ConjunctionAndFilter &>(tfilter);
+		if (child_index >= f.child_filters.size()) {
+			return nullptr;
+		}
+		return reinterpret_cast<duckdb_table_filter>(f.child_filters[child_index].get());
+	} break;
+
+	default:
+		return nullptr;
+	}
+}
+
+duckdb_table_filter_comparison_type duckdb_table_filter_get_comparison_type(duckdb_table_filter filter) {
+	if (!filter) {
+		return DUCKDB_TABLE_FILTER_COMPARE_INVALID;
+	}
+	auto &tfilter = *reinterpret_cast<duckdb::TableFilter *>(filter);
+	if (tfilter.filter_type != duckdb::TableFilterType::CONSTANT_COMPARISON) {
+		return DUCKDB_TABLE_FILTER_COMPARE_INVALID;
+	}
+	auto &cfilter = reinterpret_cast<duckdb::ConstantFilter &>(tfilter);
+	return TableFilterComparisonTypeToC(cfilter.comparison_type);
+}
+
+duckdb_value duckdb_table_filter_get_constant(duckdb_table_filter filter) {
+	if (!filter) {
+		return nullptr;
+	}
+	auto &tfilter = *reinterpret_cast<duckdb::TableFilter *>(filter);
+	if (tfilter.filter_type != duckdb::TableFilterType::CONSTANT_COMPARISON) {
+		return nullptr;
+	}
+	auto &cfilter = reinterpret_cast<duckdb::ConstantFilter &>(tfilter);
+	return reinterpret_cast<duckdb_value>(&cfilter.constant);
+}
+
+idx_t duckdb_table_filter_get_struct_child_index(duckdb_table_filter filter) {
+	if (!filter) {
+		return 0;
+	}
+	auto &tfilter = *reinterpret_cast<duckdb::TableFilter *>(filter);
+	if (tfilter.filter_type != duckdb::TableFilterType::STRUCT_EXTRACT) {
+		return 0;
+	}
+	auto &sfilter = reinterpret_cast<duckdb::StructFilter &>(tfilter);
+	return sfilter.child_idx;
+}
+
+const char *duckdb_table_filter_get_struct_child_name(duckdb_table_filter filter) {
+	if (!filter) {
+		return nullptr;
+	}
+	auto &tfilter = *reinterpret_cast<duckdb::TableFilter *>(filter);
+	if (tfilter.filter_type != duckdb::TableFilterType::STRUCT_EXTRACT) {
+		return nullptr;
+	}
+	auto &sfilter = reinterpret_cast<duckdb::StructFilter &>(tfilter);
+	return sfilter.child_name.c_str();
+}
+
+duckdb_table_filter duckdb_table_filter_get_struct_child_filter(duckdb_table_filter filter) {
+	if (!filter) {
+		return nullptr;
+	}
+	auto &tfilter = *reinterpret_cast<duckdb::TableFilter *>(filter);
+	if (tfilter.filter_type != duckdb::TableFilterType::STRUCT_EXTRACT) {
+		return nullptr;
+	}
+	auto &sfilter = reinterpret_cast<duckdb::StructFilter &>(tfilter);
+	if (!sfilter.child_filter) {
+		return nullptr;
+	}
+	return reinterpret_cast<duckdb_table_filter>(sfilter.child_filter.get());
 }
 
 idx_t duckdb_init_get_column_count(duckdb_init_info info) {

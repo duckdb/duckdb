@@ -66,6 +66,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'table_function_bind',
     'table_function_init',
     'table_function',
+    'table_filters',
     'replacement_scans',
     'profiling_info',
     'appender',

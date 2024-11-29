@@ -219,10 +219,52 @@
                 }
             ],
             "comment": {
-                "description": "Sets whether or not the given table function supports projection pushdown.\n\nIf this is set to true, the system will provide a list of all required columns in the `init` stage through\nthe `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.\nIf this is set to false (the default), the system will expect all columns to be projected.\n\n",
+                "description": "Sets whether or not the given table function supports projection pushdown.\n\nSet to false by default.\n\n",
                 "param_comments": {
                     "table_function": "The table function",
                     "pushdown": "True if the table function supports projection pushdown, false otherwise."
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_supports_filter_pushdown",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "bool",
+                    "name": "pushdown"
+                }
+            ],
+            "comment": {
+                "description": "Sets whether or not the given table function supports filter pushdown.\n\nIf this is set to true, the system will provide a list of all required columns in the `init` stage through\nthe `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.\nThis is set to false by default.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "pushdown": "True if the table function supports filter pushdown, false otherwise."
+                }
+            }
+        },
+        {
+            "name": "duckdb_table_function_supports_filter_prune",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_table_function",
+                    "name": "table_function"
+                },
+                {
+                    "type": "bool",
+                    "name": "prune"
+                }
+            ],
+            "comment": {
+                "description": "Sets whether or not the given table function supports filter pruning.\n\nThis is set to false by default.\n\n",
+                "param_comments": {
+                    "table_function": "The table function",
+                    "pushdown": "True if the table function supports filter pruning, false otherwise."
                 }
             }
         },

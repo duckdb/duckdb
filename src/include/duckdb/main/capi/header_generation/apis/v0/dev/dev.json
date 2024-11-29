@@ -24,6 +24,19 @@
         "duckdb_get_timestamp_tz",
         "duckdb_get_timestamp_s",
         "duckdb_get_timestamp_ms",
-        "duckdb_get_timestamp_ns"
+        "duckdb_get_timestamp_ns",
+        "duckdb_table_function_supports_filter_pushdown",
+        "duckdb_table_function_supports_filter_prune",
+        "duckdb_init_get_table_filters",
+        "duckdb_table_filters_size",
+        "duckdb_table_filters_get_filter",
+        "duckdb_table_filter_get_type",
+        "duckdb_table_filter_get_children_count",
+        "duckdb_table_filter_get_child",
+        "duckdb_table_filter_get_comparison_type",
+        "duckdb_table_filter_get_constant",
+        "duckdb_table_filter_get_struct_child_index",
+        "duckdb_table_filter_get_struct_child_name",
+        "duckdb_table_filter_get_struct_child_filter"
     ]
 }

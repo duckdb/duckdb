@@ -239,3 +239,207 @@ TEST_CASE("Test Table Function named parameters in C API", "[capi]") {
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 126);
 	REQUIRE(result->Fetch<int64_t>(0, 1) == 252);
 }
+
+void fltr_bind(duckdb_bind_info info) {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+	duckdb_bind_add_result_column(info, "i", type);
+	duckdb_destroy_logical_type(&type);
+
+	duckdb_bind_set_bind_data(info, nullptr, free);
+}
+
+void fltr_init(duckdb_init_info info) {
+	duckdb_table_filters filters = duckdb_init_get_table_filters(info);
+	REQUIRE(filters != nullptr);
+	// TODO: test case where there are no filters
+
+	// Expect one filter
+	idx_t nfilters = duckdb_table_filters_size(filters);
+	REQUIRE(nfilters == 1);
+
+	// Get the filter
+	duckdb_table_filter tfltr = duckdb_table_filters_get_filter(filters, 0);
+	REQUIRE(tfltr != nullptr);
+
+	// Expect nullptr for an invalid filter index
+	duckdb_table_filter tfltr_not = duckdb_table_filters_get_filter(filters, 1);
+	REQUIRE(tfltr_not == nullptr);
+
+	// Expect a conjunction-and filter
+	duckdb_table_filter_type fltr_type = duckdb_table_filter_get_type(tfltr);
+	REQUIRE(fltr_type == DUCKDB_TABLE_FILTER_CONJUNCTION_AND);
+
+	// Expect two children for the conjunction-and filter
+	idx_t nchildren = duckdb_table_filter_get_children_count(tfltr);
+	REQUIRE(nchildren == 2);
+
+	// First child is a constant comparison == 42
+	duckdb_table_filter tfltr_child1 = duckdb_table_filter_get_child(tfltr, 0);
+	REQUIRE(tfltr_child1 != nullptr);
+
+	duckdb_table_filter_type fltr_child1_type = duckdb_table_filter_get_type(tfltr_child1);
+	REQUIRE(fltr_child1_type == DUCKDB_TABLE_FILTER_CONSTANT_COMPARISON);
+
+	duckdb_table_filter_comparison_type fltr_cmp_type = duckdb_table_filter_get_comparison_type(tfltr_child1);
+	REQUIRE(fltr_cmp_type == DUCKDB_TABLE_FILTER_COMPARE_EQUAL);
+
+	duckdb_value fltr_const = duckdb_table_filter_get_constant(tfltr_child1);
+	REQUIRE(fltr_const != nullptr);
+
+	REQUIRE(duckdb_get_int64(fltr_const) == 42);
+
+	// Second child is a not null filter
+	duckdb_table_filter tfltr_child2 = duckdb_table_filter_get_child(tfltr, 1);
+	REQUIRE(tfltr_child2 != nullptr);
+
+	duckdb_table_filter_type fltr_child2_type = duckdb_table_filter_get_type(tfltr_child2);
+	REQUIRE(fltr_child2_type == DUCKDB_TABLE_FILTER_IS_NOT_NULL);
+
+	// Third child non-existent; expect nullptr
+	duckdb_table_filter tfltr_child3 = duckdb_table_filter_get_child(tfltr, 2);
+	REQUIRE(tfltr_child3 == nullptr);
+}
+
+void fltr_fn(duckdb_function_info info, duckdb_data_chunk output) {
+}
+
+TEST_CASE("Test Table Function Filter Pushdown C API", "[capi]") {
+	duckdb_database db;
+	duckdb_connection con;
+
+	// open a database
+	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
+
+	// create a table function
+	auto function = duckdb_create_table_function();
+	duckdb_table_function_set_name(function, "myfn");
+	duckdb_table_function_set_bind(function, fltr_bind);
+	duckdb_table_function_set_init(function, fltr_init);
+	duckdb_table_function_set_function(function, fltr_fn);
+	duckdb_table_function_supports_filter_pushdown(function, true);
+	duckdb_table_function_supports_filter_prune(function, true);
+
+	// register
+	REQUIRE(duckdb_register_table_function(con, function) == DuckDBSuccess);
+
+	// now call it
+	duckdb_query(con, "SELECT * FROM myfn() WHERE i = 42", nullptr);
+
+	// cleanup
+	duckdb_destroy_table_function(&function);
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+}
+
+void sfltr_bind(duckdb_bind_info info) {
+
+	duckdb_logical_type mtypes[1] = {duckdb_create_logical_type(DUCKDB_TYPE_BIGINT)};
+	const char *mnames[1] = {"i"};
+	duckdb_logical_type type = duckdb_create_struct_type(mtypes, mnames, 1);
+	duckdb_bind_add_result_column(info, "s", type);
+	duckdb_destroy_logical_type(&type);
+	duckdb_destroy_logical_type(&mtypes[0]);
+
+	duckdb_bind_set_bind_data(info, nullptr, free);
+}
+
+void sfltr_init(duckdb_init_info info) {
+	duckdb_table_filters filters = duckdb_init_get_table_filters(info);
+	REQUIRE(filters != nullptr);
+	// TODO: test case where there are no filters
+
+	// Expect one filter
+	idx_t nfilters = duckdb_table_filters_size(filters);
+	REQUIRE(nfilters == 1);
+
+	// Get the filter
+	duckdb_table_filter tfltr = duckdb_table_filters_get_filter(filters, 0);
+	REQUIRE(tfltr != nullptr);
+
+	// Expect a conjunction-and filter
+	duckdb_table_filter_type fltr_type = duckdb_table_filter_get_type(tfltr);
+	REQUIRE(fltr_type == DUCKDB_TABLE_FILTER_CONJUNCTION_AND);
+
+	// Expect two children for the conjunction-and filter
+	idx_t nchildren = duckdb_table_filter_get_children_count(tfltr);
+	REQUIRE(nchildren == 2);
+
+	// First child is a struct extract filter with constant compare i == 42
+	duckdb_table_filter tfltr_child1 = duckdb_table_filter_get_child(tfltr, 0);
+	REQUIRE(tfltr_child1 != nullptr);
+
+	duckdb_table_filter_type fltr_child1_type = duckdb_table_filter_get_type(tfltr_child1);
+	REQUIRE(fltr_child1_type == DUCKDB_TABLE_FILTER_STRUCT_EXTRACT);
+
+	idx_t child1_idx = duckdb_table_filter_get_struct_child_index(tfltr_child1);
+	REQUIRE(child1_idx == 0);
+
+	const char *child1_name = duckdb_table_filter_get_struct_child_name(tfltr_child1);
+	REQUIRE(strcmp(child1_name, "i") == 0);
+
+	duckdb_table_filter c1_child = duckdb_table_filter_get_struct_child_filter(tfltr_child1);
+	REQUIRE(c1_child != nullptr);
+
+	duckdb_table_filter_type c1_child_type = duckdb_table_filter_get_type(c1_child);
+	REQUIRE(c1_child_type == DUCKDB_TABLE_FILTER_CONSTANT_COMPARISON);
+
+	duckdb_table_filter_comparison_type c1_cmp_type = duckdb_table_filter_get_comparison_type(c1_child);
+	REQUIRE(c1_cmp_type == DUCKDB_TABLE_FILTER_COMPARE_EQUAL);
+
+	duckdb_value c1_const = duckdb_table_filter_get_constant(c1_child);
+	REQUIRE(c1_const != nullptr);
+
+	REQUIRE(duckdb_get_int64(c1_const) == 42);
+
+	// Second child is a struct extract filter with is not null
+	duckdb_table_filter tfltr_child2 = duckdb_table_filter_get_child(tfltr, 1);
+	REQUIRE(tfltr_child2 != nullptr);
+
+	duckdb_table_filter_type fltr_child2_type = duckdb_table_filter_get_type(tfltr_child2);
+	REQUIRE(fltr_child2_type == DUCKDB_TABLE_FILTER_STRUCT_EXTRACT);
+
+	idx_t child2_idx = duckdb_table_filter_get_struct_child_index(tfltr_child2);
+	REQUIRE(child2_idx == 0);
+
+	const char *child2_name = duckdb_table_filter_get_struct_child_name(tfltr_child2);
+	REQUIRE(strcmp(child2_name, "i") == 0);
+
+	duckdb_table_filter c2_child = duckdb_table_filter_get_struct_child_filter(tfltr_child2);
+	REQUIRE(c2_child != nullptr);
+
+	duckdb_table_filter_type c2_child_type = duckdb_table_filter_get_type(c2_child);
+	REQUIRE(c2_child_type == DUCKDB_TABLE_FILTER_IS_NOT_NULL);
+}
+
+void sfltr_fn(duckdb_function_info info, duckdb_data_chunk output) {
+}
+
+TEST_CASE("Test Table Function Struct Filter Pushdown C API", "[capi]") {
+	duckdb_database db;
+	duckdb_connection con;
+
+	// open a database
+	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
+
+	// create a table function
+	auto function = duckdb_create_table_function();
+	duckdb_table_function_set_name(function, "myfn");
+	duckdb_table_function_set_bind(function, sfltr_bind);
+	duckdb_table_function_set_init(function, sfltr_init);
+	duckdb_table_function_set_function(function, sfltr_fn);
+	duckdb_table_function_supports_filter_pushdown(function, true);
+	duckdb_table_function_supports_filter_prune(function, true);
+
+	// register
+	REQUIRE(duckdb_register_table_function(con, function) == DuckDBSuccess);
+
+	// now call it
+	duckdb_query(con, "SELECT * FROM myfn() WHERE s.i = 42", nullptr);
+
+	// cleanup
+	duckdb_destroy_table_function(&function);
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+}

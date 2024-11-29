@@ -142,6 +142,23 @@
                     "error": "The error message"
                 }
             }
+        },
+        {
+            "name": "duckdb_init_get_table_filters",
+            "return_type": "duckdb_table_filters",
+            "params": [
+                {
+                    "type": "duckdb_init_info",
+                    "name": "info"
+                }
+            ],
+            "comment": {
+                "description": "Returns the table filters.\n\n",
+                "param_comments": {
+                    "info": "The info object"
+                },
+                "return_value": "The table filters"
+            }
         }
     ]
 }

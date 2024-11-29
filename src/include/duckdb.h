@@ -231,6 +231,34 @@ typedef enum duckdb_error_type {
 } duckdb_error_type;
 //! An enum over DuckDB's different cast modes.
 typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } duckdb_cast_mode;
+//! An enum over DuckDB's different table filter types.
+typedef enum duckdb_table_filter_type {
+	DUCKDB_TABLE_FILTER_CONSTANT_COMPARISON = 0,
+	DUCKDB_TABLE_FILTER_IS_NULL = 1,
+	DUCKDB_TABLE_FILTER_IS_NOT_NULL = 2,
+	DUCKDB_TABLE_FILTER_CONJUNCTION_OR = 3,
+	DUCKDB_TABLE_FILTER_CONJUNCTION_AND = 4,
+	DUCKDB_TABLE_FILTER_STRUCT_EXTRACT = 5,
+	DUCKDB_TABLE_FILTER_INVALID = 6
+} duckdb_table_filter_type;
+//! An enum over DuckDB's different table filter comparison types.
+typedef enum duckdb_table_filter_comparison_type {
+	DUCKDB_TABLE_FILTER_COMPARE_EQUAL = 0,
+	DUCKDB_TABLE_FILTER_COMPARE_NOTEQUAL = 1,
+	DUCKDB_TABLE_FILTER_COMPARE_LESSTHAN = 2,
+	DUCKDB_TABLE_FILTER_COMPARE_GREATERTHAN = 3,
+	DUCKDB_TABLE_FILTER_COMPARE_LESSTHANOREQUALTO = 4,
+	DUCKDB_TABLE_FILTER_COMPARE_GREATERTHANOREQUALTO = 5,
+	DUCKDB_TABLE_FILTER_COMPARE_IN = 6,
+	DUCKDB_TABLE_FILTER_COMPARE_NOT_IN = 7,
+	DUCKDB_TABLE_FILTER_COMPARE_DISTINCT_FROM = 8,
+	DUCKDB_TABLE_FILTER_COMPARE_BETWEEN = 9,
+	DUCKDB_TABLE_FILTER_COMPARE_NOT_BETWEEN = 10,
+	DUCKDB_TABLE_FILTER_COMPARE_NOT_DISTINCT_FROM = 11,
+	DUCKDB_TABLE_FILTER_COMPARE_INVALID = 12
+} duckdb_table_filter_comparison_type;
+#define DUCKDB_TABLE_FILTER_COMPARE_BOUNDARY_START DUCKDB_TABLE_FILTER_COMPARE_EQUAL
+#define DUCKDB_TABLE_FILTER_COMPARE_BOUNDARY_END   DUCKDB_TABLE_FILTER_COMPARE_NOT_DISTINCT_FROM
 
 //===--------------------------------------------------------------------===//
 // General type definitions
@@ -637,6 +665,20 @@ typedef struct _duckdb_arrow_schema {
 typedef struct _duckdb_arrow_array {
 	void *internal_ptr;
 } * duckdb_arrow_array;
+
+//===--------------------------------------------------------------------===//
+// Table function filter types
+//===--------------------------------------------------------------------===//
+
+//! Holds a set of table filters.
+typedef struct _duckdb_table_filters {
+	void *internal_ptr;
+} * duckdb_table_filters;
+
+//! Holds a table filter.
+typedef struct _duckdb_table_filter {
+	void *internal_ptr;
+} * duckdb_table_filter;
 
 //===--------------------------------------------------------------------===//
 // DuckDB extension access
@@ -3352,14 +3394,33 @@ DUCKDB_API void duckdb_table_function_set_function(duckdb_table_function table_f
 /*!
 Sets whether or not the given table function supports projection pushdown.
 
-If this is set to true, the system will provide a list of all required columns in the `init` stage through
-the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
-If this is set to false (the default), the system will expect all columns to be projected.
+Set to false by default.
 
 * @param table_function The table function
 * @param pushdown True if the table function supports projection pushdown, false otherwise.
 */
 DUCKDB_API void duckdb_table_function_supports_projection_pushdown(duckdb_table_function table_function, bool pushdown);
+
+/*!
+Sets whether or not the given table function supports filter pushdown.
+
+If this is set to true, the system will provide a list of all required columns in the `init` stage through
+the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
+This is set to false by default.
+
+* @param table_function The table function
+* @param pushdown True if the table function supports filter pushdown, false otherwise.
+*/
+DUCKDB_API void duckdb_table_function_supports_filter_pushdown(duckdb_table_function table_function, bool pushdown);
+
+/*!
+Sets whether or not the given table function supports filter pruning.
+
+This is set to false by default.
+
+* @param table_function The table function
+*/
+DUCKDB_API void duckdb_table_function_supports_filter_prune(duckdb_table_function table_function, bool prune);
 
 /*!
 Register the table function object within the given connection.
@@ -3519,6 +3580,14 @@ Report that an error has occurred while calling init.
 */
 DUCKDB_API void duckdb_init_set_error(duckdb_init_info info, const char *error);
 
+/*!
+Returns the table filters.
+
+* @param info The info object
+* @return The table filters
+*/
+DUCKDB_API duckdb_table_filters duckdb_init_get_table_filters(duckdb_init_info info);
+
 //===--------------------------------------------------------------------===//
 // Table Function
 //===--------------------------------------------------------------------===//
@@ -3565,6 +3634,102 @@ Report that an error has occurred while executing the function.
 * @param error The error message
 */
 DUCKDB_API void duckdb_function_set_error(duckdb_function_info info, const char *error);
+
+//===--------------------------------------------------------------------===//
+// Table Filters
+//===--------------------------------------------------------------------===//
+
+/*!
+Returns the number of table filters.
+
+* @param filters The table filters
+* @return The number of table filters
+*/
+DUCKDB_API idx_t duckdb_table_filters_size(duckdb_table_filters filters);
+
+/*!
+Returns the table filter at the specified index.
+
+* @param filters The table filters
+* @param filter_index The index of the filter
+* @return The table filter
+*/
+DUCKDB_API duckdb_table_filter duckdb_table_filters_get_filter(duckdb_table_filters filters, idx_t filter_index);
+
+/*!
+Returns the type of the table filter
+
+* @param filter The table filter
+* @return The type of the table filter
+*/
+DUCKDB_API duckdb_table_filter_type duckdb_table_filter_get_type(duckdb_table_filter filter);
+
+/*!
+Returns the number of children of the table filter
+
+* @param filter The table filter
+* @return The number of children of the table filter
+*/
+DUCKDB_API idx_t duckdb_table_filter_get_children_count(duckdb_table_filter filter);
+
+/*!
+Returns the child of the table filter at the specified index
+
+* @param filter The table filter
+* @param child_index The index of the child
+* @return The child of the table filter
+*/
+DUCKDB_API duckdb_table_filter duckdb_table_filter_get_child(duckdb_table_filter filter, idx_t child_index);
+
+/*!
+Returns the comparison type of the table filter
+
+Only valid for filters of type DUCKDB_TABLE_FILTER_CONSTANT_COMPARISON
+
+* @param filter The table filter
+* @return The comparison type of the table filter
+*/
+DUCKDB_API duckdb_table_filter_comparison_type duckdb_table_filter_get_comparison_type(duckdb_table_filter filter);
+
+/*!
+Returns the constant value of the table filter
+
+Only valid for filters of type DUCKDB_TABLE_FILTER_CONSTANT_COMPARISON
+
+* @param filter The table filter
+* @return The constant value of the table filter
+*/
+DUCKDB_API duckdb_value duckdb_table_filter_get_constant(duckdb_table_filter filter);
+
+/*!
+Returns the index of the struct child in the parent struct
+
+Only valid for filters of type DUCKDB_TABLE_FILTER_STRUCT_EXTRACT
+
+* @param filter The table filter
+* @return The index of the struct child in the parent struct
+*/
+DUCKDB_API idx_t duckdb_table_filter_get_struct_child_index(duckdb_table_filter filter);
+
+/*!
+Returns the name of the struct child in the parent struct
+
+Only valid for filters of type DUCKDB_TABLE_FILTER_STRUCT_EXTRACT
+
+* @param filter The table filter
+* @return The name of the struct child in the parent struct
+*/
+DUCKDB_API const char *duckdb_table_filter_get_struct_child_name(duckdb_table_filter filter);
+
+/*!
+Returns the filter of the struct child in the parent struct
+
+Only valid for filters of type DUCKDB_TABLE_FILTER_STRUCT_EXTRACT
+
+* @param filter The table filter
+* @return The filter of the struct child in the parent struct
+*/
+DUCKDB_API duckdb_table_filter duckdb_table_filter_get_struct_child_filter(duckdb_table_filter filter);
 
 //===--------------------------------------------------------------------===//
 // Replacement Scans
