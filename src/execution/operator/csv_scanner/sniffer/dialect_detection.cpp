@@ -14,8 +14,8 @@ bool IsQuoteDefault(char quote) {
 	return false;
 }
 
-vector<char> DialectCandidates::GetDefaultDelimiter() {
-	return {',', '|', ';', '\t'};
+vector<string> DialectCandidates::GetDefaultDelimiter() {
+	return {",", "|", ";", "\t"};
 }
 
 vector<vector<char>> DialectCandidates::GetDefaultQuote() {
@@ -144,6 +144,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	} else {
 		new_line_id = DetectNewLineDelimiter(*buffer_manager);
 	}
+	bool rfc_4180 = options.dialect_options.state_machine_options.rfc_4180.GetValue();
 	CSVIterator first_iterator;
 	bool iterator_set = false;
 	for (const auto quote_rule : dialect_candidates.quote_rule_candidates) {
@@ -155,7 +156,8 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 				for (const auto &escape : escape_candidates) {
 					for (const auto &comment : dialect_candidates.comment_candidates) {
 						D_ASSERT(buffer_manager);
-						CSVStateMachineOptions state_machine_options(delimiter, quote, escape, comment, new_line_id);
+						CSVStateMachineOptions state_machine_options(delimiter, quote, escape, comment, new_line_id,
+						                                             rfc_4180);
 						auto sniffing_state_machine =
 						    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);
 						if (options.dialect_options.skip_rows.IsSetByUser()) {
@@ -468,13 +470,14 @@ void CSVSniffer::RefineCandidates() {
 			bool finished_file = cur_candidate->FinishedFile();
 			if (finished_file || i == options.sample_size_chunks) {
 				// we finished the file or our chunk sample successfully
-				successful_candidates.push_back(std::move(cur_candidate));
+				if (!cur_candidate->GetResult().error) {
+					successful_candidates.push_back(std::move(cur_candidate));
+				}
 				done = true;
-				break;
+				continue;
 			}
-			if ((!!RefineCandidateNextChunk(*cur_candidate) || cur_candidate->GetResult().error)) {
+			if (RefineCandidateNextChunk(*cur_candidate) && !cur_candidate->GetResult().error) {
 				successful_candidates.push_back(std::move(cur_candidate));
-				break;
 			}
 		}
 		candidates = std::move(successful_candidates);

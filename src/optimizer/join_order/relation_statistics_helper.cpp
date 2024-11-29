@@ -79,14 +79,15 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	// first push back basic distinct counts for each column (if we have them).
 	auto &column_ids = get.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column_id = column_ids[i].GetPrimaryIndex();
 		bool have_distinct_count_stats = false;
 		if (get.function.statistics) {
-			column_statistics = get.function.statistics(context, get.bind_data.get(), column_ids[i]);
+			column_statistics = get.function.statistics(context, get.bind_data.get(), column_id);
 			if (column_statistics && have_catalog_table_statistics) {
-				auto distinct_count = MaxValue((idx_t)1, column_statistics->GetDistinctCount());
+				auto distinct_count = MaxValue<idx_t>(1, column_statistics->GetDistinctCount());
 				auto column_distinct_count = DistinctCount({distinct_count, true});
 				return_stats.column_distinct_count.push_back(column_distinct_count);
-				return_stats.column_names.push_back(name + "." + get.names.at(column_ids.at(i)));
+				return_stats.column_names.push_back(name + "." + get.names.at(column_id));
 				have_distinct_count_stats = true;
 			}
 		}
@@ -97,8 +98,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
 			auto column_name = string("column");
-			if (column_ids.at(i) < get.names.size()) {
-				column_name = get.names.at(column_ids.at(i));
+			if (column_id < get.names.size()) {
+				column_name = get.names.at(column_id);
 			}
 			return_stats.column_names.push_back(get.GetName() + "." + column_name);
 		}

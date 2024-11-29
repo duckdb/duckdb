@@ -13,6 +13,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -24,11 +25,12 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/main/config.hpp"
+
 #include <cmath>
 
 namespace duckdb {
@@ -170,6 +172,7 @@ string LogicalTypeIdToString(LogicalTypeId type) {
 
 constexpr const LogicalTypeId LogicalType::INVALID;
 constexpr const LogicalTypeId LogicalType::SQLNULL;
+constexpr const LogicalTypeId LogicalType::UNKNOWN;
 constexpr const LogicalTypeId LogicalType::BOOLEAN;
 constexpr const LogicalTypeId LogicalType::TINYINT;
 constexpr const LogicalTypeId LogicalType::UTINYINT;
@@ -676,6 +679,54 @@ bool LogicalType::IsTemporal() const {
 
 bool LogicalType::IsValid() const {
 	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
+}
+
+bool LogicalType::IsComplete() const {
+	// Check if type does not contain incomplete types
+	return !TypeVisitor::Contains(*this, [](const LogicalType &type) {
+		switch (type.id()) {
+		case LogicalTypeId::INVALID:
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::ANY:
+			return true; // These are incomplete by default
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::MAP:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::LIST_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::UNION:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::STRUCT_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::ARRAY:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::ARRAY_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::DECIMAL:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::DECIMAL_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		default:
+			return false;
+		}
+
+		// Type has type info, check if it is complete
+		D_ASSERT(type.AuxInfo());
+		switch (type.AuxInfo()->type) {
+		case ExtraTypeInfoType::STRUCT_TYPE_INFO:
+			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty(); // Cannot be empty
+		case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
+			return DecimalType::GetWidth(type) >= 1 && DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
+			       DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
+		default:
+			return false; // Nested types are checked by TypeVisitor recursion
+		}
+	});
 }
 
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {

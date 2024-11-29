@@ -87,7 +87,8 @@ void KeyValueSecret::Serialize(Serializer &serializer) const {
 		map_values.push_back(Value::STRUCT(map_struct));
 	}
 
-	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	// Warning: the secret map is serialized into a single MAP value with type ANY
+	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::ANY);
 	auto map = Value::MAP(ListType::GetChildType(map_type), map_values);
 	serializer.WriteProperty(201, "secret_map", map);
 

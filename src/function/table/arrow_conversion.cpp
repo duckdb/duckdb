@@ -98,7 +98,7 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, const ArrowSc
 		//! We are setting a validity mask of the data part of dictionary vector
 		//! For some reason, Nulls are allowed to be indexes, hence we need to set the last element here to be null
 		//! We might have to resize the mask
-		mask.Resize(size, size + 1);
+		mask.Resize(size + 1);
 		mask.SetInvalid(size);
 	}
 }
@@ -137,6 +137,12 @@ static ArrowListOffsetData ConvertArrowListOffsetsTemplated(Vector &vector, Arro
 	ArrowListOffsetData result;
 	auto &start_offset = result.start_offset;
 	auto &list_size = result.list_size;
+
+	if (size == 0) {
+		start_offset = 0;
+		list_size = 0;
+		return result;
+	}
 
 	idx_t cur_offset = 0;
 	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;
@@ -1334,7 +1340,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
                                        DataChunk &output, idx_t start, bool arrow_scan_is_projected) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
-		auto col_idx = scan_state.column_ids[idx];
+		auto col_idx = scan_state.column_ids.empty() ? idx : scan_state.column_ids[idx];
 
 		// If projection was not pushed down into the arrow scanner, but projection pushdown is enabled on the
 		// table function, we need to use original column ids here.

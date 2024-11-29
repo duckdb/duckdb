@@ -188,9 +188,24 @@
     },
     {
         "name": "make_date",
-        "parameters": "year,month,day",
-        "description": "The date for the given parts",
-        "example": "make_date(1992, 9, 20)",
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "year"},
+                    {"name": "month"},
+                    {"name": "day"}
+                ],
+                "description": "The date for the given parts",
+                "example": "make_date(1992, 9, 20)"
+            },
+            {
+                "parameters": [
+                    {"name": "date-struct", "type": "STRUCT(year BIGINT, month BIGINT, day BIGINT)"}
+                ],
+                "description": "The date for the given struct.",
+                "example": "make_date({'year': 2024, 'month': 11, 'day': 14})"
+            }
+        ],
         "type": "scalar_function_set"
     },
     {
@@ -260,6 +275,14 @@
         "description": "Extract the nanosecond component from a date or timestamp",
         "example": "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789') => 44123456789",
         "type": "scalar_function_set"
+    },
+    {
+        "struct": "NormalizedIntervalFun",
+        "name": "normalized_interval",
+        "parameters": "interval",
+        "description": "Normalizes an INTERVAL to an equivalent interval",
+        "example": "normalized_interval(INTERVAL '30 days')",
+        "type": "scalar_function"
     },
     {
         "name": "quarter",

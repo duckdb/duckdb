@@ -496,7 +496,7 @@ class TestReadCSV(object):
         assert rel.columns == ['a', 'b', 'c', 'd']
 
         # Duplicates are not okay
-        with pytest.raises(duckdb.BinderException, match="has duplicate column name"):
+        with pytest.raises(duckdb.BinderException, match="names must have unique values"):
             rel = con.read_csv(file, names=['a', 'b', 'a', 'b'])
             assert rel.columns == ['a', 'b', 'a', 'b']
 

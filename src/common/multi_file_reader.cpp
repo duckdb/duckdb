@@ -43,7 +43,7 @@ Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) 
 	for (auto &file : file_list) {
 		files.push_back(file);
 	}
-	return Value::LIST(std::move(files));
+	return Value::LIST(LogicalType::VARCHAR, std::move(files));
 }
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
@@ -80,10 +80,6 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           FileGlobOptions options) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Scanning %s files is disabled through configuration", function_name);
-	}
 	vector<string> result_files;
 
 	auto res = make_uniq<GlobMultiFileList>(context, paths, options);
@@ -239,7 +235,7 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
                                    const string &filename, const vector<string> &local_names,
                                    const vector<LogicalType> &global_types, const vector<string> &global_names,
-                                   const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
+                                   const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
                                    ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 
 	// create a map of name -> column index
@@ -250,12 +246,13 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 		}
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		auto column_id = global_column_ids[i];
-		if (IsRowIdColumnId(column_id)) {
+		auto &col_idx = global_column_ids[i];
+		if (col_idx.IsRowIdColumn()) {
 			// row-id
 			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
 			continue;
 		}
+		auto column_id = col_idx.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
 			// filename
 			reader_data.constant_map.emplace_back(i, Value(filename));
@@ -296,15 +293,16 @@ unique_ptr<MultiFileReaderGlobalState>
 MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
                                        const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
                                        const vector<LogicalType> &global_types, const vector<string> &global_names,
-                                       const vector<column_t> &global_column_ids) {
+                                       const vector<ColumnIndex> &global_column_ids) {
 	// By default, the multifilereader does not require any global state
 	return nullptr;
 }
 
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                        const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                        MultiFileReaderData &reader_data, const string &initial_file,
+                                        const vector<string> &global_names,
+                                        const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+                                        const string &initial_file,
                                         optional_ptr<MultiFileReaderGlobalState> global_state) {
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
@@ -327,7 +325,8 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 			continue;
 		}
 		// not constant - look up the column in the name map
-		auto global_id = global_column_ids[i];
+		auto &global_idx = global_column_ids[i];
+		auto global_id = global_idx.GetPrimaryIndex();
 		if (global_id >= global_types.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
@@ -355,20 +354,25 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		D_ASSERT(local_id < local_types.size());
 		auto &global_type = global_types[global_id];
 		auto &local_type = local_types[local_id];
+		ColumnIndex local_index(local_id);
 		if (global_type != local_type) {
+			// the types are not the same - add a cast
 			reader_data.cast_map[local_id] = global_type;
+		} else {
+			local_index = ColumnIndex(local_id, global_idx.GetChildIndexes());
 		}
-		// the types are the same - create the mapping
+		// create the mapping
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
+		reader_data.column_indexes.push_back(std::move(local_index));
 	}
 
-	reader_data.empty_columns = reader_data.column_ids.empty();
+	reader_data.empty_columns = reader_data.column_indexes.empty();
 }
 
 void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                    const vector<string> &global_names, const vector<column_t> &global_column_ids,
+                                    const vector<string> &global_names, const vector<ColumnIndex> &global_column_ids,
                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
                                     const string &initial_file, const MultiFileReaderBindData &options,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {

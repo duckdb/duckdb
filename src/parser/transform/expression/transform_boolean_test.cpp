@@ -11,7 +11,7 @@ static unique_ptr<ParsedExpression> TransformBooleanTestInternal(unique_ptr<Pars
                                                                  int query_location) {
 	auto bool_value = make_uniq<ConstantExpression>(Value::BOOLEAN(comparison_value));
 	Transformer::SetQueryLocation(*bool_value, query_location);
-	// we cast the argument to bool to remove ambiguity wrt function binding on the comparision
+	// we cast the argument to bool to remove ambiguity wrt function binding on the comparison
 	auto cast_argument = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(argument));
 
 	auto result = make_uniq<ComparisonExpression>(comparison_type, std::move(cast_argument), std::move(bool_value));

@@ -2,7 +2,7 @@
 
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -207,14 +207,20 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	// recurse the query tree to find the LogicalGets in which we can push the filter info
 	GenerateJoinFiltersRecursive(*join.children[0], pushdown_columns, *pushdown_info);
 
-	if (pushdown_info->probe_info.empty()) {
+	// Even if we cannot find any table sources in which we can push down filters,
+	// we still initialize the aggregate states so that we have the possibility of doing a perfect hash join
+	const auto compute_aggregates_anyway = join.join_type == JoinType::INNER && join.conditions.size() == 1 &&
+	                                       pushdown_info->join_condition.size() == 1 &&
+	                                       TypeIsIntegral(join.conditions[0].right->return_type.InternalType());
+	if (pushdown_info->probe_info.empty() && !compute_aggregates_anyway) {
 		// no table sources found in which we can push down filters
 		return;
 	}
+
 	// set up the min/max aggregates for each of the filters
 	vector<AggregateFunction> aggr_functions;
-	aggr_functions.push_back(MinFun::GetFunction());
-	aggr_functions.push_back(MaxFun::GetFunction());
+	aggr_functions.push_back(MinFunction::GetFunction());
+	aggr_functions.push_back(MaxFunction::GetFunction());
 	for (auto &join_condition : pushdown_info->join_condition) {
 		for (auto &aggr : aggr_functions) {
 			FunctionBinder function_binder(optimizer.GetContext());

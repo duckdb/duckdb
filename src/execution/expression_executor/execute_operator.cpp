@@ -34,7 +34,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		intermediate.Reference(false_val);
 
 		// in rhs is a list of constants
-		// for every child, OR the result of the comparision with the left
+		// for every child, OR the result of the comparison with the left
 		// to get the overall result.
 		for (idx_t child = 1; child < expr.children.size(); child++) {
 			Vector vector_to_check(expr.children[child]->return_type);

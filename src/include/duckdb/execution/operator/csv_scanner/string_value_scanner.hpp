@@ -191,13 +191,15 @@ public:
 	const bool null_padding;
 	const bool ignore_errors;
 
+	const idx_t extra_delimiter_bytes = 0;
+
 	unsafe_unique_array<const char *> null_str_ptr;
 	unsafe_unique_array<idx_t> null_str_size;
 	idx_t null_str_count;
 
 	//! Internal Data Chunk used for flushing
 	DataChunk parse_chunk;
-	idx_t number_of_rows = 0;
+	int64_t number_of_rows = 0;
 	idx_t cur_col_id = 0;
 	bool figure_out_new_line = false;
 	//! Information to properly handle errors
@@ -245,6 +247,9 @@ public:
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
+	//! Specialized code for possibly escaped values, makes sure to remove escapes
+	static inline void AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos, const char *value_ptr,
+	                                           const idx_t length, const bool empty);
 	//! Adds a Value to the result
 	static inline void AddValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Row to the result
@@ -257,12 +262,14 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
-	//! Force the throw of a unicode error
+	//! Force the throw of a Unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
 	static inline void SetComment(StringValueResult &result, idx_t buffer_pos);
 	static inline bool UnsetComment(StringValueResult &result, idx_t buffer_pos);
+
+	inline idx_t HandleMultiDelimiter(const idx_t buffer_pos) const;
 
 	DataChunk &ToChunk();
 	//! Resets the state of the result

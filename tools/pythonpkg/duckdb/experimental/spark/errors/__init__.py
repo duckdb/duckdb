@@ -64,6 +64,7 @@ __all__ = [
     "SparkUpgradeException",
     "PySparkTypeError",
     "PySparkValueError",
+    "PySparkIndexError",
     "PySparkAttributeError",
     "PySparkRuntimeError",
     "PySparkAssertionError",

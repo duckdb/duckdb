@@ -86,6 +86,9 @@ public:
 	static bool CharacterIsAlpha(char c) {
 		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 	}
+	static bool CharacterIsAlphaNumeric(char c) {
+		return CharacterIsAlpha(c) || CharacterIsDigit(c);
+	}
 	static bool CharacterIsOperator(char c) {
 		if (c == '_') {
 			return false;
@@ -124,6 +127,10 @@ public:
 
 	//! Returns true if the needle string exists in the haystack
 	DUCKDB_API static bool Contains(const string &haystack, const string &needle);
+	DUCKDB_API static bool Contains(const string &haystack, const char &needle_char);
+
+	//! Returns the position of needle string within the haystack
+	DUCKDB_API static optional_idx Find(const string &haystack, const string &needle);
 
 	//! Returns true if the target string starts with the given prefix
 	DUCKDB_API static bool StartsWith(string str, string prefix);
@@ -136,6 +143,10 @@ public:
 
 	//! Split the input string based on newline char
 	DUCKDB_API static vector<string> Split(const string &str, char delimiter);
+
+	//! Split the input string, ignore delimiters within parentheses. Note: leading/trailing spaces are NOT stripped
+	DUCKDB_API static vector<string> SplitWithParentheses(const string &str, char delimiter = ',', char par_open = '(',
+	                                                      char par_close = ')');
 
 	//! Split the input string allong a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
@@ -197,6 +208,7 @@ public:
 	DUCKDB_API static string Title(const string &str);
 
 	DUCKDB_API static bool IsLower(const string &str);
+	DUCKDB_API static bool IsUpper(const string &str);
 
 	//! Case insensitive hash
 	DUCKDB_API static uint64_t CIHash(const string &str);
@@ -289,14 +301,25 @@ public:
 	//! JSON method that constructs a { string: value } JSON map
 	//! This is the inverse of ParseJSONMap
 	//! NOTE: this method is not efficient
-	DUCKDB_API static string ToJSONMap(ExceptionType type, const string &message,
-	                                   const unordered_map<string, string> &map);
+	DUCKDB_API static string ExceptionToJSONMap(ExceptionType type, const string &message,
+	                                            const unordered_map<string, string> &map);
+
+	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
 
 	DUCKDB_API static string GetFileName(const string &file_path);
 	DUCKDB_API static string GetFileExtension(const string &file_name);
 	DUCKDB_API static string GetFileStem(const string &file_name);
 	DUCKDB_API static string GetFilePath(const string &file_path);
 
+	struct EnumStringLiteral {
+		uint32_t number;
+		const char *string;
+	};
+
+	DUCKDB_API static uint32_t StringToEnum(const EnumStringLiteral enum_list[], idx_t enum_count,
+	                                        const char *enum_name, const char *str_value);
+	DUCKDB_API static const char *EnumToString(const EnumStringLiteral enum_list[], idx_t enum_count,
+	                                           const char *enum_name, uint32_t enum_value);
 	DUCKDB_API static const uint8_t ASCII_TO_LOWER_MAP[];
 	DUCKDB_API static const uint8_t ASCII_TO_UPPER_MAP[];
 };

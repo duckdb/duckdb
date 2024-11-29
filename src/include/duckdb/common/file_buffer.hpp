@@ -32,8 +32,6 @@ public:
 	virtual ~FileBuffer();
 
 	Allocator &allocator;
-	//! The type of the buffer
-	FileBufferType type;
 	//! The buffer that users can write to
 	data_ptr_t buffer;
 	//! The size of the portion that users can write to, this is equivalent to internal_size - BLOCK_HEADER_SIZE
@@ -46,6 +44,10 @@ public:
 	void Write(FileHandle &handle, uint64_t location);
 
 	void Clear();
+
+	FileBufferType GetBufferType() const {
+		return type;
+	}
 
 	// Same rules as the constructor. We will add room for a header, in additio to
 	// the requested user bytes. We will then sector-align the result.
@@ -68,6 +70,8 @@ public:
 	void Initialize(DebugInitialize info);
 
 protected:
+	//! The type of the buffer
+	FileBufferType type;
 	//! The pointer to the internal buffer that will be read or written, including the buffer header
 	data_ptr_t internal_buffer;
 	//! The aligned size as passed to the constructor. This is the size that is read or written to disk.

@@ -96,7 +96,7 @@ ignored_files = [
     'nf_zformat.h',
     'expr.cc',
     'function_list.cpp',
-    'shell.cpp',
+    'inlined_grammar.hpp',
 ]
 ignored_directories = [
     '.eggs',

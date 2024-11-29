@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/column_index.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -93,12 +94,12 @@ public:
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                  vector<column_t> &bound_column_ids, StandardEntry &entry, bool add_row_id = true);
+	                  vector<ColumnIndex> &bound_column_ids, StandardEntry &entry, bool add_row_id = true);
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                  vector<column_t> &bound_column_ids, const string &table_name);
+	                  vector<ColumnIndex> &bound_column_ids, const string &table_name);
 	//! Adds a call to a table function with the given alias to the BindContext.
 	void AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
-	                      const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
+	                      const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
 	                      optional_ptr<StandardEntry> entry);
 	//! Adds a table view with a given alias to the BindContext.
 	void AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, ViewCatalogEntry &view);

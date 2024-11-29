@@ -61,31 +61,18 @@ bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
 }
 
 idx_t StorageManager::GetWALSize() {
-	auto wal_ptr = GetWAL();
-	if (!wal_ptr) {
-		return 0;
-	}
-	return wal_ptr->GetWALSize();
+	return wal->GetWALSize();
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	if (InMemory() || read_only || !load_complete) {
 		return nullptr;
 	}
-
-	if (!wal) {
-		auto wal_path = GetWALPath();
-		wal = make_uniq<WriteAheadLog>(db, wal_path);
-	}
 	return wal.get();
 }
 
 void StorageManager::ResetWAL() {
-	auto wal_ptr = GetWAL();
-	if (wal_ptr) {
-		wal_ptr->Delete();
-	}
-	wal.reset();
+	wal->Delete();
 }
 
 string StorageManager::GetWALPath() {
@@ -157,11 +144,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
-	if (!config.options.enable_external_access) {
-		if (!db.IsInitialDatabase()) {
-			throw PermissionException("Attaching on-disk databases is disabled through configuration");
-		}
-	}
 
 	StorageManagerOptions options;
 	options.read_only = read_only;
@@ -210,7 +192,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
-
+		wal = make_uniq<WriteAheadLog>(db, wal_path);
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
 		// try to read the existing file on disk.
@@ -237,15 +219,8 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		auto checkpoint_reader = SingleFileCheckpointReader(*this);
 		checkpoint_reader.LoadFromStorage();
 
-		// check if the WAL file exists
 		auto wal_path = GetWALPath();
-		auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
-		if (handle) {
-			// replay the WAL
-			if (WriteAheadLog::Replay(db, std::move(handle))) {
-				fs.RemoveFile(wal_path);
-			}
-		}
+		wal = WriteAheadLog::Replay(fs, db, wal_path);
 	}
 
 	load_complete = true;

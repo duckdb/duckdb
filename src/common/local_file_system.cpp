@@ -527,7 +527,8 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
-		return -1;
+		throw IOException("Failed to get file size for file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		                  handle.path, strerror(errno));
 	}
 	return s.st_size;
 }
@@ -536,7 +537,8 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
-		return -1;
+		throw IOException("Failed to get last modified time for file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		                  handle.path, strerror(errno));
 	}
 	return s.st_mtime;
 }
@@ -967,7 +969,8 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	LARGE_INTEGER result;
 	if (!GetFileSizeEx(hFile, &result)) {
-		return -1;
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get file size for file \"%s\": %s", handle.path, error);
 	}
 	return result.QuadPart;
 }
@@ -978,7 +981,8 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
 	FILETIME last_write;
 	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
-		return -1;
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
 	}
 
 	// https://stackoverflow.com/questions/29266743/what-is-dwlowdatetime-and-dwhighdatetime

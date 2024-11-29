@@ -64,7 +64,7 @@ static unique_ptr<FunctionData> ReadFileBind(ClientContext &context, TableFuncti
 	names.push_back("content");
 	return_types.push_back(LogicalType::BIGINT);
 	names.push_back("size");
-	return_types.push_back(LogicalType::TIMESTAMP);
+	return_types.push_back(LogicalType::TIMESTAMP_TZ);
 	names.push_back("last_modified");
 
 	return std::move(result);
@@ -172,7 +172,8 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 					// correctly)
 					try {
 						auto timestamp_seconds = Timestamp::FromEpochSeconds(fs.GetLastModifiedTime(*file_handle));
-						FlatVector::GetData<timestamp_t>(last_modified_vector)[out_idx] = timestamp_seconds;
+						FlatVector::GetData<timestamp_tz_t>(last_modified_vector)[out_idx] =
+						    timestamp_tz_t(timestamp_seconds);
 					} catch (std::exception &ex) {
 						ErrorData error(ex);
 						if (error.Type() == ExceptionType::CONVERSION) {

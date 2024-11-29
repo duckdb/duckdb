@@ -38,10 +38,6 @@ static unique_ptr<GlobalTableFunctionState> CSVSniffInitGlobal(ClientContext &co
 static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<CSVSniffFunctionData>();
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("sniff_csv is disabled through configuration");
-	}
 	result->path = input.inputs[0].ToString();
 	auto it = input.named_parameters.find("auto_detect");
 	if (it != input.named_parameters.end()) {
@@ -113,6 +109,13 @@ string FormatOptions(char opt) {
 	string result;
 	result += opt;
 	return result;
+}
+
+string FormatOptions(string opt) {
+	if (opt.size() == 1) {
+		return FormatOptions(opt[0]);
+	}
+	return opt;
 }
 
 static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

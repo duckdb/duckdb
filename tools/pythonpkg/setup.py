@@ -115,20 +115,13 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['core_functions', 'parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
-
-if platform.system() == 'Windows':
-    extensions = ['core_functions', 'parquet', 'icu', 'fts', 'tpch', 'json']
+extensions = ['core_functions', 'parquet', 'icu', 'tpch', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
 is_pyodide = 'PYODIDE' in os.environ
 no_source_wheel = is_pyodide
 use_jemalloc = (
-    not is_android
-    and not is_pyodide
-    and platform.system() == 'Linux'
-    and platform.architecture()[0] == '64bit'
-    and platform.machine() == 'x86_64'
+    not is_android and not is_pyodide and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
 )
 
 if use_jemalloc:

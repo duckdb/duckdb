@@ -175,7 +175,7 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, LinesPerBounda
 }
 
 CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
-                                       idx_t column_count, char delimiter) {
+                                       const idx_t column_count, const string &delimiter) {
 	std::ostringstream error;
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
@@ -307,7 +307,7 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
 	how_to_fix_it << "* Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
-	how_to_fix_it << "* Set quote do empty or to a different value (e.g., quote=\'\')" << '\n';
+	how_to_fix_it << "* Set quote to empty or to a different value (e.g., quote=\'\')" << '\n';
 	return CSVError(error.str(), UNTERMINATED_QUOTES, current_column, csv_row, error_info, row_byte_position,
 	                byte_position, options, how_to_fix_it.str(), current_path);
 }

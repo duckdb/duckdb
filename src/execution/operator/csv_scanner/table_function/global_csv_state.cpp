@@ -11,7 +11,7 @@ namespace duckdb {
 
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBufferManager> &buffer_manager,
                                const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-                               vector<column_t> column_ids_p, const ReadCSVData &bind_data_p)
+                               vector<ColumnIndex> column_ids_p, const ReadCSVData &bind_data_p)
     : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error), bind_data(bind_data_p) {
 

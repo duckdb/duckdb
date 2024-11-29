@@ -14,8 +14,10 @@ namespace duckdb {
 
 class CopiedStatementVerifier : public StatementVerifier {
 public:
-	explicit CopiedStatementVerifier(unique_ptr<SQLStatement> statement_p);
-	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement_p);
+	explicit CopiedStatementVerifier(unique_ptr<SQLStatement> statement_p,
+	                                 optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters);
+	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement_p,
+	                                            optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters);
 };
 
 } // namespace duckdb

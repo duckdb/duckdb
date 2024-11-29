@@ -25,7 +25,7 @@ class StringValueScanner;
 
 class ReadCSV {
 public:
-	static unique_ptr<CSVFileHandle> OpenCSV(const string &file_path, FileCompressionType compression,
+	static unique_ptr<CSVFileHandle> OpenCSV(const string &file_path, const CSVReaderOptions &options,
 	                                         ClientContext &context);
 };
 

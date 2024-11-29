@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 // This file will not be overwritten. To implement a custom function for
-// a new setting, enable 'custom_implementation' in 'settings.json'
+// a new setting, enable 'custom_implementation' in 'src/common/settings.json'
 // for this setting. The 'update_settings_definitions.py' may include new
 // setting methods' signatures that need to be implemented in this file. You
 // can check the functions declaration in 'settings.hpp' and what is
@@ -184,6 +184,66 @@ bool AllowUnsignedExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConfi
 		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
 	}
 	return true;
+}
+
+//===----------------------------------------------------------------------===//
+// Allowed Directories
+//===----------------------------------------------------------------------===//
+void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!config.options.enable_external_access) {
+		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
+	}
+	config.options.allowed_directories.clear();
+	auto &list = ListValue::GetChildren(input);
+	for (auto &val : list) {
+		config.AddAllowedDirectory(val.GetValue<string>());
+	}
+}
+
+void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!config.options.enable_external_access) {
+		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
+	}
+	config.options.allowed_directories = DBConfig().options.allowed_directories;
+}
+
+Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	vector<Value> allowed_directories;
+	for (auto &dir : config.options.allowed_directories) {
+		allowed_directories.emplace_back(dir);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_directories));
+}
+
+//===----------------------------------------------------------------------===//
+// Allowed Paths
+//===----------------------------------------------------------------------===//void
+void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!config.options.enable_external_access) {
+		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
+	}
+	config.options.allowed_paths.clear();
+	auto &list = ListValue::GetChildren(input);
+	for (auto &val : list) {
+		config.AddAllowedPath(val.GetValue<string>());
+	}
+}
+
+void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!config.options.enable_external_access) {
+		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
+	}
+	config.options.allowed_paths = DBConfig().options.allowed_paths;
+}
+
+Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	vector<Value> allowed_paths;
+	for (auto &dir : config.options.allowed_paths) {
+		allowed_paths.emplace_back(dir);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_paths));
 }
 
 //===----------------------------------------------------------------------===//
@@ -521,8 +581,24 @@ Value DuckDBAPISetting::GetSetting(const ClientContext &context) {
 // Enable External Access
 //===----------------------------------------------------------------------===//
 bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db && input.GetValue<bool>()) {
+	if (!db) {
+		return true;
+	}
+	if (input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
+	}
+	if (db && config.options.enable_external_access) {
+		// we are turning off external access - add any already attached databases to the list of accepted paths
+		auto &db_manager = DatabaseManager::Get(*db);
+		auto attached_paths = db_manager.GetAttachedDatabasePaths();
+		for (auto &path : attached_paths) {
+			config.AddAllowedPath(path);
+			config.AddAllowedPath(path + ".wal");
+		}
+	}
+	if (config.options.use_temporary_directory && !config.options.temporary_directory.empty()) {
+		// if temp directory is enabled we can also write there
+		config.AddAllowedDirectory(config.options.temporary_directory);
 	}
 	return true;
 }
@@ -1070,6 +1146,9 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!config.options.enable_external_access) {
+		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
+	}
 	config.options.temporary_directory = input.ToString();
 	config.options.use_temporary_directory = !config.options.temporary_directory.empty();
 	if (db) {
@@ -1079,6 +1158,9 @@ void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 }
 
 void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!config.options.enable_external_access) {
+		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
+	}
 	config.SetDefaultTempDirectory();
 	config.options.use_temporary_directory = DBConfig().options.use_temporary_directory;
 	if (db) {

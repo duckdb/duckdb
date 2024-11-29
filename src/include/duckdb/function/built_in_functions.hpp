@@ -54,15 +54,6 @@ private:
 	void RegisterArrowFunctions();
 	void RegisterSnifferFunction();
 
-	// aggregates
-	void RegisterDistributiveAggregates();
-
-	// scalar functions
-	void RegisterCompressedMaterializationFunctions();
-	void RegisterOperators();
-	void RegisterNestedFunctions();
-	void RegisterSequenceFunctions();
-
 	void RegisterExtensionOverloads();
 
 	// pragmas

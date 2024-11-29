@@ -3,8 +3,9 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 from datetime import date, datetime
 
-from duckdb.experimental.spark.sql import functions as F
-from duckdb.experimental.spark.sql.types import Row
+from spark_namespace.sql import functions as F
+from spark_namespace.sql.types import Row
+from spark_namespace.sql.functions import col
 
 
 class TestsSparkFunctionsDate(object):
@@ -36,7 +37,9 @@ class TestsSparkFunctionsDate(object):
         gen_record = df.select(*[F.date_trunc(fmt, "dt_ref").alias(fmt) for fmt in cols]).collect()[0]
 
         expected_record = spark.createDataFrame(
-            [r.values() for r in expected],
+            # Need to convert to a list for Spark which otherwise throws a TypeError.
+            # It would work without it for DuckDB.
+            [list(r.values()) for r in expected],
             cols,
         ).collect()[0]
 
@@ -138,3 +141,22 @@ class TestsSparkFunctionsDate(object):
         result = df.select(F.second("dt").alias("second_num")).collect()
 
         assert result[0].second_num == 45
+
+    def test_last_day(self, spark):
+        df = spark.createDataFrame([('1997-02-10',)], ['d'])
+
+        res = df.select(F.last_day(df.d.cast("date")).alias('date')).collect()
+        assert res == [Row(date=date(1997, 2, 28))]
+
+    def test_add_months(self, spark):
+        df = spark.createDataFrame([(datetime(2024, 5, 12, 13, 30, 45), 2)], ["dt", "months"])
+
+        result = df.select(
+            F.add_months("dt", 1).alias("with_literal"),
+            F.add_months("dt", "months").alias("with_str"),
+            F.add_months(col("dt"), df["months"]).alias("with_col"),
+        ).collect()
+
+        assert result[0].with_literal == date(2024, 6, 12)
+        assert result[0].with_str == date(2024, 7, 12)
+        assert result[0].with_col == date(2024, 7, 12)
