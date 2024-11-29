@@ -41,11 +41,11 @@ void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
 	}
 }
 
-void CSVErrorHandler::Error(CSVError csv_error, bool force_error) {
+void CSVErrorHandler::Error(const CSVError& csv_error, bool force_error) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if ((ignore_errors && !force_error) || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex()))) {
 		// We store this error, we can't throw it now, or we are ignoring it
-		errors[csv_error.error_info].push_back(std::move(csv_error));
+		errors[csv_error.error_info].push_back(csv_error);
 		return;
 	}
 	// Otherwise we can throw directly

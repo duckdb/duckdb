@@ -116,7 +116,7 @@ class CSVErrorHandler {
 public:
 	explicit CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
-	void Error(CSVError csv_error, bool force_error = false);
+	void Error(const CSVError& csv_error, bool force_error = false);
 	//! If we have a cached error, and we can now error, we error.
 	void ErrorIfNeeded();
 	//! Inserts a finished error info
