@@ -491,23 +491,26 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 		delete_art = delete_index->Cast<ART>();
 	}
 
-	// Insert the entries into the index.
-	idx_t failed_index = DConstants::INVALID_INDEX;
+	ARTConflictType conflict_type;
+	optional_idx conflict_index;
 	auto was_empty = !tree.HasMetadata();
+
+	// Insert the entries into the index.
 	for (idx_t i = 0; i < row_count; i++) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		if (!Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus(), delete_art)) {
-			// Insertion failure due to a constraint violation.
-			failed_index = i;
+		conflict_type = Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus(), delete_art);
+		if (conflict_type != ARTConflictType::NO_CONFLICT) {
+			conflict_index = i;
 			break;
 		}
 	}
 
 	// Remove any previously inserted entries.
-	if (failed_index != DConstants::INVALID_INDEX) {
-		for (idx_t i = 0; i < failed_index; i++) {
+	if (conflict_type != ARTConflictType::NO_CONFLICT) {
+		D_ASSERT(conflict_index.IsValid());
+		for (idx_t i = 0; i < conflict_index.GetIndex(); i++) {
 			if (keys[i].Empty()) {
 				continue;
 			}
@@ -520,9 +523,14 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 		VerifyAllocationsInternal();
 	}
 
-	if (failed_index != DConstants::INVALID_INDEX) {
-		auto msg = AppendRowError(input, failed_index);
-		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"", msg));
+	if (conflict_type == ARTConflictType::TRANSACTION) {
+		auto msg = AppendRowError(input, conflict_index.GetIndex());
+		return ErrorData(TransactionException("write-write conflict on key \"%s\"", msg));
+	}
+
+	if (conflict_type == ARTConflictType::CONSTRAINT) {
+		auto msg = AppendRowError(input, conflict_index.GetIndex());
+		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
 	}
 
 #ifdef DEBUG
@@ -573,26 +581,26 @@ void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, cons
 	Leaf::New(ref, row_id.GetRowId());
 }
 
-bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-                         const GateStatus status, optional_ptr<ART> delete_art) {
+ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+                                    const GateStatus status, optional_ptr<ART> delete_art) {
 	D_ASSERT(depth < key.len);
 	auto child = node.GetChildMutable(*this, key[depth]);
 
 	// Recurse, if a child exists at key[depth].
 	if (child) {
 		D_ASSERT(child->HasMetadata());
-		bool success = Insert(*child, key, depth + 1, row_id, status, delete_art);
+		auto conflict_type = Insert(*child, key, depth + 1, row_id, status, delete_art);
 		node.ReplaceChild(*this, key[depth], *child);
-		return success;
+		return conflict_type;
 	}
 
 	// Create an inlined prefix at key[depth].
 	if (status == GateStatus::GATE_SET) {
 		Node remainder;
 		auto byte = key[depth];
-		auto success = Insert(remainder, key, depth + 1, row_id, status, delete_art);
+		auto conflict_type = Insert(remainder, key, depth + 1, row_id, status, delete_art);
 		Node::InsertChild(*this, node, byte, remainder);
-		return success;
+		return conflict_type;
 	}
 
 	// Insert an inlined leaf at key[depth].
@@ -608,15 +616,14 @@ bool ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const
 	// Create the inlined leaf.
 	Leaf::New(ref, row_id.GetRowId());
 	Node::InsertChild(*this, node, key[depth], leaf);
-	return true;
+	return ARTConflictType::NO_CONFLICT;
 }
 
-// TODO: Maybe return ENUM with different failure states instead of just bool.
-bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-                 optional_ptr<ART> delete_art) {
+ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
+                            optional_ptr<ART> delete_art) {
 	if (!node.HasMetadata()) {
 		InsertIntoEmpty(node, key, depth, row_id, status);
-		return true;
+		return ARTConflictType::NO_CONFLICT;
 	}
 
 	// Enter a nested leaf.
@@ -628,7 +635,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 
 			// We restrict this transactionality to two-value leaves, so any subsequent
 			// incoming transaction must fail here.
-			return false;
+			return ARTConflictType::TRANSACTION;
 		}
 		return Insert(node, row_id, 0, row_id, GateStatus::GATE_SET, delete_art);
 	}
@@ -637,15 +644,16 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 	switch (type) {
 	case NType::LEAF_INLINED: {
 		if (IsUnique() && !delete_art) {
-			return false;
+			return ARTConflictType::CONSTRAINT;
 		}
+
 		if (IsUnique()) {
 			// Lookup in the delete_art.
 			auto delete_leaf = delete_art->Lookup(delete_art->tree, key, 0);
 
 			// Not a deleted leaf.
 			if (!delete_leaf) {
-				return false;
+				return ARTConflictType::CONSTRAINT;
 			}
 
 			// The row ID has changed.
@@ -653,13 +661,13 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 			row_t delete_row_id = delete_leaf->GetRowId();
 			auto global_row_id = node.GetRowId();
 			if (delete_row_id != global_row_id) {
-				return false;
+				return ARTConflictType::TRANSACTION;
 			}
-
-			// Else, we insert the value.
 		}
+
+		// Insert the value.
 		Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
-		return true;
+		return ARTConflictType::NO_CONFLICT;
 	}
 	case NType::LEAF: {
 		D_ASSERT(!IsUnique());
@@ -672,7 +680,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_i
 		// Row IDs are unique, so there are never any duplicate byte conflicts here.
 		auto byte = key[Prefix::ROW_ID_COUNT];
 		Node::InsertChild(*this, node, byte);
-		return true;
+		return ARTConflictType::NO_CONFLICT;
 	}
 	case NType::NODE_4:
 	case NType::NODE_16:

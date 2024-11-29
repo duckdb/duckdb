@@ -297,8 +297,8 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	return GateStatus::GATE_NOT_SET;
 }
 
-bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-                    optional_ptr<ART> delete_art) {
+ARTConflictType Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id,
+                               const GateStatus status, optional_ptr<ART> delete_art) {
 	reference<Node> next(node);
 	auto pos = TraverseMutable(art, next, key, depth);
 
@@ -325,7 +325,7 @@ bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const 
 		Node new_row_id;
 		Leaf::New(new_row_id, key.GetRowId());
 		Node::InsertChild(art, next, key[depth], new_row_id);
-		return true;
+		return ARTConflictType::NO_CONFLICT;
 	}
 
 	Node leaf;
@@ -338,7 +338,7 @@ bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const 
 	// Create the inlined leaf.
 	Leaf::New(ref, row_id.GetRowId());
 	Node4::InsertChild(art, next, key[depth], leaf);
-	return true;
+	return ARTConflictType::NO_CONFLICT;
 }
 
 string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_verify) {

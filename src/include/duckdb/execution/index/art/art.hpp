@@ -22,6 +22,9 @@ enum class VerifyExistenceType : uint8_t {
 	// Delete from a table that has a foreign key.
 	DELETE_FK = 2
 };
+
+enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
+
 class ConflictManager;
 class ARTKey;
 class ARTKeySection;
@@ -77,8 +80,8 @@ public:
 	//! Append a chunk by first executing the ART's expressions.
 	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_art) override;
 	//! Insert a chunk.
-	bool Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-	            optional_ptr<ART> delete_art);
+	ARTConflictType Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
+	                       optional_ptr<ART> delete_art);
 	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids, optional_ptr<BoundIndex> delete_index) override;
 
 	//! Constraint verification for a chunk.
@@ -126,8 +129,8 @@ private:
 
 	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
 	                     const GateStatus status);
-	bool InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const GateStatus status,
-	                    optional_ptr<ART> delete_art);
+	ARTConflictType InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+	                               const GateStatus status, optional_ptr<ART> delete_art);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);

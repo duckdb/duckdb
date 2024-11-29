@@ -518,7 +518,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 		lstate.constraint_state = table.GetStorage().InitializeConstraintState(table, bound_constraints);
 	}
 	table.GetStorage().VerifyAppendConstraints(*lstate.constraint_state, context.client, lstate.insert_chunk, nullptr,
-	                                           nullptr);
+	                                           nullptr, nullptr);
 
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
@@ -629,7 +629,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 
 			memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
 			entry.collection->Scan(transaction, [&](DataChunk &insert_chunk) {
-				storage.LocalAppend(append_state, table, context, insert_chunk, nullptr);
+				storage.LocalAppend(append_state, table, context, insert_chunk, nullptr, nullptr, false);
 				return true;
 			});
 		}

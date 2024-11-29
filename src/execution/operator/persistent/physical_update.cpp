@@ -53,12 +53,13 @@ public:
 			update_types.push_back(expr->return_type);
 		}
 		update_chunk.Initialize(allocator, update_types);
-		// initialize the mock chunk
 		mock_chunk.Initialize(allocator, table_types);
+		delete_chunk.Initialize(allocator, table_types);
 	}
 
 	DataChunk update_chunk;
 	DataChunk mock_chunk;
+	DataChunk delete_chunk;
 	ExpressionExecutor default_executor;
 	unique_ptr<TableDeleteState> delete_state;
 	unique_ptr<TableUpdateState> update_state;
@@ -149,16 +150,28 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		del_row_ids = make_uniq<Vector>(row_ids, sel, update_count);
 	}
 
+	// TODO: we only need this if we update the value of any indexed column
+	// TODO: otherwise, the mock_chunk is the delete chunk.
+	auto &transaction = DuckTransaction::Get(context.client, table.db);
+	auto &delete_chunk = l_state.delete_chunk;
+	delete_chunk.SetCardinality(update_count);
+	vector<StorageIndex> column_ids;
+	for (idx_t i = 0; i < table.ColumnCount(); i++) {
+		column_ids.emplace_back(i);
+	};
+	auto fetch_state = ColumnFetchState();
+	table.Fetch(transaction, delete_chunk, column_ids, row_ids, update_count, fetch_state);
+
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
 	table.Delete(delete_state, context.client, *del_row_ids, update_count);
 
 	// Arrange the columns in the "standard table order".
-	mock_chunk.SetCardinality(update_chunk);
+	mock_chunk.SetCardinality(update_count);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 	}
 
-	table.LocalAppend(tableref, context.client, mock_chunk, bound_constraints, std::move(del_row_ids));
+	table.LocalAppend(tableref, context.client, mock_chunk, bound_constraints, std::move(del_row_ids), delete_chunk);
 	if (return_chunk) {
 		g_state.return_collection.Append(mock_chunk);
 	}

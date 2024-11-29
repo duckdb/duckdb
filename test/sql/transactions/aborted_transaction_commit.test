@@ -15,7 +15,7 @@ INSERT INTO keys VALUES (1);
 statement error
 INSERT INTO keys VALUES (1);
 ----
-constraint violated
+constraint violation
 
 # commit becomes a rollback
 statement ok
@@ -36,7 +36,7 @@ INSERT INTO keys VALUES (1);
 statement error
 INSERT INTO keys VALUES (1);
 ----
-constraint violated
+constraint violation
 
 # commit becomes a rollback
 statement error

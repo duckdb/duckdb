@@ -671,7 +671,7 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 }
 
 void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-                                    DataChunk &chunk, unique_ptr<Vector> row_ids,
+                                    DataChunk &chunk, unique_ptr<Vector> row_ids, optional_ptr<DataChunk> delete_chunk,
                                     optional_ptr<ConflictManager> manager) {
 	//! Verify the constraint without a conflict manager.
 	if (!manager) {
@@ -686,8 +686,18 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 			}
 
 			auto delete_index = delete_indexes->Find(index.GetIndexName());
-			D_ASSERT(delete_index);
-			delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
+			if (!delete_index) {
+				index.Cast<BoundIndex>().VerifyAppend(chunk, nullptr);
+				return false;
+			}
+
+			if (row_ids) {
+				if (delete_chunk) {
+					delete_index->Cast<BoundIndex>().Append(*delete_chunk, *row_ids, nullptr);
+				} else {
+					delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
+				}
+			}
 			index.Cast<BoundIndex>().VerifyAppend(chunk, delete_index->Cast<BoundIndex>());
 			return false;
 		});
@@ -711,8 +721,18 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 		}
 
 		auto delete_index = delete_indexes->Find(index.GetIndexName());
-		D_ASSERT(delete_index);
-		delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
+		if (!delete_index) {
+			index.Cast<BoundIndex>().VerifyAppend(chunk, nullptr);
+			return false;
+		}
+
+		if (row_ids) {
+			if (delete_chunk) {
+				delete_index->Cast<BoundIndex>().Append(*delete_chunk, *row_ids, nullptr);
+			} else {
+				delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
+			}
+		}
 		manager->AddIndex(index.Cast<BoundIndex>(), delete_index->Cast<BoundIndex>());
 		return false;
 	});
@@ -742,16 +762,26 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 		}
 
 		auto delete_index = delete_indexes->Find(index.GetIndexName());
-		D_ASSERT(delete_index);
-		delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
+		if (!delete_index) {
+			index.Cast<BoundIndex>().VerifyAppend(chunk, nullptr);
+			return false;
+		}
+
+		if (row_ids) {
+			if (delete_chunk) {
+				delete_index->Cast<BoundIndex>().Append(*delete_chunk, *row_ids, nullptr);
+			} else {
+				delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
+			}
+		}
 		bound_index.VerifyAppend(chunk, delete_index->Cast<BoundIndex>(), *manager);
 		return false;
 	});
 }
 
 void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, ClientContext &context, DataChunk &chunk,
-                                        unique_ptr<Vector> row_ids, optional_ptr<LocalTableStorage> local_storage,
-                                        optional_ptr<ConflictManager> manager) {
+                                        unique_ptr<Vector> row_ids, optional_ptr<TableIndexList> delete_indexes,
+                                        optional_ptr<DataChunk> delete_chunk, optional_ptr<ConflictManager> manager) {
 
 	auto &table = constraint_state.table;
 
@@ -773,11 +803,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 	}
 
 	if (HasUniqueIndexes()) {
-		if (local_storage) {
-			VerifyUniqueIndexes(info->indexes, local_storage->delete_indexes, chunk, std::move(row_ids), manager);
-		} else {
-			VerifyUniqueIndexes(info->indexes, nullptr, chunk, nullptr, manager);
-		}
+		VerifyUniqueIndexes(info->indexes, delete_indexes, chunk, std::move(row_ids), delete_chunk, manager);
 	}
 
 	auto &constraints = table.GetConstraints();
@@ -833,7 +859,7 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry
 }
 
 void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                            unique_ptr<Vector> row_ids, bool unsafe) {
+                            unique_ptr<Vector> row_ids, optional_ptr<DataChunk> delete_chunk, bool unsafe) {
 	if (chunk.size() == 0) {
 		return;
 	}
@@ -846,7 +872,8 @@ void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, C
 	// Insert any row ids into the DELETE ART and verify constraints afterward.
 	// This happens only for the global indexes.
 	if (!unsafe) {
-		VerifyAppendConstraints(*state.constraint_state, context, chunk, std::move(row_ids), state.storage);
+		VerifyAppendConstraints(*state.constraint_state, context, chunk, std::move(row_ids),
+		                        state.storage->delete_indexes, delete_chunk);
 	}
 
 	// Append to the transaction-local data.
@@ -873,11 +900,12 @@ void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collectio
 }
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                            const vector<unique_ptr<BoundConstraint>> &bound_constraints, unique_ptr<Vector> row_ids) {
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints, unique_ptr<Vector> row_ids,
+                            optional_ptr<DataChunk> delete_chunk) {
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
-	storage.LocalAppend(append_state, table, context, chunk, std::move(row_ids));
+	storage.LocalAppend(append_state, table, context, chunk, std::move(row_ids), delete_chunk, false);
 	storage.FinalizeLocalAppend(append_state);
 }
 
@@ -891,7 +919,7 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	if (!column_ids || column_ids->empty()) {
 		for (auto &chunk : collection.Chunks()) {
-			storage.LocalAppend(append_state, table, context, chunk, nullptr);
+			storage.LocalAppend(append_state, table, context, chunk, nullptr, nullptr, false);
 		}
 		storage.FinalizeLocalAppend(append_state);
 		return;
@@ -934,7 +962,7 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	for (auto &chunk : collection.Chunks()) {
 		expression_executor.Execute(chunk, result);
-		storage.LocalAppend(append_state, table, context, result, nullptr);
+		storage.LocalAppend(append_state, table, context, result, nullptr, nullptr, false);
 		result.Reset();
 	}
 	storage.FinalizeLocalAppend(append_state);
