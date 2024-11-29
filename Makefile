@@ -219,6 +219,9 @@ endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif
+ifeq (${DISABLE_POINTER_SALT}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_POINTER_SALT=1
+endif
 ifeq (${LATEST_STORAGE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
 endif
@@ -482,6 +485,7 @@ generate-files:
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_settings.py
 	python3 scripts/generate_serialization.py
+	python3 scripts/generate_storage_info.py
 	python3 scripts/generate_enum_util.py
 	python3 scripts/generate_metric_enums.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"

@@ -14,8 +14,8 @@ bool IsQuoteDefault(char quote) {
 	return false;
 }
 
-vector<char> DialectCandidates::GetDefaultDelimiter() {
-	return {',', '|', ';', '\t'};
+vector<string> DialectCandidates::GetDefaultDelimiter() {
+	return {",", "|", ";", "\t"};
 }
 
 vector<vector<char>> DialectCandidates::GetDefaultQuote() {
@@ -470,13 +470,14 @@ void CSVSniffer::RefineCandidates() {
 			bool finished_file = cur_candidate->FinishedFile();
 			if (finished_file || i == options.sample_size_chunks) {
 				// we finished the file or our chunk sample successfully
-				successful_candidates.push_back(std::move(cur_candidate));
+				if (!cur_candidate->GetResult().error) {
+					successful_candidates.push_back(std::move(cur_candidate));
+				}
 				done = true;
-				break;
+				continue;
 			}
-			if ((!!RefineCandidateNextChunk(*cur_candidate) || cur_candidate->GetResult().error)) {
+			if (RefineCandidateNextChunk(*cur_candidate) && !cur_candidate->GetResult().error) {
 				successful_candidates.push_back(std::move(cur_candidate));
-				break;
 			}
 		}
 		candidates = std::move(successful_candidates);

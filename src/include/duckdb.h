@@ -282,11 +282,26 @@ typedef struct {
 	int32_t offset;
 } duckdb_time_tz_struct;
 
-//! Timestamps are stored as microseconds since 1970-01-01.
+//! TIMESTAMP values are stored as microseconds since 1970-01-01.
 //! Use the duckdb_from_timestamp and duckdb_to_timestamp functions to extract individual information.
 typedef struct {
 	int64_t micros;
 } duckdb_timestamp;
+
+//! TIMESTAMP_S values are stored as seconds since 1970-01-01.
+typedef struct {
+	int64_t seconds;
+} duckdb_timestamp_s;
+
+//! TIMESTAMP_MS values are stored as milliseconds since 1970-01-01.
+typedef struct {
+	int64_t millis;
+} duckdb_timestamp_ms;
+
+//! TIMESTAMP_NS values are stored as nanoseconds since 1970-01-01.
+typedef struct {
+	int64_t nanos;
+} duckdb_timestamp_ns;
 
 typedef struct {
 	duckdb_date_struct date;
@@ -1325,10 +1340,34 @@ DUCKDB_API duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct ts);
 /*!
 Test a `duckdb_timestamp` to see if it is a finite value.
 
-* @param ts The timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
+* @param ts The duckdb_timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
 * @return True if the timestamp is finite, false if it is ±infinity.
 */
 DUCKDB_API bool duckdb_is_finite_timestamp(duckdb_timestamp ts);
+
+/*!
+Test a `duckdb_timestamp_s` to see if it is a finite value.
+
+* @param ts The duckdb_timestamp_s object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column.
+* @return True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp_s(duckdb_timestamp_s ts);
+
+/*!
+Test a `duckdb_timestamp_ms` to see if it is a finite value.
+
+* @param ts The duckdb_timestamp_ms object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column.
+* @return True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp_ms(duckdb_timestamp_ms ts);
+
+/*!
+Test a `duckdb_timestamp_ns` to see if it is a finite value.
+
+* @param ts The duckdb_timestamp_ns object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column.
+* @return True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp_ns(duckdb_timestamp_ns ts);
 
 //===--------------------------------------------------------------------===//
 // Hugeint Helpers
@@ -1996,10 +2035,42 @@ DUCKDB_API duckdb_value duckdb_create_time_tz_value(duckdb_time_tz value);
 /*!
 Creates a TIMESTAMP value from a duckdb_timestamp
 
-* @param input The timestamp value
+* @param input The duckdb_timestamp value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_timestamp(duckdb_timestamp input);
+
+/*!
+Creates a TIMESTAMP_TZ value from a duckdb_timestamp
+
+* @param input The duckdb_timestamp value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_timestamp_tz(duckdb_timestamp input);
+
+/*!
+Creates a TIMESTAMP_S value from a duckdb_timestamp_s
+
+* @param input The duckdb_timestamp_s value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_timestamp_s(duckdb_timestamp_s input);
+
+/*!
+Creates a TIMESTAMP_MS value from a duckdb_timestamp_ms
+
+* @param input The duckdb_timestamp_ms value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_timestamp_ms(duckdb_timestamp_ms input);
+
+/*!
+Creates a TIMESTAMP_NS value from a duckdb_timestamp_ns
+
+* @param input The duckdb_timestamp_ns value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_timestamp_ns(duckdb_timestamp_ns input);
 
 /*!
 Creates a value from an interval
@@ -2150,9 +2221,41 @@ DUCKDB_API duckdb_time_tz duckdb_get_time_tz(duckdb_value val);
 Returns the TIMESTAMP value of the given value.
 
 * @param val A duckdb_value containing a TIMESTAMP
-* @return A duckdb_timestamp, or MinValue<timestamp_t> if the value cannot be converted
+* @return A duckdb_timestamp, or MinValue<timestamp> if the value cannot be converted
 */
 DUCKDB_API duckdb_timestamp duckdb_get_timestamp(duckdb_value val);
+
+/*!
+Returns the TIMESTAMP_TZ value of the given value.
+
+* @param val A duckdb_value containing a TIMESTAMP_TZ
+* @return A duckdb_timestamp, or MinValue<timestamp_tz> if the value cannot be converted
+*/
+DUCKDB_API duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val);
+
+/*!
+Returns the duckdb_timestamp_s value of the given value.
+
+* @param val A duckdb_value containing a TIMESTAMP_S
+* @return A duckdb_timestamp_s, or MinValue<timestamp_s> if the value cannot be converted
+*/
+DUCKDB_API duckdb_timestamp_s duckdb_get_timestamp_s(duckdb_value val);
+
+/*!
+Returns the duckdb_timestamp_ms value of the given value.
+
+* @param val A duckdb_value containing a TIMESTAMP_MS
+* @return A duckdb_timestamp_ms, or MinValue<timestamp_ms> if the value cannot be converted
+*/
+DUCKDB_API duckdb_timestamp_ms duckdb_get_timestamp_ms(duckdb_value val);
+
+/*!
+Returns the duckdb_timestamp_ns value of the given value.
+
+* @param val A duckdb_value containing a TIMESTAMP_NS
+* @return A duckdb_timestamp_ns, or MinValue<timestamp_ns> if the value cannot be converted
+*/
+DUCKDB_API duckdb_timestamp_ns duckdb_get_timestamp_ns(duckdb_value val);
 
 /*!
 Returns the interval value of the given value.
@@ -2709,7 +2812,7 @@ DUCKDB_API uint64_t *duckdb_vector_get_validity(duckdb_vector vector);
 Ensures the validity mask is writable by allocating it.
 
 After this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.
-This allows null values to be written to the vector, regardless of whether a validity mask was present before.
+This allows NULL values to be written to the vector, regardless of whether a validity mask was present before.
 
 * @param vector The vector to alter
 */

@@ -187,6 +187,12 @@ duckdb_time CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
 duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
+duckdb_timestamp_s CAPIResult::Fetch(idx_t col, idx_t row);
+template <>
+duckdb_timestamp_ms CAPIResult::Fetch(idx_t col, idx_t row);
+template <>
+duckdb_timestamp_ns CAPIResult::Fetch(idx_t col, idx_t row);
+template <>
 duckdb_interval CAPIResult::Fetch(idx_t col, idx_t row);
 template <>
 duckdb_blob CAPIResult::Fetch(idx_t col, idx_t row);

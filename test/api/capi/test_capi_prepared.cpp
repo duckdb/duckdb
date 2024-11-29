@@ -351,6 +351,13 @@ TEST_CASE("Test prepared statements with named parameters in C API", "[capi]") {
 	status = duckdb_bind_parameter_index(stmt, &parameter_index, "my_val");
 	REQUIRE(status == DuckDBSuccess);
 
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_BIGINT);
+
+	auto logical_type = duckdb_param_logical_type(stmt, 1);
+	REQUIRE(logical_type);
+	REQUIRE(duckdb_get_type_id(logical_type) == DUCKDB_TYPE_BIGINT);
+	duckdb_destroy_logical_type(&logical_type);
+
 	idx_t param_count = duckdb_nparams(stmt);
 	duckdb::vector<string> names;
 	for (idx_t i = 0; i < param_count; i++) {

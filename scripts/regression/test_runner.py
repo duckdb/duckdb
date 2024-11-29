@@ -101,8 +101,8 @@ for i in range(NUMBER_REPETITIONS):
 '''
     )
 
-    old_results = old_runner.run_benchmarks()
-    new_results = new_runner.run_benchmarks()
+    old_results = old_runner.run_benchmarks(benchmark_list)
+    new_results = new_runner.run_benchmarks(benchmark_list)
 
     for benchmark in benchmark_list:
         old_res = old_results[benchmark]

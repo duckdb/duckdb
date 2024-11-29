@@ -80,6 +80,8 @@ protected:
 	mutex lock;
 };
 
+class HTTPFileSystem;
+
 class HTTPFileHandle : public FileHandle {
 public:
 	HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags flags, const HTTPParams &params);
@@ -129,6 +131,10 @@ public:
 protected:
 	//! Create a new Client
 	virtual unique_ptr<duckdb_httplib_openssl::Client> CreateClient(optional_ptr<ClientContext> client_context);
+
+private:
+	//! Fully downloads a file
+	void FullDownload(HTTPFileSystem &hfs, bool &should_write_cache);
 };
 
 class HTTPFileSystem : public FileSystem {

@@ -1,6 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 
 #include "autocomplete_extension.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -13,16 +14,19 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "matcher.hpp"
+#include "duckdb/catalog/default/builtin_types/types.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "tokenizer.hpp"
 
 namespace duckdb {
 
 struct SQLAutoCompleteFunctionData : public TableFunctionData {
-	explicit SQLAutoCompleteFunctionData(vector<string> suggestions_p, idx_t start_pos)
-	    : suggestions(std::move(suggestions_p)), start_pos(start_pos) {
+	explicit SQLAutoCompleteFunctionData(vector<AutoCompleteSuggestion> suggestions_p)
+	    : suggestions(std::move(suggestions_p)) {
 	}
 
-	vector<string> suggestions;
-	idx_t start_pos;
+	vector<AutoCompleteSuggestion> suggestions;
 };
 
 struct SQLAutoCompleteData : public GlobalTableFunctionState {
@@ -32,27 +36,24 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-struct AutoCompleteCandidate {
-	explicit AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0)
-	    : candidate(std::move(candidate_p)), score_bonus(score_bonus) {
-	}
-
-	string candidate;
-	//! The higher the score bonus, the more likely this candidate will be chosen
-	int32_t score_bonus;
-};
-
-static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions, const string &prefix,
-                                         const unordered_set<string> &extra_keywords, bool add_quotes = false) {
-	for (auto &kw : extra_keywords) {
-		available_suggestions.emplace_back(std::move(kw));
-	}
+static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions,
+                                                         const string &prefix) {
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(available_suggestions.size());
-	for (auto &suggestion : available_suggestions) {
+
+	case_insensitive_map_t<idx_t> matches;
+	bool prefix_is_lower = StringUtil::IsLower(prefix);
+	bool prefix_is_upper = StringUtil::IsUpper(prefix);
+	for (idx_t i = 0; i < available_suggestions.size(); i++) {
+		auto &suggestion = available_suggestions[i];
 		const int32_t BASE_SCORE = 10;
 		auto &str = suggestion.candidate;
 		auto bonus = suggestion.score_bonus;
+		if (matches.find(str) != matches.end()) {
+			// entry already exists
+			continue;
+		}
+		matches[str] = i;
 
 		D_ASSERT(BASE_SCORE - bonus >= 0);
 		auto score = idx_t(BASE_SCORE - bonus);
@@ -64,40 +65,44 @@ static vector<string> ComputeSuggestions(vector<AutoCompleteCandidate> available
 		}
 		scores.emplace_back(str, score);
 	}
-	auto results = StringUtil::TopNStrings(scores, 20, 999);
-	if (add_quotes) {
-		for (auto &result : results) {
-			if (extra_keywords.find(result) == extra_keywords.end()) {
-				result = KeywordHelper::WriteOptionallyQuoted(result, '"', true);
-			} else {
-				result = result + " ";
-			}
+	vector<AutoCompleteSuggestion> results;
+	auto top_strings = StringUtil::TopNStrings(scores, 20, 999);
+	for (auto &result : top_strings) {
+		auto entry = matches.find(result);
+		if (entry == matches.end()) {
+			throw InternalException("Auto-complete match not found");
 		}
+		auto &suggestion = available_suggestions[entry->second];
+		if (suggestion.candidate_type == CandidateType::KEYWORD) {
+			if (prefix_is_lower) {
+				result = StringUtil::Lower(result);
+			} else if (prefix_is_upper) {
+				result = StringUtil::Upper(result);
+			}
+		} else if (suggestion.candidate_type == CandidateType::IDENTIFIER) {
+			result = KeywordHelper::WriteOptionallyQuoted(result, '"');
+		}
+		if (suggestion.extra_char != '\0') {
+			result += suggestion.extra_char;
+		}
+		results.emplace_back(std::move(result), suggestion.suggestion_pos);
 	}
 	return results;
 }
 
-static vector<string> InitialKeywords() {
-	return vector<string> {"SELECT",     "INSERT",   "DELETE",  "UPDATE",  "CREATE",   "DROP",      "COPY",
-	                       "ALTER",      "WITH",     "EXPORT",  "BEGIN",   "VACUUM",   "PREPARE",   "EXECUTE",
-	                       "DEALLOCATE", "CALL",     "ANALYZE", "EXPLAIN", "DESCRIBE", "SUMMARIZE", "LOAD",
-	                       "CHECKPOINT", "ROLLBACK", "COMMIT",  "CALL",    "FROM",     "PIVOT",     "UNPIVOT"};
-}
+static vector<reference<AttachedDatabase>> GetAllCatalogs(ClientContext &context) {
+	vector<reference<AttachedDatabase>> result;
 
-static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
-	auto keywords = InitialKeywords();
-	vector<AutoCompleteCandidate> result;
-	for (auto &kw : keywords) {
-		auto score = 0;
-		if (kw == "SELECT") {
-			score = 2;
-		}
-		if (kw == "FROM" || kw == "DELETE" || kw == "INSERT" || kw == "UPDATE") {
-			score = 1;
-		}
-		result.emplace_back(kw + " ", score);
+	auto &database_manager = DatabaseManager::Get(context);
+	auto databases = database_manager.GetDatabases(context);
+	for (auto &database : databases) {
+		result.push_back(database.get());
 	}
 	return result;
+}
+
+static vector<reference<SchemaCatalogEntry>> GetAllSchemas(ClientContext &context) {
+	return Catalog::GetAllSchemas(context);
 }
 
 static vector<reference<CatalogEntry>> GetAllTables(ClientContext &context, bool for_table_names) {
@@ -130,6 +135,30 @@ static vector<reference<CatalogEntry>> GetAllTables(ClientContext &context, bool
 	return result;
 }
 
+static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto all_entries = GetAllCatalogs(context);
+	for (auto &entry_ref : all_entries) {
+		auto &entry = entry_ref.get();
+		AutoCompleteCandidate candidate(entry.name, 0);
+		candidate.extra_char = '.';
+		suggestions.push_back(std::move(candidate));
+	}
+	return suggestions;
+}
+
+static vector<AutoCompleteCandidate> SuggestSchemaName(ClientContext &context) {
+	vector<AutoCompleteCandidate> suggestions;
+	auto all_entries = GetAllSchemas(context);
+	for (auto &entry_ref : all_entries) {
+		auto &entry = entry_ref.get();
+		AutoCompleteCandidate candidate(entry.name, 0);
+		candidate.extra_char = '.';
+		suggestions.push_back(std::move(candidate));
+	}
+	return suggestions;
+}
+
 static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllTables(context, true);
@@ -142,6 +171,13 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 	return suggestions;
 }
 
+static vector<AutoCompleteCandidate> SuggestType(ClientContext &) {
+	vector<AutoCompleteCandidate> suggestions;
+	for (auto &type_entry : BUILTIN_TYPES) {
+		suggestions.emplace_back(type_entry.name, 0, CandidateType::KEYWORD);
+	}
+	return suggestions;
+}
 static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllTables(context, false);
@@ -149,19 +185,22 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 		auto &entry = entry_ref.get();
 		if (entry.type == CatalogType::TABLE_ENTRY) {
 			auto &table = entry.Cast<TableCatalogEntry>();
+			int32_t bonus = entry.internal ? 0 : 3;
 			for (auto &col : table.GetColumns().Logical()) {
-				suggestions.emplace_back(col.GetName(), 1);
+				suggestions.emplace_back(col.GetName(), bonus);
 			}
 		} else if (entry.type == CatalogType::VIEW_ENTRY) {
 			auto &view = entry.Cast<ViewCatalogEntry>();
+			int32_t bonus = entry.internal ? 0 : 3;
 			for (auto &col : view.aliases) {
-				suggestions.emplace_back(col, 1);
+				suggestions.emplace_back(col, bonus);
 			}
 		} else {
 			if (StringUtil::CharacterIsOperator(entry.name[0])) {
 				continue;
 			}
-			suggestions.emplace_back(entry.name);
+			int32_t bonus = entry.internal ? 0 : 2;
+			suggestions.emplace_back(entry.name, bonus);
 		};
 	}
 	return suggestions;
@@ -186,8 +225,8 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	}
 	auto &fs = FileSystem::GetFileSystem(context);
 	string search_dir;
-	D_ASSERT(last_pos >= prefix.size());
 	auto is_path_absolute = fs.IsPathAbsolute(prefix);
+	last_pos += prefix.size();
 	for (idx_t i = prefix.size(); i > 0; i--, last_pos--) {
 		if (prefix[i - 1] == '/' || prefix[i - 1] == '\\') {
 			search_dir = prefix.substr(0, i - 1);
@@ -215,164 +254,101 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 			score = 1;
 		}
 		result.emplace_back(std::move(suggestion), score);
+		result.back().candidate_type = CandidateType::LITERAL;
 	});
 	return result;
 }
 
-enum class SuggestionState : uint8_t { SUGGEST_KEYWORD, SUGGEST_TABLE_NAME, SUGGEST_COLUMN_NAME, SUGGEST_FILE_NAME };
+class AutoCompleteTokenizer : public BaseTokenizer {
+public:
+	AutoCompleteTokenizer(const string &sql, MatchState &state)
+	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
+	}
+
+	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
+		if (state == TokenizeState::STRING_LITERAL) {
+			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
+		}
+		last_word = std::move(last_word_p);
+		last_pos = last_pos_p;
+	}
+
+	vector<MatcherSuggestion> &suggestions;
+	string last_word;
+	idx_t last_pos;
+};
 
 static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
-	// for auto-completion, we consider 4 scenarios
-	// * there is nothing in the buffer, or only one word -> suggest a keyword
-	// * the previous keyword is SELECT, WHERE, BY, HAVING, ... -> suggest a column name
-	// * the previous keyword is FROM, INSERT, UPDATE ,... -> select a table name
-	// * we are in a string constant -> suggest a filename
-	// figure out which state we are in by doing a run through the query
-	idx_t pos = 0;
-	idx_t last_pos = 0;
-	idx_t pos_offset = 0;
-	bool seen_word = false;
-	unordered_set<string> suggested_keywords;
-	SuggestionState suggest_state = SuggestionState::SUGGEST_KEYWORD;
-	case_insensitive_set_t column_name_keywords = {"SELECT", "WHERE", "BY",    "HAVING", "QUALIFY",
-	                                               "LIMIT",  "SET",   "USING", "ON"};
-	case_insensitive_set_t table_name_keywords = {"FROM",  "JOIN", "INSERT", "UPDATE",  "DELETE",
-	                                              "ALTER", "DROP", "CALL",   "DESCRIBE"};
-	case_insensitive_map_t<unordered_set<string>> next_keyword_map;
-	next_keyword_map["SELECT"] = {"FROM",    "WHERE",  "GROUP",  "HAVING", "WINDOW", "ORDER",     "LIMIT",
-	                              "QUALIFY", "SAMPLE", "VALUES", "UNION",  "EXCEPT", "INTERSECT", "DISTINCT"};
-	next_keyword_map["WITH"] = {"RECURSIVE", "SELECT", "AS"};
-	next_keyword_map["INSERT"] = {"INTO", "VALUES", "SELECT", "DEFAULT"};
-	next_keyword_map["DELETE"] = {"FROM", "WHERE", "USING"};
-	next_keyword_map["UPDATE"] = {"SET", "WHERE"};
-	next_keyword_map["CREATE"] = {"TABLE", "SCHEMA", "VIEW", "SEQUENCE", "MACRO", "FUNCTION", "SECRET", "TYPE"};
-	next_keyword_map["DROP"] = next_keyword_map["CREATE"];
-	next_keyword_map["ALTER"] = {"TABLE", "VIEW", "ADD", "DROP", "COLUMN", "SET", "TYPE", "DEFAULT", "DATA", "RENAME"};
+	// tokenize the input
+	vector<MatcherToken> tokens;
+	vector<MatcherSuggestion> suggestions;
+	MatchState state(tokens, suggestions);
 
-regular_scan:
-	for (; pos < sql.size(); pos++) {
-		if (sql[pos] == '\'') {
-			pos++;
-			last_pos = pos;
-			goto in_string_constant;
+	AutoCompleteTokenizer tokenizer(sql, state);
+	auto allow_complete = tokenizer.TokenizeInput();
+	if (!allow_complete) {
+		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
+	}
+	if (state.suggestions.empty()) {
+		// no suggestions found during tokenizing
+		// run the root matcher
+		MatcherAllocator allocator;
+		auto &matcher = Matcher::RootMatcher(allocator);
+		matcher.Match(state);
+	}
+	if (state.suggestions.empty()) {
+		// still no suggestions - return
+		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
+	}
+	vector<AutoCompleteCandidate> available_suggestions;
+	for (auto &suggestion : suggestions) {
+		idx_t suggestion_pos = tokenizer.last_pos;
+		// run the suggestions
+		vector<AutoCompleteCandidate> new_suggestions;
+		switch (suggestion.type) {
+		case SuggestionState::SUGGEST_VARIABLE:
+			// variables have no suggestions available
+			break;
+		case SuggestionState::SUGGEST_KEYWORD:
+			new_suggestions.emplace_back(suggestion.keyword);
+			break;
+		case SuggestionState::SUGGEST_CATALOG_NAME:
+			new_suggestions = SuggestCatalogName(context);
+			break;
+		case SuggestionState::SUGGEST_SCHEMA_NAME:
+			new_suggestions = SuggestSchemaName(context);
+			break;
+		case SuggestionState::SUGGEST_TABLE_NAME:
+			new_suggestions = SuggestTableName(context);
+			break;
+		case SuggestionState::SUGGEST_COLUMN_NAME:
+			new_suggestions = SuggestColumnName(context);
+			break;
+		case SuggestionState::SUGGEST_TYPE_NAME:
+			new_suggestions = SuggestType(context);
+			break;
+		case SuggestionState::SUGGEST_FILE_NAME:
+			new_suggestions = SuggestFileName(context, tokenizer.last_word, suggestion_pos);
+			break;
+		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
+		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
+		case SuggestionState::SUGGEST_PRAGMA_NAME:
+		case SuggestionState::SUGGEST_SETTING_NAME:
+			// TODO:
+			break;
+		default:
+			throw InternalException("Unrecognized suggestion state");
 		}
-		if (sql[pos] == '"') {
-			pos++;
-			last_pos = pos;
-			goto in_quotes;
-		}
-		if (sql[pos] == '-' && pos + 1 < sql.size() && sql[pos + 1] == '-') {
-			goto in_comment;
-		}
-		if (sql[pos] == ';') {
-			// semicolon: restart suggestion flow
-			suggest_state = SuggestionState::SUGGEST_KEYWORD;
-			suggested_keywords.clear();
-			last_pos = pos + 1;
-			continue;
-		}
-		if (StringUtil::CharacterIsSpace(sql[pos]) || StringUtil::CharacterIsOperator(sql[pos])) {
-			if (seen_word) {
-				goto process_word;
+		for (auto &new_suggestion : new_suggestions) {
+			if (new_suggestion.extra_char == '\0') {
+				new_suggestion.extra_char = suggestion.extra_char;
 			}
-		} else {
-			seen_word = true;
+			new_suggestion.suggestion_pos = suggestion_pos;
+			available_suggestions.push_back(std::move(new_suggestion));
 		}
 	}
-	goto standard_suggestion;
-in_comment:
-	for (; pos < sql.size(); pos++) {
-		if (sql[pos] == '\n' || sql[pos] == '\r') {
-			pos++;
-			goto regular_scan;
-		}
-	}
-	// no suggestions inside comments
-	return make_uniq<SQLAutoCompleteFunctionData>(vector<string>(), 0);
-in_quotes:
-	for (; pos < sql.size(); pos++) {
-		if (sql[pos] == '"') {
-			pos++;
-			last_pos = pos;
-			seen_word = true;
-			goto regular_scan;
-		}
-	}
-	pos_offset = 1;
-	goto standard_suggestion;
-in_string_constant:
-	for (; pos < sql.size(); pos++) {
-		if (sql[pos] == '\'') {
-			pos++;
-			last_pos = pos;
-			seen_word = true;
-			goto regular_scan;
-		}
-	}
-	suggest_state = SuggestionState::SUGGEST_FILE_NAME;
-	goto standard_suggestion;
-process_word : {
-	while ((last_pos < sql.size()) &&
-	       (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
-		last_pos++;
-	}
-	auto next_word = sql.substr(last_pos, pos - last_pos);
-	if (table_name_keywords.find(next_word) != table_name_keywords.end()) {
-		suggest_state = SuggestionState::SUGGEST_TABLE_NAME;
-	} else if (column_name_keywords.find(next_word) != column_name_keywords.end()) {
-		suggest_state = SuggestionState::SUGGEST_COLUMN_NAME;
-	}
-	auto entry = next_keyword_map.find(next_word);
-	if (entry != next_keyword_map.end()) {
-		suggested_keywords = entry->second;
-	} else {
-		suggested_keywords.erase(next_word);
-	}
-	if (std::all_of(next_word.begin(), next_word.end(), ::isdigit)) {
-		// Numbers are OK
-		suggested_keywords.clear();
-	}
-	seen_word = false;
-	last_pos = pos;
-	goto regular_scan;
-}
-standard_suggestion:
-	if (suggest_state != SuggestionState::SUGGEST_FILE_NAME) {
-		while ((last_pos < sql.size()) &&
-		       (StringUtil::CharacterIsSpace(sql[last_pos]) || StringUtil::CharacterIsOperator(sql[last_pos]))) {
-			last_pos++;
-		}
-	}
-	auto last_word = sql.substr(last_pos, pos - last_pos);
-	last_pos -= pos_offset;
-	vector<string> suggestions;
-	switch (suggest_state) {
-	case SuggestionState::SUGGEST_KEYWORD:
-		suggestions = ComputeSuggestions(SuggestKeyword(context), last_word, suggested_keywords);
-		break;
-	case SuggestionState::SUGGEST_TABLE_NAME:
-		suggestions = ComputeSuggestions(SuggestTableName(context), last_word, suggested_keywords, true);
-		break;
-	case SuggestionState::SUGGEST_COLUMN_NAME:
-		suggestions = ComputeSuggestions(SuggestColumnName(context), last_word, suggested_keywords, true);
-		break;
-	case SuggestionState::SUGGEST_FILE_NAME:
-		last_pos = pos;
-		suggestions =
-		    ComputeSuggestions(SuggestFileName(context, last_word, last_pos), last_word, unordered_set<string>());
-		break;
-	default:
-		throw InternalException("Unrecognized suggestion state");
-	}
-	if (last_pos > sql.size()) {
-		D_ASSERT(false);
-		throw NotImplementedException("last_pos out of range");
-	}
-	if (!last_word.empty() && std::all_of(last_word.begin(), last_word.end(), ::isdigit)) {
-		// avoid giving auto-complete suggestion for digits
-		suggestions.clear();
-	}
-	return make_uniq<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
+	auto result_suggestions = ComputeSuggestions(available_suggestions, tokenizer.last_word);
+	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result_suggestions));
 }
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
@@ -407,21 +383,95 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 		auto &entry = bind_data.suggestions[data.offset++];
 
 		// suggestion, VARCHAR
-		output.SetValue(0, count, Value(entry));
+		output.SetValue(0, count, Value(entry.text));
 
 		// suggestion_start, INTEGER
-		output.SetValue(1, count, Value::INTEGER(bind_data.start_pos));
+		output.SetValue(1, count, Value::INTEGER(NumericCast<int32_t>(entry.pos)));
 
 		count++;
 	}
 	output.SetCardinality(count);
 }
 
+class ParserTokenizer : public BaseTokenizer {
+public:
+	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {
+	}
+	void OnStatementEnd(idx_t pos) override {
+		statements.push_back(std::move(tokens));
+		tokens.clear();
+	}
+	void OnLastToken(TokenizeState state, string last_word, idx_t) override {
+		if (last_word.empty()) {
+			return;
+		}
+		tokens.push_back(std::move(last_word));
+	}
+
+	vector<vector<MatcherToken>> statements;
+};
+
+static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
+                                                           vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("sql_auto_complete first parameter cannot be NULL");
+	}
+	names.emplace_back("success");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	auto sql = StringValue::Get(input.inputs[0]);
+
+	vector<MatcherToken> root_tokens;
+	ParserTokenizer tokenizer(sql, root_tokens);
+
+	auto allow_complete = tokenizer.TokenizeInput();
+	if (!allow_complete) {
+		return nullptr;
+	}
+	tokenizer.statements.push_back(std::move(root_tokens));
+
+	for (auto &tokens : tokenizer.statements) {
+		if (tokens.empty()) {
+			continue;
+		}
+		vector<MatcherSuggestion> suggestions;
+		MatchState state(tokens, suggestions);
+
+		MatcherAllocator allocator;
+		auto &matcher = Matcher::RootMatcher(allocator);
+		auto match_result = matcher.Match(state);
+		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
+			string token_list;
+			for (idx_t i = 0; i < tokens.size(); i++) {
+				if (!token_list.empty()) {
+					token_list += "\n";
+				}
+				if (i < 10) {
+					token_list += " ";
+				}
+				token_list += to_string(i) + ":" + tokens[i].text;
+			}
+			throw BinderException(
+			    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
+			    state.token_index, tokens[state.token_index].text, token_list);
+		}
+	}
+	return nullptr;
+}
+
+void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+}
+
 static void LoadInternal(DatabaseInstance &db) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
 	ExtensionUtil::RegisterFunction(db, auto_complete_fun);
+
+	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
+	                                   CheckPEGParserBind, nullptr);
+	ExtensionUtil::RegisterFunction(db, check_peg_parser_fun);
 }
+
 void AutocompleteExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);
 }
