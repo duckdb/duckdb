@@ -1,0 +1,48 @@
+# name: test/sql/storage/delete/test_shuffled_deletes.test_slow
+# description: Test shuffled deletes
+# group: [delete]
+
+statement ok
+set memory_limit='1GB'
+
+# load the DB from disk
+load __TEST_DIR__/test_shuffled_deletes.db
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, k VARCHAR);
+
+statement ok
+INSERT INTO test SELECT i, i+2, 'thisisalongstring'||i::VARCHAR k FROM range(0, 10000000) t(i)
+
+query III nosort correct_result
+SELECT COUNT(*), SUM(a), SUM(b) FROM test
+----
+
+loop i 0 10
+
+statement ok
+CREATE OR REPLACE TABLE to_delete AS SELECT * FROM test WHERE hash(a)%100=${i} ORDER BY hash(a)
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM test USING to_delete WHERE test.a=to_delete.a
+
+statement ok
+INSERT INTO test SELECT * FROM to_delete
+
+statement ok
+COMMIT
+
+query III nosort correct_result
+SELECT COUNT(*), SUM(a), SUM(b) FROM test
+----
+
+restart
+
+query III nosort correct_result
+SELECT COUNT(*), SUM(a), SUM(b) FROM test
+----
+
+endloop
