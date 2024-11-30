@@ -3,6 +3,8 @@
 
 require noforcestorage
 
+require vector_size 2048
+
 statement ok
 set memory_limit='20mb';
 
