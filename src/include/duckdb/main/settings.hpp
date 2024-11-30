@@ -800,7 +800,9 @@ struct MaxTempDirectorySizeSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "max_temp_directory_size";
 	static constexpr const char *Description =
-	    "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)";
+	    "The maximum amount of data stored inside the 'temp_directory'. The default value of '0 bytes' is a "
+	    "placeholder and means that the entire available disk space on that drive may be used. To limit the "
+	    "'temp_directory' to '0 bytes', set 'temp_directory' to NULL or the empty string.";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -1076,7 +1078,8 @@ struct StreamingBufferSizeSetting {
 struct TempDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "temp_directory";
-	static constexpr const char *Description = "Set the directory to which to write temp files";
+	static constexpr const char *Description =
+	    "Set the directory to which to write temp files. Set to NULL or empty string to disable.";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
