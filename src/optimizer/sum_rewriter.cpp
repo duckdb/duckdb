@@ -14,6 +14,13 @@
 
 namespace duckdb {
 
+unique_ptr<SetTypesMatcher> GetSmallIntegerTypesMatcher() {
+	vector<LogicalType> types {LogicalTypeId::TINYINT,  LogicalTypeId::SMALLINT, LogicalTypeId::INTEGER,
+	                           LogicalTypeId::BIGINT,   LogicalTypeId::UTINYINT, LogicalTypeId::USMALLINT,
+	                           LogicalTypeId::UINTEGER, LogicalTypeId::UBIGINT};
+	return make_uniq<SetTypesMatcher>(std::move(types));
+}
+
 SumRewriterOptimizer::SumRewriterOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 	// set up an expression matcher that detects SUM(x + C) or SUM(C + x)
 	auto op = make_uniq<AggregateExpressionMatcher>();
@@ -26,8 +33,8 @@ SumRewriterOptimizer::SumRewriterOptimizer(Optimizer &optimizer) : optimizer(opt
 	arithmetic->type = make_uniq<IntegerTypeMatcher>();
 	auto child_constant_matcher = make_uniq<ConstantExpressionMatcher>();
 	auto child_expression_matcher = make_uniq<StableExpressionMatcher>();
-	child_constant_matcher->type = make_uniq<IntegerTypeMatcher>();
-	child_expression_matcher->type = make_uniq<IntegerTypeMatcher>();
+	child_constant_matcher->type = GetSmallIntegerTypesMatcher();
+	child_expression_matcher->type = GetSmallIntegerTypesMatcher();
 	arithmetic->matchers.push_back(std::move(child_constant_matcher));
 	arithmetic->matchers.push_back(std::move(child_expression_matcher));
 	arithmetic->policy = SetMatcher::Policy::SOME;
