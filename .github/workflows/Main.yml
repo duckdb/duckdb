@@ -35,7 +35,7 @@ env:
 
 jobs:
  linux-debug:
-    name: Linux Debug ({matrix.tag})
+    name: Linux Debug (${{ matrix.tag }})
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     outputs:
       git_describe: ${{ steps.describe_step.outputs.git_describe }}
