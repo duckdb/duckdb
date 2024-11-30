@@ -34,6 +34,24 @@ public:
 private:
 	LogicalType type;
 };
+//! The SpecificTypeMatcher class matches only a type out of a set of types
+class SetTypesMatcher : public TypeMatcher {
+public:
+	explicit SetTypesMatcher(vector<LogicalType> types_p) : types(std::move(types_p)) {
+	}
+
+	bool Match(const LogicalType &type_p) override {
+		for (auto &type : types) {
+			if (type == type_p) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+private:
+	vector<LogicalType> types;
+};
 
 //! The NumericTypeMatcher class matches any numeric type (DECIMAL, INTEGER, etc...)
 class NumericTypeMatcher : public TypeMatcher {
