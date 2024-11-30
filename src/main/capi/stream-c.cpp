@@ -15,28 +15,28 @@ duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result) {
 }
 
 duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result) {
-  Printer::PrintF("duckdb_fetch_chunk1\n");
+  duckdb::Printer::PrintF("duckdb_fetch_chunk1\n");
 	if (!result.internal_data) {
 		return nullptr;
 	}
-          Printer::PrintF("duckdb_fetch_chunk2\n");
+          duckdb::Printer::PrintF("duckdb_fetch_chunk2\n");
 	auto &result_data = *((duckdb::DuckDBResultData *)result.internal_data);
-          Printer::PrintF("duckdb_fetch_chunk3\n");
+          duckdb::Printer::PrintF("duckdb_fetch_chunk3\n");
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return nullptr;
 	}
-          Printer::PrintF("duckdb_fetch_chunk4\n");
+          duckdb::Printer::PrintF("duckdb_fetch_chunk4\n");
 	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_STREAMING;
 	auto &result_instance = (duckdb::QueryResult &)*result_data.result;
-          Printer::PrintF("duckdb_fetch_chunk5\n");
+          duckdb::Printer::PrintF("duckdb_fetch_chunk5\n");
 	// FetchRaw ? Do we care about flattening them?
 	try {
-            Printer::PrintF("duckdb_fetch_chunk6\n");
+            duckdb::Printer::PrintF("duckdb_fetch_chunk6\n");
 		auto chunk = result_instance.Fetch();
-                  Printer::PrintF("duckdb_fetch_chunk7\n");
+                  duckdb::Printer::PrintF("duckdb_fetch_chunk7\n");
 		return reinterpret_cast<duckdb_data_chunk>(chunk.release());
 	} catch (std::exception &e) {
-            Printer::PrintF("duckdb_fetch_chunk8\n");
+            duckdb::Printer::PrintF("duckdb_fetch_chunk8\n");
 		return nullptr;
 	}
 }
