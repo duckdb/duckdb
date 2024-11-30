@@ -88,7 +88,6 @@ jobs:
     name: Force Storage
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
-    needs: linux-debug
     env:
       OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
@@ -127,7 +126,7 @@ jobs:
     name: Force Restart
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
-    needs: linux-debug
+    needs: force-storage
     env:
       OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
@@ -165,7 +164,7 @@ jobs:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
-    needs: linux-debug
+    needs: force-storage
     env:
       OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10

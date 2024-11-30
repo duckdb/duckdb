@@ -24,7 +24,9 @@ parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
 parser.add_argument('--list', action='store_true', help='Print the list of tests to run')
-parser.add_argument('--tests-per-invocation', type=int, help='The amount of tests to run per invocation of the runner', default=1)
+parser.add_argument(
+    '--tests-per-invocation', type=int, help='The amount of tests to run per invocation of the runner', default=1
+)
 parser.add_argument(
     '--print-interval', action='store', help='Prints "Still running..." every N seconds', default=300.0, type=float
 )
@@ -118,7 +120,8 @@ def print_interval_background(interval):
             print("Still running...")
             current_ticker = 0
 
-def launch_test(test, list_of_tests = False):
+
+def launch_test(test, list_of_tests=False):
     global is_active
     # start the background thread
     is_active = True
@@ -175,18 +178,19 @@ RETURNCODE
     print(res.returncode)
     if not list_of_tests:
         print(
-        """--------------------
+            """--------------------
 STDOUT
 --------------------"""
-    )
+        )
         print(stdout)
         print(
-        """--------------------
+            """--------------------
 STDERR
 --------------------"""
-    )
+        )
         print(stderr)
     fail()
+
 
 def run_tests_one_by_one():
     for test_number, test_case in enumerate(test_cases):
@@ -194,23 +198,28 @@ def run_tests_one_by_one():
             print(f"[{test_number}/{test_count}]: {test_case}", end="", flush=True)
         launch_test([test_case])
 
+
+def escape_test_case(test_case):
+    return test_case.replace(',', '\\,')
+
+
 def run_tests_batched(batch_count):
+    tmp = tempfile.NamedTemporaryFile()
+    # write the test list to a temporary file
+    with open(tmp.name, 'w') as f:
+        for test_case in test_cases:
+            f.write(escape_test_case(test_case) + '\n')
+    # use start_offset/end_offset to cycle through the test list
     test_number = 0
     while test_number < len(test_cases):
         # gather test cases
         next_entry = test_number + batch_count
         if next_entry > len(test_cases):
             next_entry = len(test_cases)
-        if not profile:
-            print(f"Running tests {test_number}..{next_entry}", flush=True)
 
-        # write the test list to a temporary file
-        tmp = tempfile.NamedTemporaryFile()
-        with open(tmp.name, 'w') as f:
-            for test_case in test_cases[test_number:next_entry]:
-                f.write(test_case + '\n')
-        launch_test(['-f', tmp.name], True)
+        launch_test(['-f', tmp.name, '--start-offset', str(test_number), '--end-offset', str(next_entry)], True)
         test_number = next_entry
+
 
 if args.tests_per_invocation == 1:
     run_tests_one_by_one()
