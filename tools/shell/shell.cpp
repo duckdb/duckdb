@@ -4573,6 +4573,7 @@ static const char zOptions[] = "   -ascii               set output mode to 'asci
                                "   -c COMMAND           run \"COMMAND\" and exit\n"
                                "   -csv                 set output mode to 'csv'\n"
                                "   -echo                print commands before execution\n"
+                               "   -f FILENAME          read/process named file and exit\n"
                                "   -init FILENAME       read/process named file\n"
                                "   -[no]header          turn headers on or off\n"
                                "   -help                show this message\n"
@@ -4779,7 +4780,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 || strcmp(z, "-newline") == 0 ||
 		    strcmp(z, "-cmd") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
-		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
+		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0 || strcmp(z, "-f") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
 			stdin_is_interactive = false;
 		} else if (strcmp(z, "-init") == 0) {
@@ -4919,6 +4920,13 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			usage(1);
 		} else if (strcmp(z, "-no-stdin") == 0) {
 			readStdin = false;
+		} else if (strcmp(z, "-f") == 0) {
+			readStdin = false;
+			if (i == argc - 1) {
+				break;
+			}
+			z = cmdline_option_value(argc, argv, ++i);
+			data.ProcessDuckDBRC(z);
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = false;
@@ -4927,8 +4935,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			** that simply appear on the command-line.  This seems goofy.  It would
 			** be better if all commands ran in the order that they appear.  But
 			** we retain the goofy behavior for historical compatibility. */
-			if (i == argc - 1)
+			if (i == argc - 1) {
 				break;
+			}
 			z = cmdline_option_value(argc, argv, ++i);
 			if (z[0] == '.') {
 				rc = data.DoMetaCommand(z);
