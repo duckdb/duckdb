@@ -224,3 +224,11 @@ class TestsSparkFunctionsDate(object):
         assert result[0].with_literal == date(2024, 6, 12)
         assert result[0].with_str == date(2024, 7, 12)
         assert result[0].with_col == date(2024, 7, 12)
+
+    def test_date_diff(self, spark):
+        df = spark.createDataFrame([(datetime(2015, 4, 8), datetime(2015, 5, 10))], ["d1", "d2"])
+
+        result = df.select(F.date_diff(col("d2"), col("d1")).alias("diff"))
+        result_data = result.collect()
+
+        assert result_data[0]["diff"] == 32

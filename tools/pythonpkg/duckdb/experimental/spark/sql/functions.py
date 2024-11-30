@@ -6054,3 +6054,73 @@ def instr(str: "ColumnOrName", substr: str) -> Column:
     """
     return _invoke_function("instr", _to_column_expr(str), ConstantExpression(substr))
 
+
+def date_diff(end: "ColumnOrName", start: "ColumnOrName") -> Column:
+    """
+    Returns the number of days from `start` to `end`.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    end : :class:`~pyspark.sql.Column` or str
+        to date column to work on.
+    start : :class:`~pyspark.sql.Column` or str
+        from date column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        difference in days between two dates.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('2015-04-08','2015-05-10')], ['d1', 'd2'])
+    >>> df.select(date_diff(df.d2, df.d1).alias('diff')).collect()
+    [Row(diff=32)]
+    """
+    return _invoke_function_over_columns("date_diff",lit("day"), start, end)
+
+
+def explode(col: "ColumnOrName") -> Column:
+    """
+    Returns a new row for each element in the given array or map.
+    Uses the default column name `col` for elements in the array and
+    `key` and `value` for elements in the map unless specified otherwise.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        one row per array item or map key value.
+
+    See Also
+    --------
+    :meth:`pyspark.functions.posexplode`
+    :meth:`pyspark.functions.explode_outer`
+    :meth:`pyspark.functions.posexplode_outer`
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([Row(a=1, intlist=[1,2,3], mapfield={"a": "b"})])
+    >>> df.select(explode(df.intlist).alias("anInt")).collect()
+    [Row(anInt=1), Row(anInt=2), Row(anInt=3)]
+
+    >>> df.select(explode(df.mapfield).alias("key", "value")).show()
+    +---+-----+
+    |key|value|
+    +---+-----+
+    |  a|    b|
+    +---+-----+
+    """
+    return _invoke_function_over_columns("unnest", col)

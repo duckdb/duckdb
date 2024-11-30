@@ -228,3 +228,11 @@ class TestSparkFunctionsArray:
             ]
         else:
             assert res == [Row(zipped=[(1, 2, 3), (2, 4, 6), (3, 6, None)])]
+
+    def test_explode_array(self, spark):
+        df = spark.createDataFrame([([1, 2, 3],), ([4, 5],), ([],)], ['intlist'])
+
+        result = df.select(F.explode(F.col("intlist")).alias("anInt"))
+        result_data = result.collect()
+
+        assert result_data == [Row(anInt=1), Row(anInt=2), Row(anInt=3), Row(anInt=4), Row(anInt=5)]
