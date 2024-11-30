@@ -4573,6 +4573,7 @@ static const char zOptions[] = "   -ascii               set output mode to 'asci
                                "   -c COMMAND           run \"COMMAND\" and exit\n"
                                "   -csv                 set output mode to 'csv'\n"
                                "   -echo                print commands before execution\n"
+                               "   -f FILENAME          read/process named file and exit\n"
                                "   -init FILENAME       read/process named file\n"
                                "   -[no]header          turn headers on or off\n"
                                "   -help                show this message\n"
@@ -4784,6 +4785,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			stdin_is_interactive = false;
 		} else if (strcmp(z, "-init") == 0) {
 			zInitFile = cmdline_option_value(argc, argv, ++i);
+		} else if (strcmp(z, "-f") == 0) {
+			zInitFile = cmdline_option_value(argc, argv, ++i);
+			stdin_is_interactive = false;
 		} else if (strcmp(z, "-batch") == 0) {
 			/* Need to check for batch mode here to so we can avoid printing
 			** informational messages (like from process_sqliterc) before
@@ -4857,6 +4861,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			z++;
 		}
 		if (strcmp(z, "-init") == 0) {
+			i++;
+		} else if (strcmp(z, "-f") == 0) {
+			readStdin = false;
 			i++;
 		} else if (strcmp(z, "-html") == 0) {
 			data.mode = RenderMode::HTML;
