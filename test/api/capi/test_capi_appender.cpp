@@ -854,7 +854,7 @@ TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	duckdb_destroy_logical_type(&enum_logical_type);
 
 	auto list_item_logical_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
-	auto list_item_count = 3;
+	idx_t list_item_count = 3;
 	int32_t list_integers[3] {101, 102, 103};
 	duckdb_value list_values[3];
 	for (idx_t i = 0; i < list_item_count; i++) {
@@ -894,7 +894,7 @@ TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
 	duckdb_destroy_value(&null_map_value);
 
 	auto array_item_logical_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
-	auto array_item_count = 3;
+	idx_t array_item_count = 3;
 	int32_t array_integers[3] {201, 202, 203};
 	duckdb_value array_values[3];
 	for (idx_t i = 0; i < array_item_count; i++) {
