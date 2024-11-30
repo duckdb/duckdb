@@ -681,7 +681,7 @@ TEST_CASE("Test append to different catalog in C API") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));
 
-	auto test_dir = GetTestDirectory();
+	auto test_dir = TestDirectoryPath();
 	auto attach_query = "ATTACH '" + test_dir + "/append_to_other.db'";
 	REQUIRE(tester.Query(attach_query)->success);
 
