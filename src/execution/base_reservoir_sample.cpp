@@ -24,14 +24,9 @@ double BaseReservoirSampling::GetMinWeightFromTuplesSeen(idx_t rows_seen_total) 
 	}
 }
 
-ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
-    : BlockingSample(seed), allocator(allocator), sample_count(sample_count) {
-	type = SampleType::RESERVOIR_SAMPLE;
-}
-
-ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
-    : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
-}
+// ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
+//     : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
+// }
 
 void BaseReservoirSampling::IncreaseNumEntriesSeenTotal(idx_t count) {
 	num_entries_seen_total += count;
@@ -138,7 +133,6 @@ void BaseReservoirSampling::FillWeights(SelectionVector &sel, idx_t &sel_size) {
 	if (!reservoir_weights.empty()) {
 		return;
 	}
-	D_ASSERT(sel_size <= FIXED_SAMPLE_SIZE);
 	D_ASSERT(reservoir_weights.empty());
 	auto num_entries_seen_normalized = num_entries_seen_total / FIXED_SAMPLE_SIZE;
 	auto min_weight = GetMinWeightFromTuplesSeen(num_entries_seen_normalized);
@@ -147,7 +141,7 @@ void BaseReservoirSampling::FillWeights(SelectionVector &sel, idx_t &sel_size) {
 		auto weight = new_random_engine.NextRandom(min_weight, 1);
 		reservoir_weights.emplace(-weight, i);
 	}
-	D_ASSERT(reservoir_weights.size() <= FIXED_SAMPLE_SIZE);
+	D_ASSERT(reservoir_weights.size() <= sel_size);
 	SetNextEntry();
 }
 

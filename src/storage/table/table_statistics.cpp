@@ -16,7 +16,7 @@ void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTab
 	if (data.table_stats.table_sample) {
 		table_sample = std::move(data.table_stats.table_sample);
 	} else {
-		table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
+		table_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
 	}
 	if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 		throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
@@ -28,7 +28,7 @@ void TableStatistics::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(!table_sample);
 
 	stats_lock = make_shared_ptr<mutex>();
-	table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
+	table_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
 	for (auto &type : types) {
 		column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
 	}
@@ -108,9 +108,9 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	D_ASSERT(column_stats.size() == other.column_stats.size());
 	if (table_sample) {
 		if (other.table_sample) {
-			D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
-			auto &this_ingest = table_sample->Cast<IngestionSample>();
-			D_ASSERT(other.table_sample->type == SampleType::INGESTION_SAMPLE);
+			D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
+			auto &this_ingest = table_sample->Cast<ReservoirSample>();
+			D_ASSERT(other.table_sample->type == SampleType::RESERVOIR_SAMPLE);
 			this_ingest.Merge(std::move(other.table_sample));
 		}
 		// if no other.table sample, do nothig
@@ -182,7 +182,7 @@ void TableStatistics::CopyStats(TableStatisticsLock &lock, TableStatistics &othe
 	}
 
 	if (table_sample) {
-		D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
+		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
 		other.table_sample = table_sample->Copy();
 	}
 }
@@ -191,9 +191,9 @@ void TableStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "column_stats", column_stats);
 	unique_ptr<BlockingSample> to_serialize = nullptr;
 	if (table_sample) {
-		D_ASSERT(table_sample->type == SampleType::INGESTION_SAMPLE);
-		auto &ingestion_sample = table_sample->Cast<IngestionSample>();
-		to_serialize = ingestion_sample.ConvertToReservoirSample();
+		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
+		auto &ingestion_sample = table_sample->Cast<ReservoirSample>();
+		to_serialize = ingestion_sample.PrepareForSerialization();
 	}
 	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", to_serialize, nullptr);
 }
@@ -216,16 +216,14 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 	table_sample = deserializer.ReadPropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample");
 	if (table_sample) {
 		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
-		auto &reservoir_sample = table_sample->Cast<ReservoirSample>();
-		table_sample = reservoir_sample.ConvertToIngestionSample();
 #ifdef DEBUG
 		if (table_sample) {
-			auto &i_sample = table_sample->Cast<IngestionSample>();
+			auto &i_sample = table_sample->Cast<ReservoirSample>();
 			i_sample.Verify();
 		}
 #endif
 	} else {
-		table_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
+		table_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
 		table_sample->Destroy();
 	}
 }

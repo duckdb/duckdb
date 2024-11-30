@@ -406,9 +406,8 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 
 	auto &table_sample = state.stats.GetTableSampleRef(*local_stats_lock);
 	if (!table_sample.destroyed) {
-		D_ASSERT(table_sample.type == SampleType::INGESTION_SAMPLE);
-		auto &ingest_sample = table_sample.Cast<IngestionSample>();
-		ingest_sample.AddToReservoir(chunk);
+		D_ASSERT(table_sample.type == SampleType::RESERVOIR_SAMPLE);
+		table_sample.AddToReservoir(chunk);
 	}
 
 	return new_row_group;
@@ -448,11 +447,11 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	auto global_sample = stats.GetTableSample(*global_stats_lock);
 
 	if (local_sample && global_sample) {
-		D_ASSERT(global_sample->type == SampleType::INGESTION_SAMPLE);
-		auto &ingest_sample = global_sample->Cast<IngestionSample>();
+		D_ASSERT(global_sample->type == SampleType::RESERVOIR_SAMPLE);
+		auto &ingest_sample = global_sample->Cast<ReservoirSample>();
 		ingest_sample.Merge(std::move(local_sample));
 		// initialize the thread local sample again
-		auto new_local_sample = make_uniq<IngestionSample>(FIXED_SAMPLE_SIZE);
+		auto new_local_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
 		state.stats.SetTableSample(*local_stats_lock, std::move(new_local_sample));
 		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
 	} else {
@@ -1239,12 +1238,11 @@ unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 	auto lock = stats.GetLock();
 	auto &sample = stats.GetTableSampleRef(*lock);
 	if (!sample.destroyed) {
-		D_ASSERT(sample.type == SampleType::INGESTION_SAMPLE);
-		auto &ingest_sample = sample.Cast<IngestionSample>();
-		ingest_sample.Shrink();
+		D_ASSERT(sample.type == SampleType::RESERVOIR_SAMPLE);
+		auto ingest_sample = sample.Copy();
 		// when get sample is called, return a sample that is min(FIXED_SAMPLE_SIZE, 0.01 * ingested_tuples).
-		auto ret = ingest_sample.ConvertToReservoirSample();
-		return ret;
+		// auto ret = ingest_sample.ConvertToReservoirSample();
+		return ingest_sample;
 	}
 	return nullptr;
 }

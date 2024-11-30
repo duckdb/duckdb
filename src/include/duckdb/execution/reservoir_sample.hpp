@@ -137,7 +137,7 @@ public:
 	}
 };
 
-class IngestionSample;
+class ReservoirSample;
 
 class ReservoirChunk {
 public:
@@ -151,21 +151,124 @@ public:
 	unique_ptr<ReservoirChunk> Copy() const;
 };
 
-//! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
+// //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
+// class ReservoirSample : public BlockingSample {
+// public:
+// 	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
+//
+// public:
+// 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = -1);
+// 	explicit ReservoirSample(idx_t sample_count, int64_t seed = -1);
+//
+// 	//! Add a chunk of data to the sample
+// 	void AddToReservoir(DataChunk &input) override;
+//
+// 	unique_ptr<IngestionSample> ConvertToIngestionSample();
+//
+// 	unique_ptr<BlockingSample> Copy() const override;
+//
+// 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
+// 	//! sample is completely built.
+// 	unique_ptr<DataChunk> GetChunkAndShrink() override;
+// 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
+// 	void Destroy() override;
+// 	void Finalize() override;
+// 	void Verify();
+// 	void Serialize(Serializer &serializer) const override;
+// 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
+//
+// private:
+// 	//! Replace a single element of the input
+// 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
+// 	void ReplaceElement(idx_t reservoir_chunk_index, DataChunk &input, idx_t index_in_input_chunk, double with_weight);
+//
+// 	void CreateReservoirChunk(const vector<LogicalType> &types);
+// 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
+// 	idx_t FillReservoir(DataChunk &input);
+//
+// 	DataChunk &Chunk();
+//
+// public:
+// 	Allocator &allocator;
+// 	//! The size of the reservoir sample.
+// 	//! when calculating percentages, it is set to reservoir_threshold * percentage
+// 	//! when explicit number used, sample_count = number
+// 	idx_t sample_count;
+// 	//! The current reservoir
+// 	unique_ptr<ReservoirChunk> reservoir_chunk;
+// };
+
+struct SampleCopyHelper {
+	SelectionVector sel;
+	//! Priority queue of [random element, index] for each of the elements in the sample
+	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
+	vector<idx_t> actual_indexes;
+};
+
+struct SelectionVectorHelper {
+	SelectionVector sel;
+	uint32_t size;
+};
+
 class ReservoirSample : public BlockingSample {
 public:
 	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
 
-public:
+	constexpr static idx_t FIXED_SAMPLE_SIZE_MULTIPLIER = 10;
+	constexpr static idx_t FAST_TO_SLOW_THRESHOLD = 60;
+
+	// how much of every chunk we consider for sampling.
+	// This can be lowered later to improve ingestion performance.
+	constexpr static double CHUNK_SAMPLE_PERCENTAGE = 1.00;
+	// If the table has less than 204800 rows, this is the percentage
+	// of values we save when serializing/returning a sample.
+	constexpr static double SAVE_PERCENTAGE = 0.01;
+
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = -1);
+	explicit ReservoirSample(Allocator &allocator, int64_t seed = -1);
 	explicit ReservoirSample(idx_t sample_count, int64_t seed = -1);
 
+	unique_ptr<BlockingSample> PrepareForSerialization();
+	void ExpandSerializedSample();
+
+	SamplingMode SamplingState() const;
+
+	//! Shrink the Ingestion Sample to only contain the tuples that are in the
+	//! reservoir weights or are in the "actual_indexes"
+	void Shrink();
+
+	//! Transform To "Slow" Merging IngestionSample
+	void ConvertToSlowSample();
+
+	//! Get the capactiy of the data chunk reserved for storing samples
+	idx_t GetReservoirChunkCapacity() const;
+
+	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for
+	//! future sampling values
+	unique_ptr<BlockingSample> Copy() const override;
+
+	//! create the first chunk called by AddToReservoir()
+	idx_t FillReservoir(DataChunk &chunk);
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
+	//! Merge two Ingestion Samples. Other must be an ingestion sample
+	void Merge(unique_ptr<BlockingSample> other);
 
-	unique_ptr<IngestionSample> ConvertToIngestionSample();
+	//! Update the sample by pushing new sample rows to the end of the sample_chunk.
+	//! The new sample rows are the tuples rows resulting from applying sel to other
+	void UpdateSampleAppend(DataChunk &other, SelectionVector &other_sel, idx_t append_count);
 
-	unique_ptr<BlockingSample> Copy() const override;
+	//! Actually appends the new tuples. TODO: rename function to AppendToSample
+	void UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &sel, idx_t source_count,
+	                           idx_t source_offset, idx_t target_offset);
+
+	idx_t GetTuplesSeen() const;
+	idx_t NumSamplesCollected() const;
+	idx_t GetActiveSampleCount() const;
+	static bool ValidSampleType(const LogicalType &type);
+
+	// get the chunk from Reservoir chunk
+	DataChunk &Chunk();
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
@@ -173,29 +276,51 @@ public:
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Destroy() override;
 	void Finalize() override;
+
 	void Verify();
+
+	// map is [index in input chunk] -> [index in sample chunk]. Both are zero-based
+	// [index in sample chunk] is incremented by 1
+	// index in input chunk have random values, however, they are increasing.
+	// The base_reservoir_sampling gets updated however, so the indexes point to (sample_chunk_offset +
+	// index_in_sample_chunk) this data is used to make a selection vector to copy samples from the input chunk to the
+	// sample chunk
+	//! Get indexes from current sample that can be replaced.
+	SelectionVectorHelper GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
+
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
 
-private:
-	//! Replace a single element of the input
-	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
-	void ReplaceElement(idx_t reservoir_chunk_index, DataChunk &input, idx_t index_in_input_chunk, double with_weight);
-
-	void CreateReservoirChunk(const vector<LogicalType> &types);
-	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
-	idx_t FillReservoir(DataChunk &input);
-
-	DataChunk &Chunk();
-
-public:
-	Allocator &allocator;
-	//! The size of the reservoir sample.
-	//! when calculating percentages, it is set to reservoir_threshold * percentage
-	//! when explicit number used, sample_count = number
 	idx_t sample_count;
-	//! The current reservoir
+	Allocator &allocator;
+
 	unique_ptr<ReservoirChunk> reservoir_chunk;
+
+private:
+	// when we serialize, we may have collected too many samples since we fill a standard vector size, then
+	// truncate if the table is still <=204800 values. The problem is, in our weights, we store indexes into
+	// the selection vector. If throw away values at selection vector index i = 5 , we need to update all indexes
+	// i > 5. Otherwise we will have indexes in the weights that are greater than the length of our sample.
+	void NormalizeWeights(BaseReservoirSampling &base_sampling);
+
+	SelectionVectorHelper GetReplacementIndexesSlow(const idx_t sample_chunk_offset, const idx_t chunk_length);
+	SelectionVectorHelper GetReplacementIndexesFast(const idx_t sample_chunk_offset, const idx_t chunk_length);
+	void SimpleMerge(ReservoirSample &other);
+
+	// Helper methods for Shrink().
+	// Shrink has different logic depending on if the IngestionSample is still in
+	// "Fast" mode or in "Slow" mode. This function creates a new sample chunk
+	// to copy the old sample chunk into
+	unique_ptr<ReservoirChunk> CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const;
+
+	// Get a vector where each index is a random int in the range 0, size.
+	// This is used to shuffle selection vector indexes
+	vector<uint32_t> GetRandomizedVector(uint32_t size) const;
+	void ShuffleSel();
+
+	bool internal_sample;
+	SelectionVector sel;
+	idx_t sel_size;
 };
 
 //! The reservoir sample sample_size class maintains a streaming sample of variable size
@@ -243,128 +368,6 @@ private:
 	//! Whether or not the stream is finalized. The stream is automatically finalized on the first call to
 	//! GetChunkAndShrink();
 	bool is_finalized;
-};
-
-struct SampleCopyHelper {
-	SelectionVector sel;
-	//! Priority queue of [random element, index] for each of the elements in the sample
-	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
-	vector<idx_t> actual_indexes;
-};
-
-struct SelectionVectorHelper {
-	SelectionVector sel;
-	uint32_t size;
-};
-
-class IngestionSample : public BlockingSample {
-public:
-	static constexpr const SampleType TYPE = SampleType::INGESTION_SAMPLE;
-
-	constexpr static idx_t FIXED_SAMPLE_SIZE_MULTIPLIER = 10;
-	constexpr static idx_t FAST_TO_SLOW_THRESHOLD = 60;
-
-	// how much of every chunk we consider for sampling.
-	// This can be lowered later to improve ingestion performance.
-	constexpr static double CHUNK_SAMPLE_PERCENTAGE = 1.00;
-	// If the table has less than 204800 rows, this is the percentage
-	// of values we save when serializing/returning a sample.
-	constexpr static double SAVE_PERCENTAGE = 0.01;
-
-	IngestionSample(Allocator &allocator, int64_t seed = -1);
-	explicit IngestionSample(idx_t sample_count, int64_t seed = -1);
-
-	unique_ptr<BlockingSample> ConvertToReservoirSample();
-
-	SamplingMode SamplingState() const;
-
-	//! Shrink the Ingestion Sample to only contain the tuples that are in the
-	//! reservoir weights or are in the "actual_indexes"
-	void Shrink();
-
-	//! Transform To "Slow" Merging IngestionSample
-	void ConvertToSlowSample();
-
-	//! When shrinking or copying or merging, you need to create a selection vector
-	//! to select the correct rows to copy. During this copy process, sometimes underlying
-	//! statistics are changed. The SampleCopyHelper object stores the changes
-	// SelectionVectorHelper GetSelToCopyData(idx_t sel_size) const;
-	// SelectionVectorHelper SelFromReservoirWeights(vector<std::pair<double, idx_t>> &weights_indexes) const;
-	// SelectionVectorHelper SelFromSimpleIndexes(vector<idx_t> &actual_indexes) const;
-
-	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for
-	//! future sampling values
-	unique_ptr<BlockingSample> Copy() const override;
-
-	//! create the first chunk called by AddToReservoir()
-	idx_t FillReservoir(DataChunk &chunk);
-	//! Add a chunk of data to the sample
-	void AddToReservoir(DataChunk &input) override;
-	//! Merge two Ingestion Samples. Other must be an ingestion sample
-	void Merge(unique_ptr<BlockingSample> other);
-
-	//! Update the sample by pushing new sample rows to the end of the sample_chunk.
-	//! The new sample rows are the tuples rows resulting from applying sel to other
-	void UpdateSampleAppend(DataChunk &other, SelectionVector &sel, idx_t append_count);
-	//! Actually appends the new tuples. TODO: rename function to AppendToSample
-	// void UpdateSampleWithTypes(DataChunk &other, SelectionVector &sel, idx_t source_count, idx_t source_offset,
-	//                            idx_t target_offset);
-	//! Actually appends the new tuples. TODO: rename function to AppendToSample
-	void UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &sel, idx_t source_count,
-	                           idx_t source_offset, idx_t target_offset);
-
-	idx_t GetTuplesSeen();
-	idx_t NumSamplesCollected() const;
-	idx_t GetActiveSampleCount() const;
-	static bool ValidSampleType(const LogicalType &type);
-
-	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
-	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunkAndShrink() override;
-	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
-	void Destroy() override;
-	void Finalize() override;
-
-	void Verify();
-
-	// map is [index in input chunk] -> [index in sample chunk]. Both are zero-based
-	// [index in sample chunk] is incremented by 1
-	// index in input chunk have random values, however, they are increasing.
-	// The base_reservoir_sampling gets updated however, so the indexes point to (sample_chunk_offset +
-	// index_in_sample_chunk) this data is used to make a selection vector to copy samples from the input chunk to the
-	// sample chunk
-	//! Get indexes from current sample that can be replaced.
-	SelectionVectorHelper GetReplacementIndexes(idx_t sample_chunk_offset, idx_t theoretical_chunk_length);
-
-	idx_t sample_count;
-	Allocator &allocator;
-
-	unique_ptr<DataChunk> sample_chunk;
-
-private:
-	// when we serialize, we may have collected too many samples since we fill a standard vector size, then
-	// truncate if the table is still <=204800 values. The problem is, in our weights, we store indexes into
-	// the selection vector. If throw away values at selection vector index i = 5 , we need to update all indexes
-	// i > 5. Otherwise we will have indexes in the weights that are greater than the length of our sample.
-	void NormalizeWeights(BaseReservoirSampling &base_sampling);
-
-	SelectionVectorHelper GetReplacementIndexesSlow(const idx_t sample_chunk_offset, const idx_t chunk_length);
-	SelectionVectorHelper GetReplacementIndexesFast(const idx_t sample_chunk_offset, const idx_t chunk_length);
-	void SimpleMerge(IngestionSample &other);
-
-	// Helper methods for Shrink().
-	// Shrink has different logic depending on if the IngestionSample is still in
-	// "Fast" mode or in "Slow" mode. This function creates a new sample chunk
-	// to copy the old sample chunk into
-	unique_ptr<DataChunk> CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const;
-
-	// Get a vector where each index is a random int in the range 0, size.
-	// This is used to shuffle selection vector indexes
-	vector<uint32_t> GetRandomizedVector(uint32_t size) const;
-	void ShuffleSel();
-
-	SelectionVector sel;
-	idx_t sel_size;
 };
 
 } // namespace duckdb

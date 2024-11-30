@@ -1,11 +1,26 @@
 # name: test/sql/sample/basic_sample_tests.test
 # group: [sample]
 
-#statement ok
-#create table t1 as select range a from range(204800);
-#
-#statement ok
-#select * from duckdb_table_sample('t1');
+query I
+select count(*) from range(100000) using sample (10000);
+----
+10000
+
+query I
+select count(*) from range(100) using sample (10);
+----
+10
+
+query I
+select count(*) from range(205000) using sample (10000);
+----
+10000
+
+statement ok
+create table t1 as select range a from range(204800);
+
+statement ok
+select * from duckdb_table_sample('t1');
 
 statement ok
 create or replace table t1 as select range a from range(1000);
