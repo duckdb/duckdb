@@ -47,6 +47,10 @@ bool DuckCatalog::IsDuckCatalog() {
 	return true;
 }
 
+optional_ptr<DependencyManager> DuckCatalog::GetDependencyManager() {
+	return dependency_manager.get();
+}
+
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
@@ -57,7 +61,7 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction 
 	if (!schemas->CreateEntry(transaction, info.schema, std::move(entry), dependencies)) {
 		return nullptr;
 	}
-	return (CatalogEntry *)result;
+	return result;
 }
 
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {

@@ -1048,6 +1048,10 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 	return vector<MetadataBlockInfo>();
 }
 
+optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
+	return nullptr;
+}
+
 //! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name
 bool Catalog::HasDefaultTable() const {
 	return !default_table.empty();
