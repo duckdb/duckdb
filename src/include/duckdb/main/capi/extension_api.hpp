@@ -452,6 +452,7 @@ typedef struct {
 	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
+	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -854,6 +855,7 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_get_timestamp_s = duckdb_get_timestamp_s;
 	result.duckdb_get_timestamp_ms = duckdb_get_timestamp_ms;
 	result.duckdb_get_timestamp_ns = duckdb_get_timestamp_ns;
+	result.duckdb_append_value = duckdb_append_value;
 	return result;
 }
 
