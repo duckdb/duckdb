@@ -366,7 +366,7 @@ unittest_release: release
 	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
-	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
+	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --tests-per-invocation 100
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestarrow:
