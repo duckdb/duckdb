@@ -40,6 +40,12 @@ jobs:
     outputs:
       git_describe: ${{ steps.describe_step.outputs.git_describe }}
     runs-on: ubuntu-20.04
+    matrix:
+      include:
+        - start_offset: "0"
+          end_offset: "--end-offset 2000"
+        - start_offset: "--start-offset 2000"
+          end_offset: ""
     env:
       CC: gcc-10
       CXX: g++-10
@@ -81,7 +87,8 @@ jobs:
 
     - name: Test
       shell: bash
-      run: make unittestci
+      run: |
+        python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --tests-per-invocation 100 ${{ matrix.start_offset }} ${{ matrix.end_offset }}
 
 
  force-storage:
