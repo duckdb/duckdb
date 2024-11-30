@@ -445,6 +445,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"netmask", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"network", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"nextafter", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"normalized_interval", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"now", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ord", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"parquet_file_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
