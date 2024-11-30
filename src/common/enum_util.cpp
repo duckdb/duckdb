@@ -182,6 +182,24 @@ AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *valu
 	return static_cast<AggregateCombineType>(StringUtil::StringToEnum(GetAggregateCombineTypeValues(), 2, "AggregateCombineType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetAggregateDistinctDependentValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AggregateDistinctDependent::DISTINCT_DEPENDENT), "DISTINCT_DEPENDENT" },
+		{ static_cast<uint32_t>(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT), "NOT_DISTINCT_DEPENDENT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AggregateDistinctDependent>(AggregateDistinctDependent value) {
+	return StringUtil::EnumToString(GetAggregateDistinctDependentValues(), 2, "AggregateDistinctDependent", static_cast<uint32_t>(value));
+}
+
+template<>
+AggregateDistinctDependent EnumUtil::FromString<AggregateDistinctDependent>(const char *value) {
+	return static_cast<AggregateDistinctDependent>(StringUtil::StringToEnum(GetAggregateDistinctDependentValues(), 2, "AggregateDistinctDependent", value));
+}
+
 const StringUtil::EnumStringLiteral *GetAggregateHandlingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AggregateHandling::STANDARD_HANDLING), "STANDARD_HANDLING" },
