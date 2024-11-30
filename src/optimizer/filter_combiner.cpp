@@ -679,9 +679,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 						column_id.SetInvalid();
 						break;
 					}
-					optional_ptr<BoundColumnRefExpression> column_ref = nullptr;
-					optional_ptr<BoundConstantExpression> const_val = nullptr;
+					optional_ptr<BoundColumnRefExpression> column_ref;
+					optional_ptr<BoundConstantExpression> const_val;
 					auto &comp = child->Cast<BoundComparisonExpression>();
+					bool invert = false;
 					if (comp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 					    comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
 						column_ref = comp.left->Cast<BoundColumnRefExpression>();
@@ -690,6 +691,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					           comp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 						column_ref = comp.right->Cast<BoundColumnRefExpression>();
 						const_val = comp.left->Cast<BoundConstantExpression>();
+						invert = true;
 					} else {
 						// child of OR filter is not simple so we do not push the or filter down at all
 						column_id.SetInvalid();
@@ -712,7 +714,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 						column_id.SetInvalid();
 						break;
 					}
-					auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val->value);
+					auto comparison_type = invert ? FlipComparisonExpression(comp.type) : comp.type;
+					auto const_filter = make_uniq<ConstantFilter>(comparison_type, const_val->value);
 					conj_filter->child_filters.push_back(std::move(const_filter));
 				}
 				if (column_id.IsValid()) {
