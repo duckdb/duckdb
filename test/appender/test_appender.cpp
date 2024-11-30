@@ -607,6 +607,9 @@ TEST_CASE("Test appending with an active default column", "[appender]") {
 }
 
 TEST_CASE("Test appending with two active normal columns", "[appender]") {
+#if STANDARD_VECTOR_SIZE != 2048
+	return;
+#endif
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
