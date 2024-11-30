@@ -54,7 +54,7 @@ enum class RenderMode : uint32_t {
 
 enum class PrintOutput { STDOUT, STDERR };
 
-enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2 };
+enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 
 /*
 ** These are the allowed shellFlgs values
@@ -118,7 +118,7 @@ public:
 	//! Thousand separator (if any)
 	char thousand_separator = '\0';
 	//! When to use formatting of large numbers (in DuckBox mode)
-	LargeNumberRendering large_number_rendering = LargeNumberRendering::FOOTER;
+	LargeNumberRendering large_number_rendering = LargeNumberRendering::DEFAULT;
 
 public:
 	void PushOutputMode();

@@ -1660,12 +1660,17 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 			max_rows = (size_t)-1;
 			max_width = (size_t)-1;
 		}
+		LargeNumberRendering large_rendering = large_number_rendering;
 		if (!stdout_is_console) {
 			max_width = (size_t)-1;
 		}
+		if (large_rendering == LargeNumberRendering::DEFAULT) {
+			large_rendering = stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
+		}
+
 		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
-		                      decimal_separator, int(large_number_rendering), &renderer);
+		                      decimal_separator, int(large_rendering), &renderer);
 		return;
 	}
 	if (cMode == RenderMode::TRASH) {
@@ -3031,7 +3036,7 @@ MetadataResult SetLargeNumberRendering(ShellState &state, const char **azArg, id
 		state.large_number_rendering = LargeNumberRendering::FOOTER;
 	} else {
 		if (booleanValue(azArg[1])) {
-			state.large_number_rendering = LargeNumberRendering::FOOTER;
+			state.large_number_rendering = LargeNumberRendering::DEFAULT;
 		} else {
 			state.large_number_rendering = LargeNumberRendering::NONE;
 		}
