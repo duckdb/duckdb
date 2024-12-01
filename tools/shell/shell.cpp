@@ -2205,6 +2205,7 @@ static const char *azHelp[] = {
     ".quit                    Exit this program",
     ".read FILE               Read input from FILE",
     ".rows                    Row-wise rendering of query results (default)",
+    ".safe_mode               Enable safe-mode",
     ".schema ?PATTERN?        Show the CREATE statements matching PATTERN",
     "     Options:",
     "         --indent            Try to pretty-print the schema",
@@ -3178,6 +3179,15 @@ MetadataResult SetRowRendering(ShellState &state, const char **azArg, idx_t nArg
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult EnableSafeMode(ShellState &state, const char **azArg, idx_t nArg) {
+	safe_mode = true;
+	if (state.db) {
+		// db has been opened - disable external access
+		sqlite3_exec(state.db, "SET enable_external_access=false", NULL, NULL, NULL);
+	}
+	return MetadataResult::SUCCESS;
+}
+
 bool ShellState::SetOutputMode(const char *mode_str, const char *tbl_name) {
 	idx_t n2 = StringLength(mode_str);
 	char c2 = mode_str[0];
@@ -4118,6 +4128,7 @@ static const MetadataCommand metadata_commands[] = {
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
     {"restore", 0, nullptr, "", "", 3},
     {"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
+    {"safe_mode", 0, EnableSafeMode, "", "enable safe-mode", 0},
     {"separator", 0, SetSeparator, "COL ?ROW?", "Change the column and row separators", 0},
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0},
     {"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
