@@ -129,6 +129,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"cos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cosh", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cot", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"count_if", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"countif", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"covar_pop", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"covar_samp", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"create_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},

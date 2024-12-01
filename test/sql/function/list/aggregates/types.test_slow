@@ -27,7 +27,7 @@ NULL
 endloop
 
 # any other result
-foreach func_name approx_count_distinct count entropy array_agg list histogram
+foreach func_name approx_count_distinct count entropy array_agg list histogram sum
 
 statement ok
 SELECT list_aggr([False], '${func_name}')
@@ -38,7 +38,7 @@ SELECT list_aggr([NULL::BOOLEAN], '${func_name}')
 endloop
 
 # statement error for BOOLEAN
-foreach func_name avg favg bit_and bit_or bit_xor kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor kurtosis mad product sem skewness fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr([False], '${func_name}')
