@@ -45,7 +45,7 @@ jobs:
       matrix:
         include:
           - tag: 1
-            start_offset: "0"
+            start_offset: ""
             end_offset: "--end-offset 2000"
           - tag: 2
             start_offset: "--start-offset 2000"
