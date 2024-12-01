@@ -15,7 +15,11 @@ namespace duckdb {
 struct ProgressData {
 	double done = 0.0;
 	double total = 0.0;
+	bool invalid = false;
 	double ProgressDone() const {
+		if (invalid) {
+			return -1.0;
+		}
 		if (total <= 0.0) {
 			D_ASSERT(total > 0.0);
 			return 0.0;
@@ -39,12 +43,19 @@ struct ProgressData {
 		if (total <= 0.0) {
 			D_ASSERT(total > 0.0);
 		}
-	
 		done /= total;
 		total = 1.0;
 		done *= target;
 		total *= target;
 	}
+	void SetInvalid() {
+		invalid = true;
+		done = 0.0;
+		total = 1.0;
+	}
+	bool IsValid() const {
+		return !invalid;
+	}
 };
 
-}
+} // namespace duckdb
