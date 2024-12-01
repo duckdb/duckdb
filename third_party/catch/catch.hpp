@@ -11330,6 +11330,11 @@ namespace Catch {
         } else if (config.startOffsetPercentage() >= 0) {
             start_offset = int((config.startOffsetPercentage() / 100.0) * total_tests_run);
         }
+        if (config.endOffset() >= 0) {
+            end_offset = config.endOffset();
+        } else if (config.endOffsetPercentage() >= 0) {
+            end_offset = int((config.endOffsetPercentage() / 100.0) * total_tests_run);
+        }
         auto it = matchedTestCases.begin();
         for(int current_test = 0; it != matchedTestCases.end(); current_test++) {
             if (current_test < start_offset || current_test >= end_offset) {
