@@ -59,6 +59,12 @@ private:
 	string result;
 };
 
+enum class LargeNumberRendering {
+	NONE = 0,   // render all numbers as-is
+	FOOTER = 1, // if there is a single row, adds a second footer row with a readable summarization of large numbers
+	ALL = 2     // renders all large numbers
+};
+
 struct BoxRendererConfig {
 	// a max_width of 0 means we default to the terminal width
 	idx_t max_width = 0;
@@ -78,6 +84,8 @@ struct BoxRendererConfig {
 	char thousand_separator = '\0';
 	//! Whether or not to render row-wise or column-wise
 	RenderMode render_mode = RenderMode::ROWS;
+	//! How to render large numbers
+	LargeNumberRendering large_number_rendering = LargeNumberRendering::NONE;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *LTCORNER = "\342\224\214"; // NOLINT: "┌";
@@ -164,6 +172,8 @@ private:
 	string FormatNumber(const string &input);
 	string ConvertRenderValue(const string &input, const LogicalType &type);
 	string ConvertRenderValue(const string &input);
+	//! Try to format a large number in a readable way (e.g. 1234567 -> 1.23 million)
+	string TryFormatLargeNumber(const string &numeric);
 };
 
 } // namespace duckdb

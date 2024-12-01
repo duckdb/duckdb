@@ -1568,7 +1568,8 @@ columnar_end:
 
 extern "C" {
 extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                                  int columns, char thousands, char decimal, duckdb::BaseResultRenderer *renderer);
+                                  int columns, char thousands, char decimal, int large_number_rendering,
+                                  duckdb::BaseResultRenderer *renderer);
 }
 
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
@@ -1659,17 +1660,22 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 			max_rows = (size_t)-1;
 			max_width = (size_t)-1;
 		}
+		LargeNumberRendering large_rendering = large_number_rendering;
 		if (!stdout_is_console) {
 			max_width = (size_t)-1;
 		}
+		if (large_rendering == LargeNumberRendering::DEFAULT) {
+			large_rendering = stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
+		}
+
 		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
-		                      decimal_separator, &renderer);
+		                      decimal_separator, int(large_rendering), &renderer);
 		return;
 	}
 	if (cMode == RenderMode::TRASH) {
 		TrashRenderer renderer;
-		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', &renderer);
+		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', 0, &renderer);
 		return;
 	}
 
@@ -2159,6 +2165,7 @@ static const char *azHelp[] = {
     "     brightyellow|brightblue|brightmagenta|brightcyan|brightwhite",
     ".keywordcode ?CODE?      Sets the syntax highlighting terminal code used for keywords",
 #endif
+    ".large_number_rendering all|footer|off Toggle readable rendering of large numbers (duckbox only)",
     ".log FILE|off            Turn logging on or off.  FILE can be stderr/stdout",
     ".maxrows COUNT           Sets the maximum number of rows for display (default: 40). Only for duckbox mode.",
     ".maxwidth COUNT          Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox "
@@ -3021,6 +3028,21 @@ MetadataResult SetDecimalSep(ShellState &state, const char **azArg, idx_t nArg) 
 
 MetadataResult SetThousandSep(ShellState &state, const char **azArg, idx_t nArg) {
 	return SetSeparator(state, azArg, nArg, "thousand", state.thousand_separator);
+}
+
+MetadataResult SetLargeNumberRendering(ShellState &state, const char **azArg, idx_t nArg) {
+	if (strcmp(azArg[1], "all") == 0) {
+		state.large_number_rendering = LargeNumberRendering::ALL;
+	} else if (strcmp(azArg[1], "footer") == 0) {
+		state.large_number_rendering = LargeNumberRendering::FOOTER;
+	} else {
+		if (booleanValue(azArg[1])) {
+			state.large_number_rendering = LargeNumberRendering::DEFAULT;
+		} else {
+			state.large_number_rendering = LargeNumberRendering::NONE;
+		}
+	}
+	return MetadataResult::SUCCESS;
 }
 
 MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
@@ -4109,6 +4131,8 @@ static const MetadataCommand metadata_commands[] = {
 
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
     {"indices", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
+    {"large_number_rendering", 2, SetLargeNumberRendering, "all|footer|off",
+     "Toggle readable rendering of large numbers (duckbox only)", 0},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0},
     {"maxrows", 0, SetMaxRows, "COUNT",
      "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0},
