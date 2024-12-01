@@ -15,3 +15,8 @@ query III
 SELECT SUM(i > 500), SUM(i=1), SUM(i IS NULL) FROM integers
 ----
 6332	1	3334
+
+query III
+SELECT COUNTIF(i > 500), COUNT_IF(i=1), COUNTIF(i IS NULL) FROM integers
+----
+6332	1	3334

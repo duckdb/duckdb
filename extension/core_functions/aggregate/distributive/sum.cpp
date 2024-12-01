@@ -225,6 +225,10 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	return sum;
 }
 
+AggregateFunction CountIfFun::GetFunction() {
+	return GetSumAggregate(PhysicalType::BOOL);
+}
+
 AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	AggregateFunctionSet sum_no_overflow;
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT32));
