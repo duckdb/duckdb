@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
 
 namespace duckdb {
 
@@ -18,7 +19,7 @@ public:
 
 public:
 	BoundCTERef(idx_t bind_index, idx_t cte_index, CTEMaterialize materialized_cte)
-	    : BoundTableRef(TableReferenceType::CTE), bind_index(bind_index), cte_index(cte_index),
+	    : BoundTableRef(TableReferenceType::CTE), bind_index(bind_index), cte_index(cte_index), correlated_columns(0),
 	      materialized_cte(materialized_cte) {
 	}
 
@@ -30,6 +31,8 @@ public:
 	idx_t bind_index;
 	//! The index of the cte
 	idx_t cte_index;
+	//! Number of correlated columns
+	idx_t correlated_columns;
 	//! Is this a reference to a materialized CTE?
 	CTEMaterialize materialized_cte;
 };
