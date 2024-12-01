@@ -3913,6 +3913,11 @@ Append a NULL value to the appender (of any type).
 DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
 
 /*!
+Append a duckdb_value to the appender.
+*/
+DUCKDB_API duckdb_state duckdb_append_value(duckdb_appender appender, duckdb_value value);
+
+/*!
 Appends a pre-filled data chunk to the specified appender.
  Attempts casting, if the data chunk types do not match the active appender types.
 
