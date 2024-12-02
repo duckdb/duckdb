@@ -146,10 +146,10 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	// The update chunk now contains exactly those rows that we are deleting.
-	unique_ptr<Vector> del_row_ids = make_uniq<Vector>(row_ids);
+	Vector del_row_ids(row_ids);
 	if (update_count != update_chunk.size()) {
 		update_chunk.Slice(sel, update_count);
-		del_row_ids = make_uniq<Vector>(row_ids, sel, update_count);
+		del_row_ids.Slice(row_ids, sel, update_count);
 	}
 
 	// TODO: we only need this if we update the value of any indexed column
@@ -165,7 +165,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	table.Fetch(transaction, delete_chunk, column_ids, row_ids, update_count, fetch_state);
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
-	table.Delete(delete_state, context.client, *del_row_ids, update_count);
+	table.Delete(delete_state, context.client, del_row_ids, update_count);
 
 	// Arrange the columns in the standard table order.
 	mock_chunk.SetCardinality(update_count);
@@ -173,7 +173,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 	}
 
-	table.LocalAppend(tableref, context.client, mock_chunk, bound_constraints, std::move(del_row_ids), delete_chunk);
+	table.LocalAppend(tableref, context.client, mock_chunk, bound_constraints, del_row_ids, delete_chunk);
 	if (return_chunk) {
 		g_state.return_collection.Append(mock_chunk);
 	}

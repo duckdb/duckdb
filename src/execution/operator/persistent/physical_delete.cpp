@@ -81,6 +81,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	row_ids.Flatten(chunk.size());
 	table.Fetch(transaction, l_state.delete_chunk, column_ids, row_ids, chunk.size(), fetch_state);
 
+	// Append the deleted row IDs to the delete indexes.
 	if (l_state.has_unique_indexes) {
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto &delete_indexes = local_storage.GetDeleteIndexes(table);
@@ -89,13 +90,15 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 				return false;
 			}
 			auto &bound_index = index.Cast<BoundIndex>();
-			auto error = bound_index.Append(l_state.delete_chunk, row_ids, nullptr);
+			auto error = bound_index.Append(l_state.delete_chunk, row_ids, nullptr, IndexAppendMode::IGNORE_DUPLICATES);
 			if (error.HasError()) {
 				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
 			}
 			return false;
 		});
 	}
+
+	// Append the return_chunk to the return collection.
 	if (return_chunk) {
 		g_state.return_collection.Append(l_state.delete_chunk);
 	}

@@ -14,15 +14,7 @@
 
 namespace duckdb {
 
-enum class VerifyExistenceType : uint8_t {
-	// Appends to a table.
-	APPEND = 0,
-	// Appends to a table that has a foreign key.
-	APPEND_FK = 1,
-	// Delete from a table that has a foreign key.
-	DELETE_FK = 2
-};
-
+enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
 
 class ConflictManager;
@@ -77,12 +69,14 @@ public:
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, unsafe_vector<row_t> &row_ids);
 
-	//! Append a chunk by first executing the ART's expressions.
-	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_art) override;
+	//! Append a chunk.
+	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_art,
+	                 const IndexAppendMode mode) override;
 	//! Insert a chunk.
 	ARTConflictType Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-	                       optional_ptr<ART> delete_art);
-	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids, optional_ptr<BoundIndex> delete_index) override;
+	                       optional_ptr<ART> delete_art, const IndexAppendMode mode);
+	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids, optional_ptr<BoundIndex> delete_index,
+	                 IndexAppendMode mode) override;
 
 	//! Constraint verification for a chunk.
 	void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) override;
@@ -130,9 +124,10 @@ private:
 	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
 	                     const GateStatus status);
 	ARTConflictType InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                                  const GateStatus status, optional_ptr<ART> delete_art);
+	                                  const GateStatus status, optional_ptr<ART> delete_art,
+	                                  const IndexAppendMode mode);
 	ARTConflictType InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                               const GateStatus status, optional_ptr<ART> delete_art);
+	                               const GateStatus status, optional_ptr<ART> delete_art, const IndexAppendMode mode);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);

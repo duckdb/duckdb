@@ -32,10 +32,11 @@ void BoundIndex::InitializeLock(IndexLock &state) {
 	state.index_lock = unique_lock<mutex>(lock);
 }
 
-ErrorData BoundIndex::Append(DataChunk &entries, Vector &row_ids, optional_ptr<BoundIndex> delete_art) {
+ErrorData BoundIndex::Append(DataChunk &entries, Vector &row_ids, optional_ptr<BoundIndex> delete_art,
+                             const IndexAppendMode mode) {
 	IndexLock state;
 	InitializeLock(state);
-	return Append(state, entries, row_ids, delete_art);
+	return Append(state, entries, row_ids, delete_art, mode);
 }
 
 void BoundIndex::CommitDrop() {

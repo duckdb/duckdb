@@ -15,10 +15,12 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
+
+enum class IndexAppendMode : uint8_t { DEFAULT = 0, IGNORE_DUPLICATES = 1 };
 
 class ClientContext;
 class TableIOManager;
@@ -64,14 +66,16 @@ public:
 		return index_constraint_type;
 	}
 
-public: // Index interface
-	//! Obtain a lock on the index
+public:
+	//! Obtains a lock on the index.
 	void InitializeLock(IndexLock &state);
-	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-	virtual ErrorData Append(IndexLock &state, DataChunk &entries, Vector &row_ids,
-	                         optional_ptr<BoundIndex> delete_art) = 0;
-	//! Obtains a lock and calls Append while holding that lock
-	ErrorData Append(DataChunk &entries, Vector &row_ids, optional_ptr<BoundIndex> delete_art);
+	//! Appends data to the locked index.
+	virtual ErrorData Append(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<BoundIndex> delete_art,
+	                         const IndexAppendMode mode) = 0;
+	//! Obtains a lock and calls Append while holding that lock.
+	ErrorData Append(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_art,
+	                 const IndexAppendMode mode);
+
 	//! Verify that data can be appended to the index without a constraint violation.
 	virtual void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) = 0;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager.
@@ -90,9 +94,9 @@ public: // Index interface
 	//! Obtains a lock and calls Delete while holding that lock
 	void Delete(DataChunk &entries, Vector &row_identifiers);
 
-	//! Insert a chunk of entries into the index
-	virtual ErrorData Insert(IndexLock &lock, DataChunk &input, Vector &row_ids,
-	                         optional_ptr<BoundIndex> delete_art) = 0;
+	//! Insert a chunk.
+	virtual ErrorData Insert(IndexLock &lock, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_art,
+	                         const IndexAppendMode mode) = 0;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge

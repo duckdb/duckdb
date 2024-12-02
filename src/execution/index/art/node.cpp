@@ -572,7 +572,7 @@ bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 		ArenaAllocator allocator(Allocator::Get(art.db));
 		for (idx_t i = 0; i < row_ids.size(); i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, row_ids[i]);
-			art.Insert(*this, row_id, 0, row_id, GateStatus::GATE_SET, nullptr);
+			art.Insert(*this, row_id, 0, row_id, GateStatus::GATE_SET, nullptr, IndexAppendMode::DEFAULT);
 		}
 		return true;
 	}

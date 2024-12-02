@@ -477,7 +477,8 @@ bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids,
 // Insert and Constraint Checking
 //===--------------------------------------------------------------------===//
 
-ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
+ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_index,
+                      const IndexAppendMode mode) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	auto row_count = input.size();
 
@@ -500,7 +501,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 		if (keys[i].Empty()) {
 			continue;
 		}
-		conflict_type = Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus(), delete_art);
+		conflict_type = Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus(), delete_art, mode);
 		if (conflict_type != ARTConflictType::NO_CONFLICT) {
 			conflict_idx = i;
 			break;
@@ -523,7 +524,12 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 		VerifyAllocationsInternal();
 	}
 
-	if (conflict_type != ARTConflictType::NO_CONFLICT) {
+	if (conflict_type == ARTConflictType::TRANSACTION) {
+		auto msg = AppendRowError(input, conflict_idx.GetIndex());
+		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
+	}
+
+	if (conflict_type == ARTConflictType::CONSTRAINT) {
 		auto msg = AppendRowError(input, conflict_idx.GetIndex());
 		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
 	}
@@ -539,14 +545,15 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 	return ErrorData();
 }
 
-ErrorData ART::Append(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_art) {
+ErrorData ART::Append(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_art,
+                      const IndexAppendMode mode) {
 	// Execute all column expressions before inserting the data chunk.
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 	ExecuteExpressions(input, expr_chunk);
 
 	// Now insert the data chunk.
-	return Insert(lock, expr_chunk, row_ids, delete_art);
+	return Insert(lock, expr_chunk, row_ids, delete_art, mode);
 }
 
 void ART::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) {
@@ -577,7 +584,8 @@ void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, cons
 }
 
 ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-                                       const GateStatus status, optional_ptr<ART> delete_art) {
+                                       const GateStatus status, optional_ptr<ART> delete_art,
+                                       const IndexAppendMode mode) {
 
 	if (!IsUnique()) {
 		Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
@@ -585,6 +593,9 @@ ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_
 	}
 
 	if (!delete_art) {
+		if (mode == IndexAppendMode::IGNORE_DUPLICATES) {
+			return ARTConflictType::NO_CONFLICT;
+		}
 		return ARTConflictType::CONSTRAINT;
 	}
 
@@ -595,14 +606,11 @@ ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_
 	}
 
 	// The row ID has changed.
-	// This happens, if the global index has a key, let's say key 1.
-	// Then, the local transaction deletes that key, and re-inserts it.
-	// Now, we try to re-insert that same key another time, which must throw.
-	// The delete ART stores the row ID of the first key 1, whereas this lookup finds the re-inserted row ID.
+	// Thus, the local index has a newer (local) row ID, and this is a constraint violation.
 	D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
-	auto delete_row_id = delete_leaf->GetRowId();
+	auto deleted_row_id = delete_leaf->GetRowId();
 	auto this_row_id = node.GetRowId();
-	if (delete_row_id != this_row_id) {
+	if (deleted_row_id != this_row_id) {
 		return ARTConflictType::TRANSACTION;
 	}
 
@@ -612,14 +620,14 @@ ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_
 }
 
 ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-                                    const GateStatus status, optional_ptr<ART> delete_art) {
+                                    const GateStatus status, optional_ptr<ART> delete_art, const IndexAppendMode mode) {
 	D_ASSERT(depth < key.len);
 	auto child = node.GetChildMutable(*this, key[depth]);
 
 	// Recurse, if a child exists at key[depth].
 	if (child) {
 		D_ASSERT(child->HasMetadata());
-		auto conflict_type = Insert(*child, key, depth + 1, row_id, status, delete_art);
+		auto conflict_type = Insert(*child, key, depth + 1, row_id, status, delete_art, mode);
 		node.ReplaceChild(*this, key[depth], *child);
 		return conflict_type;
 	}
@@ -628,7 +636,7 @@ ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t d
 	if (status == GateStatus::GATE_SET) {
 		Node remainder;
 		auto byte = key[depth];
-		auto conflict_type = Insert(remainder, key, depth + 1, row_id, status, delete_art);
+		auto conflict_type = Insert(remainder, key, depth + 1, row_id, status, delete_art, mode);
 		Node::InsertChild(*this, node, byte, remainder);
 		return conflict_type;
 	}
@@ -650,7 +658,7 @@ ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t d
 }
 
 ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-                            optional_ptr<ART> delete_art) {
+                            optional_ptr<ART> delete_art, const IndexAppendMode mode) {
 	if (!node.HasMetadata()) {
 		InsertIntoEmpty(node, key, depth, row_id, status);
 		return ARTConflictType::NO_CONFLICT;
@@ -667,18 +675,18 @@ ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const AR
 			// incoming transaction must fail here.
 			return ARTConflictType::TRANSACTION;
 		}
-		return Insert(node, row_id, 0, row_id, GateStatus::GATE_SET, delete_art);
+		return Insert(node, row_id, 0, row_id, GateStatus::GATE_SET, delete_art, mode);
 	}
 
 	auto type = node.GetType();
 	switch (type) {
 	case NType::LEAF_INLINED: {
-		return InsertIntoInlined(node, key, depth, row_id, status, delete_art);
+		return InsertIntoInlined(node, key, depth, row_id, status, delete_art, mode);
 	}
 	case NType::LEAF: {
 		D_ASSERT(!IsUnique());
 		Leaf::TransformToNested(*this, node);
-		return Insert(node, key, depth, row_id, status, delete_art);
+		return Insert(node, key, depth, row_id, status, delete_art, mode);
 	}
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
@@ -692,9 +700,9 @@ ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const AR
 	case NType::NODE_16:
 	case NType::NODE_48:
 	case NType::NODE_256:
-		return InsertIntoNode(node, key, depth, row_id, status, delete_art);
+		return InsertIntoNode(node, key, depth, row_id, status, delete_art, mode);
 	case NType::PREFIX:
-		return Prefix::Insert(*this, node, key, depth, row_id, status, delete_art);
+		return Prefix::Insert(*this, node, key, depth, row_id, status, delete_art, mode);
 	default:
 		throw InternalException("Invalid node type for ART::Insert.");
 	}

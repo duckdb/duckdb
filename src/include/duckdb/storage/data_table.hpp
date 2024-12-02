@@ -97,12 +97,12 @@ public:
 	                           const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Append a DataChunk to the transaction-local storage of the table.
 	void LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                 unique_ptr<Vector> row_ids, optional_ptr<DataChunk> delete_chunk, bool unsafe);
+	                 optional_ptr<Vector> row_ids, optional_ptr<DataChunk> delete_chunk, bool unsafe);
 	//! Finalizes a transaction-local append
 	void FinalizeLocalAppend(LocalAppendState &state);
 	//! Append a chunk to the transaction-local storage of this table
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, unique_ptr<Vector> row_ids,
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, optional_ptr<Vector> row_ids,
 	                 optional_ptr<DataChunk> delete_chunk);
 	//! Append a column data collection with default values to the transaction-local storage of this table.
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
@@ -211,8 +211,8 @@ public:
 	                                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(ConstraintState &constraint_state, ClientContext &context, DataChunk &chunk,
-	                             unique_ptr<Vector> row_ids, optional_ptr<TableIndexList> delete_indexes,
-	                             optional_ptr<DataChunk> delete_chunk, optional_ptr<ConflictManager> manager = nullptr);
+	                             optional_ptr<Vector> row_ids, optional_ptr<TableIndexList> delete_indexes,
+	                             optional_ptr<DataChunk> delete_chunk, optional_ptr<ConflictManager> manager);
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
 
@@ -232,8 +232,8 @@ public:
 	idx_t GetRowGroupSize() const;
 
 	static void VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-	                                DataChunk &chunk, unique_ptr<Vector> row_ids, optional_ptr<DataChunk> delete_chunk,
-	                                optional_ptr<ConflictManager> manager);
+	                                DataChunk &chunk, optional_ptr<Vector> row_ids,
+	                                optional_ptr<DataChunk> delete_chunk, optional_ptr<ConflictManager> manager);
 
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.

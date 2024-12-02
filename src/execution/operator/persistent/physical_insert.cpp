@@ -297,8 +297,7 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, ExecutionContext 
 		local_storage.Delete(data_table, row_ids, update_chunk.size());
 	}
 
-	unique_ptr<Vector> del_row_ids = make_uniq<Vector>(row_ids);
-	data_table.LocalAppend(table, context.client, mock_chunk, op.bound_constraints, std::move(del_row_ids), mock_chunk);
+	data_table.LocalAppend(table, context.client, mock_chunk, op.bound_constraints, row_ids, mock_chunk);
 	return update_chunk.size();
 }
 
@@ -417,7 +416,7 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 		combined_chunk.Slice(sel.Selection(), sel.Count());
 		if (GLOBAL) {
 			data_table.VerifyAppendConstraints(constraint_state, context.client, combined_chunk, nullptr, nullptr,
-			                                   nullptr);
+			                                   nullptr, nullptr);
 		} else {
 			auto &indexes = local_storage.GetIndexes(data_table);
 			auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
@@ -524,7 +523,7 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 	if (action_type == OnConflictAction::THROW) {
 		auto &constraint_state = lstate.GetConstraintState(data_table, table);
 		data_table.VerifyAppendConstraints(constraint_state, context.client, lstate.insert_chunk, nullptr,
-		                                   delete_indexes, nullptr);
+		                                   delete_indexes, nullptr, nullptr);
 		return 0;
 	}
 
