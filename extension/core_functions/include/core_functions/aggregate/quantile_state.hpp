@@ -300,9 +300,9 @@ struct QuantileState {
 		return *window_state;
 	}
 
-	CursorType &GetOrCreateWindowCursor(const ColumnDataCollection &inputs, bool all_valid) {
+	CursorType &GetOrCreateWindowCursor(const WindowPartitionInput &partition) {
 		if (!window_state) {
-			window_cursor = make_uniq<CursorType>(inputs, all_valid);
+			window_cursor = make_uniq<CursorType>(partition);
 		}
 		return *window_cursor;
 	}

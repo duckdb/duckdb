@@ -10,11 +10,12 @@
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
+#include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
+#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
@@ -24,13 +25,14 @@
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
+#include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
-#include "duckdb/optimizer/sampling_pushdown.hpp"
-#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
+#include "duckdb/optimizer/sum_rewriter.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -108,6 +110,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
 
+	// transform ORDER BY + LIMIT to TopN
+	RunOptimizer(OptimizerType::SUM_REWRITER, [&]() {
+		SumRewriterOptimizer optimizer(*this);
+		optimizer.Optimize(plan);
+	});
+
 	// perform filter pullup
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
 		FilterPullup filter_pullup;
@@ -181,6 +189,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		cse_optimizer.VisitOperator(*plan);
 	});
 
+	// creates projection maps so unused columns are projected out early
+	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
+		ColumnLifetimeAnalyzer column_lifetime(*this, *plan, true);
+		column_lifetime.VisitOperator(*plan);
+	});
+
 	// Once we know the column lifetime, we have more information regarding
 	// what relations should be the build side/probe side.
 	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
@@ -206,12 +220,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = topn.Optimize(std::move(plan));
 	});
 
-	// creates projection maps so unused columns are projected out early
-	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
-		ColumnLifetimeAnalyzer column_lifetime(true);
-		column_lifetime.VisitOperator(*plan);
-	});
-
 	// perform statistics propagation
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
@@ -228,7 +236,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
-		ColumnLifetimeAnalyzer column_lifetime(true);
+		ColumnLifetimeAnalyzer column_lifetime(*this, *plan, true);
 		column_lifetime.VisitOperator(*plan);
 	});
 
@@ -262,6 +270,30 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	Planner::VerifyPlan(context, plan);
 
 	return std::move(plan);
+}
+
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(c1));
+	return BindScalarFunction(name, std::move(children));
+}
+
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+                                                     unique_ptr<Expression> c2) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(c1));
+	children.push_back(std::move(c2));
+	return BindScalarFunction(name, std::move(children));
+}
+
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, vector<unique_ptr<Expression>> children) {
+	FunctionBinder binder(context);
+	ErrorData error;
+	auto expr = binder.BindScalarFunction(DEFAULT_SCHEMA, name, std::move(children), error);
+	if (error.HasError()) {
+		throw InternalException("Optimizer exception - failed to bind function %s: %s", name, error.Message());
+	}
+	return expr;
 }
 
 } // namespace duckdb

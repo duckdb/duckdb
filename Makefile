@@ -219,6 +219,9 @@ endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif
+ifeq (${DISABLE_POINTER_SALT}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_POINTER_SALT=1
+endif
 ifeq (${LATEST_STORAGE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
 endif
@@ -363,7 +366,7 @@ unittest_release: release
 	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
-	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
+	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestarrow:
@@ -482,7 +485,9 @@ generate-files:
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_settings.py
 	python3 scripts/generate_serialization.py
+	python3 scripts/generate_storage_info.py
 	python3 scripts/generate_enum_util.py
+	python3 scripts/generate_metric_enums.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main

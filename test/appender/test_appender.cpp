@@ -485,7 +485,7 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	auto test_dir = GetTestDirectory();
+	auto test_dir = TestDirectoryPath();
 	auto attach_query = "ATTACH '" + test_dir + "/append_to_other.db'";
 	REQUIRE_NO_FAIL(con.Query(attach_query));
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE append_to_other.tbl(i INTEGER)"));
@@ -503,8 +503,8 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	bool failed;
 
 	try {
-		Appender appender_invalid(con, "invalid_database", "main", "tbl");
 		failed = false;
+		Appender appender_invalid(con, "invalid_database", "main", "tbl");
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("Catalog Error") != std::string::npos);
@@ -513,8 +513,8 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	REQUIRE(failed);
 
 	try {
-		Appender appender_invalid(con, "append_to_other", "invalid_schema", "tbl");
 		failed = false;
+		Appender appender_invalid(con, "append_to_other", "invalid_schema", "tbl");
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("Catalog Error") != std::string::npos);
@@ -527,8 +527,8 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query(attach_query + " (readonly)"));
 
 	try {
-		Appender appender_readonly(con, "append_to_other", "main", "tbl");
 		failed = false;
+		Appender appender_readonly(con, "append_to_other", "main", "tbl");
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("Cannot append to a readonly database") != std::string::npos);
@@ -542,7 +542,7 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	auto test_dir = GetTestDirectory();
+	auto test_dir = TestDirectoryPath();
 	auto attach_db1 = "ATTACH '" + test_dir + "/db1.db'";
 	auto attach_db2 = "ATTACH '" + test_dir + "/db2.db'";
 	REQUIRE_NO_FAIL(con.Query(attach_db1));
@@ -560,8 +560,8 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 
 	bool failed;
 	try {
-		appender.Close();
 		failed = false;
+		appender.Close();
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		REQUIRE(error.Message().find("a single transaction can only write to a single attached database") !=
@@ -570,4 +570,210 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 	}
 	REQUIRE(failed);
 	REQUIRE_NO_FAIL(con.Query("COMMIT TRANSACTION"));
+}
+
+void setDataChunkInt32(DataChunk &chunk, idx_t col_idx, idx_t row_idx, int32_t value) {
+	auto &col = chunk.data[col_idx];
+	auto data = FlatVector::GetData<int32_t>(col);
+	data[row_idx] = value;
+}
+
+TEST_CASE("Test appending with an active default column", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (random()))"));
+	Appender appender(con, "main", "tbl");
+	appender.AddColumn("i");
+
+	DataChunk chunk;
+	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER};
+	chunk.Initialize(*con.context, types);
+
+	setDataChunkInt32(chunk, 0, 0, 42);
+	setDataChunkInt32(chunk, 0, 1, 43);
+
+	chunk.SetCardinality(2);
+	appender.AppendDataChunk(chunk);
+	appender.Close();
+
+	result = con.Query("SELECT i, j, k, l IS NOT NULL FROM tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {30, 30}));
+	REQUIRE(CHECK_COLUMN(result, 3, {true, true}));
+}
+
+TEST_CASE("Test appending with two active normal columns", "[appender]") {
+#if STANDARD_VECTOR_SIZE != 2048
+	return;
+#endif
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (2 * j), m INT)"));
+	Appender appender(con, "main", "tbl");
+	appender.AddColumn("j");
+	appender.AddColumn("m");
+
+	DataChunk chunk;
+	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::INTEGER};
+	chunk.Initialize(*con.context, types);
+
+	for (idx_t i = 0; i < 4; i++) {
+		for (idx_t j = 0; j < 2; j++) {
+			auto &col = chunk.data[j];
+			auto col_data = FlatVector::GetData<int32_t>(col);
+
+			auto offset = i * STANDARD_VECTOR_SIZE;
+			for (idx_t k = 0; k < STANDARD_VECTOR_SIZE; k++) {
+				col_data[k] = int32_t(offset + k);
+			}
+		}
+		chunk.SetCardinality(STANDARD_VECTOR_SIZE);
+		appender.AppendDataChunk(chunk);
+		chunk.Reset();
+	}
+	appender.Close();
+
+	result = con.Query("SELECT SUM(i), SUM(j), SUM(k), SUM(l), SUM(m) FROM tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {32768}));
+	REQUIRE(CHECK_COLUMN(result, 1, {33550336}));
+	REQUIRE(CHECK_COLUMN(result, 2, {245760}));
+	REQUIRE(CHECK_COLUMN(result, 3, {67100672}));
+	REQUIRE(CHECK_COLUMN(result, 4, {33550336}));
+}
+
+TEST_CASE("Test changing the active column configuration", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
+	Appender appender(con, "main", "tbl");
+
+	// Create a data chunk with all three columns filled.
+
+	DataChunk chunk_all_types;
+	const duckdb::vector<LogicalType> all_types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
+	chunk_all_types.Initialize(*con.context, all_types);
+
+	setDataChunkInt32(chunk_all_types, 0, 0, 42);
+	setDataChunkInt32(chunk_all_types, 1, 0, 111);
+	setDataChunkInt32(chunk_all_types, 2, 0, 50);
+
+	chunk_all_types.SetCardinality(1);
+	appender.AppendDataChunk(chunk_all_types);
+
+	appender.AddColumn("j");
+	appender.AddColumn("i");
+
+	DataChunk chunk_j_i;
+	const duckdb::vector<LogicalType> types_j_i = {LogicalType::INTEGER, LogicalType::INTEGER};
+	chunk_j_i.Initialize(*con.context, types_j_i);
+
+	setDataChunkInt32(chunk_j_i, 0, 0, 111);
+	setDataChunkInt32(chunk_j_i, 1, 0, 42);
+
+	chunk_j_i.SetCardinality(1);
+	appender.AppendDataChunk(chunk_j_i);
+
+	appender.ClearColumns();
+	appender.AppendDataChunk(chunk_all_types);
+
+	appender.AddColumn("k");
+
+	DataChunk chunk_k;
+	const duckdb::vector<LogicalType> types_k = {LogicalType::INTEGER};
+	chunk_k.Initialize(*con.context, types_k);
+
+	setDataChunkInt32(chunk_k, 0, 0, 50);
+
+	chunk_k.SetCardinality(1);
+	appender.AppendDataChunk(chunk_k);
+	appender.Close();
+
+	result = con.Query("SELECT i, j, k FROM tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {42, 42, 42, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {111, 111, 111, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {50, 30, 50, 50}));
+}
+
+TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (2 * j))"));
+	Appender appender(con, "main", "tbl");
+
+	appender.AddColumn("i");
+	appender.AddColumn("j");
+
+	bool failed;
+	// Cannot add columns that do not exist.
+	try {
+		failed = false;
+		appender.AddColumn("hello");
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("the column must exist in the table") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+
+	// Cannot add generated columns.
+	try {
+		failed = false;
+		appender.AddColumn("l");
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("cannot add a generated column to the appender") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+
+	// Cannot add the same column twice.
+	try {
+		failed = false;
+		appender.AddColumn("j");
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		REQUIRE(error.Message().find("cannot add the same column twice") != std::string::npos);
+		failed = true;
+	}
+	REQUIRE(failed);
+	appender.Close();
+}
+
+TEST_CASE("Test appending rows with an active column list", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (2 * j), m INT)"));
+	Appender appender(con, "main", "tbl");
+	appender.AddColumn("j");
+	appender.AddColumn("m");
+
+	appender.Append(42);
+	appender.Append(43);
+	appender.EndRow();
+
+	appender.Append(Value());
+	appender.Append(44);
+	appender.EndRow();
+	appender.Close();
+
+	result = con.Query("SELECT i, j, k, l, m FROM tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {42, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {30, 30}));
+	REQUIRE(CHECK_COLUMN(result, 3, {84, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {43, 44}));
 }

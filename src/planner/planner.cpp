@@ -160,7 +160,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	auto &config = DBConfig::GetConfig(context);
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	{
-		auto &serialize_comp = config.GetSetting<StorageCompatibilityVersionSetting>(context);
+		auto &serialize_comp = config.options.serialization_compatibility;
 		auto latest_version = SerializationCompatibility::Latest();
 		if (serialize_comp.manually_set &&
 		    serialize_comp.serialization_version != latest_version.serialization_version) {

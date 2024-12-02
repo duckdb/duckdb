@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
+#include "duckdb/main/relation/join_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
@@ -1085,12 +1086,12 @@ static JoinType ParseJoinType(const string &type) {
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const py::object &condition,
                                                     const string &type) {
 
-	JoinType dtype;
+	JoinType join_type;
 	string type_string = StringUtil::Lower(type);
 	StringUtil::Trim(type_string);
 
-	dtype = ParseJoinType(type_string);
-	if (dtype == JoinType::INVALID) {
+	join_type = ParseJoinType(type_string);
+	if (join_type == JoinType::INVALID) {
 		ThrowUnsupportedJoinTypeError(type);
 	}
 	auto alias = GetAlias();
@@ -1101,7 +1102,23 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	}
 	if (py::isinstance<py::str>(condition)) {
 		auto condition_string = std::string(py::cast<py::str>(condition));
-		return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition_string, dtype));
+		return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition_string, join_type));
+	}
+	vector<string> using_list;
+	if (py::is_list_like(condition)) {
+		auto using_list_p = py::list(condition);
+		for (auto &item : using_list_p) {
+			if (!py::isinstance<py::str>(item)) {
+				string actual_type = py::str(item.get_type());
+				throw InvalidInputException("Using clause should be a list of strings, not %s", actual_type);
+			}
+			using_list.push_back(std::string(py::str(item)));
+		}
+		if (using_list.empty()) {
+			throw InvalidInputException("Please provide at least one string in the condition to create a USING clause");
+		}
+		auto join_relation = make_shared_ptr<JoinRelation>(rel, other->rel, std::move(using_list), join_type);
+		return make_uniq<DuckDBPyRelation>(std::move(join_relation));
 	}
 	shared_ptr<DuckDBPyExpression> condition_expr;
 	if (!py::try_cast(condition, condition_expr)) {
@@ -1110,7 +1127,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	}
 	vector<unique_ptr<ParsedExpression>> conditions;
 	conditions.push_back(condition_expr->GetExpression().Copy());
-	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
+	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), join_type));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Cross(DuckDBPyRelation *other) {
@@ -1146,7 +1163,10 @@ static Value NestedDictToStruct(const py::object &dictionary) {
 }
 
 void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression, const py::object &field_ids,
-                                 const py::object &row_group_size_bytes, const py::object &row_group_size) {
+                                 const py::object &row_group_size_bytes, const py::object &row_group_size,
+                                 const py::object &overwrite, const py::object &per_thread_output,
+                                 const py::object &use_tmp_file, const py::object &partition_by,
+                                 const py::object &write_partition_columns, const py::object &append) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(compression)) {
@@ -1185,6 +1205,56 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 		}
 		int64_t row_group_size_int = py::int_(row_group_size);
 		options["row_group_size"] = {Value(row_group_size_int)};
+	}
+
+	if (!py::none().is(partition_by)) {
+		if (!py::isinstance<py::list>(partition_by)) {
+			throw InvalidInputException("to_parquet only accepts 'partition_by' as a list of strings");
+		}
+		vector<Value> partition_by_values;
+		const py::list &partition_fields = partition_by;
+		for (auto &field : partition_fields) {
+			if (!py::isinstance<py::str>(field)) {
+				throw InvalidInputException("to_parquet only accepts 'partition_by' as a list of strings");
+			}
+			partition_by_values.emplace_back(Value(py::str(field)));
+		}
+		options["partition_by"] = {partition_by_values};
+	}
+
+	if (!py::none().is(write_partition_columns)) {
+		if (!py::isinstance<py::bool_>(write_partition_columns)) {
+			throw InvalidInputException("to_parquet only accepts 'write_partition_columns' as a boolean");
+		}
+		options["write_partition_columns"] = {Value::BOOLEAN(py::bool_(write_partition_columns))};
+	}
+
+	if (!py::none().is(append)) {
+		if (!py::isinstance<py::bool_>(append)) {
+			throw InvalidInputException("to_parquet only accepts 'append' as a boolean");
+		}
+		options["append"] = {Value::BOOLEAN(py::bool_(append))};
+	}
+
+	if (!py::none().is(overwrite)) {
+		if (!py::isinstance<py::bool_>(overwrite)) {
+			throw InvalidInputException("to_parquet only accepts 'overwrite' as a boolean");
+		}
+		options["overwrite_or_ignore"] = {Value::BOOLEAN(py::bool_(overwrite))};
+	}
+
+	if (!py::none().is(per_thread_output)) {
+		if (!py::isinstance<py::bool_>(per_thread_output)) {
+			throw InvalidInputException("to_parquet only accepts 'per_thread_output' as a boolean");
+		}
+		options["per_thread_output"] = {Value::BOOLEAN(py::bool_(per_thread_output))};
+	}
+
+	if (!py::none().is(use_tmp_file)) {
+		if (!py::isinstance<py::bool_>(use_tmp_file)) {
+			throw InvalidInputException("to_parquet only accepts 'use_tmp_file' as a boolean");
+		}
+		options["use_tmp_file"] = {Value::BOOLEAN(py::bool_(use_tmp_file))};
 	}
 
 	auto write_parquet = rel->WriteParquetRel(filename, std::move(options));
@@ -1400,6 +1470,50 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 
 static bool IsAcceptedInsertRelationType(const Relation &relation) {
 	return relation.type == RelationType::TABLE_RELATION;
+}
+
+void DuckDBPyRelation::Update(const py::object &set_p, const py::object &where) {
+	AssertRelation();
+	unique_ptr<ParsedExpression> condition;
+	if (!py::none().is(where)) {
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(where, py_expr)) {
+			throw InvalidInputException("Please provide an Expression to 'condition'");
+		}
+		condition = py_expr->GetExpression().Copy();
+	}
+
+	if (!py::is_dict_like(set_p)) {
+		throw InvalidInputException("Please provide 'set' as a dictionary of column name to Expression");
+	}
+
+	vector<string> names;
+	vector<unique_ptr<ParsedExpression>> expressions;
+
+	py::dict set = py::dict(set_p);
+	auto arg_count = set.size();
+	if (arg_count == 0) {
+		throw InvalidInputException("Please provide at least one set expression");
+	}
+
+	for (auto item : set) {
+		py::object item_key = item.first.cast<py::object>();
+		py::object item_value = item.second.cast<py::object>();
+
+		if (!py::isinstance<py::str>(item_key)) {
+			throw InvalidInputException("Please provide the column name as the key of the dictionary");
+		}
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(item_value, py_expr)) {
+			string actual_type = py::str(item_value.get_type());
+			throw InvalidInputException("Please provide an object of type Expression as the value, not %s",
+			                            actual_type);
+		}
+		names.push_back(std::string(py::str(item_key)));
+		expressions.push_back(py_expr->GetExpression().Copy());
+	}
+
+	return rel->Update(std::move(names), std::move(expressions), std::move(condition));
 }
 
 void DuckDBPyRelation::Insert(const py::object &params) {

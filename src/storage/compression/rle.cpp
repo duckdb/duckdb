@@ -205,7 +205,7 @@ struct RLECompressState : public CompressionState {
 		handle.Destroy();
 
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(std::move(current_segment), total_segment_size);
+		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
 	void Finalize() {
@@ -263,16 +263,27 @@ struct RLEScanState : public SegmentScanState {
 		auto data = handle.Ptr() + segment.GetBlockOffset();
 		auto index_pointer = reinterpret_cast<rle_count_t *>(data + rle_count_offset);
 
-		for (idx_t i = 0; i < skip_count; i++) {
-			// assign the current value
-			position_in_entry++;
-			if (position_in_entry >= index_pointer[entry_pos]) {
-				// handled all entries in this RLE value
-				// move to the next entry
-				entry_pos++;
-				position_in_entry = 0;
+		while (skip_count > 0) {
+			rle_count_t run_end = index_pointer[entry_pos];
+			idx_t skip_amount = MinValue<idx_t>(skip_count, run_end - position_in_entry);
+
+			skip_count -= skip_amount;
+			position_in_entry += skip_amount;
+			if (ExhaustedRun(index_pointer)) {
+				ForwardToNextRun();
 			}
 		}
+	}
+
+	inline void ForwardToNextRun() {
+		// handled all entries in this RLE value
+		// move to the next entry
+		entry_pos++;
+		position_in_entry = 0;
+	}
+
+	inline bool ExhaustedRun(rle_count_t *index_pointer) {
+		return position_in_entry >= index_pointer[entry_pos];
 	}
 
 	BufferHandle handle;
@@ -313,27 +324,14 @@ static bool CanEmitConstantVector(idx_t position, idx_t run_length, idx_t scan_c
 }
 
 template <class T>
-inline static void ForwardToNextRun(RLEScanState<T> &scan_state) {
-	// handled all entries in this RLE value
-	// move to the next entry
-	scan_state.entry_pos++;
-	scan_state.position_in_entry = 0;
-}
-
-template <class T>
-inline static bool ExhaustedRun(RLEScanState<T> &scan_state, rle_count_t *index_pointer) {
-	return scan_state.position_in_entry >= index_pointer[scan_state.entry_pos];
-}
-
-template <class T>
 static void RLEScanConstant(RLEScanState<T> &scan_state, rle_count_t *index_pointer, T *data_pointer, idx_t scan_count,
                             Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	auto result_data = ConstantVector::GetData<T>(result);
 	result_data[0] = data_pointer[scan_state.entry_pos];
 	scan_state.position_in_entry += scan_count;
-	if (ExhaustedRun(scan_state, index_pointer)) {
-		ForwardToNextRun(scan_state);
+	if (scan_state.ExhaustedRun(index_pointer)) {
+		scan_state.ForwardToNextRun();
 	}
 	return;
 }
@@ -356,13 +354,27 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 
 	auto result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	for (idx_t i = 0; i < scan_count; i++) {
-		// assign the current value
-		result_data[result_offset + i] = data_pointer[scan_state.entry_pos];
-		scan_state.position_in_entry++;
-		if (ExhaustedRun(scan_state, index_pointer)) {
-			ForwardToNextRun(scan_state);
+
+	idx_t result_end = result_offset + scan_count;
+	while (result_offset < result_end) {
+		rle_count_t run_end = index_pointer[scan_state.entry_pos];
+		idx_t run_count = run_end - scan_state.position_in_entry;
+		idx_t remaining_scan_count = result_end - result_offset;
+		T element = data_pointer[scan_state.entry_pos];
+		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
+			for (idx_t i = 0; i < remaining_scan_count; i++) {
+				result_data[result_offset + i] = element;
+			}
+			scan_state.position_in_entry += remaining_scan_count;
+			break;
 		}
+
+		for (idx_t i = 0; i < run_count; i++) {
+			result_data[result_offset + i] = element;
+		}
+
+		result_offset += run_count;
+		scan_state.ForwardToNextRun();
 	}
 }
 

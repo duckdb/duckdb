@@ -154,8 +154,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	catalog_entry_vector_t catalog_entries;
 	D_ASSERT(catalog.IsDuckCatalog());
 
-	auto &duck_catalog = catalog.Cast<DuckCatalog>();
-	auto &dependency_manager = duck_catalog.GetDependencyManager();
+	auto &dependency_manager = *catalog.GetDependencyManager();
 	catalog_entries = GetCatalogEntries(schemas);
 	dependency_manager.ReorderEntries(catalog_entries);
 
@@ -454,7 +453,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<DuckTableEntry>();
 
 	// we also need to make sure the index type is loaded
-	// backwards compatability:
+	// backwards compatibility:
 	// if the index type is not specified, we default to ART
 	if (info.index_type.empty()) {
 		info.index_type = ART::TYPE_NAME;

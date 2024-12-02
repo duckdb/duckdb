@@ -12,7 +12,7 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
 	if (file_handle_p) {
 		file_handle = std::move(file_handle_p);
 	} else {
-		file_handle = ReadCSV::OpenCSV(file_path, options.compression, context);
+		file_handle = ReadCSV::OpenCSV(file_path, options, context);
 	}
 	is_pipe = file_handle->IsPipe();
 	skip_rows = options.dialect_options.skip_rows.GetValue();
@@ -151,6 +151,13 @@ void CSVBufferManager::ResetBufferManager() {
 
 string CSVBufferManager::GetFilePath() const {
 	return file_path;
+}
+
+bool CSVBufferManager::IsBlockUnloaded(idx_t block_idx) {
+	if (block_idx < cached_buffers.size()) {
+		return cached_buffers[block_idx]->IsUnloaded();
+	}
+	return false;
 }
 
 } // namespace duckdb

@@ -106,6 +106,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		result = LogicalExplain::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_EXPORT:
+		result = LogicalExport::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		result = LogicalExpressionGet::Deserialize(deserializer);
 		break;
@@ -327,12 +330,14 @@ void LogicalCreateIndex::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<CreateIndexInfo>>(200, "info", info);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "unbound_expressions", unbound_expressions);
+	serializer.WritePropertyWithDefault<unique_ptr<AlterTableInfo>>(202, "alter_table_info", alter_table_info);
 }
 
 unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(Deserializer &deserializer) {
 	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "info");
 	auto unbound_expressions = deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "unbound_expressions");
-	auto result = duckdb::unique_ptr<LogicalCreateIndex>(new LogicalCreateIndex(deserializer.Get<ClientContext &>(), std::move(info), std::move(unbound_expressions)));
+	auto alter_table_info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(202, "alter_table_info");
+	auto result = duckdb::unique_ptr<LogicalCreateIndex>(new LogicalCreateIndex(deserializer.Get<ClientContext &>(), std::move(info), std::move(unbound_expressions), std::move(alter_table_info)));
 	return std::move(result);
 }
 
@@ -442,6 +447,19 @@ unique_ptr<LogicalOperator> LogicalExplain::Deserialize(Deserializer &deserializ
 	return std::move(result);
 }
 
+void LogicalExport::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<CopyInfo>>(200, "copy_info", copy_info);
+	serializer.WritePropertyWithDefault<unique_ptr<BoundExportData>>(201, "exported_tables", exported_tables);
+}
+
+unique_ptr<LogicalOperator> LogicalExport::Deserialize(Deserializer &deserializer) {
+	auto copy_info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "copy_info");
+	auto exported_tables = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(201, "exported_tables");
+	auto result = duckdb::unique_ptr<LogicalExport>(new LogicalExport(deserializer.Get<ClientContext &>(), std::move(copy_info), std::move(exported_tables)));
+	return std::move(result);
+}
+
 void LogicalExpressionGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
@@ -546,13 +564,13 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 void LogicalOrder::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(200, "orders", orders);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projections", projections);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projections", projection_map);
 }
 
 unique_ptr<LogicalOperator> LogicalOrder::Deserialize(Deserializer &deserializer) {
 	auto orders = deserializer.ReadPropertyWithDefault<vector<BoundOrderByNode>>(200, "orders");
 	auto result = duckdb::unique_ptr<LogicalOrder>(new LogicalOrder(std::move(orders)));
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(201, "projections", result->projections);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(201, "projections", result->projection_map);
 	return std::move(result);
 }
 

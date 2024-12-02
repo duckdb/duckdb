@@ -7,9 +7,6 @@ from conftest import pandas_supports_arrow_backend
 import sys
 from packaging.version import Version
 
-from arrow_canonical_extensions import HugeIntType, UHugeIntType
-
-
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 ds = pytest.importorskip("pyarrow.dataset")
@@ -30,6 +27,27 @@ def create_pyarrow_table(rel):
 def create_pyarrow_dataset(rel):
     table = create_pyarrow_table(rel)
     return ds.dataset(table)
+
+
+def test_decimal_filter_pushdown(duckdb_cursor):
+    pl = pytest.importorskip("polars")
+    np = pytest.importorskip("numpy")
+    np.random.seed(10)
+
+    df = pl.DataFrame({'x': pl.Series(np.random.uniform(-10, 10, 1000)).cast(pl.Decimal(18, 4))})
+
+    query = """
+        SELECT
+            x,
+            x > 0.05 AS is_x_good,
+            x::FLOAT > 0.05 AS is_float_x_good
+        FROM {}
+        WHERE
+            is_x_good
+        ORDER BY x ASC
+    """
+
+    assert len(duckdb_cursor.sql(query.format("df")).fetchall()) == 495
 
 
 def numeric_operators(connection, data_type, tbl_name, create_table):
@@ -161,13 +179,6 @@ def string_check_or_pushdown(connection, tbl_name, create_table):
 
 
 class TestArrowFilterPushdown(object):
-    @classmethod
-    def setup_class(cls):
-        pa.register_extension_type(HugeIntType())
-
-    @classmethod
-    def teardown_class(cls):
-        pa.unregister_extension_type("duckdb.hugeint")
 
     @pytest.mark.parametrize(
         'data_type',
@@ -881,8 +892,6 @@ class TestArrowFilterPushdown(object):
         }
 
     def test_filter_pushdown_not_supported(self):
-        pa.register_extension_type(UHugeIntType())
-
         con = duckdb.connect()
         con.execute(
             "CREATE TABLE T as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d FROM range(5) tbl(i)"
@@ -917,4 +926,24 @@ class TestArrowFilterPushdown(object):
             "select a, b from arrow_tbl where a > 2 and c < 40 and b == '28' and g > 15 and e < 30"
         ).fetchall() == [(28, '28')]
 
-        pa.unregister_extension_type("duckdb.uhugeint")
+    def test_join_filter_pushdown(self, duckdb_cursor):
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("CREATE TABLE probe as select range a from range(10000);")
+        duckdb_conn.execute("CREATE TABLE build as select (random()*10000)::INT b from range(20);")
+        duck_probe = duckdb_conn.table("probe")
+        duck_build = duckdb_conn.table("build")
+        duck_probe_arrow = duck_probe.arrow()
+        duck_build_arrow = duck_build.arrow()
+        duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
+        duckdb_conn.register("duck_build_arrow", duck_build_arrow)
+        assert duckdb_conn.execute("SELECT count(*) from duck_probe_arrow, duck_build_arrow where a=b").fetchall() == [
+            (20,)
+        ]
+
+    def test_in_filter_pushdown(self, duckdb_cursor):
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("CREATE TABLE probe as select range a from range(1000);")
+        duck_probe = duckdb_conn.table("probe")
+        duck_probe_arrow = duck_probe.arrow()
+        duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
+        assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a in (1, 999)").fetchall() == [(1,), (999,)]

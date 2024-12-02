@@ -544,14 +544,13 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "values",
-	    [](py::object params = py::none(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::args &params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    return conn->Values(params);
 	    },
-	    "Create a relation object from the passed values", py::arg("values"), py::kw_only(),
-	    py::arg("connection") = py::none());
+	    "Create a relation object from the passed values", py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "table_function",
 	    [](const string &fname, py::object params = py::list(), shared_ptr<DuckDBPyConnection> conn = nullptr) {

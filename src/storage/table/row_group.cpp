@@ -95,6 +95,14 @@ idx_t RowGroup::GetColumnCount() const {
 	return columns.size();
 }
 
+idx_t RowGroup::GetRowGroupSize() const {
+	return collection.get().GetRowGroupSize();
+}
+
+ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
+	return GetColumn(c.GetPrimaryIndex());
+}
+
 ColumnData &RowGroup::GetColumn(storage_t c) {
 	D_ASSERT(c < columns.size());
 	if (!is_loaded) {
@@ -145,7 +153,8 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void ColumnScanState::Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options) {
+void ColumnScanState::Initialize(const LogicalType &type, const vector<StorageIndex> &children,
+                                 optional_ptr<TableScanOptions> options) {
 	// Register the options in the state
 	scan_options = options;
 
@@ -157,8 +166,23 @@ void ColumnScanState::Initialize(const LogicalType &type, optional_ptr<TableScan
 		// validity + struct children
 		auto &struct_children = StructType::GetChildTypes(type);
 		child_states.resize(struct_children.size() + 1);
-		for (idx_t i = 0; i < struct_children.size(); i++) {
-			child_states[i + 1].Initialize(struct_children[i].second, options);
+
+		if (children.empty()) {
+			// scan all struct children
+			scan_child_column.resize(struct_children.size(), true);
+			for (idx_t i = 0; i < struct_children.size(); i++) {
+				child_states[i + 1].Initialize(struct_children[i].second, options);
+			}
+		} else {
+			// only scan the specified subset of columns
+			scan_child_column.resize(struct_children.size(), false);
+			for (idx_t i = 0; i < children.size(); i++) {
+				auto &child = children[i];
+				auto index = child.GetPrimaryIndex();
+				auto &child_indexes = child.GetChildIndexes();
+				scan_child_column[index] = true;
+				child_states[index + 1].Initialize(struct_children[index].second, child_indexes, options);
+			}
 		}
 		child_states[0].scan_options = options;
 	} else if (type.InternalType() == PhysicalType::LIST) {
@@ -178,14 +202,20 @@ void ColumnScanState::Initialize(const LogicalType &type, optional_ptr<TableScan
 	}
 }
 
+void ColumnScanState::Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options) {
+	vector<StorageIndex> children;
+	Initialize(type, children, options);
+}
+
 void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
 	column_scans = make_unsafe_uniq_array<ColumnScanState>(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
+		if (column_ids[i].IsRowIdColumn()) {
 			continue;
 		}
-		column_scans[i].Initialize(types[column_ids[i]], &GetOptions());
+		auto col_id = column_ids[i].GetPrimaryIndex();
+		column_scans[i].Initialize(types[col_id], column_ids[i].GetChildIndexes(), &GetOptions());
 	}
 }
 
@@ -208,7 +238,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
-		if (column != COLUMN_IDENTIFIER_ROW_ID) {
+		if (!column.IsRowIdColumn()) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScanWithOffset(state.column_scans[i], row_number);
 			state.column_scans[i].scan_options = &state.GetOptions();
@@ -235,7 +265,7 @@ bool RowGroup::InitializeScan(CollectionScanState &state) {
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
-		if (column != COLUMN_IDENTIFIER_ROW_ID) {
+		if (!column.IsRowIdColumn()) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScan(state.column_scans[i]);
 			state.column_scans[i].scan_options = &state.GetOptions();
@@ -364,10 +394,9 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		const auto &column = column_ids[i];
-		if (column == COLUMN_IDENTIFIER_ROW_ID) {
+		if (column.IsRowIdColumn()) {
 			continue;
 		}
-		D_ASSERT(column < columns.size());
 		GetColumn(column).Skip(state.column_scans[i]);
 	}
 }
@@ -424,6 +453,7 @@ static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
 	case TableFilterType::CONSTANT_COMPARISON:
+	case TableFilterType::IN_FILTER:
 		return state.current->start + state.current->count;
 	default: {
 		throw NotImplementedException("Unimplemented filter type for zonemap");
@@ -532,7 +562,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			PrefetchState prefetch_state;
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
-				if (column != COLUMN_IDENTIFIER_ROW_ID) {
+				if (!column.IsRowIdColumn()) {
 					GetColumn(column).InitializePrefetch(prefetch_state, state.column_scans[i], max_count);
 				}
 			}
@@ -545,7 +575,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			// scan all vectors completely: full scan without deletions or table filters
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				const auto &column = column_ids[i];
-				if (column == COLUMN_IDENTIFIER_ROW_ID) {
+				if (column.IsRowIdColumn()) {
 					// scan row id
 					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
 					result.data[i].Sequence(UnsafeNumericCast<int64_t>(this->start + current_row), 1, count);
@@ -600,8 +630,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				result.Reset();
 				// skip this vector in all the scans that were not scanned yet
 				for (idx_t i = 0; i < column_ids.size(); i++) {
-					auto col_idx = column_ids[i];
-					if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+					auto &col_idx = column_ids[i];
+					if (col_idx.IsRowIdColumn()) {
 						continue;
 					}
 					if (has_filters && filter_info.ColumnHasFilters(i)) {
@@ -619,8 +649,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					// column has already been scanned as part of the filtering process
 					continue;
 				}
-				auto column = column_ids[i];
-				if (column == COLUMN_IDENTIFIER_ROW_ID) {
+				auto &column = column_ids[i];
+				if (column.IsRowIdColumn()) {
 					D_ASSERT(result.data[i].GetType().InternalType() == PhysicalType::INT64);
 					result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
 					auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
@@ -761,14 +791,14 @@ bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
 	return vinfo->Fetch(transaction, row);
 }
 
-void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<column_t> &column_ids,
+void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
                         row_t row_id, DataChunk &result, idx_t result_idx) {
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		auto column = column_ids[col_idx];
+		auto &column = column_ids[col_idx];
 		auto &result_vector = result.data[col_idx];
 		D_ASSERT(result_vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		D_ASSERT(!FlatVector::IsNull(result_vector, result_idx));
-		if (column == COLUMN_IDENTIFIER_ROW_ID) {
+		if (column.IsRowIdColumn()) {
 			// row id column: fill in the row ids
 			D_ASSERT(result_vector.GetType().InternalType() == PhysicalType::INT64);
 			result_vector.SetVectorType(VectorType::FLAT_VECTOR);
@@ -783,10 +813,11 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 }
 
 void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
+	const idx_t row_group_size = GetRowGroupSize();
 	idx_t row_group_start = this->count.load();
 	idx_t row_group_end = row_group_start + count;
-	if (row_group_end > Storage::ROW_GROUP_SIZE) {
-		row_group_end = Storage::ROW_GROUP_SIZE;
+	if (row_group_end > row_group_size) {
+		row_group_end = row_group_size;
 	}
 	// create the version_info if it doesn't exist yet
 	auto &vinfo = GetOrCreateVersionInfo();

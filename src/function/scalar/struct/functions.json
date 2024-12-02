@@ -1,0 +1,30 @@
+[
+    {
+        "name": "struct_extract",
+        "parameters": "struct,'entry'",
+        "description": "Extract the named entry from the STRUCT.",
+        "example": "struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "struct_pack",
+        "parameters": "name:=any,...",
+        "description": "Create a STRUCT containing the argument values. The entry name will be the bound variable name.",
+        "example": "struct_pack(i := 4, s := 'string')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "row",
+        "parameters": "any,...",
+        "description": "Create an unnamed STRUCT (tuple) containing the argument values.",
+        "example": "row(i, i % 4, i / 4)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "struct_concat",
+        "parameters": "struct,struct,...",
+        "description": "Merge the multiple STRUCTs into a single STRUCT.",
+        "example": "struct_concat(struct_pack(i := 4), struct_pack(s := 'string'))",
+        "type": "scalar_function"
+    }
+]

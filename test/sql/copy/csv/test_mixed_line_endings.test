@@ -10,7 +10,7 @@ PRAGMA enable_verification
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
-statement error
+query I
 insert into test select * from read_csv_auto('data/csv/test/mixed_line_endings.csv');
 ----
-Error when sniffing file
+3

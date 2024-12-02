@@ -53,9 +53,12 @@ string ValidityMask::ToString(idx_t count) const {
 }
 // LCOV_EXCL_STOP
 
-void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
-	D_ASSERT(new_size >= old_size);
-	target_count = new_size;
+void ValidityMask::Resize(idx_t new_size) {
+	idx_t old_size = capacity;
+	if (new_size <= old_size) {
+		return;
+	}
+	capacity = new_size;
 	if (validity_mask) {
 		auto new_size_count = EntryCount(new_size);
 		auto old_size_count = EntryCount(old_size);
@@ -72,8 +75,8 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	}
 }
 
-idx_t ValidityMask::TargetCount() const {
-	return target_count;
+idx_t ValidityMask::Capacity() const {
+	return capacity;
 }
 
 void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t count) {
@@ -114,6 +117,10 @@ void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel
 }
 
 void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
+	if (AllValid() && other.AllValid()) {
+		// Both validity masks are uninitialized, nothing to do
+		return;
+	}
 	EnsureWritable();
 	const idx_t ragged = count % BITS_PER_VALUE;
 	const idx_t entire_units = count / BITS_PER_VALUE;

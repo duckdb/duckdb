@@ -66,7 +66,7 @@ private:
 	optional_ptr<CatalogEntry> ReturnAndCallback(optional_ptr<CatalogEntry> result);
 
 private:
-	//! (optional) callback, called on every succesful entry retrieval
+	//! (optional) callback, called on every successful entry retrieval
 	catalog_entry_callback_t callback = nullptr;
 	ClientContext &context;
 	shared_ptr<CatalogSearchPath> search_path;
