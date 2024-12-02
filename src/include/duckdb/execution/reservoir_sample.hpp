@@ -150,60 +150,6 @@ public:
 	unique_ptr<ReservoirChunk> Copy() const;
 };
 
-// //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
-// class ReservoirSample : public BlockingSample {
-// public:
-// 	static constexpr const SampleType TYPE = SampleType::RESERVOIR_SAMPLE;
-//
-// public:
-// 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = -1);
-// 	explicit ReservoirSample(idx_t sample_count, int64_t seed = -1);
-//
-// 	//! Add a chunk of data to the sample
-// 	void AddToReservoir(DataChunk &input) override;
-//
-// 	unique_ptr<IngestionSample> ConvertToIngestionSample();
-//
-// 	unique_ptr<BlockingSample> Copy() const override;
-//
-// 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
-// 	//! sample is completely built.
-// 	unique_ptr<DataChunk> GetChunkAndShrink() override;
-// 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
-// 	void Destroy() override;
-// 	void Finalize() override;
-// 	void Verify();
-// 	void Serialize(Serializer &serializer) const override;
-// 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
-//
-// private:
-// 	//! Replace a single element of the input
-// 	void ReplaceElement(DataChunk &input, idx_t index_in_chunk, double with_weight = -1);
-// 	void ReplaceElement(idx_t reservoir_chunk_index, DataChunk &input, idx_t index_in_input_chunk, double with_weight);
-//
-// 	void CreateReservoirChunk(const vector<LogicalType> &types);
-// 	//! Fills the reservoir up until sample_count entries, returns how many entries are still required
-// 	idx_t FillReservoir(DataChunk &input);
-//
-// 	DataChunk &Chunk();
-//
-// public:
-// 	Allocator &allocator;
-// 	//! The size of the reservoir sample.
-// 	//! when calculating percentages, it is set to reservoir_threshold * percentage
-// 	//! when explicit number used, sample_count = number
-// 	idx_t sample_count;
-// 	//! The current reservoir
-// 	unique_ptr<ReservoirChunk> reservoir_chunk;
-// };
-
-struct SampleCopyHelper {
-	SelectionVector sel;
-	//! Priority queue of [random element, index] for each of the elements in the sample
-	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
-	vector<idx_t> actual_indexes;
-};
-
 struct SelectionVectorHelper {
 	SelectionVector sel;
 	uint32_t size;
