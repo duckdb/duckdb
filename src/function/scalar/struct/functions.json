@@ -8,7 +8,7 @@
     },
     {
         "name": "struct_pack",
-        "parameters": "name:=any,...)",
+        "parameters": "name:=any,...",
         "description": "Create a STRUCT containing the argument values. The entry name will be the bound variable name.",
         "example": "struct_pack(i := 4, s := 'string')",
         "type": "scalar_function"

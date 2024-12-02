@@ -336,7 +336,7 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	// set up the CSV reader
 	CSVReaderOptions options;
 	options.auto_detect = false;
-	options.dialect_options.state_machine_options.delimiter = '|';
+	options.dialect_options.state_machine_options.delimiter = {"|"};
 	options.dialect_options.header = has_header;
 	options.dialect_options.state_machine_options.quote = '\"';
 	options.dialect_options.state_machine_options.escape = '\"';

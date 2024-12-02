@@ -39,24 +39,26 @@ static string_t BarScalarFunction(double x, double min, double max, double max_w
 	}
 
 	result.clear();
+	idx_t used_blocks = 0;
 
 	auto width_as_int = LossyNumericCast<uint32_t>(width * PARTIAL_BLOCKS_COUNT);
 	idx_t full_blocks_count = (width_as_int / PARTIAL_BLOCKS_COUNT);
 	for (idx_t i = 0; i < full_blocks_count; i++) {
+		used_blocks++;
 		result += FULL_BLOCK;
 	}
 
 	idx_t remaining = width_as_int % PARTIAL_BLOCKS_COUNT;
 
 	if (remaining) {
+		used_blocks++;
 		result += PARTIAL_BLOCKS[remaining];
 	}
 
 	const idx_t integer_max_width = (idx_t)max_width;
-	if (result.size() < integer_max_width) {
-		result += std::string(integer_max_width - result.size(), ' ');
+	if (used_blocks < integer_max_width) {
+		result += std::string(integer_max_width - used_blocks, ' ');
 	}
-
 	return string_t(result);
 }
 

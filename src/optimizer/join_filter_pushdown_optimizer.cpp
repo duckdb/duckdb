@@ -207,10 +207,16 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	// recurse the query tree to find the LogicalGets in which we can push the filter info
 	GenerateJoinFiltersRecursive(*join.children[0], pushdown_columns, *pushdown_info);
 
-	if (pushdown_info->probe_info.empty()) {
+	// Even if we cannot find any table sources in which we can push down filters,
+	// we still initialize the aggregate states so that we have the possibility of doing a perfect hash join
+	const auto compute_aggregates_anyway = join.join_type == JoinType::INNER && join.conditions.size() == 1 &&
+	                                       pushdown_info->join_condition.size() == 1 &&
+	                                       TypeIsIntegral(join.conditions[0].right->return_type.InternalType());
+	if (pushdown_info->probe_info.empty() && !compute_aggregates_anyway) {
 		// no table sources found in which we can push down filters
 		return;
 	}
+
 	// set up the min/max aggregates for each of the filters
 	vector<AggregateFunction> aggr_functions;
 	aggr_functions.push_back(MinFunction::GetFunction());

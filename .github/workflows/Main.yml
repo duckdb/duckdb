@@ -35,11 +35,21 @@ env:
 
 jobs:
  linux-debug:
-    name: Linux Debug
+    name: Linux Debug (${{ matrix.tag }})
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     outputs:
       git_describe: ${{ steps.describe_step.outputs.git_describe }}
     runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: 1
+            start_offset: ""
+            end_offset: "--end-offset 2000"
+          - tag: 2
+            start_offset: "--start-offset 2000"
+            end_offset: ""
     env:
       CC: gcc-10
       CXX: g++-10
@@ -81,14 +91,14 @@ jobs:
 
     - name: Test
       shell: bash
-      run: make unittestci
+      run: |
+        python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --tests-per-invocation 100 ${{ matrix.start_offset }} ${{ matrix.end_offset }}
 
 
  force-storage:
     name: Force Storage
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
-    needs: linux-debug
     env:
       OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
@@ -127,7 +137,7 @@ jobs:
     name: Force Restart
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
-    needs: linux-debug
+    needs: force-storage
     env:
       OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
@@ -165,7 +175,7 @@ jobs:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
-    needs: linux-debug
+    needs: force-storage
     env:
       OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
