@@ -24,6 +24,7 @@
 #include "duckdb/planner/tableref/list.hpp"
 
 #include <algorithm>
+#include <duckdb/optimizer/optimizer.hpp>
 
 namespace duckdb {
 
@@ -343,9 +344,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
 	if (node.type != QueryNodeType::CTE_NODE && // Issue #13850 - Don't auto-materialize if users materialize (for now)
-	    context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
-	        context.db->config.options.disabled_optimizers.end() &&
-	    context.config.enable_optimizer && OptimizeCTEs(node)) {
+	    !Optimizer::OptimizerDisabled(context, OptimizerType::MATERIALIZED_CTE) && context.config.enable_optimizer &&
+	    OptimizeCTEs(node)) {
 		switch (node.type) {
 		case QueryNodeType::SELECT_NODE:
 			result = BindWithCTE(node.Cast<SelectNode>());

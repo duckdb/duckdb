@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
 #include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -27,12 +28,11 @@
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/optimizer/sum_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
-#include "duckdb/optimizer/sum_rewriter.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -68,7 +68,11 @@ ClientContext &Optimizer::GetContext() {
 }
 
 bool Optimizer::OptimizerDisabled(OptimizerType type) {
-	auto &config = DBConfig::GetConfig(context);
+	return OptimizerDisabled(context, type);
+}
+
+bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) {
+	auto &config = DBConfig::GetConfig(context_p);
 	return config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end();
 }
 
