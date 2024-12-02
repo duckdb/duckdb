@@ -48,8 +48,9 @@ void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, const string
 		original.Set(sniffed.GetValue(), false);
 	}
 }
-void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed, string &error, bool found_date,
-                                    bool found_timestamp) {
+
+void MatchAndReplaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed, string &error, bool found_date,
+                                     bool found_timestamp) {
 	MatchAndReplace(original.header, sniffed.header, "Header", error);
 	if (sniffed.state_machine_options.new_line.GetValue() != NewLineIdentifier::NOT_SET) {
 		// Is sniffed line is not set (e.g., single-line file) , we don't try to replace and match.
@@ -72,7 +73,7 @@ void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sn
 	}
 }
 // Set the CSV Options in the reference
-void CSVSniffer::SetResultOptions() {
+void CSVSniffer::SetResultOptions() const {
 	bool found_date = false;
 	bool found_timestamp = false;
 	for (auto &type : detected_types) {
@@ -82,8 +83,8 @@ void CSVSniffer::SetResultOptions() {
 			found_timestamp = true;
 		}
 	}
-	MatchAndRepaceUserSetVariables(options.dialect_options, best_candidate->GetStateMachine().dialect_options,
-	                               options.sniffer_user_mismatch_error, found_date, found_timestamp);
+	MatchAndReplaceUserSetVariables(options.dialect_options, best_candidate->GetStateMachine().dialect_options,
+	                                options.sniffer_user_mismatch_error, found_date, found_timestamp);
 	options.dialect_options.num_cols = best_candidate->GetStateMachine().dialect_options.num_cols;
 	options.dialect_options.rows_until_header = best_candidate->GetStateMachine().dialect_options.rows_until_header;
 }
@@ -96,9 +97,8 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	// Return Types detected
 	vector<LogicalType> return_types;
 	// Column Names detected
-
 	buffer_manager->sniffing = true;
-	constexpr idx_t result_size = 2;
+	constexpr idx_t result_size = STANDARD_VECTOR_SIZE;
 
 	auto state_machine =
 	    make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options, state_machine_cache);
@@ -114,6 +114,7 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 
 	// First figure out the number of columns on this configuration
 	auto scanner = count_scanner.UpgradeToStringValueScanner();
+	scanner->error_handler->SetIgnoreErrors(true);
 	// Parse chunk and read csv with info candidate
 	auto &data_chunk = scanner->ParseChunk().ToChunk();
 	idx_t start_row = 0;

@@ -153,7 +153,7 @@ private:
 	shared_ptr<CSVErrorHandler> detection_error_handler;
 
 	//! Sets the result options
-	void SetResultOptions();
+	void SetResultOptions() const;
 
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //
