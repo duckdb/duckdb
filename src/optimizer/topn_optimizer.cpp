@@ -36,11 +36,6 @@ bool TopN::CanOptimize(LogicalOperator &op) {
 
 void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// pushdown dynamic filters through the Top-N operator
-	if (op.orders[0].null_order == OrderByNullType::NULLS_FIRST) {
-		// FIXME: not supported for NULLS FIRST quite yet
-		// we can support NULLS FIRST by doing (x IS NULL) OR [boundary value]
-		return;
-	}
 	auto &type = op.orders[0].expression->return_type;
 	if (!TypeIsIntegral(type.InternalType())) {
 		// only supported for integral types currently
