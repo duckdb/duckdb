@@ -14,6 +14,7 @@
 namespace duckdb {
 class Optimizer;
 struct JoinFilterPushdownColumn;
+struct PushdownFilterTarget;
 
 //! The JoinFilterPushdownOptimizer links comparison joins to data sources to enable dynamic execution-time filter
 //! pushdown
