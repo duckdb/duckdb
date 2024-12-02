@@ -41,7 +41,7 @@ void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
 	}
 }
 
-void CSVErrorHandler::Error(const CSVError& csv_error, bool force_error) {
+void CSVErrorHandler::Error(const CSVError &csv_error, bool force_error) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if ((ignore_errors && !force_error) || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex()))) {
 		// We store this error, we can't throw it now, or we are ignoring it
@@ -84,6 +84,15 @@ bool CSVErrorHandler::AnyErrors() {
 	return !errors.empty();
 }
 
+idx_t CSVErrorHandler::GetMaxLineLength() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	return max_line_length;
+}
+
+void CSVErrorHandler::DontPrintErrorLine() {
+	print_line = false;
+}
+
 CSVError::CSVError(string error_message_p, CSVErrorType type_p, LinesPerBoundary error_info_p)
     : error_message(std::move(error_message_p)), type(type_p), error_info(error_info_p) {
 }
@@ -110,7 +119,6 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 		auto it = sql_types_per_column.find(names[i]);
 		if (it != sql_types_per_column.end()) {
 			sql_types_per_column.erase(names[i]);
-			continue;
 		}
 	}
 	if (sql_types_per_column.empty()) {

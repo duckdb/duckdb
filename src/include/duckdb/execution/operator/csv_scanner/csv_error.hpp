@@ -116,7 +116,7 @@ class CSVErrorHandler {
 public:
 	explicit CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
-	void Error(const CSVError& csv_error, bool force_error = false);
+	void Error(const CSVError &csv_error, bool force_error = false);
 	//! If we have a cached error, and we can now error, we error.
 	void ErrorIfNeeded();
 	//! Inserts a finished error info
@@ -128,12 +128,9 @@ public:
 	//! Set of errors
 	map<LinesPerBoundary, vector<CSVError>> errors;
 
-	idx_t GetMaxLineLength() const {
-		return max_line_length;
-	}
-	void DontPrintErrorLine() {
-		print_line = false;
-	}
+	idx_t GetMaxLineLength();
+
+	void DontPrintErrorLine();
 
 private:
 	//! Private methods should always be locked by parent method.
