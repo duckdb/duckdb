@@ -4,8 +4,10 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
 
 namespace duckdb {
 
@@ -36,6 +38,11 @@ bool TopN::CanOptimize(LogicalOperator &op) {
 
 void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// pushdown dynamic filters through the Top-N operator
+	if (op.orders[0].null_order == OrderByNullType::NULLS_FIRST) {
+		// FIXME: not supported for NULLS FIRST quite yet
+		// we can support NULLS FIRST by doing (x IS NULL) OR [boundary value]
+		return;
+	}
 	auto &type = op.orders[0].expression->return_type;
 	if (!TypeIsIntegral(type.InternalType())) {
 		// only supported for integral types currently
