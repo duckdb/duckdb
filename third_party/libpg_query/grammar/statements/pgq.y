@@ -748,6 +748,39 @@ FullElementSpec:
 			}
 		;
 
+StickyArrowHead:
+        Op
+            {   /* DDB lexer may concatenate an > with + or * into an "operator" */
+                char *op = $1;
+                if (op[0] ='>' && (op[1] == '+' || op[1] == '*') && op[2] == 0)  {
+                    $$ = (op[1] == '*') ? "->*" : "->+";
+                } else {
+                    char msg[128];
+                    snprintf(msg, 128, "PGQ does not allow - followed by %s here.", op);
+                    parser_yyerror(msg);
+                }
+            }
+    ;
+
+StickyDash:
+        Op
+            {   /* DDB lexer may concatenate an arrow with + or * into an "operator" */
+                char *op = $1, *ok = NULL;
+                /* only <-, <->, -, -> are ok */
+                if (op[0] == '<') op++; /* also accept <-> */
+                if (op[0] == '-') {
+                    ok = op + 1  + (op[1] == '>');
+                }
+                /* it may optionally be followed by a single * or + */
+                if (!ok || (ok[0] && ((ok[0] != '*' && ok[0] != '+') || ok[1]))) {
+                    char msg[128];
+                    snprintf(msg, 128, "PGQ expected an arrow instead of %s operator.", $1);
+                    parser_yyerror(msg);
+                }
+                $$ = $1;
+            }
+
+
 /* we allow spaces inside the arrows */
 Arrow:
         '-'
@@ -768,22 +801,27 @@ Arrow:
         '<' '-' '>'
             {    $$ = "<->";  }
     |
-        Op
-            {   /* DDB lexer may concatenate an arrow with + or * into an "operator" */
-                char *op = $1, *ok = NULL;
-                /* only <-, <->, -, -> are ok */
-                if (op[0] == '<') op++; /* also accept <-> */
-                if (op[0] == '-') {
-                    ok = op + 1  + (op[1] == '>');
+        StickyDash
+            {   $$ = $1; }
+    |
+        '<' StickyDash
+            {   char *op = $2;
+                if (op[0] == '<') {
+                    parse_yyerror("PGQ does not allow < followed by < as edge operator");
                 }
-                /* it may optionally be followed by a single * or + */
-                if (!ok || (ok[0] && ((ok[0] != '*' && ok[0] != '+') || ok[1]))) {
-                    char msg[128];
-                    snprintf(msg, 128, "PGQ expected an arrow instead of %s operator.", $1);
-                    parser_yyerror(msg);
-                }
-                $$ = $1;
+                $$ = (op[1] == 0)   ? "<-" :
+                     (op[1] == '*') ? "<-*" :
+                     (op[1] == '+') ? "<-+" :
+                     (op[2] == '*') ? "<->*" :
+                     (op[2] == '+') ? "<->+" : "<->";
             }
+    |
+        '<' '-' StickyArrowHead
+            {   $$ = ($3 == "->*") ? "<->*" : "<->+"; }
+        ;
+    |
+        '-' StickyArrowHead
+            {   $$ = $2 }
         ;
 
 ArrowLeft:

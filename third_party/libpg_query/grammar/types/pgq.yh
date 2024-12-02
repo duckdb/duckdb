@@ -43,6 +43,8 @@
 %type <node> OrLabelExpression
 %type <node> LabelExpressionOptional
 %type <str> Arrow
+%type <str> StickyArrowHead
+%type <str> StickyDash
 %type <str> ArrowLeft
 %type <node> ArrowKleeneOptional
 %type <str> VariableOptional
