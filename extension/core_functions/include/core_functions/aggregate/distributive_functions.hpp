@@ -138,6 +138,21 @@ struct BoolOrFun {
 	static AggregateFunction GetFunction();
 };
 
+struct CountIfFun {
+	static constexpr const char *Name = "count_if";
+	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Description = "Counts the total number of TRUE values for a boolean column";
+	static constexpr const char *Example = "count_if(A)";
+
+	static AggregateFunction GetFunction();
+};
+
+struct CountifFun {
+	using ALIAS = CountIfFun;
+
+	static constexpr const char *Name = "countif";
+};
+
 struct EntropyFun {
 	static constexpr const char *Name = "entropy";
 	static constexpr const char *Parameters = "x";

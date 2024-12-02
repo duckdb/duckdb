@@ -160,7 +160,7 @@ void GroupedAggregateHashTable::Verify() {
 }
 
 void GroupedAggregateHashTable::ClearPointerTable() {
-	std::fill_n(entries, capacity, ht_entry_t::GetEmptyEntry());
+	std::fill_n(entries, capacity, ht_entry_t());
 }
 
 void GroupedAggregateHashTable::ResetCount() {

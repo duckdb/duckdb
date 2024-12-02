@@ -89,6 +89,7 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 	case LogicalOperatorType::LOGICAL_WINDOW:
+	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return true;
 	default:
 		return false;

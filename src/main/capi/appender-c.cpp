@@ -275,6 +275,10 @@ duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t 
 	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(logical_type));
 }
 
+duckdb_state duckdb_append_value(duckdb_appender appender, duckdb_value value) {
+	return duckdb_append_internal<duckdb::Value>(appender, *(reinterpret_cast<duckdb::Value *>(value)));
+}
+
 duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk) {
 	if (!chunk) {
 		return DuckDBError;

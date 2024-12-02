@@ -394,7 +394,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		break;
 	}
 	// LCOV_EXCL_START
-	throw NotImplementedException("AddFun for types %s, %s", EnumUtil::ToString(left_type.id()),
+	throw NotImplementedException("AddFunction for types %s, %s", EnumUtil::ToString(left_type.id()),
 	                              EnumUtil::ToString(right_type.id()));
 	// LCOV_EXCL_STOP
 }

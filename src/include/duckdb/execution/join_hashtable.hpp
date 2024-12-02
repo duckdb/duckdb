@@ -82,6 +82,14 @@ public:
 		bool finished;
 		bool is_null;
 
+		// it records the RHS pointers for the result chunk
+		Vector rhs_pointers;
+		// it records the LHS sel vector for the result chunk
+		SelectionVector lhs_sel_vector;
+		// these two variable records the last match results
+		idx_t last_match_count;
+		SelectionVector last_sel_vector;
+
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
@@ -114,33 +122,35 @@ public:
 
 		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
 
+		//! Update the data chunk compaction buffer
+		void UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count);
+
 	public:
 		void AdvancePointers();
 		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);
 		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
+		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel);
 	};
 
 public:
 	struct SharedState {
-
 		SharedState();
 
 		// The ptrs to the row to which a key should be inserted into during building
 		// or matched against during probing
 		Vector rhs_row_locations;
+		Vector salt_v;
 
 		SelectionVector salt_match_sel;
 		SelectionVector key_no_match_sel;
 	};
 
 	struct ProbeState : SharedState {
-
 		ProbeState();
 
-		Vector salt_v;
 		Vector ht_offsets_v;
 		Vector ht_offsets_dense_v;
 
@@ -407,8 +417,8 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize(const idx_t max_ht_size);
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-	                   ProbeState &probe_state, DataChunk &payload, ProbeSpill &probe_spill,
+	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &probe_keys, TupleDataChunkState &key_state,
+	                   ProbeState &probe_state, DataChunk &probe_chunk, ProbeSpill &probe_spill,
 	                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
 
 private:

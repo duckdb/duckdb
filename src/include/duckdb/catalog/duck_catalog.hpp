@@ -25,9 +25,6 @@ public:
 		return "duckdb";
 	}
 
-	DependencyManager &GetDependencyManager() {
-		return *dependency_manager;
-	}
 	mutex &GetWriteLock() {
 		return write_lock;
 	}
@@ -61,6 +58,8 @@ public:
 	DUCKDB_API string GetDBPath() override;
 
 	DUCKDB_API optional_idx GetCatalogVersion(ClientContext &context) override;
+
+	optional_ptr<DependencyManager> GetDependencyManager() override;
 
 private:
 	DUCKDB_API void DropSchema(CatalogTransaction transaction, DropInfo &info);

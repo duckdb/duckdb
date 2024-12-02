@@ -77,6 +77,7 @@ struct ICUDateFunc {
 	//! Truncates the calendar time to the given part precision
 	typedef void (*part_trunc_t)(icu::Calendar *calendar, uint64_t &micros);
 	static part_trunc_t TruncationFactory(DatePartSpecifier part);
+	static timestamp_t CurrentMidnight(icu::Calendar *calendar, ExpressionState &state);
 
 	//! Subtracts the two times at the given part precision
 	typedef int64_t (*part_sub_t)(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date);

@@ -154,8 +154,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	catalog_entry_vector_t catalog_entries;
 	D_ASSERT(catalog.IsDuckCatalog());
 
-	auto &duck_catalog = catalog.Cast<DuckCatalog>();
-	auto &dependency_manager = duck_catalog.GetDependencyManager();
+	auto &dependency_manager = *catalog.GetDependencyManager();
 	catalog_entries = GetCatalogEntries(schemas);
 	dependency_manager.ReorderEntries(catalog_entries);
 

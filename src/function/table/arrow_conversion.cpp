@@ -27,6 +27,7 @@ ArrowArrayPhysicalType GetArrowArrayPhysicalType(const ArrowType &type) {
 
 } // namespace
 
+#if STANDARD_VECTOR_SIZE > 64
 static void ShiftRight(unsigned char *ar, int size, int shift) {
 	int carry = 0;
 	while (shift--) {
@@ -37,6 +38,7 @@ static void ShiftRight(unsigned char *ar, int size, int shift) {
 		}
 	}
 }
+#endif
 
 idx_t GetEffectiveOffset(const ArrowArray &array, int64_t parent_offset, const ArrowScanLocalState &state,
                          int64_t nested_offset = -1) {
@@ -1340,7 +1342,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
                                        DataChunk &output, idx_t start, bool arrow_scan_is_projected) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
-		auto col_idx = scan_state.column_ids[idx];
+		auto col_idx = scan_state.column_ids.empty() ? idx : scan_state.column_ids[idx];
 
 		// If projection was not pushed down into the arrow scanner, but projection pushdown is enabled on the
 		// table function, we need to use original column ids here.
