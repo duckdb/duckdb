@@ -33,7 +33,7 @@ string DynamicFilter::ToString(const string &column_name) {
 unique_ptr<Expression> DynamicFilter::ToExpression(const Expression &column) const {
 	if (!filter_data) {
 		auto bound_constant = make_uniq<BoundConstantExpression>(Value(true));
-		return bound_constant;
+		return std::move(bound_constant);
 	}
 	lock_guard<mutex> l(filter_data->lock);
 	return filter_data->filter->ToExpression(column);
