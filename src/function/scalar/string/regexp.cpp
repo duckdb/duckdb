@@ -204,18 +204,18 @@ RegexpExtractBindData::RegexpExtractBindData() {
 }
 
 RegexpExtractBindData::RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string_p,
-                                             bool constant_pattern, string group_string_p)
+                                             bool constant_pattern, optional_idx group_idx)
     : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern),
-      group_string(std::move(group_string_p)), rewrite(group_string) {
+      group_idx(group_idx) {
 }
 
 unique_ptr<FunctionData> RegexpExtractBindData::Copy() const {
-	return make_uniq<RegexpExtractBindData>(options, constant_string, constant_pattern, group_string);
+	return make_uniq<RegexpExtractBindData>(options, constant_string, constant_pattern, group_idx);
 }
 
 bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<RegexpExtractBindData>();
-	return RegexpBaseBindData::Equals(other) && group_string == other.group_string;
+	return RegexpBaseBindData::Equals(other) && group_idx == other.group_idx;
 }
 
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -227,15 +227,16 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
-			return Extract(input, result, lstate.constant_pattern, info.rewrite);
+			return Extract(input, lstate.constant_pattern, info.group_idx);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, string_t>(strings, patterns, result, args.size(),
 		                                                      [&](string_t input, string_t pattern) {
 			                                                      RE2 re(CreateStringPiece(pattern), info.options);
-			                                                      return Extract(input, result, re, info.rewrite);
+			                                                      return Extract(input, re, info.group_idx);
 		                                                      });
 	}
+	StringVector::AddHeapReference(result, args.data[0]);
 }
 
 //===--------------------------------------------------------------------===//
@@ -330,7 +331,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 		ParseRegexOptions(context, *arguments[3], options);
 	}
 
-	string group_string = "\\0";
+	optional_idx group_index = 0;
 	if (arguments.size() >= 3) {
 		if (arguments[2]->HasParameter()) {
 			throw ParameterNotResolvedException();
@@ -340,7 +341,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 		}
 		Value group = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 		if (group.IsNull()) {
-			group_string = "";
+			group_index = optional_idx();
 		} else if (group.type().id() == LogicalTypeId::LIST) {
 			if (!constant_pattern) {
 				throw BinderException("%s with LIST requires a constant pattern", bound_function.name);
@@ -374,12 +375,12 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 			if (group_idx < 0 || group_idx > 9) {
 				throw InvalidInputException("Group index must be between 0 and 9!");
 			}
-			group_string = "\\" + to_string(group_idx);
+			group_index = UnsafeNumericCast<idx_t>(group_idx);
 		}
 	}
 
 	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
-	                                        std::move(group_string));
+	                                        group_index);
 }
 
 ScalarFunctionSet RegexpFun::GetFunctions() {
