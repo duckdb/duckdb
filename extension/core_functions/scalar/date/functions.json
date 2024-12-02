@@ -277,6 +277,14 @@
         "type": "scalar_function_set"
     },
     {
+        "struct": "NormalizedIntervalFun",
+        "name": "normalized_interval",
+        "parameters": "interval",
+        "description": "Normalizes an INTERVAL to an equivalent interval",
+        "example": "normalized_interval(INTERVAL '30 days')",
+        "type": "scalar_function"
+    },
+    {
         "name": "quarter",
         "parameters": "ts",
         "description": "Extract the quarter component from a date or timestamp",

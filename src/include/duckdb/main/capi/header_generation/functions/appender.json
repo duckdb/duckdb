@@ -623,6 +623,23 @@
             }
         },
         {
+            "name": "duckdb_append_value",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                },
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Append a duckdb_value to the appender.\n"
+            }
+        },
+        {
             "name": "duckdb_append_data_chunk",
             "return_type": "duckdb_state",
             "params": [

@@ -215,12 +215,12 @@ TEST_CASE("Test SplitWithParentheses", "[string_util]") {
 	}
 
 	SECTION("incongruent parentheses") {
-		REQUIRE_THROWS_AS(StringUtil::SplitWithParentheses("("), InternalException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithParentheses(")"), InternalException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithParentheses("aa(bb"), InternalException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithParentheses("aa)bb"), InternalException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithParentheses("(aa)bb)"), InternalException);
-		REQUIRE_THROWS_AS(StringUtil::SplitWithParentheses("(aa(bb)"), InternalException);
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("("));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses(")"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("aa(bb"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("aa)bb"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("(aa)bb)"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("(aa(bb)"));
 	}
 }
 

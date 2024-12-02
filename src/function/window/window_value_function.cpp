@@ -118,8 +118,8 @@ public:
 	}
 
 	void Finalize(CollectionPtr collection) {
+		lock_guard<mutex> ignore_nulls_guard(lock);
 		if (child_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
-			lock_guard<mutex> ignore_nulls_guard(lock);
 			ignore_nulls = &collection->validities[child_idx];
 		}
 	}

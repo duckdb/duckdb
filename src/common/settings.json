@@ -236,7 +236,7 @@
     },
     {
         "name": "default_null_order",
-        "description": "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
+        "description": "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)",
         "type": "VARCHAR",
         "return_type": "DefaultOrderByNullType",
         "scope": "global",

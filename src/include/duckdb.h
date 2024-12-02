@@ -2812,7 +2812,7 @@ DUCKDB_API uint64_t *duckdb_vector_get_validity(duckdb_vector vector);
 Ensures the validity mask is writable by allocating it.
 
 After this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.
-This allows null values to be written to the vector, regardless of whether a validity mask was present before.
+This allows NULL values to be written to the vector, regardless of whether a validity mask was present before.
 
 * @param vector The vector to alter
 */
@@ -3911,6 +3911,11 @@ DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void 
 Append a NULL value to the appender (of any type).
 */
 DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
+
+/*!
+Append a duckdb_value to the appender.
+*/
+DUCKDB_API duckdb_state duckdb_append_value(duckdb_appender appender, duckdb_value value);
 
 /*!
 Appends a pre-filled data chunk to the specified appender.

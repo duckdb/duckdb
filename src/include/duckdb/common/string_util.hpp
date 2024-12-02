@@ -301,8 +301,10 @@ public:
 	//! JSON method that constructs a { string: value } JSON map
 	//! This is the inverse of ParseJSONMap
 	//! NOTE: this method is not efficient
-	DUCKDB_API static string ToJSONMap(ExceptionType type, const string &message,
-	                                   const unordered_map<string, string> &map);
+	DUCKDB_API static string ExceptionToJSONMap(ExceptionType type, const string &message,
+	                                            const unordered_map<string, string> &map);
+
+	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
 
 	DUCKDB_API static string GetFileName(const string &file_path);
 	DUCKDB_API static string GetFileExtension(const string &file_name);

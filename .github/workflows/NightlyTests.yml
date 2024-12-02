@@ -500,6 +500,7 @@ jobs:
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
+      DISABLE_POINTER_SALT: 1
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
 
     steps:
@@ -534,6 +535,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       CORE_EXTENSIONS: "parquet;json;tpch;tpcds"
+      DEBUG_STACKTRACE: 1
       LATEST_STORAGE: 1
       BLOCK_VERIFICATION: 1
 
