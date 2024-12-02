@@ -409,10 +409,9 @@ public:
 					auto is_null = validity.RowIsValidUnsafe(idx);
 					if (i && is_null != last_is_null) {
 						Append<EMPTY>(!last_is_null, length);
-						length = 1;
-					} else {
-						length++;
+						length = 0;
 					}
+					length++;
 					last_is_null = is_null;
 				}
 				Append<EMPTY>(!last_is_null, length);

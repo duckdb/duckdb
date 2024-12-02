@@ -7,10 +7,13 @@ group roaring
 storage persistent
 
 load
-DROP TABLE IF EXISTS tbl;
-PRAGMA force_compression='uncompressed';
+PRAGMA force_compression='roaring';
 SET checkpoint_threshold = '10.0 GB';
+CREATE TABLE data_source AS SELECT case when i%3=0 then 1337 else null end as a FROM range(0, 250_000_000) tbl(i);
 
 run
-CREATE TABLE tbl AS SELECT case when i%3=0 then 1337 else null end as a FROM range(0, 250_000_000) tbl(i);
+CREATE TABLE tbl AS FROM data_source;
 checkpoint;
+
+cleanup
+DROP TABLE IF EXISTS tbl;
