@@ -735,12 +735,10 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 		throw InternalException("Corrupt WAL: insert without table");
 	}
 
-	// append to the current table
-	// we don't do any constraint verification here
-	// TODO: shouldn't we pass 'true'/unsafe, then?
+	// Append to the current table without constraint verification.
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
-	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk, bound_constraints, nullptr,
-	                                              nullptr);
+	auto &storage = state.current_table->GetStorage();
+	storage.LocalAppend(*state.current_table, context, chunk, bound_constraints, nullptr, nullptr);
 }
 
 static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &col_data) {
