@@ -1,5 +1,6 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/function/window/window_aggregator.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
@@ -141,6 +142,7 @@ class WindowValueLocalState : public WindowExecutorBoundsState {
 public:
 	explicit WindowValueLocalState(const WindowValueGlobalState &gvstate)
 	    : WindowExecutorBoundsState(gvstate), gvstate(gvstate) {
+		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.exclude_clause);
 	}
 
 	//! Finish the sinking and prepare to scan
@@ -148,6 +150,8 @@ public:
 
 	//! The corresponding global value state
 	const WindowValueGlobalState &gvstate;
+	//! The frame boundaries, used for EXCLUDE
+	SubFrames frames;
 	//! The exclusion filter handler
 	unique_ptr<ExclusionFilter> exclusion_filter;
 	//! The validity mask that combines both the NULLs and exclusion information
@@ -383,34 +387,31 @@ WindowFirstValueExecutor::WindowFirstValueExecutor(BoundWindowExpression &wexpr,
 void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                                 DataChunk &eval_chunk, Vector &result, idx_t count,
                                                 idx_t row_idx) const {
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_BEGIN]);
-	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_END]);
-	for (idx_t i = 0; i < count; ++i, ++row_idx) {
+	auto &bounds = lvstate.bounds;
+	auto &frames = lvstate.frames;
+	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
+	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
+		for (const auto &frame : frames) {
+			if (frame.start >= frame.end) {
+				continue;
+			}
 
-		if (lvstate.exclusion_filter) {
-			lvstate.exclusion_filter->ApplyExclusion(lvstate.bounds, row_idx, i);
-		}
-
-		if (window_begin[i] >= window_end[i]) {
-			FlatVector::SetNull(result, i, true);
-			continue;
-		}
-		//	Same as NTH_VALUE(..., 1)
-		idx_t n = 1;
-		const auto first_idx =
-		    WindowBoundariesState::FindNextStart(*lvstate.ignore_nulls_exclude, window_begin[i], window_end[i], n);
-		if (!n) {
-			cursor.CopyCell(0, first_idx, result, i);
-		} else {
-			FlatVector::SetNull(result, i, true);
+			//	Same as NTH_VALUE(..., 1)
+			idx_t n = 1;
+			const auto first_idx =
+			    WindowBoundariesState::FindNextStart(*lvstate.ignore_nulls_exclude, frame.start, frame.end, n);
+			if (!n) {
+				cursor.CopyCell(0, first_idx, result, i);
+				return;
+			}
 		}
 
-		if (lvstate.exclusion_filter) {
-			lvstate.exclusion_filter->ResetMask(row_idx, i);
-		}
-	}
+		// Didn't find one
+		FlatVector::SetNull(result, i, true);
+	});
 }
 
 WindowLastValueExecutor::WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context,
