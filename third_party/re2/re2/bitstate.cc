@@ -274,7 +274,7 @@ bool BitState::Search(const StringPiece& text, const StringPiece& context,
 	memset(cap_.data(), 0, ncap*sizeof cap_[0]);
 
   // When sizeof(Job) == 16, we start with a nice round 1KiB. :)
-	if (!job_.size() < 64) {
+	if (job_.size() < 64) {
 	  job_ = PODArray<Job>(64);
 	}
 
