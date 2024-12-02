@@ -490,6 +490,9 @@ unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &con
 }
 
 unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &context) const {
+	if (dynamic_filter) {
+		dynamic_filter->Reset();
+	}
 	return make_uniq<TopNGlobalState>(context, *this);
 }
 

@@ -21,6 +21,7 @@ struct DynamicFilterData {
 	bool initialized = false;
 
 	void SetValue(Value val);
+	void Reset();
 };
 
 class DynamicFilter : public TableFilter {

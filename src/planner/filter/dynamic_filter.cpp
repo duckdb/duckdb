@@ -51,9 +51,17 @@ unique_ptr<TableFilter> DynamicFilter::Copy() const {
 }
 
 void DynamicFilterData::SetValue(Value val) {
+	if (val.IsNull()) {
+		return;
+	}
 	lock_guard<mutex> l(lock);
 	filter->Cast<ConstantFilter>().constant = std::move(val);
 	initialized = true;
+}
+
+void DynamicFilterData::Reset() {
+	lock_guard<mutex> l(lock);
+	initialized = false;
 }
 
 } // namespace duckdb
