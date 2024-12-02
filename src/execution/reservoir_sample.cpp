@@ -359,13 +359,13 @@ unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
 	throw InternalException("calling copy on reservoir sample percentage");
 }
 
-unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunkAndShrink() {
+unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunkAndDestroy() {
 	if (!is_finalized) {
 		Finalize();
 	}
 	while (!finished_samples.empty()) {
 		auto &front = finished_samples.front();
-		auto chunk = front->GetChunkAndShrink();
+		auto chunk = front->GetChunkAndDestroy();
 		if (chunk && chunk->size() > 0) {
 			return chunk;
 		}
@@ -392,7 +392,7 @@ void ReservoirSamplePercentage::Finalize() {
 		auto new_sample =
 		    make_uniq<ReservoirSample>(allocator, new_sample_size, base_reservoir_sample->random.NextRandomInteger());
 		while (true) {
-			auto chunk = current_sample->GetChunkAndShrink();
+			auto chunk = current_sample->GetChunkAndDestroy();
 			if (!chunk || chunk->size() == 0) {
 				break;
 			}

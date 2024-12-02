@@ -107,7 +107,7 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used when
 	//! querying from a sample defined in a query and not a table sample.
-	virtual unique_ptr<DataChunk> GetChunkAndShrink() = 0;
+	virtual unique_ptr<DataChunk> GetChunkAndDestroy() = 0;
 	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0) = 0;
 	virtual void Destroy();
 
@@ -272,7 +272,7 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunkAndShrink() override;
+	unique_ptr<DataChunk> GetChunkAndDestroy() override;
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Destroy() override;
 	void Finalize() override;
@@ -341,7 +341,7 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunkAndShrink() override;
+	unique_ptr<DataChunk> GetChunkAndDestroy() override;
 	//! Fetches a chunk from the sample. This method is not destructive
 	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
 	void Finalize() override;

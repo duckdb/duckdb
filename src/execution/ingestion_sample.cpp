@@ -47,13 +47,34 @@ idx_t ReservoirSample::NumSamplesCollected() const {
 	return reservoir_chunk->chunk.size();
 }
 
-idx_t ReservoirSample::GetActiveSampleCount() const {
-	if (SamplingState() == SamplingMode::FAST) {
-		return sel_size;
+SamplingMode ReservoirSample::SamplingState() const {
+	if (base_reservoir_sample->reservoir_weights.empty()) {
+		return SamplingMode::FAST;
 	}
-	return base_reservoir_sample->reservoir_weights.size();
+	return SamplingMode::SLOW;
 }
 
+idx_t ReservoirSample::GetActiveSampleCount() const {
+	switch (SamplingState()) {
+	case SamplingMode::FAST:
+		return sel_size;
+	case SamplingMode::SLOW:
+		return base_reservoir_sample->reservoir_weights.size();
+	default:
+		throw InternalException("Sampling State is INVALID");
+	}
+}
+
+idx_t ReservoirSample::GetTuplesSeen() const {
+	return base_reservoir_sample->num_entries_seen_total;
+}
+
+DataChunk &ReservoirSample::Chunk() {
+	D_ASSERT(reservoir_chunk);
+	return reservoir_chunk->chunk;
+}
+
+//TODO: Combine this with get chunk and shrink.
 unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 	if (destroyed || !reservoir_chunk || Chunk().size() == 0 || offset >= sample_count) {
 		return nullptr;
@@ -61,7 +82,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 	auto ret = make_uniq<DataChunk>();
 	idx_t ret_chunk_size = STANDARD_VECTOR_SIZE;
 	auto total_values_to_return =
-	    MinValue<idx_t>(ret_chunk_size, static_cast<idx_t>(GetTuplesSeen() * SAVE_PERCENTAGE));
+		MinValue<idx_t>(ret_chunk_size, static_cast<idx_t>(GetTuplesSeen() * SAVE_PERCENTAGE));
 	if (offset + STANDARD_VECTOR_SIZE > total_values_to_return) {
 		ret_chunk_size = total_values_to_return - offset;
 	}
@@ -79,12 +100,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk(idx_t offset) {
 	return ret;
 }
 
-DataChunk &ReservoirSample::Chunk() {
-	D_ASSERT(reservoir_chunk);
-	return reservoir_chunk->chunk;
-}
-
-unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
+unique_ptr<DataChunk> ReservoirSample::GetChunkAndDestroy() {
 	if (!reservoir_chunk || Chunk().size() == 0 || destroyed) {
 		return nullptr;
 	}
@@ -121,10 +137,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunkAndShrink() {
 	return ret;
 }
 
-idx_t ReservoirSample::GetTuplesSeen() const {
-	return base_reservoir_sample->num_entries_seen_total;
-}
-
 unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const {
 	auto new_sample_chunk = make_uniq<ReservoirChunk>();
 	new_sample_chunk->chunk.Initialize(Allocator::DefaultAllocator(), types, size);
@@ -137,13 +149,6 @@ unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalT
 		}
 	}
 	return new_sample_chunk;
-}
-
-SamplingMode ReservoirSample::SamplingState() const {
-	if (base_reservoir_sample->reservoir_weights.empty()) {
-		return SamplingMode::FAST;
-	}
-	return SamplingMode::SLOW;
 }
 
 void ReservoirSample::Shrink() {
