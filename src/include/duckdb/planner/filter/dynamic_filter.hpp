@@ -18,6 +18,9 @@ namespace duckdb {
 struct DynamicFilterData {
 	mutex lock;
 	unique_ptr<TableFilter> filter;
+	bool initialized = false;
+
+	void SetValue(Value val);
 };
 
 class DynamicFilter : public TableFilter {

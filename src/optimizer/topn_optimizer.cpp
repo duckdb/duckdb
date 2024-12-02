@@ -38,6 +38,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// pushdown dynamic filters through the Top-N operator
 	if (op.orders[0].null_order == OrderByNullType::NULLS_FIRST) {
 		// FIXME: not supported for NULLS FIRST quite yet
+		// we can support NULLS FIRST by doing (x IS NULL) OR [boundary value]
 		return;
 	}
 	auto &type = op.orders[0].expression->return_type;
@@ -61,18 +62,19 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		return;
 	}
 	// found pushdown targets! generate dynamic filters
-	unique_ptr<TableFilter> base_filter;
+	ExpressionType comparison_type;
 	if (op.orders[0].type == OrderType::ASCENDING) {
 		// for ascending order, we want the lowest N elements, so we filter on C <= [boundary]
-		// note: if we only have a single order clause, we could filter on C < boundary instead
-		// but that doesn't work with us pushing the sentinel value here
-		auto initial_bound = Value::MaximumValue(type);
-		base_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(initial_bound));
+		// if we only have a single order clause, we can filter on C < boundary
+		comparison_type =
+		    op.orders.size() == 1 ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	} else {
 		// for descending order, we want the highest N elements, so we filter on C >= [boundary]
-		auto initial_bound = Value::MinimumValue(type);
-		base_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(initial_bound));
+		// if we only have a single order clause, we can filter on C > boundary
+		comparison_type =
+		    op.orders.size() == 1 ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 	}
+	auto base_filter = make_uniq<ConstantFilter>(comparison_type, Value::MinimumValue(type));
 	auto filter_data = make_shared_ptr<DynamicFilterData>();
 	filter_data->filter = std::move(base_filter);
 

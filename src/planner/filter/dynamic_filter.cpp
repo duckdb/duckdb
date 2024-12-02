@@ -15,6 +15,9 @@ FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	lock_guard<mutex> l(filter_data->lock);
+	if (!filter_data->initialized) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 	return filter_data->filter->CheckStatistics(stats);
 }
 
@@ -45,6 +48,12 @@ bool DynamicFilter::Equals(const TableFilter &other_p) const {
 
 unique_ptr<TableFilter> DynamicFilter::Copy() const {
 	return make_uniq<DynamicFilter>(filter_data);
+}
+
+void DynamicFilterData::SetValue(Value val) {
+	lock_guard<mutex> l(lock);
+	filter->Cast<ConstantFilter>().constant = std::move(val);
+	initialized = true;
 }
 
 } // namespace duckdb

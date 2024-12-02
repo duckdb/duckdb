@@ -2,8 +2,9 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/filter/dynamic_filter.hpp"
 
 namespace duckdb {
 
@@ -40,9 +41,17 @@ struct TopNScanState {
 };
 
 struct TopNBoundaryValue {
+	explicit TopNBoundaryValue(const PhysicalTopN &op)
+	    : op(op), boundary_vector(op.orders[0].expression->return_type),
+	      boundary_modifiers(op.orders[0].type, op.orders[0].null_order) {
+	}
+
+	const PhysicalTopN &op;
 	mutex lock;
 	string boundary_value;
 	bool is_set = false;
+	Vector boundary_vector;
+	OrderModifiers boundary_modifiers;
 
 	string GetBoundaryValue() {
 		lock_guard<mutex> l(lock);
@@ -50,10 +59,16 @@ struct TopNBoundaryValue {
 	}
 
 	void UpdateValue(string_t boundary_val) {
-		lock_guard<mutex> l(lock);
+		unique_lock<mutex> l(lock);
 		if (!is_set || boundary_val < string_t(boundary_value)) {
 			boundary_value = boundary_val.GetString();
 			is_set = true;
+			if (op.dynamic_filter) {
+				CreateSortKeyHelpers::DecodeSortKey(boundary_val, boundary_vector, 0, boundary_modifiers);
+				auto new_dynamic_value = boundary_vector.GetValue(0);
+				l.unlock();
+				op.dynamic_filter->SetValue(std::move(new_dynamic_value));
+			}
 		}
 	}
 };
@@ -451,9 +466,8 @@ void TopNHeap::Scan(TopNScanState &state, DataChunk &chunk) {
 
 class TopNGlobalState : public GlobalSinkState {
 public:
-	TopNGlobalState(ClientContext &context, const vector<LogicalType> &payload_types,
-	                const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
-	    : heap(context, payload_types, orders, limit, offset) {
+	TopNGlobalState(ClientContext &context, const PhysicalTopN &op)
+	    : heap(context, op.types, op.orders, op.limit, op.offset), boundary_value(op) {
 	}
 
 	mutex lock;
@@ -476,7 +490,7 @@ unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &con
 }
 
 unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &context) const {
-	return make_uniq<TopNGlobalState>(context, types, orders, limit, offset);
+	return make_uniq<TopNGlobalState>(context, *this);
 }
 
 //===--------------------------------------------------------------------===//
