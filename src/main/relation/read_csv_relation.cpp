@@ -47,16 +47,23 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	// Run the auto-detect, populating the options with the detected settings
 
 	shared_ptr<CSVBufferManager> buffer_manager;
-	context->RunFunctionInTransaction([&]() {
-		buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0], 0);
-		CSVSniffer sniffer(csv_options, buffer_manager, CSVStateMachineCache::Get(*context));
-		auto sniffer_result = sniffer.SniffCSV();
-		auto &types = sniffer_result.return_types;
-		auto &names = sniffer_result.names;
-		for (idx_t i = 0; i < types.size(); i++) {
-			columns.emplace_back(names[i], types[i]);
+	if (csv_options.auto_detect) {
+		context->RunFunctionInTransaction([&]() {
+			buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0], 0);
+			CSVSniffer sniffer(csv_options, buffer_manager, CSVStateMachineCache::Get(*context));
+			auto sniffer_result = sniffer.SniffCSV();
+			auto &types = sniffer_result.return_types;
+			auto &names = sniffer_result.names;
+			for (idx_t i = 0; i < types.size(); i++) {
+				columns.emplace_back(names[i], types[i]);
+			}
+		});
+	} else {
+		for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {
+			D_ASSERT(csv_options.name_list.size() == csv_options.sql_type_list.size());
+			columns.emplace_back(csv_options.name_list[i], csv_options.sql_type_list[i]);
 		}
-	});
+	}
 
 	// After sniffing we can consider these set, so they are exported as named parameters
 	// FIXME: This is horribly hacky, should be refactored at some point

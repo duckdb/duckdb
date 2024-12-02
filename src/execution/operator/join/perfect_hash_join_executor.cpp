@@ -1,17 +1,123 @@
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 
-#include "duckdb/common/types/row/row_layout.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
 namespace duckdb {
 
-PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p, JoinHashTable &ht_p,
-                                                 PerfectHashJoinStats perfect_join_stats)
-    : join(join_p), ht(ht_p), perfect_join_statistics(std::move(perfect_join_stats)) {
+PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p, JoinHashTable &ht_p)
+    : join(join_p), ht(ht_p) {
 }
 
-bool PerfectHashJoinExecutor::CanDoPerfectHashJoin() {
-	return perfect_join_statistics.is_build_small;
+//===--------------------------------------------------------------------===//
+// Initialize
+//===--------------------------------------------------------------------===//
+bool ExtractNumericValue(Value val, hugeint_t &result) {
+	if (!val.type().IsIntegral()) {
+		switch (val.type().InternalType()) {
+		case PhysicalType::INT8:
+			result = Hugeint::Convert(val.GetValueUnsafe<int8_t>());
+			break;
+		case PhysicalType::INT16:
+			result = Hugeint::Convert(val.GetValueUnsafe<int16_t>());
+			break;
+		case PhysicalType::INT32:
+			result = Hugeint::Convert(val.GetValueUnsafe<int32_t>());
+			break;
+		case PhysicalType::INT64:
+			result = Hugeint::Convert(val.GetValueUnsafe<int64_t>());
+			break;
+		case PhysicalType::INT128:
+			result = val.GetValueUnsafe<hugeint_t>();
+			break;
+		case PhysicalType::UINT8:
+			result = Hugeint::Convert(val.GetValueUnsafe<uint8_t>());
+			break;
+		case PhysicalType::UINT16:
+			result = Hugeint::Convert(val.GetValueUnsafe<uint16_t>());
+			break;
+		case PhysicalType::UINT32:
+			result = Hugeint::Convert(val.GetValueUnsafe<uint32_t>());
+			break;
+		case PhysicalType::UINT64:
+			result = Hugeint::Convert(val.GetValueUnsafe<uint64_t>());
+			break;
+		case PhysicalType::UINT128: {
+			const auto uhugeint_val = val.GetValueUnsafe<uhugeint_t>();
+			if (uhugeint_val > NumericCast<uhugeint_t>(NumericLimits<hugeint_t>::Maximum())) {
+				return false;
+			}
+			result.lower = uhugeint_val.lower;
+			result.upper = NumericCast<int64_t>(uhugeint_val.upper);
+			break;
+		}
+		default:
+			return false;
+		}
+	} else {
+		if (!val.DefaultTryCastAs(LogicalType::HUGEINT)) {
+			return false;
+		}
+		result = val.GetValue<hugeint_t>();
+	}
+	return true;
+}
+
+bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, const Value &min, const Value &max) {
+	if (perfect_join_statistics.is_build_small) {
+		return true; // Already true based on static statistics
+	}
+
+	// We only do this optimization for inner joins with one integer equality condition
+	const auto key_type = op.conditions[0].left->return_type;
+	if (op.join_type != JoinType::INNER || op.conditions.size() != 1 ||
+	    op.conditions[0].comparison != ExpressionType::COMPARE_EQUAL || !TypeIsInteger(key_type.InternalType())) {
+		return false;
+	}
+
+	// We bail out if there are nested types on the RHS
+	for (auto &type : op.children[1]->types) {
+		switch (type.InternalType()) {
+		case PhysicalType::STRUCT:
+		case PhysicalType::LIST:
+		case PhysicalType::ARRAY:
+			return false;
+		default:
+			break;
+		}
+	}
+
+	// And when the build range is smaller than the threshold
+	perfect_join_statistics.build_min = min;
+	perfect_join_statistics.build_max = max;
+	hugeint_t min_value, max_value;
+	if (!ExtractNumericValue(perfect_join_statistics.build_min, min_value) ||
+	    !ExtractNumericValue(perfect_join_statistics.build_max, max_value)) {
+		return false;
+	}
+	if (max_value < min_value) {
+		return false; // Empty table
+	}
+
+	hugeint_t build_range;
+	if (!TrySubtractOperator::Operation(max_value, min_value, build_range)) {
+		return false;
+	}
+
+	// The max size our build must have to run the perfect HJ
+	static constexpr idx_t MAX_BUILD_SIZE = 1048576;
+	if (build_range > Hugeint::Convert(MAX_BUILD_SIZE)) {
+		return false;
+	}
+	perfect_join_statistics.build_range = NumericCast<idx_t>(build_range);
+
+	// If count is larger than range (duplicates), we bail out
+	if (ht.Count() > perfect_join_statistics.build_range) {
+		return false;
+	}
+
+	perfect_join_statistics.is_build_small = true;
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -29,7 +135,6 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
 	// Now fill columns with build data
-
 	return FullScanHashTable(key_type);
 }
 
@@ -95,6 +200,8 @@ bool PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, Sel
 		return TemplatedFillSelectionVectorBuild<int32_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::INT64:
 		return TemplatedFillSelectionVectorBuild<int64_t>(source, sel_vec, seq_sel_vec, count);
+	case PhysicalType::INT128:
+		return TemplatedFillSelectionVectorBuild<hugeint_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::UINT8:
 		return TemplatedFillSelectionVectorBuild<uint8_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::UINT16:
@@ -103,6 +210,8 @@ bool PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, Sel
 		return TemplatedFillSelectionVectorBuild<uint32_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::UINT64:
 		return TemplatedFillSelectionVectorBuild<uint64_t>(source, sel_vec, seq_sel_vec, count);
+	case PhysicalType::UINT128:
+		return TemplatedFillSelectionVectorBuild<uhugeint_t>(source, sel_vec, seq_sel_vec, count);
 	default:
 		throw NotImplementedException("Type not supported for perfect hash join");
 	}
@@ -216,6 +325,9 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, Sel
 	case PhysicalType::INT64:
 		TemplatedFillSelectionVectorProbe<int64_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
+	case PhysicalType::INT128:
+		TemplatedFillSelectionVectorProbe<hugeint_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
+		break;
 	case PhysicalType::UINT8:
 		TemplatedFillSelectionVectorProbe<uint8_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
@@ -227,6 +339,9 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, Sel
 		break;
 	case PhysicalType::UINT64:
 		TemplatedFillSelectionVectorProbe<uint64_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedFillSelectionVectorProbe<uhugeint_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	default:
 		throw NotImplementedException("Type not supported");

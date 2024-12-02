@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 class DataChunk;
@@ -59,8 +59,8 @@ public:
 
 	void Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const;
 	void Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const;
-	void PushFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
-	                 const PhysicalOperator &op) const;
+	unique_ptr<DataChunk> Finalize(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
+	                               const PhysicalOperator &op) const;
 
 private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,

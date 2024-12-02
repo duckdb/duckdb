@@ -1100,7 +1100,7 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	REQUIRE((res->GetValue(0, 0).ToString() == "BASE TABLE"));
 }
 
-TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
+TEST_CASE("Test AdbcConnectionGetObjects", "[adbc][.]") {
 	if (!duckdb_lib) {
 		return;
 	}
