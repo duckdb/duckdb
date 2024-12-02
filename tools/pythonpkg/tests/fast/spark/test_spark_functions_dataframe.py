@@ -5,7 +5,7 @@ from spark_namespace.sql import functions as F
 
 
 class TestSparkFunctionsArray:
-    def test_boradcast(self, spark):
+    def test_broadcast(self, spark):
         data = [
             ([1, 2, 2], 2),
             ([2, 4, 5], 3),
