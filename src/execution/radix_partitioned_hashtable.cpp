@@ -112,16 +112,16 @@ public:
 
 private:
 	//! Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
-	static constexpr idx_t L1_CACHE_SIZE = 32768 / 2;
+	static constexpr const idx_t L1_CACHE_SIZE = 32768 / 2;
 	//! Assume (1 << 20) = 1MB L2 cache per core, divided by two because hyperthreading
-	static constexpr idx_t L2_CACHE_SIZE = 1048576 / 2;
+	static constexpr const idx_t L2_CACHE_SIZE = 1048576 / 2;
 	//! Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
-	static constexpr idx_t L3_CACHE_SIZE = 1572864 / 2;
+	static constexpr const idx_t L3_CACHE_SIZE = 1572864 / 2;
 
 	//! Sink radix bits to initialize with
-	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 3;
+	static constexpr const idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 3;
 	//! Maximum Sink radix bits (independent of threads)
-	static constexpr idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 7;
+	static constexpr const idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 7;
 
 	//! The global sink state
 	RadixHTGlobalSinkState &sink;
@@ -132,11 +132,11 @@ private:
 
 public:
 	//! If we have this many or less threads, we grow the HT, otherwise we abandon
-	static constexpr idx_t GROW_STRATEGY_THREAD_THRESHOLD = 2;
+	static constexpr const idx_t GROW_STRATEGY_THREAD_THRESHOLD = 2;
 	//! If we fill this many blocks per partition, we trigger a repartition
-	static constexpr double BLOCK_FILL_FACTOR = 1.8;
+	static constexpr const double BLOCK_FILL_FACTOR = 1.8;
 	//! By how many bits to repartition if a repartition is triggered
-	static constexpr idx_t REPARTITION_RADIX_BITS = 2;
+	static constexpr const idx_t REPARTITION_RADIX_BITS = 2;
 };
 
 class RadixHTGlobalSinkState : public GlobalSinkState {
