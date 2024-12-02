@@ -36,7 +36,9 @@ public:
 class DeleteLocalState : public LocalSinkState {
 public:
 	DeleteLocalState(ClientContext &context, TableCatalogEntry &table,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints)
+	    : has_unique_indexes(false) {
+
 		delete_chunk.Initialize(Allocator::Get(context), table.GetTypes());
 		auto &storage = table.GetStorage();
 		delete_state = storage.InitializeDelete(table, context, bound_constraints);
@@ -44,6 +46,7 @@ public:
 		// We need to append deletes to the local delete-ART.
 		if (storage.HasUniqueIndexes()) {
 			storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
+			has_unique_indexes = true;
 		}
 	}
 
@@ -51,6 +54,7 @@ public:
 	DataChunk delete_chunk;
 	unique_ptr<TableDeleteState> delete_state;
 	LocalAppendState append_state;
+	bool has_unique_indexes;
 };
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -67,8 +71,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto fetch_state = ColumnFetchState();
 
 	lock_guard<mutex> delete_guard(g_state.delete_lock);
-	auto has_unique_indexes = table.HasUniqueIndexes();
-	if (!return_chunk && !has_unique_indexes) {
+	if (!return_chunk && !l_state.has_unique_indexes) {
 		g_state.deleted_count += table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
 		return SinkResultType::NEED_MORE_INPUT;
 	}
@@ -78,7 +81,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	row_ids.Flatten(chunk.size());
 	table.Fetch(transaction, l_state.delete_chunk, column_ids, row_ids, chunk.size(), fetch_state);
 
-	if (has_unique_indexes) {
+	if (l_state.has_unique_indexes) {
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto &delete_indexes = local_storage.GetDeleteIndexes(table);
 		delete_indexes.Scan([&](Index &index) {
@@ -140,7 +143,6 @@ SourceResultType PhysicalDelete::GetData(ExecutionContext &context, DataChunk &c
 	}
 
 	g.return_collection.Scan(state.scan_state, chunk);
-
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 

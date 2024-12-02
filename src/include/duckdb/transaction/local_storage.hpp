@@ -158,9 +158,7 @@ public:
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	TableIndexList &GetIndexes(DataTable &table);
 	TableIndexList &GetDeleteIndexes(DataTable &table);
-	bool IsInitialized(DataTable &table) {
-		return table_manager.GetStorage(table);
-	}
+	bool IsInitialized(DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 

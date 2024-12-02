@@ -618,6 +618,10 @@ TableIndexList &LocalStorage::GetDeleteIndexes(DataTable &table) {
 	return storage->delete_indexes;
 }
 
+bool LocalStorage::IsInitialized(DataTable &table) {
+	return table_manager.GetStorage(table);
+}
+
 void LocalStorage::VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint) {
 	auto storage = table_manager.GetStorage(parent);
 	if (!storage) {

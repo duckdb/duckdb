@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 

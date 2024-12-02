@@ -492,7 +492,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 	}
 
 	ARTConflictType conflict_type;
-	optional_idx conflict_index;
+	optional_idx conflict_idx;
 	auto was_empty = !tree.HasMetadata();
 
 	// Insert the entries into the index.
@@ -502,15 +502,15 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 		}
 		conflict_type = Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus(), delete_art);
 		if (conflict_type != ARTConflictType::NO_CONFLICT) {
-			conflict_index = i;
+			conflict_idx = i;
 			break;
 		}
 	}
 
 	// Remove any previously inserted entries.
 	if (conflict_type != ARTConflictType::NO_CONFLICT) {
-		D_ASSERT(conflict_index.IsValid());
-		for (idx_t i = 0; i < conflict_index.GetIndex(); i++) {
+		D_ASSERT(conflict_idx.IsValid());
+		for (idx_t i = 0; i < conflict_idx.GetIndex(); i++) {
 			if (keys[i].Empty()) {
 				continue;
 			}
@@ -524,7 +524,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 	}
 
 	if (conflict_type != ARTConflictType::NO_CONFLICT) {
-		auto msg = AppendRowError(input, conflict_index.GetIndex());
+		auto msg = AppendRowError(input, conflict_idx.GetIndex());
 		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
 	}
 
@@ -574,6 +574,41 @@ void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, cons
 
 	Prefix::New(*this, ref, key, depth, count);
 	Leaf::New(ref, row_id.GetRowId());
+}
+
+ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+                                       const GateStatus status, optional_ptr<ART> delete_art) {
+
+	if (!IsUnique()) {
+		Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
+		return ARTConflictType::NO_CONFLICT;
+	}
+
+	if (!delete_art) {
+		return ARTConflictType::CONSTRAINT;
+	}
+
+	// Lookup in the delete_art.
+	auto delete_leaf = delete_art->Lookup(delete_art->tree, key, 0);
+	if (!delete_leaf) {
+		return ARTConflictType::CONSTRAINT;
+	}
+
+	// The row ID has changed.
+	// This happens, if the global index has a key, let's say key 1.
+	// Then, the local transaction deletes that key, and re-inserts it.
+	// Now, we try to re-insert that same key another time, which must throw.
+	// The delete ART stores the row ID of the first key 1, whereas this lookup finds the re-inserted row ID.
+	D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
+	auto delete_row_id = delete_leaf->GetRowId();
+	auto this_row_id = node.GetRowId();
+	if (delete_row_id != this_row_id) {
+		return ARTConflictType::TRANSACTION;
+	}
+
+	// The deleted key and its row ID match the current key and its row ID.
+	Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
+	return ARTConflictType::NO_CONFLICT;
 }
 
 ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
@@ -638,32 +673,7 @@ ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const AR
 	auto type = node.GetType();
 	switch (type) {
 	case NType::LEAF_INLINED: {
-		if (IsUnique() && !delete_art) {
-			return ARTConflictType::CONSTRAINT;
-		}
-
-		if (IsUnique()) {
-			// Lookup in the delete_art.
-			auto delete_leaf = delete_art->Lookup(delete_art->tree, key, 0);
-
-			// Not a deleted leaf.
-			if (!delete_leaf) {
-				return ARTConflictType::CONSTRAINT;
-			}
-
-			// The row ID has changed.
-			// This can also happen within the same transaction, i.e., DELETE ALL, INSERT 1, INSERT 1.
-			D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
-			auto delete_row_id = delete_leaf->GetRowId();
-			auto this_row_id = node.GetRowId();
-			if (delete_row_id != this_row_id) {
-				return ARTConflictType::TRANSACTION;
-			}
-		}
-
-		// Insert the value.
-		Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
-		return ARTConflictType::NO_CONFLICT;
+		return InsertIntoInlined(node, key, depth, row_id, status, delete_art);
 	}
 	case NType::LEAF: {
 		D_ASSERT(!IsUnique());
@@ -1036,11 +1046,11 @@ void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> de
 		cast_delete_art = delete_art->Cast<ART>();
 	}
 
-	auto found_conflict = DConstants::INVALID_INDEX;
-	for (idx_t i = 0; found_conflict == DConstants::INVALID_INDEX && i < chunk.size(); i++) {
+	optional_idx conflict_idx;
+	for (idx_t i = 0; !conflict_idx.IsValid() && i < chunk.size(); i++) {
 		if (keys[i].Empty()) {
 			if (conflict_manager.AddNull(i)) {
-				found_conflict = i;
+				conflict_idx = i;
 			}
 			continue;
 		}
@@ -1048,20 +1058,24 @@ void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> de
 		auto leaf = Lookup(tree, keys[i], 0);
 		if (!leaf) {
 			if (conflict_manager.AddMiss(i)) {
-				found_conflict = i;
+				conflict_idx = i;
 			}
 			continue;
 		}
 
-		// True hit?
+		// Use the delete ART to verify if we actually found a constraint violation.
 		if (cast_delete_art) {
 			auto deleted_leaf = cast_delete_art->Lookup(cast_delete_art->tree, keys[i], 0);
+
+			// The same key exists in the delete index.
 			if (deleted_leaf) {
 				auto deleted_row_id = deleted_leaf->GetRowId();
 				auto this_row_id = leaf->GetRowId();
+
+				// And the row IDs match.
 				if (deleted_row_id == this_row_id) {
 					if (conflict_manager.AddMiss(i)) {
-						found_conflict = i;
+						conflict_idx = i;
 					}
 					continue;
 				}
@@ -1072,16 +1086,16 @@ void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> de
 		// We only perform constraint checking on unique indexes, i.e., all leaves are inlined.
 		D_ASSERT(leaf->GetType() == NType::LEAF_INLINED);
 		if (conflict_manager.AddHit(i, leaf->GetRowId())) {
-			found_conflict = i;
+			conflict_idx = i;
 		}
 	}
 
 	conflict_manager.FinishLookup();
-	if (found_conflict == DConstants::INVALID_INDEX) {
+	if (!conflict_idx.IsValid()) {
 		return;
 	}
 
-	auto key_name = GenerateErrorKeyName(chunk, found_conflict);
+	auto key_name = GenerateErrorKeyName(chunk, conflict_idx.GetIndex());
 	auto exception_msg = GenerateConstraintErrorMessage(conflict_manager.LookupType(), key_name);
 	throw ConstraintException(exception_msg);
 }

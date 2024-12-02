@@ -129,6 +129,8 @@ private:
 
 	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
 	                     const GateStatus status);
+	ARTConflictType InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+	                                  const GateStatus status, optional_ptr<ART> delete_art);
 	ARTConflictType InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
 	                               const GateStatus status, optional_ptr<ART> delete_art);
 
