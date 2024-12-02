@@ -1,6 +1,6 @@
-# name: test/sql/index/art/updates/test_art_simple_update.test
+# name: test/sql/index/art/constraints/test_art_simple_update.test
 # description: Test a simple update on a PK with a LIST column.
-# group: [updates]
+# group: [constraints]
 
 statement ok
 PRAGMA enable_verification

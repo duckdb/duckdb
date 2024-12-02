@@ -165,7 +165,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
 	table.Delete(delete_state, context.client, *del_row_ids, update_count);
 
-	// Arrange the columns in the "standard table order".
+	// Arrange the columns in the standard table order.
 	mock_chunk.SetCardinality(update_count);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);

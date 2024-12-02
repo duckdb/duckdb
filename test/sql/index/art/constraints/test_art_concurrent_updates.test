@@ -1,0 +1,136 @@
+# name: test/sql/index/art/constraints/test_art_concurrent_updates.test
+# description: Test UPDATE in the main connection with concurrent updates in other connections.
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'first payload'), (2, 'other payload');
+
+# con1 open.
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE tbl SET payload = 'con1 payload' WHERE id = 1;
+
+statement ok con1
+UPDATE tbl SET id = 3 WHERE id = 2;
+
+statement ok
+BEGIN TRANSACTION
+
+statement error
+UPDATE tbl SET payload = 'second payload' WHERE id = 1;
+----
+<REGEX>:TransactionContext Error.*Conflict on update.*
+
+statement ok
+COMMIT;
+
+# con1 and con2 open.
+
+statement ok con2
+BEGIN TRANSACTION;
+
+statement error con2
+UPDATE tbl SET payload = 'con2 payload' WHERE id = 1;
+----
+<REGEX>:TransactionContext Error.*Conflict on update.*
+
+statement ok
+BEGIN TRANSACTION;
+
+statement error
+UPDATE tbl SET payload = 'third payload' WHERE id = 1;
+----
+<REGEX>:TransactionContext Error.*Conflict on update.*
+
+statement ok
+COMMIT;
+
+statement ok con1
+COMMIT;
+
+statement ok con2
+COMMIT
+
+query III
+SELECT id, payload, rowid FROM tbl ORDER BY ALL;
+----
+1	con1 payload	0
+3	other payload	2
+
+# Now with a LIST column.
+
+statement ok
+CREATE TABLE tbl_list (id INT PRIMARY KEY, payload VARCHAR[]);
+
+statement ok
+INSERT INTO tbl_list VALUES (1, ['first payload']), (2, ['other payload']);
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE tbl_list SET payload = ['con1 payload'] WHERE id = 1;
+
+statement ok con1
+UPDATE tbl_list SET id = 3 WHERE id = 2;
+
+statement ok
+BEGIN TRANSACTION
+
+statement error
+UPDATE tbl_list SET payload = ['second payload'] WHERE id = 1;
+----
+<REGEX>:TransactionContext Error.*Conflict on tuple deletion.*
+
+statement ok
+COMMIT;
+
+statement ok con1
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl_list ORDER BY ALL;
+----
+1	[con1 payload]	2
+3	[other payload]	3
+
+# ROLLBACK due to a constraint violation during the transaction.
+
+statement ok
+CREATE TABLE tbl_rollback (id INT PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO tbl_rollback VALUES (1, 'first payload');
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE tbl_rollback SET payload = 'con1 payload' WHERE id = 1;
+
+statement error con1
+INSERT INTO tbl_rollback VALUES (1, 'con1 payload');
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+statement error con1
+BEGIN TRANSACTION;
+----
+<REGEX>:TransactionContext Error.*Current transaction is aborted.*
+
+statement ok con1
+ROLLBACK;
+
+query III
+SELECT id, payload, rowid FROM tbl_rollback ORDER BY ALL;
+----
+1	first payload	0
