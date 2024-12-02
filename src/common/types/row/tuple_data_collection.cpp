@@ -253,7 +253,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		// Make sure we round up so its all covered
 		auto child_array_total_size = ArrayVector::GetTotalSize(vector);
 		auto list_entry_t_count =
-		    MaxValue((child_array_total_size + array_size) / array_size, format.unified.validity.TargetCount());
+		    MaxValue((child_array_total_size + array_size) / array_size, format.unified.validity.Capacity());
 
 		// Create list entries!
 		format.array_list_entries = make_unsafe_uniq_array<list_entry_t>(list_entry_t_count);

@@ -84,6 +84,8 @@ public:
 	bool HasDefaultDatabase() {
 		return !default_database.empty();
 	}
+	//! Gets a list of all attached database paths
+	vector<string> GetAttachedDatabasePaths();
 
 private:
 	//! Returns a database with a specified path

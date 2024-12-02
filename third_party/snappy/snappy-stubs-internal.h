@@ -38,11 +38,11 @@
 #define HAVE_BUILTIN_PREFETCH 1
 #endif
 
-#if defined(__aarch64__)
-// These are always enabled on aarch64
-#define SNAPPY_HAVE_NEON 1
-#define SNAPPY_HAVE_NEON_CRC32 1
-#endif
+// These should always be available on aarch64, but sadly not on iOS/Android
+// #if defined(__aarch64__)
+// #define SNAPPY_HAVE_NEON 1
+// #define SNAPPY_HAVE_NEON_CRC32 1
+// #endif
 
 #include "snappy_version.hpp"
 

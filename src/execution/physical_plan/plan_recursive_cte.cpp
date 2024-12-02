@@ -59,7 +59,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 
 				FunctionBinder function_binder(context);
 				auto first_aggregate =
-				    function_binder.BindAggregateFunction(LastFun::GetFunction(logical_type), std::move(first_children),
+				    function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(logical_type), std::move(first_children),
 				                                          nullptr, AggregateType::NON_DISTINCT);
 				first_aggregate->order_bys = nullptr;
 

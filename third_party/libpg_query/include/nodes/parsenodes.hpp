@@ -317,6 +317,7 @@ typedef struct PGAStar {
 	PGNode *expr;         /* optional: the expression (regex or list) to select columns */
 	PGList *except_list;  /* optional: EXCLUDE list */
 	PGList *replace_list; /* optional: REPLACE list */
+	PGList *rename_list;  /* optional: RENAME list */
 	bool columns;         /* whether or not this is a columns list */
 	bool unpacked;        /* whether or not the columns list is unpacked */
 	int location;

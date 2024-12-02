@@ -98,7 +98,7 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, const ArrowSc
 		//! We are setting a validity mask of the data part of dictionary vector
 		//! For some reason, Nulls are allowed to be indexes, hence we need to set the last element here to be null
 		//! We might have to resize the mask
-		mask.Resize(size, size + 1);
+		mask.Resize(size + 1);
 		mask.SetInvalid(size);
 	}
 }
@@ -137,6 +137,12 @@ static ArrowListOffsetData ConvertArrowListOffsetsTemplated(Vector &vector, Arro
 	ArrowListOffsetData result;
 	auto &start_offset = result.start_offset;
 	auto &list_size = result.list_size;
+
+	if (size == 0) {
+		start_offset = 0;
+		list_size = 0;
+		return result;
+	}
 
 	idx_t cur_offset = 0;
 	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;

@@ -181,10 +181,10 @@
   },
   {
     "class": "SampleOptions",
-    "includes": [
+      "includes": [
       "duckdb/parser/parsed_data/sample_options.hpp"
     ],
-    "members": [
+      "members": [
       {
         "id": 100,
         "name": "sample_size",
@@ -203,9 +203,11 @@
       {
         "id": 103,
         "name": "seed",
-        "type": "int64_t"
+        "type": "int64_t",
+        "serialize_property": "GetSeed()"
       }
-    ]
+    ],
+    "constructor": ["seed"]
   },
   {
     "class": "BaseReservoirSampling",
@@ -812,6 +814,15 @@
       {"id": 138,
         "name": "dialect_options.rows_until_header",
         "type": "idx_t"
+      },
+      {"id": 139,
+        "name": "encoding",
+        "type": "string"
+      }
+      ,
+      {"id": 140,
+        "name": "dialect_options.state_machine_options.rfc_4180",
+        "type": "CSVOption<bool>"
       }
     ],
     "pointer_type": "none"
@@ -949,6 +960,74 @@
         "id": 103,
         "name": "column",
         "type": "string"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ExportedTableInfo",
+    "includes": [
+      "duckdb/parser/parsed_data/exported_table_data.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "table_data",
+        "type": "ExportedTableData"
+      }
+    ],
+    "constructor": ["$ClientContext", "table_data"],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ExportedTableData",
+    "includes": [
+      "duckdb/parser/parsed_data/exported_table_data.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "table_name",
+        "type": "string"
+      },
+      {
+        "id": 2,
+        "name": "schema_name",
+        "type": "string"
+      },
+      {
+        "id": 3,
+        "name": "database_name",
+        "type": "string"
+      },
+      {
+        "id": 4,
+        "name": "file_path",
+        "type": "string"
+      },
+      {
+        "id": 5,
+        "name": "not_null_columns",
+        "type": "vector<string>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ColumnIndex",
+    "includes": [
+      "duckdb/common/column_index.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "index",
+        "type": "idx_t"
+      },
+      {
+        "id": 2,
+        "name": "child_indexes",
+        "type": "vector<ColumnIndex>"
       }
     ],
     "pointer_type": "none"

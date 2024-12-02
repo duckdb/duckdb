@@ -155,7 +155,7 @@ static void get_user_data(sqlite3_context *context, int argc, sqlite3_value **ar
 	}
 }
 
-// get text value from interger or float types
+// get text value from integer or float types
 static void cast_numbers_to_text(sqlite3_context *context, int argc, sqlite3_value **argv) {
 	REQUIRE((sqlite3_value_type(argv[0]) == SQLITE_INTEGER || sqlite3_value_type(argv[0]) == SQLITE_FLOAT));
 	char *str = (char *)sqlite3_value_text(argv[0]); // argv[0] is a an integer

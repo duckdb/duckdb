@@ -53,6 +53,7 @@ def test_pragma(shell):
         .statement(".mode csv")
         .statement(".headers off")
         .statement(".sep |")
+        .statement('.nullvalue ""')
         .statement("CREATE TABLE t0(c0 INT);")
         .statement("PRAGMA table_info('t0');")
     )
@@ -95,7 +96,7 @@ def test_invalid_cast(shell):
 def test_invalid_backup(shell, random_filepath):
     test = ShellTest(shell).statement(f'.backup {random_filepath.as_posix()}')
     result = test.run()
-    result.check_stderr("sqlite3_backup_init")
+    result.check_stderr("unsupported in the current version of the CLI")
 
 def test_newline_in_value(shell):
     test = (
@@ -309,7 +310,7 @@ def test_timeout(shell):
         .statement(".timeout")
     )
     result = test.run()
-    result.check_stderr("sqlite3_busy_timeout")
+    result.check_stderr("unsupported in the current version of the CLI")
 
 
 def test_save(shell, random_filepath):
@@ -318,7 +319,7 @@ def test_save(shell, random_filepath):
         .statement(f".save {random_filepath.as_posix()}")
     )
     result = test.run()
-    result.check_stderr("sqlite3_backup_init")
+    result.check_stderr("unsupported in the current version of the CLI")
 
 def test_restore(shell, random_filepath):
     test = (
@@ -326,7 +327,7 @@ def test_restore(shell, random_filepath):
         .statement(f".restore {random_filepath.as_posix()}")
     )
     result = test.run()
-    result.check_stderr("sqlite3_backup_init")
+    result.check_stderr("unsupported in the current version of the CLI")
 
 @pytest.mark.parametrize("cmd", [
     ".vfsinfo",
@@ -357,6 +358,15 @@ def test_schema(shell, pattern):
     )
     result = test.run()
     result.check_stdout("CREATE TABLE test(a INTEGER, b VARCHAR);")
+
+def test_schema_indent(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table test (a int, b varchar, c int, d int, k int, primary key(a, b));")
+        .statement(f".schema -indent")
+    )
+    result = test.run()
+    result.check_stdout("CREATE TABLE test(")
 
 def test_tables(shell):
     test = (
@@ -552,7 +562,42 @@ def test_mode_html(shell):
     result = test.run()
     result.check_stdout('<td>fourty-two</td>')
 
-# Original comment: FIXME sqlite3_column_blob
+def test_mode_html_escapes(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode html")
+        .statement("SELECT '<&>\"\'\'' AS \"&><\"\"\'\";")
+    )
+    result = test.run()
+    result.check_stdout('<tr><th>&amp;&gt;&lt;&quot;&#39;</th>')
+
+def test_mode_tcl_escapes(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode tcl")
+        .statement("SELECT '<&>\"\'\'' AS \"&><\"\"\'\";")
+    )
+    result = test.run()
+    result.check_stdout('"&><\\"\'"')
+
+def test_mode_csv_escapes(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode csv")
+        .statement("SELECT 'BEGINVAL,\n\"ENDVAL' AS \"BEGINHEADER\"\",\nENDHEADER\";")
+    )
+    result = test.run()
+    result.check_stdout('"BEGINHEADER"",\nENDHEADER"\r\n"BEGINVAL,\n""ENDVAL"')
+
+def test_mode_json_infinity(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode json")
+        .statement("SELECT 'inf'::DOUBLE AS inf, '-inf'::DOUBLE AS ninf, 'nan'::DOUBLE AS nan, '-nan'::DOUBLE AS nnan;")
+    )
+    result = test.run()
+    result.check_stdout('[{"inf":1e999,"ninf":-1e999,"nan":null,"nnan":null}]')
+
 def test_mode_insert(shell):
     test = (
         ShellTest(shell)
@@ -853,42 +898,6 @@ select 42;
     result = test.run()
     result.check_stdout('42')
 
-def test_sqlite_udfs_error(shell):
-    test = (
-        ShellTest(shell)
-        .statement("SELECT writefile()")
-    )
-    result = test.run()
-    result.check_stderr('wrong number of arguments to function writefile')
-
-    test = (
-        ShellTest(shell)
-        .statement("SELECT writefile('hello')")
-    )
-    result = test.run()
-    result.check_stderr('wrong number of arguments to function writefile')
-
-def test_sqlite_udfs_correct(shell, random_filepath):
-    import os
-    test = (
-        ShellTest(shell)
-        .statement(f"SELECT writefile('{random_filepath.as_posix()}', 'hello');")
-    )
-    result = test.run()
-    if not os.path.exists(random_filepath):
-        raise Exception(f"Failed to write file {random_filepath.as_posix()}")
-    with open(random_filepath, 'r') as f:
-        result.stdout = f.read()
-    result.check_stdout('hello')
-
-def test_lsmode(shell):
-    test = (
-        ShellTest(shell)
-        .statement("SELECT lsmode(1) AS lsmode;")
-    )
-    result = test.run()
-    result.check_stdout('lsmode')
-
 def test_duckbox(shell):
     test = (
         ShellTest(shell)
@@ -974,31 +983,40 @@ def test_nullbyte_error_rendering(shell):
     result = test.run()
     result.check_stderr('INT32')
 
-@pytest.mark.parametrize("stmt", [
-	"select sha3(NULL);"
-])
-def test_sqlite_udf_null(shell, stmt):
+def test_thousand_sep(shell):
     test = (
         ShellTest(shell)
-        .statement(stmt)
+        .statement(".thousand_sep space")
+        .statement("SELECT 10000")
+        .statement(".thousand_sep ,")
+        .statement("SELECT 10000")
+        .statement(".thousand_sep none")
+        .statement("SELECT 10000")
+        .statement(".thousand_sep")
     )
-    result = test.run()
-    result.check_stdout('NULL')
 
-def test_sqlite_udf_sha3_int(shell):
-    test = (
-        ShellTest(shell)
-        .statement("select sha3(256)")
-    )
     result = test.run()
-    result.check_stdout('A7')
+    result.check_stdout("10 000")
+    result.check_stdout("10,000")
+    result.check_stdout("10000")
+    result.check_stdout("current thousand separator")
 
-def test_sqlite_udf_sha3_non_inlined_string(shell):
+def test_decimal_sep(shell):
     test = (
         ShellTest(shell)
-        .statement("select sha3('hello world this is a long string');")
+        .statement(".decimal_sep space")
+        .statement("SELECT 10.5")
+        .statement(".decimal_sep ,")
+        .statement("SELECT 10.5")
+        .statement(".decimal_sep none")
+        .statement("SELECT 10.5")
+        .statement(".decimal_sep")
     )
+
     result = test.run()
-    result.check_stdout('D4')
+    result.check_stdout("10 5")
+    result.check_stdout("10,5")
+    result.check_stdout("10.5")
+    result.check_stdout("current decimal separator")
 
 # fmt: on

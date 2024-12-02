@@ -54,14 +54,35 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			    TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(list->head->data.ptr_value));
 			auto value = PGPointerCast<duckdb_libpgquery::PGValue>(list->tail->data.ptr_value);
 			D_ASSERT(value->type == duckdb_libpgquery::T_PGString);
-			string exclude_entry = value->val.str;
-			if (result->replace_list.find(exclude_entry) != result->replace_list.end()) {
-				throw ParserException("Duplicate entry \"%s\" in REPLACE list", exclude_entry);
+			string replace_entry = value->val.str;
+			if (result->replace_list.find(replace_entry) != result->replace_list.end()) {
+				throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_entry);
 			}
-			if (result->exclude_list.find(QualifiedColumnName(exclude_entry)) != result->exclude_list.end()) {
-				throw ParserException("Column \"%s\" cannot occur in both EXCEPT and REPLACE list", exclude_entry);
+			if (result->exclude_list.find(QualifiedColumnName(replace_entry)) != result->exclude_list.end()) {
+				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and REPLACE list", replace_entry);
 			}
-			result->replace_list.insert(make_pair(std::move(exclude_entry), std::move(replace_expression)));
+			result->replace_list.insert(make_pair(std::move(replace_entry), std::move(replace_expression)));
+		}
+	}
+	if (star.rename_list) {
+		for (auto head = star.rename_list->head; head; head = head->next) {
+			auto list = PGPointerCast<duckdb_libpgquery::PGList>(head->data.ptr_value);
+			D_ASSERT(list->length == 2);
+			auto rename_column_list = PGPointerCast<duckdb_libpgquery::PGList>(list->head->data.ptr_value);
+			auto rename_column = TransformQualifiedColumnName(*rename_column_list);
+			string new_name = char_ptr_cast(list->tail->data.ptr_value);
+			if (result->rename_list.find(rename_column) != result->rename_list.end()) {
+				throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", rename_column.ToString());
+			}
+			if (result->exclude_list.find(rename_column) != result->exclude_list.end()) {
+				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and RENAME list",
+				                      rename_column.ToString());
+			}
+			if (result->replace_list.find(rename_column.column) != result->replace_list.end()) {
+				throw ParserException("Column \"%s\" cannot occur in both REPLACE and RENAME list",
+				                      rename_column.ToString());
+			}
+			result->rename_list.insert(make_pair(std::move(rename_column), std::move(new_name)));
 		}
 	}
 	if (star.expr) {

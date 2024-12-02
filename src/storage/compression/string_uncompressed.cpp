@@ -158,17 +158,16 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-struct SerializedStringSegmentState : public ColumnSegmentState {
-	SerializedStringSegmentState() {
-	}
-	explicit SerializedStringSegmentState(vector<block_id_t> blocks_p) {
-		blocks = std::move(blocks_p);
-	}
+SerializedStringSegmentState::SerializedStringSegmentState() {
+}
 
-	void Serialize(Serializer &serializer) const override {
-		serializer.WriteProperty(1, "overflow_blocks", blocks);
-	}
-};
+SerializedStringSegmentState::SerializedStringSegmentState(vector<block_id_t> blocks_p) {
+	blocks = std::move(blocks_p);
+}
+
+void SerializedStringSegmentState::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(1, "overflow_blocks", blocks);
+}
 
 unique_ptr<CompressedSegmentState>
 UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t block_id,

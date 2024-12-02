@@ -538,7 +538,7 @@ static void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t coun
 		}
 	}
 
-	child_mask->Reset(null_mask->TargetCount());
+	child_mask->Reset(null_mask->Capacity());
 }
 
 static void DensifyNestedSelection(const SelectionVector &dense_sel, const idx_t count, SelectionVector &slice_sel) {
@@ -576,7 +576,7 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, cons
 	ValidityMask *child_mask = nullptr;
 	if (null_mask) {
 		child_mask = &child_validity;
-		child_mask->Reset(null_mask->TargetCount());
+		child_mask->Reset(null_mask->Capacity());
 	}
 
 	idx_t match_count = 0;
@@ -714,7 +714,7 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	ValidityMask *child_mask = nullptr;
 	if (null_mask) {
 		child_mask = &child_validity;
-		child_mask->Reset(null_mask->TargetCount());
+		child_mask->Reset(null_mask->Capacity());
 	}
 
 	idx_t match_count = 0;
@@ -850,7 +850,7 @@ static idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const
 	ValidityMask *child_mask = nullptr;
 	if (null_mask) {
 		child_mask = &child_validity;
-		child_mask->Reset(null_mask->TargetCount());
+		child_mask->Reset(null_mask->Capacity());
 	}
 
 	idx_t match_count = 0;

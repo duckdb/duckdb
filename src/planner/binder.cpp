@@ -683,13 +683,13 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 
 	auto binder = Binder::CreateBinder(context);
 
-	vector<column_t> bound_columns;
+	vector<ColumnIndex> bound_columns;
 	idx_t column_count = 0;
 	for (auto &col : table.GetColumns().Logical()) {
 		names.push_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {
-			bound_columns.push_back(column_count);
+			bound_columns.emplace_back(column_count);
 		}
 		column_count++;
 	}

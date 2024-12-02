@@ -279,15 +279,17 @@ typedef struct {
 	int32_t offset;
 } duckdb_time_tz_struct;
 
-//! Timestamps are stored as microseconds since 1970-01-01
-//! Use the duckdb_from_timestamp/duckdb_to_timestamp function to extract individual information
+//! Timestamps are stored as microseconds since 1970-01-01.
+//! Use the duckdb_from_timestamp and duckdb_to_timestamp functions to extract individual information.
 typedef struct {
 	int64_t micros;
 } duckdb_timestamp;
+
 typedef struct {
 	duckdb_date_struct date;
 	duckdb_time_struct time;
 } duckdb_timestamp_struct;
+
 typedef struct {
 	int32_t months;
 	int32_t days;
@@ -622,7 +624,7 @@ typedef struct _duckdb_arrow_array {
 //===--------------------------------------------------------------------===//
 //! Passed to C API extension as parameter to the entrypoint
 struct duckdb_extension_access {
-	//! Indicate that an error has occured
+	//! Indicate that an error has occurred
 	void (*set_error)(duckdb_extension_info info, const char *error);
 	//! Fetch the database from duckdb to register extensions to
 	duckdb_database *(*get_database)(duckdb_extension_info info);

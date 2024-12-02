@@ -1,4 +1,5 @@
 #include "zstd_file_system.hpp"
+
 #include "zstd.h"
 
 namespace duckdb {
@@ -182,6 +183,18 @@ idx_t ZStdFileSystem::InBufferSize() {
 
 idx_t ZStdFileSystem::OutBufferSize() {
 	return duckdb_zstd::ZSTD_DStreamOutSize();
+}
+
+int64_t ZStdFileSystem::DefaultCompressionLevel() {
+	return duckdb_zstd::ZSTD_defaultCLevel();
+}
+
+int64_t ZStdFileSystem::MinimumCompressionLevel() {
+	return duckdb_zstd::ZSTD_minCLevel();
+}
+
+int64_t ZStdFileSystem::MaximumCompressionLevel() {
+	return duckdb_zstd::ZSTD_maxCLevel();
 }
 
 } // namespace duckdb

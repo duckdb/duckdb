@@ -460,6 +460,12 @@ order by id;
 ----
 Binder Error: In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list
 
+statement error
+select list(distinct v % 2 order by v) c2 
+from generate_series(20) s(v, i);
+----
+Binder Error: In a DISTINCT aggregate, ORDER BY expressions must appear in the argument list
+
 # bug fixes test for #5694
 
 require parquet
