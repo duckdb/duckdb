@@ -42,7 +42,7 @@ jobs:
     # Builds binaries for linux_amd64_gcc4
     name: Linux (x64)
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64:2024.11.24-1
+    container: quay.io/pypa/manylinux2014_x86_64
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -55,6 +55,7 @@ jobs:
       DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: 'node16'
+      ACTIONS_RUNNER_FORCED_INTERNAL_NODE_VERSION: 'node16'
 
     steps:
     - uses: actions/checkout@v3
