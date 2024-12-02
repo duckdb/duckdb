@@ -773,8 +773,8 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 // Decode Sort Key
 //===--------------------------------------------------------------------===//
 struct DecodeSortKeyVectorData {
-	DecodeSortKeyVectorData(const LogicalType &type, OrderModifiers modifiers) :
-		flip_bytes(modifiers.order_type == OrderType::DESCENDING) {
+	DecodeSortKeyVectorData(const LogicalType &type, OrderModifiers modifiers)
+	    : flip_bytes(modifiers.order_type == OrderType::DESCENDING) {
 		null_byte = SortKeyVectorData::NULL_FIRST_BYTE;
 		valid_byte = SortKeyVectorData::NULL_LAST_BYTE;
 		if (modifiers.null_type == OrderByNullType::NULLS_LAST) {
@@ -785,7 +785,7 @@ struct DecodeSortKeyVectorData {
 		// within nested types NULLS LAST/NULLS FIRST is dependent on ASC/DESC order instead
 		// don't blame me this is what Postgres does
 		auto child_null_type =
-			modifiers.order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		    modifiers.order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
 		OrderModifiers child_modifiers(modifiers.order_type, child_null_type);
 		switch (type.InternalType()) {
 		case PhysicalType::STRUCT: {
@@ -809,7 +809,6 @@ struct DecodeSortKeyVectorData {
 			break;
 		}
 	}
-
 
 	data_t null_byte;
 	data_t valid_byte;
@@ -1016,10 +1015,11 @@ void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_
 	DecodeSortKeyRecursive(decode_data, sort_key_data, result, result_idx);
 }
 
-void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx, const vector<OrderModifiers> &modifiers) {
+void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx,
+                                         const vector<OrderModifiers> &modifiers) {
 	DecodeSortKeyData decode_data(sort_key);
 	D_ASSERT(modifiers.size() == result.ColumnCount());
-	for(idx_t c = 0; c < result.ColumnCount(); c++) {
+	for (idx_t c = 0; c < result.ColumnCount(); c++) {
 		auto &vec = result.data[c];
 		DecodeSortKeyVectorData vector_data(vec.GetType(), modifiers[c]);
 		DecodeSortKeyRecursive(decode_data, vector_data, vec, result_idx);

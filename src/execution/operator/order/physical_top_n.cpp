@@ -156,8 +156,8 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
                    const vector<BoundOrderByNode> &orders_p, idx_t limit, idx_t offset)
     : allocator(allocator), buffer_manager(BufferManager::GetBufferManager(context)), payload_types(payload_types_p),
       orders(orders_p), limit(limit), offset(offset), heap_size(limit + offset), executor(context),
-      matching_sel(STANDARD_VECTOR_SIZE), final_sel(STANDARD_VECTOR_SIZE),
-      true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE), new_remaining_sel(STANDARD_VECTOR_SIZE) {
+      matching_sel(STANDARD_VECTOR_SIZE), final_sel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
+      false_sel(STANDARD_VECTOR_SIZE), new_remaining_sel(STANDARD_VECTOR_SIZE) {
 	// initialize the executor and the sort_chunk
 	vector<LogicalType> sort_types;
 	for (auto &order : orders) {
@@ -265,8 +265,13 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, To
 	if (current_boundary_val != boundary_val) {
 		// new boundary value - decode
 		boundary_val = std::move(current_boundary_val);
+		boundary_values.Reset();
 		CreateSortKeyHelpers::DecodeSortKey(string_t(boundary_val), boundary_values, 0, modifiers);
+		for (auto &col : boundary_values.data) {
+			col.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 	}
+	boundary_values.SetCardinality(sort_chunk.size());
 
 	// we have boundary values
 	// from these boundary values, determine which values we should insert (if any)
