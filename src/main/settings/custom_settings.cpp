@@ -919,7 +919,7 @@ Value MaxTempDirectorySizeSetting::GetSetting(const ClientContext &context) {
 		return Value(StringUtil::BytesToHumanReadableString(max_swap.GetIndex()));
 	} else {
 		// The temp directory has not been used yet
-		return Value(StringUtil::BytesToHumanReadableString(0));
+		return Value("90% of available disk space");
 	}
 }
 

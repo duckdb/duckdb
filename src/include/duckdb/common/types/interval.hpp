@@ -27,6 +27,11 @@ struct interval_t { // NOLINT
 	int64_t micros;
 
 	inline void Normalize(int64_t &months, int64_t &days, int64_t &micros) const;
+
+	// Normalize to interval bounds.
+	inline static void Borrow(const int64_t msf, int64_t &lsf, int32_t &f, const int64_t scale);
+	inline interval_t Normalize() const;
+
 	inline bool operator==(const interval_t &right) const {
 		//	Quick equality check
 		const auto &left = *this;
@@ -165,6 +170,7 @@ public:
 		return left > right;
 	}
 };
+
 void interval_t::Normalize(int64_t &months, int64_t &days, int64_t &micros) const {
 	auto &input = *this;
 
@@ -180,6 +186,32 @@ void interval_t::Normalize(int64_t &months, int64_t &days, int64_t &micros) cons
 
 	months = input.months;
 	months += carry_months;
+}
+
+void interval_t::Borrow(const int64_t msf, int64_t &lsf, int32_t &f, const int64_t scale) {
+	if (msf > NumericLimits<int32_t>::Maximum()) {
+		f = NumericLimits<int32_t>::Maximum();
+		lsf += (msf - f) * scale;
+	} else if (msf < NumericLimits<int32_t>::Minimum()) {
+		f = NumericLimits<int32_t>::Minimum();
+		lsf += (msf - f) * scale;
+	} else {
+		f = UnsafeNumericCast<int32_t>(msf);
+	}
+}
+
+interval_t interval_t::Normalize() const {
+	interval_t result;
+
+	int64_t mm;
+	int64_t dd;
+	Normalize(mm, dd, result.micros);
+
+	//  Borrow right on overflow
+	Borrow(mm, dd, result.months, Interval::DAYS_PER_MONTH);
+	Borrow(dd, result.micros, result.days, Interval::MICROS_PER_DAY);
+
+	return result;
 }
 
 } // namespace duckdb

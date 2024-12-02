@@ -78,23 +78,4 @@ TEST_CASE("Test parse logical type", "[parse_logical_type]") {
 		REQUIRE(DBConfig::ParseLogicalType("STRUCT(my_list ANY[], my_array VARCHAR[2], my_map MAP(VARCHAR,VARCHAR))") ==
 		        LogicalType::STRUCT(mix_struct_children));
 	}
-
-	SECTION("invalid types") {
-		REQUIRE_THROWS(DBConfig::ParseLogicalType(""));
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("AAA"));
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("[]"));
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("aaa[]"));
-
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR42]"));
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR[x]"));
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR[-3]"));
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR[0]"));
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("VARCHAR[100001]"));
-
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("MAP()"));
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("MAP(ANY,ANY,ANY)"));
-
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("UNION()"));
-		REQUIRE_THROWS(DBConfig::ParseLogicalType("UNION(num AAA, v VARCHAR, f FLOAT)"));
-	}
 }

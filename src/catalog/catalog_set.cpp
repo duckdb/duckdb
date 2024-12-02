@@ -198,7 +198,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	// Mark this entry as being created by the current active transaction
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
-	catalog.GetDependencyManager().AddObject(transaction, *value, dependencies);
+	catalog.GetDependencyManager()->AddObject(transaction, *value, dependencies);
 
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
@@ -259,7 +259,7 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 		throw CatalogException("CatalogElement \"%s.%s\" does not exist!", info.owner_schema, info.owner_name);
 	}
 	write_lock.unlock();
-	catalog.GetDependencyManager().AddOwnership(transaction, *owner_entry, *entry);
+	catalog.GetDependencyManager()->AddOwnership(transaction, *owner_entry, *entry);
 	return true;
 }
 
@@ -368,7 +368,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	write_lock.unlock();
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
-	catalog.GetDependencyManager().AlterObject(transaction, *entry, *new_entry, alter_info);
+	catalog.GetDependencyManager()->AlterObject(transaction, *entry, *new_entry, alter_info);
 
 	return true;
 }
@@ -385,7 +385,7 @@ bool CatalogSet::DropDependencies(CatalogTransaction transaction, const string &
 	// check any dependencies of this object
 	D_ASSERT(entry->ParentCatalog().IsDuckCatalog());
 	auto &duck_catalog = entry->ParentCatalog().Cast<DuckCatalog>();
-	duck_catalog.GetDependencyManager().DropObject(transaction, *entry, cascade);
+	duck_catalog.GetDependencyManager()->DropObject(transaction, *entry, cascade);
 	return true;
 }
 
@@ -443,7 +443,7 @@ void CatalogSet::VerifyExistenceOfDependency(transaction_t commit_id, CatalogEnt
 
 	D_ASSERT(entry.type == CatalogType::DEPENDENCY_ENTRY);
 	auto &dep = entry.Cast<DependencyEntry>();
-	duck_catalog.GetDependencyManager().VerifyExistence(commit_transaction, dep);
+	duck_catalog.GetDependencyManager()->VerifyExistence(commit_transaction, dep);
 }
 
 //! Verify that no dependencies creations were committed since our transaction started, that reference the entry we're
@@ -457,7 +457,7 @@ void CatalogSet::CommitDrop(transaction_t commit_id, transaction_t start_time, C
 	auto tx_start_time = commit_id;
 	CatalogTransaction commit_transaction(duck_catalog.GetDatabase(), transaction_id, tx_start_time);
 
-	duck_catalog.GetDependencyManager().VerifyCommitDrop(commit_transaction, start_time, entry);
+	duck_catalog.GetDependencyManager()->VerifyCommitDrop(commit_transaction, start_time, entry);
 }
 
 DuckCatalog &CatalogSet::GetCatalog() {

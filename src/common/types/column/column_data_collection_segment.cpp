@@ -256,6 +256,7 @@ void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementSt
                                             const vector<column_t> &column_ids) {
 	D_ASSERT(chunk.ColumnCount() == column_ids.size());
 	D_ASSERT(state.properties != ColumnDataScanProperties::INVALID);
+	chunk.Reset();
 	InitializeChunkState(chunk_index, state);
 	auto &chunk_meta = chunk_data[chunk_index];
 	for (idx_t i = 0; i < column_ids.size(); i++) {

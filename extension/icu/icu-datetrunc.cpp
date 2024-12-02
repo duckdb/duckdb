@@ -224,6 +224,13 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 	}
 }
 
+timestamp_t ICUDateFunc::CurrentMidnight(icu::Calendar *calendar, ExpressionState &state) {
+	const auto current_timestamp = MetaTransaction::Get(state.GetContext()).start_timestamp;
+	auto current_micros = SetTime(calendar, current_timestamp);
+	ICUDateTrunc::TruncDay(calendar, current_micros);
+	return GetTime(calendar);
+}
+
 void RegisterICUDateTruncFunctions(DatabaseInstance &db) {
 	ICUDateTrunc::AddBinaryTimestampFunction("date_trunc", db);
 	ICUDateTrunc::AddBinaryTimestampFunction("datetrunc", db);
