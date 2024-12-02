@@ -99,10 +99,10 @@ public:
 	idx_t GetRadixBits() const;
 
 private:
-	void SetRadixBitsInternal(const idx_t &radix_bits_p, bool external);
-	static idx_t InitialSinkRadixBits(const idx_t &number_of_threads_p);
-	static idx_t MaximumSinkRadixBits(const idx_t &number_of_threads_p);
-	static idx_t SinkCapacity(const idx_t &number_of_threads_p);
+	void SetRadixBitsInternal(idx_t radix_bits_p, bool external);
+	static idx_t InitialSinkRadixBits(idx_t number_of_threads_p);
+	static idx_t MaximumSinkRadixBits(idx_t number_of_threads_p);
+	static idx_t SinkCapacity(idx_t number_of_threads_p);
 
 public:
 	//! Number of threads (from TaskScheduler)
@@ -112,16 +112,16 @@ public:
 
 private:
 	//! Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
-	static constexpr const idx_t L1_CACHE_SIZE = 32768 / 2;
+	static constexpr idx_t L1_CACHE_SIZE = 32768 / 2;
 	//! Assume (1 << 20) = 1MB L2 cache per core, divided by two because hyperthreading
-	static constexpr const idx_t L2_CACHE_SIZE = 1048576 / 2;
+	static constexpr idx_t L2_CACHE_SIZE = 1048576 / 2;
 	//! Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
-	static constexpr const idx_t L3_CACHE_SIZE = 1572864 / 2;
+	static constexpr idx_t L3_CACHE_SIZE = 1572864 / 2;
 
 	//! Sink radix bits to initialize with
-	static constexpr const idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 3;
+	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 3;
 	//! Maximum Sink radix bits (independent of threads)
-	static constexpr const idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 7;
+	static constexpr idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 7;
 
 	//! The global sink state
 	RadixHTGlobalSinkState &sink;
@@ -132,11 +132,11 @@ private:
 
 public:
 	//! If we have this many or less threads, we grow the HT, otherwise we abandon
-	static constexpr const idx_t GROW_STRATEGY_THREAD_THRESHOLD = 2;
+	static constexpr idx_t GROW_STRATEGY_THREAD_THRESHOLD = 2;
 	//! If we fill this many blocks per partition, we trigger a repartition
-	static constexpr const double BLOCK_FILL_FACTOR = 1.8;
+	static constexpr double BLOCK_FILL_FACTOR = 1.8;
 	//! By how many bits to repartition if a repartition is triggered
-	static constexpr const idx_t REPARTITION_RADIX_BITS = 2;
+	static constexpr idx_t REPARTITION_RADIX_BITS = 2;
 };
 
 class RadixHTGlobalSinkState : public GlobalSinkState {
@@ -272,7 +272,7 @@ idx_t RadixHTConfig::GetRadixBits() const {
 	return sink_radix_bits;
 }
 
-void RadixHTConfig::SetRadixBitsInternal(const idx_t &radix_bits_p, bool external) {
+void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external) {
 	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
 		return;
 	}
@@ -288,19 +288,19 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t &radix_bits_p, bool externa
 	sink_radix_bits = radix_bits_p;
 }
 
-idx_t RadixHTConfig::InitialSinkRadixBits(const idx_t &number_of_threads_p) {
+idx_t RadixHTConfig::InitialSinkRadixBits(const idx_t number_of_threads_p) {
 	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(number_of_threads_p)),
 	                MAXIMUM_INITIAL_SINK_RADIX_BITS);
 }
 
-idx_t RadixHTConfig::MaximumSinkRadixBits(const idx_t &number_of_threads_p) {
+idx_t RadixHTConfig::MaximumSinkRadixBits(const idx_t number_of_threads_p) {
 	if (number_of_threads_p <= GROW_STRATEGY_THREAD_THRESHOLD) {
 		return InitialSinkRadixBits(number_of_threads_p); // Don't repartition unless we go external
 	}
 	return MAXIMUM_FINAL_SINK_RADIX_BITS;
 }
 
-idx_t RadixHTConfig::SinkCapacity(const idx_t &number_of_threads_p) {
+idx_t RadixHTConfig::SinkCapacity(const idx_t number_of_threads_p) {
 	// Compute cache size per active thread (assuming cache is shared)
 	const auto total_shared_cache_size = number_of_threads_p * L3_CACHE_SIZE;
 	const auto cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / number_of_threads_p;
