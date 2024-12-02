@@ -1291,16 +1291,21 @@ SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+ProgressData PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	auto &gstate = gstate_p.Cast<HashJoinGlobalSourceState>();
 
+	ProgressData res;
+
 	if (!sink.external) {
 		if (PropagatesBuildSide(join_type)) {
-			return static_cast<double>(gstate.full_outer_chunk_done) /
-			       static_cast<double>(gstate.full_outer_chunk_count) * 100.0;
+			res.done = static_cast<double>(gstate.full_outer_chunk_done);
+			res.total = static_cast<double>(gstate.full_outer_chunk_count);
+			return res;
 		}
-		return 100.0;
+		res.done = 0.0;
+		res.total = 1.0;
+		return res;
 	}
 
 	auto num_partitions = static_cast<double>(RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits()));
@@ -1308,7 +1313,8 @@ double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &
 	auto partition_end = static_cast<double>(sink.hash_table->GetPartitionEnd());
 
 	// This many partitions are fully done
-	auto progress = partition_start / num_partitions;
+	res.done = partition_start;
+	res.total = num_partitions;
 
 	auto probe_chunk_done = static_cast<double>(gstate.probe_chunk_done);
 	auto probe_chunk_count = static_cast<double>(gstate.probe_chunk_count);
@@ -1316,10 +1322,12 @@ double PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceState &
 		// Progress of the current round of probing, weighed by the number of partitions
 		auto probe_progress = probe_chunk_done / probe_chunk_count;
 		// Add it to the progress, weighed by the number of partitions in the current round
-		progress += (partition_end - partition_start) / num_partitions * probe_progress;
+		// progress += (partition_end - partition_start) / num_partitions * probe_progress;
+		// TODO also also me, fixup using somehow `partition_end - partition_start`
+		res.done += probe_progress;
 	}
 
-	return progress * 100.0;
+	return res;
 }
 
 InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {

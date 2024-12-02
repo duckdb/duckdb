@@ -112,13 +112,19 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+ProgressData PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
+	ProgressData res;
 	if (function.table_scan_progress) {
-		return function.table_scan_progress(context, bind_data.get(), gstate.global_state.get());
+		res.done = function.table_scan_progress(context, bind_data.get(), gstate.global_state.get());
+		res.total = 100;
+
+		res.Normalize(1e3);
+	} else {
+		// if table_scan_progress is not implemented we don't support this function yet in the progress bar
+		res.SetInvalid();
 	}
-	// if table_scan_progress is not implemented we don't support this function yet in the progress bar
-	return -1;
+	return res;
 }
 
 bool PhysicalTableScan::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {

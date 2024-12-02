@@ -885,7 +885,7 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+ProgressData PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalSinkState>();
 	auto &gstate = gstate_p.Cast<HashAggregateGlobalSourceState>();
 	ProgressData progress;
@@ -893,8 +893,7 @@ double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceSt
 		progress.Add(groupings[radix_idx].table_data.GetProgress(
 		    context, *sink_gstate.grouping_states[radix_idx].table_state, *gstate.radix_states[radix_idx]));
 	}
-	// TODO: This is to keep current behaviour (to a point), where progress is normalize 0-100
-	return progress.ProgressDone() * 100.0;
+	return progress;
 }
 
 InsertionOrderPreservingMap<string> PhysicalHashAggregate::ParamsToString() const {

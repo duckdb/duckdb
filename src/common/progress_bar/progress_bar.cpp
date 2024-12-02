@@ -106,13 +106,18 @@ void ProgressBar::Update(bool final) {
 	double new_percentage = -1;
 	auto rows_processed = query_progress.rows_processed.load();
 	auto total_rows_to_process = query_progress.total_rows_to_process.load();
-	supported = executor.GetPipelinesProgress(new_percentage, rows_processed, total_rows_to_process);
-	query_progress.rows_processed = rows_processed;
-	query_progress.total_rows_to_process = total_rows_to_process;
 
-	if (!final && !supported) {
+	ProgressData progress;
+	idx_t invalid_pipelines = executor.GetPipelinesProgress(progress);
+	query_progress.rows_processed = progress.done;
+	query_progress.total_rows_to_process = progress.total;
+
+	new_percentage = progress.ProgressDone() * 100;
+
+	if (!final && invalid_pipelines > 0) {
 		return;
 	}
+
 	if (new_percentage > query_progress.percentage) {
 		query_progress.percentage = new_percentage;
 	}
