@@ -693,8 +693,10 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 
 			if (row_ids) {
 				if (delete_chunk) {
+					// TODO: don't ignore errors here.
 					delete_index->Cast<BoundIndex>().Append(*delete_chunk, *row_ids, nullptr);
 				} else {
+					// TODO: don't ignore errors here.
 					delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
 				}
 			}
@@ -728,8 +730,10 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 
 		if (row_ids) {
 			if (delete_chunk) {
+				// TODO: don't ignore errors here.
 				delete_index->Cast<BoundIndex>().Append(*delete_chunk, *row_ids, nullptr);
 			} else {
+				// TODO: don't ignore errors here.
 				delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
 			}
 		}
@@ -769,8 +773,10 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 
 		if (row_ids) {
 			if (delete_chunk) {
+				// TODO: don't ignore errors here.
 				delete_index->Cast<BoundIndex>().Append(*delete_chunk, *row_ids, nullptr);
 			} else {
+				// TODO: don't ignore errors here.
 				delete_index->Cast<BoundIndex>().Append(chunk, *row_ids, nullptr);
 			}
 		}

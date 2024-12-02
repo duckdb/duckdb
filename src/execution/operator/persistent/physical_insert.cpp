@@ -265,41 +265,40 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, ExecutionContext 
 	auto &set_columns = op.set_columns;
 	DataChunk update_chunk;
 	CreateUpdateChunk(context, chunk, table, row_ids, update_chunk, op);
-
 	auto &data_table = table.GetStorage();
-	DataChunk &mock_chunk = lstate.mock_chunk;
 
-	// Perform the update, using the results of the SET expressions.
-	if (GLOBAL) {
-		if (!op.update_is_del_and_insert) {
+	// Perform the UPDATE on the global storage.
+	if (!op.update_is_del_and_insert) {
+		if (GLOBAL) {
 			auto update_state = data_table.InitializeUpdate(table, context.client, op.bound_constraints);
 			data_table.Update(*update_state, context.client, row_ids, set_columns, update_chunk);
 			return update_chunk.size();
 		}
-
-		// TODO: get the delete chunk, if the upsert is changing the indexed column (can that happen?)
-		unique_ptr<Vector> del_row_ids = make_uniq<Vector>(row_ids);
-
-		auto &delete_state = lstate.GetDeleteState(data_table, table, context.client);
-		data_table.Delete(delete_state, context.client, row_ids, update_chunk.size());
-
-		// Arrange the columns in the standard table order.
-		mock_chunk.SetCardinality(update_chunk);
-		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-			mock_chunk.data[i].Reference(chunk.data[i]);
-		}
-		for (idx_t i = 0; i < set_columns.size(); i++) {
-			mock_chunk.data[set_columns[i].index].Reference(update_chunk.data[i]);
-		}
-		data_table.LocalAppend(table, context.client, mock_chunk, op.bound_constraints, std::move(del_row_ids),
-		                       mock_chunk);
+		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
+		local_storage.Update(data_table, row_ids, set_columns, update_chunk);
 		return update_chunk.size();
 	}
 
-	// Local update.
-	// TODO: what happens here, should we also switch to delete + insert?
-	auto &local_storage = LocalStorage::Get(context.client, data_table.db);
-	local_storage.Update(data_table, row_ids, set_columns, update_chunk);
+	// Arrange the columns in the standard table order.
+	DataChunk &mock_chunk = lstate.mock_chunk;
+	mock_chunk.SetCardinality(update_chunk);
+	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+		mock_chunk.data[i].Reference(chunk.data[i]);
+	}
+	for (idx_t i = 0; i < set_columns.size(); i++) {
+		mock_chunk.data[set_columns[i].index].Reference(update_chunk.data[i]);
+	}
+
+	if (GLOBAL) {
+		auto &delete_state = lstate.GetDeleteState(data_table, table, context.client);
+		data_table.Delete(delete_state, context.client, row_ids, update_chunk.size());
+	} else {
+		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
+		local_storage.Delete(data_table, row_ids, update_chunk.size());
+	}
+
+	unique_ptr<Vector> del_row_ids = make_uniq<Vector>(row_ids);
+	data_table.LocalAppend(table, context.client, mock_chunk, op.bound_constraints, std::move(del_row_ids), mock_chunk);
 	return update_chunk.size();
 }
 
@@ -443,8 +442,14 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	ConflictManager conflict_manager(VerifyExistenceType::APPEND, tuples.size(), &conflict_info);
 	if (GLOBAL) {
 		auto &constraint_state = lstate.GetConstraintState(data_table, table);
-		data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, nullptr, nullptr,
-		                                   &conflict_manager);
+		if (local_storage.IsInitialized(data_table)) {
+			auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
+			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, delete_indexes,
+			                                   nullptr, &conflict_manager);
+		} else {
+			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, nullptr, nullptr,
+			                                   &conflict_manager);
+		}
 	} else {
 		auto &indexes = local_storage.GetIndexes(data_table);
 		auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);

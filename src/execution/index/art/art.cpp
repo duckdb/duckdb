@@ -523,12 +523,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 		VerifyAllocationsInternal();
 	}
 
-	if (conflict_type == ARTConflictType::TRANSACTION) {
-		auto msg = AppendRowError(input, conflict_index.GetIndex());
-		return ErrorData(TransactionException("write-write conflict on key \"%s\"", msg));
-	}
-
-	if (conflict_type == ARTConflictType::CONSTRAINT) {
+	if (conflict_type != ARTConflictType::NO_CONFLICT) {
 		auto msg = AppendRowError(input, conflict_index.GetIndex());
 		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
 	}
@@ -657,10 +652,11 @@ ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const AR
 			}
 
 			// The row ID has changed.
+			// This can also happen within the same transaction, i.e., DELETE ALL, INSERT 1, INSERT 1.
 			D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
-			row_t delete_row_id = delete_leaf->GetRowId();
-			auto global_row_id = node.GetRowId();
-			if (delete_row_id != global_row_id) {
+			auto delete_row_id = delete_leaf->GetRowId();
+			auto this_row_id = node.GetRowId();
+			if (delete_row_id != this_row_id) {
 				return ARTConflictType::TRANSACTION;
 			}
 		}
@@ -1061,10 +1057,14 @@ void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> de
 		if (cast_delete_art) {
 			auto deleted_leaf = cast_delete_art->Lookup(cast_delete_art->tree, keys[i], 0);
 			if (deleted_leaf) {
-				if (conflict_manager.AddMiss(i)) {
-					found_conflict = i;
+				auto deleted_row_id = deleted_leaf->GetRowId();
+				auto this_row_id = leaf->GetRowId();
+				if (deleted_row_id == this_row_id) {
+					if (conflict_manager.AddMiss(i)) {
+						found_conflict = i;
+					}
+					continue;
 				}
-				continue;
 			}
 		}
 

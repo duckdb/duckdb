@@ -376,20 +376,21 @@ void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
 }
 
 void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
-	// append to unique indices (if any)
+	// Append to any unique indexes.
 	auto storage = state.storage;
-	idx_t base_id =
-	    NumericCast<idx_t>(MAX_ROW_ID) + storage->row_groups->GetTotalRows() + state.append_state.total_append_count;
+	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->row_groups->GetTotalRows();
+	idx_t base_id = offset + state.append_state.total_append_count;
 
-	// TODO: or do we need to pass the delete index here, too?
-	auto error = DataTable::AppendToIndexes(storage->indexes, nullptr, chunk, NumericCast<row_t>(base_id));
+	auto error =
+	    DataTable::AppendToIndexes(storage->indexes, storage->delete_indexes, chunk, NumericCast<row_t>(base_id));
 	if (error.HasError()) {
 		error.Throw();
 	}
 
-	//! Append the chunk to the local storage
+	// Append the chunk to the local storage.
 	auto new_row_group = storage->row_groups->Append(chunk, state.append_state);
-	//! Check if we should pre-emptively flush blocks to disk
+
+	// Check if we should pre-emptively flush blocks to disk.
 	if (new_row_group) {
 		storage->WriteNewRowGroup();
 	}

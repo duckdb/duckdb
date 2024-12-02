@@ -19,6 +19,9 @@ BEGIN TRANSACTION;
 statement ok con1
 INSERT OR REPLACE INTO tbl VALUES (1, 'con1 payload');
 
+statement ok con1
+INSERT OR REPLACE INTO tbl VALUES (1, 'other payload');
+
 statement ok
 BEGIN TRANSACTION
 
@@ -60,7 +63,7 @@ COMMIT
 query III
 SELECT id, payload, rowid FROM tbl ORDER BY ALL;
 ----
-1	con1 payload	0
+1	other payload	0
 
 # Now with a LIST column.
 
@@ -155,16 +158,32 @@ SELECT id, payload, rowid FROM tbl_local_in_place ORDER BY ALL;
 ----
 1	local payload	0
 
-# Transaction-local out-of-place UPSERT.
+# UPSERT on the same key within a transaction.
 
-# TODO
-mode skip
+statement ok
+CREATE TABLE tbl_tx_same_key (id INT PRIMARY KEY, payload VARCHAR[]);
+
+statement ok
+INSERT INTO tbl_tx_same_key VALUES (1, ['first payload']);
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+INSERT OR REPLACE INTO tbl_tx_same_key VALUES (1, ['con1 payload']), (1, ['local payload']);
+
+statement ok con1
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl_tx_same_key ORDER BY ALL;
+----
+1	[local payload]	1
+
+# UPSERT on the same key in two statements within a transaction.
 
 statement ok
 CREATE TABLE tbl_local (id INT PRIMARY KEY, payload VARCHAR[]);
-
-statement ok
-INSERT INTO tbl_local VALUES (1, ['first payload']);
 
 statement ok con1
 BEGIN TRANSACTION;
@@ -181,4 +200,4 @@ COMMIT;
 query III
 SELECT id, payload, rowid FROM tbl_local ORDER BY ALL;
 ----
-1	[local payload]	2
+1	[local payload]	0
