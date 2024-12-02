@@ -940,8 +940,8 @@ ProgressData PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceSta
 	const auto count = gsink.global_partition->count.load();
 	ProgressData res;
 	if (count) {
-		res.done = returned;
-		res.total = count;
+		res.done = double(returned);
+		res.total = double(count);
 	} else {
 		res.SetInvalid();
 	}

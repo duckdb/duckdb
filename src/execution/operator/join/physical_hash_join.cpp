@@ -1310,7 +1310,7 @@ ProgressData PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceS
 
 	auto num_partitions = static_cast<double>(RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits()));
 	auto partition_start = static_cast<double>(sink.hash_table->GetPartitionStart());
-	auto partition_end = static_cast<double>(sink.hash_table->GetPartitionEnd());
+	// auto partition_end = static_cast<double>(sink.hash_table->GetPartitionEnd());
 
 	// This many partitions are fully done
 	res.done = partition_start;

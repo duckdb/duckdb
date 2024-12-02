@@ -77,12 +77,12 @@ bool Pipeline::GetProgress(ProgressData &progress) {
 	idx_t source_cardinality = MinValue<idx_t>(source->estimated_cardinality, 1ULL << 48ULL);
 	if (!initialized) {
 		progress.done = 0;
-		progress.total = source_cardinality;
+		progress.total = double(source_cardinality);
 		return true;
 	}
 	auto &client = executor.context;
 	progress = source->GetProgress(client, *source_state);
-	progress.Normalize(source_cardinality);
+	progress.Normalize(double(source_cardinality));
 	progress.Add(sink->GetSinkProgress(client, *sink->sink_state, progress));
 	return progress.IsValid();
 }
