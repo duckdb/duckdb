@@ -15,9 +15,10 @@
 namespace duckdb {
 class DataChunk;
 class DynamicTableFilterSet;
+class LogicalGet;
+class JoinHashTable;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
-class JoinHashTable;
 
 struct JoinFilterPushdownColumn {
 	//! The probe column index to which this filter should be applied

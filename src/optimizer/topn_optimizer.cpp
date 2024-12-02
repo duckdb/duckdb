@@ -1,15 +1,16 @@
 #include "duckdb/optimizer/topn_optimizer.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
 
@@ -58,7 +59,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	vector<JoinFilterPushdownColumn> columns;
 	JoinFilterPushdownColumn column;
 	column.probe_column_index = colref.binding;
-	columns.emplace_back(std::move(column));
+	columns.emplace_back(column);
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*op.children[0], std::move(columns), pushdown_targets);
 	if (pushdown_targets.empty()) {
