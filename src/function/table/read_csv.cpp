@@ -52,7 +52,7 @@ unique_ptr<CSVFileHandle> FindFileToSniff(ClientContext &context, const CSVReade
 	D_ASSERT(file_list.Size() > 0);
 	if (file_list.Size() == 1 || !file_list.IsFirstPathGlob()) {
 		// We only have one file or the first file is not a glob, we don't have to do anything.
-		return ReadCSV::OpenCSV(file_list.GetFirstFile(), options.compression, context);
+		return ReadCSV::OpenCSV(file_list.GetFirstFile(), options, context);
 	}
 
 	// But we also will only check up to 10 files
@@ -61,7 +61,7 @@ unique_ptr<CSVFileHandle> FindFileToSniff(ClientContext &context, const CSVReade
 	// auto paths = file_list.GetPaths();
 	auto files = file_list.Files();
 	auto it = files.begin();
-	unique_ptr<CSVFileHandle> max_file_handle = ReadCSV::OpenCSV(it.current_file, options.compression, context);
+	unique_ptr<CSVFileHandle> max_file_handle = ReadCSV::OpenCSV(it.current_file, options, context);
 	idx_t max_file_idx = 0;
 	for (idx_t i = 1; i < maximum_number_of_files; i++) {
 		// We are looking for a file that is at least 1MB
@@ -71,7 +71,7 @@ unique_ptr<CSVFileHandle> FindFileToSniff(ClientContext &context, const CSVReade
 			return max_file_handle;
 		}
 		it.Next();
-		auto cur_file = ReadCSV::OpenCSV(it.current_file, options.compression, context);
+		auto cur_file = ReadCSV::OpenCSV(it.current_file, options, context);
 		if (max_file_handle->FileSize() < cur_file->FileSize()) {
 			max_file_handle = std::move(cur_file);
 			max_file_idx = i;
