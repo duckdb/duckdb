@@ -24,63 +24,15 @@
 #include <utility>
 
 #include "util/logging.h"
+#include "re2/bitstate.h"
 #include "re2/pod_array.h"
-#include "re2/prog.h"
 #include "re2/regexp.h"
 
 namespace duckdb_re2 {
 
-struct Job {
-  int id;
-  int rle;  // run length encoding
-  const char* p;
-};
-
-class BitState {
- public:
-  explicit BitState(Prog* prog);
-
-  // The usual Search prototype.
-  // Can only call Search once per BitState.
-  bool Search(const StringPiece& text, const StringPiece& context,
-              bool anchored, bool longest,
-              StringPiece* submatch, int nsubmatch);
-
- private:
-  inline bool ShouldVisit(int id, const char* p);
-  void Push(int id, const char* p);
-  void GrowStack();
-  bool TrySearch(int id, const char* p);
-
-  // Search parameters
-  Prog* prog_;              // program being run
-  StringPiece text_;        // text being searched
-  StringPiece context_;     // greater context of text being searched
-  bool anchored_;           // whether search is anchored at text.begin()
-  bool longest_;            // whether search wants leftmost-longest match
-  bool endmatch_;           // whether match must end at text.end()
-  StringPiece* submatch_;   // submatches to fill in
-  int nsubmatch_;           //   # of submatches to fill in
-
-  // Search state
-  static constexpr int kVisitedBits = 64;
-  PODArray<uint64_t> visited_;  // bitmap: (list ID, char*) pairs visited
-  PODArray<const char*> cap_;   // capture registers
-  PODArray<Job> job_;           // stack of text positions to explore
-  int njob_;                    // stack size
-
-  BitState(const BitState&) = delete;
-  BitState& operator=(const BitState&) = delete;
-};
-
 BitState::BitState(Prog* prog)
-  : prog_(prog),
-    anchored_(false),
-    longest_(false),
-    endmatch_(false),
-    submatch_(NULL),
-    nsubmatch_(0),
-    njob_(0) {
+  : prog_(prog){
+	Reset();
 }
 
 // Given id, which *must* be a list head, we can look up its list ID.
@@ -308,17 +260,23 @@ bool BitState::Search(const StringPiece& text, const StringPiece& context,
   // Allocate scratch space.
   int nvisited = prog_->list_count() * static_cast<int>(text.size()+1);
   nvisited = (nvisited + kVisitedBits-1) / kVisitedBits;
-  visited_ = PODArray<uint64_t>(nvisited);
-  memset(visited_.data(), 0, nvisited*sizeof visited_[0]);
+	if (visited_.size() < nvisited) {
+		visited_ = PODArray<uint64_t>(nvisited);
+	}
+	memset(visited_.data(), 0, nvisited*sizeof visited_[0]);
 
   int ncap = 2*nsubmatch;
   if (ncap < 2)
     ncap = 2;
-  cap_ = PODArray<const char*>(ncap);
-  memset(cap_.data(), 0, ncap*sizeof cap_[0]);
+	if (cap_.size() < ncap) {
+		cap_ = PODArray<const char*>(ncap);
+	}
+	memset(cap_.data(), 0, ncap*sizeof cap_[0]);
 
   // When sizeof(Job) == 16, we start with a nice round 1KiB. :)
-  job_ = PODArray<Job>(64);
+	if (!job_.size() < 64) {
+	  job_ = PODArray<Job>(64);
+	}
 
   // Anchored search must start at text.begin().
   if (anchored_) {
@@ -372,10 +330,14 @@ bool Prog::SearchBitState(const StringPiece& text,
   }
 
   // Run the search.
-  BitState b(this);
+  if (!bitstate) {
+  	bitstate = std::unique_ptr<BitState>(new BitState(this));
+  } else {
+  	bitstate->Reset();
+  }
   bool anchored = anchor == kAnchored;
   bool longest = kind != kFirstMatch;
-  if (!b.Search(text, context, anchored, longest, match, nmatch))
+  if (!bitstate->Search(text, context, anchored, longest, match, nmatch))
     return false;
   if (kind == kFullMatch && EndPtr(match[0]) != EndPtr(text))
     return false;
