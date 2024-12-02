@@ -526,7 +526,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 
 	if (conflict_type == ARTConflictType::TRANSACTION) {
 		auto msg = AppendRowError(input, conflict_idx.GetIndex());
-		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
+		return ErrorData(TransactionException("write-write conflict on key: \"%s\"", msg));
 	}
 
 	if (conflict_type == ARTConflictType::CONSTRAINT) {
@@ -611,7 +611,7 @@ ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_
 	auto deleted_row_id = delete_leaf->GetRowId();
 	auto this_row_id = node.GetRowId();
 	if (deleted_row_id != this_row_id) {
-		return ARTConflictType::TRANSACTION;
+		return ARTConflictType::CONSTRAINT;
 	}
 
 	// The deleted key and its row ID match the current key and its row ID.

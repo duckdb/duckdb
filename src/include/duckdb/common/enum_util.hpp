@@ -178,6 +178,8 @@ enum class GateStatus : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
+enum class IndexAppendMode : uint8_t;
+
 enum class IndexConstraintType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
@@ -589,6 +591,9 @@ const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
+
+template<>
+const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
@@ -1097,6 +1102,9 @@ GateStatus EnumUtil::FromString<GateStatus>(const char *value);
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
+
+template<>
+IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
