@@ -652,9 +652,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						}
 
 						// Generate row ids
-						D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-
 						// Create sequence for row ids
+						D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
 						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
 						auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
 						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
@@ -713,7 +712,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				}
 				auto &column = column_ids[i];
 				if (column.IsRowIdColumn()) {
-					D_ASSERT(result.data[i].GetType().InternalType() == PhysicalType::INT64);
+					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
 					result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
 					auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
 					for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
