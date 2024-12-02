@@ -128,17 +128,6 @@ private:
 		return false;
 	}
 
-	inline bool EntryShouldBeAdded(const string_t &sort_key, const string &boundary_val,
-	                               const string_t &global_boundary_val) {
-		// first compare against the global boundary value (if there is any)
-		if (!boundary_val.empty() && sort_key > global_boundary_val) {
-			// this entry is out-of-range for the global boundary val
-			// it will never be in the final result even if it fits in this heap
-			return false;
-		}
-		return EntryShouldBeAdded(sort_key);
-	}
-
 	inline void AddEntryToHeap(const TopNEntry &entry) {
 		if (heap.size() >= heap_size) {
 			std::pop_heap(heap.begin(), heap.end());

@@ -45,6 +45,13 @@ struct JoinFilterPushdownFilter {
 	vector<JoinFilterPushdownColumn> columns;
 };
 
+struct PushdownFilterTarget {
+	PushdownFilterTarget(LogicalGet &get, vector<JoinFilterPushdownColumn> columns_p) : get(get), columns(std::move(columns_p)) {}
+
+	LogicalGet &get;
+	vector<JoinFilterPushdownColumn> columns;
+};
+
 struct JoinFilterPushdownInfo {
 	//! The join condition indexes for which we compute the min/max aggregates
 	vector<idx_t> join_condition;
