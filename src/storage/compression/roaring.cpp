@@ -1,6 +1,7 @@
 #include "duckdb/storage/compression/roaring.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/likely.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -164,6 +165,13 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 	}
 #endif
 }
+
+struct BitmaskTableEntry {
+	uint8_t first_bit_set : 1;
+	uint8_t last_bit_set : 1;
+	uint8_t valid_count : 6;
+	uint8_t run_count;
+};
 
 idx_t ContainerMetadata::GetDataSizeInBytes(idx_t container_size) const {
 	if (IsUncompressed()) {
@@ -372,6 +380,97 @@ public:
 	idx_t idx = 0;
 };
 
+template <class STATE_TYPE>
+struct RoaringStateAppender {
+public:
+	RoaringStateAppender() = delete;
+
+public:
+	static void AppendBytes(STATE_TYPE &state, validity_t entry, idx_t bits) {
+		D_ASSERT(bits <= ValidityMask::BITS_PER_VALUE);
+
+		idx_t full_bytes = bits / 8;
+		idx_t last_bits = bits % 8;
+		for (idx_t i = 0; i < full_bytes; i++) {
+			// Create a mask for the byte we care about (least to most significant byte)
+			auto bitmask = ValidityUncompressed::UPPER_MASKS[8] >> ((7 - i) * 8);
+			// Shift to the least significant bits so we can use it to index our bitmask table
+			auto array_index = (entry & bitmask) >> (i * 8);
+
+			STATE_TYPE::HandleByte(state, array_index);
+		}
+
+		if (DUCKDB_UNLIKELY(last_bits != 0)) {
+			for (idx_t i = full_bytes * 8; i < bits; i++) {
+				bool bit_set = ValidityMask::RowIsValid(entry, i);
+				STATE_TYPE::HandleBit(state, bit_set);
+			}
+		}
+	}
+
+	static void AppendVector(STATE_TYPE &state, Vector &input, idx_t input_size) {
+		UnifiedVectorFormat unified;
+		input.ToUnifiedFormat(input_size, unified);
+		auto &validity = unified.validity;
+
+		if (validity.AllValid()) {
+			// All bits are set implicitly
+			idx_t appended = 0;
+			while (appended < input_size) {
+				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - state.count, input_size - appended);
+				STATE_TYPE::HandleAllValid(state, to_append);
+				if (state.count == ROARING_CONTAINER_SIZE) {
+					STATE_TYPE::Flush(state);
+				}
+				appended += to_append;
+			}
+		} else {
+			// There is a validity mask
+			idx_t appended = 0;
+			while (appended < input_size) {
+				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - state.count, input_size - appended);
+
+				auto entry_count = to_append / ValidityMask::BITS_PER_VALUE;
+				for (idx_t entry_index = 0; entry_index < entry_count; entry_index++) {
+					// get the validity entry at this index
+					auto validity_entry = validity.GetValidityEntry(entry_index);
+					if (ValidityMask::AllValid(validity_entry)) {
+						// All bits are set
+						STATE_TYPE::HandleAllValid(state, ValidityMask::BITS_PER_VALUE);
+					} else if (ValidityMask::NoneValid(validity_entry)) {
+						// None of the bits are set
+						STATE_TYPE::HandleNoneValid(state, ValidityMask::BITS_PER_VALUE);
+					} else {
+						// Mixed set/unset bits
+						AppendBytes(state, validity_entry, ValidityMask::BITS_PER_VALUE);
+					}
+				}
+
+				// Deal with a ragged end, when the validity entry isn't entirely used
+				idx_t remainder = to_append % ValidityMask::BITS_PER_VALUE;
+				if (DUCKDB_UNLIKELY(remainder != 0)) {
+					auto validity_entry = validity.GetValidityEntry(entry_count);
+					auto masked = validity_entry & ValidityUncompressed::LOWER_MASKS[remainder];
+					if (masked == ValidityUncompressed::LOWER_MASKS[remainder]) {
+						// All bits are set
+						STATE_TYPE::HandleAllValid(state, remainder);
+					} else if (masked == 0) {
+						// None of the bits are set
+						STATE_TYPE::HandleNoneValid(state, remainder);
+					} else {
+						AppendBytes(analyze_data, validity_entry, remainder);
+					}
+				}
+
+				if (state.count == ROARING_CONTAINER_SIZE) {
+					STATE_TYPE::Flush(state);
+				}
+				appended += to_append;
+			}
+		}
+	}
+};
+
 struct ContainerCompressionState {
 private:
 	enum class Type : uint8_t { UNDECIDED, BITSET_CONTAINER, RUN_CONTAINER, ARRAY_CONTAINER, INVERTED_ARRAY_CONTAINER };
@@ -382,98 +481,146 @@ public:
 	}
 
 public:
-	template <bool EMPTY = false>
-	void AppendVector(Vector &input, idx_t input_size, const std::function<void()> &on_full_container) {
-		UnifiedVectorFormat unified;
-		input.ToUnifiedFormat(input_size, unified);
-		auto &validity = unified.validity;
+	//! RoaringStateAppender interface
 
-		if (validity.AllValid()) {
-			idx_t appended = 0;
-			while (appended < input_size) {
-				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
-				Append<EMPTY>(false, NumericCast<uint16_t>(to_append));
-				if (IsFull()) {
-					on_full_container();
-				}
-				appended += to_append;
-			}
+	static void HandleByte(ContainerCompressionState &state, uint8_t array_index) {
+		if (array_index == NumericLimits<uint8_t>::Maximum()) {
+			HandleAllValid(state, 8);
+		} else if (array_index == 0) {
+			HandleNoneValid(state, 8);
 		} else {
-			idx_t appended = 0;
-			while (appended < input_size) {
-				idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
-				bool last_is_null;
-				uint16_t length = 0;
-				for (idx_t i = 0; i < to_append; i++) {
-					auto idx = unified.sel->get_index(appended + i);
-					auto is_null = validity.RowIsValidUnsafe(idx);
-					if (i && is_null != last_is_null) {
-						Append<EMPTY>(!last_is_null, length);
-						length = 0;
-					}
-					length++;
-					last_is_null = is_null;
-				}
-				Append<EMPTY>(!last_is_null, length);
-				if (IsFull()) {
-					on_full_container();
-				}
-				appended += to_append;
+			for (idx_t i = 0; i < 8; i++) {
+				const bool bit_set = array_index & (1 << i);
+				HandleBit(state, bit_set);
 			}
 		}
 	}
 
-	template <bool EMPTY = false>
+	static void HandleBit(ContainerCompressionState &state, bool bit_set) {
+		if (state.last_bit_set != bit_set) {
+			state.Append(!state.last_bit_set, state.length);
+			state.length = 0;
+		}
+		state.length += 1;
+		state.last_bit_set = bit_set;
+	}
+
+	static void HandleAllValid(ContainerCompressionState &state, idx_t amount) {
+		if (!state.last_bit_set) {
+			state.Append(!state.last_bit_set, state.length);
+			state.length = 0;
+		}
+		state.length += amount;
+		state.last_bit_set = true;
+	}
+
+	static void HandleNoneValid(ContainerCompressionState &state, idx_t amount) {
+		if (state.last_bit_set) {
+			state.Append(!state.last_bit_set, state.length);
+			state.length = 0;
+		}
+		state.length += amount;
+		state.last_bit_set = false;
+	}
+
+	static void Flush(ContainerCompressionState &state) {
+		if (state.length) {
+			state.Append(!state.last_bit_set, state.length);
+			state.length = 0;
+		}
+	}
+
+	// void CompressVector(Vector &input, idx_t input_size, const std::function<void()> &on_full_container) {
+	//	UnifiedVectorFormat unified;
+	//	input.ToUnifiedFormat(input_size, unified);
+	//	auto &validity = unified.validity;
+
+	//	if (validity.AllValid()) {
+	//		// All bits are set implicitly
+	//		idx_t appended = 0;
+	//		while (appended < input_size) {
+	//			idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
+	//			Append<false>(false, NumericCast<uint16_t>(to_append));
+	//			if (IsFull()) {
+	//				on_full_container();
+	//			}
+	//			appended += to_append;
+	//		}
+	//	} else {
+	//		// There is a validity mask
+	//		idx_t appended = 0;
+	//		while (appended < input_size) {
+	//			idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
+	//			bool last_is_null;
+	//			uint16_t length = 0;
+	//			for (idx_t i = 0; i < to_append; i++) {
+	//				auto idx = unified.sel->get_index(appended + i);
+	//				auto is_null = validity.RowIsValidUnsafe(idx);
+	//				if (i && is_null != last_is_null) {
+	//					Append<false>(!last_is_null, length);
+	//					length = 0;
+	//				}
+	//				length++;
+	//				last_is_null = is_null;
+	//			}
+	//			Append<false>(!last_is_null, length);
+	//			if (IsFull()) {
+	//				on_full_container();
+	//			}
+	//			appended += to_append;
+	//		}
+	//	}
+	//}
+
 	void Append(bool null, uint16_t amount = 1) {
-		if (!EMPTY && uncompressed) {
+		if (uncompressed) {
 			D_ASSERT(type == Type::BITSET_CONTAINER);
 			if (null) {
 				ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
-				SetInvalidRange(mask, count, count + amount);
+				SetInvalidRange(mask, appended_count, appended_count + amount);
 			}
-			count += amount;
+			appended_count += amount;
 			return;
 		}
 
 		// Adjust the run
-		if (!null && run_idx < MAX_RUN_IDX && count && (null != last_is_null)) {
-			if (!EMPTY && (type == Type::UNDECIDED || type == Type::RUN_CONTAINER)) {
+		if (!null && run_idx < MAX_RUN_IDX && appended_count && (null != last_is_null)) {
+			if (type == Type::UNDECIDED || type == Type::RUN_CONTAINER) {
 				if (run_idx < COMPRESSED_RUN_THRESHOLD) {
 					auto &last_run = runs[run_idx];
 					// End the last run
-					last_run.length = (count - last_run.start) - 1;
+					last_run.length = (appended_count - last_run.start) - 1;
 				}
-				compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
-				run_counts[count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+				compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
+				run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 			}
 			run_idx++;
-		} else if (null && run_idx < MAX_RUN_IDX && (!count || null != last_is_null)) {
-			if (!EMPTY && (type == Type::UNDECIDED || type == Type::RUN_CONTAINER)) {
+		} else if (null && run_idx < MAX_RUN_IDX && (!appended_count || null != last_is_null)) {
+			if (type == Type::UNDECIDED || type == Type::RUN_CONTAINER) {
 				if (run_idx < COMPRESSED_RUN_THRESHOLD) {
 					auto &current_run = runs[run_idx];
 					// Initialize a new run
-					current_run.start = count;
+					current_run.start = appended_count;
 				}
-				compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
-				run_counts[count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+				compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
+				run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 			}
 		}
 
 		// Add to the array
 		auto &current_array_idx = array_idx[null];
 		if (current_array_idx < MAX_ARRAY_IDX) {
-			if (!EMPTY &&
-			    (type == Type::UNDECIDED || type == Type::ARRAY_CONTAINER || type == Type::INVERTED_ARRAY_CONTAINER)) {
+			if (type == Type::UNDECIDED || type == Type::ARRAY_CONTAINER || type == Type::INVERTED_ARRAY_CONTAINER) {
 				if (current_array_idx + amount <= MAX_ARRAY_IDX) {
 					for (uint16_t i = 0; i < amount; i++) {
 						compressed_arrays[null][current_array_idx + i] =
-						    static_cast<uint8_t>((count + i) % COMPRESSED_SEGMENT_SIZE);
-						array_counts[null][(count + i) >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+						    static_cast<uint8_t>((appended_count + i) % COMPRESSED_SEGMENT_SIZE);
+						array_counts[null][(appended_count + i) >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 					}
 				}
 				if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
 					for (uint16_t i = 0; i < amount; i++) {
-						arrays[null][current_array_idx + i] = count + i;
+						arrays[null][current_array_idx + i] = appended_count + i;
 					}
 				}
 			}
@@ -482,7 +629,7 @@ public:
 
 		last_is_null = null;
 		null_count += null * amount;
-		count += amount;
+		appended_count += amount;
 	}
 
 	bool IsFull() const {
@@ -526,15 +673,15 @@ public:
 
 	void Finalize() {
 		D_ASSERT(!finalized);
-		if (count && last_is_null && run_idx < MAX_RUN_IDX) {
+		if (appended_count && last_is_null && run_idx < MAX_RUN_IDX) {
 			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
 				auto &last_run = runs[run_idx];
 				// End the last run
-				last_run.length = (count - last_run.start);
+				last_run.length = (appended_count - last_run.start);
 			}
-			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(count % COMPRESSED_SEGMENT_SIZE);
-			if (count != ROARING_CONTAINER_SIZE) {
-				run_counts[count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
+			if (appended_count != ROARING_CONTAINER_SIZE) {
+				run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 			}
 			run_idx++;
 		}
@@ -589,6 +736,9 @@ public:
 
 	void Reset() {
 		count = 0;
+		length = 0;
+
+		appended_count = 0;
 		null_count = 0;
 		run_idx = 0;
 		array_idx[NON_NULLS] = 0;
@@ -619,8 +769,13 @@ public:
 	}
 
 public:
+	//! Buffered append state (we don't want to append every bit separately)
+	idx_t length = 0;
+	idx_t count = 0;
+	bool last_bit_set;
+
 	//! Total amount of values covered by the container
-	uint16_t count = 0;
+	uint16_t appended_count = 0;
 	//! How many of the total are null
 	uint16_t null_count = 0;
 	bool last_is_null = false;
@@ -652,12 +807,85 @@ public:
 	Type type = Type::UNDECIDED;
 };
 
+static unsafe_unique_array<BitmaskTableEntry> CreateBitmaskTable() {
+	unsafe_unique_array<BitmaskTableEntry> result;
+	result = make_unsafe_uniq_array_uninitialized<BitmaskTableEntry>(NumericLimits<uint8_t>::Maximum() + 1);
+
+	for (uint16_t val = 0; val < NumericLimits<uint8_t>::Maximum() + 1; val++) {
+		bool previous_bit;
+		auto &entry = result[val];
+		entry.valid_count = 0;
+		entry.run_count = 0;
+		for (uint8_t i = 0; i < 8; i++) {
+			const bool bit_set = val & (1 << i);
+			if (!i) {
+				entry.first_bit_set = bit_set;
+			} else if (i == 7) {
+				entry.last_bit_set = bit_set;
+			}
+			entry.valid_count += bit_set;
+
+			if (i && !bit_set && previous_bit == true) {
+				entry.run_count++;
+			}
+			previous_bit = bit_set;
+		}
+	}
+
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
 struct RoaringAnalyzeState : public AnalyzeState {
 public:
-	explicit RoaringAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {};
+	explicit RoaringAnalyzeState(const CompressionInfo &info)
+	    : AnalyzeState(info), bitmask_table(CreateBitmaskTable()) {};
+
+public:
+	// RoaringStateAppender interface:
+
+	static void HandleByte(RoaringAnalyzeState &state, uint8_t array_index) {
+		auto bit_info = state.bitmask_table[static_cast<uint8_t>(array_index)];
+
+		state.run_count +=
+		    bit_info.run_count + (bit_info.first_bit_set == false && (!state.count || state.last_bit_set == true));
+		state.one_count += bit_info.valid_count;
+		D_ASSERT(bit_info.valid_count <= 8);
+		state.zero_count += 8 - bit_info.valid_count;
+		state.last_bit_set = bit_info.last_bit_set;
+		state.count += 8;
+	}
+
+	static void HandleBit(RoaringAnalyzeState &state, bool bit_set) {
+		if (!bit_set && (state.count == 0 || state.last_bit_set == true)) {
+			state.run_count++;
+		}
+		state.one_count += bit_set;
+		state.zero_count += !bit_set;
+		state.last_bit_set = bit_set;
+		state.count++;
+	}
+
+	static void HandleAllValid(RoaringAnalyzeState &state, idx_t amount) {
+		state.one_count += amount;
+		state.last_bit_set = true;
+		state.count += amount;
+	}
+
+	static void HandleNoneValid(RoaringAnalyzeState &state, idx_t amount) {
+		if (!state.count || (state.last_bit_set != false)) {
+			state.run_count++;
+		}
+		state.zero_count += amount;
+		state.last_bit_set = false;
+		state.count += amount;
+	}
+
+	static void Flush(RoaringAnalyzeState &state) {
+		state.FlushContainer();
+	}
 
 public:
 	bool HasEnoughSpaceInSegment(idx_t required_space) {
@@ -682,10 +910,9 @@ public:
 	}
 
 	void FlushContainer() {
-		if (!container_state.count) {
+		if (!count) {
 			return;
 		}
-		container_state.Finalize();
 		auto metadata = container_state.GetResult();
 		idx_t runs_count = metadata_collection.GetRunContainerCount();
 		idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
@@ -698,26 +925,43 @@ public:
 
 		idx_t required_space = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
 
-		required_space += metadata.GetDataSizeInBytes(container_state.count);
+		required_space += metadata.GetDataSizeInBytes(count);
 		if (!HasEnoughSpaceInSegment(required_space)) {
 			FlushSegment();
 		}
 		container_metadata.push_back(metadata);
 		metadata_collection.AddMetadata(metadata);
 		space_used += required_space;
-		current_count += container_state.count;
-		container_state.Reset();
+		current_count += count;
+
+		// Reset the container analyze state
+		one_count = 0;
+		zero_count = 0;
+		run_count = 0;
+		last_bit_set = false;
+		count = 0;
 	}
 
-	void Analyze(Vector &input, idx_t count) {
-		auto &self = *this;
-		container_state.AppendVector<true>(input, count, [&self]() { self.FlushContainer(); });
-
-		this->count += count;
-	}
+	void Analyze(Vector &input, idx_t count);
 
 public:
-	ContainerCompressionState container_state;
+	unsafe_unique_array<BitmaskTableEntry> bitmask_table;
+
+	//! Analyze phase
+
+	//! The amount of set bits found
+	idx_t one_count = 0;
+	//! The amount of unset bits found
+	idx_t zero_count = 0;
+	//! The amount of runs (of 0's) so far
+	idx_t run_count = 0;
+	//! Whether the last bit was set or not
+	bool last_bit_set;
+	//! The total amount of bits covered (one_count + zero_count)
+	idx_t count = 0;
+
+	//! Flushed analyze data
+
 	//! The space used by the current segment
 	idx_t space_used = 0;
 	//! The total amount of segments to write
@@ -725,7 +969,7 @@ public:
 	//! The amount of values in the current segment;
 	idx_t current_count = 0;
 	//! The total amount of data to serialize
-	idx_t count = 0;
+	idx_t total_count = 0;
 
 	//! The total amount of bytes used to compress the whole segment
 	idx_t total_size = 0;
@@ -733,6 +977,13 @@ public:
 	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> container_metadata;
 };
+
+void RoaringAnalyzeState::Analyze(Vector &input, idx_t count) {
+	auto &self = *this;
+
+	RoaringStateAppender<RoaringAnalyzeState>(self, input, count);
+	total_count += count;
+}
 
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
@@ -811,7 +1062,7 @@ public:
 	}
 
 	void InitializeContainer() {
-		if (count == analyze_state.count) {
+		if (count == analyze_state.total_count) {
 			// No more containers left
 			return;
 		}
@@ -820,7 +1071,7 @@ public:
 		auto metadata = container_metadata[container_index];
 
 		idx_t container_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(
-		    MinValue<idx_t>(analyze_state.count - count, ROARING_CONTAINER_SIZE));
+		    MinValue<idx_t>(analyze_state.total_count - count, ROARING_CONTAINER_SIZE));
 		if (!CanStore(container_size, metadata)) {
 			idx_t row_start = current_segment->start + current_segment->count;
 			FlushSegment();
@@ -905,7 +1156,6 @@ public:
 		if (!container_state.count) {
 			return;
 		}
-		container_state.Finalize();
 #ifdef DEBUG
 		auto container_index = GetContainerIndex();
 		auto analyzed_metadata = container_metadata[container_index];
@@ -978,7 +1228,7 @@ public:
 
 	void Compress(Vector &input, idx_t count) {
 		auto &self = *this;
-		container_state.AppendVector(input, count, [&self]() { self.NextContainer(); });
+		container_state.CompressVector(input, count, [&self]() { self.NextContainer(); });
 	}
 
 public:
@@ -999,7 +1249,7 @@ public:
 	// Ptr to next free spot for storing
 	data_ptr_t metadata_ptr;
 	//! The amount of values already compressed
-	idx_t count = 0;
+	idx_t total_count = 0;
 };
 
 unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointer &checkpointer,
