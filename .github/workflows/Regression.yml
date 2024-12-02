@@ -2,10 +2,12 @@ name: Regression
 on:
   workflow_call:
     inputs:
-      base_hash: string
+      base_hash:
+        type: string
   workflow_dispatch:
     inputs:
-      base_hash: string
+      base_hash:
+        type: string
   repository_dispatch:
   push:
     branches:
