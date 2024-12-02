@@ -639,9 +639,13 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					auto column_idx = filter.table_column_index;
 
 					if (column_idx == COLUMN_IDENTIFIER_ROW_ID) {
+
+						// If we have a selection vector, we need to generate the row ids for more than "count" rows
+						const auto seq_count = sel.IsSet() ? max_count : count;
+
 						// We do another quick statistics scan for row ids here
 						const auto rowid_start = this->start + current_row;
-						const auto rowid_end = this->start + current_row + count;
+						const auto rowid_end = this->start + current_row + seq_count;
 						const auto prune_result = CheckRowIdFilter(filter.filter, rowid_start, rowid_end);
 						if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 							// We can just break out of the loop here.
@@ -651,7 +655,9 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 						// Generate row ids
 						D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-						result.data[i].Sequence(UnsafeNumericCast<int64_t>(this->start + current_row), 1, count);
+
+						// Create sequence for row ids
+						result.data[i].Sequence(UnsafeNumericCast<int64_t>(this->start + current_row), 1, seq_count);
 
 						// Was this filter always true? If so, we dont need to apply it
 						if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -660,7 +666,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 						// Now apply the filter
 						UnifiedVectorFormat vdata;
-						result.data[i].ToUnifiedFormat(count, vdata);
+						result.data[i].ToUnifiedFormat(seq_count, vdata);
 						ColumnSegment::FilterSelection(sel, result.data[i], vdata, filter.filter, count,
 						                               approved_tuple_count);
 
