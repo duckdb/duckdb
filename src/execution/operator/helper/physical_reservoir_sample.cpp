@@ -24,7 +24,6 @@ public:
 			}
 			sample = make_uniq<ReservoirSample>(allocator, size, static_cast<int64_t>(options.seed.GetIndex()));
 		}
-		offset = 0;
 	}
 
 	//! The lock for updating the global aggoregate state
@@ -32,7 +31,6 @@ public:
 	mutex lock;
 	//! The reservoir sample
 	unique_ptr<BlockingSample> sample;
-	idx_t offset;
 };
 
 unique_ptr<GlobalSinkState> PhysicalReservoirSample::GetGlobalSinkState(ClientContext &context) const {

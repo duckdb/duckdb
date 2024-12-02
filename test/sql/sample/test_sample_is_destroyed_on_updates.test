@@ -88,9 +88,6 @@ query I
 select * from duckdb_table_sample('integers_1');
 ----
 
-
-mode skip
-
 # test sample is destroyed after a restart
 statement ok
 create or replace table integers_1 as select range a, range+1 b  from range(500);

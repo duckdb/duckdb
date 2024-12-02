@@ -4,24 +4,20 @@
 
 namespace duckdb {
 
-ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
-    : BlockingSample(seed), sample_count(sample_count), allocator(Allocator::DefaultAllocator()) {
-	base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
-	type = SampleType::RESERVOIR_SAMPLE;
-	reservoir_chunk = nullptr;
+ReservoirSample::ReservoirSample(idx_t sample_count, unique_ptr<ReservoirChunk> reservoir_chunk)
+    : ReservoirSample(sample_count, 1) {
+	if (reservoir_chunk) {
+		this->reservoir_chunk = std::move(reservoir_chunk);
+		sel_size = this->reservoir_chunk->chunk.size();
+		sel = SelectionVector(0, sel_size);
+		ExpandSerializedSample();
+	}
 	internal_sample = true;
-	sel = SelectionVector(STANDARD_VECTOR_SIZE);
-	sel_size = 0;
 }
 
 ReservoirSample::ReservoirSample(Allocator &allocator, int64_t seed)
-    : BlockingSample(seed), sample_count(FIXED_SAMPLE_SIZE), allocator(allocator) {
-	base_reservoir_sample = make_uniq<BaseReservoirSampling>(seed);
-	type = SampleType::RESERVOIR_SAMPLE;
+    : ReservoirSample(allocator, FIXED_SAMPLE_SIZE, seed) {
 	internal_sample = true;
-	reservoir_chunk = nullptr;
-	sel = SelectionVector(STANDARD_VECTOR_SIZE);
-	sel_size = 0;
 }
 
 ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
@@ -32,6 +28,14 @@ ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64
 	internal_sample = false;
 	sel = SelectionVector(sample_count);
 	sel_size = 0;
+	if (seed != 1) {
+		auto break_here = 0;
+	}
+}
+
+ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
+    : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
+	internal_sample = true;
 }
 
 void PrintSel(SelectionVector sel, idx_t sel_size) {
@@ -541,10 +545,7 @@ void ReservoirSample::ExpandSerializedSample() {
 	auto types = reservoir_chunk->chunk.GetTypes();
 	auto new_res_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 	auto copy_count = reservoir_chunk->chunk.size();
-	SelectionVector tmp_sel = SelectionVector(copy_count);
-	for (idx_t i = 0; i < copy_count; i++) {
-		tmp_sel.set_index(i, i);
-	}
+	SelectionVector tmp_sel = SelectionVector(0, copy_count);
 	UpdateSampleAppend(new_res_chunk->chunk, reservoir_chunk->chunk, tmp_sel, copy_count);
 	new_res_chunk->chunk.SetCardinality(copy_count);
 	std::swap(reservoir_chunk, new_res_chunk);

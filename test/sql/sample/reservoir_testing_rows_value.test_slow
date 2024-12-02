@@ -2,8 +2,6 @@
 # description: Test SAMPLE keyword
 # group: [sample]
 
-mode skip
-
 loop i 1 8
 
 statement ok

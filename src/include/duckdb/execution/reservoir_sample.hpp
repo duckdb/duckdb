@@ -162,16 +162,14 @@ public:
 	constexpr static idx_t FIXED_SAMPLE_SIZE_MULTIPLIER = 10;
 	constexpr static idx_t FAST_TO_SLOW_THRESHOLD = 60;
 
-	// how much of every chunk we consider for sampling.
-	// This can be lowered later to improve ingestion performance.
-	constexpr static double CHUNK_SAMPLE_PERCENTAGE = 1.00;
 	// If the table has less than 204800 rows, this is the percentage
 	// of values we save when serializing/returning a sample.
 	constexpr static double SAVE_PERCENTAGE = 0.01;
 
-	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = -1);
-	explicit ReservoirSample(Allocator &allocator, int64_t seed = -1);
-	explicit ReservoirSample(idx_t sample_count, int64_t seed = -1);
+	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = 1);
+	explicit ReservoirSample(Allocator &allocator, int64_t seed = 1);
+	explicit ReservoirSample(idx_t sample_count, int64_t seed = 1);
+	explicit ReservoirSample(idx_t sample_count, unique_ptr<ReservoirChunk>);
 
 	unique_ptr<BlockingSample> PrepareForSerialization();
 	void ExpandSerializedSample();
@@ -285,13 +283,9 @@ public:
 
 	unique_ptr<BlockingSample> Copy() const override;
 
-	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
-	//! sample is completely built.
-	// unique_ptr<DataChunk> GetChunkAndDestroy() override;
-	//! Fetches a chunk from the sample. This method is not destructive
+	//! Fetches a chunk from the sample. If destory = true this method is descructive
 	unique_ptr<DataChunk> GetChunk(idx_t offset, bool destroy = false) override;
 	void Finalize() override;
-	// void FromReservoirSample(unique_ptr<ReservoirSample> other);
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);

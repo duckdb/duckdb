@@ -15,8 +15,6 @@ create table materialized_range as select * from range(204800);
 statement ok
 create or replace table integers_1 as (select range b from materialized_range);
 
-mode skip
-
 statement ok
 create table materialized_range as select * from range(204800);
 

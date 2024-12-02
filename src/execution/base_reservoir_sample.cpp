@@ -24,10 +24,6 @@ double BaseReservoirSampling::GetMinWeightFromTuplesSeen(idx_t rows_seen_total) 
 	}
 }
 
-// ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
-//     : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
-// }
-
 void BaseReservoirSampling::IncreaseNumEntriesSeenTotal(idx_t count) {
 	num_entries_seen_total += count;
 }

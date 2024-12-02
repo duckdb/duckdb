@@ -244,6 +244,65 @@
     ]
   },
   {
+    "class": "BlockingSample",
+    "class_type": "type",
+    "members": [
+      {
+        "id" : 100,
+        "name" : "base_reservoir_sample",
+        "type" : "unique_ptr<BaseReservoirSampling>"
+      },
+      {
+        "id" : 101,
+        "name": "type",
+        "type": "SampleType"
+      },
+      {
+        "id": 102,
+        "name": "destroyed",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "ReservoirSample",
+    "base": "BlockingSample",
+    "enum": "RESERVOIR_SAMPLE",
+    "includes": [],
+    "members": [
+      {
+        "id": 200,
+        "name": "sample_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 201,
+        "name": "reservoir_chunk",
+        "type": "unique_ptr<ReservoirChunk>"
+      }
+    ],
+    "constructor": ["sample_count", "reservoir_chunk"]
+  },
+  {
+    "class": "ReservoirSamplePercentage",
+    "base": "BlockingSample",
+    "enum": "RESERVOIR_PERCENTAGE_SAMPLE",
+    "includes": [],
+    "members": [
+      {
+        "id": 200,
+        "name": "sample_percentage",
+        "type": "double"
+      },
+      {
+        "id": 201,
+        "name": "reservoir_sample_size",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["sample_percentage"]
+  },
+  {
     "class": "PivotColumn",
     "includes": [
       "duckdb/parser/tableref/pivotref.hpp"

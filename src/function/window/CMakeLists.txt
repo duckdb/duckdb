@@ -10,13 +10,13 @@ add_library_unity(
   window_custom_aggregator.cpp
   window_cumedist_function.cpp
   window_distinct_aggregator.cpp
-  window_executor.cpp
   window_naive_aggregator.cpp
   window_rank_function.cpp
   window_rownumber_function.cpp
   window_segment_tree.cpp
   window_shared_expressions.cpp
-  window_value_function.cpp)
+  window_value_function.cpp
+  window_executor.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_window>
