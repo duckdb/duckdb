@@ -88,6 +88,8 @@ public:
 	void ResetCount();
 	//! Set the radix bits for this HT
 	void SetRadixBits(idx_t radix_bits);
+	//! Get the radix bits for this HT
+	idx_t GetRadixBits() const;
 	//! Initializes the PartitionedTupleData
 	void InitializePartitionedData();
 
