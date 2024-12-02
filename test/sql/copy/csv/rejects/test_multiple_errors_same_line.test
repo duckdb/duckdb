@@ -179,7 +179,7 @@ DROP TABLE reject_scans;
 query IIII
 FROM read_csv('data/csv/rejects/multiple_errors/unquoted_cast.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
-    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40, rfc_4180=true);
 ----
 oogie boogie	3	2023-01-01	2
 oogie boogie	3	2023-01-02	7
@@ -200,7 +200,7 @@ DROP TABLE reject_scans;
 query IIII
 FROM read_csv('data/csv/rejects/multiple_errors/unquoted_less.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
-    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40, rfc_4180=true);
 ----
 oogie boogie	3	2023-01-01	2
 oogie boogie	3	2023-01-02	7
@@ -220,7 +220,7 @@ DROP TABLE reject_scans;
 query IIII
 FROM read_csv('data/csv/rejects/multiple_errors/unquoted_maxline.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
-    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40, rfc_4180=true);
 ----
 oogie boogie	3	2023-01-01	2
 oogie boogie	3	2023-01-02	7
@@ -241,7 +241,7 @@ DROP TABLE reject_scans;
 query IIII
 FROM read_csv('data/csv/rejects/multiple_errors/unquoted_more.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
-    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40, rfc_4180=true);
 ----
 oogie boogie	3	2023-01-01	2
 oogie boogie	3	2023-01-02	7
@@ -341,7 +341,7 @@ DROP TABLE reject_scans;
 query IIIII
 FROM read_csv('data/csv/rejects/multiple_errors/invalid_utf_unquoted.csv',
     columns = {'name': 'VARCHAR', 'last_name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
-    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40, rfc_4180=true);
 ----
 oogie	 boogie	3	2023-01-01	2
 
@@ -361,7 +361,7 @@ DROP TABLE reject_scans;
 query IIII
 FROM read_csv('data/csv/rejects/multiple_errors/multiple_errors.csv',
     columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'current_day': 'DATE', 'barks': 'INTEGER'},
-    store_rejects = true, auto_detect=false, header = 1, max_line_size=40);
+    store_rejects = true, auto_detect=false, header = 1, max_line_size=40, rfc_4180=true);
 ----
 oogie boogie	3	2023-01-01	2
 oogie boogie	3	2023-01-02	5

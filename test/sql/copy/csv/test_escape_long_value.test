@@ -27,7 +27,7 @@ statement ok
 CREATE TABLE long_escaped_value (a INTEGER, b INTEGER, c VARCHAR);
 
 query I
-COPY long_escaped_value FROM 'data/csv/test/long_escaped_value.csv' (DELIMITER '🦆', AUTO_DETECT FALSE);
+COPY long_escaped_value FROM 'data/csv/test/long_escaped_value.csv' (DELIMITER '🦆', AUTO_DETECT FALSE, QUOTE '"', ESCAPE '"');
 ----
 1
 
