@@ -191,7 +191,7 @@ ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_
 }
 
 bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
-	if (config.level < log_level) {
+	if (config.level > log_level) {
 		return false;
 	}
 	if (config.mode == LogMode::ENABLE_SELECTED && config.enabled_loggers.find(log_type) == config.enabled_loggers.end()) {
@@ -204,7 +204,7 @@ bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 }
 
 bool ThreadSafeLogger::ShouldLog(LogLevel log_level) {
-	if (config.level < log_level) {
+	if (config.level > log_level) {
 		return false;
 	}
 	if (config.mode != LogMode::LEVEL_ONLY) {
@@ -263,6 +263,7 @@ void MutableLogger::UpdateConfig(LogConfig &new_config) {
 	config = new_config;
 
 	// Update atomics for lock-free access
+	enabled = config.enabled;
 	level = config.level;
 	mode = config.mode;
 }
@@ -281,7 +282,7 @@ bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	}
 
 	// check atomic level to early out if level too low
-	if (level < log_level) {
+	if (level > log_level) {
 		return false;
 	}
 
@@ -404,30 +405,37 @@ void LogManager::FlushCachedLogEntries(DataChunk &chunk, const RegisteredLogging
 
 void LogManager::SetEnableLogging(bool enable) {
 	unique_lock<mutex> lck(lock);
-	auto config_copy = global_logger->GetConfig();
-	config_copy.enabled = enable;
-	global_logger->UpdateConfig(config_copy);
+	config.enabled = enable;
+	global_logger->UpdateConfig(config);
+}
+
+void LogManager::SetLogMode(LogMode mode) {
+	unique_lock<mutex> lck(lock);
+	config.mode = mode;
+	global_logger->UpdateConfig(config);
 }
 
 void LogManager::SetLogLevel(LogLevel level) {
 	unique_lock<mutex> lck(lock);
-	auto config_copy = global_logger->GetConfig();
-	config_copy.level = level;
-	global_logger->UpdateConfig(config_copy);
+	config.level = level;
+	global_logger->UpdateConfig(config);
 }
 
 void LogManager::SetEnabledLoggers(unordered_set <string> &enabled_loggers) {
 	unique_lock<mutex> lck(lock);
-	auto config_copy = global_logger->GetConfig();
-	config_copy.enabled_loggers = enabled_loggers;
-	global_logger->UpdateConfig(config_copy);
+	config.enabled_loggers = enabled_loggers;
+	global_logger->UpdateConfig(config);
 }
 
 void LogManager::SetDisabledLoggers(unordered_set <string> &disabled_loggers) {
 	unique_lock<mutex> lck(lock);
-	auto config_copy = global_logger->GetConfig();
-	config_copy.enabled_loggers = disabled_loggers;
-	global_logger->UpdateConfig(config_copy);
+	config.enabled_loggers = disabled_loggers;
+	global_logger->UpdateConfig(config);
+}
+
+LogConfig LogManager::GetConfig() {
+	unique_lock<mutex> lck(lock);
+	return config;
 }
 
 

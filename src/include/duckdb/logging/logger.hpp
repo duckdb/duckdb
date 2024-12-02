@@ -366,9 +366,12 @@ public:
 	unique_ptr<LogStorage> log_storage;
 
 	void SetEnableLogging(bool enable);
+	void SetLogMode(LogMode mode);
 	void SetLogLevel(LogLevel level);
 	void SetEnabledLoggers(unordered_set <string> &enabled_loggers);
 	void SetDisabledLoggers(unordered_set <string> &disabled_loggers);
+
+	LogConfig GetConfig();
 
 protected:
 	// This is to be called by the Loggers only, it does not verify log_level and log_type
