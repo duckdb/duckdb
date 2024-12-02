@@ -24,7 +24,6 @@
 #include "duckdb/main/profiling_info.hpp"
 #include "duckdb/main/profiling_node.hpp"
 
-#include <mutex>
 #include <stack>
 
 namespace duckdb {
@@ -156,7 +155,6 @@ public:
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 
 	idx_t OperatorSize() {
-		D_ASSERT(!running); // This function should only be called after the query has completed
 		return tree_map.size();
 	}
 
@@ -164,7 +162,6 @@ public:
 
 	//! Return the root of the query tree
 	optional_ptr<ProfilingNode> GetRoot() {
-		D_ASSERT(!running); // This function should only be called after the query has completed
 		return root.get();
 	}
 
@@ -174,7 +171,7 @@ private:
 	//! Whether or not the query profiler is running
 	bool running;
 	//! The lock used for accessing the global query profiler or flushing information to it from a thread
-	mutable std::recursive_mutex lock;
+	mutable std::mutex lock;
 
 	//! Whether or not the query requires profiling
 	bool query_requires_profiling;
@@ -193,7 +190,6 @@ private:
 
 public:
 	const TreeMap &GetTreeMap() const {
-		D_ASSERT(!running); // This function should only be called after the query has completed
 		return tree_map;
 	}
 

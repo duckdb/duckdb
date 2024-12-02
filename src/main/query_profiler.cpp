@@ -87,7 +87,7 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 }
 
 void QueryProfiler::StartQuery(string query, bool is_explain_analyze_p, bool start_at_optimizer) {
-	lock_guard<std::recursive_mutex> guard(lock);
+	lock_guard<std::mutex> guard(lock);
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -197,7 +197,7 @@ Value GetCumulativeOptimizers(ProfilingNode &node) {
 }
 
 void QueryProfiler::EndQuery() {
-	lock_guard<std::recursive_mutex> guard(lock);
+	unique_lock<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -210,6 +210,8 @@ void QueryProfiler::EndQuery() {
 		}
 	}
 	running = false;
+
+	bool emit_output = false;
 
 	// Print or output the query profiling after query termination.
 	// EXPLAIN ANALYZE output is not written by the profiler.
@@ -251,20 +253,26 @@ void QueryProfiler::EndQuery() {
 			}
 		}
 
+		if (ClientConfig::GetConfig(context).emit_profiler_output) {
+			emit_output = true;
+		}
+	}
+
+	is_explain_analyze = false;
+
+	guard.unlock();
+
+	if (emit_output) {
 		string tree = ToString();
 		auto save_location = GetSaveLocation();
 
-		if (!ClientConfig::GetConfig(context).emit_profiler_output) {
-			// disable output
-		} else if (save_location.empty()) {
+		if (save_location.empty()) {
 			Printer::Print(tree);
 			Printer::Print("\n");
 		} else {
 			WriteToFile(save_location.c_str(), tree);
 		}
 	}
-
-	is_explain_analyze = false;
 }
 
 string QueryProfiler::ToString(ExplainFormat explain_format) const {
@@ -272,7 +280,6 @@ string QueryProfiler::ToString(ExplainFormat explain_format) const {
 }
 
 string QueryProfiler::ToString(ProfilerPrintFormat format) const {
-	lock_guard<std::recursive_mutex> guard(lock);
 	if (!IsEnabled()) {
 		return RenderDisabledMessage(format);
 	}
@@ -286,6 +293,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 		return "";
 	case ProfilerPrintFormat::HTML:
 	case ProfilerPrintFormat::GRAPHVIZ: {
+		lock_guard<std::mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
 		if (query_info.query_name.empty() && !root) {
@@ -306,7 +314,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 }
 
 void QueryProfiler::StartPhase(MetricsType phase_metric) {
-	lock_guard<std::recursive_mutex> guard(lock);
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -318,7 +326,7 @@ void QueryProfiler::StartPhase(MetricsType phase_metric) {
 }
 
 void QueryProfiler::EndPhase() {
-	lock_guard<std::recursive_mutex> guard(lock);
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -415,7 +423,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
-	lock_guard<std::recursive_mutex> guard(lock);
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -454,7 +462,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 }
 
 void QueryProfiler::SetInfo(const double &blocked_thread_time) {
-	lock_guard<std::recursive_mutex> guard(lock);
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -570,7 +578,7 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
-	lock_guard<std::recursive_mutex> guard(lock);
+	lock_guard<std::mutex> guard(lock);
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
 	ss << "││    Query Profiling Information    ││\n";
@@ -682,7 +690,7 @@ static string StringifyAndFree(yyjson_mut_doc *doc, yyjson_mut_val *object) {
 }
 
 string QueryProfiler::ToJSON() const {
-	lock_guard<std::recursive_mutex> guard(lock);
+	lock_guard<std::mutex> guard(lock);
 	auto doc = yyjson_mut_doc_new(nullptr);
 	auto result_obj = yyjson_mut_obj(doc);
 	yyjson_mut_doc_set_root(doc, result_obj);
@@ -802,7 +810,7 @@ string QueryProfiler::RenderDisabledMessage(ProfilerPrintFormat format) const {
 }
 
 void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
-	lock_guard<std::recursive_mutex> guard(lock);
+	lock_guard<std::mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
