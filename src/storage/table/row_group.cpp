@@ -635,17 +635,15 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						// this filter is always true - skip it
 						continue;
 					}
-					auto scan_idx = filter.scan_column_index;
-					auto column_idx = filter.table_column_index;
+
+					const auto scan_idx = filter.scan_column_index;
+					const auto column_idx = filter.table_column_index;
 
 					if (column_idx == COLUMN_IDENTIFIER_ROW_ID) {
 
-						// If we have a selection vector, we need to generate the row ids for more than "count" rows
-						const auto seq_count = sel.IsSet() ? max_count : count;
-
 						// We do another quick statistics scan for row ids here
 						const auto rowid_start = this->start + current_row;
-						const auto rowid_end = this->start + current_row + seq_count;
+						const auto rowid_end = this->start + current_row + max_count;
 						const auto prune_result = CheckRowIdFilter(filter.filter, rowid_start, rowid_end);
 						if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 							// We can just break out of the loop here.
@@ -657,7 +655,12 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
 
 						// Create sequence for row ids
-						result.data[i].Sequence(UnsafeNumericCast<int64_t>(this->start + current_row), 1, seq_count);
+						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
+						auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
+						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+							result_data[sel.get_index(sel_idx)] =
+							    UnsafeNumericCast<int64_t>(this->start + current_row + sel.get_index(sel_idx));
+						}
 
 						// Was this filter always true? If so, we dont need to apply it
 						if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -666,8 +669,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 						// Now apply the filter
 						UnifiedVectorFormat vdata;
-						result.data[i].ToUnifiedFormat(seq_count, vdata);
-						ColumnSegment::FilterSelection(sel, result.data[i], vdata, filter.filter, count,
+						result.data[i].ToUnifiedFormat(approved_tuple_count, vdata);
+						ColumnSegment::FilterSelection(sel, result.data[i], vdata, filter.filter, approved_tuple_count,
 						                               approved_tuple_count);
 
 					} else {
