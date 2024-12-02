@@ -2512,15 +2512,15 @@ inline std::string decode_url(const std::string &s,
           result += s[i];
         }
       } else {
-        auto val = 0;
-	if (from_hex_to_i(s, i + 1, 2, val)) {
-		const auto converted = static_cast<char>(val);
-		if (exclude.empty() || exclude.count(converted) == 0) {
-			result += converted;
-		} else {
-		result.append(s, i, 3);
-	   }
-	  i += 2; // '00'
+				auto val = 0;
+				if (from_hex_to_i(s, i + 1, 2, val)) {
+	 				const auto converted = static_cast<char>(val);
+					if (exclude.empty() || exclude.count(converted) == 0) {
+						result += converted;
+					} else {
+						result.append(s, i, 3);
+	   			}
+	  			i += 2; // '00'
         } else {
           result += s[i];
         }
