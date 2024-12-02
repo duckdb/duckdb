@@ -9,103 +9,6 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// ExclusionFilter
-//===--------------------------------------------------------------------===//
-
-//! Handles window exclusion by piggybacking on the filtering logic.
-//! (needed for first_value, last_value, nth_value)
-class ExclusionFilter {
-public:
-	ExclusionFilter(const WindowExcludeMode exclude_mode_p, idx_t total_count, const ValidityMask &src)
-	    : mode(exclude_mode_p), mask_src(src) {
-		mask.Initialize(total_count);
-
-		// copy the data from mask_src
-		FetchFromSource(0, total_count);
-	}
-
-	//! Copy the entries from mask_src to mask, in the index range [begin, end)
-	void FetchFromSource(idx_t begin, idx_t end);
-	//! Apply the current exclusion to the validity mask
-	//! (offset is the current row's index within the chunk)
-	void ApplyExclusion(DataChunk &bounds, idx_t row_idx, idx_t offset);
-	//! Reset the validity mask to match mask_src
-	//! (offset is the current row's index within the chunk)
-	void ResetMask(idx_t row_idx, idx_t offset);
-
-	//! The current peer group's begin
-	idx_t curr_peer_begin;
-	//! The current peer group's end
-	idx_t curr_peer_end;
-	//! The window exclusion mode
-	WindowExcludeMode mode;
-	//! The validity mask representing the exclusion
-	ValidityMask mask;
-	//! The validity mask upon which mask is based
-	const ValidityMask &mask_src;
-};
-
-void ExclusionFilter::FetchFromSource(idx_t begin, idx_t end) {
-	idx_t begin_entry_idx;
-	idx_t end_entry_idx;
-	idx_t idx_in_entry;
-	mask.GetEntryIndex(begin, begin_entry_idx, idx_in_entry);
-	mask.GetEntryIndex(end - 1, end_entry_idx, idx_in_entry);
-	auto dst = mask.GetData() + begin_entry_idx;
-	for (idx_t entry_idx = begin_entry_idx; entry_idx <= end_entry_idx; ++entry_idx) {
-		*dst++ = mask_src.GetValidityEntry(entry_idx);
-	}
-}
-
-void ExclusionFilter::ApplyExclusion(DataChunk &bounds, idx_t row_idx, idx_t offset) {
-	// flip the bits in mask according to the window exclusion mode
-	switch (mode) {
-	case WindowExcludeMode::CURRENT_ROW:
-		mask.SetInvalid(row_idx);
-		break;
-	case WindowExcludeMode::TIES:
-	case WindowExcludeMode::GROUP: {
-		if (curr_peer_end == row_idx || offset == 0) {
-			// new peer group or input chunk: set entire peer group to invalid
-			auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
-			auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
-			curr_peer_begin = peer_begin[offset];
-			curr_peer_end = peer_end[offset];
-			for (idx_t i = curr_peer_begin; i < curr_peer_end; i++) {
-				mask.SetInvalid(i);
-			}
-		}
-		if (mode == WindowExcludeMode::TIES) {
-			mask.Set(row_idx, mask_src.RowIsValid(row_idx));
-		}
-		break;
-	}
-	default:
-		break;
-	}
-}
-
-void ExclusionFilter::ResetMask(idx_t row_idx, idx_t offset) {
-	// flip the bits that were modified in ApplyExclusion back
-	switch (mode) {
-	case WindowExcludeMode::CURRENT_ROW:
-		mask.Set(row_idx, mask_src.RowIsValid(row_idx));
-		break;
-	case WindowExcludeMode::TIES:
-		mask.SetInvalid(row_idx);
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case WindowExcludeMode::GROUP:
-		if (curr_peer_end == row_idx + 1) {
-			// if we've reached the peer group's end, restore the entire peer group
-			FetchFromSource(curr_peer_begin, curr_peer_end);
-		}
-		break;
-	default:
-		break;
-	}
-}
-
-//===--------------------------------------------------------------------===//
 // WindowValueGlobalState
 //===--------------------------------------------------------------------===//
 
@@ -152,10 +55,6 @@ public:
 	const WindowValueGlobalState &gvstate;
 	//! The frame boundaries, used for EXCLUDE
 	SubFrames frames;
-	//! The exclusion filter handler
-	unique_ptr<ExclusionFilter> exclusion_filter;
-	//! The validity mask that combines both the NULLs and exclusion information
-	optional_ptr<ValidityMask> ignore_nulls_exclude;
 
 	//! The state used for reading the collection
 	unique_ptr<WindowCursor> cursor;
@@ -163,18 +62,6 @@ public:
 
 void WindowValueLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
 	WindowExecutorBoundsState::Finalize(gstate, collection);
-
-	// Set up the IGNORE NULLS state
-	auto ignore_nulls = gvstate.ignore_nulls;
-	if (gvstate.executor.wexpr.exclude_clause == WindowExcludeMode::NO_OTHER) {
-		exclusion_filter = nullptr;
-		ignore_nulls_exclude = ignore_nulls;
-	} else {
-		// create the exclusion filter based on ignore_nulls
-		exclusion_filter =
-		    make_uniq<ExclusionFilter>(gvstate.executor.wexpr.exclude_clause, gvstate.payload_count, *ignore_nulls);
-		ignore_nulls_exclude = &exclusion_filter->mask;
-	}
 
 	// Prepare to scan
 	if (!cursor && gvstate.child_idx != DConstants::INVALID_INDEX) {
@@ -392,6 +279,7 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstat
 	auto &cursor = *lvstate.cursor;
 	auto &bounds = lvstate.bounds;
 	auto &frames = lvstate.frames;
+	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		for (const auto &frame : frames) {
@@ -401,8 +289,7 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstat
 
 			//	Same as NTH_VALUE(..., 1)
 			idx_t n = 1;
-			const auto first_idx =
-			    WindowBoundariesState::FindNextStart(*lvstate.ignore_nulls_exclude, frame.start, frame.end, n);
+			const auto first_idx = WindowBoundariesState::FindNextStart(ignore_nulls, frame.start, frame.end, n);
 			if (!n) {
 				cursor.CopyCell(0, first_idx, result, i);
 				return;
@@ -427,6 +314,7 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 	auto &cursor = *lvstate.cursor;
 	auto &bounds = lvstate.bounds;
 	auto &frames = lvstate.frames;
+	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		for (idx_t f = frames.size(); f-- > 0;) {
@@ -436,8 +324,7 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 			}
 
 			idx_t n = 1;
-			const auto last_idx =
-			    WindowBoundariesState::FindPrevStart(*lvstate.ignore_nulls_exclude, frame.start, frame.end, n);
+			const auto last_idx = WindowBoundariesState::FindPrevStart(ignore_nulls, frame.start, frame.end, n);
 			if (!n) {
 				cursor.CopyCell(0, last_idx, result, i);
 				return;
@@ -461,6 +348,7 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 	auto &cursor = *lvstate.cursor;
 	auto &bounds = lvstate.bounds;
 	auto &frames = lvstate.frames;
+	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	D_ASSERT(cursor.chunk.ColumnCount() == 1);
 	WindowInputExpression nth_col(eval_chunk, nth_idx);
@@ -485,8 +373,7 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 				continue;
 			}
 
-			const auto nth_index =
-			    WindowBoundariesState::FindNextStart(*lvstate.ignore_nulls_exclude, frame.start, frame.end, n);
+			const auto nth_index = WindowBoundariesState::FindNextStart(ignore_nulls, frame.start, frame.end, n);
 			if (!n) {
 				cursor.CopyCell(0, nth_index, result, i);
 				return;
