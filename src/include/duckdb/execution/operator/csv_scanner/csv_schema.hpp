@@ -22,6 +22,9 @@ struct CSVColumnInfo {
 
 //! Basic CSV Schema
 struct CSVSchema {
+	CSVSchema() {
+	}
+	CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read);
 	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
 	bool Empty() const;
 	bool SchemasMatch(string &error_message, SnifferResult &sniffer_result, const string &cur_file_path,
@@ -32,5 +35,6 @@ private:
 	vector<CSVColumnInfo> columns;
 	unordered_map<string, idx_t> name_idx_map;
 	string file_path;
+	idx_t rows_read = 0;
 };
 } // namespace duckdb

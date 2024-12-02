@@ -26,6 +26,7 @@
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 
 #include <limits>
+#include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 
 namespace duckdb {
 
@@ -44,41 +45,55 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 }
 
-// We try to figure out the right file to sniff for names and types
-// The right file should have a sufficient size
-// But we shouldn't open all possible files
-unique_ptr<CSVFileHandle> FindFileToSniff(ClientContext &context, const CSVReaderOptions &options,
-                                          MultiFileList &file_list) {
-	D_ASSERT(file_list.Size() > 0);
-	if (file_list.Size() == 1 || !file_list.IsFirstPathGlob()) {
-		// We only have one file or the first file is not a glob, we don't have to do anything.
-		return ReadCSV::OpenCSV(file_list.GetFirstFile(), options, context);
+
+//! Function to do schema discovery over one CSV file or a list/glob of CSV files
+void SchemaDiscovery(ClientContext& context, ReadCSVData& result, CSVReaderOptions& options, vector<LogicalType> &return_types, vector<string> &names, MultiFileList& multi_file_list ) {
+	vector<CSVSchema> schemas;
+	const auto file_paths = multi_file_list.GetPaths();
+
+	// Here what we want to do is to sniff a given number of lines, if we have many files, we might go through them
+	// to reach the number of lines.
+	const idx_t required_number_of_lines = options.sniff_size * options.sample_size_chunks;
+
+	idx_t total_number_of_rows = 0;
+	idx_t current_file = 0;
+
+	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
+	options.file_path = multi_file_list.GetFirstFile();
+	result.buffer_manager =
+		   make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false);
+
+	{
+		CSVSniffer sniffer(options, result.buffer_manager, CSVStateMachineCache::Get(context));
+		auto sniffer_result = sniffer.SniffCSV();
+		idx_t rows_read = sniffer.LinesSniffed() - (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
+		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read);
+		total_number_of_rows += sniffer.LinesSniffed();
 	}
 
-	// But we also will only check up to 10 files
-	const idx_t maximum_number_of_files = std::min(static_cast<idx_t>(10), file_list.Size());
+	// if (names.empty()) {
+	// 	names = sniffer_result.names;
+	// 	return_types = sniffer_result.return_types;
+	// }
+	// result.csv_types = return_types;
+	// result.csv_names = names;
 
-	// auto paths = file_list.GetPaths();
-	auto files = file_list.Files();
-	auto it = files.begin();
-	unique_ptr<CSVFileHandle> max_file_handle = ReadCSV::OpenCSV(it.current_file, options, context);
-	idx_t max_file_idx = 0;
-	for (idx_t i = 1; i < maximum_number_of_files; i++) {
-		// We are looking for a file that is at least 1MB
-		constexpr idx_t min_size = 1000000;
-		if (max_file_handle->FileSize() >= min_size) {
-			file_list.SwapToFirst(i - 1);
-			return max_file_handle;
-		}
-		it.Next();
-		auto cur_file = ReadCSV::OpenCSV(it.current_file, options, context);
-		if (max_file_handle->FileSize() < cur_file->FileSize()) {
-			max_file_handle = std::move(cur_file);
-			max_file_idx = i;
-		}
+
+
+	while (total_number_of_rows < required_number_of_lines  && current_file < multi_file_list.Size()) {
+		current_file++;
+		options.file_path = file_paths[current_file];
+		auto buffer_manager =
+		   make_shared_ptr<CSVBufferManager>(context, options, options.file_path, current_file, false);
+		// TODO: We could cache the sniffer to be reused during scanning.
+		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context));
+		auto sniffer_result = sniffer.SniffCSV();
+		idx_t rows_read = sniffer.LinesSniffed() - (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
+		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read);
+
+		total_number_of_rows += sniffer.LinesSniffed();
 	}
-	file_list.SwapToFirst(max_file_idx);
-	return max_file_handle;
+
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -104,18 +119,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
-		auto file_handle = FindFileToSniff(context, options, *multi_file_list);
-		options.file_path = multi_file_list->GetFirstFile();
-		result->buffer_manager =
-		    make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false, std::move(file_handle));
-		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context));
-		auto sniffer_result = sniffer.SniffCSV();
-		if (names.empty()) {
-			names = sniffer_result.names;
-			return_types = sniffer_result.return_types;
-		}
-		result->csv_types = return_types;
-		result->csv_names = names;
+
 	}
 
 	D_ASSERT(return_types.size() == names.size());

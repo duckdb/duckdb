@@ -43,6 +43,10 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 	}
 }
 
+CSVSchema::CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read_p): rows_read(rows_read_p) {
+	Initialize(names,types,file_path);
+}
+
 void CSVSchema::Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path_p) {
 	if (!columns.empty()) {
 		throw InternalException("CSV Schema is already populated, this should not happen.");
