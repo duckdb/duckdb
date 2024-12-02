@@ -458,46 +458,44 @@ WindowNthValueExecutor::WindowNthValueExecutor(BoundWindowExpression &wexpr, Cli
 
 void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                               DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx) const {
+	auto &gvstate = gstate.Cast<WindowValueGlobalState>();
 	auto &lvstate = lstate.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
+	auto &bounds = lvstate.bounds;
+	auto &frames = lvstate.frames;
+	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	D_ASSERT(cursor.chunk.ColumnCount() == 1);
-	auto window_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_BEGIN]);
-	auto window_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[FRAME_END]);
 	WindowInputExpression nth_col(eval_chunk, nth_idx);
-	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-
-		if (lvstate.exclusion_filter) {
-			lvstate.exclusion_filter->ApplyExclusion(lvstate.bounds, row_idx, i);
-		}
-
-		if (window_begin[i] >= window_end[i]) {
-			FlatVector::SetNull(result, i, true);
-			continue;
-		}
+	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
 		// returns NULL if there is no such row.
 		if (nth_col.CellIsNull(i)) {
 			FlatVector::SetNull(result, i, true);
-		} else {
-			auto n_param = nth_col.GetCell<int64_t>(i);
-			if (n_param < 1) {
-				FlatVector::SetNull(result, i, true);
-			} else {
-				auto n = idx_t(n_param);
-				const auto nth_index = WindowBoundariesState::FindNextStart(*lvstate.ignore_nulls_exclude,
-				                                                            window_begin[i], window_end[i], n);
-				if (!n) {
-					cursor.CopyCell(0, nth_index, result, i);
-				} else {
-					FlatVector::SetNull(result, i, true);
-				}
-			}
+			return;
+		}
+		auto n_param = nth_col.GetCell<int64_t>(i);
+		if (n_param < 1) {
+			FlatVector::SetNull(result, i, true);
+			return;
 		}
 
-		if (lvstate.exclusion_filter) {
-			lvstate.exclusion_filter->ResetMask(row_idx, i);
+		//	Decrement as we go along.
+		auto n = idx_t(n_param);
+
+		for (const auto &frame : frames) {
+			if (frame.start >= frame.end) {
+				continue;
+			}
+
+			const auto nth_index =
+			    WindowBoundariesState::FindNextStart(*lvstate.ignore_nulls_exclude, frame.start, frame.end, n);
+			if (!n) {
+				cursor.CopyCell(0, nth_index, result, i);
+				return;
+			}
 		}
-	}
+		FlatVector::SetNull(result, i, true);
+	});
 }
 
 } // namespace duckdb
