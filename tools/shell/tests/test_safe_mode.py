@@ -18,6 +18,18 @@ def test_safe_mode_command(shell, command):
     result.check_stderr('cannot be used in -safe mode')
 
 
+@pytest.mark.parametrize("param", [(".sh ls", 'cannot be used in -safe mode'), ("INSTALL extension", "Permission Error")])
+def test_safe_mode_dot_command(shell, param):
+    command = param[0]
+    expected_error = param[1]
+    test = (
+        ShellTest(shell)
+        .statement('.safe_mode')
+        .statement(command)
+    )
+    result = test.run()
+    result.check_stderr(expected_error)
+
 def test_safe_mode_database_basic(shell, random_filepath):
     test = (
         ShellTest(shell, [random_filepath, '-safe'])

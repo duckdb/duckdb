@@ -239,11 +239,11 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 #if STANDARD_VECTOR_SIZE < 128
 	// fallback for tiny vector sizes
 	// the bitwise ops we use below don't work if the vector size is too small
-	ValidityMask source_mask(input_data);
+	ValidityMask source_mask(input_data, segment.count);
 	for (idx_t i = 0; i < scan_count; i++) {
 		if (!source_mask.RowIsValid(start + i)) {
 			if (result_mask.AllValid()) {
-				result_mask.Initialize(result_mask.TargetCount());
+				result_mask.Initialize();
 			}
 			result_mask.SetInvalid(result_offset + i);
 		}

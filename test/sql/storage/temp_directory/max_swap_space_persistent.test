@@ -21,11 +21,11 @@ SET temp_directory='';
 statement ok
 PRAGMA memory_limit='2MB';
 
-# If the 'temp_directory' is not set, then this defaults to zero.
+# If the 'temp_directory' is not set, then this defaults to 90% of available disk space.
 query I
 SELECT current_setting('max_temp_directory_size');
 ----
-0 bytes
+90% of available disk space
 
 # Set the maximum size.
 statement ok
@@ -43,7 +43,7 @@ RESET max_temp_directory_size;
 query I
 SELECT current_setting('max_temp_directory_size');
 ----
-0 bytes
+90% of available disk space
 
 # The maximum size is by default set to the available disk space, if the temp_directory exists.
 statement ok
@@ -53,7 +53,7 @@ SET temp_directory = '__TEST_DIR__';
 query I
 SELECT current_setting('max_temp_directory_size');
 ----
-0 bytes
+90% of available disk space
 
 # If we set 'max_temp_directory_size', it cannot be overwritten.
 statement ok
@@ -102,7 +102,7 @@ SET temp_directory = '__TEST_DIR__/does_not_exist';
 query I
 SELECT current_setting('max_temp_directory_size');
 ----
-0 bytes
+90% of available disk space
 
 statement ok
 CREATE TABLE t2 AS SELECT * FROM range(1000000);
