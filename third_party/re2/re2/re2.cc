@@ -545,6 +545,21 @@ bool RE2::Extract(const StringPiece& text,
   return re.Rewrite(out, rewrite, vec, nvec);
 }
 
+bool RE2::ExtractGroup(const StringPiece& text, const RE2& re, size_t capture_group, StringPiece &result) {
+	StringPiece vec[kVecSize];
+	if (capture_group > 1 + re.NumberOfCapturingGroups()) {
+		return false;
+	}
+	if (capture_group >= kVecSize) {
+		return false;
+	}
+	if (!re.Match(text, 0, text.size(), UNANCHORED, vec, static_cast<int>(capture_group + 1))) {
+		return false;
+	}
+	result = vec[capture_group];
+	return true;
+}
+
 std::string RE2::QuoteMeta(const StringPiece& unquoted) {
   std::string result;
   result.reserve(unquoted.size() << 1);
