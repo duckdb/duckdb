@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class LogicalOperator;
+class LogicalTopN;
 class Optimizer;
 
 class TopN {
