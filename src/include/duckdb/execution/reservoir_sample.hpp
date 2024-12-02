@@ -107,8 +107,7 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used when
 	//! querying from a sample defined in a query and not a table sample.
-	virtual unique_ptr<DataChunk> GetChunkAndDestroy() = 0;
-	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0) = 0;
+	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0, bool destroy = false) = 0;
 	virtual void Destroy();
 
 	virtual void Serialize(Serializer &serializer) const;
@@ -256,11 +255,11 @@ public:
 
 	//! Update the sample by pushing new sample rows to the end of the sample_chunk.
 	//! The new sample rows are the tuples rows resulting from applying sel to other
-	void UpdateSampleAppend(DataChunk &other, SelectionVector &other_sel, idx_t append_count);
+	void UpdateSampleAppend(DataChunk &this_, DataChunk &other, SelectionVector &other_sel, idx_t append_count) const;
 
 	//! Actually appends the new tuples. TODO: rename function to AppendToSample
-	void UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &sel, idx_t source_count,
-	                           idx_t source_offset, idx_t target_offset);
+	// void UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &other_sel, idx_t source_count,
+	//                            idx_t source_offset, idx_t target_offset);
 
 	idx_t GetTuplesSeen() const;
 	idx_t NumSamplesCollected() const;
@@ -272,8 +271,8 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunkAndDestroy() override;
-	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
+	// unique_ptr<DataChunk> GetChunkAndDestroy() override;
+	unique_ptr<DataChunk> GetChunk(idx_t offset, bool destroy = false) override;
 	void Destroy() override;
 	void Finalize() override;
 
@@ -301,11 +300,12 @@ private:
 	// truncate if the table is still <=204800 values. The problem is, in our weights, we store indexes into
 	// the selection vector. If throw away values at selection vector index i = 5 , we need to update all indexes
 	// i > 5. Otherwise we will have indexes in the weights that are greater than the length of our sample.
-	void NormalizeWeights(BaseReservoirSampling &base_sampling);
+	void NormalizeWeights();
 
 	SelectionVectorHelper GetReplacementIndexesSlow(const idx_t sample_chunk_offset, const idx_t chunk_length);
 	SelectionVectorHelper GetReplacementIndexesFast(const idx_t sample_chunk_offset, const idx_t chunk_length);
 	void SimpleMerge(ReservoirSample &other);
+	void WeightedMerge(ReservoirSample &other_ingest);
 
 	// Helper methods for Shrink().
 	// Shrink has different logic depending on if the IngestionSample is still in
@@ -341,9 +341,9 @@ public:
 
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
-	unique_ptr<DataChunk> GetChunkAndDestroy() override;
+	// unique_ptr<DataChunk> GetChunkAndDestroy() override;
 	//! Fetches a chunk from the sample. This method is not destructive
-	unique_ptr<DataChunk> GetChunk(idx_t offset = 0) override;
+	unique_ptr<DataChunk> GetChunk(idx_t offset, bool destroy = false) override;
 	void Finalize() override;
 	// void FromReservoirSample(unique_ptr<ReservoirSample> other);
 

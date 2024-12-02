@@ -124,6 +124,7 @@ void BaseReservoirSampling::ReplaceElement(double with_weight) {
 void BaseReservoirSampling::UpdateMinWeightThreshold() {
 	if (!reservoir_weights.empty()) {
 		min_weight_threshold = -reservoir_weights.top().first;
+		min_weighted_entry_index = reservoir_weights.top().second;
 		return;
 	}
 	min_weight_threshold = 1;

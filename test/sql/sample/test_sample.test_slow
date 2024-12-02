@@ -222,5 +222,5 @@ select i from integers using sample (1 rows) repeatable (0);
 query I
 select i from integers using sample reservoir(1%) repeatable (0) order by i;
 ----
-37
-194
+80
+153
