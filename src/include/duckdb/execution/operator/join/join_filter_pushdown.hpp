@@ -46,7 +46,9 @@ struct JoinFilterPushdownFilter {
 };
 
 struct PushdownFilterTarget {
-	PushdownFilterTarget(LogicalGet &get, vector<JoinFilterPushdownColumn> columns_p) : get(get), columns(std::move(columns_p)) {}
+	PushdownFilterTarget(LogicalGet &get, vector<JoinFilterPushdownColumn> columns_p)
+	    : get(get), columns(std::move(columns_p)) {
+	}
 
 	LogicalGet &get;
 	vector<JoinFilterPushdownColumn> columns;

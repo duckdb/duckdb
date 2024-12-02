@@ -30,8 +30,9 @@ bool PushdownJoinFilterExpression(Expression &expr, JoinFilterPushdownColumn &fi
 	return true;
 }
 
-void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
-                                  vector<PushdownFilterTarget> &targets) {
+void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
+                                                           vector<JoinFilterPushdownColumn> columns,
+                                                           vector<PushdownFilterTarget> &targets) {
 	auto &probe_child = op;
 	switch (probe_child.type) {
 	case LogicalOperatorType::LOGICAL_LIMIT:
@@ -199,7 +200,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	// recurse the query tree to find the LogicalGets in which we can push the filter info
 	vector<PushdownFilterTarget> pushdown_filter_targets;
 	GetPushdownFilterTargets(*join.children[0], pushdown_columns, pushdown_filter_targets);
-	for(auto &target : pushdown_filter_targets) {
+	for (auto &target : pushdown_filter_targets) {
 		auto &get = target.get;
 		// pushdown info can be applied to this LogicalGet - push the dynamic table filter set
 		if (!get.dynamic_filters) {

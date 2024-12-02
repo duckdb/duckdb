@@ -8,9 +8,12 @@
 namespace duckdb {
 
 PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
-                           idx_t estimated_cardinality)
+                           shared_ptr<DynamicFilterData> dynamic_filter_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality), orders(std::move(orders)),
-      limit(limit), offset(offset) {
+      limit(limit), offset(offset), dynamic_filter(std::move(dynamic_filter_p)) {
+}
+
+PhysicalTopN::~PhysicalTopN() {
 }
 
 //===--------------------------------------------------------------------===//

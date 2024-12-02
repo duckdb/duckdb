@@ -23,7 +23,7 @@ public:
 public:
 	void VisitOperator(LogicalOperator &op) override;
 	static void GetPushdownFilterTargets(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
-					  vector<PushdownFilterTarget> &targets);
+	                                     vector<PushdownFilterTarget> &targets);
 
 private:
 	void GenerateJoinFilters(LogicalComparisonJoin &join);
