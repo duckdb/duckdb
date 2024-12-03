@@ -576,7 +576,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr),
 			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now, result_offset);
 			if (result_offset == 0) {
-				result.Slice(*dictionary, dictionary_selection_vector, read_now);
+				result.Dictionary(*dictionary, dictionary_size, dictionary_selection_vector, read_now);
 				D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 			} else {
 				D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
