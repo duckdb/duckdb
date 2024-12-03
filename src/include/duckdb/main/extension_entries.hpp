@@ -1023,7 +1023,7 @@ static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
     {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"}, {"s3a://", "httpfs"},  {"s3n://", "httpfs"},
     {"gcs://", "httpfs"},  {"gs://", "httpfs"},    {"r2://", "httpfs"}, {"azure://", "azure"}, {"az://", "azure"},
-    {"abfss://", "azure"}, {"hf://", "httpfs"}, {"oss://", "httpfs"}}; // END_OF_EXTENSION_FILE_PREFIXES
+    {"abfss://", "azure"}, {"hf://", "httpfs"}}; // END_OF_EXTENSION_FILE_PREFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -1044,8 +1044,7 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
     {"s3", "httpfs"},           {"r2", "httpfs"},
     {"gcs", "httpfs"},          {"azure", "azure"},
     {"huggingface", "httpfs"},  {"bearer", "httpfs"},
-    {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"},
-    {"oss", "httpfs"}}; // EXTENSION_SECRET_TYPES
+    {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"}}; // EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -1053,11 +1052,9 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"s3/config", "httpfs"},
     {"gcs/config", "httpfs"},
     {"r2/config", "httpfs"},
-    {"oss/config", "httpfs"},
     {"s3/credential_chain", "aws"},
     {"gcs/credential_chain", "aws"},
     {"r2/credential_chain", "aws"},
-    {"oss/credential_chain", "aws"},
     {"azure/access_token", "azure"},
     {"azure/config", "azure"},
     {"azure/credential_chain", "azure"},
