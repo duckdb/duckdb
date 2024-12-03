@@ -48,7 +48,7 @@ struct ProgressData {
 		total = 1.0;
 	}
 	bool IsValid() const {
-		return (!invalid) || (done < 0.0) || (total < done);
+		return (!invalid) || (done < 0.0) || (total < done) || (total <= 0.0);
 	}
 };
 
