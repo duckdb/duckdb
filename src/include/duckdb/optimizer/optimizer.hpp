@@ -28,6 +28,7 @@ public:
 	ClientContext &GetContext();
 	//! Whether the specific optimizer is disabled
 	bool OptimizerDisabled(OptimizerType type);
+	static bool OptimizerDisabled(ClientContext &context, OptimizerType type);
 
 public:
 	ClientContext &context;
