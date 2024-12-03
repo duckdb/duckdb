@@ -1,21 +1,6 @@
 name: LinuxRelease
 on:
-  workflow_call:
-    inputs:
-      override_git_describe:
-        type: string
-      git_ref:
-        type: string
-      skip_tests:
-        type: string
   workflow_dispatch:
-    inputs:
-      override_git_describe:
-        type: string
-      git_ref:
-        type: string
-      skip_tests:
-        type: string
   repository_dispatch:
   push:
     branches:
