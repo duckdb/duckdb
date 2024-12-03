@@ -38,260 +38,149 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
- linux-release-64:
-    # Builds binaries for linux_amd64_gcc4
-    name: Linux (x64)
+  linux-release-64:
+     # Builds binaries for linux_amd64_gcc4
+     name: Linux (x64)
+     runs-on: ubuntu-latest
+     container: quay.io/pypa/manylinux_2_28_x86_64
+     env:
+       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+       ENABLE_EXTENSION_AUTOLOADING: 1
+       ENABLE_EXTENSION_AUTOINSTALL: 1
+       GEN: ninja
+       BUILD_BENCHMARK: 1
+       BUILD_ODBC: 1
+       DEBUG_STACKTRACE: 1
+       FORCE_WARN_UNUSED: 1
+       DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
+       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+       ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: 'node16'
+       ACTIONS_RUNNER_FORCED_INTERNAL_NODE_VERSION: 'node16'
+
+     steps:
+     - uses: actions/checkout@v2
+       with:
+         fetch-depth: 0
+
+     - uses: ./.github/actions/manylinux_2014_setup
+       with:
+         ninja-build: 1
+         ccache: 1
+         odbc: 1
+         python_alias: 1
+         vcpkg: 1
+         librdkafka: 1
+
+     - name: Install pytest
+       run: |
+         python3 -m pip install pytest
+
+     - name: Build
+       shell: bash
+       run:   VCPKG_TOOLCHAIN_PATH='${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake' make
+
+     - name: Print platform
+       shell: bash
+       run: ./build/release/duckdb -c "PRAGMA platform;"
+
+     - name: Deploy
+       shell: bash
+       run: |
+         python3 scripts/amalgamation.py
+         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
+         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
+         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
+         python3 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
+
+     - uses: actions/upload-artifact@v3
+       with:
+         name: duckdb-binaries-linux
+         path: |
+           libduckdb-linux-amd64.zip
+           duckdb_cli-linux-amd64.zip
+           duckdb_odbc-linux-amd64.zip
+
+  linux-release-aarch64:
+    # Builds binaries for linux_arm64
+    name: Linux (aarch64)
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
+    needs: linux-release-64
+    container:
+        image: ubuntu:18.04
+        volumes:
+          - /node20217:/node20217:rw,rshared
+          - /node20217:/__e/node20:ro,rshared
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
       GEN: ninja
       BUILD_BENCHMARK: 1
-      BUILD_ODBC: 1
-      DEBUG_STACKTRACE: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
-      DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
+      BUILD_ODBC: 1
+      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
+      DUCKDB_PLATFORM: linux_arm64
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: 'node16'
-      ACTIONS_RUNNER_FORCED_INTERNAL_NODE_VERSION: 'node16'
 
     steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      - name: install old node
+        shell: bash
+        run: |
+          apt-get update && apt-get install xz-utils
+          ls /node20217
+          echo "done with ls"
+          ldd --version
+          apt update && apt -y install curl
+          curl --output node-v20.9.0-linux-x64-glibc-217.tar.xz https://unofficial-builds.nodejs.org/download/release/v20.9.0/node-v20.9.0-linux-x64-glibc-217.tar.xz
+          tar -xJf ./node-v20.9.0-linux-x64-glibc-217.tar.xz --strip-components 1 -C /node20217
+          ls /node20217
+          ldd /node20217/bin/node
+   
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - uses: ./.github/actions/manylinux_2014_setup
-      with:
-        ninja-build: 1
-        ccache: 1
-        odbc: 1
-        python_alias: 1
-        vcpkg: 1
-        librdkafka: 1
+      - uses: ./.github/actions/ubuntu_18_setup
+        with:
+         ccache: 1
+         aarch64_cross_compile: 1
+         vcpkg: 1
 
-    - name: Install pytest
-      run: |
-        python3 -m pip install pytest
+      - name: Install unixODBC
+        shell: bash
+        run: | # we need an x86 odbc_config tool to run cmake. fun.
+          apt-get remove -y unixodbc unixodbc-dev
+          CC=gcc ./scripts/install_unixodbc.sh
+          cp build/unixodbc/build/bin/odbc_config .
+          CC=aarch64-linux-gnu-gcc ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
+          cp odbc_config build/unixodbc/build/bin/odbc_config
 
-    - name: Build
-      shell: bash
-      run:   VCPKG_TOOLCHAIN_PATH='${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake' make
+      - name: Build
+        shell: bash
+        env:
+          CMAKE_TOOLCHAIN_FILE: ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
+          VCPKG_TOOLCHAIN_PATH: ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
+          VCPKG_HOST_TRIPLET: x64-linux
+          VCPKG_TARGET_TRIPLET: arm64-linux
+        run: |
+          $VCPKG_ROOT/vcpkg install librdkafka:arm64-linux
+          CMAKE_SYSTEM_ARCH=aarch64 CPACK_DEBIAN_PACKAGE_ARCHITECTURE=arm64 CMAKE_SYSTEM_NAME=Linux CMAKE_SYSTEM_PROCESSOR=arm64 CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
 
-    - name: Print platform
-      shell: bash
-      run: ./build/release/duckdb -c "PRAGMA platform;"
+      - name: Deploy
+        shell: bash
+        run: |
+          python3 scripts/amalgamation.py
+          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
+          zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
+          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+          python3 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
-    - name: Deploy
-      shell: bash
-      run: |
-        python3 scripts/amalgamation.py
-        zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
-        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
-        zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
-        python3 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: duckdb-binaries-linux
-        path: |
-          libduckdb-linux-amd64.zip
-          duckdb_cli-linux-amd64.zip
-          duckdb_odbc-linux-amd64.zip
-
- linux-release-aarch64:
-   # Builds binaries for linux_arm64
-   name: Linux (aarch64)
-   runs-on: ubuntu-latest
-   needs: linux-release-64
-   container: ubuntu:18.04
-   env:
-     EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
-     ENABLE_EXTENSION_AUTOLOADING: 1
-     ENABLE_EXTENSION_AUTOINSTALL: 1
-     GEN: ninja
-     BUILD_BENCHMARK: 1
-     TREAT_WARNINGS_AS_ERRORS: 1
-     FORCE_WARN_UNUSED: 1
-     BUILD_ODBC: 1
-     ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
-     DUCKDB_PLATFORM: linux_arm64
-     ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-     ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: 'node16'
-
-   steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - uses: ./.github/actions/ubuntu_18_setup
-       with:
-        ccache: 1
-        aarch64_cross_compile: 1
-        vcpkg: 1
-
-     - name: Install unixODBC
-       shell: bash
-       run: | # we need an x86 odbc_config tool to run cmake. fun.
-         apt-get remove -y unixodbc unixodbc-dev
-         CC=gcc ./scripts/install_unixodbc.sh
-         cp build/unixodbc/build/bin/odbc_config .
-         CC=aarch64-linux-gnu-gcc ./scripts/install_unixodbc.sh --host aarch64-linux-gnu
-         cp odbc_config build/unixodbc/build/bin/odbc_config
-
-     - name: Build
-       shell: bash
-       env:
-         CMAKE_TOOLCHAIN_FILE: ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
-         VCPKG_TOOLCHAIN_PATH: ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
-         VCPKG_HOST_TRIPLET: x64-linux
-         VCPKG_TARGET_TRIPLET: arm64-linux
-       run: |
-         $VCPKG_ROOT/vcpkg install librdkafka:arm64-linux
-         CMAKE_SYSTEM_ARCH=aarch64 CPACK_DEBIAN_PACKAGE_ARCHITECTURE=arm64 CMAKE_SYSTEM_NAME=Linux CMAKE_SYSTEM_PROCESSOR=arm64 CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
-
-     - name: Deploy
-       shell: bash
-       run: |
-         python3 scripts/amalgamation.py
-         zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
-         zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
-         zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-         python3 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
-
-     - uses: actions/upload-artifact@v3
-       with:
-         name: duckdb-binaries-linux-aarch64
-         path: |
-           libduckdb-linux-aarch64.zip
-           duckdb_odbc-linux-aarch64.zip
-           duckdb_cli-linux-aarch64.zip
-
- # Linux extensions for builds that use C++11 ABI, currently these are all linux builds based on ubuntu >= 18 (e.g. NodeJS)
- # note that the linux-release-64 is based on the manylinux-based extensions, which are built in .github/workflows/Python.yml
-# linux-extensions-64:
-#    # Builds extensions for linux_amd64
-#    name: Linux Extensions (x64)
-#    runs-on: ubuntu-latest
-#    container: ubuntu:18.04
-#    needs: linux-release-64
-#
-#    steps:
-#    - uses: actions/checkout@v3
-#      with:
-#        fetch-depth: 0
-#
-#    - uses: ./.github/actions/ubuntu_18_setup
-#      with:
-#        vcpkg: 1
-#        openssl: 1
-#        ccache: 1
-#
-#    - uses: ./.github/actions/build_extensions
-#      with:
-#        vcpkg_target_triplet: x64-linux
-#        post_install: rm build/release/src/libduckdb*
-#        deploy_as: linux_amd64
-#        treat_warn_as_error: 0
-#        run_autoload_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
-#        run_tests: ${{ startsWith(github.ref, 'refs/tags/v') && 0 || 1 }}
-#        s3_id: ${{ secrets.S3_ID }}
-#        s3_key: ${{ secrets.S3_KEY }}
-#        signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-#        ninja: 1
-#
-#    - uses: actions/upload-artifact@v3
-#      with:
-#        name: linux-extensions-64
-#        path: |
-#          build/release/extension/*/*.duckdb_extension
-
-# linux-extensions-64-aarch64:
-#    # Builds extensions for linux_arm64
-#    name: Linux Extensions (aarch64)
-#    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
-#    runs-on: ubuntu-latest
-#    container: ubuntu:18.04
-#    needs: linux-release-64
-#
-#    steps:
-#      - uses: actions/checkout@v3
-#        with:
-#          fetch-depth: 0
-#
-#      - uses: ./.github/actions/ubuntu_18_setup
-#        with:
-#          vcpkg: 1
-#          openssl: 1
-#          aarch64_cross_compile: 1
-#          ccache: 1
-#
-#      - uses: ./.github/actions/build_extensions
-#        with:
-#          vcpkg_target_triplet: arm64-linux
-#          deploy_as: linux_arm64
-#          treat_warn_as_error: 0
-#          s3_id: ${{ secrets.S3_ID }}
-#          s3_key: ${{ secrets.S3_KEY }}
-#          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-#          aarch64_cross_compile: 1
-#          run_tests: 0 # Cannot run tests here due to cross-compiling
-#          run_autoload_tests: 0
-#          ninja: 1
-#
-#      - uses: actions/upload-artifact@v3
-#        with:
-#          name: linux-extensions-64-aarch64
-#          path: |
-#            build/release/extension/*/*.duckdb_extension
-
-# check-load-install-extensions:
-#    name: Checks extension entries
-#    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-#    runs-on: ubuntu-20.04
-#    needs: linux-extensions-64
-#    env:
-#      CC: gcc-10
-#      CXX: g++-10
-#      GEN: ninja
-#
-#    steps:
-#    - uses: actions/checkout@v3
-#      with:
-#        fetch-depth: 0
-#
-#    - uses: actions/setup-python@v4
-#      with:
-#        python-version: '3.9'
-#
-#    - name: Install
-#      shell: bash
-#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-#
-#    - name: Setup Ccache
-#      uses: hendrikmuhs/ccache-action@main
-#      with:
-#        key: ${{ github.job }}
-#        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-#
-#    - name: Build
-#      shell: bash
-#      env:
-#        DISABLE_BUILTIN_EXTENSIONS: 1
-#      run: |
-#        make
-#
-#    - uses: actions/download-artifact@v3
-#      with:
-#        name: linux-extensions-64
-#        path: /tmp
-#
-#    - name: Check if extension_entries.hpp is up to date
-#      shell: bash
-#      env:
-#        EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
-#      run: |
-#        make extension_configuration
-#        python scripts/generate_extensions_function.py --validate
+      - uses: actions/upload-artifact@v3
+        with:
+          name: duckdb-binaries-linux-aarch64
+          path: |
+            libduckdb-linux-aarch64.zip
+            duckdb_odbc-linux-aarch64.zip
+            duckdb_cli-linux-aarch64.zip
