@@ -52,6 +52,8 @@ struct ClientConfig {
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled
 	bool print_progress_bar = true;
+	//! If the print of debug info for the progress bar is enabled
+	bool debug_progress_bar = false;
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
 

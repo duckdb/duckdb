@@ -105,6 +105,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(EnableProfilingSetting),
     DUCKDB_LOCAL(EnableProgressBarSetting),
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),
+    DUCKDB_LOCAL(EnableProgressBarDebugSetting),
     DUCKDB_GLOBAL(EnableViewDependenciesSetting),
     DUCKDB_LOCAL(ErrorsAsJSONSetting),
     DUCKDB_LOCAL(ExplainOutputSetting),

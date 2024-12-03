@@ -717,6 +717,25 @@ Value EnableProgressBarPrintSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Progress Bar Debug
+//===----------------------------------------------------------------------===//
+void EnableProgressBarDebugSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	config.debug_progress_bar = input.GetValue<bool>();
+}
+
+void EnableProgressBarDebugSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	config.debug_progress_bar = ClientConfig().debug_progress_bar;
+}
+
+Value EnableProgressBarDebugSetting::GetSetting(const ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).debug_progress_bar);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 bool EnableProgressBarSetting::OnLocalSet(ClientContext &context, const Value &input) {
