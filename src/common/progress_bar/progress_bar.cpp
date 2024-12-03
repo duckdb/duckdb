@@ -130,9 +130,6 @@ void ProgressBar::Update(bool final) {
 		return;
 	}
 
-	if (new_percentage > query_progress.percentage) {
-		query_progress.percentage = new_percentage;
-	}
 
 	double elapsed_time = -1.0;
 
@@ -140,7 +137,13 @@ void ProgressBar::Update(bool final) {
 		if (elapsed_time < 0.0) {
 			elapsed_time = profiler.Elapsed();
 		}
-		squared_distance_accumulator->AddSample(new_percentage / 100.0, elapsed_time);
+		if (!final) {
+			squared_distance_accumulator->AddSample(new_percentage / 100.0, elapsed_time);
+		}
+	}
+
+	if (new_percentage > query_progress.percentage) {
+		query_progress.percentage = new_percentage;
 	}
 	if (ShouldPrint(final, elapsed_time)) {
 #ifndef DUCKDB_DISABLE_PRINT
