@@ -14,7 +14,32 @@
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/progress_bar/progress_bar_display.hpp"
 
+#include <cmath>
+
 namespace duckdb {
+
+struct SquaredDistanceAccumulator {
+	void AddSample(double x, double t) {
+		stats[0] += x * x;
+		stats[1] += x * t;
+		stats[2] += t * t;
+		stats[3] += 1.0;
+	}
+	double GetResult(double normalize_T = 1.0) {
+		D_ASSERT(stats[3] >= 1.0);
+		return std::sqrt((stats[0] + (stats[2] / normalize_T - 2.0 * stats[1]) / normalize_T) / stats[3]);
+	}
+	double stats[4] = {0.0, 0.0, 0.0, 0.0};
+	// Accumulated statistics are:
+	//  stats[0] => sum(x^2)
+	//  stats[1] => sum(x*2)
+	//  stats[2] => sum(t^2)
+	//  stats[3] => number of samples
+	// Result we want to compute is sqrt(sum((x-t/T)^2)/N), and expanding (x-t/T)^2 you get
+	//    sqrt(sum(x^2 - 2*x*t/T + t^2/T^2) / N) = sqrt( (sum(x^2) - 2.0*sum(x*t)/T + sum(t^2)/T^2) / N )
+	// Trick here is doing normalization by (/T) on the accumulated sums, that allows to not known total time until the
+	// very end
+};
 
 struct ClientConfig;
 typedef unique_ptr<ProgressBarDisplay> (*progress_bar_display_create_func_t)();
@@ -54,8 +79,9 @@ public:
 	QueryProgress GetDetailedQueryProgress();
 	void PrintProgress(int percentage);
 	void FinishProgressBarPrint();
-	bool ShouldPrint(bool final) const;
+	bool ShouldPrint(bool final, double &elapsed_time) const;
 	bool PrintEnabled() const;
+	void IntializeStatCollection();
 
 private:
 	//! The executor
@@ -72,5 +98,7 @@ private:
 	bool supported = true;
 	//! Whether the bar has already finished
 	bool finished = false;
+	//! Optional struct to hold accumulated data to compute squared distance
+	unique_ptr<SquaredDistanceAccumulator> squared_distance_accumulator;
 };
 } // namespace duckdb

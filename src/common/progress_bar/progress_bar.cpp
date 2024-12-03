@@ -68,6 +68,11 @@ QueryProgress ProgressBar::GetDetailedQueryProgress() {
 	return query_progress;
 }
 
+void ProgressBar::IntializeStatCollection() {
+	D_ASSERT(!squared_distance_accumulator);
+	squared_distance_accumulator = make_uniq<SquaredDistanceAccumulator>();
+}
+
 void ProgressBar::Start() {
 	profiler.Start();
 	query_progress.Initialize();
@@ -78,7 +83,7 @@ bool ProgressBar::PrintEnabled() const {
 	return display != nullptr;
 }
 
-bool ProgressBar::ShouldPrint(bool final) const {
+bool ProgressBar::ShouldPrint(bool final, double &elapsed_time) const {
 	if (!PrintEnabled()) {
 		// Don't print progress at all
 		return false;
@@ -87,13 +92,12 @@ bool ProgressBar::ShouldPrint(bool final) const {
 		return false;
 	}
 
-	double elapsed_time = -1.0;
 	if (elapsed_time < 0.0) {
 		elapsed_time = profiler.Elapsed();
 	}
 
 	auto sufficient_time_elapsed = elapsed_time > static_cast<double>(show_progress_after) / 1000.0;
-	if (!sufficient_time_elapsed) {
+	if (!sufficient_time_elapsed && !squared_distance_accumulator) {
 		// Don't print yet
 		return false;
 	}
@@ -129,9 +133,24 @@ void ProgressBar::Update(bool final) {
 	if (new_percentage > query_progress.percentage) {
 		query_progress.percentage = new_percentage;
 	}
-	if (ShouldPrint(final)) {
+
+	double elapsed_time = -1.0;
+
+	if (squared_distance_accumulator) {
+		if (elapsed_time < 0.0) {
+			elapsed_time = profiler.Elapsed();
+		}
+		squared_distance_accumulator->AddSample(new_percentage / 100.0, elapsed_time);
+	}
+	if (ShouldPrint(final, elapsed_time)) {
 #ifndef DUCKDB_DISABLE_PRINT
 		if (final) {
+			D_ASSERT(display);
+			display->AddInfo("query_time", elapsed_time);
+			if (squared_distance_accumulator) {
+				const double mean_squared_diff = squared_distance_accumulator->GetResult(elapsed_time);
+				display->AddInfo("squared_progress_error", mean_squared_diff);
+			}
 			FinishProgressBarPrint();
 		} else {
 			PrintProgress(LossyNumericCast<int>(query_progress.percentage.load()));
