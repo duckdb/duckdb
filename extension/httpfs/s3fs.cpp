@@ -154,7 +154,7 @@ S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerI
 		return result;
 	}
 
-	const char *secret_types[] = {"s3", "r2", "gcs"};
+	const char *secret_types[] = {"s3", "r2", "gcs", "oss"};
 	idx_t secret_types_len = sizeof(secret_types) / sizeof(const char *);
 
 	KeyValueSecretReader secret_reader(*opener, info, secret_types, secret_types_len);
@@ -169,7 +169,7 @@ S3AuthParams S3AuthParams::ReadFrom(optional_ptr<FileOpener> opener, FileOpenerI
 	secret_reader.TryGetSecretKeyOrSetting("s3_url_compatibility_mode", "s3_url_compatibility_mode",
 	                                       result.s3_url_compatibility_mode);
 
-	// Endpoint and url style are slightly more complex and require special handling for gcs and r2
+	// Endpoint and url style are slightly more complex and require special handling for gcs, r2, and oss
 	auto endpoint_result = secret_reader.TryGetSecretKeyOrSetting("endpoint", "s3_endpoint", result.endpoint);
 	auto url_style_result = secret_reader.TryGetSecretKeyOrSetting("url_style", "s3_url_style", result.url_style);
 
@@ -526,13 +526,13 @@ void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &
 }
 
 static string GetPrefix(string url) {
-	const string prefixes[] = {"s3://", "s3a://", "s3n://", "gcs://", "gs://", "r2://"};
+	const string prefixes[] = {"s3://", "s3a://", "s3n://", "gcs://", "gs://", "r2://", "oss://"};
 	for (auto &prefix : prefixes) {
 		if (StringUtil::StartsWith(url, prefix)) {
 			return prefix;
 		}
 	}
-	throw IOException("URL needs to start with s3://, gcs:// or r2://");
+	throw IOException("URL needs to start with s3://, gcs://, r2://, or oss://");
 	return string();
 }
 
@@ -809,7 +809,7 @@ void S3FileHandle::Initialize(optional_ptr<FileOpener> opener) {
 bool S3FileSystem::CanHandleFile(const string &fpath) {
 
 	return fpath.rfind("s3://", 0) * fpath.rfind("s3a://", 0) * fpath.rfind("s3n://", 0) * fpath.rfind("gcs://", 0) *
-	           fpath.rfind("gs://", 0) * fpath.rfind("r2://", 0) ==
+	           fpath.rfind("gs://", 0) * fpath.rfind("r2://", 0) * fpath.rfind("oss://", 0) ==
 	       0;
 }
 

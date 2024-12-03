@@ -24,7 +24,7 @@ protected:
 
 	//! Helper function to set named params of secret function
 	static void SetBaseNamedParams(CreateSecretFunction &function, string &type);
-	//! Helper function to create secret types s3/r2/gcs
+	//! Helper function to create secret types s3/r2/gcs/oss
 	static void RegisterCreateSecretFunction(DatabaseInstance &instance, string type);
 };
 
