@@ -311,12 +311,25 @@ void RoaringCompressState::InitializeContainer() {
 	metadata_collection.AddMetadata(metadata);
 }
 
+//! FIXME: the real 'CreateTransientSegment' uses ValidityInitSegment which does unnecessary work (memset the whole
+//! block)
+unique_ptr<ColumnSegment> CreateTransientSegment(CompressionFunction &function, DatabaseInstance &db,
+                                                 const LogicalType &type, const idx_t start, const idx_t segment_size,
+                                                 const idx_t block_size) {
+	// Allocate a buffer for the uncompressed segment.
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_size);
+
+	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, function,
+	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
+}
+
 void RoaringCompressState::CreateEmptySegment(idx_t row_start) {
 	auto &db = checkpointer.GetDatabase();
 	auto &type = checkpointer.GetType();
 
 	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+	    CreateTransientSegment(function, db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 	compressed_segment->function = function;
 	current_segment = std::move(compressed_segment);
 
