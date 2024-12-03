@@ -17,6 +17,8 @@ namespace duckdb {
 enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
 //! Whether or not the input order influences the result of the aggregate
 enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DEPENDENT = 2 };
+//! Whether or not the input distinctness influences the result of the aggregate
+enum class AggregateDistinctDependent : uint8_t { DISTINCT_DEPENDENT = 1, NOT_DISTINCT_DEPENDENT = 2 };
 //! Whether or not the combiner needs to preserve the source
 enum class AggregateCombineType : uint8_t { PRESERVE_INPUT = 1, ALLOW_DESTRUCTIVE = 2 };
 

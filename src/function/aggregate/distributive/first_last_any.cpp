@@ -307,6 +307,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
 	auto name = std::move(function.name);
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
 	function.name = std::move(name);
+	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
 	function.return_type = decimal_type;
 	return nullptr;
 }
@@ -326,6 +327,7 @@ unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &fu
 	auto name = std::move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
 	function.name = std::move(name);
+	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
 	if (function.bind) {
 		return function.bind(context, function, arguments);
 	} else {
