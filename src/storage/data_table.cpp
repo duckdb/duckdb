@@ -678,6 +678,9 @@ static void UpdateDeleteIndex(BoundIndex &delete_index, DataChunk &chunk, option
 
 	auto mode = IndexAppendMode::IGNORE_DUPLICATES;
 	auto &append_chunk = delete_chunk ? *delete_chunk : chunk;
+	if (append_chunk.size() == 0) {
+		return;
+	}
 	auto result = delete_index.Append(append_chunk, *row_ids, nullptr, mode);
 	if (result.HasError()) {
 		throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
