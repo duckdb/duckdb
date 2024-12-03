@@ -695,7 +695,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 		const auto max_partition_ht_size =
 		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
-		if (max_partition_ht_size > sink.temporary_memory_state->GetReservation()) {
+		const auto very_very_skewed = // No point in repartitioning if it's this skewed
+		    static_cast<double>(max_partition_ht_size) >= 0.8 * static_cast<double>(sink.total_size);
+		if (!very_very_skewed && max_partition_ht_size > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
 			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
 			                           sink.max_partition_count);
