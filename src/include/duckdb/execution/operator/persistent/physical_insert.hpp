@@ -44,12 +44,7 @@ public:
 
 public:
 	ConstraintState &GetConstraintState(DataTable &table, TableCatalogEntry &table_ref);
-	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &table_ref, ClientContext &context) {
-		if (!delete_state) {
-			delete_state = table.InitializeDelete(table_ref, context, bound_constraints);
-		}
-		return *delete_state;
-	}
+	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &table_ref, ClientContext &context);
 
 public:
 	//! The chunk that ends up getting inserted
@@ -65,8 +60,10 @@ public:
 	idx_t update_count = 0;
 	unique_ptr<ConstraintState> constraint_state;
 	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
+	//! The delete state for ON CONFLICT handling that is rewritten into DELETE + INSERT.
 	unique_ptr<TableDeleteState> delete_state;
-	DataChunk mock_chunk;
+	//! The append chunk for ON CONFLICT handling that is rewritting into DELETE + INSERT.
+	DataChunk append_chunk;
 };
 
 //! Physically insert a set of data into a table

@@ -492,7 +492,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 		delete_art = delete_index->Cast<ART>();
 	}
 
-	ARTConflictType conflict_type;
+	auto conflict_type = ARTConflictType::NO_CONFLICT;
 	optional_idx conflict_idx;
 	auto was_empty = !tree.HasMetadata();
 

@@ -88,14 +88,22 @@ InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalT
 	auto &allocator = Allocator::Get(context);
 	insert_chunk.Initialize(allocator, types);
 	update_chunk.Initialize(allocator, types);
-	mock_chunk.Initialize(allocator, types);
+	append_chunk.Initialize(allocator, types);
 }
 
-ConstraintState &InsertLocalState::GetConstraintState(DataTable &table, TableCatalogEntry &tableref) {
+ConstraintState &InsertLocalState::GetConstraintState(DataTable &table, TableCatalogEntry &table_ref) {
 	if (!constraint_state) {
-		constraint_state = table.InitializeConstraintState(tableref, bound_constraints);
+		constraint_state = table.InitializeConstraintState(table_ref, bound_constraints);
 	}
 	return *constraint_state;
+}
+
+TableDeleteState &InsertLocalState::GetDeleteState(DataTable &table, TableCatalogEntry &table_ref,
+                                                   ClientContext &context) {
+	if (!delete_state) {
+		delete_state = table.InitializeDelete(table_ref, context, bound_constraints);
+	}
+	return *delete_state;
 }
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
@@ -267,7 +275,7 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, ExecutionContext 
 	CreateUpdateChunk(context, chunk, table, row_ids, update_chunk, op);
 	auto &data_table = table.GetStorage();
 
-	// Perform the UPDATE on the global storage.
+	// Perform the UPDATE on the (global) storage.
 	if (!op.update_is_del_and_insert) {
 		if (GLOBAL) {
 			auto update_state = data_table.InitializeUpdate(table, context.client, op.bound_constraints);
@@ -280,13 +288,13 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, ExecutionContext 
 	}
 
 	// Arrange the columns in the standard table order.
-	DataChunk &mock_chunk = lstate.mock_chunk;
-	mock_chunk.SetCardinality(update_chunk);
+	DataChunk &append_chunk = lstate.append_chunk;
+	append_chunk.SetCardinality(update_chunk);
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-		mock_chunk.data[i].Reference(chunk.data[i]);
+		append_chunk.data[i].Reference(chunk.data[i]);
 	}
 	for (idx_t i = 0; i < set_columns.size(); i++) {
-		mock_chunk.data[set_columns[i].index].Reference(update_chunk.data[i]);
+		append_chunk.data[set_columns[i].index].Reference(update_chunk.data[i]);
 	}
 
 	if (GLOBAL) {
@@ -297,7 +305,7 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, ExecutionContext 
 		local_storage.Delete(data_table, row_ids, update_chunk.size());
 	}
 
-	data_table.LocalAppend(table, context.client, mock_chunk, op.bound_constraints, row_ids, mock_chunk);
+	data_table.LocalAppend(table, context.client, append_chunk, op.bound_constraints, row_ids, append_chunk);
 	return update_chunk.size();
 }
 
@@ -403,27 +411,32 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 	DataChunk conflict_condition_result;
 	CheckOnConflictCondition(context, combined_chunk, on_conflict_condition, conflict_condition_result);
 	bool conditions_met = AllConflictsMeetCondition(conflict_condition_result);
-	if (!conditions_met) {
-		// Filter out the tuples that did pass the filter, then run the verify again
-		ManagedSelection sel(combined_chunk.size());
-		auto data = FlatVector::GetData<bool>(conflict_condition_result.data[0]);
-		for (idx_t i = 0; i < combined_chunk.size(); i++) {
-			if (!data[i]) {
-				// Only populate the selection vector with the tuples that did not meet the condition
-				sel.Append(i);
-			}
-		}
-		combined_chunk.Slice(sel.Selection(), sel.Count());
-		if (GLOBAL) {
-			data_table.VerifyAppendConstraints(constraint_state, context.client, combined_chunk, nullptr, nullptr,
-			                                   nullptr, nullptr);
-		} else {
-			auto &indexes = local_storage.GetIndexes(data_table);
-			auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
-			DataTable::VerifyUniqueIndexes(indexes, delete_indexes, tuples, nullptr, nullptr, nullptr);
-		}
-		throw InternalException("The previous operation was expected to throw but didn't");
+	if (conditions_met) {
+		return;
 	}
+
+	// We need to throw. Filter all tuples that passed, and verify again with those that violate the constraint.
+	ManagedSelection sel(combined_chunk.size());
+	auto data = FlatVector::GetData<bool>(conflict_condition_result.data[0]);
+	for (idx_t i = 0; i < combined_chunk.size(); i++) {
+		if (!data[i]) {
+			// This tuple did not meet the condition.
+			sel.Append(i);
+		}
+	}
+	combined_chunk.Slice(sel.Selection(), sel.Count());
+
+	// Verify and throw.
+	if (GLOBAL) {
+		data_table.VerifyAppendConstraints(constraint_state, context.client, combined_chunk, nullptr, nullptr, nullptr,
+		                                   nullptr);
+		throw InternalException("VerifyAppendConstraints was expected to throw but didn't");
+	}
+
+	auto &indexes = local_storage.GetIndexes(data_table);
+	auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
+	DataTable::VerifyUniqueIndexes(indexes, delete_indexes, tuples, nullptr, nullptr, nullptr);
+	throw InternalException("VerifyUniqueIndexes was expected to throw but didn't");
 }
 
 template <bool GLOBAL>
