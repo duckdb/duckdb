@@ -19,6 +19,7 @@
 #include "duckdb/function/copy_function.hpp"
 #endif
 
+#include "parquet_statistics.hpp"
 #include "column_writer.hpp"
 #include "parquet_types.h"
 #include "geo_parquet.hpp"
@@ -61,13 +62,19 @@ struct FieldID {
 	static FieldID Deserialize(Deserializer &source);
 };
 
+struct ParquetBloomFilterEntry {
+	unique_ptr<ParquetBloomFilter> bloom_filter;
+	idx_t row_group_idx;
+	idx_t column_idx;
+};
+
 class ParquetWriter {
 public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
-	              shared_ptr<ParquetEncryptionConfig> encryption_config, double dictionary_compression_ratio_threshold,
-	              int64_t compression_level, bool debug_use_openssl);
+	              shared_ptr<ParquetEncryptionConfig> encryption_config, idx_t dictionary_size_limit,
+	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -97,8 +104,11 @@ public:
 		lock_guard<mutex> glock(lock);
 		return writer->total_written;
 	}
-	double DictionaryCompressionRatioThreshold() const {
-		return dictionary_compression_ratio_threshold;
+	idx_t DictionarySizeLimit() const {
+		return dictionary_size_limit;
+	}
+	double BloomFilterFalsePositiveRatio() const {
+		return bloom_filter_false_positive_ratio;
 	}
 	int64_t CompressionLevel() const {
 		return compression_level;
@@ -116,6 +126,8 @@ public:
 	static bool TryGetParquetType(const LogicalType &duckdb_type,
 	                              optional_ptr<duckdb_parquet::Type::type> type = nullptr);
 
+	void BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter);
+
 private:
 	string file_name;
 	vector<LogicalType> sql_types;
@@ -123,7 +135,8 @@ private:
 	duckdb_parquet::CompressionCodec::type codec;
 	ChildFieldIDs field_ids;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
-	double dictionary_compression_ratio_threshold;
+	idx_t dictionary_size_limit;
+	double bloom_filter_false_positive_ratio;
 	int64_t compression_level;
 	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;
@@ -136,6 +149,7 @@ private:
 	vector<unique_ptr<ColumnWriter>> column_writers;
 
 	unique_ptr<GeoParquetFileMetadata> geoparquet_data;
+	vector<ParquetBloomFilterEntry> bloom_filters;
 };
 
 } // namespace duckdb
