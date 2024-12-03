@@ -2,6 +2,8 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
 
+#include <string.h>
+
 namespace duckdb {
 
 int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
@@ -78,6 +80,12 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, bool 
 	result += PROGRESS_END;
 	result += " ";
 
+	if (end) {
+		if (squared_progress_error >= 0.0) {
+			result += "estimated_progress_bar_error:" + to_string(squared_progress_error);
+		}
+	}
+
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
 }
 
@@ -95,6 +103,14 @@ void TerminalProgressBarDisplay::Finish() {
 	PrintProgressInternal(100, true);
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, "\n");
 	Printer::Flush(OutputStream::STREAM_STDOUT);
+}
+
+void TerminalProgressBarDisplay::AddInfo(const char *name, double value) {
+	if (strcmp(name, "query_time") == 0) {
+		query_time = value;
+	} else if (strcmp(name, "squared_progress_error") == 0) {
+		squared_progress_error = value;
+	}
 }
 
 } // namespace duckdb

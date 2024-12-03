@@ -22,6 +22,7 @@ public:
 public:
 	void Update(double percentage) override;
 	void Finish() override;
+	void AddInfo(const char *name, double value) override;
 
 private:
 	int32_t rendered_percentage = -1;
