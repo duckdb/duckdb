@@ -1,0 +1,503 @@
+#include "duckdb/storage/compression/roaring/roaring.hpp"
+
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/likely.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/function/compression/compression.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/bitpacking.hpp"
+
+namespace duckdb {
+
+namespace roaring {
+
+ContainerCompressionState::ContainerCompressionState() {
+	Reset();
+}
+
+// void CompressVector(Vector &input, idx_t input_size, const std::function<void()> &on_full_container) {
+//	UnifiedVectorFormat unified;
+//	input.ToUnifiedFormat(input_size, unified);
+//	auto &validity = unified.validity;
+
+//	if (validity.AllValid()) {
+//		// All bits are set implicitly
+//		idx_t appended = 0;
+//		while (appended < input_size) {
+//			idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
+//			Append<false>(false, NumericCast<uint16_t>(to_append));
+//			if (IsFull()) {
+//				on_full_container();
+//			}
+//			appended += to_append;
+//		}
+//	} else {
+//		// There is a validity mask
+//		idx_t appended = 0;
+//		while (appended < input_size) {
+//			idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
+//			bool last_is_null;
+//			uint16_t length = 0;
+//			for (idx_t i = 0; i < to_append; i++) {
+//				auto idx = unified.sel->get_index(appended + i);
+//				auto is_null = validity.RowIsValidUnsafe(idx);
+//				if (i && is_null != last_is_null) {
+//					Append<false>(!last_is_null, length);
+//					length = 0;
+//				}
+//				length++;
+//				last_is_null = is_null;
+//			}
+//			Append<false>(!last_is_null, length);
+//			if (IsFull()) {
+//				on_full_container();
+//			}
+//			appended += to_append;
+//		}
+//	}
+//}
+
+void ContainerCompressionState::Append(bool null, uint16_t amount) {
+	if (uncompressed) {
+		D_ASSERT(type == Type::BITSET_CONTAINER);
+		if (null) {
+			ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
+			SetInvalidRange(mask, appended_count, appended_count + amount);
+		}
+		appended_count += amount;
+		return;
+	}
+
+	// Adjust the run
+	if (!null && run_idx < MAX_RUN_IDX && appended_count && (null != last_is_null)) {
+		if (type == Type::UNDECIDED || type == Type::RUN_CONTAINER) {
+			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+				auto &last_run = runs[run_idx];
+				// End the last run
+				last_run.length = (appended_count - last_run.start) - 1;
+			}
+			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
+			run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+		}
+		run_idx++;
+	} else if (null && run_idx < MAX_RUN_IDX && (!appended_count || null != last_is_null)) {
+		if (type == Type::UNDECIDED || type == Type::RUN_CONTAINER) {
+			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+				auto &current_run = runs[run_idx];
+				// Initialize a new run
+				current_run.start = appended_count;
+			}
+			compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
+			run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+		}
+	}
+
+	// Add to the array
+	auto &current_array_idx = array_idx[null];
+	if (current_array_idx < MAX_ARRAY_IDX) {
+		if (type == Type::UNDECIDED || type == Type::ARRAY_CONTAINER || type == Type::INVERTED_ARRAY_CONTAINER) {
+			if (current_array_idx + amount <= MAX_ARRAY_IDX) {
+				for (uint16_t i = 0; i < amount; i++) {
+					compressed_arrays[null][current_array_idx + i] =
+					    static_cast<uint8_t>((appended_count + i) % COMPRESSED_SEGMENT_SIZE);
+					array_counts[null][(appended_count + i) >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+				}
+			}
+			if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
+				for (uint16_t i = 0; i < amount; i++) {
+					arrays[null][current_array_idx + i] = appended_count + i;
+				}
+			}
+		}
+		current_array_idx += amount;
+	}
+
+	last_is_null = null;
+	null_count += null * amount;
+	appended_count += amount;
+}
+
+void ContainerCompressionState::OverrideArray(data_ptr_t destination, bool nulls, idx_t count) {
+	if (nulls) {
+		type = Type::INVERTED_ARRAY_CONTAINER;
+	} else {
+		type = Type::ARRAY_CONTAINER;
+	}
+
+	if (count >= COMPRESSED_ARRAY_THRESHOLD) {
+		memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
+		array_counts[nulls] = reinterpret_cast<uint8_t *>(destination);
+		destination += sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
+		compressed_arrays[nulls] = reinterpret_cast<uint8_t *>(destination);
+	} else {
+		arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
+	}
+}
+
+void ContainerCompressionState::OverrideRun(data_ptr_t destination, idx_t count) {
+	type = Type::RUN_CONTAINER;
+
+	if (count >= COMPRESSED_RUN_THRESHOLD) {
+		memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
+		run_counts = reinterpret_cast<uint8_t *>(destination);
+		destination += sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
+		compressed_runs = reinterpret_cast<uint8_t *>(destination);
+	} else {
+		runs = reinterpret_cast<RunContainerRLEPair *>(destination);
+	}
+}
+
+void ContainerCompressionState::OverrideUncompressed(data_ptr_t destination) {
+	type = Type::BITSET_CONTAINER;
+	uncompressed = reinterpret_cast<validity_t *>(destination);
+}
+
+void ContainerCompressionState::Finalize() {
+	D_ASSERT(!finalized);
+	if (appended_count && last_is_null && run_idx < MAX_RUN_IDX) {
+		if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+			auto &last_run = runs[run_idx];
+			// End the last run
+			last_run.length = (appended_count - last_run.start);
+		}
+		compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
+		if (appended_count != ROARING_CONTAINER_SIZE) {
+			run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+		}
+		run_idx++;
+	}
+	finalized = true;
+}
+
+ContainerMetadata ContainerCompressionState::GetResult() {
+	if (uncompressed) {
+		return ContainerMetadata::BitsetContainer(appended_count);
+	}
+	D_ASSERT(finalized);
+	return ContainerMetadata::CreateMetadata(appended_count, array_idx[NULLS], array_idx[NON_NULLS], run_idx);
+}
+
+void ContainerCompressionState::Reset() {
+	length = 0;
+
+	appended_count = 0;
+	null_count = 0;
+	run_idx = 0;
+	array_idx[NON_NULLS] = 0;
+	array_idx[NULLS] = 0;
+	finalized = false;
+	last_is_null = false;
+
+	// Reset the arrays + runs
+	arrays[NULLS] = base_arrays[NULLS];
+	arrays[NON_NULLS] = base_arrays[NON_NULLS];
+	runs = base_runs;
+
+	compressed_arrays[NULLS] = base_compressed_arrays[NULLS];
+	compressed_arrays[NON_NULLS] = base_compressed_arrays[NON_NULLS];
+	compressed_runs = base_compressed_runs;
+
+	array_counts[NULLS] = base_array_counts[NULLS];
+	array_counts[NON_NULLS] = base_array_counts[NON_NULLS];
+	run_counts = base_run_counts;
+
+	memset(array_counts[NULLS], 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
+	memset(array_counts[NON_NULLS], 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
+	memset(run_counts, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
+
+	type = Type::UNDECIDED;
+
+	uncompressed = nullptr;
+}
+
+//===--------------------------------------------------------------------===//
+// Compress
+//===--------------------------------------------------------------------===//
+RoaringCompressState::RoaringCompressState(ColumnDataCheckpointer &checkpointer,
+                                           unique_ptr<AnalyzeState> analyze_state_p)
+    : CompressionState(analyze_state_p->info), owned_analyze_state(std::move(analyze_state_p)),
+      analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()), container_state(),
+      container_metadata(analyze_state.container_metadata), checkpointer(checkpointer),
+      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
+	CreateEmptySegment(checkpointer.GetRowGroup().start);
+	total_count = 0;
+	InitializeContainer();
+}
+
+idx_t RoaringCompressState::GetContainerIndex() {
+	idx_t index = total_count / ROARING_CONTAINER_SIZE;
+	return index;
+}
+
+idx_t RoaringCompressState::GetRemainingSpace() {
+	return static_cast<idx_t>(metadata_ptr - data_ptr);
+}
+
+bool RoaringCompressState::CanStore(idx_t container_size, const ContainerMetadata &metadata) {
+	idx_t required_space = 0;
+	if (metadata.IsUncompressed()) {
+		// Account for the alignment we might need for this container
+		required_space += (AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr))) - reinterpret_cast<idx_t>(data_ptr);
+	}
+	required_space += metadata.GetDataSizeInBytes(container_size);
+
+	idx_t runs_count = metadata_collection.GetRunContainerCount();
+	idx_t arrays_count = metadata_collection.GetArrayAndBitsetContainerCount();
+#ifdef DEBUG
+	idx_t current_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+	(void)current_size;
+	D_ASSERT(required_space + current_size <= GetRemainingSpace());
+#endif
+	if (metadata.IsRun()) {
+		runs_count++;
+	} else {
+		arrays_count++;
+	}
+	idx_t metadata_size = metadata_collection.GetMetadataSize(runs_count + arrays_count, runs_count, arrays_count);
+	required_space += metadata_size;
+
+	if (required_space > GetRemainingSpace()) {
+		return false;
+	}
+	return true;
+}
+
+void RoaringCompressState::InitializeContainer() {
+	if (container_state.appended_count == analyze_state.total_count) {
+		// No more containers left
+		return;
+	}
+	auto container_index = GetContainerIndex();
+	D_ASSERT(container_index < container_metadata.size());
+	auto metadata = container_metadata[container_index];
+
+	idx_t container_size = AlignValue<idx_t, ValidityMask::BITS_PER_VALUE>(
+	    MinValue<idx_t>(analyze_state.total_count - container_state.appended_count, ROARING_CONTAINER_SIZE));
+	if (!CanStore(container_size, metadata)) {
+		idx_t row_start = current_segment->start + current_segment->count;
+		FlushSegment();
+		CreateEmptySegment(row_start);
+	}
+
+	// Override the pointer to write directly into the block
+	if (metadata.IsUncompressed()) {
+		data_ptr = reinterpret_cast<data_ptr_t>(AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr)));
+		FastMemset(data_ptr, ~0, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
+		container_state.OverrideUncompressed(data_ptr);
+	} else if (metadata.IsRun()) {
+		auto number_of_runs = metadata.NumberOfRuns();
+		container_state.OverrideRun(data_ptr, number_of_runs);
+	} else {
+		auto cardinality = metadata.Cardinality();
+		container_state.OverrideArray(data_ptr, metadata.IsInverted(), cardinality);
+	}
+	data_ptr += metadata.GetDataSizeInBytes(container_size);
+	metadata_collection.AddMetadata(metadata);
+}
+
+void RoaringCompressState::CreateEmptySegment(idx_t row_start) {
+	auto &db = checkpointer.GetDatabase();
+	auto &type = checkpointer.GetType();
+
+	auto compressed_segment =
+	    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+	compressed_segment->function = function;
+	current_segment = std::move(compressed_segment);
+
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	handle = buffer_manager.Pin(current_segment->block);
+	data_ptr = handle.Ptr();
+	data_ptr += sizeof(idx_t);
+	metadata_ptr = handle.Ptr() + info.GetBlockSize();
+}
+
+void RoaringCompressState::FlushSegment() {
+	auto &state = checkpointer.GetCheckpointState();
+	auto base_ptr = handle.Ptr();
+	// +======================================+
+	// |x|ddddddddddddddd||mmm|               |
+	// +======================================+
+
+	// x: metadata_offset (to the "right" of it)
+	// d: data of the containers
+	// m: metadata of the containers
+
+	// This is after 'x'
+	base_ptr += sizeof(idx_t);
+
+	// Size of the 'd' part
+	idx_t data_size = NumericCast<idx_t>(data_ptr - base_ptr);
+	data_size = AlignValue(data_size);
+
+	// Size of the 'm' part
+	idx_t metadata_size = metadata_collection.GetMetadataSizeForSegment();
+
+	if (current_segment->count.load() == 0) {
+		D_ASSERT(metadata_size == 0);
+		return;
+	}
+
+	idx_t serialized_metadata_size = metadata_collection.Serialize(data_ptr);
+	metadata_collection.FlushSegment();
+	(void)serialized_metadata_size;
+	D_ASSERT(metadata_size == serialized_metadata_size);
+	idx_t metadata_start = static_cast<idx_t>(data_ptr - base_ptr);
+	Store<idx_t>(metadata_start, handle.Ptr());
+	idx_t total_segment_size = sizeof(idx_t) + data_size + metadata_size;
+	state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+}
+
+void RoaringCompressState::Finalize() {
+	Flush(*this);
+	FlushSegment();
+	current_segment.reset();
+}
+
+void RoaringCompressState::FlushContainer() {
+	if (!container_state.appended_count) {
+		return;
+	}
+	container_state.Finalize();
+#ifdef DEBUG
+	auto container_index = GetContainerIndex();
+	auto analyzed_metadata = container_metadata[container_index];
+	auto metadata = container_state.GetResult();
+	D_ASSERT(analyzed_metadata == metadata);
+
+	idx_t container_size = container_state.appended_count;
+	if (!metadata.IsUncompressed()) {
+		unique_ptr<ContainerScanState> scan_state;
+		if (metadata.IsRun()) {
+			D_ASSERT(metadata.IsInverted());
+			auto number_of_runs = metadata.NumberOfRuns();
+			if (number_of_runs >= COMPRESSED_RUN_THRESHOLD) {
+				auto segments = container_state.run_counts;
+				auto data_ptr = container_state.compressed_runs;
+				scan_state = make_uniq<CompressedRunContainerScanState>(container_index, container_size, number_of_runs,
+				                                                        segments, data_ptr);
+			} else {
+				auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.runs);
+				scan_state =
+				    make_uniq<RunContainerScanState>(container_index, container_size, number_of_runs, data_ptr);
+			}
+		} else {
+			auto cardinality = metadata.Cardinality();
+			if (cardinality >= COMPRESSED_ARRAY_THRESHOLD) {
+				if (metadata.IsInverted()) {
+					auto segments = reinterpret_cast<data_ptr_t>(container_state.array_counts[NULLS]);
+					auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.compressed_arrays[NULLS]);
+					scan_state = make_uniq<CompressedArrayContainerScanState<NULLS>>(container_index, container_size,
+					                                                                 cardinality, segments, data_ptr);
+				} else {
+					auto segments = reinterpret_cast<data_ptr_t>(container_state.array_counts[NON_NULLS]);
+					auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.compressed_arrays[NON_NULLS]);
+					scan_state = make_uniq<CompressedArrayContainerScanState<NON_NULLS>>(
+					    container_index, container_size, cardinality, segments, data_ptr);
+				}
+			} else {
+				if (metadata.IsInverted()) {
+					auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.arrays[NULLS]);
+					scan_state = make_uniq<ArrayContainerScanState<NULLS>>(container_index, container_size, cardinality,
+					                                                       data_ptr);
+				} else {
+					auto data_ptr = reinterpret_cast<data_ptr_t>(container_state.arrays[NON_NULLS]);
+					scan_state = make_uniq<ArrayContainerScanState<NON_NULLS>>(container_index, container_size,
+					                                                           cardinality, data_ptr);
+				}
+			}
+		}
+		scan_state->Verify();
+	}
+
+#endif
+	total_count += container_state.appended_count;
+	bool has_nulls = container_state.null_count != 0;
+	bool has_non_nulls = container_state.null_count != container_state.appended_count;
+	if (has_nulls || container_state.uncompressed) {
+		current_segment->stats.statistics.SetHasNullFast();
+	}
+	if (has_non_nulls || container_state.uncompressed) {
+		current_segment->stats.statistics.SetHasNoNullFast();
+	}
+	current_segment->count += container_state.appended_count;
+	container_state.Reset();
+}
+
+void RoaringCompressState::NextContainer() {
+	Flush(*this);
+	InitializeContainer();
+}
+
+void RoaringCompressState::HandleByte(RoaringCompressState &state, uint8_t array_index) {
+	if (array_index == NumericLimits<uint8_t>::Maximum()) {
+		HandleAllValid(state, 8);
+	} else if (array_index == 0) {
+		HandleNoneValid(state, 8);
+	} else {
+		for (idx_t i = 0; i < 8; i++) {
+			const bool bit_set = array_index & (1 << i);
+			HandleBit(state, bit_set);
+		}
+	}
+}
+
+void RoaringCompressState::HandleBit(RoaringCompressState &state, bool bit_set) {
+	auto &container_state = state.container_state;
+	if (container_state.length && container_state.last_bit_set != bit_set) {
+		container_state.Append(!container_state.last_bit_set, container_state.length);
+		container_state.length = 0;
+	}
+	container_state.length += 1;
+	container_state.last_bit_set = bit_set;
+}
+
+void RoaringCompressState::HandleAllValid(RoaringCompressState &state, idx_t amount) {
+	auto &container_state = state.container_state;
+	if (container_state.length && container_state.last_bit_set == false) {
+		container_state.Append(!container_state.last_bit_set, container_state.length);
+		container_state.length = 0;
+	}
+	container_state.length += amount;
+	container_state.last_bit_set = true;
+}
+
+void RoaringCompressState::HandleNoneValid(RoaringCompressState &state, idx_t amount) {
+	auto &container_state = state.container_state;
+	if (container_state.length && container_state.last_bit_set == true) {
+		container_state.Append(!container_state.last_bit_set, container_state.length);
+		container_state.length = 0;
+	}
+	container_state.length += amount;
+	container_state.last_bit_set = false;
+}
+
+idx_t RoaringCompressState::Count(RoaringCompressState &state) {
+	auto &container_state = state.container_state;
+	// How much is appended and waiting to be appended
+	return container_state.appended_count + container_state.length;
+}
+
+void RoaringCompressState::Flush(RoaringCompressState &state) {
+	auto &container_state = state.container_state;
+	if (container_state.length) {
+		container_state.Append(!container_state.last_bit_set, container_state.length);
+		container_state.length = 0;
+	}
+	state.FlushContainer();
+}
+
+void RoaringCompressState::Compress(Vector &input, idx_t count) {
+	auto &self = *this;
+	RoaringStateAppender<RoaringCompressState>::AppendVector(self, input, count);
+}
+
+} // namespace roaring
+
+} // namespace duckdb
