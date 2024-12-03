@@ -73,13 +73,6 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		total_number_of_rows += sniffer.LinesSniffed();
 	}
 
-	// if (names.empty()) {
-	// 	names = sniffer_result.names;
-	// 	return_types = sniffer_result.return_types;
-	// }
-	// result.csv_types = return_types;
-	// result.csv_names = names;
-
 	// We do a copy of the options to not pollute the options of the first file.
 	while (total_number_of_rows < required_number_of_lines && current_file < file_paths.size()) {
 		auto option_copy = option_og;
@@ -103,15 +96,26 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		if (best_schema.Empty()) {
 			// A schema is bettah than no schema
 			best_schema = schema;
-			continue;
-		}
-		if (schema.MatchColumns(best_schema) && !option_og.null_padding) {
+		} else if (schema.MatchColumns(best_schema) && !option_og.null_padding) {
 			throw InvalidInputException("File %s has a schema with %d columns, while file %s has a schema with %d "
 			                            "columns. \nPossible Fix: * set null_padding=True",
 			                            best_schema.GetPath(), best_schema.GetColumnCount(), schema.GetPath(),
 			                            schema.GetColumnCount());
+		} else if (best_schema.GetRowsRead() == 0) {
+			// If the best-schema has no data-rows, that's easy, we just take the new schema
+			best_schema = schema;
+		} else {
+			// We might have conflicting-schemas, we must merge them
+			best_schema.MergeSchemas(schema);
 		}
 	}
+
+	if (names.empty()) {
+		names = best_schema.GetNames();
+		return_types = best_schema.GetTypes();
+	}
+	result.csv_types = return_types;
+	result.csv_names = names;
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -137,6 +141,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
+		SchemaDiscovery(context, *result, options, return_types, names, *multi_file_list);
 	}
 
 	D_ASSERT(return_types.size() == names.size());

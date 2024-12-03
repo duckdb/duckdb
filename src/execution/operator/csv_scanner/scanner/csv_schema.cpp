@@ -43,6 +43,30 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 	}
 }
 
+void CSVSchema::MergeSchemas(CSVSchema &other) {
+	// TODO: We could also merge names, maybe by giving preference to non-generated names?
+	const vector<LogicalType> candidates_by_specificity = {LogicalType::BOOLEAN, LogicalType::BIGINT,
+	                                                       LogicalType::DOUBLE, LogicalType::VARCHAR};
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto this_type = columns[i].type.id();
+		auto other_type = other.columns[i].type.id();
+		if (columns[i].type != other.columns[i].type) {
+			if (CanWeCastIt(this_type, other_type)) {
+				// If we can cast this to other, this becomes other
+				columns[i].type = other.columns[i].type;
+			} else if (!CanWeCastIt(other_type, this_type)) {
+				// If we can't cast this to other or other to this, we see which parent they can be both cast to
+				for (const auto &type : candidates_by_specificity) {
+					if (CanWeCastIt(this_type, type.id()) && CanWeCastIt(other_type, type.id())) {
+						columns[i].type = type;
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
 CSVSchema::CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read_p)
     : rows_read(rows_read_p) {
 	Initialize(names, types, file_path);
@@ -61,6 +85,22 @@ void CSVSchema::Initialize(vector<string> &names, vector<LogicalType> &types, co
 	}
 }
 
+vector<string> CSVSchema::GetNames() const {
+	vector<string> names;
+	for (auto &column : columns) {
+		names.push_back(column.name);
+	}
+	return names;
+};
+
+vector<LogicalType> CSVSchema::GetTypes() const {
+	vector<LogicalType> types;
+	for (auto &column : columns) {
+		types.push_back(column.type);
+	}
+	return types;
+};
+
 bool CSVSchema::Empty() const {
 	return columns.empty();
 }
@@ -75,6 +115,10 @@ string CSVSchema::GetPath() const {
 
 idx_t CSVSchema::GetColumnCount() const {
 	return columns.size();
+}
+
+idx_t CSVSchema::GetRowsRead() const {
+	return rows_read;
 }
 
 bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_result, const string &cur_file_path,
