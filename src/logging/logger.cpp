@@ -194,23 +194,18 @@ bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	if (config.level > log_level) {
 		return false;
 	}
-	if (config.mode == LogMode::ENABLE_SELECTED && config.enabled_loggers.find(log_type) == config.enabled_loggers.end()) {
-		return false;
+	if (config.mode == LogMode::ENABLE_SELECTED) {
+		return config.enabled_loggers.find(log_type) != config.enabled_loggers.end();
 	}
-	if (config.mode == LogMode::DISABLE_SELECTED && config.disabled_loggers.find(log_type) != config.disabled_loggers.end()) {
-		return false;
+	if (config.mode == LogMode::DISABLE_SELECTED) {
+		return config.disabled_loggers.find(log_type) == config.disabled_loggers.end();
 	}
 	return true;
 }
 
+// TODO: is this desirable?
 bool ThreadSafeLogger::ShouldLog(LogLevel log_level) {
-	if (config.level > log_level) {
-		return false;
-	}
-	if (config.mode != LogMode::LEVEL_ONLY) {
-		return false;
-	}
-	return true;
+	return ShouldLog(context.context.default_log_type, log_level);
 }
 
 void ThreadSafeLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
@@ -293,10 +288,10 @@ bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	// ENABLE_SELECTED and DISABLE_SELECTED are expensive and need full global lock TODO: can we do better here?
 	{
 		unique_lock<mutex> lck(lock);
-		if (config.mode == LogMode::ENABLE_SELECTED && config.enabled_loggers.find(log_type) == config.enabled_loggers.end()) {
-			return true;
-		} else if (config.mode == LogMode::DISABLE_SELECTED && config.disabled_loggers.find(log_type) != config.disabled_loggers.end()) {
-			return true;
+		if (config.mode == LogMode::ENABLE_SELECTED) {
+			return config.enabled_loggers.find(log_type) != config.enabled_loggers.end();
+		} else if (config.mode == LogMode::DISABLE_SELECTED) {
+			return config.disabled_loggers.find(log_type) == config.disabled_loggers.end();
 		}
 	}
 	throw InternalException("Should be unreachable (MutableLogger::ShouldLog)");
@@ -306,17 +301,14 @@ bool MutableLogger::ShouldLog(LogLevel log_level) {
 	if (!enabled) {
 		return false;
 	}
-	// check atomic mode to early out if disabled
-	if (mode != LogMode::LEVEL_ONLY) {
-		return false;
-	}
 
 	// check atomic level to early out if level too low
 	if (level > log_level) {
 		return false;
 	}
 
-	return true;
+	// TODO: this checks things twice
+	return ShouldLog(context.context.default_log_type, log_level);
 }
 
 void MutableLogger::Flush() {
@@ -331,11 +323,6 @@ unique_ptr<Logger> LogManager::CreateLogger(LoggingContext &context, bool thread
 		config_copy = config;
 	}
 
-	// With lock released, we create the logger TODO: clean up?
-
-	if (!config_copy.IsConsistent()) {
-		throw InvalidConfigurationException("Log configuration is inconsistent");
-	}
 	if (mutable_settings) {
 		return make_uniq<MutableLogger>(config_copy, context, *this);
 	}
@@ -429,7 +416,7 @@ void LogManager::SetEnabledLoggers(unordered_set <string> &enabled_loggers) {
 
 void LogManager::SetDisabledLoggers(unordered_set <string> &disabled_loggers) {
 	unique_lock<mutex> lck(lock);
-	config.enabled_loggers = disabled_loggers;
+	config.disabled_loggers = disabled_loggers;
 	global_logger->UpdateConfig(config);
 }
 

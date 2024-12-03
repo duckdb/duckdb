@@ -673,7 +673,8 @@ void EnabledLoggers::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 }
 
 void EnabledLoggers::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	db->GetLogManager().SetEnableLogging(false);
+	unordered_set<string> set;
+	db->GetLogManager().SetEnabledLoggers(set);
 }
 
 //===----------------------------------------------------------------------===//
@@ -696,7 +697,9 @@ void DisabledLoggers::SetGlobal(DatabaseInstance *db, DBConfig &config, const Va
 }
 
 void DisabledLoggers::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	db->GetLogManager().SetEnableLogging(false);
+	unordered_set<string> set;
+	db->GetLogManager().SetDisabledLoggers(set);
+
 }
 
 //===----------------------------------------------------------------------===//
