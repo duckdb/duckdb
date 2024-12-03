@@ -1,5 +1,6 @@
 add_subdirectory(chimp)
 add_subdirectory(alp)
+add_subdirectory(roaring)
 
 add_library_unity(
   duckdb_storage_compression
@@ -16,8 +17,7 @@ add_library_unity(
   patas.cpp
   zstd.cpp
   alprd.cpp
-  fsst.cpp
-  roaring.cpp)
+  fsst.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_compression>
     PARENT_SCOPE)
