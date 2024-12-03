@@ -260,6 +260,18 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	auxiliary = std::move(child_ref);
 }
 
+void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+	Slice(sel, count);
+	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		buffer->Cast<DictionaryBuffer>().SetDictionarySize(dictionary_size);
+	}
+}
+
+void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+	Reference(dict);
+	Dictionary(dictionary_size, sel, count);
+}
+
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && GetType().InternalType() != PhysicalType::STRUCT) {
 		// dictionary vector: need to merge dictionaries

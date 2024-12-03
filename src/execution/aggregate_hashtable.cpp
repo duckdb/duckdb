@@ -235,11 +235,113 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	return AddChunk(groups, payload, aggregate_filter);
 }
 
+optional_idx GroupedAggregateHashTable::TryAddChunkDictionary(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter) {
+	if (groups.ColumnCount() != 1) {
+		// only single column supported (for now)
+		return optional_idx();
+	}
+	// all columns must be dict
+	for(auto &group : groups.data) {
+		if (group.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			return optional_idx();
+		}
+	}
+	auto dict_size = DictionaryVector::DictionarySize(groups.data[0]);
+	if (!dict_size.IsValid()) {
+		// dict size not known - this is not a dictionary that comes from the storage
+		return optional_idx();
+	}
+	if (dict_size.GetIndex() > STANDARD_VECTOR_SIZE) {
+		// dictionary too big - bailout
+		return optional_idx();
+	}
+	// first figure out which dictionary entries we need to add
+
+	// FIXME: cache these if the dictionary vector does not change
+	bool found_entry[STANDARD_VECTOR_SIZE] = { false };
+	sel_t index_map[STANDARD_VECTOR_SIZE];
+	SelectionVector unique_entries(STANDARD_VECTOR_SIZE);
+	idx_t unique_count = 0;
+	auto &offsets = DictionaryVector::SelVector(groups.data[0]);
+	for(idx_t i = 0; i < groups.size(); i++) {
+		auto dict_idx = offsets.get_index(i);
+		if (!found_entry[dict_idx]) {
+			index_map[dict_idx] = unique_count;
+			unique_entries.set_index(unique_count++, dict_idx);
+			found_entry[dict_idx] = true;
+		}
+	}
+	// FIXME: avoid constantly re-allocating
+	DataChunk unique_values;
+	unique_values.InitializeEmpty(groups.GetTypes());
+	unique_values.Slice(groups, unique_entries, unique_count);
+	// now we know which entries we are going to add - hash them
+	Vector hashes(LogicalType::HASH);
+	unique_values.Hash(hashes);
+
+	Vector dictionary_addresses(LogicalType::POINTER);
+	SelectionVector new_dictionary_groups(STANDARD_VECTOR_SIZE);
+
+	// add the dictionary groups to the hash table
+	const auto new_group_count = FindOrCreateGroups(unique_values, hashes, dictionary_addresses, new_dictionary_groups);
+	VectorOperations::AddInPlace(dictionary_addresses, NumericCast<int64_t>(layout.GetAggrOffset()), unique_count);
+
+	// set the addresses that we found for each of the unique groups in the main addresses vector
+	auto dict_addresses = FlatVector::GetData<uintptr_t>(dictionary_addresses);
+	auto result_addresses = FlatVector::GetData<uintptr_t>(state.addresses);
+	for(idx_t i = 0; i < groups.size(); i++) {
+		auto dict_idx = offsets.get_index(i);
+		result_addresses[i] = dict_addresses[index_map[dict_idx]];
+	}
+	// FIXME: set new groups
+	UpdateAggregates(payload, filter);
+
+	return new_group_count;
+}
+
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter) {
+	// check if we can use an optimized path that utilizes dictionaries
+	auto result = TryAddChunkDictionary(groups, payload, filter);
+	if (result.IsValid()) {
+		return result.GetIndex();
+	}
+	// otherwise append the raw values
 	Vector hashes(LogicalType::HASH);
 	groups.Hash(hashes);
 
 	return AddChunk(groups, hashes, payload, filter);
+}
+
+void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter) {
+	// Now every cell has an entry, update the aggregates
+	auto &aggregates = layout.GetAggregates();
+	idx_t filter_idx = 0;
+	idx_t payload_idx = 0;
+	RowOperationsState row_state(*aggregate_allocator);
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggr = aggregates[i];
+		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
+			// Skip all the aggregates that are not in the filter
+			payload_idx += aggr.child_count;
+			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
+			continue;
+		}
+		D_ASSERT(i == filter[filter_idx]);
+
+		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
+			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(i), aggr, state.addresses, payload,
+												payload_idx);
+		} else {
+			RowOperations::UpdateStates(row_state, aggr, state.addresses, payload, payload_idx, payload.size());
+		}
+
+		// Move to the next aggregate
+		payload_idx += aggr.child_count;
+		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
+		filter_idx++;
+	}
+
+	Verify();
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload,
@@ -258,35 +360,8 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 	const auto new_group_count = FindOrCreateGroups(groups, group_hashes, state.addresses, state.new_groups);
 	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout.GetAggrOffset()), payload.size());
 
-	// Now every cell has an entry, update the aggregates
-	auto &aggregates = layout.GetAggregates();
-	idx_t filter_idx = 0;
-	idx_t payload_idx = 0;
-	RowOperationsState row_state(*aggregate_allocator);
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &aggr = aggregates[i];
-		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
-			// Skip all the aggregates that are not in the filter
-			payload_idx += aggr.child_count;
-			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
-			continue;
-		}
-		D_ASSERT(i == filter[filter_idx]);
+	UpdateAggregates(payload, filter);
 
-		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
-			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(i), aggr, state.addresses, payload,
-			                                    payload_idx);
-		} else {
-			RowOperations::UpdateStates(row_state, aggr, state.addresses, payload, payload_idx, payload.size());
-		}
-
-		// Move to the next aggregate
-		payload_idx += aggr.child_count;
-		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
-		filter_idx++;
-	}
-
-	Verify();
 	return new_group_count;
 }
 

@@ -165,6 +165,27 @@ private:
 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
 			break;
 		}
+		case VectorType::DICTIONARY_VECTOR: {
+			static constexpr idx_t DICTIONARY_THRESHOLD = 2;
+			auto dict_size = DictionaryVector::DictionarySize(input);
+			if (dict_size.IsValid() && dict_size.GetIndex() * DICTIONARY_THRESHOLD <= count) {
+				// we can operate directly on the dictionary if we have a dictionary size
+				// but this only makes sense if the dictionary size is smaller than the count by some factor
+				auto &dictionary_values = DictionaryVector::Child(input);
+				if (dictionary_values.GetVectorType() == VectorType::FLAT_VECTOR) {
+					// execute the function over the dictionary
+					auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+					auto ldata = FlatVector::GetData<INPUT_TYPE>(dictionary_values);
+					ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, dict_size.GetIndex(), FlatVector::Validity(dictionary_values),
+											    FlatVector::Validity(result), dataptr, adds_nulls);
+					// slice the result with the original offests
+					auto &offsets = DictionaryVector::SelVector(input);;
+					result.Dictionary(result, dict_size.GetIndex(), offsets, count);
+					break;
+				}
+			}
+			DUCKDB_EXPLICIT_FALLTHROUGH;
+		}
 #endif
 		default: {
 			UnifiedVectorFormat vdata;
