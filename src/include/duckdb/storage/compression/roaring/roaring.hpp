@@ -212,7 +212,7 @@ public:
 	// RoaringStateAppender interface:
 
 	static void HandleByte(RoaringAnalyzeState &state, uint8_t array_index);
-	static void HandleBit(RoaringAnalyzeState &state, bool bit_set);
+	static void HandleRaggedByte(RoaringAnalyzeState &state, uint8_t array_index, idx_t relevant_bits);
 	static void HandleAllValid(RoaringAnalyzeState &state, idx_t amount);
 	static void HandleNoneValid(RoaringAnalyzeState &state, idx_t amount);
 	static idx_t Count(RoaringAnalyzeState &state);
@@ -324,7 +324,7 @@ public:
 public:
 	//! RoaringStateAppender interface
 	static void HandleByte(RoaringCompressState &state, uint8_t array_index);
-	static void HandleBit(RoaringCompressState &state, bool bit_set);
+	static void HandleRaggedByte(RoaringCompressState &state, uint8_t array_index, idx_t relevant_bits);
 	static void HandleAllValid(RoaringCompressState &state, idx_t amount);
 	static void HandleNoneValid(RoaringCompressState &state, idx_t amount);
 	static idx_t Count(RoaringCompressState &state);

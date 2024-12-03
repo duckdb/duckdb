@@ -466,14 +466,11 @@ void RoaringCompressState::HandleByte(RoaringCompressState &state, uint8_t array
 	} else if (array_index == 0) {
 		HandleNoneValid(state, 8);
 	} else {
-		for (idx_t i = 0; i < 8; i++) {
-			const bool bit_set = array_index & (1 << i);
-			HandleBit(state, bit_set);
-		}
+		HandleRaggedByte(state, array_index, 8);
 	}
 }
 
-void RoaringCompressState::HandleBit(RoaringCompressState &state, bool bit_set) {
+static inline void HandleBit(RoaringCompressState &state, bool bit_set) {
 	auto &container_state = state.container_state;
 	if (container_state.length && container_state.last_bit_set != bit_set) {
 		container_state.Append(!container_state.last_bit_set, container_state.length);
@@ -481,6 +478,14 @@ void RoaringCompressState::HandleBit(RoaringCompressState &state, bool bit_set) 
 	}
 	container_state.length += 1;
 	container_state.last_bit_set = bit_set;
+}
+
+void RoaringCompressState::HandleRaggedByte(RoaringCompressState &state, uint8_t array_index, idx_t relevant_bits) {
+	D_ASSERT(relevant_bits <= 8);
+	for (idx_t i = 0; i < relevant_bits; i++) {
+		const bool bit_set = array_index & (1 << i);
+		HandleBit(state, bit_set);
+	}
 }
 
 void RoaringCompressState::HandleAllValid(RoaringCompressState &state, idx_t amount) {

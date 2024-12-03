@@ -38,10 +38,9 @@ public:
 		}
 
 		if (DUCKDB_UNLIKELY(last_bits != 0)) {
-			for (idx_t i = full_bytes * 8; i < bits; i++) {
-				bool bit_set = ValidityMask::RowIsValid(entry, i);
-				STATE_TYPE::HandleBit(state, bit_set);
-			}
+			auto bitmask = ValidityUncompressed::UPPER_MASKS[8] >> ((7 - full_bytes) * 8);
+			auto array_index = (entry & bitmask) >> (full_bytes * 8);
+			STATE_TYPE::HandleRaggedByte(state, array_index, last_bits);
 		}
 	}
 

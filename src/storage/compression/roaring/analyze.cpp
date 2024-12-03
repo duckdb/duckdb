@@ -65,7 +65,7 @@ void RoaringAnalyzeState::HandleByte(RoaringAnalyzeState &state, uint8_t array_i
 	state.count += 8;
 }
 
-void RoaringAnalyzeState::HandleBit(RoaringAnalyzeState &state, bool bit_set) {
+static inline void HandleBit(RoaringAnalyzeState &state, bool bit_set) {
 	if (!bit_set && (state.count == 0 || state.last_bit_set == true)) {
 		state.run_count++;
 	}
@@ -73,6 +73,14 @@ void RoaringAnalyzeState::HandleBit(RoaringAnalyzeState &state, bool bit_set) {
 	state.zero_count += !bit_set;
 	state.last_bit_set = bit_set;
 	state.count++;
+}
+
+void RoaringAnalyzeState::HandleRaggedByte(RoaringAnalyzeState &state, uint8_t array_index, idx_t relevant_bits) {
+	D_ASSERT(relevant_bits <= 8);
+	for (idx_t i = 0; i < relevant_bits; i++) {
+		const bool bit_set = array_index & (1 << i);
+		HandleBit(state, bit_set);
+	}
 }
 
 void RoaringAnalyzeState::HandleAllValid(RoaringAnalyzeState &state, idx_t amount) {
