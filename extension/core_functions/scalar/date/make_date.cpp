@@ -11,15 +11,9 @@
 
 namespace duckdb {
 
-struct MakeDateFromEpochOperator {
-	static date_t Operation(int32_t val) {
-		return Date::EpochDaysToDate(val);
-	}
-};
-
 static void MakeDateFromEpoch(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
-	UnaryExecutor::Execute<int32_t, date_t>(input.data[0], result, input.size(), MakeDateFromEpochOperator::Operation);
+	result.Reinterpret(input.data[0]);
 }
 
 struct MakeDateOperator {
