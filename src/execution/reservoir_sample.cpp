@@ -244,25 +244,24 @@ void ReservoirSample::ConvertToSlowSample() {
 	base_reservoir_sample->FillWeights(sel, sel_size);
 }
 
-vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t size) const {
+vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t range, uint32_t size) const {
 	vector<uint32_t> ret;
-	ret.reserve(size);
-	for (uint32_t i = 0; i < size; i++) {
+	ret.reserve(range);
+	for (uint32_t i = 0; i < range; i++) {
 		ret.push_back(i);
 	}
-	if (size <= 1) {
+	if (range <= 1) {
 		return ret;
 	}
-	if (size == 2) {
+	if (range == 2) {
 		if (base_reservoir_sample->random.NextRandom() > 0.5) {
 			std::swap(ret[0], ret[1]);
 		}
 		return ret;
 	}
-	idx_t upper_bound = size - 1;
-	for (idx_t i = 0; i < upper_bound; i++) {
-		uint32_t random_shuffle = base_reservoir_sample->random.NextRandomInteger(static_cast<uint32_t>(i + 1),
-		                                                                          static_cast<uint32_t>(upper_bound));
+	uint32_t upper_bound = size - 1;
+	for (uint32_t i = 0; i < upper_bound; i++) {
+		uint32_t random_shuffle = base_reservoir_sample->random.NextRandomInteger(i + 1, upper_bound);
 		uint32_t tmp = ret[random_shuffle];
 		// basically replacing the tuple that was at index actual_sample_indexes[random_shuffle]
 		ret[random_shuffle] = ret[i];
@@ -272,7 +271,7 @@ vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t size) const {
 }
 
 void ReservoirSample::ShuffleSel() {
-	auto new_indexes = GetRandomizedVector(static_cast<uint32_t>(sel_size));
+	auto new_indexes = GetRandomizedVector(static_cast<uint32_t>(sel_size), static_cast<uint32_t>(sel_size));
 	for (idx_t i = 0; i < sel_size; i++) {
 		idx_t tmp = sel.get_index(new_indexes[i]);
 		sel.set_index(new_indexes[i], sel.get_index(i));
@@ -639,14 +638,15 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 	unordered_map<idx_t, idx_t> replacement_indexes;
 	SelectionVector chunk_sel(num_to_pop);
 
-	auto random_indexes_chunk = GetRandomizedVector(static_cast<uint32_t>(chunk_length));
+	auto random_indexes_chunk =
+	    GetRandomizedVector(static_cast<uint32_t>(chunk_length), static_cast<uint32_t>(chunk_length));
+	auto random_sel_indexes = GetRandomizedVector(static_cast<uint32_t>(sel_size), num_to_pop);
 	for (idx_t i = 0; i < num_to_pop; i++) {
 		// update the selection vector for the reservoir sample
 		chunk_sel.set_index(i, random_indexes_chunk[i]);
 		// sel is already random, so we update the indexes incrementally
-		sel.set_index(i, sample_chunk_offset + i);
+		sel.set_index(random_sel_indexes[i], sample_chunk_offset + i);
 	}
-	ShuffleSel();
 
 	D_ASSERT(sel_size == sample_count);
 

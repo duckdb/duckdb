@@ -240,7 +240,7 @@ private:
 
 	// Get a vector where each index is a random int in the range 0, size.
 	// This is used to shuffle selection vector indexes
-	vector<uint32_t> GetRandomizedVector(uint32_t size) const;
+	vector<uint32_t> GetRandomizedVector(uint32_t range, uint32_t size) const;
 	void ShuffleSel();
 
 	idx_t sample_count;
