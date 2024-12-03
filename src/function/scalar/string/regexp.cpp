@@ -205,8 +205,7 @@ RegexpExtractBindData::RegexpExtractBindData() {
 
 RegexpExtractBindData::RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string_p,
                                              bool constant_pattern, optional_idx group_idx)
-    : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern),
-      group_idx(group_idx) {
+    : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern), group_idx(group_idx) {
 }
 
 unique_ptr<FunctionData> RegexpExtractBindData::Copy() const {
@@ -379,8 +378,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 		}
 	}
 
-	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
-	                                        group_index);
+	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, group_index);
 }
 
 ScalarFunctionSet RegexpFun::GetFunctions() {
