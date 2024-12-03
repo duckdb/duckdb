@@ -26,6 +26,9 @@ inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 }
 
 inline string_t Extract(const string_t &input, const RE2 &re, optional_idx group_index) {
+	if (!group_index.IsValid()) {
+		return string_t();
+	}
 	duckdb_re2::StringPiece result_str;
 	if (!RE2::ExtractGroup(CreateStringPiece(input), re, group_index.GetIndex(), result_str)) {
 		return string_t();
