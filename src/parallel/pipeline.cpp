@@ -87,7 +87,7 @@ bool Pipeline::GetProgress(ProgressData &progress) {
 
 	progress = source->GetProgress(client, *source_state);
 	progress.Normalize(double(source_cardinality));
-	progress.Add(sink->GetSinkProgress(client, *sink->sink_state, progress));
+	progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
 	return progress.IsValid();
 }
 
