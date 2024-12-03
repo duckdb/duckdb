@@ -1922,6 +1922,25 @@ LoadType EnumUtil::FromString<LoadType>(const char *value) {
 	return static_cast<LoadType>(StringUtil::StringToEnum(GetLoadTypeValues(), 3, "LoadType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetLogContextScopeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogContextScope::DATABASE), "DATABASE" },
+		{ static_cast<uint32_t>(LogContextScope::CONNECTION), "CONNECTION" },
+		{ static_cast<uint32_t>(LogContextScope::THREAD), "THREAD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogContextScope>(LogContextScope value) {
+	return StringUtil::EnumToString(GetLogContextScopeValues(), 3, "LogContextScope", static_cast<uint32_t>(value));
+}
+
+template<>
+LogContextScope EnumUtil::FromString<LogContextScope>(const char *value) {
+	return static_cast<LogContextScope>(StringUtil::StringToEnum(GetLogContextScopeValues(), 3, "LogContextScope", value));
+}
+
 const StringUtil::EnumStringLiteral *GetLogDestinationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LogDestinationType::IN_MEMORY), "IN_MEMORY" }

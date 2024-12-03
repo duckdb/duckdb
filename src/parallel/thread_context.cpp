@@ -6,8 +6,7 @@
 namespace duckdb {
 
 ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
-	LoggingContext log_context;
-	log_context.default_log_type = "thread_context";
+	LoggingContext log_context(LogContextScope::THREAD);
 	log_context.client_context = reinterpret_cast<idx_t>(&context);
 	log_context.thread = TaskScheduler::GetEstimatedCPUId();
 	if (context.transaction.HasActiveTransaction()) {

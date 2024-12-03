@@ -55,7 +55,7 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	duckdb::vector<Value> default_types = {"global_logger", "client_context"};
+	duckdb::vector<Value> default_types = {"default", "default"};
 	duckdb::vector<string> log_levels = {"DEBUGGING", "INFO", "WARN", "ERROR", "FATAL"};
 	auto minimum_level_index = std::find(log_levels.begin(), log_levels.end(), minimum_level) - log_levels.begin();
 
@@ -143,10 +143,10 @@ TEST_CASE("Test logging", "[logging][.]") {
 		test_logging(level, "", "");
 
 		// Test various combinations of enabled and disabled loggers
-		test_logging(level, "custom_type,client_context", "");
+		test_logging(level, "custom_type,default", "");
 		test_logging(level, "custom_type", "");
-		test_logging(level, "", "global_logger");
-		test_logging(level, "", "custom_type,global_logger");
+		test_logging(level, "", "default");
+		test_logging(level, "", "custom_type,default");
 	}
 
 	// TODO: test thread-local logger

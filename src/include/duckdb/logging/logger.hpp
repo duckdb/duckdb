@@ -34,13 +34,24 @@ enum class LogLevel : uint8_t {
 	FATAL = 50,
 };
 
+enum class LogContextScope : uint8_t {
+	DATABASE = 10,
+	CONNECTION = 20,
+	THREAD = 30,
+};
+
 struct LoggingContext {
+	explicit LoggingContext(LogContextScope scope_p) : scope(scope_p){
+	}
+
+	LogContextScope scope;
+
 	// TODO: potentially we might want to add stuff to identify which connection and thread the log came from
 	optional_idx thread;
 	optional_idx client_context;
 	optional_idx transaction_id;
 
-	const char *default_log_type = "";
+	const char *default_log_type = "default";
 };
 
 struct RegisteredLoggingContext {
@@ -130,6 +141,7 @@ public:
 	// most preferred way of fetching the logger and the DatabaseInstance getter the least preferred. This has to do
 	// both with logging performance and level of detail of logging context that is provided.
 	static Logger &Get(ThreadContext &thread_context);
+	static Logger &Get(ExecutionContext &execution_context);
 	static Logger &Get(ClientContext &client_context);
 	static Logger &Get(FileOpener &opener);
 	static Logger &Get(DatabaseInstance &db);

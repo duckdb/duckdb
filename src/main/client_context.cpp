@@ -140,8 +140,7 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 #ifdef DEBUG
 	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
 #endif
-	LoggingContext context;
-	context.default_log_type = "client_context";
+	LoggingContext context(LogContextScope::CONNECTION);
 	context.client_context = reinterpret_cast<idx_t>(this);
 	logger = db->GetLogManager().CreateLogger(context, true);
 }
@@ -210,12 +209,11 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	logger->Flush();
 
 	// Refresh the logger to ensure we are in sync with global log settings
-	LoggingContext context;
-	context.default_log_type = "client_context";
+	LoggingContext context(LogContextScope::CONNECTION);
 	context.client_context = reinterpret_cast<idx_t>(this);
 	context.transaction_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(context, true);
-	Logger::Info(*this, "Beginning query: '%s'", query);
+	Logger::Info(*this, "Running query '%s'", query);
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
@@ -226,7 +224,6 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		active_query->executor->CancelTasks();
 	}
 	active_query->progress_bar.reset();
-	Logger::Info(*this, "Ending Query '%s'", active_query->query);
 	D_ASSERT(active_query.get());
 	active_query.reset();
 	query_progress.Initialize();
@@ -257,8 +254,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 
 	// Refresh the logger
 	logger->Flush();
-	LoggingContext context;
-	context.default_log_type = "client_context";
+	LoggingContext context (LogContextScope::CONNECTION);
 	context.client_context = reinterpret_cast<idx_t>(this);
 	logger = db->GetLogManager().CreateLogger(context, true);
 

@@ -192,6 +192,8 @@ enum class LimitNodeType : uint8_t;
 
 enum class LoadType : uint8_t;
 
+enum class LogContextScope : uint8_t;
+
 enum class LogDestinationType : uint8_t;
 
 enum class LogLevel : uint8_t;
@@ -614,6 +616,9 @@ const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
+
+template<>
+const char* EnumUtil::ToChars<LogContextScope>(LogContextScope value);
 
 template<>
 const char* EnumUtil::ToChars<LogDestinationType>(LogDestinationType value);
@@ -1128,6 +1133,9 @@ LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
 
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
+
+template<>
+LogContextScope EnumUtil::FromString<LogContextScope>(const char *value);
 
 template<>
 LogDestinationType EnumUtil::FromString<LogDestinationType>(const char *value);

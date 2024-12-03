@@ -15,16 +15,17 @@ namespace duckdb {
 LogStorage::LogStorage(shared_ptr<DatabaseInstance> &db_p) : entry_buffer(make_uniq<DataChunk>()), log_context_buffer(make_uniq<DataChunk>()) {
 	// LogEntry Schema
 	vector<LogicalType> log_entry_schema = {
-		LogicalType::UBIGINT, // context_id
+		LogicalType::UBIGINT,   // context_id
 		LogicalType::TIMESTAMP, // timestamp
-		LogicalType::VARCHAR, // log_type
-		LogicalType::VARCHAR, // level
-		LogicalType::VARCHAR, // message
+		LogicalType::VARCHAR,   // log_type TODO: const vector where possible?
+		LogicalType::VARCHAR,   // level TODO: enumify
+		LogicalType::VARCHAR,   // message
 	};
 
 	// LogContext Schema
 	vector<LogicalType> log_context_schema = {
 		LogicalType::UBIGINT, // context_id
+		LogicalType::VARCHAR, // scope TODO: enumify
 		LogicalType::UBIGINT, // client_context
 		LogicalType::UBIGINT, // transaction_id
 		LogicalType::UBIGINT, // thread
@@ -78,23 +79,26 @@ void LogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {
 	auto context_id_data = FlatVector::GetData<idx_t>(log_context_buffer->data[0]);
 	context_id_data[size] = context.context_id;
 
+	auto context_scope_data = FlatVector::GetData<string_t>(log_context_buffer->data[1]);
+	context_scope_data[size] = StringVector::AddString(log_context_buffer->data[1], EnumUtil::ToString(context.context.scope));
+
 	if (context.context.client_context.IsValid()) {
-		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[1]);
+		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[2]);
 		client_context_data[size] = context.context.client_context.GetIndex();
 	} else {
-		FlatVector::Validity(log_context_buffer->data[1]).SetInvalid(size);
+		FlatVector::Validity(log_context_buffer->data[2]).SetInvalid(size);
 	}
 	if (context.context.transaction_id.IsValid()) {
-		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[2]);
+		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[3]);
 		client_context_data[size] = context.context.transaction_id.GetIndex();
 	} else {
-		FlatVector::Validity(log_context_buffer->data[1]).SetInvalid(size);
+		FlatVector::Validity(log_context_buffer->data[3]).SetInvalid(size);
 	}
 	if (context.context.thread.IsValid()) {
-		auto thread_data = FlatVector::GetData<idx_t>(log_context_buffer->data[3]);
+		auto thread_data = FlatVector::GetData<idx_t>(log_context_buffer->data[4]);
 		thread_data[size] = context.context.thread.GetIndex();
 	} else {
-		FlatVector::Validity(log_context_buffer->data[3]).SetInvalid(size);
+		FlatVector::Validity(log_context_buffer->data[4]).SetInvalid(size);
 	}
 
 	log_context_buffer->SetCardinality(size + 1);
@@ -141,6 +145,10 @@ Logger &Logger::Get(DatabaseInstance &db) {
 
 Logger& Logger::Get(ThreadContext &thread_context) {
 	return *thread_context.logger;
+}
+
+Logger& Logger::Get(ExecutionContext &execution_context) {
+	return *execution_context.thread.logger;
 }
 
 Logger& Logger::Get(ClientContext &client_context) {
@@ -330,7 +338,8 @@ unique_ptr<Logger> LogManager::CreateLogger(LoggingContext &context, bool thread
 		return make_uniq<NopLogger>();
 	}
 	if (!thread_safe) {
-		return make_uniq<ThreadLocalLogger>(config_copy, context, *this);
+		// TODO: implement ThreadLocalLogger and return it here
+		// return make_uniq<ThreadLocalLogger>(config_copy, context, *this);
 	}
 	return make_uniq<ThreadSafeLogger>(config_copy, context, *this);
 }
@@ -372,8 +381,7 @@ LogManager::LogManager(shared_ptr<DatabaseInstance> &db, LogConfig config_p) : c
 }
 
 void LogManager::Initialize() {
-	LoggingContext context;
-	context.default_log_type = "global_logger";
+	LoggingContext context(LogContextScope::DATABASE);
 	global_logger = CreateLogger(context, true, true);
 }
 
