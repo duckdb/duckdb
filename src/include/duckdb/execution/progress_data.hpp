@@ -32,7 +32,7 @@ struct ProgressData {
 		// Normalize checks only `target`, propagating invalid
 		D_ASSERT(target > 0.0);
 		if (IsValid()) {
-			if (done > 0.0) {
+			if (total > 0.0) {
 				done /= total;
 			}
 			total = 1.0;
