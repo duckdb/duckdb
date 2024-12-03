@@ -58,6 +58,8 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		    cast_data.child_cast_info[i].function(source_child_vector, result_child_vector, count, child_parameters);
 		(void)converted;
 		D_ASSERT(converted);
+		// we flatten the child because we use FlatVector::SetNull below and we may get non-flat from source/cast
+		result_child_vector.Flatten(count);
 	}
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -68,15 +70,15 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		auto &tag_vec = *target_children[0];
 		ConstantVector::SetNull(result, ConstantVector::IsNull(tag_vec));
 	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-
 		// if the tag is NULL, the union should be NULL
 		auto &tag_vec = *target_children[0];
-		UnifiedVectorFormat tag_data;
+		UnifiedVectorFormat source_data, tag_data;
+		source.ToUnifiedFormat(count, source_data);
 		tag_vec.ToUnifiedFormat(count, tag_data);
+
 		for (idx_t i = 0; i < count; i++) {
-			if (!tag_data.validity.RowIsValid(tag_data.sel->get_index(i))) {
+			if (!source_data.validity.RowIsValid(source_data.sel->get_index(i)) ||
+			    !tag_data.validity.RowIsValid(tag_data.sel->get_index(i))) {
 				FlatVector::SetNull(result, i, true);
 			}
 		}
