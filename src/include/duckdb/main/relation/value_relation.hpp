@@ -21,6 +21,9 @@ public:
 	              vector<string> names, string alias = "values");
 	ValueRelation(const shared_ptr<RelationContextWrapper> &context, const vector<vector<Value>> &values,
 	              vector<string> names, string alias = "values");
+	ValueRelation(const shared_ptr<RelationContextWrapper> &context,
+	              vector<vector<unique_ptr<ParsedExpression>>> &&expressions, vector<string> names,
+	              string alias = "values");
 	ValueRelation(const shared_ptr<ClientContext> &context, const string &values, vector<string> names,
 	              string alias = "values");
 

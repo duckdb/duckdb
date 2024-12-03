@@ -301,7 +301,7 @@ struct QuantileState {
 	}
 
 	CursorType &GetOrCreateWindowCursor(const WindowPartitionInput &partition) {
-		if (!window_state) {
+		if (!window_cursor) {
 			window_cursor = make_uniq<CursorType>(partition);
 		}
 		return *window_cursor;

@@ -21,7 +21,7 @@ TEST_CASE("Test the table description in the C API", "[capi]") {
 
 	// Create an in-memory table and a table in an external file.
 	tester.Query("CREATE TABLE test (i INTEGER, j INTEGER default 5)");
-	auto test_dir = GetTestDirectory();
+	auto test_dir = TestDirectoryPath();
 	auto attach_query = "ATTACH '" + test_dir + "/ext_description.db'";
 	tester.Query(attach_query);
 	tester.Query("CREATE TABLE ext_description.test(my_column INTEGER)");

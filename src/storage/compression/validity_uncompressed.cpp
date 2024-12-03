@@ -238,7 +238,7 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	for (idx_t i = 0; i < scan_count; i++) {
 		if (!source_mask.RowIsValid(input_start + i)) {
 			if (result_mask.AllValid()) {
-				result_mask.Initialize(result_mask.TargetCount());
+				result_mask.Initialize();
 			}
 			result_mask.SetInvalid(result_offset + i);
 		}

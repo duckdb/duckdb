@@ -183,17 +183,17 @@ struct ParquetWriteBindData : public TableFunctionData {
 	duckdb_parquet::CompressionCodec::type codec = duckdb_parquet::CompressionCodec::SNAPPY;
 	vector<pair<string, string>> kv_metadata;
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
-
-	//! If row_group_size_bytes is not set, we default to row_group_size * BYTES_PER_ROW
-	static constexpr const idx_t BYTES_PER_ROW = 1024;
-	idx_t row_group_size_bytes;
+	idx_t row_group_size_bytes = NumericLimits<idx_t>::Maximum();
 
 	//! How/Whether to encrypt the data
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 	bool debug_use_openssl = true;
 
-	//! Dictionary compression is applied only if the compression ratio exceeds this threshold
-	double dictionary_compression_ratio_threshold = 1.0;
+	//! After how many distinct values should we abandon dictionary compression and bloom filters?
+	idx_t dictionary_size_limit = row_group_size / 100;
+
+	//! What false positive rate are we willing to accept for bloom filters
+	double bloom_filter_false_positive_ratio = 0.01;
 
 	//! After how many row groups to rotate to a new file
 	optional_idx row_groups_per_file;
@@ -1278,14 +1278,19 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 		} else if (loption == "encryption_config") {
 			bind_data->encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
 		} else if (loption == "dictionary_compression_ratio_threshold") {
-			auto val = option.second[0].GetValue<double>();
-			if (val == -1) {
-				val = NumericLimits<double>::Maximum();
-			} else if (val < 0) {
-				throw BinderException("dictionary_compression_ratio_threshold must be greater than 0, or -1 to disable "
-				                      "dictionary compression");
+			// deprecated, ignore setting
+		} else if (loption == "dictionary_size_limit") {
+			auto val = option.second[0].GetValue<int64_t>();
+			if (val < 0) {
+				throw BinderException("dictionary_size_limit must be greater than 0 or 0 to disable");
 			}
-			bind_data->dictionary_compression_ratio_threshold = val;
+			bind_data->dictionary_size_limit = val;
+		} else if (loption == "bloom_filter_false_positive_ratio") {
+			auto val = option.second[0].GetValue<double>();
+			if (val <= 0) {
+				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0");
+			}
+			bind_data->bloom_filter_false_positive_ratio = val;
 		} else if (loption == "debug_use_openssl") {
 			auto val = StringUtil::Lower(option.second[0].GetValue<std::string>());
 			if (val == "false") {
@@ -1313,9 +1318,6 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			throw BinderException("ROW_GROUP_SIZE_BYTES does not work while preserving insertion order. Use \"SET "
 			                      "preserve_insertion_order=false;\" to disable preserving insertion order.");
 		}
-	} else {
-		// We always set a max row group size bytes so we don't use too much memory
-		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
 	}
 
 	if (compression_level_set && bind_data->codec != CompressionCodec::ZSTD) {
@@ -1333,11 +1335,11 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer =
-	    make_uniq<ParquetWriter>(context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names,
-	                             parquet_bind.codec, parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata,
-	                             parquet_bind.encryption_config, parquet_bind.dictionary_compression_ratio_threshold,
-	                             parquet_bind.compression_level, parquet_bind.debug_use_openssl);
+	global_state->writer = make_uniq<ParquetWriter>(
+	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
+	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
+	    parquet_bind.dictionary_size_limit, parquet_bind.bloom_filter_false_positive_ratio,
+	    parquet_bind.compression_level, parquet_bind.debug_use_openssl);
 	return std::move(global_state);
 }
 
@@ -1471,13 +1473,15 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(106, "field_ids", bind_data.field_ids);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                         bind_data.encryption_config, nullptr);
-	serializer.WriteProperty(108, "dictionary_compression_ratio_threshold",
-	                         bind_data.dictionary_compression_ratio_threshold);
+
+	// 108 was dictionary_compression_ratio_threshold, but was deleted
 	const auto compression_level = SerializeCompressionLevel(bind_data.compression_level);
 	D_ASSERT(DeserializeCompressionLevel(compression_level) == bind_data.compression_level);
 	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
 	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
 	serializer.WriteProperty(111, "debug_use_openssl", bind_data.debug_use_openssl);
+	serializer.WriteProperty(112, "dictionary_size_limit", bind_data.dictionary_size_limit);
+	serializer.WriteProperty(113, "bloom_filter_false_positive_ratio", bind_data.bloom_filter_false_positive_ratio);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1491,8 +1495,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
 	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
 	                                                                                  data->encryption_config, nullptr);
-	deserializer.ReadPropertyWithExplicitDefault<double>(108, "dictionary_compression_ratio_threshold",
-	                                                     data->dictionary_compression_ratio_threshold, 1.0);
+	deserializer.ReadDeletedProperty<double>(108, "dictionary_compression_ratio_threshold");
+
 	optional_idx compression_level;
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
 	data->compression_level = DeserializeCompressionLevel(compression_level);
@@ -1500,6 +1504,11 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->row_groups_per_file =
 	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
 	data->debug_use_openssl = deserializer.ReadPropertyWithExplicitDefault<bool>(111, "debug_use_openssl", true);
+	data->dictionary_size_limit =
+	    deserializer.ReadPropertyWithExplicitDefault<idx_t>(112, "dictionary_size_limit", data->row_group_size / 10);
+	data->bloom_filter_false_positive_ratio =
+	    deserializer.ReadPropertyWithExplicitDefault<double>(113, "bloom_filter_false_positive_ratio", 0.01);
+
 	return std::move(data);
 }
 // LCOV_EXCL_STOP
@@ -1700,6 +1709,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	// parquet_file_metadata
 	ParquetFileMetadataFunction file_meta_fun;
 	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(file_meta_fun));
+
+	// parquet_bloom_probe
+	ParquetBloomProbeFunction bloom_probe_fun;
+	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(bloom_probe_fun));
 
 	CopyFunction function("parquet");
 	function.copy_to_select = ParquetWriteSelect;

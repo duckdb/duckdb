@@ -903,7 +903,7 @@ public:
 		const auto r = MinValue(next_right.load(), right_outers.load());
 		const auto returned = completed.load() + l + r;
 
-		return count ? (double(returned) / double(count)) : -1;
+		return count ? (100.0 * double(returned) / double(count)) : -1;
 	}
 
 	const PhysicalIEJoin &op;

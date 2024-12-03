@@ -505,6 +505,18 @@ typedef struct {
 	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
 	duckdb_state (*duckdb_appender_add_column)(duckdb_appender appender, const char *name);
 	duckdb_state (*duckdb_appender_clear_columns)(duckdb_appender appender);
+	bool (*duckdb_is_finite_timestamp_s)(duckdb_timestamp_s ts);
+	bool (*duckdb_is_finite_timestamp_ms)(duckdb_timestamp_ms ts);
+	bool (*duckdb_is_finite_timestamp_ns)(duckdb_timestamp_ns ts);
+	duckdb_value (*duckdb_create_timestamp_tz)(duckdb_timestamp input);
+	duckdb_value (*duckdb_create_timestamp_s)(duckdb_timestamp_s input);
+	duckdb_value (*duckdb_create_timestamp_ms)(duckdb_timestamp_ms input);
+	duckdb_value (*duckdb_create_timestamp_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp (*duckdb_get_timestamp_tz)(duckdb_value val);
+	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
+	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
+	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
 #endif
 
 } duckdb_ext_api_v0;
@@ -887,7 +899,18 @@ typedef struct {
 #define duckdb_destroy_cast_function                duckdb_ext_api.duckdb_destroy_cast_function
 
 // Version dev
+#define duckdb_is_finite_timestamp_s             duckdb_ext_api.duckdb_is_finite_timestamp_s
+#define duckdb_is_finite_timestamp_ms            duckdb_ext_api.duckdb_is_finite_timestamp_ms
+#define duckdb_is_finite_timestamp_ns            duckdb_ext_api.duckdb_is_finite_timestamp_ns
 #define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
+#define duckdb_create_timestamp_tz               duckdb_ext_api.duckdb_create_timestamp_tz
+#define duckdb_create_timestamp_s                duckdb_ext_api.duckdb_create_timestamp_s
+#define duckdb_create_timestamp_ms               duckdb_ext_api.duckdb_create_timestamp_ms
+#define duckdb_create_timestamp_ns               duckdb_ext_api.duckdb_create_timestamp_ns
+#define duckdb_get_timestamp_tz                  duckdb_ext_api.duckdb_get_timestamp_tz
+#define duckdb_get_timestamp_s                   duckdb_ext_api.duckdb_get_timestamp_s
+#define duckdb_get_timestamp_ms                  duckdb_ext_api.duckdb_get_timestamp_ms
+#define duckdb_get_timestamp_ns                  duckdb_ext_api.duckdb_get_timestamp_ns
 #define duckdb_is_null_value                     duckdb_ext_api.duckdb_is_null_value
 #define duckdb_create_null_value                 duckdb_ext_api.duckdb_create_null_value
 #define duckdb_get_list_size                     duckdb_ext_api.duckdb_get_list_size
@@ -898,6 +921,7 @@ typedef struct {
 #define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
 #define duckdb_appender_add_column               duckdb_ext_api.duckdb_appender_add_column
 #define duckdb_appender_clear_columns            duckdb_ext_api.duckdb_appender_clear_columns
+#define duckdb_append_value                      duckdb_ext_api.duckdb_append_value
 #define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
 #define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name
 

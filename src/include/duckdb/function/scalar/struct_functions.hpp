@@ -26,7 +26,7 @@ struct StructExtractFun {
 
 struct StructPackFun {
 	static constexpr const char *Name = "struct_pack";
-	static constexpr const char *Parameters = "name:=any,...)";
+	static constexpr const char *Parameters = "name:=any,...";
 	static constexpr const char *Description = "Create a STRUCT containing the argument values. The entry name will be the bound variable name.";
 	static constexpr const char *Example = "struct_pack(i := 4, s := 'string')";
 
