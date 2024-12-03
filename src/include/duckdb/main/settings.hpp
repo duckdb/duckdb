@@ -550,21 +550,22 @@ struct EnableProgressBarSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct EnableProgressBarPrintSetting {
+struct EnableProgressBarDebugSetting {
 	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "enable_progress_bar_print";
+	static constexpr const char *Name = "enable_progress_bar_debug";
 	static constexpr const char *Description =
-	    "Controls the printing of the progress bar, when 'enable_progress_bar' is true";
+	    "Controls the printing of debug information, when 'enable_progress_bar_debug' is true";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct EnableProgressBarDebugSetting {
+struct EnableProgressBarPrintSetting {
 	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "enable_progress_bar_debug";
-	static constexpr const char *Description = "Controls the printing (and collection) of progress bar debug info";
+	static constexpr const char *Name = "enable_progress_bar_print";
+	static constexpr const char *Description =
+	    "Controls the printing of the progress bar, when 'enable_progress_bar' is true";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
