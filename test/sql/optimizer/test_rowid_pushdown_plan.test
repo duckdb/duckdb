@@ -1,4 +1,4 @@
-# name: test/sql/optimizer/test_rowid_pushdown.test
+# name: test/sql/optimizer/test_rowid_pushdown_plan.test
 # group: [optimizer]
 
 require tpch
