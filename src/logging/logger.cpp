@@ -43,8 +43,8 @@ void LogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const stri
 	auto size = entry_buffer->size();
 	auto context_id_data = FlatVector::GetData<idx_t>(entry_buffer->data[0]);
 	auto timestamp_data = FlatVector::GetData<timestamp_t>(entry_buffer->data[1]);
-	auto level_data = FlatVector::GetData<string_t>(entry_buffer->data[2]);
-	auto type_data = FlatVector::GetData<string_t>(entry_buffer->data[3]);
+	auto type_data = FlatVector::GetData<string_t>(entry_buffer->data[2]);
+	auto level_data = FlatVector::GetData<string_t>(entry_buffer->data[3]);
 	auto message_data = FlatVector::GetData<string_t>(entry_buffer->data[4]);
 
 	context_id_data[size] = context.context_id;
@@ -312,7 +312,7 @@ bool MutableLogger::ShouldLog(LogLevel log_level) {
 	}
 
 	// check atomic level to early out if level too low
-	if (level < log_level) {
+	if (level > log_level) {
 		return false;
 	}
 
