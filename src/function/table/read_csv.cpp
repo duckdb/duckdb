@@ -59,6 +59,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 
 	idx_t total_number_of_rows = 0;
 	idx_t current_file = 0;
+	options.file_path = file_paths[current_file];
 
 	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
 	options.file_path = multi_file_list.GetFirstFile();
@@ -74,7 +75,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	}
 
 	// We do a copy of the options to not pollute the options of the first file.
-	while (total_number_of_rows < required_number_of_lines && current_file < file_paths.size()) {
+	while (total_number_of_rows < required_number_of_lines && current_file + 1 < file_paths.size()) {
 		auto option_copy = option_og;
 		current_file++;
 		option_copy.file_path = file_paths[current_file];
@@ -96,7 +97,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		if (best_schema.Empty()) {
 			// A schema is bettah than no schema
 			best_schema = schema;
-		} else if (schema.MatchColumns(best_schema) && !option_og.null_padding) {
+		} else if (!schema.MatchColumns(best_schema) && !option_og.null_padding) {
 			throw InvalidInputException("File %s has a schema with %d columns, while file %s has a schema with %d "
 			                            "columns. \nPossible Fix: * set null_padding=True",
 			                            best_schema.GetPath(), best_schema.GetColumnCount(), schema.GetPath(),
