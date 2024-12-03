@@ -373,6 +373,13 @@ void BaseAppender::Append(Value value) { // NOLINT: template stuff
 	AppendValue(value);
 }
 
+void BaseAppender::Append(DataChunk &target, Value value, int8_t column) {
+	if (column >= target.ColumnCount()) {
+		throw InvalidInputException("Too many appends for chunk!");
+	}
+	target.SetValue(column, target.size(), value);
+}
+
 template <>
 void BaseAppender::Append(std::nullptr_t value) {
 	if (column >= chunk.ColumnCount()) {
@@ -473,6 +480,18 @@ void Appender::AppendDefault() {
 	}
 	auto &value = it->second;
 	Append(value);
+}
+
+void Appender::AppendDefault(DataChunk &chunk, int8_t column) {
+	auto index = column_ids.empty() ? column : column_ids[column].index;
+	auto it = default_values.find(index);
+	if (it == default_values.end()) {
+		auto &name = description->columns[index].Name();
+		throw NotImplementedException(
+		    "AppendDefault is not supported for column \"%s\": not a foldable default expressions.", name);
+	}
+	auto &value = it->second;
+	Append(chunk, value, column);
 }
 
 void Appender::AddColumn(const string &name) {
