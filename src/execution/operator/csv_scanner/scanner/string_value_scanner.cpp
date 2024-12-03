@@ -815,7 +815,7 @@ bool StringValueResult::AddRowInternal() {
 		} else {
 			// If we are not null-padding this is an error
 			if (!state_machine.options.IgnoreErrors()) {
-				bool first_nl;
+				bool first_nl = false;
 				auto borked_line =
 				    current_line_position.ReconstructCurrentLine(first_nl, buffer_handles, PrintErrorLine());
 				LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
@@ -1588,9 +1588,9 @@ bool StringValueScanner::IsRowValid(CSVIterator &current_iterator) const {
 		return false;
 	}
 	constexpr idx_t result_size = 1;
-	auto scan_finder = make_uniq<StringValueScanner>(StringValueScanner::LINE_FINDER_ID, buffer_manager, state_machine_strict,
-	                                                 make_shared_ptr<CSVErrorHandler>(), csv_file_scan, false,
-	                                                 current_iterator, result_size);
+	auto scan_finder = make_uniq<StringValueScanner>(StringValueScanner::LINE_FINDER_ID, buffer_manager,
+	                                                 state_machine_strict, make_shared_ptr<CSVErrorHandler>(),
+	                                                 csv_file_scan, false, current_iterator, result_size);
 	auto &tuples = scan_finder->ParseChunk();
 	current_iterator.pos = scan_finder->GetIteratorPosition();
 	bool has_error = false;
