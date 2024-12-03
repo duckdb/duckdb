@@ -68,12 +68,6 @@ idx_t ReservoirSample::GetSampleCount() {
 	return sample_count;
 }
 
-void PrintSel(SelectionVector &sel, idx_t &sel_size) {
-	for (idx_t i = 0; i < sel_size; i++) {
-		Printer::Print(to_string(sel.get_index(i)));
-	}
-}
-
 idx_t ReservoirSample::NumSamplesCollected() const {
 	if (!reservoir_chunk) {
 		return 0;
@@ -823,7 +817,6 @@ void ReservoirSample::Verify() {
 			base_reservoir_copy->reservoir_weights.pop();
 		} else {
 			index_count[pair.second] += 1;
-			Printer::Print("duplicate index in reservoir weights " + to_string(pair.second));
 			base_reservoir_copy->reservoir_weights.pop();
 			D_ASSERT(false);
 		}
