@@ -159,4 +159,9 @@ int64_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields 
 	return sub;
 }
 
+uint64_t ICUDateFunc::SetCurrentTimestamp(icu::Calendar *calendar, ExpressionState &state) {
+	const auto current_timestamp = MetaTransaction::Get(state.GetContext()).start_timestamp;
+	return SetTime(calendar, current_timestamp);
+}
+
 } // namespace duckdb

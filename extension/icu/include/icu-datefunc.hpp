@@ -73,6 +73,8 @@ struct ICUDateFunc {
 	//! constructs an ICU timestamp, and then converts that back to a DuckDB instant
 	//! Adding offset doesn't really work around DST because the bin values are ambiguous
 	static timestamp_t FromNaive(icu::Calendar *calendar, timestamp_t naive);
+	//! Set the calendar date to the transaction now.
+	static uint64_t SetCurrentTimestamp(icu::Calendar *calendar, ExpressionState &state);
 
 	//! Truncates the calendar time to the given part precision
 	typedef void (*part_trunc_t)(icu::Calendar *calendar, uint64_t &micros);
