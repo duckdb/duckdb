@@ -1,4 +1,5 @@
 #include "duckdb/storage/compression/roaring/roaring.hpp"
+#include "duckdb/storage/compression/roaring/appender.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/likely.hpp"
