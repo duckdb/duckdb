@@ -503,11 +503,31 @@ idx_t PositionComparator::Final<duckdb::DistinctLessThan>(Vector &left, Vector &
 }
 
 template <>
+idx_t PositionComparator::Final<duckdb::DistinctLessThanNullsFirst>(Vector &left, Vector &right,
+                                                                    const SelectionVector &sel, idx_t count,
+                                                                    optional_ptr<SelectionVector> true_sel,
+                                                                    optional_ptr<SelectionVector> false_sel,
+                                                                    optional_ptr<ValidityMask> null_mask) {
+	// DistinctGreaterThan has NULLs last
+	return VectorOperations::DistinctGreaterThan(right, left, &sel, count, true_sel, false_sel, null_mask);
+}
+
+template <>
 idx_t PositionComparator::Final<duckdb::DistinctGreaterThan>(Vector &left, Vector &right, const SelectionVector &sel,
                                                              idx_t count, optional_ptr<SelectionVector> true_sel,
                                                              optional_ptr<SelectionVector> false_sel,
                                                              optional_ptr<ValidityMask> null_mask) {
 	return VectorOperations::DistinctGreaterThan(left, right, &sel, count, true_sel, false_sel, null_mask);
+}
+
+template <>
+idx_t PositionComparator::Final<duckdb::DistinctGreaterThanNullsFirst>(Vector &left, Vector &right,
+                                                                       const SelectionVector &sel, idx_t count,
+                                                                       optional_ptr<SelectionVector> true_sel,
+                                                                       optional_ptr<SelectionVector> false_sel,
+                                                                       optional_ptr<ValidityMask> null_mask) {
+	// DistinctLessThan has NULLs last
+	return VectorOperations::DistinctLessThan(right, left, &sel, count, true_sel, false_sel, null_mask);
 }
 
 using StructEntries = vector<unique_ptr<Vector>>;
@@ -1178,6 +1198,16 @@ idx_t VectorOperations::DistinctGreaterThan(Vector &left, Vector &right, optiona
 	                                                                     null_mask);
 }
 
+// true := A > B with nulls being minimal
+idx_t VectorOperations::DistinctGreaterThanNullsFirst(Vector &left, Vector &right,
+                                                      optional_ptr<const SelectionVector> sel, idx_t count,
+                                                      optional_ptr<SelectionVector> true_sel,
+                                                      optional_ptr<SelectionVector> false_sel,
+                                                      optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst>(left, right, sel, count, true_sel,
+	                                                                               false_sel, null_mask);
+}
+
 // true := A >= B with nulls being maximal
 idx_t VectorOperations::DistinctGreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
                                                   idx_t count, optional_ptr<SelectionVector> true_sel,
@@ -1193,6 +1223,15 @@ idx_t VectorOperations::DistinctLessThan(Vector &left, Vector &right, optional_p
                                          optional_ptr<ValidityMask> null_mask) {
 	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan>(right, left, sel, count, true_sel, false_sel,
 	                                                                     null_mask);
+}
+
+// true := A < B with nulls being minimal
+idx_t VectorOperations::DistinctLessThanNullsFirst(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+                                                   idx_t count, optional_ptr<SelectionVector> true_sel,
+                                                   optional_ptr<SelectionVector> false_sel,
+                                                   optional_ptr<ValidityMask> null_mask) {
+	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst>(right, left, sel, count, true_sel,
+	                                                                               false_sel, nullptr);
 }
 
 // true := A <= B with nulls being maximal

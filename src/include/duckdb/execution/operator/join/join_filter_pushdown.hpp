@@ -15,9 +15,10 @@
 namespace duckdb {
 class DataChunk;
 class DynamicTableFilterSet;
+class LogicalGet;
+class JoinHashTable;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
-class JoinHashTable;
 
 struct JoinFilterPushdownColumn {
 	//! The probe column index to which this filter should be applied
@@ -42,6 +43,15 @@ struct JoinFilterPushdownFilter {
 	//! The dynamic table filter set where to push filters into
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! The columns for which we should generate filters
+	vector<JoinFilterPushdownColumn> columns;
+};
+
+struct PushdownFilterTarget {
+	PushdownFilterTarget(LogicalGet &get, vector<JoinFilterPushdownColumn> columns_p)
+	    : get(get), columns(std::move(columns_p)) {
+	}
+
+	LogicalGet &get;
 	vector<JoinFilterPushdownColumn> columns;
 };
 
