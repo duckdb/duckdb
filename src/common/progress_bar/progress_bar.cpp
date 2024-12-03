@@ -2,6 +2,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/progress_bar/display/terminal_progress_bar_display.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 void QueryProgress::Initialize() {
@@ -83,8 +85,16 @@ bool ProgressBar::ShouldPrint(bool final) const {
 		// Don't print progress at all
 		return false;
 	}
-	// FIXME - do we need to check supported before running `profiler.Elapsed()` ?
-	auto sufficient_time_elapsed = profiler.Elapsed() > static_cast<double>(show_progress_after) / 1000.0;
+	if (!supported) {
+		return false;
+	}
+
+	double elapsed_time = -1.0;
+	if (elapsed_time < 0.0) {
+		elapsed_time = profiler.Elapsed();
+	}
+
+	auto sufficient_time_elapsed = elapsed_time > static_cast<double>(show_progress_after) / 1000.0;
 	if (!sufficient_time_elapsed) {
 		// Don't print yet
 		return false;
@@ -92,9 +102,6 @@ bool ProgressBar::ShouldPrint(bool final) const {
 	if (final) {
 		// Print the last completed bar
 		return true;
-	}
-	if (!supported) {
-		return false;
 	}
 	return query_progress.percentage > -1;
 }
@@ -110,9 +117,10 @@ void ProgressBar::Update(bool final) {
 	query_progress.total_rows_to_process = idx_t(progress.total);
 
 	double new_percentage = 0.0;
-	if (progress.total > 0) {
+	if (progress.total > 0 && invalid_pipelines == 0) {
 		new_percentage = progress.ProgressDone() * 100;
-		if (isnan(new_percentage)) new_percentage = 0.0;
+		if (std::isnan(new_percentage))
+			new_percentage = 0.0;
 	}
 
 	if (!final && invalid_pipelines > 0) {
