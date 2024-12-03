@@ -75,12 +75,16 @@ ClientContext &Pipeline::GetClientContext() {
 bool Pipeline::GetProgress(ProgressData &progress) {
 	D_ASSERT(source);
 	idx_t source_cardinality = MinValue<idx_t>(source->estimated_cardinality, 1ULL << 48ULL);
+	if (source_cardinality < 1) {
+		source_cardinality = 1;
+	}
 	if (!initialized) {
 		progress.done = 0;
 		progress.total = double(source_cardinality);
 		return true;
 	}
 	auto &client = executor.context;
+
 	progress = source->GetProgress(client, *source_state);
 	progress.Normalize(double(source_cardinality));
 	progress.Add(sink->GetSinkProgress(client, *sink->sink_state, progress));

@@ -17,36 +17,30 @@ struct ProgressData {
 	double total = 0.0;
 	bool invalid = false;
 	double ProgressDone() const {
-		if (invalid) {
-			return -1.0;
-		}
-		if (total <= 0.0) {
-			D_ASSERT(total > 0.0);
-			return 0.0;
-		}
-		if (done <= 0.0) {
-			D_ASSERT(done >= 0.0);
-			return 0.0;
-		}
-		if (done > total) {
-			D_ASSERT(done <= total);
-			return 1.0;
-		}
+		// ProgressDone requires a valid state
+		D_ASSERT(IsValid());
+
 		return done / total;
 	}
 	void Add(const ProgressData &other) {
+		// Add is unchecked, propagating invalid
 		done += other.done;
 		total += other.total;
+		invalid |= other.invalid;
 	}
 	void Normalize(const double target = 1.0) {
+		// Normalize checks only `target`, propagating invalid
 		D_ASSERT(target > 0.0);
-		if (total <= 0.0) {
-			D_ASSERT(total > 0.0);
+		if (IsValid()) {
+			if (done > 0.0) {
+				done /= total;
+			}
+			total = 1.0;
+			done *= target;
+			total *= target;
+		} else {
+			SetInvalid();
 		}
-		done /= total;
-		total = 1.0;
-		done *= target;
-		total *= target;
 	}
 	void SetInvalid() {
 		invalid = true;
@@ -54,7 +48,7 @@ struct ProgressData {
 		total = 1.0;
 	}
 	bool IsValid() const {
-		return !invalid;
+		return (!invalid) || (done < 0.0) || (total < done);
 	}
 };
 

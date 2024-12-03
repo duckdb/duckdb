@@ -2,8 +2,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/progress_bar/display/terminal_progress_bar_display.hpp"
 
-#include <cmath>
-
 namespace duckdb {
 
 void QueryProgress::Initialize() {
@@ -117,11 +115,8 @@ void ProgressBar::Update(bool final) {
 	query_progress.total_rows_to_process = idx_t(progress.total);
 
 	double new_percentage = 0.0;
-	if (progress.total > 0 && invalid_pipelines == 0) {
+	if (invalid_pipelines == 0 && progress.IsValid()) {
 		new_percentage = progress.ProgressDone() * 100;
-		if (std::isnan(new_percentage)) {
-			new_percentage = 0.0;
-		}
 	}
 
 	if (!final && invalid_pipelines > 0) {
