@@ -130,7 +130,6 @@ void ProgressBar::Update(bool final) {
 		return;
 	}
 
-
 	double elapsed_time = -1.0;
 
 	if (squared_distance_accumulator) {
