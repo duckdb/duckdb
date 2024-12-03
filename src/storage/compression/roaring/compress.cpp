@@ -270,7 +270,7 @@ bool RoaringCompressState::CanStore(idx_t container_size, const ContainerMetadat
 }
 
 void RoaringCompressState::InitializeContainer() {
-	if (container_state.appended_count == analyze_state.total_count) {
+	if (total_count == analyze_state.total_count) {
 		// No more containers left
 		return;
 	}
@@ -355,12 +355,17 @@ void RoaringCompressState::FlushSegment() {
 }
 
 void RoaringCompressState::Finalize() {
-	Flush(*this);
+	FlushContainer();
 	FlushSegment();
 	current_segment.reset();
 }
 
 void RoaringCompressState::FlushContainer() {
+	if (container_state.length) {
+		container_state.Append(!container_state.last_bit_set, container_state.length);
+		container_state.length = 0;
+	}
+
 	if (!container_state.appended_count) {
 		return;
 	}
@@ -431,7 +436,7 @@ void RoaringCompressState::FlushContainer() {
 }
 
 void RoaringCompressState::NextContainer() {
-	Flush(*this);
+	FlushContainer();
 	InitializeContainer();
 }
 
@@ -485,12 +490,7 @@ idx_t RoaringCompressState::Count(RoaringCompressState &state) {
 }
 
 void RoaringCompressState::Flush(RoaringCompressState &state) {
-	auto &container_state = state.container_state;
-	if (container_state.length) {
-		container_state.Append(!container_state.last_bit_set, container_state.length);
-		container_state.length = 0;
-	}
-	state.FlushContainer();
+	state.NextContainer();
 }
 
 void RoaringCompressState::Compress(Vector &input, idx_t count) {
