@@ -43,7 +43,9 @@ private:
 
 private:
 	static int32_t NormalizePercentage(double percentage);
-	void PrintProgressInternal(int32_t percentage);
+	void PrintProgressInternal(int32_t percentage, bool end);
+	double squared_progress_error = -1.0;
+	double query_time = -1.0;
 };
 
 } // namespace duckdb
