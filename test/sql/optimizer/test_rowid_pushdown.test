@@ -2,6 +2,9 @@
 # group: [optimizer]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE t1 AS SELECT i + 100 as x FROM range(250000) AS t(i);
 
 query I
