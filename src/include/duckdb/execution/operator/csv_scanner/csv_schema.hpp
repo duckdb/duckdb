@@ -27,6 +27,9 @@ struct CSVSchema {
 	CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read);
 	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
 	bool Empty() const;
+	bool MatchColumns(CSVSchema &other) const;
+	string GetPath() const;
+	idx_t GetColumnCount() const;
 	bool SchemasMatch(string &error_message, SnifferResult &sniffer_result, const string &cur_file_path,
 	                  bool is_minimal_sniffer) const;
 

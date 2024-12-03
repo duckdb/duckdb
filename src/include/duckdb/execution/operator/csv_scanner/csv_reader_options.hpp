@@ -97,7 +97,6 @@ struct CSVReaderOptions {
 	//! Result size of sniffing phases
 	static constexpr idx_t sniff_size = 2048;
 
-
 	//! Number of sample chunks used in auto-detection
 	idx_t sample_size_chunks = 20480 / sniff_size;
 	//! Consider all columns to be of type varchar

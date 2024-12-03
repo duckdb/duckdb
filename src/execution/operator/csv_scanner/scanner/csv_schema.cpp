@@ -43,8 +43,9 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 	}
 }
 
-CSVSchema::CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read_p): rows_read(rows_read_p) {
-	Initialize(names,types,file_path);
+CSVSchema::CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read_p)
+    : rows_read(rows_read_p) {
+	Initialize(names, types, file_path);
 }
 
 void CSVSchema::Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path_p) {
@@ -62,6 +63,18 @@ void CSVSchema::Initialize(vector<string> &names, vector<LogicalType> &types, co
 
 bool CSVSchema::Empty() const {
 	return columns.empty();
+}
+
+bool CSVSchema::MatchColumns(CSVSchema &other) const {
+	return other.columns.size() == columns.size();
+}
+
+string CSVSchema::GetPath() const {
+	return file_path;
+}
+
+idx_t CSVSchema::GetColumnCount() const {
+	return columns.size();
 }
 
 bool CSVSchema::SchemasMatch(string &error_message, SnifferResult &sniffer_result, const string &cur_file_path,

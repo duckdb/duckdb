@@ -328,7 +328,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 
 	// If the start position is valid.
 	const bool start_good = !candidates.empty() &&
-	                  dirty_notes <= candidates.front()->GetStateMachine().dialect_options.skip_rows.GetValue();
+	                        dirty_notes <= candidates.front()->GetStateMachine().dialect_options.skip_rows.GetValue();
 
 	// If padding happened but it is not allowed.
 	const bool invalid_padding = !allow_padding && padding_count > 0;
@@ -336,13 +336,15 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	const bool comments_are_acceptable = AreCommentsAcceptable(
 	    sniffed_column_counts, num_cols, options.dialect_options.state_machine_options.comment.IsSetByUser());
 
-	const bool quoted = scanner->ever_quoted &&
-	              sniffed_column_counts.state_machine.dialect_options.state_machine_options.quote.GetValue() != '\0';
+	const bool quoted =
+	    scanner->ever_quoted &&
+	    sniffed_column_counts.state_machine.dialect_options.state_machine_options.quote.GetValue() != '\0';
 
 	// For our columns to match, we either don't have them manually set, or they match in value with the sniffed value
-	const bool columns_match_set = num_cols == set_columns.Size() ||
-	                         (num_cols == set_columns.Size() + 1 && sniffed_column_counts[0].last_value_always_empty) ||
-	                         !set_columns.IsSet();
+	const bool columns_match_set =
+	    num_cols == set_columns.Size() ||
+	    (num_cols == set_columns.Size() + 1 && sniffed_column_counts[0].last_value_always_empty) ||
+	    !set_columns.IsSet();
 
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:

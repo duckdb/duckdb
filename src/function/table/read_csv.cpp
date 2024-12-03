@@ -45,10 +45,12 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 }
 
-
 //! Function to do schema discovery over one CSV file or a list/glob of CSV files
-void SchemaDiscovery(ClientContext& context, ReadCSVData& result, CSVReaderOptions& options, vector<LogicalType> &return_types, vector<string> &names, MultiFileList& multi_file_list ) {
+void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptions &options,
+                     vector<LogicalType> &return_types, vector<string> &names, MultiFileList &multi_file_list) {
 	vector<CSVSchema> schemas;
+	const auto option_og = options;
+
 	const auto file_paths = multi_file_list.GetPaths();
 
 	// Here what we want to do is to sniff a given number of lines, if we have many files, we might go through them
@@ -60,13 +62,13 @@ void SchemaDiscovery(ClientContext& context, ReadCSVData& result, CSVReaderOptio
 
 	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
 	options.file_path = multi_file_list.GetFirstFile();
-	result.buffer_manager =
-		   make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false);
+	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false);
 
 	{
 		CSVSniffer sniffer(options, result.buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
-		idx_t rows_read = sniffer.LinesSniffed() - (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
+		idx_t rows_read = sniffer.LinesSniffed() -
+		                  (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
 		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read);
 		total_number_of_rows += sniffer.LinesSniffed();
 	}
@@ -78,22 +80,38 @@ void SchemaDiscovery(ClientContext& context, ReadCSVData& result, CSVReaderOptio
 	// result.csv_types = return_types;
 	// result.csv_names = names;
 
-
-
-	while (total_number_of_rows < required_number_of_lines  && current_file < multi_file_list.Size()) {
+	// We do a copy of the options to not pollute the options of the first file.
+	while (total_number_of_rows < required_number_of_lines && current_file < file_paths.size()) {
+		auto option_copy = option_og;
 		current_file++;
-		options.file_path = file_paths[current_file];
+		option_copy.file_path = file_paths[current_file];
 		auto buffer_manager =
-		   make_shared_ptr<CSVBufferManager>(context, options, options.file_path, current_file, false);
-		// TODO: We could cache the sniffer to be reused during scanning.
-		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context));
+		    make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, current_file, false);
+		// TODO: We could cache the sniffer to be reused during scanning. Currently that's an exercise left to the
+		// reader
+		CSVSniffer sniffer(option_copy, buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
-		idx_t rows_read = sniffer.LinesSniffed() - (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
+		idx_t rows_read = sniffer.LinesSniffed() - (option_copy.dialect_options.skip_rows.GetValue() +
+		                                            option_copy.dialect_options.header.GetValue());
 		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read);
-
 		total_number_of_rows += sniffer.LinesSniffed();
 	}
 
+	// We might now have multiple schemas, we need to go through them to define the one true schema
+	CSVSchema best_schema;
+	for (auto &schema : schemas) {
+		if (best_schema.Empty()) {
+			// A schema is bettah than no schema
+			best_schema = schema;
+			continue;
+		}
+		if (schema.MatchColumns(best_schema) && !option_og.null_padding) {
+			throw InvalidInputException("File %s has a schema with %d columns, while file %s has a schema with %d "
+			                            "columns. \nPossible Fix: * set null_padding=True",
+			                            best_schema.GetPath(), best_schema.GetColumnCount(), schema.GetPath(),
+			                            schema.GetColumnCount());
+		}
+	}
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -119,7 +137,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
-
 	}
 
 	D_ASSERT(return_types.size() == names.size());
