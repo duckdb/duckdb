@@ -626,12 +626,16 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexes(idx_t sample_chunk_
 SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_chunk_offset, idx_t chunk_length) {
 
 	// how much weight to the other tuples have compared to the ones in this chunk?
-	// In fast sampling, num_to_pop should always be >= 1.
 	auto weight_tuples_other = static_cast<double>(chunk_length) / static_cast<double>(GetTuplesSeen() + chunk_length);
 	auto num_to_pop = static_cast<uint32_t>(round(weight_tuples_other * sample_count));
-	D_ASSERT(num_to_pop >= 1);
 	D_ASSERT(num_to_pop <= sample_count);
+	SelectionVectorHelper ret;
 
+	if (num_to_pop == 0) {
+		ret.sel = SelectionVector(num_to_pop);
+		ret.size = 0;
+		return ret;
+	}
 	unordered_map<idx_t, idx_t> replacement_indexes;
 	SelectionVector chunk_sel(num_to_pop);
 
@@ -646,7 +650,6 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 
 	D_ASSERT(sel_size == sample_count);
 
-	SelectionVectorHelper ret;
 	ret.sel = SelectionVector(chunk_sel);
 	ret.size = num_to_pop;
 	return ret;
