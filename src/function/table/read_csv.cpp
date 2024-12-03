@@ -51,7 +51,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	vector<CSVSchema> schemas;
 	const auto option_og = options;
 
-	const auto file_paths = multi_file_list.GetPaths();
+	const auto file_paths = multi_file_list.GetAllFiles();
 
 	// Here what we want to do is to sniff a given number of lines, if we have many files, we might go through them
 	// to reach the number of lines.
@@ -61,8 +61,8 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	idx_t current_file = 0;
 	options.file_path = file_paths[current_file];
 
-	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
-	options.file_path = multi_file_list.GetFirstFile();
+	// result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
+	// options.file_path = multi_file_list.GetFirstFile();
 	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false);
 
 	{
@@ -105,7 +105,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		} else if (best_schema.GetRowsRead() == 0) {
 			// If the best-schema has no data-rows, that's easy, we just take the new schema
 			best_schema = schema;
-		} else {
+		} else if (schema.GetRowsRead() != 0) {
 			// We might have conflicting-schemas, we must merge them
 			best_schema.MergeSchemas(schema);
 		}
