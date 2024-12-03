@@ -65,8 +65,9 @@ ContainerCompressionState::ContainerCompressionState() {
 //}
 
 void ContainerCompressionState::Append(bool null, uint16_t amount) {
-	if (uncompressed) {
-		D_ASSERT(type == Type::BITSET_CONTAINER);
+	switch (type) {
+	case ContainerCompressionState::Type::BITSET_CONTAINER: {
+		D_ASSERT(uncompressed);
 		if (null) {
 			ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
 			SetInvalidRange(mask, appended_count, appended_count + amount);
@@ -74,10 +75,9 @@ void ContainerCompressionState::Append(bool null, uint16_t amount) {
 		appended_count += amount;
 		return;
 	}
-
-	// Adjust the run
-	if (!null && run_idx < MAX_RUN_IDX && appended_count && (null != last_is_null)) {
-		if (type == Type::UNDECIDED || type == Type::RUN_CONTAINER) {
+	case ContainerCompressionState::Type::RUN_CONTAINER: {
+		// Adjust the run
+		if (!null && run_idx < MAX_RUN_IDX && appended_count && (null != last_is_null)) {
 			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
 				auto &last_run = runs[run_idx];
 				// End the last run
@@ -85,10 +85,8 @@ void ContainerCompressionState::Append(bool null, uint16_t amount) {
 			}
 			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
 			run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
-		}
-		run_idx++;
-	} else if (null && run_idx < MAX_RUN_IDX && (!appended_count || null != last_is_null)) {
-		if (type == Type::UNDECIDED || type == Type::RUN_CONTAINER) {
+			run_idx++;
+		} else if (null && run_idx < MAX_RUN_IDX && (!appended_count || null != last_is_null)) {
 			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
 				auto &current_run = runs[run_idx];
 				// Initialize a new run
@@ -97,27 +95,41 @@ void ContainerCompressionState::Append(bool null, uint16_t amount) {
 			compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
 			run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
 		}
+		break;
 	}
+	case ContainerCompressionState::Type::ARRAY_CONTAINER:
+	case ContainerCompressionState::Type::INVERTED_ARRAY_CONTAINER: {
+		// Add to the array
+		auto &current_array_idx = array_idx[null];
+		if (current_array_idx + amount <= MAX_ARRAY_IDX) {
+			auto &array_count = array_counts[null];
+			auto &compressed_array = compressed_arrays[null];
+			idx_t appended = 0;
+			while (appended < amount) {
+				idx_t remaining = amount - appended;
+				idx_t segment_offset = (appended_count + appended) % COMPRESSED_SEGMENT_SIZE;
+				idx_t to_append = MinValue<idx_t>(remaining, COMPRESSED_SEGMENT_SIZE - segment_offset);
+				for (uint16_t i = 0; i < to_append; i++) {
+					auto index = current_array_idx + appended + i;
+					compressed_array[index] = static_cast<uint8_t>(segment_offset + i);
+				}
 
-	// Add to the array
-	auto &current_array_idx = array_idx[null];
-	if (current_array_idx < MAX_ARRAY_IDX) {
-		if (type == Type::UNDECIDED || type == Type::ARRAY_CONTAINER || type == Type::INVERTED_ARRAY_CONTAINER) {
-			if (current_array_idx + amount <= MAX_ARRAY_IDX) {
-				for (uint16_t i = 0; i < amount; i++) {
-					compressed_arrays[null][current_array_idx + i] =
-					    static_cast<uint8_t>((appended_count + i) % COMPRESSED_SEGMENT_SIZE);
-					array_counts[null][(appended_count + i) >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
-				}
+				idx_t segment_index = (appended_count + appended) / COMPRESSED_SEGMENT_SIZE;
+				array_count[segment_index] += to_append;
+				appended += to_append;
 			}
+
 			if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
+				auto &array = arrays[null];
 				for (uint16_t i = 0; i < amount; i++) {
-					arrays[null][current_array_idx + i] = appended_count + i;
+					array[current_array_idx + i] = appended_count + i;
 				}
 			}
+			current_array_idx += amount;
 		}
-		current_array_idx += amount;
+		break;
 	}
+	};
 
 	last_is_null = null;
 	null_count += null * amount;
@@ -211,9 +223,6 @@ void ContainerCompressionState::Reset() {
 	memset(array_counts[NULLS], 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 	memset(array_counts[NON_NULLS], 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 	memset(run_counts, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
-
-	type = Type::UNDECIDED;
-
 	uncompressed = nullptr;
 }
 
@@ -372,9 +381,7 @@ void RoaringCompressState::FlushContainer() {
 	container_state.Finalize();
 #ifdef DEBUG
 	auto container_index = GetContainerIndex();
-	auto analyzed_metadata = container_metadata[container_index];
-	auto metadata = container_state.GetResult();
-	D_ASSERT(analyzed_metadata == metadata);
+	auto metadata = container_metadata[container_index];
 
 	idx_t container_size = container_state.appended_count;
 	if (!metadata.IsUncompressed()) {
