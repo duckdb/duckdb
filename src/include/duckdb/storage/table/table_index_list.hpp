@@ -81,7 +81,7 @@ public:
 	//! Verify a foreign key constraint.
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
 	//! Get the combined column ids of the indexes in this list.
-	vector<column_t> GetRequiredColumns();
+	unordered_set<column_t> GetRequiredColumns();
 	//! Serialize all indexes of this table.
 	vector<IndexStorageInfo> GetStorageInfos(const case_insensitive_map_t<Value> &options);
 

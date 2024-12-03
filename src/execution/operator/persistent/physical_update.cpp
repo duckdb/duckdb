@@ -23,7 +23,26 @@ PhysicalUpdate::PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tab
     : PhysicalOperator(PhysicalOperatorType::UPDATE, std::move(types), estimated_cardinality), tableref(tableref),
       table(table), columns(std::move(columns)), expressions(std::move(expressions)),
       bound_defaults(std::move(bound_defaults)), bound_constraints(std::move(bound_constraints)),
-      return_chunk(return_chunk) {
+      return_chunk(return_chunk), index_update(false) {
+
+	auto &indexes = table.GetDataTableInfo().get()->GetIndexes();
+	auto index_columns = indexes.GetRequiredColumns();
+
+	unordered_set<column_t> update_columns;
+	for (const auto col : this->columns) {
+		update_columns.insert(col.index);
+	}
+
+	for (const auto &col : table.Columns()) {
+		if (index_columns.find(col.Logical().index) == index_columns.end()) {
+			continue;
+		}
+		if (update_columns.find(col.Physical().index) == update_columns.end()) {
+			continue;
+		}
+		index_update = true;
+		break;
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -47,7 +66,8 @@ public:
 	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints)
 	    : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
-		// initialize the update chunk
+
+		// Initialize the update chunk.
 		auto &allocator = Allocator::Get(context);
 		vector<LogicalType> update_types;
 		update_types.reserve(expressions.size());
@@ -55,6 +75,8 @@ public:
 			update_types.push_back(expr->return_type);
 		}
 		update_chunk.Initialize(allocator, update_types);
+
+		// Initialize the mock and delete chunk.
 		mock_chunk.Initialize(allocator, table_types);
 		delete_chunk.Initialize(allocator, table_types);
 	}
@@ -86,7 +108,6 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &g_state = input.global_state.Cast<UpdateGlobalState>();
 	auto &l_state = input.local_state.Cast<UpdateLocalState>();
 
-	// FIXME: do we need to flatten here?
 	chunk.Flatten();
 	l_state.default_executor.SetChunk(chunk);
 
@@ -152,17 +173,19 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		del_row_ids.Slice(row_ids, sel, update_count);
 	}
 
-	// TODO: we only need this if we update the value of any indexed column
-	// TODO: otherwise, the mock_chunk is the delete chunk.
-	auto &transaction = DuckTransaction::Get(context.client, table.db);
-	auto &delete_chunk = l_state.delete_chunk;
+	auto &delete_chunk = index_update ? l_state.delete_chunk : l_state.mock_chunk;
 	delete_chunk.SetCardinality(update_count);
-	vector<StorageIndex> column_ids;
-	for (idx_t i = 0; i < table.ColumnCount(); i++) {
-		column_ids.emplace_back(i);
-	};
-	auto fetch_state = ColumnFetchState();
-	table.Fetch(transaction, delete_chunk, column_ids, row_ids, update_count, fetch_state);
+
+	if (index_update) {
+		auto &transaction = DuckTransaction::Get(context.client, table.db);
+		vector<StorageIndex> column_ids;
+		for (idx_t i = 0; i < table.ColumnCount(); i++) {
+			column_ids.emplace_back(i);
+		};
+		// We need to fetch the previous index keys to add them to the delete index.
+		auto fetch_state = ColumnFetchState();
+		table.Fetch(transaction, delete_chunk, column_ids, row_ids, update_count, fetch_state);
+	}
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
 	table.Delete(delete_state, context.client, del_row_ids, update_count);

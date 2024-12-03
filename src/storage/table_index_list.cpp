@@ -154,19 +154,13 @@ void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, Data
 	index->Cast<BoundIndex>().CheckConstraintsForChunk(chunk, nullptr, conflict_manager);
 }
 
-vector<column_t> TableIndexList::GetRequiredColumns() {
+unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	lock_guard<mutex> lock(indexes_lock);
-	set<column_t> unique_column_ids;
+	unordered_set<column_t> column_ids;
 	for (auto &index : indexes) {
 		for (auto col_id : index->GetColumnIds()) {
-			unique_column_ids.insert(col_id);
+			column_ids.insert(col_id);
 		}
-	}
-
-	// Turn the set into a vector and return.
-	vector<column_t> column_ids;
-	for (auto col_id : unique_column_ids) {
-		column_ids.emplace_back(col_id);
 	}
 	return column_ids;
 }
