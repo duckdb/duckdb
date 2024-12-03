@@ -20,15 +20,17 @@ namespace duckdb {
 
 struct SquaredDistanceAccumulator {
 	void AddSample(double x, double t) {
-		stats[0] += x * x;
-		stats[1] += x * t;
-		stats[2] += t * t;
-		stats[3] += 1.0;
+		stats[0] += x * x * (t - prev_t);
+		stats[1] += x * t * (t - prev_t);
+		stats[2] += t * t * (t - prev_t);
+		stats[3] += 1.0 * (t - prev_t);
+		prev_t = t;
 	}
 	double GetResult(double normalize_T = 1.0) {
 		D_ASSERT(stats[3] >= 1.0);
 		return std::sqrt((stats[0] + (stats[2] / normalize_T - 2.0 * stats[1]) / normalize_T) / stats[3]);
 	}
+	double prev_t = 0.0;
 	double stats[4] = {0.0, 0.0, 0.0, 0.0};
 	// Accumulated statistics are:
 	//  stats[0] => sum(x^2)
