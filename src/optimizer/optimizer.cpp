@@ -22,6 +22,7 @@
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
+#include "duckdb/optimizer/rule/distinct_aggregate_optimizer.hpp"
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
@@ -49,6 +50,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<MoveConstantsRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<OrderedAggregateOptimizer>(rewriter));
+	rewriter.rules.push_back(make_uniq<DistinctAggregateOptimizer>(rewriter));
+	rewriter.rules.push_back(make_uniq<DistinctWindowedOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));

@@ -24,6 +24,7 @@ unique_ptr<SetTypesMatcher> GetSmallIntegerTypesMatcher() {
 SumRewriterOptimizer::SumRewriterOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 	// set up an expression matcher that detects SUM(x + C) or SUM(C + x)
 	auto op = make_uniq<AggregateExpressionMatcher>();
+	op->function = make_uniq<SpecificFunctionMatcher>("sum");
 	op->policy = SetMatcher::Policy::UNORDERED;
 
 	auto arithmetic = make_uniq<FunctionExpressionMatcher>();

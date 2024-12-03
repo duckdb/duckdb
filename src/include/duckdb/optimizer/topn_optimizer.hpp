@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class LogicalOperator;
+class LogicalTopN;
 class Optimizer;
 
 class TopN {
@@ -20,6 +21,9 @@ public:
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 	//! Whether we can perform the optimization on this operator
 	static bool CanOptimize(LogicalOperator &op);
+
+private:
+	void PushdownDynamicFilters(LogicalTopN &op);
 };
 
 } // namespace duckdb

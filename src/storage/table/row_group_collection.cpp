@@ -982,29 +982,38 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	VacuumState vacuum_state;
 	InitializeVacuumState(checkpoint_state, vacuum_state, segments);
-	// schedule tasks
-	idx_t total_vacuum_tasks = 0;
-	auto &config = DBConfig::GetConfig(writer.GetDatabase());
-	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
-		auto &entry = segments[segment_idx];
-		auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx,
-		                                        total_vacuum_tasks < config.options.max_vacuum_tasks);
-		if (vacuum_tasks) {
-			// vacuum tasks were scheduled - don't schedule a checkpoint task yet
-			total_vacuum_tasks++;
-			continue;
+
+	try {
+		// schedule tasks
+		idx_t total_vacuum_tasks = 0;
+		auto &config = DBConfig::GetConfig(writer.GetDatabase());
+
+		for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+			auto &entry = segments[segment_idx];
+			auto vacuum_tasks = ScheduleVacuumTasks(checkpoint_state, vacuum_state, segment_idx,
+			                                        total_vacuum_tasks < config.options.max_vacuum_tasks);
+			if (vacuum_tasks) {
+				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
+				total_vacuum_tasks++;
+				continue;
+			}
+			if (!entry.node) {
+				// row group was vacuumed/dropped - skip
+				continue;
+			}
+			// schedule a checkpoint task for this row group
+			entry.node->MoveToCollection(*this, vacuum_state.row_start);
+			auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
+			checkpoint_state.executor.ScheduleTask(std::move(checkpoint_task));
+			vacuum_state.row_start += entry.node->count;
 		}
-		if (!entry.node) {
-			// row group was vacuumed/dropped - skip
-			continue;
-		}
-		// schedule a checkpoint task for this row group
-		entry.node->MoveToCollection(*this, vacuum_state.row_start);
-		auto checkpoint_task = GetCheckpointTask(checkpoint_state, segment_idx);
-		checkpoint_state.executor.ScheduleTask(std::move(checkpoint_task));
-		vacuum_state.row_start += entry.node->count;
+	} catch (const std::exception &e) {
+		ErrorData error(e);
+		checkpoint_state.executor.PushError(std::move(error));
+		checkpoint_state.executor.WorkOnTasks(); // ensure all tasks have completed first before rethrowing
+		throw;
 	}
-	// all tasks have been scheduled - execute tasks until we are done
+	// all tasks have been successfully scheduled - execute tasks until we are done
 	checkpoint_state.executor.WorkOnTasks();
 
 	// no errors - finalize the row groups
