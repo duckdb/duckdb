@@ -639,9 +639,13 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		CreateKeyValuePairs(info.const_struct_names, doc, objs, vals, key_v, value_v, count);
 	}
 	// Write JSON values to string
-	UnaryExecutor::ExecuteWithNulls<data_t, string_t>(
-	    args.data[0], result, count,
-	    [&](data_t, ValidityMask &, idx_t index) { return JSONCommon::WriteVal<yyjson_mut_val>(objs[index], alc); });
+	auto objects = FlatVector::GetData<string_t>(result);
+	for (idx_t i = 0; i < count; i++) {
+		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(objs[i], alc);
+	}
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -667,9 +671,13 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 		}
 	}
 	// Write JSON arrays to string
-	UnaryExecutor::ExecuteWithNulls<data_t, string_t>(
-	    args.data[0], result, count,
-	    [&](data_t, ValidityMask &, idx_t index) { return JSONCommon::WriteVal<yyjson_mut_val>(arrs[index], alc); });
+	auto objects = FlatVector::GetData<string_t>(result);
+	for (idx_t i = 0; i < count; i++) {
+		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(arrs[i], alc);
+	}
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
 }
 
 static void ToJSONFunctionInternal(const StructNames &names, Vector &input, const idx_t count, Vector &result,
