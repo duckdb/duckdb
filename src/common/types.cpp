@@ -729,6 +729,27 @@ bool LogicalType::IsComplete() const {
 	});
 }
 
+bool LogicalType::SupportsRegularUpdate() const {
+	switch (id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto &child_types = StructType::GetChildTypes(*this);
+		for (auto &entry : child_types) {
+			if (!entry.second.SupportsRegularUpdate()) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
+}
+
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:

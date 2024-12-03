@@ -22,8 +22,8 @@ void TableIndexList::RemoveIndex(const string &name) {
 	lock_guard<mutex> lock(indexes_lock);
 
 	for (idx_t i = 0; i < indexes.size(); i++) {
-		auto &entry = indexes[i];
-		if (entry->GetIndexName() == name) {
+		auto &index = indexes[i];
+		if (index->GetIndexName() == name) {
 			indexes.erase_at(i);
 			break;
 		}

@@ -50,7 +50,7 @@ public:
 	idx_t ConflictCount() const;
 	//! Adds an index and its respective delete_index to the conflict manager's matches.
 	void AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index);
-	//! Returns true, if the index consists in this conflict manager.
+	//! Returns true, if the index is in this conflict manager.
 	bool MatchedIndex(BoundIndex &index);
 	//! Returns a reference to the matched indexes.
 	const vector<reference<BoundIndex>> &MatchedIndexes() const;

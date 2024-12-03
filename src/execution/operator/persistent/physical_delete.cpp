@@ -82,7 +82,8 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	table.Fetch(transaction, l_state.delete_chunk, column_ids, row_ids, chunk.size(), fetch_state);
 
 	// Append the deleted row IDs to the delete indexes.
-	if (l_state.has_unique_indexes) {
+	// If we only delete local row IDs, then the delete_chunk is empty.
+	if (l_state.has_unique_indexes && l_state.delete_chunk.size() != 0) {
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto &delete_indexes = local_storage.GetDeleteIndexes(table);
 		delete_indexes.Scan([&](Index &index) {

@@ -41,9 +41,6 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 		auto index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(), art.table_io_manager,
 		                            std::move(expressions), art.db);
 		indexes.AddIndex(std::move(index));
-
-		// TODO: somehow guarantee that we don't insert the same deleted row ID twice.
-		// TODO: maybe allow 'multi insert mode' or something.
 		auto delete_index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(),
 		                                   art.table_io_manager, std::move(delete_expressions), art.db);
 		delete_indexes.AddIndex(std::move(delete_index));
@@ -152,7 +149,6 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		}
 		mock_chunk.SetCardinality(chunk);
 		// append this chunk to the indexes of the table
-		// TODO: or do I need to get the delete index here? But this should be the local append?
 		error = DataTable::AppendToIndexes(index_list, nullptr, mock_chunk, start_row);
 		if (error.HasError()) {
 			return false;
@@ -174,8 +170,6 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// appending: need to scan entire
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			// TODO: we have the delete_art here: how do we flush the changes without a constraint exception?
-			// - temporarily have duplicates (idk..)
 			error = table.AppendToIndexes(delete_indexes, chunk, append_state.current_row);
 			if (error.HasError()) {
 				return false;

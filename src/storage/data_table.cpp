@@ -670,24 +670,18 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
-static optional_ptr<BoundIndex> UpdateDeleteIndex(Index &index, optional_ptr<TableIndexList> delete_indexes,
-                                                  DataChunk &chunk, optional_ptr<Vector> row_ids,
-                                                  optional_ptr<DataChunk> delete_chunk) {
-	auto delete_index = delete_indexes->Find(index.GetIndexName());
-	if (!delete_index) {
-		index.Cast<BoundIndex>().VerifyAppend(chunk, nullptr);
-		return nullptr;
+static void UpdateDeleteIndex(BoundIndex &delete_index, DataChunk &chunk, optional_ptr<Vector> row_ids,
+                              optional_ptr<DataChunk> delete_chunk) {
+	if (!row_ids) {
+		return;
 	}
 
-	if (row_ids) {
-		auto &append_chunk = delete_chunk ? *delete_chunk : chunk;
-		auto result = delete_index->Cast<BoundIndex>().Append(append_chunk, *row_ids, nullptr,
-		                                                      IndexAppendMode::IGNORE_DUPLICATES);
-		if (result.HasError()) {
-			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
-		}
+	auto mode = IndexAppendMode::IGNORE_DUPLICATES;
+	auto &append_chunk = delete_chunk ? *delete_chunk : chunk;
+	auto result = delete_index.Append(append_chunk, *row_ids, nullptr, mode);
+	if (result.HasError()) {
+		throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 	}
-	return delete_index->Cast<BoundIndex>();
 }
 
 void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
@@ -705,10 +699,13 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 				return false;
 			}
 
-			auto delete_index = UpdateDeleteIndex(index, delete_indexes, chunk, row_ids, delete_chunk);
-			if (!delete_index) {
+			auto delete_index_ptr = delete_indexes->Find(index.GetIndexName());
+			if (!delete_index_ptr) {
+				index.Cast<BoundIndex>().VerifyAppend(chunk, nullptr);
 				return false;
 			}
+			auto &delete_index = delete_index_ptr->Cast<BoundIndex>();
+			UpdateDeleteIndex(delete_index, chunk, row_ids, delete_chunk);
 			index.Cast<BoundIndex>().VerifyAppend(chunk, delete_index);
 			return false;
 		});
@@ -731,10 +728,13 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 			return false;
 		}
 
-		auto delete_index = UpdateDeleteIndex(index, delete_indexes, chunk, row_ids, delete_chunk);
-		if (delete_index) {
-			manager->AddIndex(index.Cast<BoundIndex>(), delete_index);
+		auto delete_index_ptr = delete_indexes->Find(index.GetIndexName());
+		if (!delete_index_ptr) {
+			return false;
 		}
+		auto &delete_index = delete_index_ptr->Cast<BoundIndex>();
+		UpdateDeleteIndex(delete_index, chunk, row_ids, delete_chunk);
+		manager->AddIndex(index.Cast<BoundIndex>(), delete_index);
 		return false;
 	});
 
@@ -762,10 +762,14 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 			return false;
 		}
 
-		auto delete_index = UpdateDeleteIndex(index, delete_indexes, chunk, row_ids, delete_chunk);
-		if (delete_index) {
-			bound_index.VerifyAppend(chunk, delete_index, *manager);
+		auto delete_index_ptr = delete_indexes->Find(index.GetIndexName());
+		if (!delete_index_ptr) {
+			index.Cast<BoundIndex>().VerifyAppend(chunk, nullptr);
+			return false;
 		}
+		auto &delete_index = delete_index_ptr->Cast<BoundIndex>();
+		UpdateDeleteIndex(delete_index, chunk, row_ids, delete_chunk);
+		bound_index.VerifyAppend(chunk, delete_index, *manager);
 		return false;
 	});
 }
