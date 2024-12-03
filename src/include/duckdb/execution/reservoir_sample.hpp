@@ -200,7 +200,6 @@ public:
 	//! The new sample rows are the tuples rows resulting from applying sel to other
 	void UpdateSampleAppend(DataChunk &this_, DataChunk &other, SelectionVector &other_sel, idx_t append_count) const;
 
-
 	idx_t GetTuplesSeen() const;
 	idx_t NumSamplesCollected() const;
 	idx_t GetActiveSampleCount() const;
