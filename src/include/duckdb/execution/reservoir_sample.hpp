@@ -34,14 +34,13 @@ public:
 	explicit BaseReservoirSampling(int64_t seed);
 	BaseReservoirSampling();
 
-	void InitializeReservoirWeights(idx_t cur_size, idx_t sample_size, idx_t index_offset = 0);
+	void InitializeReservoirWeights(idx_t cur_size, idx_t sample_size);
 
 	void SetNextEntry();
 
 	void ReplaceElementWithIndex(idx_t entry_index, double with_weight, bool pop = true);
 	void ReplaceElement(double with_weight = -1);
 
-	void IncreaseNumEntriesSeenTotal(idx_t count);
 	void UpdateMinWeightThreshold();
 
 	//! Go from the naive sampling to the reservoir sampling
@@ -201,9 +200,6 @@ public:
 	//! The new sample rows are the tuples rows resulting from applying sel to other
 	void UpdateSampleAppend(DataChunk &this_, DataChunk &other, SelectionVector &other_sel, idx_t append_count) const;
 
-	//! Actually appends the new tuples. TODO: rename function to AppendToSample
-	// void UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &other_sel, idx_t source_count,
-	//                            idx_t source_offset, idx_t target_offset);
 
 	idx_t GetTuplesSeen() const;
 	idx_t NumSamplesCollected() const;

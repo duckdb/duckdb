@@ -28,9 +28,6 @@ ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64
 	internal_sample = false;
 	sel = SelectionVector(sample_count);
 	sel_size = 0;
-	if (seed != 1) {
-		auto break_here = 0;
-	}
 }
 
 ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
@@ -662,9 +659,6 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesSlow(const idx_t sam
 		base_offset += offset;
 	}
 
-	// create set of random indexes to update the ingestion sample selection vector.
-	// auto random_indexes = GetRandomizedVector(static_cast<uint32_t>(ret_map.size()));
-
 	// create selection vector to return
 	SelectionVector ret_sel(ret_map.size());
 	D_ASSERT(sel_size == sample_count);
@@ -684,20 +678,6 @@ void ReservoirSample::Finalize() {
 bool ReservoirSample::ValidSampleType(const LogicalType &type) {
 	return type.IsNumeric();
 }
-
-// void ReservoirSample::UpdateSampleWithTypes(DataChunk &this_, DataChunk &other, SelectionVector &other_sel,
-//                                             idx_t source_count, idx_t source_offset, idx_t target_offset) {
-// 	D_ASSERT(reservoir_chunk->chunk.GetTypes() == other.GetTypes());
-// 	auto types = reservoir_chunk->chunk.GetTypes();
-//
-// 	for (idx_t i = 0; i < reservoir_chunk->chunk.ColumnCount(); i++) {
-// 		auto col_type = types[i];
-// 		if (ValidSampleType(col_type) || !internal_sample) {
-// 			D_ASSERT(this_.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-// 			VectorOperations::Copy(other.data[i], this_.data[i], other_sel, source_count, source_offset, target_offset);
-// 		}
-// 	}
-// }
 
 void ReservoirSample::UpdateSampleAppend(DataChunk &this_, DataChunk &other, SelectionVector &other_sel,
                                          idx_t append_count) const {

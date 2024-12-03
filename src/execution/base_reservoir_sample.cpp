@@ -24,10 +24,6 @@ double BaseReservoirSampling::GetMinWeightFromTuplesSeen(idx_t rows_seen_total) 
 	}
 }
 
-void BaseReservoirSampling::IncreaseNumEntriesSeenTotal(idx_t count) {
-	num_entries_seen_total += count;
-}
-
 BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
 	next_index_to_sample = 0;
 	min_weight_threshold = 0;
@@ -50,7 +46,7 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Copy() {
 	return ret;
 }
 
-void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sample_size, idx_t index_offset) {
+void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sample_size) {
 	//! 1: The first m items of V are inserted into R
 	//! first we need to check if the reservoir already has "m" elements
 	//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
@@ -61,9 +57,8 @@ void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sam
 		//! we then define the threshold to enter the reservoir T_w as the minimum key of R
 		//! we use a priority queue to extract the minimum key in O(1) time
 		for (idx_t i = 0; i < sample_size; i++) {
-			idx_t index = i + index_offset;
 			double k_i = random.NextRandom();
-			reservoir_weights.emplace(-k_i, index);
+			reservoir_weights.emplace(-k_i, i);
 		}
 		SetNextEntry();
 	}
