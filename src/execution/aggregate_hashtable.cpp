@@ -235,6 +235,10 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	return AddChunk(groups, payload, aggregate_filter);
 }
 
+GroupedAggregateHashTable::AggregateDictionaryState::AggregateDictionaryState()
+	: hashes(LogicalType::HASH), new_dictionary_pointers(LogicalType::POINTER), unique_entries(STANDARD_VECTOR_SIZE) {
+}
+
 optional_idx GroupedAggregateHashTable::TryAddChunkDictionary(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter) {
 	if (groups.ColumnCount() != 1) {
 		// only single column supported (for now)
@@ -246,52 +250,72 @@ optional_idx GroupedAggregateHashTable::TryAddChunkDictionary(DataChunk &groups,
 			return optional_idx();
 		}
 	}
-	auto dict_size = DictionaryVector::DictionarySize(groups.data[0]);
-	if (!dict_size.IsValid()) {
+	auto opt_dict_size = DictionaryVector::DictionarySize(groups.data[0]);
+	if (!opt_dict_size.IsValid()) {
 		// dict size not known - this is not a dictionary that comes from the storage
 		return optional_idx();
 	}
-	if (dict_size.GetIndex() > STANDARD_VECTOR_SIZE) {
-		// dictionary too big - bailout
-		return optional_idx();
-	}
+	auto dict_size = opt_dict_size.GetIndex();
 	// first figure out which dictionary entries we need to add
+	auto &dict_state = state.dict_state;
 
-	// FIXME: cache these if the dictionary vector does not change
-	bool found_entry[STANDARD_VECTOR_SIZE] = { false };
-	sel_t index_map[STANDARD_VECTOR_SIZE];
-	SelectionVector unique_entries(STANDARD_VECTOR_SIZE);
+	auto &dict = DictionaryVector::Child(groups.data[0]);
+	if (dict_state.dictionary != dict) {
+		// new dictionary - initialize the index state
+		if (dict_size > dict_state.capacity) {
+			dict_state.dictionary_addresses = make_uniq<Vector>(LogicalType::POINTER, dict_size);
+			dict_state.found_entry = make_unsafe_uniq_array<bool>(dict_size);
+			dict_state.capacity = dict_size;
+		}
+		memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
+		dict_state.dictionary = dict;
+	}
+
+	// for each of the dictionary entries - check if we have already done a look-up into the hash table
+	// if we have, we can just use the cached
+	auto &found_entry = dict_state.found_entry;
+	auto &unique_entries = dict_state.unique_entries;
 	idx_t unique_count = 0;
 	auto &offsets = DictionaryVector::SelVector(groups.data[0]);
 	for(idx_t i = 0; i < groups.size(); i++) {
 		auto dict_idx = offsets.get_index(i);
 		if (!found_entry[dict_idx]) {
-			index_map[dict_idx] = unique_count;
 			unique_entries.set_index(unique_count++, dict_idx);
 			found_entry[dict_idx] = true;
 		}
 	}
-	// FIXME: avoid constantly re-allocating
-	DataChunk unique_values;
-	unique_values.InitializeEmpty(groups.GetTypes());
-	unique_values.Slice(groups, unique_entries, unique_count);
-	// now we know which entries we are going to add - hash them
-	Vector hashes(LogicalType::HASH);
-	unique_values.Hash(hashes);
+	auto &dictionary_addresses = *dict_state.dictionary_addresses;
+	auto dict_addresses = FlatVector::GetData<uintptr_t>(dictionary_addresses);
+	idx_t new_group_count = 0;
+	if (unique_count > 0) {
+		auto &unique_values = dict_state.unique_values;
+		if (unique_values.ColumnCount() == 0) {
+			unique_values.InitializeEmpty(groups.GetTypes());
+		}
+		unique_values.data[0].Slice(dict, unique_entries, unique_count);
+		unique_values.SetCardinality(unique_count);
+		// now we know which entries we are going to add - hash them
+		auto &hashes = dict_state.hashes;
+		unique_values.Hash(hashes);
 
-	Vector dictionary_addresses(LogicalType::POINTER);
-	SelectionVector new_dictionary_groups(STANDARD_VECTOR_SIZE);
+		auto &new_dictionary_pointers = dict_state.new_dictionary_pointers;
 
-	// add the dictionary groups to the hash table
-	const auto new_group_count = FindOrCreateGroups(unique_values, hashes, dictionary_addresses, new_dictionary_groups);
-	VectorOperations::AddInPlace(dictionary_addresses, NumericCast<int64_t>(layout.GetAggrOffset()), unique_count);
+		// add the dictionary groups to the hash table
+		new_group_count = FindOrCreateGroups(unique_values, hashes, new_dictionary_pointers, state.new_groups);
+
+		// for each of the new groups, add them to the global (cached) list of addresses for the dictionary
+		auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
+		for(idx_t i = 0; i < unique_count; i++) {
+			auto dict_idx = unique_entries.get_index(i);
+			dict_addresses[dict_idx] = new_dict_addresses[i] + layout.GetAggrOffset();
+		}
+	}
 
 	// set the addresses that we found for each of the unique groups in the main addresses vector
-	auto dict_addresses = FlatVector::GetData<uintptr_t>(dictionary_addresses);
 	auto result_addresses = FlatVector::GetData<uintptr_t>(state.addresses);
 	for(idx_t i = 0; i < groups.size(); i++) {
 		auto dict_idx = offsets.get_index(i);
-		result_addresses[i] = dict_addresses[index_map[dict_idx]];
+		result_addresses[i] = dict_addresses[dict_idx];
 	}
 	// FIXME: set new groups
 	UpdateAggregates(payload, filter);

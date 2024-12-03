@@ -105,6 +105,20 @@ private:
 	//! Efficiently matches groups
 	RowMatcher row_matcher;
 
+	struct AggregateDictionaryState {
+		AggregateDictionaryState();
+
+		//! The current dictionary vector (if any)
+		optional_ptr<Vector> dictionary;
+		DataChunk unique_values;
+		Vector hashes;
+		Vector new_dictionary_pointers;
+		SelectionVector unique_entries;
+		unique_ptr<Vector> dictionary_addresses;
+		unsafe_unique_array<bool> found_entry;
+		idx_t capacity = 0;
+	};
+
 	//! Append state
 	struct AggregateHTAppendState {
 		AggregateHTAppendState();
@@ -120,6 +134,7 @@ private:
 		Vector addresses;
 		unsafe_unique_array<UnifiedVectorFormat> group_data;
 		DataChunk group_chunk;
+		AggregateDictionaryState dict_state;
 	} state;
 
 	//! The number of radix bits to partition by
