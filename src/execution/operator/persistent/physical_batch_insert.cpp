@@ -518,7 +518,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 		lstate.constraint_state = table.GetStorage().InitializeConstraintState(table, bound_constraints);
 	}
 	table.GetStorage().VerifyAppendConstraints(*lstate.constraint_state, context.client, lstate.insert_chunk, nullptr,
-	                                           nullptr, nullptr, nullptr);
+	                                           nullptr, nullptr);
 
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {

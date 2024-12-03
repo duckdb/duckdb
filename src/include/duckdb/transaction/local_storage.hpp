@@ -46,8 +46,6 @@ public:
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The set of unique indexes.
 	TableIndexList indexes;
-	//! The set of delete indexes.
-	TableIndexList delete_indexes;
 	//! The number of deleted rows
 	idx_t deleted_rows;
 	//! The main optimistic data writer
@@ -157,7 +155,6 @@ public:
 	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	TableIndexList &GetIndexes(DataTable &table);
-	TableIndexList &GetDeleteIndexes(DataTable &table);
 	bool IsInitialized(DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);

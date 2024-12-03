@@ -4,6 +4,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
@@ -85,13 +86,20 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	// If we only delete local row IDs, then the delete_chunk is empty.
 	if (l_state.has_unique_indexes && l_state.delete_chunk.size() != 0) {
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
-		auto &delete_indexes = local_storage.GetDeleteIndexes(table);
-		delete_indexes.Scan([&](Index &index) {
+		auto &indexes = local_storage.GetIndexes(table);
+		indexes.Scan([&](Index &index) {
 			if (!index.IsBound()) {
 				return false;
 			}
 			auto &bound_index = index.Cast<BoundIndex>();
-			auto error = bound_index.Append(l_state.delete_chunk, row_ids, nullptr, IndexAppendMode::IGNORE_DUPLICATES);
+			if (bound_index.GetIndexType() != ART::TYPE_NAME) {
+				return false;
+			}
+			auto &art_index = bound_index.Cast<ART>();
+			if (!art_index.delete_index) {
+				return false;
+			}
+			auto error = art_index.delete_index->Append(l_state.delete_chunk, row_ids);
 			if (error.HasError()) {
 				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
 			}

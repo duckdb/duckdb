@@ -84,8 +84,7 @@ public:
 	static GateStatus Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
 
 	//! Insert a key into a prefix.
-	static ARTConflictType Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id,
-	                              const GateStatus status, optional_ptr<ART> delete_art, const IndexAppendMode mode);
+	static ARTConflictType Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);

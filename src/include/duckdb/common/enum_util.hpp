@@ -32,6 +32,8 @@ struct EnumUtil {
     static string ToString(T value) { return string(ToChars<T>(value)); }
 };
 
+enum class ARTAppendMode : uint8_t;
+
 enum class ARTConflictType : uint8_t;
 
 enum class AccessMode : uint8_t;
@@ -179,8 +181,6 @@ enum class FunctionStability : uint8_t;
 enum class GateStatus : uint8_t;
 
 enum class HLLStorageType : uint8_t;
-
-enum class IndexAppendMode : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
 
@@ -374,6 +374,9 @@ enum class WindowBoundary : uint8_t;
 
 enum class WindowExcludeMode : uint8_t;
 
+
+template<>
+const char* EnumUtil::ToChars<ARTAppendMode>(ARTAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
@@ -596,9 +599,6 @@ const char* EnumUtil::ToChars<GateStatus>(GateStatus value);
 
 template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
-
-template<>
-const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
@@ -890,6 +890,9 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
 
 template<>
+ARTAppendMode EnumUtil::FromString<ARTAppendMode>(const char *value);
+
+template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
 
 template<>
@@ -1110,9 +1113,6 @@ GateStatus EnumUtil::FromString<GateStatus>(const char *value);
 
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
-
-template<>
-IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);

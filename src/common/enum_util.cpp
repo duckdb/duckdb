@@ -80,7 +80,6 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
@@ -144,6 +143,24 @@
 #include "duckdb/verification/statement_verifier.hpp"
 
 namespace duckdb {
+
+const StringUtil::EnumStringLiteral *GetARTAppendModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTAppendMode::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ARTAppendMode::IGNORE_DUPLICATES), "IGNORE_DUPLICATES" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTAppendMode>(ARTAppendMode value) {
+	return StringUtil::EnumToString(GetARTAppendModeValues(), 2, "ARTAppendMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTAppendMode EnumUtil::FromString<ARTAppendMode>(const char *value) {
+	return static_cast<ARTAppendMode>(StringUtil::StringToEnum(GetARTAppendModeValues(), 2, "ARTAppendMode", value));
+}
 
 const StringUtil::EnumStringLiteral *GetARTConflictTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
@@ -1793,24 +1810,6 @@ const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value) {
 template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
 	return static_cast<HLLStorageType>(StringUtil::StringToEnum(GetHLLStorageTypeValues(), 2, "HLLStorageType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetIndexAppendModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(IndexAppendMode::DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(IndexAppendMode::IGNORE_DUPLICATES), "IGNORE_DUPLICATES" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value) {
-	return StringUtil::EnumToString(GetIndexAppendModeValues(), 2, "IndexAppendMode", static_cast<uint32_t>(value));
-}
-
-template<>
-IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value) {
-	return static_cast<IndexAppendMode>(StringUtil::StringToEnum(GetIndexAppendModeValues(), 2, "IndexAppendMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetIndexConstraintTypeValues() {

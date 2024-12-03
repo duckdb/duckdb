@@ -84,12 +84,11 @@ SinkResultType PhysicalCreateARTIndex::SinkUnsorted(OperatorSinkInput &input) co
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	auto row_count = l_state.key_chunk.size();
 	auto &art = l_state.local_index->Cast<ART>();
-	auto mode = IndexAppendMode::DEFAULT;
 
 	// Insert each key and its corresponding row ID.
 	for (idx_t i = 0; i < row_count; i++) {
 		auto status = art.tree.GetGateStatus();
-		auto conflict_type = art.Insert(art.tree, l_state.keys[i], 0, l_state.row_ids[i], status, nullptr, mode);
+		auto conflict_type = art.Insert(art.tree, l_state.keys[i], 0, l_state.row_ids[i], status);
 		D_ASSERT(conflict_type != ARTConflictType::TRANSACTION);
 		if (conflict_type == ARTConflictType::CONSTRAINT) {
 			throw ConstraintException("Data contains duplicates on indexed column(s)");

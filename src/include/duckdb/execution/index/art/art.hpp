@@ -16,6 +16,7 @@ namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
+enum class ARTAppendMode : uint8_t { DEFAULT = 0, IGNORE_DUPLICATES = 1 };
 
 class ConflictManager;
 class ARTKey;
@@ -62,6 +63,11 @@ public:
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
+	//! The append mode.
+	ARTAppendMode append_mode;
+	//! The optional corresponding delete index.
+	unique_ptr<BoundIndex> delete_index;
+
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
@@ -70,18 +76,14 @@ public:
 	bool Scan(IndexScanState &state, idx_t max_count, unsafe_vector<row_t> &row_ids);
 
 	//! Append a chunk.
-	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_art,
-	                 const IndexAppendMode mode) override;
+	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids) override;
 	//! Insert a chunk.
-	ARTConflictType Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-	                       optional_ptr<ART> delete_art, const IndexAppendMode mode);
-	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids, optional_ptr<BoundIndex> delete_index,
-	                 IndexAppendMode mode) override;
+	ARTConflictType Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status);
+	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Constraint verification for a chunk.
-	void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) override;
-	void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art,
-	                  ConflictManager &conflict_manager) override;
+	void VerifyAppend(DataChunk &chunk) override;
+	void VerifyAppend(DataChunk &chunk, ConflictManager &manager) override;
 
 	//! Delete a chunk from the ART.
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
@@ -123,16 +125,12 @@ private:
 
 	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
 	                     const GateStatus status);
-	ARTConflictType InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                                  const GateStatus status, optional_ptr<ART> delete_art,
-	                                  const IndexAppendMode mode);
-	ARTConflictType InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-	                               const GateStatus status, optional_ptr<ART> delete_art, const IndexAppendMode mode);
+	ARTConflictType InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const GateStatus status);
+	ARTConflictType InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const GateStatus status);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void CheckConstraintsForChunk(DataChunk &input, optional_ptr<BoundIndex> delete_art,
-	                              ConflictManager &conflict_manager) override;
+	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 

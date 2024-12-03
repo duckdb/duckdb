@@ -45,7 +45,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
-      allocators(allocators_ptr), owns_data(false) {
+      allocators(allocators_ptr), owns_data(false), append_mode(ARTAppendMode::DEFAULT) {
 
 	// FIXME: Use the new byte representation function to support nested types.
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -477,8 +477,7 @@ bool ART::Construct(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids,
 // Insert and Constraint Checking
 //===--------------------------------------------------------------------===//
 
-ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_index,
-                      const IndexAppendMode mode) {
+ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	auto row_count = input.size();
 
@@ -486,11 +485,6 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 	unsafe_vector<ARTKey> keys(row_count);
 	unsafe_vector<ARTKey> row_id_keys(row_count);
 	GenerateKeyVectors(allocator, input, row_ids, keys, row_id_keys);
-
-	optional_ptr<ART> delete_art;
-	if (delete_index) {
-		delete_art = delete_index->Cast<ART>();
-	}
 
 	auto conflict_type = ARTConflictType::NO_CONFLICT;
 	optional_idx conflict_idx;
@@ -501,7 +495,7 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 		if (keys[i].Empty()) {
 			continue;
 		}
-		conflict_type = Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus(), delete_art, mode);
+		conflict_type = Insert(tree, keys[i], 0, row_id_keys[i], tree.GetGateStatus());
 		if (conflict_type != ARTConflictType::NO_CONFLICT) {
 			conflict_idx = i;
 			break;
@@ -545,25 +539,24 @@ ErrorData ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids, option
 	return ErrorData();
 }
 
-ErrorData ART::Append(IndexLock &lock, DataChunk &input, Vector &row_ids, optional_ptr<BoundIndex> delete_art,
-                      const IndexAppendMode mode) {
+ErrorData ART::Append(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	// Execute all column expressions before inserting the data chunk.
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 	ExecuteExpressions(input, expr_chunk);
 
 	// Now insert the data chunk.
-	return Insert(lock, expr_chunk, row_ids, delete_art, mode);
+	return Insert(lock, expr_chunk, row_ids);
 }
 
-void ART::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art) {
+void ART::VerifyAppend(DataChunk &chunk) {
 	ConflictManager conflict_manager(VerifyExistenceType::APPEND, chunk.size());
-	CheckConstraintsForChunk(chunk, delete_art, conflict_manager);
+	CheckConstraintsForChunk(chunk, conflict_manager);
 }
 
-void ART::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_art, ConflictManager &conflict_manager) {
-	D_ASSERT(conflict_manager.LookupType() == VerifyExistenceType::APPEND);
-	CheckConstraintsForChunk(chunk, delete_art, conflict_manager);
+void ART::VerifyAppend(DataChunk &chunk,  ConflictManager &manager) {
+	D_ASSERT(manager.LookupType() == VerifyExistenceType::APPEND);
+	CheckConstraintsForChunk(chunk, manager);
 }
 
 void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
@@ -583,24 +576,23 @@ void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, cons
 	Leaf::New(ref, row_id.GetRowId());
 }
 
-ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-                                       const GateStatus status, optional_ptr<ART> delete_art,
-                                       const IndexAppendMode mode) {
+ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,const GateStatus status) {
 
 	if (!IsUnique()) {
 		Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
 		return ARTConflictType::NO_CONFLICT;
 	}
 
-	if (!delete_art) {
-		if (mode == IndexAppendMode::IGNORE_DUPLICATES) {
+	if (!delete_index) {
+		if (append_mode == ARTAppendMode::IGNORE_DUPLICATES) {
 			return ARTConflictType::NO_CONFLICT;
 		}
 		return ARTConflictType::CONSTRAINT;
 	}
 
 	// Lookup in the delete_art.
-	auto delete_leaf = delete_art->Lookup(delete_art->tree, key, 0);
+	auto &delete_art = delete_index->Cast<ART>();
+	auto delete_leaf = delete_art.Lookup(delete_art.tree, key, 0);
 	if (!delete_leaf) {
 		return ARTConflictType::CONSTRAINT;
 	}
@@ -619,15 +611,14 @@ ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_
 	return ARTConflictType::NO_CONFLICT;
 }
 
-ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
-                                    const GateStatus status, optional_ptr<ART> delete_art, const IndexAppendMode mode) {
+ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const GateStatus status) {
 	D_ASSERT(depth < key.len);
 	auto child = node.GetChildMutable(*this, key[depth]);
 
 	// Recurse, if a child exists at key[depth].
 	if (child) {
 		D_ASSERT(child->HasMetadata());
-		auto conflict_type = Insert(*child, key, depth + 1, row_id, status, delete_art, mode);
+		auto conflict_type = Insert(*child, key, depth + 1, row_id, status);
 		node.ReplaceChild(*this, key[depth], *child);
 		return conflict_type;
 	}
@@ -636,7 +627,7 @@ ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t d
 	if (status == GateStatus::GATE_SET) {
 		Node remainder;
 		auto byte = key[depth];
-		auto conflict_type = Insert(remainder, key, depth + 1, row_id, status, delete_art, mode);
+		auto conflict_type = Insert(remainder, key, depth + 1, row_id, status);
 		Node::InsertChild(*this, node, byte, remainder);
 		return conflict_type;
 	}
@@ -657,8 +648,7 @@ ARTConflictType ART::InsertIntoNode(Node &node, const ARTKey &key, const idx_t d
 	return ARTConflictType::NO_CONFLICT;
 }
 
-ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
-                            optional_ptr<ART> delete_art, const IndexAppendMode mode) {
+ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status) {
 	if (!node.HasMetadata()) {
 		InsertIntoEmpty(node, key, depth, row_id, status);
 		return ARTConflictType::NO_CONFLICT;
@@ -675,18 +665,18 @@ ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const AR
 			// incoming transaction must fail here.
 			return ARTConflictType::TRANSACTION;
 		}
-		return Insert(node, row_id, 0, row_id, GateStatus::GATE_SET, delete_art, mode);
+		return Insert(node, row_id, 0, row_id, GateStatus::GATE_SET);
 	}
 
 	auto type = node.GetType();
 	switch (type) {
 	case NType::LEAF_INLINED: {
-		return InsertIntoInlined(node, key, depth, row_id, status, delete_art, mode);
+		return InsertIntoInlined(node, key, depth, row_id, status);
 	}
 	case NType::LEAF: {
 		D_ASSERT(!IsUnique());
 		Leaf::TransformToNested(*this, node);
-		return Insert(node, key, depth, row_id, status, delete_art, mode);
+		return Insert(node, key, depth, row_id, status);
 	}
 	case NType::NODE_7_LEAF:
 	case NType::NODE_15_LEAF:
@@ -700,9 +690,9 @@ ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const AR
 	case NType::NODE_16:
 	case NType::NODE_48:
 	case NType::NODE_256:
-		return InsertIntoNode(node, key, depth, row_id, status, delete_art, mode);
+		return InsertIntoNode(node, key, depth, row_id, status);
 	case NType::PREFIX:
-		return Prefix::Insert(*this, node, key, depth, row_id, status, delete_art, mode);
+		return Prefix::Insert(*this, node, key, depth, row_id, status);
 	default:
 		throw InternalException("Invalid node type for ART::Insert.");
 	}
@@ -1036,8 +1026,7 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 }
 
-void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> delete_art,
-                                   ConflictManager &conflict_manager) {
+void ART::CheckConstraintsForChunk(DataChunk &chunk, ConflictManager &manager) {
 	// Lock the index during constraint checking.
 	lock_guard<mutex> l(lock);
 
@@ -1049,15 +1038,15 @@ void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> de
 	unsafe_vector<ARTKey> keys(expr_chunk.size());
 	GenerateKeys<>(arena_allocator, expr_chunk, keys);
 
-	optional_ptr<ART> cast_delete_art;
-	if (delete_art) {
-		cast_delete_art = delete_art->Cast<ART>();
+	optional_ptr<ART> delete_art;
+	if (delete_index) {
+		delete_art = delete_index->Cast<ART>();
 	}
 
 	optional_idx conflict_idx;
 	for (idx_t i = 0; !conflict_idx.IsValid() && i < chunk.size(); i++) {
 		if (keys[i].Empty()) {
-			if (conflict_manager.AddNull(i)) {
+			if (manager.AddNull(i)) {
 				conflict_idx = i;
 			}
 			continue;
@@ -1065,15 +1054,15 @@ void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> de
 
 		auto leaf = Lookup(tree, keys[i], 0);
 		if (!leaf) {
-			if (conflict_manager.AddMiss(i)) {
+			if (manager.AddMiss(i)) {
 				conflict_idx = i;
 			}
 			continue;
 		}
 
 		// Use the delete ART to verify if we actually found a constraint violation.
-		if (cast_delete_art) {
-			auto deleted_leaf = cast_delete_art->Lookup(cast_delete_art->tree, keys[i], 0);
+		if (delete_art) {
+			auto deleted_leaf = delete_art->Lookup(delete_art->tree, keys[i], 0);
 
 			// The same key exists in the delete index.
 			if (deleted_leaf) {
@@ -1082,7 +1071,7 @@ void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> de
 
 				// And the row IDs match.
 				if (deleted_row_id == this_row_id) {
-					if (conflict_manager.AddMiss(i)) {
+					if (manager.AddMiss(i)) {
 						conflict_idx = i;
 					}
 					continue;
@@ -1093,18 +1082,18 @@ void ART::CheckConstraintsForChunk(DataChunk &chunk, optional_ptr<BoundIndex> de
 		// If we find a node, we need to update the 'matches' and 'row_ids'.
 		// We only perform constraint checking on unique indexes, i.e., all leaves are inlined.
 		D_ASSERT(leaf->GetType() == NType::LEAF_INLINED);
-		if (conflict_manager.AddHit(i, leaf->GetRowId())) {
+		if (manager.AddHit(i, leaf->GetRowId())) {
 			conflict_idx = i;
 		}
 	}
 
-	conflict_manager.FinishLookup();
+	manager.FinishLookup();
 	if (!conflict_idx.IsValid()) {
 		return;
 	}
 
 	auto key_name = GenerateErrorKeyName(chunk, conflict_idx.GetIndex());
-	auto exception_msg = GenerateConstraintErrorMessage(conflict_manager.LookupType(), key_name);
+	auto exception_msg = GenerateConstraintErrorMessage(manager.LookupType(), key_name);
 	throw ConstraintException(exception_msg);
 }
 
