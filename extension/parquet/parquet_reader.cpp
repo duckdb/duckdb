@@ -561,11 +561,13 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
 	}
 
-	// If object cached is disabled
+	// If metadata cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!metadata_p) {
-		if (!ObjectCache::ObjectCacheEnabled(context_p)) {
+		Value metadata_cache = false;
+		context_p.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
+		if (!metadata_cache.GetValue<bool>()) {
 			metadata =
 			    LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, *encryption_util);
 		} else {

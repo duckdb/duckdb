@@ -611,6 +611,19 @@ bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Object Cache
+//===----------------------------------------------------------------------===//
+void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+}
+
+void EnableObjectCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+}
+
+Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
+	return Value();
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Profiling
 //===----------------------------------------------------------------------===//
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {

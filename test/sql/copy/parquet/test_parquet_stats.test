@@ -86,7 +86,7 @@ explain select time from parquet_scan('data/parquet-testing/timestamp*.parquet')
 ----
 
 statement ok
-pragma enable_object_cache
+SET parquet_metadata_cache=true;
 
 
 # no stats since there are two files and the cache is on but we have not read all files yet
