@@ -231,15 +231,15 @@ public:
 	//! Analyze phase
 
 	//! The amount of set bits found
-	idx_t one_count = 0;
+	uint16_t one_count = 0;
 	//! The amount of unset bits found
-	idx_t zero_count = 0;
+	uint16_t zero_count = 0;
 	//! The amount of runs (of 0's) so far
-	idx_t run_count = 0;
+	uint16_t run_count = 0;
 	//! Whether the last bit was set or not
 	bool last_bit_set;
 	//! The total amount of bits covered (one_count + zero_count)
-	idx_t count = 0;
+	uint16_t count = 0;
 
 	//! Flushed analyze data
 
@@ -281,7 +281,7 @@ public:
 
 public:
 	//! Buffered append state (we don't want to append every bit separately)
-	idx_t length = 0;
+	uint16_t length = 0;
 	bool last_bit_set;
 
 	//! Total amount of values covered by the container

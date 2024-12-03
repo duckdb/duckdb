@@ -32,14 +32,13 @@ public:
 			// Create a mask for the byte we care about (least to most significant byte)
 			auto bitmask = ValidityUncompressed::UPPER_MASKS[8] >> ((7 - i) * 8);
 			// Shift to the least significant bits so we can use it to index our bitmask table
-			auto array_index = (entry & bitmask) >> (i * 8);
-
+			auto array_index = static_cast<uint8_t>((entry & bitmask) >> (i * 8));
 			STATE_TYPE::HandleByte(state, array_index);
 		}
 
 		if (DUCKDB_UNLIKELY(last_bits != 0)) {
 			auto bitmask = ValidityUncompressed::UPPER_MASKS[8] >> ((7 - full_bytes) * 8);
-			auto array_index = (entry & bitmask) >> (full_bytes * 8);
+			auto array_index = static_cast<uint8_t>((entry & bitmask) >> (full_bytes * 8));
 			STATE_TYPE::HandleRaggedByte(state, array_index, last_bits);
 		}
 	}

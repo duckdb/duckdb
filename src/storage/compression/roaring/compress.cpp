@@ -22,48 +22,6 @@ ContainerCompressionState::ContainerCompressionState() {
 	Reset();
 }
 
-// void CompressVector(Vector &input, idx_t input_size, const std::function<void()> &on_full_container) {
-//	UnifiedVectorFormat unified;
-//	input.ToUnifiedFormat(input_size, unified);
-//	auto &validity = unified.validity;
-
-//	if (validity.AllValid()) {
-//		// All bits are set implicitly
-//		idx_t appended = 0;
-//		while (appended < input_size) {
-//			idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
-//			Append<false>(false, NumericCast<uint16_t>(to_append));
-//			if (IsFull()) {
-//				on_full_container();
-//			}
-//			appended += to_append;
-//		}
-//	} else {
-//		// There is a validity mask
-//		idx_t appended = 0;
-//		while (appended < input_size) {
-//			idx_t to_append = MinValue<idx_t>(ROARING_CONTAINER_SIZE - count, input_size - appended);
-//			bool last_is_null;
-//			uint16_t length = 0;
-//			for (idx_t i = 0; i < to_append; i++) {
-//				auto idx = unified.sel->get_index(appended + i);
-//				auto is_null = validity.RowIsValidUnsafe(idx);
-//				if (i && is_null != last_is_null) {
-//					Append<false>(!last_is_null, length);
-//					length = 0;
-//				}
-//				length++;
-//				last_is_null = is_null;
-//			}
-//			Append<false>(!last_is_null, length);
-//			if (IsFull()) {
-//				on_full_container();
-//			}
-//			appended += to_append;
-//		}
-//	}
-//}
-
 void ContainerCompressionState::Append(bool null, uint16_t amount) {
 	switch (type) {
 	case ContainerCompressionState::Type::BITSET_CONTAINER: {
