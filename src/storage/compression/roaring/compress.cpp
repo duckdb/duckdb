@@ -63,11 +63,11 @@ void ContainerCompressionState::Append(bool null, uint16_t amount) {
 		if (current_array_idx + amount <= MAX_ARRAY_IDX) {
 			auto &array_count = array_counts[null];
 			auto &compressed_array = compressed_arrays[null];
-			idx_t appended = 0;
+			uint16_t appended = 0;
 			while (appended < amount) {
-				idx_t remaining = amount - appended;
-				idx_t segment_offset = (appended_count + appended) % COMPRESSED_SEGMENT_SIZE;
-				idx_t to_append = MinValue<idx_t>(remaining, COMPRESSED_SEGMENT_SIZE - segment_offset);
+				uint16_t remaining = amount - appended;
+				uint16_t segment_offset = (appended_count + appended) % COMPRESSED_SEGMENT_SIZE;
+				uint16_t to_append = MinValue<uint16_t>(remaining, COMPRESSED_SEGMENT_SIZE - segment_offset);
 				for (uint16_t i = 0; i < to_append; i++) {
 					auto index = current_array_idx + appended + i;
 					compressed_array[index] = static_cast<uint8_t>(segment_offset + i);

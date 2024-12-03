@@ -13,6 +13,7 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/compression/roaring/roaring.hpp"
 
 namespace duckdb {
 
