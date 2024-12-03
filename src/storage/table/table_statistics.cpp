@@ -192,8 +192,8 @@ void TableStatistics::Serialize(Serializer &serializer) const {
 	unique_ptr<BlockingSample> to_serialize = nullptr;
 	if (table_sample) {
 		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
-		auto &ingestion_sample = table_sample->Cast<ReservoirSample>();
-		to_serialize = ingestion_sample.PrepareForSerialization();
+		auto &reservoir_sample = table_sample->Cast<ReservoirSample>();
+		to_serialize = reservoir_sample.PrepareForSerialization();
 	}
 	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", to_serialize, nullptr);
 }
@@ -218,8 +218,8 @@ void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &column
 		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
 #ifdef DEBUG
 		if (table_sample) {
-			auto &i_sample = table_sample->Cast<ReservoirSample>();
-			i_sample.Verify();
+			auto &reservoir_sample = table_sample->Cast<ReservoirSample>();
+			reservoir_sample.Verify();
 		}
 #endif
 	} else {

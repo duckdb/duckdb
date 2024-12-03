@@ -1,6 +1,6 @@
-# name: test/sql/sample/table_sample_converts_to_block_sample.test
+# name: test/sql/sample/table_samples/table_sample_converts_to_block_sample.test
 # description: Test sampling of larger relations
-# group: [sample]
+# group: [table_samples]
 
 require vector_size 2048
 
@@ -51,9 +51,9 @@ select count(*) from duckdb_table_sample('materialized_range');
 query II
 select a, count(*) from duckdb_table_sample('materialized_range') group by all  order by a;
 ----
-1	677
-2	674
-3	697
+1	684
+2	677
+3	687
 
 statement ok
 pragma threads=1;
@@ -63,6 +63,6 @@ pragma threads=1;
 query II
 select a, count(*) from (select( range%3+1) as a from range(102400 * 3)) t(a) group by all USING SAMPLE reservoir(2048 rows) REPEATABLE (200) order by a;
 ----
-1	696
-2	678
-3	674
+1	689
+2	680
+3	679

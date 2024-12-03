@@ -1115,7 +1115,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
 	// When adding a column destroy the sample
-	D_ASSERT(lock);
 	stats.DestroyTableSample(*lock);
 
 	return result;

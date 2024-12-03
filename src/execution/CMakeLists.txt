@@ -19,8 +19,7 @@ add_library_unity(
   physical_plan_generator.cpp
   radix_partitioned_hashtable.cpp
   reservoir_sample.cpp
-  base_reservoir_sample.cpp
-  ingestion_sample.cpp)
+  base_reservoir_sample.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution>
     PARENT_SCOPE)

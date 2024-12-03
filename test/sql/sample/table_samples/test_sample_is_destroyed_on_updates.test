@@ -1,6 +1,6 @@
-# name: test/sql/sample/test_sample_is_destroyed_on_updates.test
+# name: test/sql/sample/table_samples/test_sample_is_destroyed_on_updates.test
 # description: Test sampling of larger relations
-# group: [sample]
+# group: [table_samples]
 
 require vector_size 2048
 
@@ -95,7 +95,7 @@ create or replace table integers_1 as select range a, range+1 b  from range(500)
 query I
 select count(*) from duckdb_table_sample('integers_1');
 ----
-500
+5
 
 statement ok
 Alter table integers_1 drop b;

@@ -16,10 +16,7 @@ double BaseReservoirSampling::GetMinWeightFromTuplesSeen(idx_t rows_seen_total) 
 	case 3:
 		return 0.693454;
 	default: {
-		// 0.978 - 1.5194 * std::exp(0.441 * rows_seen_total);
-		// 0.988 - 0.17742 * std::exp(-0.0718 * rows_seen_total);
-		// 0.987 - 0.19 * std::exp(-0.077 * rows_seen_total);
-		return (0.99 - 0.436 * std::exp(-0.07 * rows_seen_total));
+		return (0.99 - 0.355 * std::exp(-0.07 * rows_seen_total));
 	}
 	}
 }
@@ -129,8 +126,7 @@ void BaseReservoirSampling::FillWeights(SelectionVector &sel, idx_t &sel_size) {
 	auto num_entries_seen_normalized = num_entries_seen_total / FIXED_SAMPLE_SIZE;
 	auto min_weight = GetMinWeightFromTuplesSeen(num_entries_seen_normalized);
 	for (idx_t i = 0; i < sel_size; i++) {
-		RandomEngine new_random_engine;
-		auto weight = new_random_engine.NextRandom(min_weight, 1);
+		auto weight = random.NextRandom(min_weight, 1);
 		reservoir_weights.emplace(-weight, i);
 	}
 	D_ASSERT(reservoir_weights.size() <= sel_size);

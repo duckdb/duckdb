@@ -19,14 +19,9 @@
 
 namespace duckdb {
 
-enum class SampleType : uint8_t {
-	BLOCKING_SAMPLE = 0,
-	RESERVOIR_SAMPLE = 1,
-	RESERVOIR_PERCENTAGE_SAMPLE = 2,
-	INGESTION_SAMPLE = 3
-};
+enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RESERVOIR_PERCENTAGE_SAMPLE = 2 };
 
-enum class SamplingMode : uint8_t { FAST = 0, SLOW = 1 };
+enum class SamplingState : uint8_t { RANDOM = 0, RESERVOIR = 1 };
 
 //! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
 class BaseReservoirSampling {
@@ -49,7 +44,7 @@ public:
 	void FillWeights(SelectionVector &sel, idx_t &sel_size);
 
 	unique_ptr<BaseReservoirSampling> Copy();
-	// BaseReservoirSampling Copy2();
+
 	//! The random generator
 	RandomEngine random;
 
@@ -99,15 +94,13 @@ public:
 
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
-
 	virtual unique_ptr<BlockingSample> Copy() const = 0;
-
 	virtual void Finalize() = 0;
-
-	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used when
-	//! querying from a sample defined in a query and not a table sample.
-	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0, bool destroy = false) = 0;
 	virtual void Destroy();
+
+	//! Fetches a chunk from the sample. destroy = true should only be used when
+	//! querying from a sample defined in a query and not a duckdb_table_sample.
+	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0, bool destroy = false) = 0;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
@@ -134,8 +127,6 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
-
-class ReservoirSample;
 
 class ReservoirChunk {
 public:
@@ -166,14 +157,13 @@ public:
 	constexpr static double SAVE_PERCENTAGE = 0.01;
 
 	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed = 1);
-	explicit ReservoirSample(Allocator &allocator, int64_t seed = 1);
-	explicit ReservoirSample(idx_t sample_count, int64_t seed = 1);
-	explicit ReservoirSample(idx_t sample_count, unique_ptr<ReservoirChunk>);
+	explicit ReservoirSample(idx_t sample_count, unique_ptr<ReservoirChunk> = nullptr);
 
+	//! methods used to help with serializing and deserializing
 	unique_ptr<BlockingSample> PrepareForSerialization();
 	void ExpandSerializedSample();
 
-	SamplingMode SamplingState() const;
+	SamplingState GetSamplingState() const;
 
 	//! Shrink the Ingestion Sample to only contain the tuples that are in the
 	//! reservoir weights or are in the "actual_indexes"
@@ -214,8 +204,9 @@ public:
 	unique_ptr<DataChunk> GetChunk(idx_t offset, bool destroy = false) override;
 	void Destroy() override;
 	void Finalize() override;
-
 	void Verify();
+
+	idx_t GetSampleCount();
 
 	// map is [index in input chunk] -> [index in sample chunk]. Both are zero-based
 	// [index in sample chunk] is incremented by 1
@@ -228,11 +219,6 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
-
-	idx_t sample_count;
-	Allocator &allocator;
-
-	unique_ptr<ReservoirChunk> reservoir_chunk;
 
 private:
 	// when we serialize, we may have collected too many samples since we fill a standard vector size, then
@@ -257,6 +243,9 @@ private:
 	vector<uint32_t> GetRandomizedVector(uint32_t size) const;
 	void ShuffleSel();
 
+	idx_t sample_count;
+	Allocator &allocator;
+	unique_ptr<ReservoirChunk> reservoir_chunk;
 	bool internal_sample;
 	SelectionVector sel;
 	idx_t sel_size;
