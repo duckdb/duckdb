@@ -114,6 +114,9 @@ void ProgressBar::Update(bool final) {
 
 	double new_percentage = 0.0;
 	if (invalid_pipelines == 0 && progress.IsValid()) {
+		if (progress.total > 1e15) {
+			progress.Normalize(1e15);
+		}
 		query_progress.rows_processed = idx_t(progress.done);
 		query_progress.total_rows_to_process = idx_t(progress.total);
 		new_percentage = progress.ProgressDone() * 100;
