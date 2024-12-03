@@ -51,7 +51,8 @@ static unsafe_unique_array<BitmaskTableEntry> CreateBitmaskTable() {
 // Analyze
 //===--------------------------------------------------------------------===//
 RoaringAnalyzeState::RoaringAnalyzeState(const CompressionInfo &info)
-    : AnalyzeState(info), bitmask_table(CreateBitmaskTable()) {};
+    : AnalyzeState(info), bitmask_table(CreateBitmaskTable()) {
+}
 
 void RoaringAnalyzeState::HandleByte(RoaringAnalyzeState &state, uint8_t array_index) {
 	auto bit_info = state.bitmask_table[static_cast<uint8_t>(array_index)];
