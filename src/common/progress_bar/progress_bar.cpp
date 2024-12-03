@@ -119,8 +119,9 @@ void ProgressBar::Update(bool final) {
 	double new_percentage = 0.0;
 	if (progress.total > 0 && invalid_pipelines == 0) {
 		new_percentage = progress.ProgressDone() * 100;
-		if (std::isnan(new_percentage))
+		if (std::isnan(new_percentage)) {
 			new_percentage = 0.0;
+		}
 	}
 
 	if (!final && invalid_pipelines > 0) {
