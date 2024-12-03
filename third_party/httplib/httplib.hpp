@@ -7110,7 +7110,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   if (next_host.empty()) { next_host = host_; }
   if (next_path.empty()) { next_path = "/"; }
   
-	auto path = detail::decode_url(next_path, true, std::set<char> {'/'}) + next_query;
+  auto path = detail::decode_url(next_path, true, std::set<char> {'/'}) + next_query;
 	
   if (next_scheme == scheme && next_host == host_ && next_port == port_) {
     return detail::redirect(*this, req, res, path, location, error);
