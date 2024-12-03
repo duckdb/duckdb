@@ -3807,7 +3807,7 @@ Append a DEFAULT value (NULL if DEFAULT not available for column) to the appende
 */
 DUCKDB_API duckdb_state duckdb_append_default(duckdb_appender appender);
 
-DUCKDB_API duckdb_state duckdb_append_default_to_chunk(duckdb_appender appender, duckdb_data_chunk chunk, int32_t column);
+DUCKDB_API duckdb_state duckdb_append_default_to_chunk(duckdb_appender appender, duckdb_data_chunk chunk, idx_t column);
 
 /*!
 Append a bool value to the appender.

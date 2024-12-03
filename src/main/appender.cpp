@@ -373,7 +373,7 @@ void BaseAppender::Append(Value value) { // NOLINT: template stuff
 	AppendValue(value);
 }
 
-void BaseAppender::Append(DataChunk &target, Value value, int8_t column) {
+void BaseAppender::Append(DataChunk &target, Value value, idx_t column) {
 	if (column >= target.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
@@ -482,7 +482,7 @@ void Appender::AppendDefault() {
 	Append(value);
 }
 
-void Appender::AppendDefault(DataChunk &chunk, int8_t column) {
+void Appender::AppendDefault(DataChunk &chunk, idx_t column) {
 	auto index = column_ids.empty() ? column : column_ids[column].index;
 	auto it = default_values.find(index);
 	if (it == default_values.end()) {
