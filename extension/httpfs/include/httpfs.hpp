@@ -42,6 +42,7 @@ struct HTTPParams {
 	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 100;
 	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
 	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
+	static constexpr bool DEFAULT_ENABLE_HTTP_WRITE = false;
 	static constexpr bool DEFAULT_KEEP_ALIVE = true;
 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
 	static constexpr uint64_t DEFAULT_HF_MAX_PER_PAGE = 0;
@@ -51,6 +52,7 @@ struct HTTPParams {
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool force_download = DEFAULT_FORCE_DOWNLOAD;
+	bool enable_http_write = DEFAULT_ENABLE_HTTP_WRITE;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
 	idx_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
@@ -115,6 +117,12 @@ public:
 	duckdb::unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
+	// duckdb::unique_ptr<data_t[]> write_buffer;
+	constexpr static idx_t WRITE_BUFFER_LEN = 1000000;
+	std::vector<data_t> write_buffer; // Use a vector instead of a fixed-size array
+	idx_t write_buffer_idx = 0;       // Tracks the current index in the buffer
+	idx_t current_buffer_len;
+
 	shared_ptr<HTTPState> state;
 
 	void AddHeaders(HeaderMap &map);
@@ -125,8 +133,7 @@ public:
 	void StoreClient(unique_ptr<duckdb_httplib_openssl::Client> client);
 
 public:
-	void Close() override {
-	}
+	void Close() override;
 
 protected:
 	//! Create a new Client
@@ -138,6 +145,8 @@ private:
 };
 
 class HTTPFileSystem : public FileSystem {
+	friend HTTPFileHandle;
+
 public:
 	static duckdb::unique_ptr<duckdb_httplib_openssl::Client>
 	GetClient(const HTTPParams &http_params, const char *proto_host_port, optional_ptr<HTTPFileHandle> hfs);
@@ -210,6 +219,7 @@ private:
 	// Global cache
 	mutex global_cache_lock;
 	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
+	void FlushBuffer(HTTPFileHandle &hfh);
 };
 
 } // namespace duckdb

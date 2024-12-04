@@ -944,6 +944,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"disable_parquet_prefetching", "parquet"},
     {"enable_geoparquet_conversion", "parquet"},
     {"enable_server_cert_verification", "httpfs"},
+    {"enable_http_write", "httpfs"},
     {"force_download", "httpfs"},
     {"hf_max_per_page", "httpfs"},
     {"hnsw_ef_search", "vss"},

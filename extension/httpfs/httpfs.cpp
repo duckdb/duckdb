@@ -12,6 +12,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "http_state.hpp"
 
 #include <chrono>
@@ -59,6 +60,7 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<Fi
 	                                 info);
 	FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result.ca_cert_file, info);
 	FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", result.hf_max_per_page, info);
+	FileOpener::TryGetCurrentSetting(opener, "enable_http_write", result.enable_http_write, info);
 
 	// HTTP Secret lookups
 	KeyValueSecretReader settings_reader(*opener, info, "http");
@@ -576,13 +578,106 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 }
 
 void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw NotImplementedException("Writing to HTTP files not implemented");
+	auto &hfh = handle.Cast<HTTPFileHandle>();
+
+	// Check if HTTP write is enabled
+	if (!hfh.http_params.enable_http_write) {
+		throw NotImplementedException("Writing to HTTP files not implemented");
+	}
+
+	if (!buffer || nr_bytes <= 1) {
+		return;
+	}
+
+	// Initialize the write buffer if it is not already done
+	if (hfh.write_buffer.empty()) {
+		hfh.write_buffer.resize(hfh.WRITE_BUFFER_LEN);
+		hfh.write_buffer_idx = 0;
+	}
+
+	idx_t bytes_to_copy = nr_bytes;
+	idx_t buffer_offset = 0;
+
+	// Accumulate data into the write buffer
+	while (bytes_to_copy > 0) {
+		idx_t space_in_buffer = hfh.WRITE_BUFFER_LEN - hfh.write_buffer_idx;
+		idx_t copy_amount = MinValue<idx_t>(space_in_buffer, bytes_to_copy);
+
+		// Copy data to the write buffer
+		memcpy(hfh.write_buffer.data() + hfh.write_buffer_idx, (char *)buffer + buffer_offset, copy_amount);
+		hfh.write_buffer_idx += copy_amount;
+		bytes_to_copy -= copy_amount;
+		buffer_offset += copy_amount;
+
+		// std::cout << "Write buffer idx after write: " << hfh.write_buffer_idx << std::endl;
+
+		// If the buffer is full, send the data
+		if (hfh.write_buffer_idx == hfh.WRITE_BUFFER_LEN) {
+			// Perform the HTTP POST request
+			FlushBuffer(hfh);
+		}
+	}
+
+	// Update the file offset
+	hfh.file_offset += nr_bytes;
+
+	// std::cout << "Completed Write operation. Total bytes written: " << nr_bytes << std::endl;
+}
+
+void HTTPFileSystem::FlushBuffer(HTTPFileHandle &hfh) {
+	// If no data in buffer, return
+	if (hfh.write_buffer_idx <= 1) {
+		return;
+	}
+
+	// Prepare the URL and headers for the HTTP POST request
+	string path, proto_host_port;
+	ParseUrl(hfh.path, path, proto_host_port);
+
+	HeaderMap header_map;
+	auto headers = InitializeHeaders(header_map, hfh.http_params);
+
+	// Define the request lambda
+	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
+		auto client = GetClient(hfh.http_params, proto_host_port.c_str(), &hfh);
+		duckdb_httplib_openssl::Request req;
+		req.method = "POST";
+		req.path = path;
+		req.headers = *headers;
+		req.headers.emplace("Content-Type", "application/octet-stream");
+
+		// Prepare the request body from the write buffer
+		req.body = std::string(reinterpret_cast<const char *>(hfh.write_buffer.data()), hfh.write_buffer_idx);
+
+		// std::cout << "Sending request with " << hfh.write_buffer_idx << " bytes of data" << std::endl;
+
+		return client->send(req);
+	});
+
+	// Perform the HTTP POST request and handle retries
+	auto response = RunRequestWithRetry(request, hfh.path, "POST", hfh.http_params);
+
+	// Check if the response was successful (HTTP 200-299 status code)
+	if (response->code < 200 || response->code >= 300) {
+		throw HTTPException(*response, "HTTP POST request failed to '%s' with status code: %d", hfh.path.c_str(),
+		                    response->code);
+	}
+
+	// Reset the write buffer index after sending data
+	hfh.write_buffer_idx = 0;
+}
+
+void HTTPFileHandle::Close() {
+	auto &fs = (HTTPFileSystem &)file_system;
+	if (flags.OpenForWriting()) {
+		fs.FlushBuffer(*this);
+	}
 }
 
 int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &hfh = (HTTPFileHandle &)handle;
-	Write(handle, buffer, nr_bytes, hfh.file_offset);
-	return nr_bytes;
+	auto &hfh = handle.Cast<HTTPFileHandle>();        // Get HTTP file handle
+	Write(handle, buffer, nr_bytes, hfh.file_offset); // Call the Write function with the current file offset
+	return nr_bytes;                                  // Return the number of bytes written
 }
 
 void HTTPFileSystem::FileSync(FileHandle &handle) {
@@ -827,5 +922,15 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &
 	body = res.body;
 }
 
-HTTPFileHandle::~HTTPFileHandle() = default;
+HTTPFileHandle::~HTTPFileHandle() {
+	if (Exception::UncaughtException()) {
+		return;
+	}
+
+	try {
+		Close();
+	} catch (...) { // NOLINT
+	}
+}
+
 } // namespace duckdb
