@@ -91,11 +91,8 @@ bool VersioningUtils::IsSupportedCAPIVersion(string &capi_version_string) {
 }
 
 bool VersioningUtils::IsSupportedCAPIVersion(idx_t major, idx_t minor, idx_t patch) {
-	if (major > DUCKDB_EXTENSION_API_VERSION_MAJOR) {
+	if (major != DUCKDB_EXTENSION_API_VERSION_MAJOR) {
 		return false;
-	}
-	if (major < DUCKDB_EXTENSION_API_VERSION_MAJOR) {
-		return true;
 	}
 	if (minor > DUCKDB_EXTENSION_API_VERSION_MINOR) {
 		return false;
