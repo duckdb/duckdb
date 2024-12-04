@@ -129,6 +129,16 @@ struct VectorOperations {
 	                                    idx_t count, optional_ptr<SelectionVector> true_sel,
 	                                    optional_ptr<SelectionVector> false_sel,
 	                                    optional_ptr<ValidityMask> null_mask = nullptr);
+	// true := A > B with nulls being minimal
+	static idx_t DistinctGreaterThanNullsFirst(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                           idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                           optional_ptr<SelectionVector> false_sel,
+	                                           optional_ptr<ValidityMask> null_mask = nullptr);
+	// true := A < B with nulls being minimal
+	static idx_t DistinctLessThanNullsFirst(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                        idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                        optional_ptr<SelectionVector> false_sel,
+	                                        optional_ptr<ValidityMask> null_mask = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Nested Comparisons

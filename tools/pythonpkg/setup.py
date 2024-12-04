@@ -121,11 +121,7 @@ is_android = hasattr(sys, 'getandroidapilevel')
 is_pyodide = 'PYODIDE' in os.environ
 no_source_wheel = is_pyodide
 use_jemalloc = (
-    not is_android
-    and not is_pyodide
-    and platform.system() == 'Linux'
-    and platform.architecture()[0] == '64bit'
-    and platform.machine() == 'x86_64'
+    not is_android and not is_pyodide and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
 )
 
 if use_jemalloc:

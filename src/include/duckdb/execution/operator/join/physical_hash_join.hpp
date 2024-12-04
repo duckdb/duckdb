@@ -31,11 +31,9 @@ public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
-	                 idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats,
-	                 unique_ptr<JoinFilterPushdownInfo> pushdown_info);
+	                 idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
-	                 PerfectHashJoinStats join_state);
+	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 	//! Initialize HT for this operator
 	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
@@ -52,8 +50,9 @@ public:
 
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-	//! Used in perfect hash join
-	PerfectHashJoinStats perfect_join_statistics;
+
+	//! Join Keys statistics (optional)
+	vector<unique_ptr<BaseStatistics>> join_stats;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -77,7 +76,7 @@ protected:
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
-	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 	//! Becomes a source when it is an external join
 	bool IsSource() const override {

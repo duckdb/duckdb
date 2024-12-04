@@ -40,6 +40,15 @@ void SubstringDetection(char str_1, string &str_2, const string &name_str_1, con
 	}
 }
 
+void StringDetection(const string &str_1, const string &str_2, const string &name_str_1, const string &name_str_2) {
+	if (str_1.empty() || str_2.empty()) {
+		return;
+	}
+	if (str_2.find(str_1) != string::npos) {
+		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Bind
 //===--------------------------------------------------------------------===//
@@ -50,17 +59,15 @@ void WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape) {
 }
 
 void BaseCSVData::Finalize() {
-	// verify that the options are correct in the final pass
-	if (options.dialect_options.state_machine_options.escape == '\0') {
-		options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
-	}
-	// escape and delimiter must not be substrings of each other
-	AreOptionsEqual(options.dialect_options.state_machine_options.delimiter.GetValue(),
-	                options.dialect_options.state_machine_options.escape.GetValue(), "DELIMITER", "ESCAPE");
+	auto delimiter_string = options.dialect_options.state_machine_options.delimiter.GetValue();
 
-	// delimiter and quote must not be substrings of each other
-	AreOptionsEqual(options.dialect_options.state_machine_options.quote.GetValue(),
-	                options.dialect_options.state_machine_options.delimiter.GetValue(), "DELIMITER", "QUOTE");
+	// quote and delimiter must not be substrings of each other
+	SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), delimiter_string, "QUOTE",
+	                   "DELIMITER");
+
+	// escape and delimiter must not be substrings of each other
+	SubstringDetection(options.dialect_options.state_machine_options.escape.GetValue(), delimiter_string, "ESCAPE",
+	                   "DELIMITER");
 
 	// escape and quote must not be substrings of each other (but can be the same)
 	if (options.dialect_options.state_machine_options.quote != options.dialect_options.state_machine_options.escape) {
@@ -68,19 +75,19 @@ void BaseCSVData::Finalize() {
 		                options.dialect_options.state_machine_options.escape.GetValue(), "QUOTE", "ESCAPE");
 	}
 
-	// delimiter and quote must not be substrings of each other
+	// comment and quote must not be substrings of each other
 	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
 	                options.dialect_options.state_machine_options.quote.GetValue(), "COMMENT", "QUOTE");
 
-	// delimiter and quote must not be substrings of each other
-	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
-	                options.dialect_options.state_machine_options.delimiter.GetValue(), "COMMENT", "DELIMITER");
+	// delimiter and comment must not be substrings of each other
+	SubstringDetection(options.dialect_options.state_machine_options.comment.GetValue(), delimiter_string, "COMMENT",
+	                   "DELIMITER");
 
 	// null string and delimiter must not be substrings of each other
 	for (auto &null_str : options.null_str) {
 		if (!null_str.empty()) {
-			SubstringDetection(options.dialect_options.state_machine_options.delimiter.GetValue(), null_str,
-			                   "DELIMITER", "NULL");
+			StringDetection(options.dialect_options.state_machine_options.delimiter.GetValue(), null_str, "DELIMITER",
+			                "NULL");
 
 			// quote and nullstr must not be substrings of each other
 			SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), null_str, "QUOTE",
@@ -210,7 +217,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	bind_data->requires_quotes['\n'] = true;
 	bind_data->requires_quotes['\r'] = true;
 	bind_data->requires_quotes[NumericCast<idx_t>(
-	    bind_data->options.dialect_options.state_machine_options.delimiter.GetValue())] = true;
+	    bind_data->options.dialect_options.state_machine_options.delimiter.GetValue()[0])] = true;
 	bind_data->requires_quotes[NumericCast<idx_t>(
 	    bind_data->options.dialect_options.state_machine_options.quote.GetValue())] = true;
 
@@ -448,7 +455,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
-				WriteQuoteOrEscape(stream, options.dialect_options.state_machine_options.delimiter.GetValue());
+				WriteQuoteOrEscape(stream, options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
 			}
 			WriteQuotedString(stream, csv_data, csv_data.options.name_list[i].c_str(),
 			                  csv_data.options.name_list[i].size(), false);
@@ -485,7 +492,7 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		D_ASSERT(options.null_str.size() == 1);
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
-				WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.delimiter.GetValue());
+				WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value

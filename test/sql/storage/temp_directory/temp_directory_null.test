@@ -1,0 +1,20 @@
+# name: test/sql/storage/temp_directory/temp_directory_null.test
+# group: [temp_directory]
+
+# this one worked from the start
+statement ok
+set temp_directory=''
+
+query  I
+select value from duckdb_settings() where name = 'temp_directory'
+----
+(empty)
+
+# this used to create a directory with name "null" - should also be empty to denote NO temp dir
+statement ok
+set temp_directory=null
+
+query  I
+select value from duckdb_settings() where name = 'temp_directory'
+----
+(empty)

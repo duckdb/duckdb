@@ -28,6 +28,23 @@ ScalarFunction ToTimestampFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ, EpochSecFunction);
 }
 
+struct NormalizedIntervalOperator {
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
+		return input.Normalize();
+	}
+};
+
+static void NormalizedIntervalFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.ColumnCount() == 1);
+
+	UnaryExecutor::Execute<interval_t, interval_t, NormalizedIntervalOperator>(input.data[0], result, input.size());
+}
+
+ScalarFunction NormalizedIntervalFun::GetFunction() {
+	return ScalarFunction({LogicalType::INTERVAL}, LogicalType::INTERVAL, NormalizedIntervalFunction);
+}
+
 struct TimeTZSortKeyOperator {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input) {
@@ -44,5 +61,4 @@ static void TimeTZSortKeyFunction(DataChunk &input, ExpressionState &state, Vect
 ScalarFunction TimeTZSortKeyFun::GetFunction() {
 	return ScalarFunction({LogicalType::TIME_TZ}, LogicalType::UBIGINT, TimeTZSortKeyFunction);
 }
-
 } // namespace duckdb

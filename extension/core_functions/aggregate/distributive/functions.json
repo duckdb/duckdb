@@ -79,6 +79,14 @@
         "type": "aggregate_function"
     },
     {
+        "name": "count_if",
+        "parameters": "arg",
+        "description": "Counts the total number of TRUE values for a boolean column",
+        "example": "count_if(A)",
+        "type": "aggregate_function",
+        "aliases": ["countif"]
+    },
+    {
         "name": "entropy",
         "parameters": "x",
         "description": "Returns the log-2 entropy of count input-values.",

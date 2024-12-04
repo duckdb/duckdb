@@ -87,10 +87,32 @@ bool PushTimeTZCollation(ClientContext &context, unique_ptr<Expression> &source,
 	return true;
 }
 
+bool PushIntervalCollation(ClientContext &context, unique_ptr<Expression> &source, const LogicalType &sql_type,
+                           CollationType) {
+	if (sql_type.id() != LogicalTypeId::INTERVAL) {
+		return false;
+	}
+
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "normalized_interval");
+	if (function_entry.functions.Size() != 1) {
+		throw InternalException("normalized_interval should only have a single overload");
+	}
+	auto &scalar_function = function_entry.functions.GetFunctionReferenceByOffset(0);
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(source));
+
+	FunctionBinder function_binder(context);
+	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
+	source = std::move(function);
+	return true;
+}
+
 // timetz_byte_comparable
 CollationBinding::CollationBinding() {
 	RegisterCollation(CollationCallback(PushVarcharCollation));
 	RegisterCollation(CollationCallback(PushTimeTZCollation));
+	RegisterCollation(CollationCallback(PushIntervalCollation));
 }
 
 void CollationBinding::RegisterCollation(CollationCallback callback) {

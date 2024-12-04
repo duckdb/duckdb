@@ -377,6 +377,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 	function.name = std::move(name);
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
 	if (function.bind) {
 		return function.bind(context, function, arguments);
 	} else {

@@ -160,7 +160,7 @@ void GroupedAggregateHashTable::Verify() {
 }
 
 void GroupedAggregateHashTable::ClearPointerTable() {
-	std::fill_n(entries, capacity, ht_entry_t::GetEmptyEntry());
+	std::fill_n(entries, capacity, ht_entry_t());
 }
 
 void GroupedAggregateHashTable::ResetCount() {
@@ -169,6 +169,10 @@ void GroupedAggregateHashTable::ResetCount() {
 
 void GroupedAggregateHashTable::SetRadixBits(idx_t radix_bits_p) {
 	radix_bits = radix_bits_p;
+}
+
+idx_t GroupedAggregateHashTable::GetRadixBits() const {
+	return radix_bits;
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {

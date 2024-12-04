@@ -374,6 +374,22 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #endif
 	}
 
+	if (param == "ram") {
+		if (params.size() != 2) {
+			parser.Fail("require ram requires a parameter");
+		}
+		// require a minimum amount of ram
+		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto limit = FileSystem::GetAvailableMemory();
+		if (!limit.IsValid()) {
+			return RequireResult::MISSING;
+		}
+		if (limit.GetIndex() < required_limit) {
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
 	if (param == "vector_size") {
 		if (params.size() != 2) {
 			parser.Fail("require vector_size requires a parameter");
