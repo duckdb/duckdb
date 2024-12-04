@@ -10,7 +10,6 @@ add_subdirectory(third_party)
 
 set(ICU_EXTENSION_FILES
     ${ICU_LIBRARY_FILES}
-    icu-current.cpp
     icu_extension.cpp
     icu-dateadd.cpp
     icu-datefunc.cpp

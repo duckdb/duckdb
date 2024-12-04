@@ -13,7 +13,6 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "include/icu-current.hpp"
 #include "include/icu-dateadd.hpp"
 #include "include/icu-datepart.hpp"
 #include "include/icu-datesub.hpp"
@@ -327,7 +326,6 @@ static void LoadInternal(DuckDB &ddb) {
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
 	                          SetICUTimeZone);
 
-	RegisterICUCurrentFunctions(db);
 	RegisterICUDateAddFunctions(db);
 	RegisterICUDatePartFunctions(db);
 	RegisterICUDateSubFunctions(db);
