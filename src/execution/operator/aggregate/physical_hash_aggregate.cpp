@@ -319,15 +319,17 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 			for (idx_t group_idx = 0; group_idx < grouped_aggregate_data.groups.size(); group_idx++) {
 				auto &group = grouped_aggregate_data.groups[group_idx];
 				auto &bound_ref = group->Cast<BoundReferenceExpression>();
-				filtered_input.data[bound_ref.index].Reference(chunk.data[bound_ref.index]);
+				auto &col = filtered_input.data[bound_ref.index];
+				col.Reference(chunk.data[bound_ref.index]);
+				col.Slice(sel_vec, count);
 			}
 			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
 				auto &child = aggregate.children[child_idx];
 				auto &bound_ref = child->Cast<BoundReferenceExpression>();
-
-				filtered_input.data[bound_ref.index].Reference(chunk.data[bound_ref.index]);
+				auto &col = filtered_input.data[bound_ref.index];
+				col.Reference(chunk.data[bound_ref.index]);
+				col.Slice(sel_vec, count);
 			}
-			filtered_input.Slice(sel_vec, count);
 			filtered_input.SetCardinality(count);
 
 			radix_table.Sink(context, filtered_input, sink_input, empty_chunk, empty_filter);
@@ -883,15 +885,15 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+ProgressData PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalSinkState>();
 	auto &gstate = gstate_p.Cast<HashAggregateGlobalSourceState>();
-	double total_progress = 0;
+	ProgressData progress;
 	for (idx_t radix_idx = 0; radix_idx < groupings.size(); radix_idx++) {
-		total_progress += groupings[radix_idx].table_data.GetProgress(
-		    context, *sink_gstate.grouping_states[radix_idx].table_state, *gstate.radix_states[radix_idx]);
+		progress.Add(groupings[radix_idx].table_data.GetProgress(
+		    context, *sink_gstate.grouping_states[radix_idx].table_state, *gstate.radix_states[radix_idx]));
 	}
-	return total_progress / double(groupings.size());
+	return progress;
 }
 
 InsertionOrderPreservingMap<string> PhysicalHashAggregate::ParamsToString() const {

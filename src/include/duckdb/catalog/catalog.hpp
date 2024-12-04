@@ -9,17 +9,18 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
-#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/map.hpp"
-#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/enums/catalog_lookup_behavior.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
-#include "duckdb/common/enums/catalog_lookup_behavior.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+
 #include <functional>
 
 namespace duckdb {
@@ -71,6 +72,17 @@ class LogicalDelete;
 class LogicalUpdate;
 class CreateStatement;
 class CatalogEntryRetriever;
+
+//! Return value of Catalog::LookupEntry
+struct CatalogEntryLookup {
+	optional_ptr<SchemaCatalogEntry> schema;
+	optional_ptr<CatalogEntry> entry;
+	ErrorData error;
+
+	DUCKDB_API bool Found() const {
+		return entry;
+	}
+};
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
@@ -299,6 +311,15 @@ public:
 		return CatalogLookupBehavior::STANDARD;
 	}
 
+	//! The default table is used for `SELECT * FROM <catalog_name>;`
+	DUCKDB_API bool HasDefaultTable() const;
+	DUCKDB_API void SetDefaultTable(const string &schema, const string &name);
+	DUCKDB_API string GetDefaultTable() const;
+	DUCKDB_API string GetDefaultTableSchema() const;
+
+	//! Returns the dependency manager of this catalog - if the catalog has anye
+	virtual optional_ptr<DependencyManager> GetDependencyManager();
+
 public:
 	template <class T>
 	static optional_ptr<T> GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,
@@ -342,7 +363,16 @@ protected:
 	//! Reference to the database
 	AttachedDatabase &db;
 
+	//! (optionally) a default table to query for `SELECT * FROM <catalog_name>;`
+	string default_table;
+	string default_table_schema;
+
 public:
+	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION
+	CatalogEntryLookup LookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &schema,
+	                               const string &name, OnEntryNotFound if_not_found,
+	                               QueryErrorContext error_context = QueryErrorContext());
+
 private:
 	//! Lookup an entry in the schema, returning a lookup with the entry and schema if they exist
 	CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
@@ -352,16 +382,17 @@ private:
 	CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &schema,
 	                                  const string &name, OnEntryNotFound if_not_found,
 	                                  QueryErrorContext error_context = QueryErrorContext());
-	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION
-	CatalogEntryLookup LookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &schema,
-	                               const string &name, OnEntryNotFound if_not_found,
-	                               QueryErrorContext error_context = QueryErrorContext());
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, vector<CatalogLookup> &lookups,
 	                                         CatalogType type, const string &name, OnEntryNotFound if_not_found,
 	                                         QueryErrorContext error_context = QueryErrorContext());
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &catalog,
 	                                         const string &schema, const string &name, OnEntryNotFound if_not_found,
 	                                         QueryErrorContext error_context);
+
+	//! Looks for a Catalog with a DefaultTable that matches the lookup
+	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever, CatalogType type,
+	                                                const string &catalog, const string &schema, const string &name,
+	                                                OnEntryNotFound if_not_found, QueryErrorContext error_context);
 
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(CatalogEntryRetriever &retriever, const string &entry_name,

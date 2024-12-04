@@ -132,6 +132,7 @@ void SQLLogicTestRunner::Reconnect() {
 }
 
 string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
+	replacement = ReplaceKeywords(replacement);
 	if (StringUtil::Contains(loop_iterator_name, ",")) {
 		auto name_splits = StringUtil::Split(loop_iterator_name, ",");
 		auto replacement_splits = StringUtil::Split(replacement, ",");
@@ -371,6 +372,22 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #else
 		return RequireResult::PRESENT;
 #endif
+	}
+
+	if (param == "ram") {
+		if (params.size() != 2) {
+			parser.Fail("require ram requires a parameter");
+		}
+		// require a minimum amount of ram
+		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto limit = FileSystem::GetAvailableMemory();
+		if (!limit.IsValid()) {
+			return RequireResult::MISSING;
+		}
+		if (limit.GetIndex() < required_limit) {
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
 	}
 
 	if (param == "vector_size") {

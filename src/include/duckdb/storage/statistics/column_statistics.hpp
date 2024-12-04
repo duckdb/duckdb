@@ -24,7 +24,7 @@ public:
 
 	void Merge(ColumnStatistics &other);
 
-	void UpdateDistinctStatistics(Vector &v, idx_t count);
+	void UpdateDistinctStatistics(Vector &v, idx_t count, Vector &hashes);
 
 	BaseStatistics &Statistics();
 

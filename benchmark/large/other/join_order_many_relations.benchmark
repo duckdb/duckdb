@@ -1,0 +1,42 @@
+# name: benchmark/large/other/join_order_many_relations.benchmark
+# description: Test or filter pushdown
+# group: [other]
+
+load
+create table t1 as select range id1 from range(100);
+create table t2 as select range id2 from range(200);
+create table t3 as select range id3 from range(400);
+create table t4 as select range id4 from range(500);
+create table t5 as select range id5 from range(600);
+create table t6 as select range id6 from range(700);
+create table t7 as select range id7 from range(800);
+create table t8 as select range id8 from range(900);
+create table t9 as select range id9 from range(1000);
+create table t10 as select range id10 from range(1100);
+create table t11 as select range id11 from range(1200);
+create table t12 as select range id12 from range(1300);
+create table t13 as select range id13 from range(1400);
+create table t14 as select range id14 from range(1500);
+create table t15 as select range id15 from range(1600);
+
+run
+pragma disabled_optimizers='join_filter_pushdown,statistics_propagation';
+select count(*) from t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15
+where
+id1 = id2 and
+id2 = id3 and
+id3 = id4 and
+id4 = id5 and
+id5 = id6 and
+id6 = id7 and
+id7 = id8 and
+id8 = id9 and
+id9 = id10 and
+id10 = id11 and
+id11 = id12 and
+id12 = id13 and
+id13 = id14 and
+id14 = id15
+
+result I
+100

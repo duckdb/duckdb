@@ -23,9 +23,9 @@ string(REPEAT "${EMPTY_BYTE}" 256 EMPTY_256)
 
 # 0 for custom section
 string(APPEND CUSTOM_SECTION "${EMPTY_BYTE}")
-# 213 in hex = 531 in decimal, total lenght of what follows (1 + 16 + 2 + 8x32 + 256)
+# 213 in hex = 531 in decimal, total length of what follows (1 + 16 + 2 + 8x32 + 256)
 # [1(continuation) + 0010011(payload) = \x93 -> 147, 0(continuation) + 10(payload) = \x04 -> 4]
-# 10 in hex = 16 in decimal, lenght of name, 1 byte
+# 10 in hex = 16 in decimal, length of name, 1 byte
 string(ASCII 147 4 16 CUSTOM_SECTION_2)
 string(APPEND CUSTOM_SECTION "${CUSTOM_SECTION_2}")
 

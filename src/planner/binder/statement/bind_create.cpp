@@ -1,48 +1,45 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_create.hpp"
-#include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
-#include "duckdb/function/scalar_macro_function.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_extension.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/parser/constraints/unique_constraint.hpp"
-#include "duckdb/parser/constraints/list.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
@@ -147,8 +144,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto &catalog = Catalog::GetCatalog(context, base.catalog);
 
 	auto &db_config = DBConfig::GetConfig(context);
-	auto should_create_dependencies = db_config.options.enable_view_dependencies;
-
+	bool should_create_dependencies = db_config.GetSetting<EnableViewDependenciesSetting>(context);
 	if (should_create_dependencies) {
 		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
@@ -219,7 +215,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		BoundSelectNode sel_node;
 		BoundGroupInformation group_info;
 		SelectBinder binder(*this, context, sel_node, group_info);
-		auto should_create_dependencies = db_config.options.enable_macro_dependencies;
+		bool should_create_dependencies = db_config.GetSetting<EnableMacroDependenciesSetting>(context);
 
 		if (should_create_dependencies) {
 			binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
@@ -574,46 +570,9 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
                                                          TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
-	auto &base = stmt.info->Cast<CreateIndexInfo>();
-
-	auto &get = plan->Cast<LogicalGet>();
-	// bind the index expressions
-	IndexBinder index_binder(binder, binder.context);
-	auto &dependencies = base.dependencies;
-	auto &catalog = Catalog::GetCatalog(binder.context, base.catalog);
-	index_binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-		if (&catalog != &entry.ParentCatalog()) {
-			// Don't register any cross-catalog dependencies
-			return;
-		}
-		dependencies.AddDependency(entry);
-	});
-	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(base.expressions.size());
-	for (auto &expr : base.expressions) {
-		expressions.push_back(index_binder.Bind(expr));
-	}
-
 	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
-	auto &column_ids = get.GetColumnIds();
-	for (auto &column_id : column_ids) {
-		if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
-			throw BinderException("Cannot create an index on the rowid!");
-		}
-		create_index_info->scan_types.push_back(get.returned_types[column_id]);
-	}
-	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
-	create_index_info->names = get.names;
-	create_index_info->column_ids = column_ids;
-	create_index_info->schema = table.schema.name;
-	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
-	bind_data.is_create_index = true;
-	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
-
-	// the logical CREATE INDEX also needs all fields to scan the referenced table
-	auto result = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table);
-	result->children.push_back(std::move(plan));
-	return std::move(result);
+	IndexBinder index_binder(binder, binder.context);
+	return index_binder.BindCreateIndex(binder.context, std::move(create_index_info), table, std::move(plan), nullptr);
 }
 
 BoundStatement Binder::Bind(CreateStatement &stmt) {
@@ -659,18 +618,17 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
-		auto &base = stmt.info->Cast<CreateIndexInfo>();
+		auto &create_index_info = stmt.info->Cast<CreateIndexInfo>();
 
-		// visit the table reference
-		auto table_ref = make_uniq<BaseTableRef>();
-		table_ref->catalog_name = base.catalog;
-		table_ref->schema_name = base.schema;
-		table_ref->table_name = base.table;
-
+		// Plan the table scan.
+		TableDescription table_description(create_index_info.catalog, create_index_info.schema,
+		                                   create_index_info.table);
+		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
-			throw BinderException("Can only create an index over a base table!");
+			throw BinderException("can only create an index on a base table");
 		}
+
 		auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
 		auto &table = table_binding.table;
 		if (table.temporary) {
@@ -683,6 +641,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
 			throw BinderException("Cannot create index on a view!");
 		}
+
 		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
@@ -702,30 +661,37 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			D_ASSERT(fk.info.pk_keys.empty());
 			D_ASSERT(fk.info.fk_keys.empty());
 			FindForeignKeyIndexes(create_info.columns, fk.fk_columns, fk.info.fk_keys);
+
+			// Resolve the self-reference.
 			if (StringUtil::CIEquals(create_info.table, fk.info.table)) {
-				// self-referential foreign key constraint
 				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
 				FindMatchingPrimaryKeyColumns(create_info.columns, create_info.constraints, fk);
 				FindForeignKeyIndexes(create_info.columns, fk.pk_columns, fk.info.pk_keys);
 				CheckForeignKeyTypes(create_info.columns, create_info.columns, fk);
-			} else {
-				// have to resolve referenced table
-				auto table_entry =
-				    entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, INVALID_CATALOG, fk.info.schema, fk.info.table);
-				auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
-				fk_schemas.insert(pk_table_entry_ptr.schema);
-				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
-				FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
-				CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
-				auto &storage = pk_table_entry_ptr.GetStorage();
-
-				if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
-					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
-					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
-					                      "present on these columns",
-					                      pk_table_entry_ptr.name, fk_column_names);
-				}
+				continue;
 			}
+
+			// Resolve the table reference.
+			auto table_entry =
+			    entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, INVALID_CATALOG, fk.info.schema, fk.info.table);
+			if (table_entry->type == CatalogType::VIEW_ENTRY) {
+				throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
+			}
+
+			auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
+			fk_schemas.insert(pk_table_entry_ptr.schema);
+			FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
+			FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
+			CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
+			auto &storage = pk_table_entry_ptr.GetStorage();
+
+			if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
+				auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
+				throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
+				                      "present on these columns",
+				                      pk_table_entry_ptr.name, fk_column_names);
+			}
+
 			D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
 			D_ASSERT(fk.info.pk_keys.size() == fk.pk_columns.size());
 			D_ASSERT(fk.info.fk_keys.size() == fk.fk_columns.size());

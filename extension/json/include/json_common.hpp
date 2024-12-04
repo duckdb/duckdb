@@ -89,7 +89,8 @@ using json_key_set_t = unordered_set<JSONKey, JSONKeyHash, JSONKeyEquality>;
 struct JSONCommon {
 public:
 	//! Read/Write flags
-	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
+	static constexpr auto READ_FLAG =
+	    YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW;
 	static constexpr auto READ_STOP_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
 	static constexpr auto READ_INSITU_FLAG = READ_STOP_FLAG | YYJSON_READ_INSITU;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
@@ -102,6 +103,7 @@ public:
 	static constexpr char const *TYPE_STRING_BIGINT = "BIGINT";
 	static constexpr char const *TYPE_STRING_UBIGINT = "UBIGINT";
 	static constexpr char const *TYPE_STRING_DOUBLE = "DOUBLE";
+	static constexpr char const *TYPE_STRING_HUGEINT = "HUGEINT";
 	static constexpr char const *TYPE_STRING_VARCHAR = "VARCHAR";
 	static constexpr char const *TYPE_STRING_ARRAY = "ARRAY";
 	static constexpr char const *TYPE_STRING_OBJECT = "OBJECT";
@@ -109,23 +111,24 @@ public:
 	static inline const char *ValTypeToString(yyjson_val *val) {
 		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-			return JSONCommon::TYPE_STRING_NULL;
+			return TYPE_STRING_NULL;
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NOESC:
 		case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
-			return JSONCommon::TYPE_STRING_VARCHAR;
+			return TYPE_STRING_VARCHAR;
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-			return JSONCommon::TYPE_STRING_ARRAY;
+			return TYPE_STRING_ARRAY;
 		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-			return JSONCommon::TYPE_STRING_OBJECT;
+			return TYPE_STRING_OBJECT;
 		case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_TRUE:
 		case YYJSON_TYPE_BOOL | YYJSON_SUBTYPE_FALSE:
-			return JSONCommon::TYPE_STRING_BOOLEAN;
+			return TYPE_STRING_BOOLEAN;
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_UINT:
-			return JSONCommon::TYPE_STRING_UBIGINT;
+			return TYPE_STRING_UBIGINT;
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
-			return JSONCommon::TYPE_STRING_BIGINT;
+			return TYPE_STRING_BIGINT;
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
-			return JSONCommon::TYPE_STRING_DOUBLE;
+		case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
+			return TYPE_STRING_DOUBLE;
 		default:
 			throw InternalException("Unexpected yyjson tag in ValTypeToString");
 		}
@@ -154,6 +157,7 @@ public:
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_SINT:
 			return LogicalTypeId::BIGINT;
 		case YYJSON_TYPE_NUM | YYJSON_SUBTYPE_REAL:
+		case YYJSON_TYPE_RAW | YYJSON_SUBTYPE_NONE:
 			return LogicalTypeId::DOUBLE;
 		default:
 			throw InternalException("Unexpected yyjson tag in ValTypeToLogicalTypeId");
@@ -301,7 +305,7 @@ private:
 	//! Get JSON pointer (/field/index/... syntax)
 	static inline yyjson_val *GetPointer(yyjson_val *val, const char *ptr, const idx_t &len) {
 		yyjson_ptr_err err;
-		return len == 1 ? val : unsafe_yyjson_ptr_getx(val, ptr, len, &err);
+		return unsafe_yyjson_ptr_getx(val, ptr, len, &err);
 	}
 	//! Get JSON path ($.field[index]... syntax)
 	static yyjson_val *GetPath(yyjson_val *val, const char *ptr, const idx_t &len);

@@ -176,20 +176,20 @@ struct JaccardFun {
 
 struct JaroSimilarityFun {
 	static constexpr const char *Name = "jaro_similarity";
-	static constexpr const char *Parameters = "str1,str2";
+	static constexpr const char *Parameters = "str1,str2,score_cutoff";
 	static constexpr const char *Description = "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1";
-	static constexpr const char *Example = "jaro_similarity('duck','duckdb')";
+	static constexpr const char *Example = "jaro_similarity('duck', 'duckdb', 0.5)";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct JaroWinklerSimilarityFun {
 	static constexpr const char *Name = "jaro_winkler_similarity";
-	static constexpr const char *Parameters = "str1,str2";
+	static constexpr const char *Parameters = "str1,str2,score_cutoff";
 	static constexpr const char *Description = "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1";
-	static constexpr const char *Example = "jaro_winkler_similarity('duck','duckdb')";
+	static constexpr const char *Example = "jaro_winkler_similarity('duck', 'duckdb', 0.5)";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct LeftFun {
@@ -362,9 +362,9 @@ struct TranslateFun {
 
 struct TrimFun {
 	static constexpr const char *Name = "trim";
-	static constexpr const char *Parameters = "string,characters";
-	static constexpr const char *Description = "Removes any occurrences of any of the characters from either side of the string";
-	static constexpr const char *Example = "trim('>>>>test<<', '><')";
+	static constexpr const char *Parameters = "string::VARCHAR\1string::VARCHAR,characters::VARCHAR";
+	static constexpr const char *Description = "Removes any spaces from either side of the string.\1Removes any occurrences of any of the characters from either side of the string";
+	static constexpr const char *Example = "trim(' test ')\1trim('>>>>test<<', '><')";
 
 	static ScalarFunctionSet GetFunctions();
 };

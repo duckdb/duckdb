@@ -36,10 +36,6 @@
 #define DUCKDB_EXTENSION_TPCDS_LINKED false
 #endif
 
-#ifndef DUCKDB_EXTENSION_FTS_LINKED
-#define DUCKDB_EXTENSION_FTS_LINKED false
-#endif
-
 #ifndef DUCKDB_EXTENSION_HTTPFS_LINKED
 #define DUCKDB_EXTENSION_HTTPFS_LINKED false
 #endif
@@ -82,10 +78,6 @@
 #include "tpcds_extension.hpp"
 #endif
 
-#if DUCKDB_EXTENSION_FTS_LINKED
-#include "fts_extension.hpp"
-#endif
-
 #if DUCKDB_EXTENSION_HTTPFS_LINKED
 #include "httpfs_extension.hpp"
 #endif
@@ -116,7 +108,6 @@ static const DefaultExtension internal_extensions[] = {
     {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
     {"tpch", "Adds TPC-H data generation and query support", DUCKDB_EXTENSION_TPCH_LINKED},
     {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED},
-    {"fts", "Adds support for Full-Text Search Indexes", DUCKDB_EXTENSION_FTS_LINKED},
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
     {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
     {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
@@ -134,6 +125,7 @@ static const DefaultExtension internal_extensions[] = {
     {"iceberg", "Adds support for Apache Iceberg", false},
     {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
     {"delta", "Adds support for Delta Lake", false},
+    {"fts", "Adds support for Full-Text Search Indexes", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -222,7 +214,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
-			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
+			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(
+			    StringValue::Get(config.GetSetting<AutoinstallExtensionRepositorySetting>(context)));
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
@@ -373,7 +366,7 @@ ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, c
 		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",
 		                            extension_name);
 	} else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
-		throw InternalException("Failed to update extension '%s', an unknown error ocurred", extension_name);
+		throw InternalException("Failed to update extension '%s', an unknown error occurred", extension_name);
 	}
 	return update_result;
 }
@@ -413,8 +406,8 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// The in-tree extensions that we check. Non-cmake builds are currently limited to these for static linking
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 	//		 these can be removed
-	vector<string> extensions {"parquet", "icu",   "tpch", "tpcds",    "fts",          "httpfs",
-	                           "json",    "excel", "inet", "jemalloc", "autocomplete", "core_functions"};
+	vector<string> extensions {"parquet", "icu",  "tpch",     "tpcds",        "httpfs",        "json",
+	                           "excel",   "inet", "jemalloc", "autocomplete", "core_functions"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -500,13 +493,6 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		db.LoadStaticExtension<TpcdsExtension>();
 #else
 		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "fts") {
-#if DUCKDB_EXTENSION_FTS_LINKED
-//		db.LoadStaticExtension<FtsExtension>();
-#else
-		// fts extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "httpfs") {

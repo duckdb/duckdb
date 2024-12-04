@@ -123,11 +123,14 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"cbrt", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ceil", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ceiling", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"check_peg_parser", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"chr", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"corr", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"cos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cosh", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cot", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"count_if", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"countif", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"covar_pop", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"covar_samp", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"create_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
@@ -444,8 +447,10 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"netmask", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"network", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"nextafter", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"normalized_interval", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"now", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ord", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"parquet_bloom_probe", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_file_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_kv_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -937,6 +942,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ca_cert_file", "httpfs"},
     {"calendar", "icu"},
     {"disable_parquet_prefetching", "parquet"},
+    {"enable_geoparquet_conversion", "parquet"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
     {"hf_max_per_page", "httpfs"},
@@ -1035,8 +1041,10 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
-    {"s3", "httpfs"},   {"r2", "httpfs"},          {"gcs", "httpfs"},
-    {"azure", "azure"}, {"huggingface", "httpfs"}, {"bearer", "httpfs"}}; // EXTENSION_SECRET_TYPES
+    {"s3", "httpfs"},           {"r2", "httpfs"},
+    {"gcs", "httpfs"},          {"azure", "azure"},
+    {"huggingface", "httpfs"},  {"bearer", "httpfs"},
+    {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"}}; // EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -1053,12 +1061,13 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"azure/service_principal", "azure"},
     {"huggingface/config", "httfps"},
     {"huggingface/credential_chain", "httpfs"},
-    {"bearer/config", "httpfs"}}; // EXTENSION_SECRET_PROVIDERS
+    {"bearer/config", "httpfs"},
+    {"mysql/config", "mysql_scanner"},
+    {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "aws",   "azure",   "autocomplete",   "core_functions", "delta",
-    "excel", "fts",     "httpfs",         "inet",           "icu",
-    "json",  "parquet", "sqlite_scanner", "sqlsmith",       "postgres_scanner",
+    "aws",   "azure", "autocomplete", "core_functions", "delta",   "excel",          "fts",      "httpfs",
+    "inet",  "icu",   "json",         "mysql_scanner",  "parquet", "sqlite_scanner", "sqlsmith", "postgres_scanner",
     "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

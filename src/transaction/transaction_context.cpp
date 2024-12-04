@@ -74,10 +74,18 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	}
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
-	transaction->Rollback();
+	ErrorData rollback_error;
+	try {
+		transaction->Rollback();
+	} catch (std::exception &ex) {
+		rollback_error = ErrorData(ex);
+	}
 	// Notify any registered state of transaction rollback
 	for (auto const &s : context.registered_state->States()) {
 		s->TransactionRollback(*transaction, context, error);
+	}
+	if (rollback_error.HasError()) {
+		rollback_error.Throw();
 	}
 }
 

@@ -25,9 +25,6 @@ public:
 		return "duckdb";
 	}
 
-	DependencyManager &GetDependencyManager() {
-		return *dependency_manager;
-	}
 	mutex &GetWriteLock() {
 		return write_lock;
 	}
@@ -52,6 +49,7 @@ public:
 	DUCKDB_API unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt,
 	                                                       TableCatalogEntry &table,
 	                                                       unique_ptr<LogicalOperator> plan) override;
+	CatalogSet &GetSchemaCatalogSet();
 
 	DatabaseSize GetDatabaseSize(ClientContext &context) override;
 	vector<MetadataBlockInfo> GetMetadataInfo(ClientContext &context) override;
@@ -60,6 +58,8 @@ public:
 	DUCKDB_API string GetDBPath() override;
 
 	DUCKDB_API optional_idx GetCatalogVersion(ClientContext &context) override;
+
+	optional_ptr<DependencyManager> GetDependencyManager() override;
 
 private:
 	DUCKDB_API void DropSchema(CatalogTransaction transaction, DropInfo &info);

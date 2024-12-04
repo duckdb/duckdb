@@ -308,22 +308,13 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIn
 // Lookup Structures
 //===--------------------------------------------------------------------===//
 struct CatalogLookup {
-	CatalogLookup(Catalog &catalog, string schema_p) : catalog(catalog), schema(std::move(schema_p)) {
+	CatalogLookup(Catalog &catalog, string schema_p, string name_p)
+	    : catalog(catalog), schema(std::move(schema_p)), name(std::move(name_p)) {
 	}
 
 	Catalog &catalog;
 	string schema;
-};
-
-//! Return value of Catalog::LookupEntry
-struct CatalogEntryLookup {
-	optional_ptr<SchemaCatalogEntry> schema;
-	optional_ptr<CatalogEntry> entry;
-	ErrorData error;
-
-	DUCKDB_API bool Found() const {
-		return entry;
-	}
+	string name;
 };
 
 //===--------------------------------------------------------------------===//
@@ -405,7 +396,12 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 			entries.emplace_back(catalog_name, schema);
 		}
 		if (entries.empty()) {
-			entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+			auto &default_entry = search_path.GetDefault();
+			if (!IsInvalidCatalog(default_entry.catalog)) {
+				entries.emplace_back(default_entry.catalog, schema);
+			} else {
+				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+			}
 		}
 	} else if (IsInvalidSchema(schema)) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
@@ -600,7 +596,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	auto databases = db_manager.GetDatabases(context);
 	auto &config = DBConfig::GetConfig(context);
 
-	auto max_schema_count = config.options.catalog_error_max_schemas;
+	auto max_schema_count = config.GetSetting<CatalogErrorMaxSchemasSetting>(context);
 	for (auto database : databases) {
 		if (unseen_schemas.size() >= max_schema_count) {
 			break;
@@ -776,7 +772,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vec
 	reference_set_t<SchemaCatalogEntry> schemas;
 	for (auto &lookup : lookups) {
 		auto transaction = lookup.catalog.GetCatalogTransaction(context);
-		auto result = lookup.catalog.TryLookupEntryInternal(transaction, type, lookup.schema, name);
+		auto result = lookup.catalog.TryLookupEntryInternal(transaction, type, lookup.schema, lookup.name);
 		if (result.Found()) {
 			return result;
 		}
@@ -791,6 +787,42 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vec
 		auto except = CreateMissingEntryException(retriever, name, type, schemas, error_context);
 		return {nullptr, nullptr, ErrorData(except)};
 	}
+}
+
+CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriever, CatalogType type,
+                                                  const string &catalog, const string &schema, const string &name,
+                                                  OnEntryNotFound if_not_found, QueryErrorContext error_context) {
+	// Default tables of catalogs can only be accessed by the catalog name directly
+	if (!schema.empty() || !catalog.empty()) {
+		return {nullptr, nullptr, ErrorData()};
+	}
+
+	vector<CatalogLookup> catalog_by_name_lookups;
+	auto catalog_by_name = GetCatalogEntry(retriever, name);
+	if (catalog_by_name && catalog_by_name->HasDefaultTable()) {
+		catalog_by_name_lookups.emplace_back(*catalog_by_name, catalog_by_name->GetDefaultTableSchema(),
+		                                     catalog_by_name->GetDefaultTable());
+	}
+
+	return TryLookupEntry(retriever, catalog_by_name_lookups, type, name, if_not_found, error_context);
+}
+
+static void ThrowDefaultTableAmbiguityException(CatalogEntryLookup &base_lookup, CatalogEntryLookup &default_table,
+                                                const string &name) {
+	auto entry_type = CatalogTypeToString(base_lookup.entry->type);
+	string fully_qualified_name_hint;
+	if (base_lookup.schema) {
+		fully_qualified_name_hint = StringUtil::Format(": '%s.%s.%s'", base_lookup.schema->catalog.GetName(),
+		                                               base_lookup.schema->name, base_lookup.entry->name);
+	}
+	string fully_qualified_catalog_name_hint = StringUtil::Format(
+	    ": '%s.%s.%s'", default_table.schema->catalog.GetName(), default_table.schema->name, default_table.entry->name);
+	throw CatalogException(
+	    "Ambiguity detected for '%s': this could either refer to the '%s' '%s', or the "
+	    "attached catalog '%s' which has a default table. To avoid this error, either detach the catalog and "
+	    "reattach under a different name, or use a fully qualified name for the '%s'%s or for the Catalog "
+	    "Default Table%s.",
+	    name, entry_type, name, name, entry_type, fully_qualified_name_hint, fully_qualified_catalog_name_hint);
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, CatalogType type, const string &catalog,
@@ -813,15 +845,35 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, Cat
 		D_ASSERT(catalog_entry);
 		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(type);
 		if (lookup_behavior == CatalogLookupBehavior::STANDARD) {
-			lookups.emplace_back(*catalog_entry, entry.schema);
+			lookups.emplace_back(*catalog_entry, entry.schema, name);
 		} else if (lookup_behavior == CatalogLookupBehavior::LOWER_PRIORITY) {
-			final_lookups.emplace_back(*catalog_entry, entry.schema);
+			final_lookups.emplace_back(*catalog_entry, entry.schema, name);
 		}
 	}
+
 	for (auto &lookup : final_lookups) {
 		lookups.emplace_back(std::move(lookup));
 	}
-	return Catalog::TryLookupEntry(retriever, lookups, type, name, if_not_found, error_context);
+
+	// Do the main lookup
+	auto lookup_result = TryLookupEntry(retriever, lookups, type, name, if_not_found, error_context);
+
+	// Special case for tables: we do a second lookup searching for catalogs with default tables that also match this
+	// lookup
+	if (type == CatalogType::TABLE_ENTRY) {
+		auto lookup_result_default_table =
+		    TryLookupDefaultTable(retriever, type, catalog, schema, name, if_not_found, error_context);
+
+		if (lookup_result_default_table.Found() && lookup_result.Found()) {
+			ThrowDefaultTableAmbiguityException(lookup_result, lookup_result_default_table, name);
+		}
+
+		if (lookup_result_default_table.Found()) {
+			return lookup_result_default_table;
+		}
+	}
+
+	return lookup_result;
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, CatalogType type,
@@ -994,6 +1046,28 @@ void Catalog::Alter(ClientContext &context, AlterInfo &info) {
 
 vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 	return vector<MetadataBlockInfo>();
+}
+
+optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
+	return nullptr;
+}
+
+//! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name
+bool Catalog::HasDefaultTable() const {
+	return !default_table.empty();
+}
+
+void Catalog::SetDefaultTable(const string &schema, const string &name) {
+	default_table = name;
+	default_table_schema = schema;
+}
+
+string Catalog::GetDefaultTable() const {
+	return default_table;
+}
+
+string Catalog::GetDefaultTableSchema() const {
+	return !default_table_schema.empty() ? default_table_schema : DEFAULT_SCHEMA;
 }
 
 void Catalog::Verify() {

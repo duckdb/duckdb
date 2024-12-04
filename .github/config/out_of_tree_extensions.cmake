@@ -21,6 +21,7 @@ if (NOT MINGW)
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
             GIT_TAG c50862c82c065096722745631f4230832a3a04e8
+            APPLY_PATCHES
             )
 endif()
 
@@ -29,17 +30,23 @@ if (NOT MINGW)
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
-            GIT_TAG e738b4cc07a86d323db8b38220323752cd183a04
+            GIT_TAG f743d4b3c2faecda15498d0219a1727ad6d62b5b
             )
 endif()
 
+### Currently libxml2, an azure dependency, has the repository repo return 503
+### Re-enable AZURE when the problem goes away. This means AZURE needs to be
+### build on a side
+if (NO)
 ################# AZURE
 if (NOT MINGW)
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG b0ffe7ada20cdbd0bee2bbe5461ecd22fb468062
+            GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
+            APPLY_PATCHES
             )
+endif()
 endif()
 
 ################# DELTA
@@ -49,7 +56,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
-            GIT_TAG 3933ebd800ad06a64656c9aef6ca7d62897fa4db
+            GIT_TAG b7333c0143e101c720117d564651e693b317bb31
             APPLY_PATCHES
     )
 endif()
@@ -74,7 +81,7 @@ if (NOT MINGW)
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG 3f6d753787252e3da1d12157910b62edf729fc6e
+            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
             APPLY_PATCHES
             )
 endif()
@@ -83,7 +90,7 @@ endif()
 duckdb_extension_load(inet
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_inet
-    GIT_TAG eca867b2517af06eabc89ccd6234266e9a7d6d71
+    GIT_TAG 51d7ad789f34eecb36a2071bac5aef0e12747d70
     INCLUDE_DIR src/include
     TEST_DIR test/sql
     )
@@ -96,6 +103,7 @@ if (NOT MINGW)
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
             GIT_TAG 03eaed75f0ec5500609b7a97aa05468493b229d1
+            APPLY_PATCHES
             )
 endif()
 
@@ -103,7 +111,7 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG bb9c829693965f029eb5a312aefed4c538fad781
+    GIT_TAG 7ea79b614755d2bdee4be468691e4e17b39b8dbc
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     APPLY_PATCHES
@@ -120,34 +128,24 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/sqlite_scanner
-        GIT_TAG 315861963c8106397af36cbda10faebc8dae485a
+        GIT_TAG d5d62657702d33cb44a46cddc7ffc4b67bf7e961
         APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG f24be8b5b0cd0eeed7541e10cff42d7050771afc
-        APPLY_PATCHES
+        GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
         )
-
-################# SUBSTRAIT
-if (NOT WIN32)
-    duckdb_extension_load(substrait
-            LOAD_TESTS DONT_LINK
-            GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG be71387cf0a484dc7b261a0cb21abec0d0e0ce5c
-            )
-endif()
-
 
 ################# VSS
 duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 77739ea5382cce3220af83803ac0b1e98b3ab7d8
+        GIT_TAG 96374099476b3427c9ab43c1821e610b0465c864
         TEST_DIR test/sql
+        APPLY_PATCHES
     )
 
 ################# MYSQL
@@ -157,5 +155,15 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_mysql
             GIT_TAG f2a15013fb4559e1591e977c1c023aa0a369c6f3
+            APPLY_PATCHES
             )
 endif()
+
+################# FTS
+duckdb_extension_load(fts
+        LOAD_TESTS
+        DONT_LINK
+        GIT_URL https://github.com/duckdb/duckdb_fts
+        GIT_TAG 0477abaf2484aa7b9aabf8ace9dc0bde80a15554
+        TEST_DIR test/sql
+)

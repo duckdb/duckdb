@@ -54,109 +54,113 @@ bool DBConfigOptions::debug_print_bindings = false;
 		    _PARAM::ResetLocal, _PARAM::GetSetting                                                                     \
 	}
 #define FINAL_SETTING                                                                                                  \
-	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr, nullptr, nullptr }
+	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AccessModeSetting),
-    DUCKDB_GLOBAL(AllowPersistentSecrets),
-    DUCKDB_GLOBAL(CatalogErrorMaxSchema),
-    DUCKDB_GLOBAL(CheckpointThresholdSetting),
-    DUCKDB_GLOBAL(DebugCheckpointAbort),
-    DUCKDB_GLOBAL(DebugSkipCheckpointOnCommit),
-    DUCKDB_GLOBAL(StorageCompatibilityVersion),
-    DUCKDB_LOCAL(DebugForceExternal),
-    DUCKDB_LOCAL(DebugForceNoCrossProduct),
-    DUCKDB_LOCAL(DebugAsOfIEJoin),
-    DUCKDB_LOCAL(PreferRangeJoins),
-    DUCKDB_GLOBAL(DebugWindowMode),
-    DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
-    DUCKDB_GLOBAL(DefaultOrderSetting),
-    DUCKDB_GLOBAL(DefaultNullOrderSetting),
-    DUCKDB_GLOBAL(DisabledFileSystemsSetting),
-    DUCKDB_GLOBAL(DisabledOptimizersSetting),
-    DUCKDB_GLOBAL(EnableExternalAccessSetting),
-    DUCKDB_GLOBAL(EnableFSSTVectors),
-    DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllocatorBackgroundThreadsSetting),
+    DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
+    DUCKDB_GLOBAL(AllocatorFlushThresholdSetting),
     DUCKDB_GLOBAL(AllowCommunityExtensionsSetting),
     DUCKDB_GLOBAL(AllowExtensionsMetadataMismatchSetting),
+    DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
     DUCKDB_GLOBAL(AllowUnredactedSecretsSetting),
-    DUCKDB_GLOBAL(CustomExtensionRepository),
-    DUCKDB_GLOBAL(AutoloadExtensionRepository),
-    DUCKDB_GLOBAL(AutoinstallKnownExtensions),
-    DUCKDB_GLOBAL(AutoloadKnownExtensions),
-    DUCKDB_GLOBAL(EnableObjectCacheSetting),
+    DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllowedDirectoriesSetting),
+    DUCKDB_GLOBAL(AllowedPathsSetting),
+    DUCKDB_GLOBAL(ArrowLargeBufferSizeSetting),
+    DUCKDB_GLOBAL(ArrowLosslessConversionSetting),
+    DUCKDB_GLOBAL(ArrowOutputListViewSetting),
+    DUCKDB_GLOBAL(AutoinstallExtensionRepositorySetting),
+    DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
+    DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
+    DUCKDB_GLOBAL(CatalogErrorMaxSchemasSetting),
+    DUCKDB_GLOBAL(CheckpointThresholdSetting),
+    DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
+    DUCKDB_GLOBAL(CustomExtensionRepositorySetting),
+    DUCKDB_LOCAL(CustomProfilingSettingsSetting),
+    DUCKDB_GLOBAL(CustomUserAgentSetting),
+    DUCKDB_LOCAL(DebugAsofIejoinSetting),
+    DUCKDB_GLOBAL(DebugCheckpointAbortSetting),
+    DUCKDB_LOCAL(DebugForceExternalSetting),
+    DUCKDB_LOCAL(DebugForceNoCrossProductSetting),
+    DUCKDB_GLOBAL(DebugSkipCheckpointOnCommitSetting),
+    DUCKDB_GLOBAL(DebugWindowModeSetting),
+    DUCKDB_GLOBAL(DefaultBlockSizeSetting),
+    DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
+    DUCKDB_GLOBAL(DefaultNullOrderSetting),
+    DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
+    DUCKDB_GLOBAL(DefaultOrderSetting),
+    DUCKDB_GLOBAL(DefaultSecretStorageSetting),
+    DUCKDB_GLOBAL(DisabledFilesystemsSetting),
+    DUCKDB_GLOBAL(DisabledOptimizersSetting),
+    DUCKDB_GLOBAL(DuckDBAPISetting),
+    DUCKDB_LOCAL(DynamicOrFilterThresholdSetting),
+    DUCKDB_GLOBAL(EnableExternalAccessSetting),
+    DUCKDB_GLOBAL(EnableFSSTVectorsSetting),
+    DUCKDB_LOCAL(EnableHTTPLoggingSetting),
     DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
+    DUCKDB_GLOBAL(EnableMacroDependenciesSetting),
+    DUCKDB_GLOBAL(EnableObjectCacheSetting),
     DUCKDB_LOCAL(EnableProfilingSetting),
     DUCKDB_LOCAL(EnableProgressBarSetting),
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),
-    DUCKDB_LOCAL(ErrorsAsJsonSetting),
+    DUCKDB_GLOBAL(EnableViewDependenciesSetting),
+    DUCKDB_LOCAL(ErrorsAsJSONSetting),
     DUCKDB_LOCAL(ExplainOutputSetting),
     DUCKDB_GLOBAL(ExtensionDirectorySetting),
     DUCKDB_GLOBAL(ExternalThreadsSetting),
     DUCKDB_LOCAL(FileSearchPathSetting),
-    DUCKDB_GLOBAL(ForceCompressionSetting),
     DUCKDB_GLOBAL(ForceBitpackingModeSetting),
+    DUCKDB_GLOBAL(ForceCompressionSetting),
     DUCKDB_LOCAL(HomeDirectorySetting),
-    DUCKDB_GLOBAL(HTTPProxy),
-    DUCKDB_GLOBAL(HTTPProxyUsername),
-    DUCKDB_GLOBAL(HTTPProxyPassword),
-    DUCKDB_LOCAL(LogQueryPathSetting),
-    DUCKDB_GLOBAL(EnableMacrosDependencies),
-    DUCKDB_GLOBAL(EnableViewDependencies),
-    DUCKDB_GLOBAL(LockConfigurationSetting),
+    DUCKDB_LOCAL(HTTPLoggingOutputSetting),
+    DUCKDB_GLOBAL(HTTPProxySetting),
+    DUCKDB_GLOBAL(HTTPProxyPasswordSetting),
+    DUCKDB_GLOBAL(HTTPProxyUsernameSetting),
     DUCKDB_LOCAL(IEEEFloatingPointOpsSetting),
     DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
+    DUCKDB_GLOBAL(IndexScanMaxCountSetting),
+    DUCKDB_GLOBAL(IndexScanPercentageSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
-    DUCKDB_LOCAL(MaximumExpressionDepthSetting),
-    DUCKDB_LOCAL(StreamingBufferSize),
-    DUCKDB_GLOBAL(MaximumMemorySetting),
-    DUCKDB_GLOBAL(MaximumTempDirectorySize),
-    DUCKDB_GLOBAL(MaximumVacuumTasks),
-    DUCKDB_LOCAL(MergeJoinThreshold),
-    DUCKDB_LOCAL(NestedLoopJoinThreshold),
-    DUCKDB_GLOBAL(OldImplicitCasting),
-    DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
-    DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
-    DUCKDB_LOCAL(OrderByNonIntegerLiteral),
-    DUCKDB_LOCAL(OrderedAggregateThreshold),
+    DUCKDB_GLOBAL(LockConfigurationSetting),
+    DUCKDB_LOCAL(LogQueryPathSetting),
+    DUCKDB_LOCAL(MaxExpressionDepthSetting),
+    DUCKDB_GLOBAL(MaxMemorySetting),
+    DUCKDB_GLOBAL_ALIAS("memory_limit", MaxMemorySetting),
+    DUCKDB_GLOBAL(MaxTempDirectorySizeSetting),
+    DUCKDB_GLOBAL(MaxVacuumTasksSetting),
+    DUCKDB_LOCAL(MergeJoinThresholdSetting),
+    DUCKDB_LOCAL(NestedLoopJoinThresholdSetting),
+    DUCKDB_GLOBAL(OldImplicitCastingSetting),
+    DUCKDB_LOCAL(OrderByNonIntegerLiteralSetting),
+    DUCKDB_LOCAL(OrderedAggregateThresholdSetting),
+    DUCKDB_LOCAL(PartitionedWriteFlushThresholdSetting),
+    DUCKDB_LOCAL(PartitionedWriteMaxOpenFilesSetting),
     DUCKDB_GLOBAL(PasswordSetting),
-    DUCKDB_LOCAL(PerfectHashThresholdSetting),
-    DUCKDB_LOCAL(PivotFilterThreshold),
+    DUCKDB_LOCAL(PerfectHtThresholdSetting),
+    DUCKDB_LOCAL(PivotFilterThresholdSetting),
     DUCKDB_LOCAL(PivotLimitSetting),
-    DUCKDB_LOCAL(PreserveIdentifierCase),
-    DUCKDB_GLOBAL(PreserveInsertionOrder),
+    DUCKDB_LOCAL(PreferRangeJoinsSetting),
+    DUCKDB_LOCAL(PreserveIdentifierCaseSetting),
+    DUCKDB_GLOBAL(PreserveInsertionOrderSetting),
+    DUCKDB_GLOBAL(ProduceArrowStringViewSetting),
     DUCKDB_LOCAL(ProfileOutputSetting),
-    DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
-    DUCKDB_LOCAL(CustomProfilingSettings),
+    DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
+    DUCKDB_LOCAL(ScalarSubqueryErrorOnMultipleRowsSetting),
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
-    DUCKDB_LOCAL(ScalarSubqueryErrorOnMultipleRows),
     DUCKDB_GLOBAL(SecretDirectorySetting),
-    DUCKDB_GLOBAL(DefaultSecretStorage),
+    DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
+    DUCKDB_LOCAL(StreamingBufferSizeSetting),
     DUCKDB_GLOBAL(TempDirectorySetting),
     DUCKDB_GLOBAL(ThreadsSetting),
-    DUCKDB_GLOBAL(UsernameSetting),
-    DUCKDB_GLOBAL(ExportLargeBufferArrow),
-    DUCKDB_GLOBAL(ArrowOutputListView),
-    DUCKDB_GLOBAL(LosslessConversionArrow),
-    DUCKDB_GLOBAL(ProduceArrowStringView),
-    DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
-    DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
     DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
-    DUCKDB_GLOBAL(AllocatorFlushThreshold),
-    DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThreshold),
-    DUCKDB_GLOBAL(AllocatorBackgroundThreadsSetting),
-    DUCKDB_GLOBAL(DuckDBApiSetting),
-    DUCKDB_GLOBAL(CustomUserAgentSetting),
-    DUCKDB_LOCAL(PartitionedWriteFlushThreshold),
-    DUCKDB_LOCAL(PartitionedWriteMaxOpenFiles),
-    DUCKDB_GLOBAL(DefaultBlockAllocSize),
-    DUCKDB_GLOBAL(IndexScanPercentage),
-    DUCKDB_GLOBAL(IndexScanMaxCount),
-    DUCKDB_LOCAL(EnableHTTPLoggingSetting),
-    DUCKDB_LOCAL(HTTPLoggingOutputSetting),
+    DUCKDB_GLOBAL(UsernameSetting),
+    DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
+    DUCKDB_GLOBAL(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -241,7 +245,7 @@ void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option
 		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.reset_global);
-	Value input = value.DefaultCastAs(option.parameter_type);
+	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
 	option.set_global(db, *this, input);
 }
 
@@ -271,6 +275,96 @@ void DBConfig::ResetOption(const string &name) {
 		// Otherwise just remove it from the 'set_variables' map
 		options.set_variables.erase(name);
 	}
+}
+
+LogicalType DBConfig::ParseLogicalType(const string &type) {
+	if (StringUtil::EndsWith(type, "[]")) {
+		// list - recurse
+		auto child_type = ParseLogicalType(type.substr(0, type.size() - 2));
+		return LogicalType::LIST(child_type);
+	}
+
+	if (StringUtil::EndsWith(type, "]")) {
+		// array - recurse
+		auto bracket_open_idx = type.rfind('[');
+		if (bracket_open_idx == DConstants::INVALID_INDEX || bracket_open_idx == 0) {
+			throw InternalException("Ill formatted type: '%s'", type);
+		}
+		idx_t array_size = 0;
+		for (auto length_idx = bracket_open_idx + 1; length_idx < type.size() - 1; length_idx++) {
+			if (!isdigit(type[length_idx])) {
+				throw InternalException("Ill formatted array type: '%s'", type);
+			}
+			array_size = array_size * 10 + static_cast<idx_t>(type[length_idx] - '0');
+		}
+		if (array_size == 0 || array_size > ArrayType::MAX_ARRAY_SIZE) {
+			throw InternalException("Invalid array size: '%s'", type);
+		}
+		auto child_type = ParseLogicalType(type.substr(0, bracket_open_idx));
+		return LogicalType::ARRAY(child_type, array_size);
+	}
+
+	if (StringUtil::StartsWith(type, "MAP(") && StringUtil::EndsWith(type, ")")) {
+		// map - recurse
+		string map_args = type.substr(4, type.size() - 5);
+		vector<string> map_args_vect = StringUtil::SplitWithParentheses(map_args);
+		if (map_args_vect.size() != 2) {
+			throw InternalException("Ill formatted map type: '%s'", type);
+		}
+		StringUtil::Trim(map_args_vect[0]);
+		StringUtil::Trim(map_args_vect[1]);
+		auto key_type = ParseLogicalType(map_args_vect[0]);
+		auto value_type = ParseLogicalType(map_args_vect[1]);
+		return LogicalType::MAP(key_type, value_type);
+	}
+
+	if (StringUtil::StartsWith(type, "UNION(") && StringUtil::EndsWith(type, ")")) {
+		// union - recurse
+		string union_members_str = type.substr(6, type.size() - 7);
+		vector<string> union_members_vect = StringUtil::SplitWithParentheses(union_members_str);
+		child_list_t<LogicalType> union_members;
+		for (idx_t member_idx = 0; member_idx < union_members_vect.size(); member_idx++) {
+			StringUtil::Trim(union_members_vect[member_idx]);
+			vector<string> union_member_parts = StringUtil::SplitWithParentheses(union_members_vect[member_idx], ' ');
+			if (union_member_parts.size() != 2) {
+				throw InternalException("Ill formatted union type: %s", type);
+			}
+			StringUtil::Trim(union_member_parts[0]);
+			StringUtil::Trim(union_member_parts[1]);
+			auto value_type = ParseLogicalType(union_member_parts[1]);
+			union_members.emplace_back(make_pair(union_member_parts[0], value_type));
+		}
+		if (union_members.empty() || union_members.size() > UnionType::MAX_UNION_MEMBERS) {
+			throw InternalException("Invalid number of union members: '%s'", type);
+		}
+		return LogicalType::UNION(union_members);
+	}
+
+	if (StringUtil::StartsWith(type, "STRUCT(") && StringUtil::EndsWith(type, ")")) {
+		// struct - recurse
+		string struct_members_str = type.substr(7, type.size() - 8);
+		vector<string> struct_members_vect = StringUtil::SplitWithParentheses(struct_members_str);
+		child_list_t<LogicalType> struct_members;
+		for (idx_t member_idx = 0; member_idx < struct_members_vect.size(); member_idx++) {
+			StringUtil::Trim(struct_members_vect[member_idx]);
+			vector<string> struct_member_parts = StringUtil::SplitWithParentheses(struct_members_vect[member_idx], ' ');
+			if (struct_member_parts.size() != 2) {
+				throw InternalException("Ill formatted struct type: %s", type);
+			}
+			StringUtil::Trim(struct_member_parts[0]);
+			StringUtil::Trim(struct_member_parts[1]);
+			auto value_type = ParseLogicalType(struct_member_parts[1]);
+			struct_members.emplace_back(make_pair(struct_member_parts[0], value_type));
+		}
+		return LogicalType::STRUCT(struct_members);
+	}
+
+	LogicalType type_id = StringUtil::CIEquals(type, "ANY") ? LogicalType::ANY : TransformStringToLogicalTypeId(type);
+	if (type_id == LogicalTypeId::USER) {
+		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
+		                        type);
+	}
+	return type_id;
 }
 
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
@@ -322,7 +416,9 @@ void DBConfig::SetDefaultMaxMemory() {
 }
 
 void DBConfig::SetDefaultTempDirectory() {
-	if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
+	if (!options.use_temporary_directory) {
+		options.temporary_directory = string();
+	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
 		options.temporary_directory = ".tmp";
 	} else {
 		options.temporary_directory = options.database_path + ".tmp";
@@ -546,6 +642,94 @@ const string DBConfig::UserAgent() const {
 		user_agent += " " + options.custom_user_agent;
 	}
 	return user_agent;
+}
+
+string DBConfig::SanitizeAllowedPath(const string &path) const {
+	auto path_sep = file_system->PathSeparator(path);
+	if (path_sep != "/") {
+		// allowed_directories/allowed_path always uses forward slashes regardless of the OS
+		return StringUtil::Replace(path, path_sep, "/");
+	}
+	return path;
+}
+
+void DBConfig::AddAllowedDirectory(const string &path) {
+	auto allowed_directory = SanitizeAllowedPath(path);
+	if (allowed_directory.empty()) {
+		throw InvalidInputException("Cannot provide an empty string for allowed_directory");
+	}
+	// ensure the directory ends with a path separator
+	if (!StringUtil::EndsWith(allowed_directory, "/")) {
+		allowed_directory += "/";
+	}
+	options.allowed_directories.insert(allowed_directory);
+}
+
+void DBConfig::AddAllowedPath(const string &path) {
+	auto allowed_path = SanitizeAllowedPath(path);
+	options.allowed_paths.insert(allowed_path);
+}
+
+bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
+	if (options.enable_external_access) {
+		// all external access is allowed
+		return true;
+	}
+	string path = SanitizeAllowedPath(input_path);
+	if (options.allowed_paths.count(path) > 0) {
+		// path is explicitly allowed
+		return true;
+	}
+	if (options.allowed_directories.empty()) {
+		// no prefix directories specified
+		return false;
+	}
+	if (type == FileType::FILE_TYPE_DIR) {
+		// make sure directories end with a /
+		if (!StringUtil::EndsWith(path, "/")) {
+			path += "/";
+		}
+	}
+	auto start_bound = options.allowed_directories.lower_bound(path);
+	if (start_bound != options.allowed_directories.begin()) {
+		--start_bound;
+	}
+	auto end_bound = options.allowed_directories.upper_bound(path);
+
+	string prefix;
+	for (auto it = start_bound; it != end_bound; ++it) {
+		if (StringUtil::StartsWith(path, *it)) {
+			prefix = *it;
+			break;
+		}
+	}
+	if (prefix.empty()) {
+		// no common prefix found - path is not inside an allowed directory
+		return false;
+	}
+	D_ASSERT(StringUtil::EndsWith(prefix, "/"));
+	// path is inside an allowed directory - HOWEVER, we could still exit the allowed directory using ".."
+	// we check if we ever exit the allowed directory using ".." by looking at the path fragments
+	idx_t directory_level = 0;
+	idx_t current_pos = prefix.size();
+	for (; current_pos < path.size(); current_pos++) {
+		idx_t dir_begin = current_pos;
+		// find either the end of the path or the directory separator
+		for (; path[current_pos] != '/' && current_pos < path.size(); current_pos++) {
+		}
+		idx_t path_length = current_pos - dir_begin;
+		if (path_length == 2 && path[dir_begin] == '.' && path[dir_begin + 1] == '.') {
+			// go up a directory
+			if (directory_level == 0) {
+				// we cannot go up past the prefix
+				return false;
+			}
+			--directory_level;
+		} else if (path_length > 0) {
+			directory_level++;
+		}
+	}
+	return true;
 }
 
 SerializationCompatibility SerializationCompatibility::FromString(const string &input) {

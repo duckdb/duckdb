@@ -87,6 +87,13 @@ FROM (SELECT make_date(year(d), month(d), NULL) md FROM dates) t
 WHERE md IS NOT NULL
 ----
 
+# round trip
+query I
+SELECT *
+FROM dates
+WHERE d <> make_date((d - date '1970-01-01')::INT)
+----
+
 # Constants
 query IIII
 SELECT

@@ -97,6 +97,20 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 	vector<string> scope;
 	deserializer.ReadList(103, "scope",
 	                      [&](Deserializer::List &list, idx_t i) { scope.push_back(list.ReadElement<string>()); });
+	auto serialization_type =
+	    deserializer.ReadPropertyWithExplicitDefault(104, "serialization_type", SecretSerializationType::CUSTOM);
+
+	switch (serialization_type) {
+	// This allows us to skip looking up the secret type for deserialization altogether
+	case SecretSerializationType::KEY_VALUE_SECRET:
+		return KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, {scope, type, provider, name});
+	// Continues below: we need to do a type lookup to find the secret deserialize method
+	case SecretSerializationType::CUSTOM:
+		break;
+	default:
+		throw IOException("Unrecognized secret serialization type found in secret '%s': %s", secret_path,
+		                  EnumUtil::ToString(serialization_type));
+	}
 
 	SecretType deserialized_type;
 	if (!TryLookupTypeInternal(type, deserialized_type)) {

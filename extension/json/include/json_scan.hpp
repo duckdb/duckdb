@@ -132,7 +132,7 @@ public:
 	bool convert_strings_to_integers = false;
 	//! If a struct contains more fields than this threshold with at least 80% similar types,
 	//! we infer it as MAP type
-	idx_t map_inference_threshold = 25;
+	idx_t map_inference_threshold = 200;
 
 	//! All column names (in order)
 	vector<string> names;
@@ -179,7 +179,8 @@ public:
 
 	//! Column names that we're actually reading (after projection pushdown)
 	vector<string> names;
-	vector<column_t> column_indices;
+	vector<column_t> column_ids;
+	vector<ColumnIndex> column_indices;
 
 	//! Buffer manager allocator
 	Allocator &allocator;
@@ -309,8 +310,7 @@ public:
 
 	static double ScanProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                           const GlobalTableFunctionState *global_state);
-	static idx_t GetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-	                           LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state);
+	static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *bind_data);
 	static void ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                  vector<unique_ptr<Expression>> &filters);

@@ -558,7 +558,7 @@ static void ExtractNestedMask(const SelectionVector &slice_sel, const idx_t coun
 		}
 	}
 
-	child_mask->Reset(null_mask->TargetCount());
+	child_mask->Reset(null_mask->Capacity());
 }
 
 static void DensifyNestedSelection(const SelectionVector &dense_sel, const idx_t count, SelectionVector &slice_sel) {
@@ -596,7 +596,7 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, cons
 	ValidityMask *child_mask = nullptr;
 	if (null_mask) {
 		child_mask = &child_validity;
-		child_mask->Reset(null_mask->TargetCount());
+		child_mask->Reset(null_mask->Capacity());
 	}
 
 	idx_t match_count = 0;
@@ -734,7 +734,7 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	ValidityMask *child_mask = nullptr;
 	if (null_mask) {
 		child_mask = &child_validity;
-		child_mask->Reset(null_mask->TargetCount());
+		child_mask->Reset(null_mask->Capacity());
 	}
 
 	idx_t match_count = 0;
@@ -870,7 +870,7 @@ static idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const
 	ValidityMask *child_mask = nullptr;
 	if (null_mask) {
 		child_mask = &child_validity;
-		child_mask->Reset(null_mask->TargetCount());
+		child_mask->Reset(null_mask->Capacity());
 	}
 
 	idx_t match_count = 0;
@@ -1207,6 +1207,7 @@ idx_t VectorOperations::DistinctGreaterThanNullsFirst(Vector &left, Vector &righ
 	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst>(left, right, sel, count, true_sel,
 	                                                                               false_sel, null_mask);
 }
+
 // true := A >= B with nulls being maximal
 idx_t VectorOperations::DistinctGreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
                                                   idx_t count, optional_ptr<SelectionVector> true_sel,

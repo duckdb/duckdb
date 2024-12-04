@@ -265,9 +265,13 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
+	string catalog = fexpr.catalog;
+	string schema = fexpr.schema;
+	Binder::BindSchemaOrCatalog(context, catalog, schema);
+
 	// fetch the function from the catalog
-	auto &func_catalog = *GetCatalogEntry(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
-	                                      fexpr.function_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+	auto &func_catalog = *GetCatalogEntry(CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, fexpr.function_name,
+	                                      OnEntryNotFound::THROW_EXCEPTION, error_context);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
@@ -306,7 +310,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 
 	// select the function based on the input parameters
-	FunctionBinder function_binder(context);
+	FunctionBinder function_binder(*this);
 	auto best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
 	if (!best_function_idx.IsValid()) {
 		error.AddQueryLocation(ref);

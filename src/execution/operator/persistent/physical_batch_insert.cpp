@@ -34,6 +34,8 @@ PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry
 //===--------------------------------------------------------------------===//
 // CollectionMerger
 //===--------------------------------------------------------------------===//
+enum class RowGroupBatchType : uint8_t { FLUSHED, NOT_FLUSHED };
+
 class CollectionMerger {
 public:
 	explicit CollectionMerger(ClientContext &context) : context(context) {
@@ -41,10 +43,17 @@ public:
 
 	ClientContext &context;
 	vector<unique_ptr<RowGroupCollection>> current_collections;
+	RowGroupBatchType batch_type = RowGroupBatchType::NOT_FLUSHED;
 
 public:
-	void AddCollection(unique_ptr<RowGroupCollection> collection) {
+	void AddCollection(unique_ptr<RowGroupCollection> collection, RowGroupBatchType type) {
 		current_collections.push_back(std::move(collection));
+		if (type == RowGroupBatchType::FLUSHED) {
+			batch_type = RowGroupBatchType::FLUSHED;
+			if (current_collections.size() > 1) {
+				throw InternalException("Cannot merge flushed collections");
+			}
+		}
 	}
 
 	bool Empty() {
@@ -65,9 +74,9 @@ public:
 			DataChunk scan_chunk;
 			scan_chunk.Initialize(context, types);
 
-			vector<column_t> column_ids;
+			vector<StorageIndex> column_ids;
 			for (idx_t i = 0; i < types.size(); i++) {
-				column_ids.push_back(i);
+				column_ids.emplace_back(i);
 			}
 			for (auto &collection : current_collections) {
 				if (!collection) {
@@ -91,13 +100,14 @@ public:
 			}
 			new_collection->FinalizeAppend(TransactionData(0, 0), append_state);
 			writer.WriteLastRowGroup(*new_collection);
+		} else if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
+			writer.WriteLastRowGroup(*new_collection);
 		}
 		current_collections.clear();
 		return new_collection;
 	}
 };
 
-enum class RowGroupBatchType : uint8_t { FLUSHED, NOT_FLUSHED };
 struct RowGroupBatchEntry {
 	RowGroupBatchEntry(idx_t batch_idx, unique_ptr<RowGroupCollection> collection_p, RowGroupBatchType type)
 	    : batch_idx(batch_idx), total_rows(collection_p->GetTotalRows()), unflushed_memory(0),
@@ -131,19 +141,21 @@ public:
 	explicit BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, idx_t minimum_memory_per_thread)
 	    : memory_manager(context, minimum_memory_per_thread), table(table), insert_count(0),
 	      optimistically_written(false), minimum_memory_per_thread(minimum_memory_per_thread) {
+		row_group_size = table.GetStorage().GetRowGroupSize();
 	}
 
 	BatchMemoryManager memory_manager;
 	BatchTaskManager<BatchInsertTask> task_manager;
 	mutex lock;
 	DuckTableEntry &table;
+	idx_t row_group_size;
 	idx_t insert_count;
 	vector<RowGroupBatchEntry> collections;
 	idx_t next_start = 0;
 	atomic<bool> optimistically_written;
 	idx_t minimum_memory_per_thread;
 
-	static bool ReadyToMerge(idx_t count);
+	bool ReadyToMerge(idx_t count) const;
 	void ScheduleMergeTasks(idx_t min_batch_index);
 	unique_ptr<RowGroupCollection> MergeCollections(ClientContext &context,
 	                                                vector<RowGroupBatchEntry> merge_collections,
@@ -178,8 +190,8 @@ public:
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto table_info = table.GetStorage().GetDataTableInfo();
-		auto &block_manager = TableIOManager::Get(table.GetStorage()).GetBlockManagerForRowData();
-		current_collection = make_uniq<RowGroupCollection>(std::move(table_info), block_manager, insert_types,
+		auto &io_manager = TableIOManager::Get(table.GetStorage());
+		current_collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types,
 		                                                   NumericCast<idx_t>(MAX_ROW_ID));
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
@@ -227,21 +239,21 @@ struct BatchMergeTask {
 	idx_t total_count;
 };
 
-bool BatchInsertGlobalState::ReadyToMerge(idx_t count) {
+bool BatchInsertGlobalState::ReadyToMerge(idx_t count) const {
 	// we try to merge so the count fits nicely into row groups
-	if (count >= Storage::ROW_GROUP_SIZE / 10 * 9 && count <= Storage::ROW_GROUP_SIZE) {
+	if (count >= row_group_size / 10 * 9 && count <= row_group_size) {
 		// 90%-100% of row group size
 		return true;
 	}
-	if (count >= Storage::ROW_GROUP_SIZE / 10 * 18 && count <= Storage::ROW_GROUP_SIZE * 2) {
+	if (count >= row_group_size / 10 * 18 && count <= row_group_size * 2) {
 		// 180%-200% of row group size
 		return true;
 	}
-	if (count >= Storage::ROW_GROUP_SIZE / 10 * 27 && count <= Storage::ROW_GROUP_SIZE * 3) {
+	if (count >= row_group_size / 10 * 27 && count <= row_group_size * 3) {
 		// 270%-300% of row group size
 		return true;
 	}
-	if (count >= Storage::ROW_GROUP_SIZE / 10 * 36) {
+	if (count >= row_group_size / 10 * 36) {
 		// >360% of row group size
 		return true;
 	}
@@ -330,7 +342,7 @@ unique_ptr<RowGroupCollection> BatchInsertGlobalState::MergeCollections(ClientCo
 	CollectionMerger merger(context);
 	idx_t written_data = 0;
 	for (auto &entry : merge_collections) {
-		merger.AddCollection(std::move(entry.collection));
+		merger.AddCollection(std::move(entry.collection), RowGroupBatchType::NOT_FLUSHED);
 		written_data += entry.unflushed_memory;
 	}
 	optimistically_written = true;
@@ -346,7 +358,7 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, idx_t batch_i
 		                        batch_index, min_batch_index);
 	}
 	auto new_count = current_collection->GetTotalRows();
-	auto batch_type = new_count < Storage::ROW_GROUP_SIZE ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
+	auto batch_type = new_count < row_group_size ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 	if (batch_type == RowGroupBatchType::FLUSHED && writer) {
 		writer->WriteLastRowGroup(*current_collection);
 	}
@@ -556,7 +568,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &memory_manager = gstate.memory_manager;
 
-	if (gstate.optimistically_written || gstate.insert_count >= LocalStorage::MERGE_THRESHOLD) {
+	if (gstate.optimistically_written || gstate.insert_count >= gstate.row_group_size) {
 		// we have written data to disk optimistically or are inserting a large amount of data
 		// perform a final pass over all of the row groups and merge them together
 		vector<unique_ptr<CollectionMerger>> mergers;
@@ -569,7 +581,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 				if (!current_merger) {
 					current_merger = make_uniq<CollectionMerger>(context);
 				}
-				current_merger->AddCollection(std::move(entry.collection));
+				current_merger->AddCollection(std::move(entry.collection), entry.type);
 				memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
 			} else {
 				// this collection has been flushed: it does not need to be merged
@@ -580,7 +592,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 					current_merger.reset();
 				}
 				auto larger_merger = make_uniq<CollectionMerger>(context);
-				larger_merger->AddCollection(std::move(entry.collection));
+				larger_merger->AddCollection(std::move(entry.collection), entry.type);
 				mergers.push_back(std::move(larger_merger));
 			}
 		}

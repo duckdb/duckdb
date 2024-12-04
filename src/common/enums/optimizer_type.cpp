@@ -15,6 +15,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"expression_rewriter", OptimizerType::EXPRESSION_REWRITER},
     {"filter_pullup", OptimizerType::FILTER_PULLUP},
     {"filter_pushdown", OptimizerType::FILTER_PUSHDOWN},
+    {"empty_result_pullup", OptimizerType::EMPTY_RESULT_PULLUP},
     {"cte_filter_pusher", OptimizerType::CTE_FILTER_PUSHER},
     {"regex_range", OptimizerType::REGEX_RANGE},
     {"in_clause", OptimizerType::IN_CLAUSE},
@@ -32,9 +33,11 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
     {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},
     {"reorder_filter", OptimizerType::REORDER_FILTER},
+    {"sampling_pushdown", OptimizerType::SAMPLING_PUSHDOWN},
     {"join_filter_pushdown", OptimizerType::JOIN_FILTER_PUSHDOWN},
     {"extension", OptimizerType::EXTENSION},
     {"materialized_cte", OptimizerType::MATERIALIZED_CTE},
+    {"sum_rewriter", OptimizerType::SUM_REWRITER},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

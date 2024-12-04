@@ -17,33 +17,7 @@
 // Returns the most frequent value for the values within expr1.
 // NULL values are ignored. If all the values are NULL, or there are 0 rows, then the function returns NULL.
 
-namespace std {
-
-template <>
-struct hash<duckdb::interval_t> {
-	inline size_t operator()(const duckdb::interval_t &val) const {
-		int64_t months, days, micros;
-		val.Normalize(months, days, micros);
-		return hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(days)) ^
-		       hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(months)) ^ hash<int64_t> {}(micros);
-	}
-};
-
-template <>
-struct hash<duckdb::hugeint_t> {
-	inline size_t operator()(const duckdb::hugeint_t &val) const {
-		return hash<int64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
-	}
-};
-
-template <>
-struct hash<duckdb::uhugeint_t> {
-	inline size_t operator()(const duckdb::uhugeint_t &val) const {
-		return hash<uint64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
-	}
-};
-
-} // namespace std
+namespace std {} // namespace std
 
 namespace duckdb {
 
@@ -121,11 +95,13 @@ struct ModeState {
 		}
 	}
 
-	void InitializePage(const ColumnDataCollection &inputs) {
+	void InitializePage(const WindowPartitionInput &partition) {
 		if (page.ColumnCount() == 0) {
-			this->inputs = &inputs;
-			inputs.InitializeScan(scan);
-			inputs.InitializeScanChunk(scan, page);
+			D_ASSERT(partition.inputs);
+			inputs = partition.inputs;
+			D_ASSERT(partition.column_ids.size() == 1);
+			inputs->InitializeScan(scan, partition.column_ids);
+			inputs->InitializeScanChunk(scan, page);
 		}
 	}
 
@@ -346,10 +322,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 	                   idx_t rid) {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 
-		D_ASSERT(partition.inputs);
-		const auto &inputs = *partition.inputs;
-		D_ASSERT(inputs.ColumnCount() == 1);
-		state.InitializePage(inputs);
+		state.InitializePage(partition);
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
@@ -425,7 +398,7 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	using STATE = ModeState<string_t, ModeString>;
 	using OP = ModeFallbackFunction<ModeString>;
 	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
-	                       AggregateFunction::StateInitialize<STATE, OP>,
+	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
 	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
@@ -436,7 +409,9 @@ template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = ModeFunction<TYPE_OP>;
-	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
+	auto func =
+	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
+	        type, type);
 	func.window = OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>;
 	return func;
 }
@@ -529,7 +504,9 @@ template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedEntropyFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = EntropyFunction<TYPE_OP>;
-	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, double, OP>(type, LogicalType::DOUBLE);
+	auto func =
+	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, double, OP, AggregateDestructorType::LEGACY>(
+	        type, LogicalType::DOUBLE);
 	func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return func;
 }
@@ -538,7 +515,7 @@ AggregateFunction GetFallbackEntropyFunction(const LogicalType &type) {
 	using STATE = ModeState<string_t, ModeString>;
 	using OP = EntropyFallbackFunction<ModeString>;
 	AggregateFunction func({type}, LogicalType::DOUBLE, AggregateFunction::StateSize<STATE>,
-	                       AggregateFunction::StateInitialize<STATE, OP>,
+	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	                       AggregateFunction::StateFinalize<STATE, double, OP>, nullptr);
 	func.destructor = AggregateFunction::StateDestroy<STATE, OP>;

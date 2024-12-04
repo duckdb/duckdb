@@ -57,6 +57,7 @@ public:
 	idx_t Capacity() const;
 	//! Threshold at which to resize the HT
 	idx_t ResizeThreshold() const;
+	static idx_t ResizeThreshold(idx_t capacity);
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
@@ -87,6 +88,8 @@ public:
 	void ResetCount();
 	//! Set the radix bits for this HT
 	void SetRadixBits(idx_t radix_bits);
+	//! Get the radix bits for this HT
+	idx_t GetRadixBits() const;
 	//! Initializes the PartitionedTupleData
 	void InitializePartitionedData();
 

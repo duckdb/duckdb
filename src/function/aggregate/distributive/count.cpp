@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
@@ -36,7 +37,7 @@ struct CountStarFunction : public BaseCountFunction {
 	template <typename RESULT_TYPE>
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition, const_data_ptr_t,
 	                   data_ptr_t l_state, const SubFrames &frames, Vector &result, idx_t rid) {
-		D_ASSERT(partition.inputs == nullptr);
+		D_ASSERT(partition.column_ids.empty());
 
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
 		RESULT_TYPE total = 0;
@@ -210,7 +211,7 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-AggregateFunction CountFun::GetFunction() {
+AggregateFunction CountFunctionBase::GetFunction() {
 	AggregateFunction fun({LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT, AggregateFunction::StateSize<int64_t>,
 	                      AggregateFunction::StateInitialize<int64_t, CountFunction>, CountFunction::CountScatter,
 	                      AggregateFunction::StateCombine<int64_t, CountFunction>,
@@ -241,21 +242,14 @@ unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggr
 	return nullptr;
 }
 
-void CountFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunction count_function = CountFun::GetFunction();
+AggregateFunctionSet CountFun::GetFunctions() {
+	AggregateFunction count_function = CountFunctionBase::GetFunction();
 	count_function.statistics = CountPropagateStats;
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments
-	count_function = CountStarFun::GetFunction();
-	count.AddFunction(count_function);
-	set.AddFunction(count);
-}
-
-void CountStarFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet count("count_star");
 	count.AddFunction(CountStarFun::GetFunction());
-	set.AddFunction(count);
+	return count;
 }
 
 } // namespace duckdb

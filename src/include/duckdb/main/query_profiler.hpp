@@ -64,7 +64,10 @@ class OperatorProfiler {
 
 public:
 	DUCKDB_API explicit OperatorProfiler(ClientContext &context);
+	~OperatorProfiler() {
+	}
 
+public:
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
 
@@ -72,20 +75,14 @@ public:
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 
-	~OperatorProfiler() {
-	}
-
+public:
 	ClientContext &context;
-
-	bool HasOperatorSetting(const MetricsType &metric) const {
-		return operator_settings.find(metric) != operator_settings.end();
-	}
 
 private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
 	//! Sub-settings for the operator profiler
-	profiler_settings_t operator_settings;
+	profiler_settings_t settings;
 
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
@@ -113,7 +110,8 @@ public:
 	using TreeMap = reference_map_t<const PhysicalOperator, reference<ProfilingNode>>;
 
 private:
-	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, profiler_settings_t settings, idx_t depth = 0);
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
+	                                     const idx_t depth = 0);
 	void Render(const ProfilingNode &node, std::ostream &str) const;
 	string RenderDisabledMessage(ProfilerPrintFormat format) const;
 
@@ -172,8 +170,8 @@ private:
 
 	//! Whether or not the query profiler is running
 	bool running;
-	//! The lock used for flushing information from a thread into the global query profiler
-	mutex flush_lock;
+	//! The lock used for accessing the global query profiler or flushing information to it from a thread
+	mutable std::mutex lock;
 
 	//! Whether or not the query requires profiling
 	bool query_requires_profiling;

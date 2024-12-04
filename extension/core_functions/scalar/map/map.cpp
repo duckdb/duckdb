@@ -10,9 +10,8 @@
 namespace duckdb {
 
 static void MapFunctionEmptyInput(Vector &result, const idx_t row_count) {
-
-	// if no chunk is set in ExpressionExecutor::ExecuteExpression (args.data.empty(), e.g.,
-	// in SELECT MAP()), then we always pass a row_count of 1
+	// If no chunk is set in ExpressionExecutor::ExecuteExpression (args.data.empty(), e.g., in SELECT MAP()),
+	// then we always pass a row_count of 1.
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ListVector::SetListSize(result, 0);
 
@@ -165,6 +164,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	result_key_vector.Flatten(offset);
 	result_value_vector.Slice(values_child_vector, sel_values, offset);
 	result_value_vector.Flatten(offset);
+	FlatVector::Validity(ListVector::GetEntry(result)).Resize(result_child_size);
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

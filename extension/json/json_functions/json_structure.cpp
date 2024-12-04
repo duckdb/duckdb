@@ -1,11 +1,10 @@
 #include "json_structure.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "json_executors.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
-
-#include <duckdb/common/extra_type_info.hpp>
 
 namespace duckdb {
 
@@ -214,8 +213,8 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], const idx
 				D_ASSERT(it != key_map.end());
 				const auto child_idx = it->second;
 				child_vals[child_idx][i] = child_val;
+				found_key_count += !found_keys[child_idx];
 				found_keys[child_idx] = true;
-				found_key_count++;
 			}
 
 			if (found_key_count != child_count) {
@@ -562,10 +561,12 @@ static void MergeNodeVal(JSONStructureNode &merged, const JSONStructureDescripti
 	}
 	if (!merged.initialized) {
 		merged_desc.candidate_types = child_desc.candidate_types;
-	} else if (!merged_desc.candidate_types.empty() && !child_desc.candidate_types.empty() &&
-	           merged_desc.candidate_types.back() != child_desc.candidate_types.back()) {
+	} else if (merged_desc.candidate_types.empty() != child_desc.candidate_types.empty() // both empty or neither empty
+	           || (!merged_desc.candidate_types.empty() &&
+	               merged_desc.candidate_types.back() != child_desc.candidate_types.back())) { // non-empty: check type
 		merged_desc.candidate_types.clear(); // Not the same, default to VARCHAR
 	}
+
 	merged.initialized = true;
 }
 
@@ -704,14 +705,18 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
 
-	// If it's an empty struct we do MAP of JSON instead
 	if (desc.children.empty()) {
-		// Empty struct - let's do MAP of JSON instead
-		return LogicalType::MAP(LogicalType::VARCHAR, null_type);
+		if (map_inference_threshold != DConstants::INVALID_INDEX) {
+			// Empty struct - let's do MAP of JSON instead
+			return LogicalType::MAP(LogicalType::VARCHAR, null_type);
+		} else {
+			return LogicalType::JSON();
+		}
 	}
 
 	// If it's an inconsistent object we also just do MAP with the best-possible, recursively-merged value type
-	if (IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold)) {
+	if (map_inference_threshold != DConstants::INVALID_INDEX &&
+	    IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold)) {
 		return LogicalType::MAP(LogicalType::VARCHAR,
 		                        GetMergedType(context, node, max_depth, field_appearance_threshold,
 		                                      map_inference_threshold, depth + 1, null_type));
