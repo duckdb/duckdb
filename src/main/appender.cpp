@@ -373,11 +373,11 @@ void BaseAppender::Append(Value value) { // NOLINT: template stuff
 	AppendValue(value);
 }
 
-void BaseAppender::Append(DataChunk &target, Value value, idx_t column) {
+void BaseAppender::Append(DataChunk &target, Value value, idx_t row, idx_t column) {
 	if (column >= target.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
-	target.SetValue(column, target.size(), value);
+	target.SetValue(column, row, value);
 }
 
 template <>
@@ -475,9 +475,9 @@ void Appender::AppendDefault() {
 	Append(value);
 }
 
-void Appender::AppendDefault(DataChunk &chunk, idx_t column) {
+void Appender::AppendDefault(DataChunk &chunk, idx_t row, idx_t column) {
 	auto &value = GetDefaultValue(column);
-	Append(chunk, value, column);
+	Append(chunk, value, row, column);
 }
 
 Value Appender::GetDefaultValue(idx_t column) {

@@ -145,7 +145,7 @@ duckdb_state duckdb_append_default(duckdb_appender appender) {
 	return DuckDBSuccess;
 }
 
-duckdb_state duckdb_append_default_to_chunk(duckdb_appender appender, duckdb_data_chunk chunk, idx_t column) {
+duckdb_state duckdb_append_default_to_chunk(duckdb_appender appender, duckdb_data_chunk chunk, idx_t row, idx_t column) {
 	if (!appender || !chunk) {
 		return DuckDBError;
 	}
@@ -155,7 +155,7 @@ duckdb_state duckdb_append_default_to_chunk(duckdb_appender appender, duckdb_dat
 	auto data_chunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 
 	try {
-		appender_instance->appender->AppendDefault(*data_chunk, column);
+		appender_instance->appender->AppendDefault(*data_chunk, row, column);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		appender_instance->error = error.RawMessage();
