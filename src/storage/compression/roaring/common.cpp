@@ -183,7 +183,9 @@ idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 	auto &roaring_state = state.Cast<RoaringAnalyzeState>();
 	roaring_state.FlushContainer();
 	roaring_state.FlushSegment();
-	return roaring_state.total_size;
+
+	constexpr const double ROARING_COMPRESS_PENALTY = 2.0;
+	return LossyNumericCast<idx_t>((double)roaring_state.total_size * ROARING_COMPRESS_PENALTY);
 }
 
 unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointer &checkpointer,

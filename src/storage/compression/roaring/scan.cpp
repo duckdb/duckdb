@@ -133,6 +133,8 @@ CompressedRunContainerScanState::CompressedRunContainerScanState(idx_t container
                                                                  idx_t count, data_ptr_t segments, data_ptr_t data)
     : RunContainerScanState(container_index, container_size, count, data), segments(segments), segment(segments) {
 	D_ASSERT(count >= COMPRESSED_RUN_THRESHOLD);
+	//! Used by Verify, have to use it to avoid a compiler warning/error
+	(void)this->segments;
 }
 
 void CompressedRunContainerScanState::LoadNextRun() {
