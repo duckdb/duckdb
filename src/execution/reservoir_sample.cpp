@@ -208,7 +208,7 @@ void ReservoirSample::Shrink() {
 	D_ASSERT(Chunk().size() > 0 && Chunk().size() <= num_samples_to_keep);
 }
 
-unique_ptr<BlockingSample> ReservoirSample::Copy() const {
+unique_ptr<BlockingSample> ReservoirSample::Copy(bool shuffle) const {
 
 	// only internal samples can be copied.
 	D_ASSERT(internal_sample);
@@ -230,9 +230,15 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() const {
 
 	auto new_sample_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 
-	SelectionVector const_sel(sel);
+	SelectionVector sel_copy(sel);
+	if (shuffle) {
+		auto randomized = GetRandomizedVector(sel_size, values_to_copy);
+		for (idx_t i = 0; i < values_to_copy; i++) {
+			sel_copy.set_index(i, sel.get_index(randomized[i]));
+		}
+	}
 	ret->reservoir_chunk = std::move(new_sample_chunk);
-	ret->UpdateSampleAppend(ret->reservoir_chunk->chunk, reservoir_chunk->chunk, const_sel, values_to_copy);
+	ret->UpdateSampleAppend(ret->reservoir_chunk->chunk, reservoir_chunk->chunk, sel_copy, values_to_copy);
 	ret->sel = SelectionVector(0, values_to_copy);
 	ret->sel_size = sel_size;
 	D_ASSERT(ret->reservoir_chunk->chunk.size() <= sample_count);
@@ -269,15 +275,6 @@ vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t range, uint32_t s
 		ret[i] = tmp;
 	}
 	return ret;
-}
-
-void ReservoirSample::ShuffleSel() {
-	auto new_indexes = GetRandomizedVector(static_cast<uint32_t>(sel_size), static_cast<uint32_t>(sel_size));
-	for (idx_t i = 0; i < sel_size; i++) {
-		idx_t tmp = sel.get_index(new_indexes[i]);
-		sel.set_index(new_indexes[i], sel.get_index(i));
-		sel.set_index(i, tmp);
-	}
 }
 
 void ReservoirSample::SimpleMerge(ReservoirSample &other) {
@@ -516,7 +513,7 @@ unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
 	}
 
 	// if we over sampled, make sure we only keep the highest percentage samples
-	std::unordered_set<idx_t> selections_to_delete;
+	std::unordered_set<duckdb::idx_t> selections_to_delete;
 	while (num_samples_to_keep < ret->GetPriorityQueueSize()) {
 		auto top = ret->PopFromWeightQueue();
 		D_ASSERT(top.second < sel_size);
@@ -603,7 +600,6 @@ idx_t ReservoirSample::FillReservoir(DataChunk &chunk) {
 		}
 		UpdateSampleAppend(reservoir_chunk->chunk, chunk, sel_for_input_chunk, ingested_count);
 		sel_size += ingested_count;
-		// ShuffleSel();
 	}
 	D_ASSERT(GetActiveSampleCount() <= sample_count);
 	D_ASSERT(GetActiveSampleCount() >= ingested_count);
@@ -640,7 +636,7 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 	std::unordered_map<idx_t, idx_t> replacement_indexes;
 	SelectionVector chunk_sel(num_to_pop);
 
-	auto random_indexes_chunk =GetRandomizedVector(static_cast<uint32_t>(chunk_length), num_to_pop);
+	auto random_indexes_chunk = GetRandomizedVector(static_cast<uint32_t>(chunk_length), num_to_pop);
 	auto random_sel_indexes = GetRandomizedVector(static_cast<uint32_t>(sel_size), num_to_pop);
 	for (idx_t i = 0; i < num_to_pop; i++) {
 		// update the selection vector for the reservoir sample
@@ -921,7 +917,7 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset, bool des
 	return nullptr;
 }
 
-unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
+unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy(bool shuffle) const {
 	throw InternalException("Cannot call Copy on ReservoirSample Percentage");
 }
 

@@ -4,6 +4,8 @@
 
 require vector_size 2048
 
+require noforcestorage
+
 # table samples first collect only 1% of the table, until the table has a cardinality of 2048.
 # then the sample stays at a fixed 2048 values.
 

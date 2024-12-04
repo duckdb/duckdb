@@ -1247,9 +1247,7 @@ unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 	auto &sample = stats.GetTableSampleRef(*lock);
 	if (!sample.destroyed) {
 		D_ASSERT(sample.type == SampleType::RESERVOIR_SAMPLE);
-		auto ingest_sample = sample.Copy();
-		// when get sample is called, return a sample that is min(FIXED_SAMPLE_SIZE, 0.01 * ingested_tuples).
-		// auto ret = ingest_sample.ConvertToReservoirSample();
+		auto ingest_sample = sample.Copy(true);
 		return ingest_sample;
 	}
 	return nullptr;
