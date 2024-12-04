@@ -427,7 +427,7 @@ jobs:
      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
      runs-on: ubuntu-20.04
-     needs: linux-python3-9
+     needs: twine-upload
      env:
        PYPI_CLEANUP_USERNAME: 'mytherin'
        PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}
