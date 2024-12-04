@@ -1,11 +1,10 @@
 #include "json_structure.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "json_executors.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
-
-#include <duckdb/common/extra_type_info.hpp>
 
 namespace duckdb {
 

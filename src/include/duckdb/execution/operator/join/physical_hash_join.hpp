@@ -76,7 +76,7 @@ protected:
 	                                                 GlobalSourceState &gstate) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
-	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 	//! Becomes a source when it is an external join
 	bool IsSource() const override {

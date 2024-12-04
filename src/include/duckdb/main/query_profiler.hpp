@@ -170,8 +170,8 @@ private:
 
 	//! Whether or not the query profiler is running
 	bool running;
-	//! The lock used for flushing information from a thread into the global query profiler
-	mutex flush_lock;
+	//! The lock used for accessing the global query profiler or flushing information to it from a thread
+	mutable std::mutex lock;
 
 	//! Whether or not the query requires profiling
 	bool query_requires_profiling;
