@@ -517,6 +517,7 @@ typedef struct {
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
 	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
+	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t row, idx_t column);
 #endif
 
 } duckdb_ext_api_v0;
@@ -924,6 +925,7 @@ typedef struct {
 #define duckdb_append_value                      duckdb_ext_api.duckdb_append_value
 #define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
 #define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name
+#define duckdb_append_default_to_chunk           duckdb_ext_api.duckdb_append_default_to_chunk
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
