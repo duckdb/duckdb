@@ -43,11 +43,11 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 	}
 }
 
-void CSVSchema::MergeSchemas(CSVSchema &other) {
+void CSVSchema::MergeSchemas(CSVSchema &other, bool null_padding) {
 	// TODO: We could also merge names, maybe by giving preference to non-generated names?
 	const vector<LogicalType> candidates_by_specificity = {LogicalType::BOOLEAN, LogicalType::BIGINT,
 	                                                       LogicalType::DOUBLE, LogicalType::VARCHAR};
-	for (idx_t i = 0; i < columns.size(); i++) {
+	for (idx_t i = 0; i < columns.size() && i < other.columns.size(); i++) {
 		auto this_type = columns[i].type.id();
 		auto other_type = other.columns[i].type.id();
 		if (columns[i].type != other.columns[i].type) {
@@ -65,10 +65,20 @@ void CSVSchema::MergeSchemas(CSVSchema &other) {
 			}
 		}
 	}
+
+	if (null_padding && other.columns.size() > columns.size()) {
+		for (idx_t i = columns.size(); i < other.columns.size(); i++) {
+			auto name = other.columns[i].name;
+			auto type = other.columns[i].type;
+			columns.push_back({name, type});
+			name_idx_map[name] = i;
+		}
+	}
 }
 
-CSVSchema::CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read_p)
-    : rows_read(rows_read_p) {
+CSVSchema::CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read_p,
+                     const bool empty_p)
+    : rows_read(rows_read_p), empty(empty_p) {
 	Initialize(names, types, file_path);
 }
 

@@ -61,19 +61,15 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	idx_t current_file = 0;
 	options.file_path = file_paths[current_file];
 
-	// result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
-	// options.file_path = multi_file_list.GetFirstFile();
 	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false);
 	{
 		CSVSniffer sniffer(options, result.buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		idx_t rows_read = sniffer.LinesSniffed() -
 		                  (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
-		if (result.buffer_manager->GetBuffer(0)->actual_size == 0) {
-			schemas.emplace_back(true);
-		} else {
-			schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read);
-		}
+
+		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read,
+		                     result.buffer_manager->GetBuffer(0)->actual_size == 0);
 		total_number_of_rows += sniffer.LinesSniffed();
 	}
 
@@ -104,17 +100,12 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		if (best_schema.Empty()) {
 			// A schema is bettah than no schema
 			best_schema = schema;
-		} else if (!schema.MatchColumns(best_schema) && !option_og.null_padding) {
-			throw InvalidInputException("File %s has a schema with %d columns, while file %s has a schema with %d "
-			                            "columns. \nPossible Fix: * set null_padding=True",
-			                            best_schema.GetPath(), best_schema.GetColumnCount(), schema.GetPath(),
-			                            schema.GetColumnCount());
 		} else if (best_schema.GetRowsRead() == 0) {
 			// If the best-schema has no data-rows, that's easy, we just take the new schema
 			best_schema = schema;
 		} else if (schema.GetRowsRead() != 0) {
 			// We might have conflicting-schemas, we must merge them
-			best_schema.MergeSchemas(schema);
+			best_schema.MergeSchemas(schema, options.null_padding);
 		}
 	}
 

@@ -97,10 +97,10 @@ select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', 
 ----
 Binder Error: Hive partition mismatch
 
-statement error
+query II
 select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', '__TEST_DIR__/bad_file.csv'], names=['a','b','c','d']) LIMIT 1;
 ----
-Invalid Input Error: Schema mismatch between globbed files.
+a	b
 
 # same tests with parquet
 require parquet

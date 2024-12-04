@@ -25,7 +25,8 @@ struct CSVSchema {
 	explicit CSVSchema(const bool empty = false) : empty(empty) {
 	}
 
-	CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read);
+	CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read,
+	          const bool empty = false);
 
 	//! Initializes the schema based on names and types
 	void Initialize(const vector<string> &names, const vector<LogicalType> &types, const string &file_path);
@@ -37,7 +38,7 @@ struct CSVSchema {
 	bool MatchColumns(const CSVSchema &other) const;
 
 	//! We merge two schemas by ensuring that the column types are compatible between both
-	void MergeSchemas(CSVSchema &other);
+	void MergeSchemas(CSVSchema &other, bool null_padding);
 
 	//! What's the file path for the file that generated this schema
 	string GetPath() const;
