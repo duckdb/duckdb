@@ -122,8 +122,10 @@ OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &conte
 	throw InternalException("Calling GetPartitionData on a node that does not support it");
 }
 
-double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
-	return -1;
+ProgressData PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	ProgressData res;
+	res.SetInvalid();
+	return res;
 }
 // LCOV_EXCL_STOP
 
