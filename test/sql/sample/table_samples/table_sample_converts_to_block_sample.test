@@ -52,8 +52,8 @@ select count(*) from duckdb_table_sample('materialized_range');
 query II
 select a, count(*) from duckdb_table_sample('materialized_range') group by all  order by a;
 ----
-1	656
-2	699
+1	680
+2	675
 3	693
 
 statement ok
@@ -63,6 +63,6 @@ pragma threads=1;
 query II
 select a, count(*) from (select( range%3+1) as a from range(102400 * 3)) t(a) group by all USING SAMPLE reservoir(2048 rows) REPEATABLE (1) order by a;
 ----
-1	656
+1	678
 2	699
-3	693
+3	671

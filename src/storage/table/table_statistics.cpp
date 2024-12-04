@@ -116,7 +116,8 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 		// if no other.table sample, do nothig
 	} else {
 		if (other.table_sample) {
-			auto other_table_sample_copy = other.table_sample->Copy();
+			auto &other_res = other.table_sample->Cast<ReservoirSample>();
+			auto other_table_sample_copy = other_res.Copy();
 			table_sample = std::move(other_table_sample_copy);
 		}
 	}
@@ -183,7 +184,8 @@ void TableStatistics::CopyStats(TableStatisticsLock &lock, TableStatistics &othe
 
 	if (table_sample) {
 		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
-		other.table_sample = table_sample->Copy();
+		auto &res = table_sample->Cast<ReservoirSample>();
+		other.table_sample = res.Copy();
 	}
 }
 
@@ -193,7 +195,9 @@ void TableStatistics::Serialize(Serializer &serializer) const {
 	if (table_sample) {
 		D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
 		auto &reservoir_sample = table_sample->Cast<ReservoirSample>();
-		to_serialize = reservoir_sample.PrepareForSerialization();
+		to_serialize = unique_ptr_cast<BlockingSample, ReservoirSample>(reservoir_sample.Copy());
+		auto &res_serialize = to_serialize->Cast<ReservoirSample>();
+		res_serialize.EvictOverBudgetSamples();
 	}
 	serializer.WritePropertyWithDefault<unique_ptr<BlockingSample>>(101, "table_sample", to_serialize, nullptr);
 }

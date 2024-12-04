@@ -1,5 +1,6 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
@@ -196,7 +197,21 @@ void ReservoirSample::Shrink() {
 	D_ASSERT(Chunk().size() > 0 && Chunk().size() <= sample_count);
 }
 
-unique_ptr<BlockingSample> ReservoirSample::Copy(bool shuffle) const {
+bool ReservoirSample::IsShuffled() const {
+	if (sel_size <= 1) {
+		return true;
+	}
+	idx_t prev_val = sel.get_index(0);
+	for (idx_t i = 1; i < sel_size; i++) {
+		if (sel.get_index(i) - prev_val != 1) {
+			return true;
+		}
+		prev_val = sel.get_index(i);
+	}
+	return false;
+}
+
+unique_ptr<BlockingSample> ReservoirSample::Copy() const {
 
 	auto ret = make_uniq<ReservoirSample>(sample_count);
 	ret->internal_sample = internal_sample;
@@ -218,9 +233,6 @@ unique_ptr<BlockingSample> ReservoirSample::Copy(bool shuffle) const {
 	auto new_sample_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 
 	SelectionVector sel_copy(sel);
-	if (shuffle) {
-		ShuffleSel(sel_copy, sel_size, values_to_copy);
-	}
 
 	ret->reservoir_chunk = std::move(new_sample_chunk);
 	ret->UpdateSampleAppend(ret->reservoir_chunk->chunk, reservoir_chunk->chunk, sel_copy, values_to_copy);
@@ -250,14 +262,14 @@ vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t range, uint32_t s
 		return ret;
 	}
 	if (range == 2) {
-		if (base_reservoir_sample->random.NextRandom() > 0.5) {
+		if (base_reservoir_sample->random.NextRandom32() > 0.5) {
 			std::swap(ret[0], ret[1]);
 		}
 		return ret;
 	}
 	uint32_t upper_bound = MinValue(range - 1, size);
 	for (uint32_t i = 0; i < upper_bound; i++) {
-		uint32_t random_shuffle = base_reservoir_sample->random.NextRandomInteger(i + 1, range);
+		uint32_t random_shuffle = base_reservoir_sample->random.NextRandomInteger32(i + 1, range);
 		uint32_t tmp = ret[random_shuffle];
 		// basically replacing the tuple that was at index actual_sample_indexes[random_shuffle]
 		ret[random_shuffle] = ret[i];
@@ -492,12 +504,10 @@ void ReservoirSample::NormalizeWeights() {
 	base_reservoir_sample->SetNextEntry();
 }
 
-unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
+void ReservoirSample::EvictOverBudgetSamples() {
 	Verify();
 	if (!reservoir_chunk || destroyed) {
-		auto ret = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
-		ret->Destroy();
-		return unique_ptr_cast<ReservoirSample, BlockingSample>(std::move(ret));
+		return;
 	}
 
 	// since this is for serialization, we really need to make sure keep a
@@ -505,37 +515,32 @@ unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
 	idx_t num_samples_to_keep =
 	    MinValue<idx_t>(FIXED_SAMPLE_SIZE, static_cast<idx_t>(SAVE_PERCENTAGE * static_cast<double>(GetTuplesSeen())));
 
-	// samples are collected in order to avoid too many random calls during ingestion
-	// if we are still "random" sampling, then we can shuffle
-	// if we are reservoir sampling, then we cannot shuffle our selection vector
-	// as every sampled value is attached to a weight that is in the reservoir weights
-	// if we shuffle, we loose that relationship
-	auto shuffle = GetSamplingState() == SamplingState::RANDOM;
-	auto ret = unique_ptr_cast<BlockingSample, ReservoirSample>(Copy());
-	if (shuffle) {
-		ShuffleSel(ret->sel, sel_size, num_samples_to_keep);
+	if (num_samples_to_keep <= 0) {
+		reservoir_chunk->chunk.SetCardinality(0);
+		return;
 	}
 
-	if (num_samples_to_keep <= 0) {
-		ret->reservoir_chunk->chunk.SetCapacity(0);
-		ret->reservoir_chunk->chunk.SetCardinality(0);
-		return unique_ptr_cast<ReservoirSample, BlockingSample>(std::move(ret));
+	if (num_samples_to_keep == sample_count) {
+		return;
 	}
 
 	// if we over sampled, make sure we only keep the highest percentage samples
-	std::unordered_set<idx_t> selections_to_delete;
+	unordered_set<idx_t> selections_to_delete;
 
-	while (num_samples_to_keep < ret->GetPriorityQueueSize()) {
-		auto top = ret->PopFromWeightQueue();
+	while (num_samples_to_keep < GetPriorityQueueSize()) {
+		auto top = PopFromWeightQueue();
 		D_ASSERT(top.second < sel_size);
 		selections_to_delete.emplace(top.second);
 	}
 
 	// set up reservoir chunk for the reservoir sample
-	D_ASSERT(reservoir_chunk->chunk.size() <= FIXED_SAMPLE_SIZE);
+	D_ASSERT(reservoir_chunk->chunk.size() <= sample_count);
 	// create a new sample chunk to store new samples
 	auto types = reservoir_chunk->chunk.GetTypes();
-	ret->reservoir_chunk = CreateNewSampleChunk(types, num_samples_to_keep);
+	D_ASSERT(num_samples_to_keep <= sample_count);
+	D_ASSERT(internal_sample);
+	D_ASSERT(sample_count == STANDARD_VECTOR_SIZE);
+	auto new_reservoir_chunk = CreateNewSampleChunk(types, STANDARD_VECTOR_SIZE);
 
 	// The current selection vector can potentially have 2048 valid mappings.
 	// If we need to save a sample with less rows than that, we need to do the following
@@ -545,7 +550,7 @@ unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
 	for (idx_t i = 0; i < num_samples_to_keep + selections_to_delete.size(); i++) {
 		if (selections_to_delete.find(i) == selections_to_delete.end()) {
 			D_ASSERT(i - offset < num_samples_to_keep);
-			new_sel.set_index(i - offset, ret->sel.get_index(i));
+			new_sel.set_index(i - offset, sel.get_index(i));
 		} else {
 			offset += 1;
 		}
@@ -553,21 +558,16 @@ unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
 	// 2. Update row_ids in our weights so that they don't store rows ids to
 	//    indexes in the selection vector that have been evicted.
 	if (!selections_to_delete.empty()) {
-		ret->NormalizeWeights();
+		NormalizeWeights();
 	}
 
-	D_ASSERT(reservoir_chunk->chunk.GetTypes() == ret->reservoir_chunk->chunk.GetTypes());
+	D_ASSERT(reservoir_chunk->chunk.GetTypes() == new_reservoir_chunk->chunk.GetTypes());
 
-	UpdateSampleAppend(ret->reservoir_chunk->chunk, reservoir_chunk->chunk, new_sel, num_samples_to_keep);
+	UpdateSampleAppend(new_reservoir_chunk->chunk, reservoir_chunk->chunk, new_sel, num_samples_to_keep);
 	// set the cardinality
-	ret->reservoir_chunk->chunk.SetCardinality(num_samples_to_keep);
-	ret->base_reservoir_sample->num_entries_seen_total = base_reservoir_sample->num_entries_seen_total;
-	if (!ret->base_reservoir_sample->reservoir_weights.empty()) {
-		ret->base_reservoir_sample->SetNextEntry();
-	}
-
-	D_ASSERT(ret->reservoir_chunk->chunk.size() == num_samples_to_keep);
-	return unique_ptr_cast<ReservoirSample, BlockingSample>(std::move(ret));
+	new_reservoir_chunk->chunk.SetCardinality(num_samples_to_keep);
+	reservoir_chunk = std::move(new_reservoir_chunk);
+	base_reservoir_sample->UpdateMinWeightThreshold();
 }
 
 void ReservoirSample::ExpandSerializedSample() {
@@ -602,12 +602,15 @@ idx_t ReservoirSample::FillReservoir(DataChunk &chunk) {
 
 	idx_t actual_sample_index_start = GetActiveSampleCount();
 	D_ASSERT(reservoir_chunk->chunk.ColumnCount() == chunk.ColumnCount());
+
 	if (reservoir_chunk->chunk.size() < sample_count) {
 		ingested_count = MinValue<idx_t>(sample_count - reservoir_chunk->chunk.size(), chunk.size());
+		auto random_other_sel =
+		    GetRandomizedVector(static_cast<uint32_t>(ingested_count), static_cast<uint32_t>(ingested_count));
 		SelectionVector sel_for_input_chunk(ingested_count);
 		for (idx_t i = 0; i < ingested_count; i++) {
 			sel.set_index(actual_sample_index_start + i, actual_sample_index_start + i);
-			sel_for_input_chunk.set_index(i, i);
+			sel_for_input_chunk.set_index(i, random_other_sel[i]);
 		}
 		UpdateSampleAppend(reservoir_chunk->chunk, chunk, sel_for_input_chunk, ingested_count);
 		sel_size += ingested_count;
@@ -684,7 +687,7 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesSlow(const idx_t sam
 		// ret[index_in_new_chunk] = index_in_sample_chunk (the sample chunk offset will be applied later)
 		// D_ASSERT(sample_chunk_index == ret.size());
 		ret_map[base_offset + offset] = sample_chunk_index;
-		double r2 = base_reservoir_sample->random.NextRandom(base_reservoir_sample->min_weight_threshold, 1);
+		double r2 = base_reservoir_sample->random.NextRandom32(base_reservoir_sample->min_weight_threshold, 1);
 		// replace element in our max_heap
 		// first get the top most pair
 		const auto top = PopFromWeightQueue();
@@ -927,7 +930,7 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk(idx_t offset, bool des
 	return nullptr;
 }
 
-unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy(bool shuffle) const {
+unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
 	throw InternalException("Cannot call Copy on ReservoirSample Percentage");
 }
 

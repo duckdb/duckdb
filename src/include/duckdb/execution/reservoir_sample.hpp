@@ -94,7 +94,7 @@ public:
 
 	//! Add a chunk of data to the sample
 	virtual void AddToReservoir(DataChunk &input) = 0;
-	virtual unique_ptr<BlockingSample> Copy(bool shuffle = false) const = 0;
+	virtual unique_ptr<BlockingSample> Copy() const = 0;
 	virtual void Finalize() = 0;
 	virtual void Destroy();
 
@@ -160,7 +160,7 @@ public:
 	explicit ReservoirSample(idx_t sample_count, unique_ptr<ReservoirChunk> = nullptr);
 
 	//! methods used to help with serializing and deserializing
-	unique_ptr<BlockingSample> PrepareForSerialization();
+	void EvictOverBudgetSamples();
 	void ExpandSerializedSample();
 
 	SamplingState GetSamplingState() const;
@@ -177,7 +177,7 @@ public:
 
 	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for
 	//! future sampling values
-	unique_ptr<BlockingSample> Copy(bool shuffle = false) const override;
+	unique_ptr<BlockingSample> Copy() const override;
 
 	//! create the first chunk called by AddToReservoir()
 	idx_t FillReservoir(DataChunk &chunk);
@@ -228,6 +228,7 @@ private:
 	// the selection vector. If throw away values at selection vector index i = 5 , we need to update all indexes
 	// i > 5. Otherwise we will have indexes in the weights that are greater than the length of our sample.
 	void NormalizeWeights();
+	bool IsShuffled() const;
 
 	SelectionVectorHelper GetReplacementIndexesSlow(const idx_t sample_chunk_offset, const idx_t chunk_length);
 	SelectionVectorHelper GetReplacementIndexesFast(const idx_t sample_chunk_offset, const idx_t chunk_length);
@@ -266,7 +267,7 @@ public:
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
 
-	unique_ptr<BlockingSample> Copy(bool shuffle = false) const override;
+	unique_ptr<BlockingSample> Copy() const override;
 
 	//! Fetches a chunk from the sample. If destory = true this method is descructive
 	unique_ptr<DataChunk> GetChunk(idx_t offset, bool destroy = false) override;

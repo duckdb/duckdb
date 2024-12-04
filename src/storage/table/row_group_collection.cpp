@@ -1233,7 +1233,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 
 //===--------------------------------------------------------------------===//
 // Statistics
-//===--------------------------------------------------------------------===//
+//===---------------------------------------------------------------r-----===//
 void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 	stats.CopyStats(other_stats);
 }
@@ -1247,8 +1247,8 @@ unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 	auto &sample = stats.GetTableSampleRef(*lock);
 	if (!sample.destroyed) {
 		D_ASSERT(sample.type == SampleType::RESERVOIR_SAMPLE);
-		auto ingest_sample = sample.Copy(true);
-		return ingest_sample;
+		auto &reservoir = sample.Cast<ReservoirSample>();
+		return reservoir.Copy();
 	}
 	return nullptr;
 }
