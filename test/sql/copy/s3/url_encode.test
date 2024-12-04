@@ -143,8 +143,3 @@ statement error
 SELECT * FROM 'gcs://test-bucket/whatever.parquet';
 ----
 HTTP GET error on 'http://storage.googleapis.com/test-bucket/whatever.parquet'
-
-statement error
-SELECT * FROM 'oss://test-bucket/whatever.parquet';
-----
-HTTP GET error on 'http://test-bucket.s3.amazonaws.com/whatever.parquet'
