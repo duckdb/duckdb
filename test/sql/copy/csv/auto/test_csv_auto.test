@@ -9,6 +9,12 @@ statement ok
 PRAGMA verify_parallelism
 
 query I
+FROM read_csv('data/csv/pipe_delim.csv', columns={'a': 'VARCHAR'}, auto_detect=False)
+----
+one|two|three|four
+1|2|3|4
+
+query I
 FROM read_csv('data/csv/nullterm.csv')
 ----
 world

@@ -15,13 +15,13 @@ namespace duckdb {
 //! Basically which char, quote and escape were used to generate it.
 struct CSVStateMachineOptions {
 	CSVStateMachineOptions() {};
-	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p, char comment_p, NewLineIdentifier new_line_p,
-	                       bool rfc_4180_p)
-	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
+	CSVStateMachineOptions(string delimiter_p, char quote_p, char escape_p, char comment_p,
+	                       NewLineIdentifier new_line_p, bool rfc_4180_p)
+	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
 	      rfc_4180(rfc_4180_p) {};
 
 	//! Delimiter to separate columns within each line
-	CSVOption<char> delimiter = ',';
+	CSVOption<string> delimiter {","};
 	//! Quote used for columns that contain reserved characters, e.g '
 	CSVOption<char> quote = '\"';
 	//! Escape character to escape quote character
@@ -31,7 +31,7 @@ struct CSVStateMachineOptions {
 	//! New Line separator
 	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
 	//! RFC 4180 conformance
-	CSVOption<bool> rfc_4180 = true;
+	CSVOption<bool> rfc_4180 = false;
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape &&

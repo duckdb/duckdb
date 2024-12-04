@@ -495,6 +495,7 @@ typedef struct {
 	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
+	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
 #endif
 
 // These functions are considered for deprecation.
@@ -907,6 +908,7 @@ typedef struct {
 #define duckdb_get_timestamp_s        duckdb_ext_api.duckdb_get_timestamp_s
 #define duckdb_get_timestamp_ms       duckdb_ext_api.duckdb_get_timestamp_ms
 #define duckdb_get_timestamp_ns       duckdb_ext_api.duckdb_get_timestamp_ns
+#define duckdb_append_value           duckdb_ext_api.duckdb_append_value
 
 // Version unstable_potential_deprecation_candidates
 #define duckdb_get_profiling_info       duckdb_ext_api.duckdb_get_profiling_info

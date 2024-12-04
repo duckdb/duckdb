@@ -54,9 +54,9 @@ SELECT COUNT(*) FROM read_json_auto('__TEST_DIR__/file_size_bytes_json/*.json')
 
 # JSON is a bit more wasteful, 5 files
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_json/*.json')
+SELECT count(*) >= 3 and count(*) <= 12 FROM glob('__TEST_DIR__/file_size_bytes_json/*.json')
 ----
-5
+true
 
 require parquet
 

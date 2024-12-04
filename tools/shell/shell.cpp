@@ -1568,7 +1568,8 @@ columnar_end:
 
 extern "C" {
 extern void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value,
-                                  int columns, char thousands, char decimal, duckdb::BaseResultRenderer *renderer);
+                                  int columns, char thousands, char decimal, int large_number_rendering,
+                                  duckdb::BaseResultRenderer *renderer);
 }
 
 class DuckBoxRenderer : public duckdb::BaseResultRenderer {
@@ -1659,17 +1660,22 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 			max_rows = (size_t)-1;
 			max_width = (size_t)-1;
 		}
+		LargeNumberRendering large_rendering = large_number_rendering;
 		if (!stdout_is_console) {
 			max_width = (size_t)-1;
 		}
+		if (large_rendering == LargeNumberRendering::DEFAULT) {
+			large_rendering = stdout_is_console ? LargeNumberRendering::FOOTER : LargeNumberRendering::NONE;
+		}
+
 		DuckBoxRenderer renderer(*this, HighlightResults());
 		sqlite3_print_duckbox(pStmt, max_rows, max_width, nullValue.c_str(), columns, thousand_separator,
-		                      decimal_separator, &renderer);
+		                      decimal_separator, int(large_rendering), &renderer);
 		return;
 	}
 	if (cMode == RenderMode::TRASH) {
 		TrashRenderer renderer;
-		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', &renderer);
+		sqlite3_print_duckbox(pStmt, 1, 80, "", false, '\0', '\0', 0, &renderer);
 		return;
 	}
 
@@ -2159,6 +2165,7 @@ static const char *azHelp[] = {
     "     brightyellow|brightblue|brightmagenta|brightcyan|brightwhite",
     ".keywordcode ?CODE?      Sets the syntax highlighting terminal code used for keywords",
 #endif
+    ".large_number_rendering all|footer|off Toggle readable rendering of large numbers (duckbox only)",
     ".log FILE|off            Turn logging on or off.  FILE can be stderr/stdout",
     ".maxrows COUNT           Sets the maximum number of rows for display (default: 40). Only for duckbox mode.",
     ".maxwidth COUNT          Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox "
@@ -2205,6 +2212,7 @@ static const char *azHelp[] = {
     ".quit                    Exit this program",
     ".read FILE               Read input from FILE",
     ".rows                    Row-wise rendering of query results (default)",
+    ".safe_mode               Enable safe-mode",
     ".schema ?PATTERN?        Show the CREATE statements matching PATTERN",
     "     Options:",
     "         --indent            Try to pretty-print the schema",
@@ -3022,6 +3030,21 @@ MetadataResult SetThousandSep(ShellState &state, const char **azArg, idx_t nArg)
 	return SetSeparator(state, azArg, nArg, "thousand", state.thousand_separator);
 }
 
+MetadataResult SetLargeNumberRendering(ShellState &state, const char **azArg, idx_t nArg) {
+	if (strcmp(azArg[1], "all") == 0) {
+		state.large_number_rendering = LargeNumberRendering::ALL;
+	} else if (strcmp(azArg[1], "footer") == 0) {
+		state.large_number_rendering = LargeNumberRendering::FOOTER;
+	} else {
+		if (booleanValue(azArg[1])) {
+			state.large_number_rendering = LargeNumberRendering::DEFAULT;
+		} else {
+			state.large_number_rendering = LargeNumberRendering::NONE;
+		}
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult DumpTable(ShellState &state, const char **azArg, idx_t nArg) {
 	char *zLike = 0;
 	char *zSql;
@@ -3175,6 +3198,15 @@ MetadataResult SetColumnRendering(ShellState &state, const char **azArg, idx_t n
 
 MetadataResult SetRowRendering(ShellState &state, const char **azArg, idx_t nArg) {
 	state.columns = 1;
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult EnableSafeMode(ShellState &state, const char **azArg, idx_t nArg) {
+	safe_mode = true;
+	if (state.db) {
+		// db has been opened - disable external access
+		sqlite3_exec(state.db, "SET enable_external_access=false", NULL, NULL, NULL);
+	}
 	return MetadataResult::SUCCESS;
 }
 
@@ -4099,6 +4131,8 @@ static const MetadataCommand metadata_commands[] = {
 
     {"indexes", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
     {"indices", 0, ShowIndexes, "?TABLE?", "Show names of indexes", 0},
+    {"large_number_rendering", 2, SetLargeNumberRendering, "all|footer|off",
+     "Toggle readable rendering of large numbers (duckbox only)", 0},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0},
     {"maxrows", 0, SetMaxRows, "COUNT",
      "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0},
@@ -4118,6 +4152,7 @@ static const MetadataCommand metadata_commands[] = {
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0},
     {"restore", 0, nullptr, "", "", 3},
     {"save", 0, nullptr, "?DB? FILE", "Backup DB (default \"main\") to FILE", 3},
+    {"safe_mode", 0, EnableSafeMode, "", "enable safe-mode", 0},
     {"separator", 0, SetSeparator, "COL ?ROW?", "Change the column and row separators", 0},
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0},
     {"shell", 0, RunShellCommand, "CMD ARGS...", "Run CMD ARGS... in a system shell", 0},
@@ -4573,6 +4608,7 @@ static const char zOptions[] = "   -ascii               set output mode to 'asci
                                "   -c COMMAND           run \"COMMAND\" and exit\n"
                                "   -csv                 set output mode to 'csv'\n"
                                "   -echo                print commands before execution\n"
+                               "   -f FILENAME          read/process named file and exit\n"
                                "   -init FILENAME       read/process named file\n"
                                "   -[no]header          turn headers on or off\n"
                                "   -help                show this message\n"
@@ -4779,7 +4815,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 || strcmp(z, "-newline") == 0 ||
 		    strcmp(z, "-cmd") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
-		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
+		} else if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0 || strcmp(z, "-f") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
 			stdin_is_interactive = false;
 		} else if (strcmp(z, "-init") == 0) {
@@ -4919,6 +4955,13 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			usage(1);
 		} else if (strcmp(z, "-no-stdin") == 0) {
 			readStdin = false;
+		} else if (strcmp(z, "-f") == 0) {
+			readStdin = false;
+			if (i == argc - 1) {
+				break;
+			}
+			z = cmdline_option_value(argc, argv, ++i);
+			data.ProcessDuckDBRC(z);
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = false;
@@ -4927,8 +4970,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			** that simply appear on the command-line.  This seems goofy.  It would
 			** be better if all commands ran in the order that they appear.  But
 			** we retain the goofy behavior for historical compatibility. */
-			if (i == argc - 1)
+			if (i == argc - 1) {
 				break;
+			}
 			z = cmdline_option_value(argc, argv, ++i);
 			if (z[0] == '.') {
 				rc = data.DoMetaCommand(z);

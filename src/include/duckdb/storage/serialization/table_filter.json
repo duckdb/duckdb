@@ -134,5 +134,15 @@
       }
     ],
     "constructor": ["values"]
+  },
+  {
+    "class": "DynamicFilter",
+    "base": "TableFilter",
+    "includes": [
+      "duckdb/planner/filter/dynamic_filter.hpp"
+    ],
+    "enum": "DYNAMIC_FILTER",
+    "members": [
+    ]
   }
 ]

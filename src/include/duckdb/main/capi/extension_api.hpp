@@ -427,6 +427,7 @@ typedef struct {
 	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
+	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
 	// These functions are considered for deprecation.
 
 	duckdb_profiling_info (*duckdb_get_profiling_info)(duckdb_connection connection);
@@ -831,6 +832,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_timestamp_s = duckdb_get_timestamp_s;
 	result.duckdb_get_timestamp_ms = duckdb_get_timestamp_ms;
 	result.duckdb_get_timestamp_ns = duckdb_get_timestamp_ns;
+	result.duckdb_append_value = duckdb_append_value;
 	result.duckdb_get_profiling_info = duckdb_get_profiling_info;
 	result.duckdb_profiling_info_get_value = duckdb_profiling_info_get_value;
 	result.duckdb_appender_begin_row = duckdb_appender_begin_row;

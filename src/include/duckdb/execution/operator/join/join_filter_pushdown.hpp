@@ -8,16 +8,17 @@
 
 #pragma once
 
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 class DataChunk;
 class DynamicTableFilterSet;
+class LogicalGet;
+class JoinHashTable;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
-class JoinHashTable;
 
 struct JoinFilterPushdownColumn {
 	//! The probe column index to which this filter should be applied
@@ -45,6 +46,15 @@ struct JoinFilterPushdownFilter {
 	vector<JoinFilterPushdownColumn> columns;
 };
 
+struct PushdownFilterTarget {
+	PushdownFilterTarget(LogicalGet &get, vector<JoinFilterPushdownColumn> columns_p)
+	    : get(get), columns(std::move(columns_p)) {
+	}
+
+	LogicalGet &get;
+	vector<JoinFilterPushdownColumn> columns;
+};
+
 struct JoinFilterPushdownInfo {
 	//! The join condition indexes for which we compute the min/max aggregates
 	vector<idx_t> join_condition;
@@ -59,8 +69,8 @@ public:
 
 	void Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const;
 	void Combine(JoinFilterGlobalState &gstate, JoinFilterLocalState &lstate) const;
-	void PushFilters(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
-	                 const PhysicalOperator &op) const;
+	unique_ptr<DataChunk> Finalize(ClientContext &context, JoinHashTable &ht, JoinFilterGlobalState &gstate,
+	                               const PhysicalOperator &op) const;
 
 private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,

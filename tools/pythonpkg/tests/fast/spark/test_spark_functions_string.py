@@ -183,6 +183,120 @@ class TestSparkFunctionsString(object):
         else:
             assert res == [Row(encoded=b'abcd')]
 
+    def test_split(self, spark):
+        df = spark.createDataFrame(
+            [('oneAtwoBthreeC',)],
+            [
+                's',
+            ],
+        )
+
+        res = df.select(F.split(df.s, '[ABC]').alias('s')).collect()
+        assert res == [Row(s=['one', 'two', 'three', ''])]
+
+    def test_split_part(self, spark):
+        df = spark.createDataFrame(
+            [
+                (
+                    "11.12.13",
+                    ".",
+                    3,
+                )
+            ],
+            ["a", "b", "c"],
+        )
+
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r='13')]
+
+        # If any input is null, should return null
+        df = spark.createDataFrame(
+            [
+                (
+                    "11.12.13",
+                    ".",
+                    None,
+                ),
+                (
+                    "11.12.13",
+                    ".",
+                    1,
+                ),
+            ],
+            ["a", "b", "c"],
+        )
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r=None), Row(r='11')]
+
+        # If partNum is out of range, should return an empty string
+        df = spark.createDataFrame(
+            [
+                (
+                    "11.12.13",
+                    ".",
+                    4,
+                )
+            ],
+            ["a", "b", "c"],
+        )
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r='')]
+
+        # If partNum is negative, parts are counted backwards
+        df = spark.createDataFrame(
+            [
+                (
+                    "11.12.13",
+                    ".",
+                    -1,
+                )
+            ],
+            ["a", "b", "c"],
+        )
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r='13')]
+
+        # If the delimiter is an empty string, the return should be empty
+        df = spark.createDataFrame(
+            [
+                (
+                    "11.12.13",
+                    "",
+                    2,
+                )
+            ],
+            ["a", "b", "c"],
+        )
+        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
+        assert res == [Row(r='')]
+
+    def test_substr(self, spark):
+        df = spark.createDataFrame(
+            [
+                (
+                    "Spark SQL",
+                    5,
+                    1,
+                )
+            ],
+            ["a", "b", "c"],
+        )
+        res = df.select(F.substr("a", "b", "c").alias("s")).collect()
+        assert res == [Row(s='k')]
+
+        df = spark.createDataFrame(
+            [
+                (
+                    "Spark SQL",
+                    5,
+                    1,
+                )
+            ],
+            ["a", "b", "c"],
+        )
+        res = df.select(F.substr("a", "b").alias("s")).collect()
+        assert res == [Row(s='k SQL')]
+
     def test_find_in_set(self, spark):
         string_array = "abc,b,ab,c,def"
         df = spark.createDataFrame([("ab", string_array), ("b,c", string_array), ("z", string_array)], ['a', 'b'])
@@ -354,3 +468,61 @@ class TestSparkFunctionsString(object):
         )
         res = df.select(F.repeat(df.s, 3).alias('s')).collect()
         assert res == [Row(s='ababab')]
+
+    def test_reverse(self, spark):
+        data = [
+            ("firstRowFirstColumn",),
+            ("2ndRowFirstColumn",),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("reversed", F.reverse(F.col("firstColumn")))
+        res = df.select("reversed").collect()
+        assert res == [
+            Row(reversed=data[0][0][::-1]),
+            Row(reversed=data[1][0][::-1]),
+        ]
+
+    def test_concat(self, spark):
+        data = [
+            ("firstRow", "FirstColumn"),
+            ("2ndRow", "FirstColumn"),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn", "secondColumn"])
+        df = df.withColumn("concatenated", F.concat(F.col("firstColumn"), F.col("secondColumn")))
+        res = df.select("concatenated").collect()
+        assert res == [
+            Row(concatenated="firstRowFirstColumn"),
+            Row(concatenated="2ndRowFirstColumn"),
+        ]
+
+    def test_substring(self, spark):
+        data = [("abcd",)]
+        df = spark.createDataFrame(data, ["s"])
+        res = df.select(F.substring(df.s, 1, 2).alias("s")).collect()
+        assert res == [Row(s="ab")]
+
+    def test_contains(self, spark):
+        data = [
+            ("firstRowFirstColumn",),
+            ("2ndRowFirstColumn",),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("contains", F.contains(F.col("firstColumn"), F.lit("Row")))
+        res = df.select("contains").collect()
+        assert res == [
+            Row(contains=True),
+            Row(contains=True),
+        ]
+
+    def test_instr(self, spark):
+        data = [
+            ("firstRowFirstColumn",),
+            ("2ndRowFirstColumn",),
+        ]
+        df = spark.createDataFrame(data, ["firstColumn"])
+        df = df.withColumn("instr", F.instr(F.col("firstColumn"), "Row"))
+        res = df.select("instr").collect()
+        assert res == [
+            Row(instr=6),
+            Row(instr=4),
+        ]

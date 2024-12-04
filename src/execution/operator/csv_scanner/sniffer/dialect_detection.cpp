@@ -14,8 +14,8 @@ bool IsQuoteDefault(char quote) {
 	return false;
 }
 
-vector<char> DialectCandidates::GetDefaultDelimiter() {
-	return {',', '|', ';', '\t'};
+vector<string> DialectCandidates::GetDefaultDelimiter() {
+	return {",", "|", ";", "\t"};
 }
 
 vector<vector<char>> DialectCandidates::GetDefaultQuote() {
@@ -144,7 +144,11 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	} else {
 		new_line_id = DetectNewLineDelimiter(*buffer_manager);
 	}
-	bool rfc_4180 = options.dialect_options.state_machine_options.rfc_4180.GetValue();
+	// We only sniff RFC 4180 rules, unless manually set by user.
+	bool rfc_4180 = true;
+	if (options.dialect_options.state_machine_options.rfc_4180.IsSetByUser()) {
+		rfc_4180 = options.dialect_options.state_machine_options.rfc_4180.GetValue();
+	}
 	CSVIterator first_iterator;
 	bool iterator_set = false;
 	for (const auto quote_rule : dialect_candidates.quote_rule_candidates) {
@@ -370,10 +374,11 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				if (!scanner->ever_escaped && candidates.front()->ever_escaped) {
 					return;
 				}
-				if (best_consistent_rows == consistent_rows) {
+				if (best_consistent_rows == consistent_rows && num_cols >= max_columns_found) {
 					// If both have not been escaped, this might get solved later on.
 					sniffing_state_machine.dialect_options.num_cols = num_cols;
 					candidates.emplace_back(std::move(scanner));
+					max_columns_found = num_cols;
 					return;
 				}
 			}
@@ -381,7 +386,13 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		if (max_columns_found == num_cols && ignored_rows > min_ignored_rows) {
 			return;
 		}
-
+		if (quoted && num_cols < max_columns_found) {
+			for (auto &candidate : candidates) {
+				if (candidate->ever_quoted) {
+					return;
+				}
+			}
+		}
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
