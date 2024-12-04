@@ -3808,9 +3808,9 @@ Append a DEFAULT value (NULL if DEFAULT not available for column) to the appende
 DUCKDB_API duckdb_state duckdb_append_default(duckdb_appender appender);
 
 /*!
-Append a DEFAULT value (NULL if DEFAULT not available for column) to the appender.
-The default value of the column must be a constant value. Non-deterministic expressions like nextval('seq') or random()
-are not supported.
+Append a DEFAULT value, at the specified row and column, (NULL if DEFAULT not available for column) to the chunk created
+from the specified appender. The default value of the column must be a constant value. Non-deterministic expressions
+like nextval('seq') or random() are not supported.
 
 * @param appender The appender to get the default value from.
 * @param chunk The data chunk to append the default value to.

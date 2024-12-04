@@ -471,12 +471,12 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void Appender::AppendDefault() {
-	auto &value = GetDefaultValue(column);
+	auto value = GetDefaultValue(column);
 	Append(value);
 }
 
 void Appender::AppendDefault(DataChunk &chunk, idx_t row, idx_t column) {
-	auto &value = GetDefaultValue(column);
+	auto value = GetDefaultValue(column);
 	Append(chunk, value, row, column);
 }
 
