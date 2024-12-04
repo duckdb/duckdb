@@ -376,8 +376,6 @@ typedef struct {
 	void (*duckdb_replacement_scan_set_function_name)(duckdb_replacement_scan_info info, const char *function_name);
 	void (*duckdb_replacement_scan_add_parameter)(duckdb_replacement_scan_info info, duckdb_value parameter);
 	void (*duckdb_replacement_scan_set_error)(duckdb_replacement_scan_info info, const char *error);
-	duckdb_profiling_info (*duckdb_get_profiling_info)(duckdb_connection connection);
-	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
 	duckdb_value (*duckdb_profiling_info_get_metrics)(duckdb_profiling_info info);
 	idx_t (*duckdb_profiling_info_get_child_count)(duckdb_profiling_info info);
 	duckdb_profiling_info (*duckdb_profiling_info_get_child)(duckdb_profiling_info info, idx_t index);
@@ -393,30 +391,6 @@ typedef struct {
 	duckdb_state (*duckdb_appender_destroy)(duckdb_appender *appender);
 	duckdb_state (*duckdb_appender_add_column)(duckdb_appender appender, const char *name);
 	duckdb_state (*duckdb_appender_clear_columns)(duckdb_appender appender);
-	duckdb_state (*duckdb_appender_begin_row)(duckdb_appender appender);
-	duckdb_state (*duckdb_appender_end_row)(duckdb_appender appender);
-	duckdb_state (*duckdb_append_default)(duckdb_appender appender);
-	duckdb_state (*duckdb_append_bool)(duckdb_appender appender, bool value);
-	duckdb_state (*duckdb_append_int8)(duckdb_appender appender, int8_t value);
-	duckdb_state (*duckdb_append_int16)(duckdb_appender appender, int16_t value);
-	duckdb_state (*duckdb_append_int32)(duckdb_appender appender, int32_t value);
-	duckdb_state (*duckdb_append_int64)(duckdb_appender appender, int64_t value);
-	duckdb_state (*duckdb_append_hugeint)(duckdb_appender appender, duckdb_hugeint value);
-	duckdb_state (*duckdb_append_uint8)(duckdb_appender appender, uint8_t value);
-	duckdb_state (*duckdb_append_uint16)(duckdb_appender appender, uint16_t value);
-	duckdb_state (*duckdb_append_uint32)(duckdb_appender appender, uint32_t value);
-	duckdb_state (*duckdb_append_uint64)(duckdb_appender appender, uint64_t value);
-	duckdb_state (*duckdb_append_uhugeint)(duckdb_appender appender, duckdb_uhugeint value);
-	duckdb_state (*duckdb_append_float)(duckdb_appender appender, float value);
-	duckdb_state (*duckdb_append_double)(duckdb_appender appender, double value);
-	duckdb_state (*duckdb_append_date)(duckdb_appender appender, duckdb_date value);
-	duckdb_state (*duckdb_append_time)(duckdb_appender appender, duckdb_time value);
-	duckdb_state (*duckdb_append_timestamp)(duckdb_appender appender, duckdb_timestamp value);
-	duckdb_state (*duckdb_append_interval)(duckdb_appender appender, duckdb_interval value);
-	duckdb_state (*duckdb_append_varchar)(duckdb_appender appender, const char *val);
-	duckdb_state (*duckdb_append_varchar_length)(duckdb_appender appender, const char *val, idx_t length);
-	duckdb_state (*duckdb_append_blob)(duckdb_appender appender, const void *data, idx_t length);
-	duckdb_state (*duckdb_append_null)(duckdb_appender appender);
 	duckdb_state (*duckdb_append_data_chunk)(duckdb_appender appender, duckdb_data_chunk chunk);
 	duckdb_state (*duckdb_table_description_create)(duckdb_connection connection, const char *schema, const char *table,
 	                                                duckdb_table_description *out);
@@ -521,6 +495,36 @@ typedef struct {
 	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
+#endif
+
+// These functions are considered for deprecation.
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_profiling_info (*duckdb_get_profiling_info)(duckdb_connection connection);
+	duckdb_value (*duckdb_profiling_info_get_value)(duckdb_profiling_info info, const char *key);
+	duckdb_state (*duckdb_appender_begin_row)(duckdb_appender appender);
+	duckdb_state (*duckdb_appender_end_row)(duckdb_appender appender);
+	duckdb_state (*duckdb_append_default)(duckdb_appender appender);
+	duckdb_state (*duckdb_append_bool)(duckdb_appender appender, bool value);
+	duckdb_state (*duckdb_append_int8)(duckdb_appender appender, int8_t value);
+	duckdb_state (*duckdb_append_int16)(duckdb_appender appender, int16_t value);
+	duckdb_state (*duckdb_append_int32)(duckdb_appender appender, int32_t value);
+	duckdb_state (*duckdb_append_int64)(duckdb_appender appender, int64_t value);
+	duckdb_state (*duckdb_append_hugeint)(duckdb_appender appender, duckdb_hugeint value);
+	duckdb_state (*duckdb_append_uint8)(duckdb_appender appender, uint8_t value);
+	duckdb_state (*duckdb_append_uint16)(duckdb_appender appender, uint16_t value);
+	duckdb_state (*duckdb_append_uint32)(duckdb_appender appender, uint32_t value);
+	duckdb_state (*duckdb_append_uint64)(duckdb_appender appender, uint64_t value);
+	duckdb_state (*duckdb_append_uhugeint)(duckdb_appender appender, duckdb_uhugeint value);
+	duckdb_state (*duckdb_append_float)(duckdb_appender appender, float value);
+	duckdb_state (*duckdb_append_double)(duckdb_appender appender, double value);
+	duckdb_state (*duckdb_append_date)(duckdb_appender appender, duckdb_date value);
+	duckdb_state (*duckdb_append_time)(duckdb_appender appender, duckdb_time value);
+	duckdb_state (*duckdb_append_timestamp)(duckdb_appender appender, duckdb_timestamp value);
+	duckdb_state (*duckdb_append_interval)(duckdb_appender appender, duckdb_interval value);
+	duckdb_state (*duckdb_append_varchar)(duckdb_appender appender, const char *val);
+	duckdb_state (*duckdb_append_varchar_length)(duckdb_appender appender, const char *val, idx_t length);
+	duckdb_state (*duckdb_append_blob)(duckdb_appender appender, const void *data, idx_t length);
+	duckdb_state (*duckdb_append_null)(duckdb_appender appender);
 #endif
 
 } duckdb_ext_api_v1;
@@ -800,8 +804,6 @@ typedef struct {
 #define duckdb_replacement_scan_set_function_name   duckdb_ext_api.duckdb_replacement_scan_set_function_name
 #define duckdb_replacement_scan_add_parameter       duckdb_ext_api.duckdb_replacement_scan_add_parameter
 #define duckdb_replacement_scan_set_error           duckdb_ext_api.duckdb_replacement_scan_set_error
-#define duckdb_get_profiling_info                   duckdb_ext_api.duckdb_get_profiling_info
-#define duckdb_profiling_info_get_value             duckdb_ext_api.duckdb_profiling_info_get_value
 #define duckdb_profiling_info_get_metrics           duckdb_ext_api.duckdb_profiling_info_get_metrics
 #define duckdb_profiling_info_get_child_count       duckdb_ext_api.duckdb_profiling_info_get_child_count
 #define duckdb_profiling_info_get_child             duckdb_ext_api.duckdb_profiling_info_get_child
@@ -815,30 +817,6 @@ typedef struct {
 #define duckdb_appender_destroy                     duckdb_ext_api.duckdb_appender_destroy
 #define duckdb_appender_add_column                  duckdb_ext_api.duckdb_appender_add_column
 #define duckdb_appender_clear_columns               duckdb_ext_api.duckdb_appender_clear_columns
-#define duckdb_appender_begin_row                   duckdb_ext_api.duckdb_appender_begin_row
-#define duckdb_appender_end_row                     duckdb_ext_api.duckdb_appender_end_row
-#define duckdb_append_default                       duckdb_ext_api.duckdb_append_default
-#define duckdb_append_bool                          duckdb_ext_api.duckdb_append_bool
-#define duckdb_append_int8                          duckdb_ext_api.duckdb_append_int8
-#define duckdb_append_int16                         duckdb_ext_api.duckdb_append_int16
-#define duckdb_append_int32                         duckdb_ext_api.duckdb_append_int32
-#define duckdb_append_int64                         duckdb_ext_api.duckdb_append_int64
-#define duckdb_append_hugeint                       duckdb_ext_api.duckdb_append_hugeint
-#define duckdb_append_uint8                         duckdb_ext_api.duckdb_append_uint8
-#define duckdb_append_uint16                        duckdb_ext_api.duckdb_append_uint16
-#define duckdb_append_uint32                        duckdb_ext_api.duckdb_append_uint32
-#define duckdb_append_uint64                        duckdb_ext_api.duckdb_append_uint64
-#define duckdb_append_uhugeint                      duckdb_ext_api.duckdb_append_uhugeint
-#define duckdb_append_float                         duckdb_ext_api.duckdb_append_float
-#define duckdb_append_double                        duckdb_ext_api.duckdb_append_double
-#define duckdb_append_date                          duckdb_ext_api.duckdb_append_date
-#define duckdb_append_time                          duckdb_ext_api.duckdb_append_time
-#define duckdb_append_timestamp                     duckdb_ext_api.duckdb_append_timestamp
-#define duckdb_append_interval                      duckdb_ext_api.duckdb_append_interval
-#define duckdb_append_varchar                       duckdb_ext_api.duckdb_append_varchar
-#define duckdb_append_varchar_length                duckdb_ext_api.duckdb_append_varchar_length
-#define duckdb_append_blob                          duckdb_ext_api.duckdb_append_blob
-#define duckdb_append_null                          duckdb_ext_api.duckdb_append_null
 #define duckdb_append_data_chunk                    duckdb_ext_api.duckdb_append_data_chunk
 #define duckdb_table_description_create             duckdb_ext_api.duckdb_table_description_create
 #define duckdb_table_description_create_ext         duckdb_ext_api.duckdb_table_description_create_ext
@@ -929,6 +907,34 @@ typedef struct {
 #define duckdb_get_timestamp_s        duckdb_ext_api.duckdb_get_timestamp_s
 #define duckdb_get_timestamp_ms       duckdb_ext_api.duckdb_get_timestamp_ms
 #define duckdb_get_timestamp_ns       duckdb_ext_api.duckdb_get_timestamp_ns
+
+// Version unstable_potential_deprecation_candidates
+#define duckdb_get_profiling_info       duckdb_ext_api.duckdb_get_profiling_info
+#define duckdb_profiling_info_get_value duckdb_ext_api.duckdb_profiling_info_get_value
+#define duckdb_appender_begin_row       duckdb_ext_api.duckdb_appender_begin_row
+#define duckdb_appender_end_row         duckdb_ext_api.duckdb_appender_end_row
+#define duckdb_append_default           duckdb_ext_api.duckdb_append_default
+#define duckdb_append_bool              duckdb_ext_api.duckdb_append_bool
+#define duckdb_append_int8              duckdb_ext_api.duckdb_append_int8
+#define duckdb_append_int16             duckdb_ext_api.duckdb_append_int16
+#define duckdb_append_int32             duckdb_ext_api.duckdb_append_int32
+#define duckdb_append_int64             duckdb_ext_api.duckdb_append_int64
+#define duckdb_append_hugeint           duckdb_ext_api.duckdb_append_hugeint
+#define duckdb_append_uint8             duckdb_ext_api.duckdb_append_uint8
+#define duckdb_append_uint16            duckdb_ext_api.duckdb_append_uint16
+#define duckdb_append_uint32            duckdb_ext_api.duckdb_append_uint32
+#define duckdb_append_uint64            duckdb_ext_api.duckdb_append_uint64
+#define duckdb_append_uhugeint          duckdb_ext_api.duckdb_append_uhugeint
+#define duckdb_append_float             duckdb_ext_api.duckdb_append_float
+#define duckdb_append_double            duckdb_ext_api.duckdb_append_double
+#define duckdb_append_date              duckdb_ext_api.duckdb_append_date
+#define duckdb_append_time              duckdb_ext_api.duckdb_append_time
+#define duckdb_append_timestamp         duckdb_ext_api.duckdb_append_timestamp
+#define duckdb_append_interval          duckdb_ext_api.duckdb_append_interval
+#define duckdb_append_varchar           duckdb_ext_api.duckdb_append_varchar
+#define duckdb_append_varchar_length    duckdb_ext_api.duckdb_append_varchar_length
+#define duckdb_append_blob              duckdb_ext_api.duckdb_append_blob
+#define duckdb_append_null              duckdb_ext_api.duckdb_append_null
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
