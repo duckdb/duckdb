@@ -1149,7 +1149,7 @@ void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
-	config.options.temporary_directory = input.ToString();
+	config.options.temporary_directory = input.IsNull() ? "" : input.ToString();
 	config.options.use_temporary_directory = !config.options.temporary_directory.empty();
 	if (db) {
 		auto &buffer_manager = BufferManager::GetBufferManager(*db);
