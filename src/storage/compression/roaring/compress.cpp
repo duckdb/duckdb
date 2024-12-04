@@ -23,73 +23,78 @@ ContainerCompressionState::ContainerCompressionState() {
 	Reset();
 }
 
-void ContainerCompressionState::Append(bool null, uint16_t amount) {
-	switch (type) {
-	case ContainerCompressionState::Type::BITSET_CONTAINER: {
-		D_ASSERT(uncompressed);
-		if (null) {
-			ValidityMask mask(uncompressed, ROARING_CONTAINER_SIZE);
-			SetInvalidRange(mask, appended_count, appended_count + amount);
+inline void AppendBitset(ContainerCompressionState &state, bool null, uint16_t amount) {
+	D_ASSERT(state.uncompressed);
+	if (null) {
+		ValidityMask mask(state.uncompressed, ROARING_CONTAINER_SIZE);
+		SetInvalidRange(mask, state.appended_count, state.appended_count + amount);
+	}
+}
+
+inline void AppendRun(ContainerCompressionState &state, bool null, uint16_t amount) {
+	// Adjust the run
+	auto run_idx = state.run_idx;
+	auto appended_count = state.appended_count;
+	if (!null && run_idx < MAX_RUN_IDX && appended_count && (null != state.last_is_null)) {
+		if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+			auto &last_run = state.runs[run_idx];
+			// End the last run
+			last_run.length = (appended_count - last_run.start) - 1;
 		}
-		appended_count += amount;
+		state.compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(appended_count & (COMPRESSED_SEGMENT_SIZE - 1));
+		state.run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+		state.run_idx++;
+	} else if (null && run_idx < MAX_RUN_IDX && (!appended_count || null != state.last_is_null)) {
+		if (run_idx < COMPRESSED_RUN_THRESHOLD) {
+			auto &current_run = state.runs[run_idx];
+			// Initialize a new run
+			current_run.start = appended_count;
+		}
+		state.compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(appended_count & (COMPRESSED_SEGMENT_SIZE - 1));
+		state.run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
+	}
+}
+
+template <bool INVERTED>
+inline void AppendToArray(ContainerCompressionState &state, bool null, uint16_t amount) {
+	if (DUCKDB_LIKELY(INVERTED != null)) {
 		return;
 	}
-	case ContainerCompressionState::Type::RUN_CONTAINER: {
-		// Adjust the run
-		if (!null && run_idx < MAX_RUN_IDX && appended_count && (null != last_is_null)) {
-			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
-				auto &last_run = runs[run_idx];
-				// End the last run
-				last_run.length = (appended_count - last_run.start) - 1;
-			}
-			compressed_runs[(run_idx * 2) + 1] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
-			run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
-			run_idx++;
-		} else if (null && run_idx < MAX_RUN_IDX && (!appended_count || null != last_is_null)) {
-			if (run_idx < COMPRESSED_RUN_THRESHOLD) {
-				auto &current_run = runs[run_idx];
-				// Initialize a new run
-				current_run.start = appended_count;
-			}
-			compressed_runs[(run_idx * 2) + 0] = static_cast<uint8_t>(appended_count % COMPRESSED_SEGMENT_SIZE);
-			run_counts[appended_count >> COMPRESSED_SEGMENT_SHIFT_AMOUNT]++;
-		}
-		break;
+
+	auto current_array_idx = state.array_idx[null];
+	if (current_array_idx + amount > MAX_ARRAY_IDX) {
+		return;
 	}
-	case ContainerCompressionState::Type::ARRAY_CONTAINER:
-	case ContainerCompressionState::Type::INVERTED_ARRAY_CONTAINER: {
-		// Add to the array
-		auto &current_array_idx = array_idx[null];
-		if (current_array_idx + amount <= MAX_ARRAY_IDX) {
-			auto &array_count = array_counts[null];
-			auto &compressed_array = compressed_arrays[null];
-			uint16_t appended = 0;
-			while (appended < amount) {
-				uint16_t remaining = amount - appended;
-				uint16_t segment_offset = (appended_count + appended) % COMPRESSED_SEGMENT_SIZE;
-				uint16_t to_append = MinValue<uint16_t>(remaining, COMPRESSED_SEGMENT_SIZE - segment_offset);
-				for (uint16_t i = 0; i < to_append; i++) {
-					auto index = current_array_idx + appended + i;
-					compressed_array[index] = static_cast<uint8_t>(segment_offset + i);
-				}
-
-				idx_t segment_index = (appended_count + appended) / COMPRESSED_SEGMENT_SIZE;
-				array_count[segment_index] += to_append;
-				appended += to_append;
-			}
-
-			if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
-				auto &array = arrays[null];
-				for (uint16_t i = 0; i < amount; i++) {
-					array[current_array_idx + i] = appended_count + i;
-				}
-			}
-			current_array_idx += amount;
+	auto appended_count = state.appended_count;
+	auto array_count = state.array_counts[null];
+	auto compressed_array = state.compressed_arrays[null];
+	uint16_t appended = 0;
+	while (appended < amount) {
+		uint16_t remaining = amount - appended;
+		uint8_t segment_offset = appended ? 0 : (appended_count + appended) & (COMPRESSED_SEGMENT_SIZE - 1);
+		uint8_t to_append =
+		    static_cast<uint8_t>(MinValue<uint16_t>(remaining, COMPRESSED_SEGMENT_SIZE - segment_offset));
+		for (uint8_t i = 0; i < to_append; i++) {
+			auto index = current_array_idx + appended + i;
+			compressed_array[index] = segment_offset + i;
 		}
-		break;
-	}
-	};
 
+		idx_t segment_index = (appended_count + appended) / COMPRESSED_SEGMENT_SIZE;
+		array_count[segment_index] += to_append;
+		appended += to_append;
+	}
+
+	if (current_array_idx + amount < COMPRESSED_ARRAY_THRESHOLD) {
+		auto &array = state.arrays[null];
+		for (uint16_t i = 0; i < amount; i++) {
+			array[current_array_idx + i] = appended_count + i;
+		}
+	}
+	state.array_idx[null] += amount;
+}
+
+void ContainerCompressionState::Append(bool null, uint16_t amount) {
+	append_function(*this, null, amount);
 	last_is_null = null;
 	null_count += null * amount;
 	appended_count += amount;
@@ -97,9 +102,9 @@ void ContainerCompressionState::Append(bool null, uint16_t amount) {
 
 void ContainerCompressionState::OverrideArray(data_ptr_t destination, bool nulls, idx_t count) {
 	if (nulls) {
-		type = Type::INVERTED_ARRAY_CONTAINER;
+		append_function = AppendToArray<true>;
 	} else {
-		type = Type::ARRAY_CONTAINER;
+		append_function = AppendToArray<false>;
 	}
 
 	if (count >= COMPRESSED_ARRAY_THRESHOLD) {
@@ -113,7 +118,7 @@ void ContainerCompressionState::OverrideArray(data_ptr_t destination, bool nulls
 }
 
 void ContainerCompressionState::OverrideRun(data_ptr_t destination, idx_t count) {
-	type = Type::RUN_CONTAINER;
+	append_function = AppendRun;
 
 	if (count >= COMPRESSED_RUN_THRESHOLD) {
 		memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
@@ -126,7 +131,7 @@ void ContainerCompressionState::OverrideRun(data_ptr_t destination, idx_t count)
 }
 
 void ContainerCompressionState::OverrideUncompressed(data_ptr_t destination) {
-	type = Type::BITSET_CONTAINER;
+	append_function = AppendBitset;
 	uncompressed = reinterpret_cast<validity_t *>(destination);
 }
 

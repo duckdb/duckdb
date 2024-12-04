@@ -264,8 +264,7 @@ public:
 //===--------------------------------------------------------------------===//
 
 struct ContainerCompressionState {
-private:
-	enum class Type : uint8_t { BITSET_CONTAINER, RUN_CONTAINER, ARRAY_CONTAINER, INVERTED_ARRAY_CONTAINER };
+	using append_func_t = void (*)(ContainerCompressionState &, bool, uint16_t);
 
 public:
 	ContainerCompressionState();
@@ -314,7 +313,8 @@ public:
 	validity_t *uncompressed = nullptr;
 	//! Whether the state has been finalized
 	bool finalized = false;
-	Type type;
+	//! The function called to append to the state
+	append_func_t append_function;
 };
 
 struct RoaringCompressState : public CompressionState {
