@@ -151,6 +151,7 @@ public:
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
+	Value GetDefaultValue(idx_t column);
 };
 
 class InternalAppender : public BaseAppender {

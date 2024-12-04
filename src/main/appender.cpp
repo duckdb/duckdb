@@ -471,18 +471,16 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void Appender::AppendDefault() {
-	auto index = column_ids.empty() ? column : column_ids[column].index;
-	auto it = default_values.find(index);
-	if (it == default_values.end()) {
-		auto &name = description->columns[index].Name();
-		throw NotImplementedException(
-		    "AppendDefault is not supported for column \"%s\": not a foldable default expressions.", name);
-	}
-	auto &value = it->second;
+	auto &value = GetDefaultValue(column);
 	Append(value);
 }
 
 void Appender::AppendDefault(DataChunk &chunk, idx_t column) {
+	auto &value = GetDefaultValue(column);
+	Append(chunk, value, column);
+}
+
+Value Appender::GetDefaultValue(idx_t column) {
 	auto index = column_ids.empty() ? column : column_ids[column].index;
 	auto it = default_values.find(index);
 	if (it == default_values.end()) {
@@ -490,8 +488,7 @@ void Appender::AppendDefault(DataChunk &chunk, idx_t column) {
 		throw NotImplementedException(
 		    "AppendDefault is not supported for column \"%s\": not a foldable default expressions.", name);
 	}
-	auto &value = it->second;
-	Append(chunk, value, column);
+	return it->second;
 }
 
 void Appender::AddColumn(const string &name) {
