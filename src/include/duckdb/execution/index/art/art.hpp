@@ -62,11 +62,8 @@ public:
 	bool owns_data;
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
-
 	//! The append mode.
 	ARTAppendMode append_mode;
-	//! The optional corresponding delete index.
-	unique_ptr<BoundIndex> delete_index;
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
@@ -75,15 +72,22 @@ public:
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, unsafe_vector<row_t> &row_ids);
 
-	//! Append a chunk.
-	ErrorData Append(IndexLock &lock, DataChunk &input, Vector &row_ids) override;
-	//! Insert a chunk.
-	ARTConflictType Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status);
-	ErrorData Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+	//! Appends data to the locked index.
+	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
+	//! Appends data to the locked index and verifies constraint violations against a delete index.
+	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) override;
 
-	//! Constraint verification for a chunk.
-	void VerifyAppend(DataChunk &chunk) override;
-	void VerifyAppend(DataChunk &chunk, ConflictManager &manager) override;
+	//! Internally inserts a chunk.
+	ARTConflictType Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,
+	                       optional_ptr<ART> delete_art);
+	//! Insert a chunk.
+	ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
+	//! Insert a chunk and verifies constraint violations against a delete index.
+	ErrorData Insert(IndexLock &l, DataChunk &data, Vector &row_ids, optional_ptr<BoundIndex> delete_index) override;
+
+	//! Verify that data can be appended to the index without a constraint violation.
+	void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_index,
+	                  optional_ptr<ConflictManager> manager) override;
 
 	//! Delete a chunk from the ART.
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
@@ -125,12 +129,14 @@ private:
 
 	void InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
 	                     const GateStatus status);
-	ARTConflictType InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const GateStatus status);
-	ARTConflictType InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id, const GateStatus status);
+	ARTConflictType InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+	                                  const GateStatus status, optional_ptr<ART> delete_art);
+	ARTConflictType InsertIntoNode(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
+	                               const GateStatus status, optional_ptr<ART> delete_art);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &manager) override;
+	void VerifyConstraint(DataChunk &chunk, optional_ptr<BoundIndex> delete_index, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 

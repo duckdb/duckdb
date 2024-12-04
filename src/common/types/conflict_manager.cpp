@@ -212,8 +212,9 @@ idx_t ConflictManager::ConflictCount() const {
 	return conflicts.Count();
 }
 
-void ConflictManager::AddIndex(BoundIndex &index) {
+void ConflictManager::AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index) {
 	matched_indexes.push_back(index);
+	matched_delete_indexes.push_back(delete_index);
 	matched_index_names.insert(index.name);
 }
 
@@ -223,6 +224,10 @@ bool ConflictManager::MatchedIndex(BoundIndex &index) {
 
 const vector<reference<BoundIndex>> &ConflictManager::MatchedIndexes() const {
 	return matched_indexes;
+}
+
+const vector<optional_ptr<BoundIndex>> &ConflictManager::MatchedDeleteIndexes() const {
+	return matched_delete_indexes;
 }
 
 void ConflictManager::Finalize() {

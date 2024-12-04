@@ -428,12 +428,14 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 
 	// Verify and throw.
 	if (GLOBAL) {
-		data_table.VerifyAppendConstraints(constraint_state, context.client, combined_chunk, nullptr, nullptr, nullptr);
+		data_table.VerifyAppendConstraints(constraint_state, context.client, combined_chunk, nullptr, nullptr, nullptr,
+		                                   nullptr);
 		throw InternalException("VerifyAppendConstraints was expected to throw but didn't");
 	}
 
 	auto &indexes = local_storage.GetIndexes(data_table);
-	DataTable::VerifyUniqueIndexes(indexes, tuples, nullptr, nullptr, nullptr);
+	auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
+	DataTable::VerifyUniqueIndexes(indexes, delete_indexes, tuples, nullptr, nullptr, nullptr);
 	throw InternalException("VerifyUniqueIndexes was expected to throw but didn't");
 }
 
@@ -453,13 +455,17 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	if (GLOBAL) {
 		auto &constraint_state = lstate.GetConstraintState(data_table, table);
 		if (local_storage.IsInitialized(data_table)) {
-			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, nullptr, &conflict_manager);
+			auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
+			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, delete_indexes,
+			                                   nullptr, &conflict_manager);
 		} else {
-			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, nullptr, &conflict_manager);
+			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, nullptr, nullptr,
+			                                   &conflict_manager);
 		}
 	} else {
 		auto &indexes = local_storage.GetIndexes(data_table);
-		DataTable::VerifyUniqueIndexes(indexes, tuples, nullptr, nullptr, &conflict_manager);
+		auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
+		DataTable::VerifyUniqueIndexes(indexes, delete_indexes, tuples, nullptr, nullptr, &conflict_manager);
 	}
 
 	conflict_manager.Finalize();
@@ -525,10 +531,12 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
                                          InsertLocalState &lstate) const {
 	auto &data_table = table.GetStorage();
 	auto &local_storage = LocalStorage::Get(context.client, data_table.db);
+	auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
 
 	if (action_type == OnConflictAction::THROW) {
 		auto &constraint_state = lstate.GetConstraintState(data_table, table);
-		data_table.VerifyAppendConstraints(constraint_state, context.client, lstate.insert_chunk, nullptr, nullptr, nullptr);
+		data_table.VerifyAppendConstraints(constraint_state, context.client, lstate.insert_chunk, nullptr,
+		                                   delete_indexes, nullptr, nullptr);
 		return 0;
 	}
 

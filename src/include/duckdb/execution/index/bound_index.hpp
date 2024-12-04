@@ -68,16 +68,19 @@ public:
 	//! Obtains a lock on the index.
 	void InitializeLock(IndexLock &state);
 	//! Appends data to the locked index.
-	virtual ErrorData Append(IndexLock &state, DataChunk &chunk, Vector &row_ids) = 0;
+	virtual ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) = 0;
 	//! Obtains a lock and calls Append while holding that lock.
 	ErrorData Append(DataChunk &chunk, Vector &row_ids);
+	//! Appends data to the locked index and verifies constraint violations against a delete index.
+	virtual ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index);
+	//! Obtains a lock and calls Append with an delete_index while holding that lock.
+	ErrorData Append(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index);
 
 	//! Verify that data can be appended to the index without a constraint violation.
-	virtual void VerifyAppend(DataChunk &chunk) = 0;
-	//! Verify that data can be appended to the index without a constraint violation using the conflict manager.
-	virtual void VerifyAppend(DataChunk &chunk, ConflictManager &manager) = 0;
-	//! Performs constraint checking for a chunk of data.
-	virtual void CheckConstraintsForChunk(DataChunk &chunk, ConflictManager &manager) = 0;
+	virtual void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_index,
+	                          optional_ptr<ConflictManager> manager);
+	//! Verifies the constraint for a chunk of data.
+	virtual void VerifyConstraint(DataChunk &chunk, optional_ptr<BoundIndex> delete_index, ConflictManager &manager);
 
 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
 	virtual void CommitDrop(IndexLock &index_lock) = 0;
@@ -89,7 +92,9 @@ public:
 	void Delete(DataChunk &entries, Vector &row_identifiers);
 
 	//! Insert a chunk.
-	virtual ErrorData Insert(IndexLock &lock, DataChunk &chunk, Vector &row_ids) = 0;
+	virtual ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) = 0;
+	//! Insert a chunk and verifies constraint violations against a delete index.
+	virtual ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index);
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge

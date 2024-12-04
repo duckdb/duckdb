@@ -30,6 +30,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 			return false;
 		}
 
+		// UNIQUE constraint.
 		vector<unique_ptr<Expression>> expressions;
 		vector<unique_ptr<Expression>> delete_expressions;
 		for (auto &expr : art.unbound_expressions) {
@@ -37,16 +38,14 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 			delete_expressions.push_back(expr->Copy());
 		}
 
-		// UNIQUE constraint.
-		// Create a delete index, and a local index pointing to that delete index.
-		auto &name = art.GetIndexName();
-		auto delete_index = make_uniq<ART>(name, constraint_type, art.GetColumnIds(),
+		// Create a delete index and a local index.
+		auto delete_index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(),
 		                                   art.table_io_manager, std::move(delete_expressions), art.db);
 		delete_index->append_mode = ARTAppendMode::IGNORE_DUPLICATES;
+		delete_indexes.AddIndex(std::move(delete_index));
 
-		auto index = make_uniq<ART>(name, constraint_type, art.GetColumnIds(), art.table_io_manager,
+		auto index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(), art.table_io_manager,
 		                            std::move(expressions), art.db);
-		index->delete_index = std::move(delete_index);
 		indexes.AddIndex(std::move(index));
 		return false;
 	});
@@ -174,8 +173,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// appending: need to scan entire
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			// TODO: probably need to pass the local indexes here?
-			error = table.AppendToIndexes(indexes, chunk, append_state.current_row);
+			error = table.AppendToIndexes(delete_indexes, chunk, append_state.current_row);
 			if (error.HasError()) {
 				return false;
 			}
@@ -380,7 +378,8 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->row_groups->GetTotalRows();
 	idx_t base_id = offset + state.append_state.total_append_count;
 
-	auto error = DataTable::AppendToIndexes(storage->indexes, nullptr, chunk, NumericCast<row_t>(base_id));
+	auto error =
+	    DataTable::AppendToIndexes(storage->indexes, storage->delete_indexes, chunk, NumericCast<row_t>(base_id));
 	if (error.HasError()) {
 		error.Throw();
 	}
@@ -606,6 +605,14 @@ TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
 		throw InternalException("LocalStorage::GetIndexes - local storage not found");
 	}
 	return storage->indexes;
+}
+
+TableIndexList &LocalStorage::GetDeleteIndexes(DataTable &table) {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		throw InternalException("LocalStorage::GetDeleteIndexes - local storage not found");
+	}
+	return storage->delete_indexes;
 }
 
 bool LocalStorage::IsInitialized(DataTable &table) {

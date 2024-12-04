@@ -162,8 +162,8 @@ public:
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
 	//! Returns empty ErrorData, if the append was successful.
-	ErrorData AppendToIndexes(optional_ptr<TableIndexList> local_indexes, DataChunk &chunk, row_t row_start);
-	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> local_indexes,
+	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start);
+	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
 	                                 DataChunk &chunk, row_t row_start);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
@@ -211,7 +211,8 @@ public:
 	                                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(ConstraintState &constraint_state, ClientContext &context, DataChunk &chunk,
-	                             optional_ptr<Vector> row_ids, optional_ptr<DataChunk> delete_chunk, optional_ptr<ConflictManager> manager);
+	                             optional_ptr<Vector> row_ids, optional_ptr<TableIndexList> delete_indexes,
+	                             optional_ptr<DataChunk> delete_chunk, optional_ptr<ConflictManager> manager);
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
 
@@ -230,7 +231,8 @@ public:
 
 	idx_t GetRowGroupSize() const;
 
-	static void VerifyUniqueIndexes(TableIndexList &indexes, DataChunk &chunk, optional_ptr<Vector> row_ids,
+	static void VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
+	                                DataChunk &chunk, optional_ptr<Vector> row_ids,
 	                                optional_ptr<DataChunk> delete_chunk, optional_ptr<ConflictManager> manager);
 
 	//! AddIndex initializes an index and adds it to the table's index list.
