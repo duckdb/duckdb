@@ -77,7 +77,7 @@ public:
 			memcpy(aligned_data, src.ptr, next_read);
 
 			// Unpack
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(dst), data_ptr_cast(aligned_data), width);
+			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(dst), data_ptr_cast(aligned_data), width, true);
 
 			src.unsafe_inc(next_read);
 			dst += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
