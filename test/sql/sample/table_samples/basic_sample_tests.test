@@ -4,8 +4,6 @@
 statement ok
 PRAGMA enable_verification
 
-require noforcestorage
-
 load __TEST_DIR__/test_samples_basic.db
 
 query I
@@ -59,7 +57,7 @@ create or replace table integers_1 as (select range b from materialized_range);
 query I
 select * from duckdb_table_sample('integers_1');
 ----
-5
+33
 
 # sample exists after restart
 restart
@@ -67,5 +65,5 @@ restart
 query I
 select * from duckdb_table_sample('integers_1');
 ----
-5
+33
 

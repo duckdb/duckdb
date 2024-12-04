@@ -231,7 +231,7 @@ unique_ptr<BlockingSample> ReservoirSample::Copy(bool shuffle) const {
 	auto new_sample_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 
 	SelectionVector sel_copy(sel);
-	if (shuffle) {
+	if (shuffle && values_to_copy < sample_count) {
 		auto randomized = GetRandomizedVector(sel_size, values_to_copy);
 		for (idx_t i = 0; i < values_to_copy; i++) {
 			sel_copy.set_index(i, sel.get_index(randomized[i]));
