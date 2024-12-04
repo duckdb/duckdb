@@ -519,8 +519,8 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
+		                                                                info.GetBlockSize(), info.GetBlockSize());
 		segment = std::move(compressed_segment);
 		segment->function = function;
 
