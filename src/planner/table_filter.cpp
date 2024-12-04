@@ -67,10 +67,6 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	}
 	for (auto &entry : filters) {
 		for (auto &filter : entry.second->filters) {
-			if (scan.column_ids[filter.first].IsRowIdColumn()) {
-				// skip row id filters
-				continue;
-			}
 			result->PushFilter(ColumnIndex(filter.first), filter.second->Copy());
 		}
 	}
