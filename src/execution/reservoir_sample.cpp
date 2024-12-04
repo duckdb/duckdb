@@ -1,5 +1,6 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -602,7 +603,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &chunk) {
 		}
 		UpdateSampleAppend(reservoir_chunk->chunk, chunk, sel_for_input_chunk, ingested_count);
 		sel_size += ingested_count;
-		ShuffleSel();
+		// ShuffleSel();
 	}
 	D_ASSERT(GetActiveSampleCount() <= sample_count);
 	D_ASSERT(GetActiveSampleCount() >= ingested_count);
@@ -628,6 +629,7 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 	auto weight_tuples_other = static_cast<double>(chunk_length) / static_cast<double>(GetTuplesSeen() + chunk_length);
 	auto num_to_pop = static_cast<uint32_t>(round(weight_tuples_other * sample_count));
 	D_ASSERT(num_to_pop <= sample_count);
+	D_ASSERT(num_to_pop <= sel_size);
 	SelectionVectorHelper ret;
 
 	if (num_to_pop == 0) {
@@ -638,13 +640,13 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 	std::unordered_map<idx_t, idx_t> replacement_indexes;
 	SelectionVector chunk_sel(num_to_pop);
 
-	auto random_indexes_chunk =
-	    GetRandomizedVector(static_cast<uint32_t>(chunk_length), static_cast<uint32_t>(chunk_length));
+	auto random_indexes_chunk =GetRandomizedVector(static_cast<uint32_t>(chunk_length), num_to_pop);
 	auto random_sel_indexes = GetRandomizedVector(static_cast<uint32_t>(sel_size), num_to_pop);
 	for (idx_t i = 0; i < num_to_pop; i++) {
 		// update the selection vector for the reservoir sample
 		chunk_sel.set_index(i, random_indexes_chunk[i]);
-		// sel is already random, so we update the indexes incrementally
+		// sel is not guaratneed to be random, so we update the indexes according to our
+		// random sel indexes.
 		sel.set_index(random_sel_indexes[i], sample_chunk_offset + i);
 	}
 
