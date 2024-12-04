@@ -515,7 +515,7 @@ unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
 	}
 
 	// if we over sampled, make sure we only keep the highest percentage samples
-	unordered_set<idx_t> selections_to_delete;
+	std::unordered_set<idx_t> selections_to_delete;
 	while (num_samples_to_keep < ret->GetPriorityQueueSize()) {
 		auto top = ret->PopFromWeightQueue();
 		D_ASSERT(top.second < sel_size);
@@ -635,7 +635,7 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 		ret.size = 0;
 		return ret;
 	}
-	unordered_map<idx_t, idx_t> replacement_indexes;
+	std::unordered_map<idx_t, idx_t> replacement_indexes;
 	SelectionVector chunk_sel(num_to_pop);
 
 	auto random_indexes_chunk =
@@ -658,7 +658,7 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 SelectionVectorHelper ReservoirSample::GetReplacementIndexesSlow(const idx_t sample_chunk_offset,
                                                                  const idx_t chunk_length) {
 	idx_t remaining = chunk_length;
-	unordered_map<idx_t, idx_t> ret_map;
+	std::unordered_map<idx_t, idx_t> ret_map;
 	idx_t sample_chunk_index = 0;
 
 	idx_t base_offset = 0;
@@ -812,7 +812,7 @@ void ReservoirSample::Verify() {
 		D_ASSERT(NumSamplesCollected() >= GetPriorityQueueSize());
 	}
 	auto base_reservoir_copy = base_reservoir_sample->Copy();
-	unordered_map<idx_t, idx_t> index_count;
+	std::unordered_map<idx_t, idx_t> index_count;
 	while (!base_reservoir_copy->reservoir_weights.empty()) {
 		auto &pair = base_reservoir_copy->reservoir_weights.top();
 		if (index_count.find(pair.second) == index_count.end()) {

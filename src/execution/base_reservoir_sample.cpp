@@ -16,7 +16,7 @@ double BaseReservoirSampling::GetMinWeightFromTuplesSeen(idx_t rows_seen_total) 
 	case 3:
 		return 0.693454;
 	default: {
-		return (0.99 - 0.355 * std::exp(-0.07 * rows_seen_total));
+		return (0.99 - 0.355 * std::exp(-0.07 * static_cast<double>(rows_seen_total)));
 	}
 	}
 }
