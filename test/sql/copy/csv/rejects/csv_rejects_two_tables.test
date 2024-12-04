@@ -19,16 +19,16 @@ BIGINT	VARCHAR	11044	11044	2
 query IIIIIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_scans order by all;
 ----
-0	data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	sample_size=1, store_rejects=true
-1	data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	sample_size=1, store_rejects=true
+0	data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	sample_size=1, store_rejects=true
+1	data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	sample_size=1, store_rejects=true
 
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
 ----
-0	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-0	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-1	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-1	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 # Test giving the name of errors table
 statement error
@@ -54,16 +54,16 @@ BIGINT	VARCHAR	11044	11044	2
 query IIIIIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_scans order by all;
 ----
-0	data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_2', sample_size=1
-1	data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_2', sample_size=1
+0	data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_2', sample_size=1
+1	data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_table='rejects_errors_2', sample_size=1
 
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM rejects_errors_2 order by all;
 ----
-0	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-0	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-1	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-1	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 statement ok
 drop table reject_errors;
@@ -80,16 +80,16 @@ BIGINT	VARCHAR	11044	11044	2
 query IIIIIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM rejects_scan_2 order by all;
 ----
-0	data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_2', sample_size=1
-1	data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_2', sample_size=1
+0	data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_2', sample_size=1
+1	data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_2', sample_size=1
 
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
 ----
-0	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-0	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-1	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-1	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 # Test giving the name of both tables
 query IIIII
@@ -106,16 +106,16 @@ query IIIIIIIIIIII
 SELECT * EXCLUDE (scan_id)
 FROM rejects_scan_3 order by all;
 ----
-0	data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_3', rejects_table='rejects_errors_3', sample_size=1
-1	data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_3', rejects_table='rejects_errors_3', sample_size=1
+0	data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_3', rejects_table='rejects_errors_3', sample_size=1
+1	data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL	rejects_scan='rejects_scan_3', rejects_table='rejects_errors_3', sample_size=1
 
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM rejects_errors_3 order by all;
 ----
-0	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-0	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-1	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-1	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 statement ok
 drop table reject_errors;

@@ -18,10 +18,10 @@ BIGINT	VARCHAR	11044	11044	2
 query IIIIIIIII rowsort
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
 ----
-0	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-0	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
-1	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
-1	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+0	2176	10876	10876	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+0	4176	20876	20876	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
+1	3680	18396	18396	1	column0	CAST	B, A	Error when converting column "column0". Could not convert string "B" to 'BIGINT'
+1	5680	28396	28396	1	column0	CAST	C, A	Error when converting column "column0". Could not convert string "C" to 'BIGINT'
 
 statement ok
 DROP TABLE reject_errors;
