@@ -923,10 +923,10 @@ typedef struct {
 #define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
 #define duckdb_appender_add_column               duckdb_ext_api.duckdb_appender_add_column
 #define duckdb_appender_clear_columns            duckdb_ext_api.duckdb_appender_clear_columns
+#define duckdb_append_default_to_chunk           duckdb_ext_api.duckdb_append_default_to_chunk
 #define duckdb_append_value                      duckdb_ext_api.duckdb_append_value
 #define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
 #define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name
-#define duckdb_append_default_to_chunk           duckdb_ext_api.duckdb_append_default_to_chunk
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros

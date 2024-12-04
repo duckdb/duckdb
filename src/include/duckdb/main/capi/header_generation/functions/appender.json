@@ -279,7 +279,7 @@
                 },
                 {
                     "type": "idx_t",
-                    "name": "col"
+                    "name": "column"
                 }
             ],
           "comment": {
@@ -288,7 +288,7 @@
               "appender": "The appender to get the default value from.",
               "chunk": "The data chunk to append to.",
               "row": "The chunk row index to append the default value to to.",
-              "col": "The chunk column index to append the default value to to."
+              "column": "The chunk column index to append the default value to to."
             },
             "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
           }
