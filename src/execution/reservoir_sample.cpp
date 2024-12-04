@@ -1,5 +1,6 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -515,7 +516,7 @@ unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
 	}
 
 	// if we over sampled, make sure we only keep the highest percentage samples
-	unordered_set<idx_t> selections_to_delete;
+	std::unordered_set<idx_t> selections_to_delete;
 	while (num_samples_to_keep < ret->GetPriorityQueueSize()) {
 		auto top = ret->PopFromWeightQueue();
 		D_ASSERT(top.second < sel_size);
