@@ -22,19 +22,19 @@ struct CSVColumnInfo {
 
 //! Basic CSV Schema
 struct CSVSchema {
-	CSVSchema() {
+	explicit CSVSchema(const bool empty = false) : empty(empty) {
 	}
 
 	CSVSchema(vector<string> &names, vector<LogicalType> &types, const string &file_path, idx_t rows_read);
 
 	//! Initializes the schema based on names and types
-	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
+	void Initialize(const vector<string> &names, const vector<LogicalType> &types, const string &file_path);
 
 	//! If the schema is empty
 	bool Empty() const;
 
 	//! If the columns of the schema match
-	bool MatchColumns(CSVSchema &other) const;
+	bool MatchColumns(const CSVSchema &other) const;
 
 	//! We merge two schemas by ensuring that the column types are compatible between both
 	void MergeSchemas(CSVSchema &other);
@@ -65,5 +65,6 @@ private:
 	unordered_map<string, idx_t> name_idx_map;
 	string file_path;
 	idx_t rows_read = 0;
+	bool empty = false;
 };
 } // namespace duckdb

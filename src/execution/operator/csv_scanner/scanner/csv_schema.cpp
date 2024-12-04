@@ -72,7 +72,7 @@ CSVSchema::CSVSchema(vector<string> &names, vector<LogicalType> &types, const st
 	Initialize(names, types, file_path);
 }
 
-void CSVSchema::Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path_p) {
+void CSVSchema::Initialize(const vector<string> &names, const vector<LogicalType> &types, const string &file_path_p) {
 	if (!columns.empty()) {
 		throw InternalException("CSV Schema is already populated, this should not happen.");
 	}
@@ -80,7 +80,9 @@ void CSVSchema::Initialize(vector<string> &names, vector<LogicalType> &types, co
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	for (idx_t i = 0; i < names.size(); i++) {
 		// Populate our little schema
-		columns.push_back({names[i], types[i]});
+		auto name = names.at(i);
+		auto type = types.at(i);
+		columns.push_back({name, type});
 		name_idx_map[names[i]] = i;
 	}
 }
@@ -105,8 +107,8 @@ bool CSVSchema::Empty() const {
 	return columns.empty();
 }
 
-bool CSVSchema::MatchColumns(CSVSchema &other) const {
-	return other.columns.size() == columns.size();
+bool CSVSchema::MatchColumns(const CSVSchema &other) const {
+	return other.columns.size() == columns.size() || empty || other.empty;
 }
 
 string CSVSchema::GetPath() const {

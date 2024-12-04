@@ -64,13 +64,16 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	// result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
 	// options.file_path = multi_file_list.GetFirstFile();
 	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false);
-
 	{
 		CSVSniffer sniffer(options, result.buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		idx_t rows_read = sniffer.LinesSniffed() -
 		                  (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
-		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read);
+		if (result.buffer_manager->GetBuffer(0)->actual_size == 0) {
+			schemas.emplace_back(true);
+		} else {
+			schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read);
+		}
 		total_number_of_rows += sniffer.LinesSniffed();
 	}
 
@@ -87,7 +90,11 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		auto sniffer_result = sniffer.SniffCSV();
 		idx_t rows_read = sniffer.LinesSniffed() - (option_copy.dialect_options.skip_rows.GetValue() +
 		                                            option_copy.dialect_options.header.GetValue());
-		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read);
+		if (buffer_manager->GetBuffer(0)->actual_size == 0) {
+			schemas.emplace_back(true);
+		} else {
+			schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, option_copy.file_path, rows_read);
+		}
 		total_number_of_rows += sniffer.LinesSniffed();
 	}
 

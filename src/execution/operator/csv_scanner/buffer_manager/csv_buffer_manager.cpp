@@ -160,4 +160,8 @@ bool CSVBufferManager::IsBlockUnloaded(idx_t block_idx) {
 	return false;
 }
 
+idx_t CSVBufferManager::GetBytesRead() const {
+	return bytes_read;
+}
+
 } // namespace duckdb

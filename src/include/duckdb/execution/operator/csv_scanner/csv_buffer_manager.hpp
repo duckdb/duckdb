@@ -49,6 +49,8 @@ public:
 
 	bool IsBlockUnloaded(idx_t block_idx);
 
+	idx_t GetBytesRead() const;
+
 	ClientContext &context;
 	idx_t skip_rows = 0;
 	bool sniffing = false;
