@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "json_common.hpp"
 
@@ -64,9 +66,10 @@ struct TryParseTimeStamp {
 
 struct JSONTransform {
 	static bool Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
-	                      JSONTransformOptions &options);
+	                      JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index);
 	static bool TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count, const vector<string> &names,
-	                            const vector<Vector *> &result_vectors, JSONTransformOptions &options);
+	                            const vector<Vector *> &result_vectors, JSONTransformOptions &options,
+	                            optional_ptr<const vector<ColumnIndex>> column_indices, bool error_unknown_key);
 	static bool GetStringVector(yyjson_val *vals[], const idx_t count, const LogicalType &target, Vector &string_vector,
 	                            JSONTransformOptions &options);
 };
