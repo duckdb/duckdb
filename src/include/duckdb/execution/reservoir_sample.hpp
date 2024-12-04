@@ -186,6 +186,8 @@ public:
 	//! Merge two Ingestion Samples. Other must be an ingestion sample
 	void Merge(unique_ptr<BlockingSample> other);
 
+	void ShuffleSel(SelectionVector &sel, idx_t range, idx_t size) const;
+
 	//! Update the sample by pushing new sample rows to the end of the sample_chunk.
 	//! The new sample rows are the tuples rows resulting from applying sel to other
 	void UpdateSampleAppend(DataChunk &this_, DataChunk &other, SelectionVector &other_sel, idx_t append_count) const;
@@ -241,7 +243,6 @@ private:
 	// Get a vector where each index is a random int in the range 0, size.
 	// This is used to shuffle selection vector indexes
 	vector<uint32_t> GetRandomizedVector(uint32_t range, uint32_t size) const;
-	void ShuffleSel();
 
 	idx_t sample_count;
 	Allocator &allocator;

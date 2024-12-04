@@ -185,34 +185,21 @@ void ReservoirSample::Shrink() {
 		return;
 	}
 
-	auto types = Chunk().GetTypes();
-	auto new_sample_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
-	idx_t num_samples_to_keep = GetActiveSampleCount();
+	auto ret = Copy();
+	auto ret_reservoir = duckdb::unique_ptr_cast<BlockingSample, ReservoirSample>(std::move(ret));
+	reservoir_chunk = std::move(ret_reservoir->reservoir_chunk);
+	sel = std::move(ret_reservoir->sel);
+	sel_size = ret_reservoir->sel_size;
 
-	if (GetSamplingState() != SamplingState::RANDOM) {
-		base_reservoir_sample->min_weighted_entry_index = base_reservoir_sample->reservoir_weights.top().second;
-	}
-
-	// perform the copy
-	UpdateSampleAppend(new_sample_chunk->chunk, reservoir_chunk->chunk, sel, num_samples_to_keep);
-	// swap the two chunks
-	std::swap(reservoir_chunk, new_sample_chunk);
-	D_ASSERT(sel_size == num_samples_to_keep);
-	D_ASSERT(Chunk().size() == num_samples_to_keep);
-	sel = SelectionVector(num_samples_to_keep);
-	for (idx_t i = 0; i < sel_size; i++) {
-		sel.set_index(i, i);
-	}
 	Verify();
 	// We should only have one sample chunk now.
-	D_ASSERT(Chunk().size() > 0 && Chunk().size() <= num_samples_to_keep);
+	D_ASSERT(Chunk().size() > 0 && Chunk().size() <= sample_count);
 }
 
 unique_ptr<BlockingSample> ReservoirSample::Copy(bool shuffle) const {
 
-	// only internal samples can be copied.
-	D_ASSERT(internal_sample);
 	auto ret = make_uniq<ReservoirSample>(sample_count);
+	ret->internal_sample = internal_sample;
 
 	ret->base_reservoir_sample = base_reservoir_sample->Copy();
 	ret->destroyed = destroyed;
@@ -231,15 +218,17 @@ unique_ptr<BlockingSample> ReservoirSample::Copy(bool shuffle) const {
 	auto new_sample_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity());
 
 	SelectionVector sel_copy(sel);
-	if (shuffle && values_to_copy < sample_count) {
-		auto randomized = GetRandomizedVector(sel_size, values_to_copy);
-		for (idx_t i = 0; i < values_to_copy; i++) {
-			sel_copy.set_index(i, sel.get_index(randomized[i]));
-		}
+	if (shuffle) {
+		ShuffleSel(sel_copy, sel_size, values_to_copy);
 	}
+
 	ret->reservoir_chunk = std::move(new_sample_chunk);
 	ret->UpdateSampleAppend(ret->reservoir_chunk->chunk, reservoir_chunk->chunk, sel_copy, values_to_copy);
-	ret->sel = SelectionVector(0, values_to_copy);
+	ret->sel = SelectionVector(values_to_copy);
+	for (idx_t i = 0; i < values_to_copy; i++) {
+		ret->sel.set_index(i, i);
+	}
+	// ret->sel = SelectionVector(0, values_to_copy);
 	ret->sel_size = sel_size;
 	D_ASSERT(ret->reservoir_chunk->chunk.size() <= sample_count);
 	ret->Verify();
@@ -266,9 +255,9 @@ vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t range, uint32_t s
 		}
 		return ret;
 	}
-	uint32_t upper_bound = size - 1;
+	uint32_t upper_bound = MinValue(range - 1, size);
 	for (uint32_t i = 0; i < upper_bound; i++) {
-		uint32_t random_shuffle = base_reservoir_sample->random.NextRandomInteger(i + 1, upper_bound);
+		uint32_t random_shuffle = base_reservoir_sample->random.NextRandomInteger(i + 1, range);
 		uint32_t tmp = ret[random_shuffle];
 		// basically replacing the tuple that was at index actual_sample_indexes[random_shuffle]
 		ret[random_shuffle] = ret[i];
@@ -477,6 +466,17 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 	WeightedMerge(other_ingest);
 }
 
+void ReservoirSample::ShuffleSel(SelectionVector &sel, idx_t range, idx_t size) const {
+	auto randomized = GetRandomizedVector(static_cast<uint32_t>(range), static_cast<uint32_t>(size));
+	SelectionVector original_sel(range);
+	for (idx_t i = 0; i < range; i++) {
+		original_sel.set_index(i, sel.get_index(i));
+	}
+	for (idx_t i = 0; i < size; i++) {
+		sel.set_index(i, original_sel.get_index(randomized[i]));
+	}
+}
+
 void ReservoirSample::NormalizeWeights() {
 	vector<std::pair<double, idx_t>> tmp_weights;
 	while (!base_reservoir_sample->reservoir_weights.empty()) {
@@ -493,7 +493,6 @@ void ReservoirSample::NormalizeWeights() {
 }
 
 unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
-	Shrink();
 	Verify();
 	if (!reservoir_chunk || destroyed) {
 		auto ret = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
@@ -506,14 +505,26 @@ unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
 	idx_t num_samples_to_keep =
 	    MinValue<idx_t>(FIXED_SAMPLE_SIZE, static_cast<idx_t>(SAVE_PERCENTAGE * static_cast<double>(GetTuplesSeen())));
 
-	auto ret = make_uniq<ReservoirSample>(sample_count);
-	ret->base_reservoir_sample = base_reservoir_sample->Copy();
+	// samples are collected in order to avoid too many random calls during ingestion
+	// if we are still "random" sampling, then we can shuffle
+	// if we are reservoir sampling, then we cannot shuffle our selection vector
+	// as every sampled value is attached to a weight that is in the reservoir weights
+	// if we shuffle, we loose that relationship
+	auto shuffle = GetSamplingState() == SamplingState::RANDOM;
+	auto ret = unique_ptr_cast<BlockingSample, ReservoirSample>(Copy());
+	if (shuffle) {
+		ShuffleSel(ret->sel, sel_size, num_samples_to_keep);
+	}
+
 	if (num_samples_to_keep <= 0) {
+		ret->reservoir_chunk->chunk.SetCapacity(0);
+		ret->reservoir_chunk->chunk.SetCardinality(0);
 		return unique_ptr_cast<ReservoirSample, BlockingSample>(std::move(ret));
 	}
 
 	// if we over sampled, make sure we only keep the highest percentage samples
-	std::unordered_set<duckdb::idx_t> selections_to_delete;
+	std::unordered_set<idx_t> selections_to_delete;
+
 	while (num_samples_to_keep < ret->GetPriorityQueueSize()) {
 		auto top = ret->PopFromWeightQueue();
 		D_ASSERT(top.second < sel_size);
@@ -534,7 +545,7 @@ unique_ptr<BlockingSample> ReservoirSample::PrepareForSerialization() {
 	for (idx_t i = 0; i < num_samples_to_keep + selections_to_delete.size(); i++) {
 		if (selections_to_delete.find(i) == selections_to_delete.end()) {
 			D_ASSERT(i - offset < num_samples_to_keep);
-			new_sel.set_index(i - offset, sel.get_index(i));
+			new_sel.set_index(i - offset, ret->sel.get_index(i));
 		} else {
 			offset += 1;
 		}
@@ -701,7 +712,6 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesSlow(const idx_t sam
 }
 
 void ReservoirSample::Finalize() {
-	return;
 }
 
 bool ReservoirSample::ValidSampleType(const LogicalType &type) {
