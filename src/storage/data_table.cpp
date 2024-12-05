@@ -692,7 +692,9 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 	// Update all delete indexes.
 	if (delete_indexes) {
 		delete_indexes->Scan([&](Index &delete_index) {
-			D_ASSERT(delete_index.IsUnique());
+			if (!delete_index.IsUnique()) {
+				return false;
+			}
 			D_ASSERT(delete_index.IsBound());
 			auto &bound_delete_index = delete_index.Cast<BoundIndex>();
 			UpdateDeleteIndex(bound_delete_index, chunk, row_ids, delete_chunk);
