@@ -8,13 +8,12 @@
 
 #pragma once
 
-#include <utility>
-
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/table/arrow/arrow_type_info.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 
 namespace duckdb {
 
@@ -44,6 +43,14 @@ public:
 		return type_info->Cast<T>();
 	}
 	void ThrowIfInvalid() const;
+
+	static unique_ptr<ArrowType> GetTypeFromFormat(const string &format);
+
+	static unique_ptr<ArrowType> GetTypeFromSchema(ArrowSchema &schema);
+
+	static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSizeType size_type, bool view);
+
+	static unique_ptr<ArrowType> GetTypeFromFormatNested(ArrowSchema &schema, string &format);
 
 private:
 	LogicalType type;

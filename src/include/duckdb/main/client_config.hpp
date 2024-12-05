@@ -120,7 +120,7 @@ struct ClientConfig {
 	//! The maximum amount of OR filters we generate dynamically from a hash join
 	idx_t dynamic_or_filter_threshold = 50;
 
-	//! Whether or not the "/" division operator defaults to integer division or floating point division
+	//! Whether the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
 	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
 	bool scalar_subquery_error_on_multiple_rows = true;

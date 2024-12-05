@@ -210,8 +210,8 @@ public:
 
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-	static void PopulateArrowTableType(ArrowTableType &arrow_table, const ArrowSchemaWrapper &schema_p, vector<string> &names,
-	                                   vector<LogicalType> &return_types);
+	static void PopulateArrowTableType(ArrowTableType &arrow_table, const ArrowSchemaWrapper &schema_p,
+	                                   vector<string> &names, vector<LogicalType> &return_types);
 
 protected:
 	//! Defines Maximum Number of Threads
