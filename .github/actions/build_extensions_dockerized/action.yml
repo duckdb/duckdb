@@ -181,11 +181,11 @@ runs:
           cd  ${{ inputs.build_dir}}
           if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
-              ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
+              duckdb/scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
             elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
-              ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
+              duckdb/scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
             elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
-              ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
+              duckdb/scripts/extension-upload-all.sh ${{ inputs.deploy_as }} "${GITHUB_SHA:0:10}"
             fi
           fi
 

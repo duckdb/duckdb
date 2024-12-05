@@ -239,9 +239,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				if (!index.IsValid()) {
 					throw InternalException("Could not find column index for table filter");
 				}
-				auto &column_type = get.returned_types[filter.first];
+
+				auto column_type =
+				    filter.first == COLUMN_IDENTIFIER_ROW_ID ? LogicalType::ROW_TYPE : get.returned_types[filter.first];
+
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
-				auto column_ref = make_uniq<BoundColumnRefExpression>(column_type, filter_binding);
+				auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 				auto filter_expr = filter.second->ToExpression(*column_ref);
 				VisitExpression(&filter_expr);
 				filter_expressions.push_back(std::move(filter_expr));
