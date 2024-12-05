@@ -46,7 +46,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 
 		auto index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(), art.table_io_manager,
 		                            std::move(expressions), art.db);
-		indexes.AddIndex(std::move(index));
+		append_indexes.AddIndex(std::move(index));
 		return false;
 	});
 }
@@ -59,7 +59,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
       merged_storage(parent.merged_storage) {
 	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 	parent.row_groups.reset();
-	indexes.Move(parent.indexes);
+	append_indexes.Move(parent.append_indexes);
 }
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
@@ -68,7 +68,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
       merged_storage(parent.merged_storage) {
 	row_groups = parent.row_groups->RemoveColumn(drop_idx);
 	parent.row_groups.reset();
-	indexes.Move(parent.indexes);
+	append_indexes.Move(parent.append_indexes);
 }
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
@@ -78,7 +78,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
       merged_storage(parent.merged_storage) {
 	row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
 	parent.row_groups.reset();
-	indexes.Move(parent.indexes);
+	append_indexes.Move(parent.append_indexes);
 }
 
 LocalTableStorage::~LocalTableStorage() {
@@ -104,7 +104,7 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	// get the index size
 	idx_t index_sizes = 0;
-	indexes.Scan([&](Index &index) {
+	append_indexes.Scan([&](Index &index) {
 		D_ASSERT(index.IsBound());
 		index_sizes += index.Cast<BoundIndex>().GetInMemorySize();
 		return false;
@@ -378,8 +378,8 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->row_groups->GetTotalRows();
 	idx_t base_id = offset + state.append_state.total_append_count;
 
-	auto error =
-	    DataTable::AppendToIndexes(storage->indexes, storage->delete_indexes, chunk, NumericCast<row_t>(base_id));
+	auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, chunk,
+	                                        NumericCast<row_t>(base_id));
 	if (error.HasError()) {
 		error.Throw();
 	}
@@ -399,10 +399,11 @@ void LocalStorage::FinalizeAppend(LocalAppendState &state) {
 
 void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) {
 	auto &storage = table_manager.GetOrCreateStorage(context, table);
-	if (!storage.indexes.Empty()) {
+	if (!storage.append_indexes.Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.row_groups->GetTotalRows());
-		auto error = storage.AppendToIndexes(transaction, collection, storage.indexes, table.GetTypes(), base_id);
+		auto error =
+		    storage.AppendToIndexes(transaction, collection, storage.append_indexes, table.GetTypes(), base_id);
 		if (error.HasError()) {
 			error.Throw();
 		}
@@ -438,8 +439,8 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 	D_ASSERT(storage);
 
 	// delete from unique indices (if any)
-	if (!storage->indexes.Empty()) {
-		storage->row_groups->RemoveFromIndexes(storage->indexes, row_ids, count);
+	if (!storage->append_indexes.Empty()) {
+		storage->row_groups->RemoveFromIndexes(storage->append_indexes, row_ids, count);
 	}
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -487,7 +488,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 			storage.AppendToIndexes(transaction, append_state, false);
 		}
 		// finally move over the row groups
-		table.MergeStorage(*storage.row_groups, storage.indexes, commit_state);
+		table.MergeStorage(*storage.row_groups, storage.append_indexes, commit_state);
 	} else {
 		// check if we have written data
 		// if we have, we cannot merge to disk after all
@@ -604,7 +605,7 @@ TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
 	if (!storage) {
 		throw InternalException("LocalStorage::GetIndexes - local storage not found");
 	}
-	return storage->indexes;
+	return storage->append_indexes;
 }
 
 TableIndexList &LocalStorage::GetDeleteIndexes(DataTable &table) {

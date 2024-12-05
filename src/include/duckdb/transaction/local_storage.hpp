@@ -44,8 +44,8 @@ public:
 	Allocator &allocator;
 	//! The main chunk collection holding the data
 	shared_ptr<RowGroupCollection> row_groups;
-	//! The set of unique indexes.
-	TableIndexList indexes;
+	//! The set of unique append indexes.
+	TableIndexList append_indexes;
 	//! The set of delete indexes.
 	TableIndexList delete_indexes;
 	//! The number of deleted rows
