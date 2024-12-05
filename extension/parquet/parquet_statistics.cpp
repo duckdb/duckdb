@@ -149,13 +149,12 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 			throw InternalException("Unsupported internal type for decimal?..");
 		}
 	}
-	case LogicalType::VARCHAR:
-	case LogicalType::BLOB:
-		if (Value::StringIsValid(stats)) {
-			return Value(stats);
-		} else {
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		if (type.id() == LogicalTypeId::BLOB || !Value::StringIsValid(stats)) {
 			return Value(Blob::ToString(string_t(stats)));
 		}
+		return Value(stats);
 	case LogicalTypeId::DATE:
 		if (stats.size() != sizeof(int32_t)) {
 			throw InvalidInputException("Incorrect stats size for type DATE");
