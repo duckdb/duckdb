@@ -74,7 +74,9 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	}
 
 	// We do a copy of the options to not pollute the options of the first file.
-	while (total_number_of_rows < required_number_of_lines && current_file + 1 < file_paths.size()) {
+	const idx_t max_files_to_sniff = 10;
+	idx_t files_to_sniff = file_paths.size() > max_files_to_sniff ? max_files_to_sniff : file_paths.size();
+	while (total_number_of_rows < required_number_of_lines && current_file + 1 < files_to_sniff) {
 		auto option_copy = option_og;
 		current_file++;
 		option_copy.file_path = file_paths[current_file];
