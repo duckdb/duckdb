@@ -354,7 +354,6 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 		// early-out - no aggregates to update
 		return new_group_count;
 	}
-	// FIXME: we can use simple_update here if the aggregates support it
 
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
 	auto result_addresses = FlatVector::GetData<uintptr_t>(state.addresses);
@@ -364,6 +363,7 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	}
 
 	// process the aggregates
+	// FIXME: we can use simple_update here if the aggregates support it
 	UpdateAggregates(payload, filter);
 
 	return new_group_count;

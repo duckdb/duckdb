@@ -2,7 +2,7 @@
 # description: Aggregate Over Constant Groups
 # group: [aggregate]
 
-name Aggregate Over Constant Groups
+name Aggregate Over Constant Vectors
 group aggregate
 storage persistent
 
