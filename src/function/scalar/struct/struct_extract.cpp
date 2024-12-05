@@ -101,7 +101,7 @@ static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context
 	}
 	if (unnamed_only && !StructType::IsUnnamed(child_type)) {
 		throw BinderException(
-			"struct_extract with an integer key can only be used on unnamed structs, use a string key instead");
+		    "struct_extract with an integer key can only be used on unnamed structs, use a string key instead");
 	}
 	bound_function.arguments[0] = child_type;
 
