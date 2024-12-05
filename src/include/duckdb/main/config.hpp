@@ -34,7 +34,7 @@
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
-#include "duckdb/logging/logger.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 

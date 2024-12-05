@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "duckdb/logging/logging.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/unordered_set.hpp"
 
 #include <duckdb/parallel/thread_context.hpp>
 
@@ -24,94 +24,7 @@ class LogManager;
 class ColumnDataCollection;
 class ThreadContext;
 class FileOpener;
-
-// TODO: should we reconsider these logging levels?
-enum class LogLevel : uint8_t {
-	DEBUGGING = 10,
-	INFO = 20,
-	WARN = 30,
-	ERROR = 40,
-	FATAL = 50,
-};
-
-enum class LogContextScope : uint8_t {
-	DATABASE = 10,
-	CONNECTION = 20,
-	THREAD = 30,
-};
-
-struct LoggingContext {
-	explicit LoggingContext(LogContextScope scope_p) : scope(scope_p){
-	}
-
-	LogContextScope scope;
-
-	// TODO: potentially we might want to add stuff to identify which connection and thread the log came from
-	optional_idx thread;
-	optional_idx client_context;
-	optional_idx transaction_id;
-
-	const char *default_log_type = "default";
-};
-
-struct RegisteredLoggingContext {
-	idx_t context_id;
-	LoggingContext context;
-};
-
-// TODO: class ColumnDataCollectionLogStorage : public LogStorage
-class LogStorage {
-public:
-	explicit LogStorage(shared_ptr<DatabaseInstance> &db);
-	~LogStorage();
-
-	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
-	                   const RegisteredLoggingContext &context);
-	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context);
-	void Flush();
-
-	void WriteLoggingContext(RegisteredLoggingContext &context);
-
-	unique_ptr<ColumnDataCollection> log_entries;
-	unique_ptr<ColumnDataCollection> log_contexts;
-
-private:
-	// Cache for direct logging
-	unique_ptr<DataChunk> entry_buffer;
-	unique_ptr<DataChunk> log_context_buffer;
-	idx_t max_buffer_size;
-};
-
-enum class LogMode : uint8_t {
-	LEVEL_ONLY = 0,
-	DISABLE_SELECTED = 1,
-	ENABLE_SELECTED = 2,
-};
-
-enum class LogDestinationType : uint8_t {
-	IN_MEMORY = 0,
-};
-
-struct LogConfig {
-	LogConfig();
-
-	static LogConfig Create(bool enabled, LogLevel level);
-	static LogConfig CreateFromEnabled(bool enabled, LogLevel level, unordered_set<string> &enabled_loggers);
-	static LogConfig CreateFromDisabled(bool enabled, LogLevel level, unordered_set<string> &disabled_loggers);
-
-	bool IsConsistent() const;
-
-	bool enabled;
-	LogMode mode;
-	LogLevel level;
-	LogDestinationType output;
-	unordered_set<string> enabled_loggers;
-	unordered_set<string> disabled_loggers;
-
-protected:
-	LogConfig(bool enabled, LogLevel level, LogMode mode, optional_ptr<unordered_set<string>> enabled_loggers,
-		  optional_ptr<unordered_set<string>> disable_loggers);
-};
+class LogStorage;
 
 //! Main logging interface
 class Logger {
@@ -315,9 +228,9 @@ public:
 	void UpdateConfig(LogConfig &new_config) override;
 protected:
 	// Atomics for lock-free log setting checks
-	duckdb::atomic<bool> enabled;
-	duckdb::atomic<LogMode> mode;
-	duckdb::atomic<LogLevel> level;
+	atomic<bool> enabled;
+	atomic<LogMode> mode;
+	atomic<LogLevel> level;
 
 	mutex lock;
 	LogConfig config;
@@ -346,61 +259,6 @@ public:
 	const LogConfig &GetConfig() const override {
 		throw InternalException("Called GetConfig on NopLogger");
 	}
-};
-
-// Top level class
-// - Handles configuration changes
-// - Creates Loggers with cached configuration
-// - Main sink for logs (either by logging directly into this, or by syncing a pre-cached set of log entries)
-// - Holds the logs (in case of in-memory
-class LogManager : public enable_shared_from_this<LogManager> {
-	friend class ThreadSafeLogger;
-	friend class ThreadLocalLogger;
-	friend class MutableLogger;
-
-public:
-	// Note: two step initialization because Logger needs shared pointer to log manager TODO: can we clean up?
-	explicit LogManager(shared_ptr<DatabaseInstance> &db, LogConfig config = LogConfig());
-	void Initialize();
-
-	static LogManager &Get(ClientContext &context);
-	unique_ptr<Logger> CreateLogger(LoggingContext &context, bool thread_safe = true, bool mutable_settings = false);
-
-	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
-	// TODO: never called yet
-	void DropLoggingContext(RegisteredLoggingContext &logging_id);
-
-	//! The global logger can be used whe
-	Logger &GlobalLogger();
-
-	// TODO: allow modifying log settings
-
-	unique_ptr<LogStorage> log_storage;
-
-	void SetEnableLogging(bool enable);
-	void SetLogMode(LogMode mode);
-	void SetLogLevel(LogLevel level);
-	void SetEnabledLoggers(unordered_set <string> &enabled_loggers);
-	void SetDisabledLoggers(unordered_set <string> &disabled_loggers);
-
-	LogConfig GetConfig();
-
-protected:
-	// This is to be called by the Loggers only, it does not verify log_level and log_type
-	void WriteLogEntry(timestamp_t, const char *log_type, LogLevel log_level, const char *log_message,
-	                   const RegisteredLoggingContext &context);
-	// This allows efficiently pushing a cached set of log entries into the log manager
-	void FlushCachedLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context);
-
-	mutex lock;
-	LogConfig config;
-
-	unique_ptr<Logger> global_logger;
-
-	idx_t next_registered_logging_context_index = 0;
-
-	// TOOD: this can be a set? Should we store at all?
-	unordered_map<idx_t, LoggingContext> registered_log_contexts;
 };
 
 } // namespace duckdb

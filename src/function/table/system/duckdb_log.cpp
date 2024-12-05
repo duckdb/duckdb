@@ -5,7 +5,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/logging/logger.hpp"
+#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/logging/log_storage.hpp"
 
 namespace duckdb {
 
@@ -39,7 +40,7 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_uniq<DuckDBLogData>(*context.db->GetLogManager().log_storage->log_entries);
+	auto result = make_uniq<DuckDBLogData>(context.db->GetLogManager().log_storage->GetEntries());
 	return std::move(result);
 }
 
