@@ -824,6 +824,16 @@ struct LoggingMode {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LoggingStorage {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "logging_storage";
+	static constexpr const char *Description = "Set the logging storage (memory/stdout/file)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct MaxExpressionDepthSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "max_expression_depth";

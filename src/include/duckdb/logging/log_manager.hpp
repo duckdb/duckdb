@@ -46,6 +46,7 @@ public:
 	void SetLogLevel(LogLevel level);
 	void SetEnabledLoggers(unordered_set <string> &enabled_loggers);
 	void SetDisabledLoggers(unordered_set <string> &disabled_loggers);
+	void SetLogStorage(shared_ptr<DatabaseInstance> &db, const string &storage_name);
 
 	LogConfig GetConfig();
 

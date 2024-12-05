@@ -1,0 +1,32 @@
+# name: test/sql/logging/logging.test
+# description: Test logging functionality
+# group: [keywords]
+
+query IIIIIIII
+from duckdb_logs
+----
+
+statement ok
+set enable_logging=true;
+
+statement ok
+set logging_storage='memory';
+
+statement ok
+SELECT 1;
+
+query IIIII
+SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs
+----
+default	INFO	Running query 'SELECT 1;'	CONNECTION	NULL
+default	INFO	Running query 'SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs'	CONNECTION	NULL
+
+statement ok
+set logging_storage='stdout';
+
+# Storage is now cleared
+query IIIII
+SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs
+----
+
+

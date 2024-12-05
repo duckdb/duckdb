@@ -130,6 +130,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(LogQueryPathSetting),
     DUCKDB_GLOBAL(LoggingLevel),
     DUCKDB_GLOBAL(LoggingMode),
+    DUCKDB_GLOBAL(LoggingStorage),
     DUCKDB_LOCAL(MaxExpressionDepthSetting),
     DUCKDB_GLOBAL(MaxMemorySetting),
     DUCKDB_GLOBAL_ALIAS("memory_limit", MaxMemorySetting),

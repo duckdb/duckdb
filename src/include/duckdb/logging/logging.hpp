@@ -39,11 +39,11 @@ enum class LogMode : uint8_t {
 	ENABLE_SELECTED = 2,
 };
 
-enum class LogDestinationType : uint8_t {
-	IN_MEMORY = 0,
-};
-
 struct LogConfig {
+	constexpr static const char* IN_MEMORY_STORAGE_NAME = "memory";
+	constexpr static const char* STDOUT_STORAGE_NAME = "stdout";
+	constexpr static const char* FILE_STORAGE_NAME = "file";
+
 	LogConfig();
 
 	static LogConfig Create(bool enabled, LogLevel level);
@@ -55,7 +55,7 @@ struct LogConfig {
 	bool enabled;
 	LogMode mode;
 	LogLevel level;
-	LogDestinationType output;
+	string storage;
 	unordered_set<string> enabled_loggers;
 	unordered_set<string> disabled_loggers;
 

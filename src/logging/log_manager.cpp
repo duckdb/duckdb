@@ -122,6 +122,28 @@ void LogManager::SetDisabledLoggers(unordered_set <string> &disabled_loggers) {
 	global_logger->UpdateConfig(config);
 }
 
+void LogManager::SetLogStorage(shared_ptr<DatabaseInstance> &db, const string &storage_name) {
+	unique_lock<mutex> lck(lock);
+	auto storage_name_to_lower = StringUtil::Lower(storage_name);
+
+	if (config.storage == storage_name_to_lower) {
+		return;
+	}
+
+	// Flush the old storage, we are going to replace it.
+	log_storage->Flush();
+
+	if (storage_name_to_lower == LogConfig::IN_MEMORY_STORAGE_NAME) {
+		log_storage = make_uniq<InMemoryLogStorage>(db);
+		config.storage = storage_name_to_lower;
+	} else if (storage_name_to_lower == LogConfig::STDOUT_STORAGE_NAME) {
+		log_storage = make_uniq<StdOutLogStorage>();
+		config.storage = storage_name_to_lower;
+	} else if (storage_name_to_lower == LogConfig::FILE_STORAGE_NAME) {
+		throw NotImplementedException("File log storage is not yet implemented");
+	}
+}
+
 LogConfig LogManager::GetConfig() {
 	unique_lock<mutex> lck(lock);
 	return config;

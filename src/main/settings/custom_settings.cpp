@@ -29,6 +29,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/logging/logger.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 
@@ -651,6 +652,22 @@ void LoggingLevel::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value
 
 void LoggingLevel::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	db->GetLogManager().SetLogLevel(LogLevel::WARN); // TODO: use central low
+}
+
+//===----------------------------------------------------------------------===//
+// Logging Storage
+//===----------------------------------------------------------------------===//
+Value LoggingStorage::GetSetting(const ClientContext &context) {
+	return context.db->GetLogManager().GetConfig().storage;
+}
+void LoggingStorage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	auto shared_ptr = db->shared_from_this();
+	db->GetLogManager().SetLogStorage(shared_ptr, parameter.GetValue<string>());
+}
+
+void LoggingStorage::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	auto shared_ptr = db->shared_from_this();
+	db->GetLogManager().SetLogStorage(shared_ptr, LogConfig::IN_MEMORY_STORAGE_NAME); // TODO: use central low
 }
 
 //===----------------------------------------------------------------------===//

@@ -42,7 +42,7 @@ LogConfig LogConfig::CreateFromDisabled(bool enabled, LogLevel level, unordered_
 
 LogConfig::LogConfig(bool enabled, LogLevel level_p, LogMode mode_p, optional_ptr<unordered_set<string>> enabled_loggers_p, optional_ptr<unordered_set<string>> disabled_loggers_p)
 :  enabled(enabled), mode(mode_p), level(level_p), enabled_loggers(enabled_loggers_p), disabled_loggers(disabled_loggers_p) {
-	output = LogDestinationType::IN_MEMORY;
+	storage = LogConfig::IN_MEMORY_STORAGE_NAME;
 }
 
 } // namespace duckdb

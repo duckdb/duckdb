@@ -10,7 +10,40 @@
 //#include <duckdb/common/file_opener.hpp>
 //#include <duckdb/parallel/thread_context.hpp>
 
+#include <iostream>
+
 namespace duckdb {
+
+StdOutLogStorage::StdOutLogStorage() {
+}
+
+StdOutLogStorage::~StdOutLogStorage() {
+}
+
+void StdOutLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string& log_type, const string& log_message, const RegisteredLoggingContext& context) {
+	std::cout << StringUtil::Format("[LOG] %s, %s, %s, %s, %s, %s, %s, %s\n",
+		Value::TIMESTAMP(timestamp).ToString(),
+		log_type,
+		EnumUtil::ToString(level),
+		log_message,
+		EnumUtil::ToString(context.context.scope),
+		context.context.client_context.IsValid() ? to_string(context.context.client_context.GetIndex()) : "NULL",
+		context.context.transaction_id.IsValid() ? to_string(context.context.transaction_id.GetIndex()) : "NULL",
+		context.context.thread.IsValid() ? to_string(context.context.thread.GetIndex()) : "NULL"
+		);
+}
+
+void StdOutLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
+	throw NotImplementedException("StdOutLogStorage::WriteLogEntries");
+}
+
+void StdOutLogStorage::Flush() {
+	// NOP
+}
+
+void StdOutLogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {
+	// NOP
+}
 
 InMemoryLogStorage::InMemoryLogStorage(shared_ptr<DatabaseInstance> &db_p) : entry_buffer(make_uniq<DataChunk>()), log_context_buffer(make_uniq<DataChunk>()) {
 	// LogEntry Schema

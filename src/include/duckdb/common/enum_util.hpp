@@ -194,8 +194,6 @@ enum class LoadType : uint8_t;
 
 enum class LogContextScope : uint8_t;
 
-enum class LogDestinationType : uint8_t;
-
 enum class LogLevel : uint8_t;
 
 enum class LogMode : uint8_t;
@@ -619,9 +617,6 @@ const char* EnumUtil::ToChars<LoadType>(LoadType value);
 
 template<>
 const char* EnumUtil::ToChars<LogContextScope>(LogContextScope value);
-
-template<>
-const char* EnumUtil::ToChars<LogDestinationType>(LogDestinationType value);
 
 template<>
 const char* EnumUtil::ToChars<LogLevel>(LogLevel value);
@@ -1136,9 +1131,6 @@ LoadType EnumUtil::FromString<LoadType>(const char *value);
 
 template<>
 LogContextScope EnumUtil::FromString<LogContextScope>(const char *value);
-
-template<>
-LogDestinationType EnumUtil::FromString<LogDestinationType>(const char *value);
 
 template<>
 LogLevel EnumUtil::FromString<LogLevel>(const char *value);

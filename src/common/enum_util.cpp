@@ -1941,23 +1941,6 @@ LogContextScope EnumUtil::FromString<LogContextScope>(const char *value) {
 	return static_cast<LogContextScope>(StringUtil::StringToEnum(GetLogContextScopeValues(), 3, "LogContextScope", value));
 }
 
-const StringUtil::EnumStringLiteral *GetLogDestinationTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(LogDestinationType::IN_MEMORY), "IN_MEMORY" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<LogDestinationType>(LogDestinationType value) {
-	return StringUtil::EnumToString(GetLogDestinationTypeValues(), 1, "LogDestinationType", static_cast<uint32_t>(value));
-}
-
-template<>
-LogDestinationType EnumUtil::FromString<LogDestinationType>(const char *value) {
-	return static_cast<LogDestinationType>(StringUtil::StringToEnum(GetLogDestinationTypeValues(), 1, "LogDestinationType", value));
-}
-
 const StringUtil::EnumStringLiteral *GetLogLevelValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LogLevel::DEBUGGING), "DEBUGGING" },

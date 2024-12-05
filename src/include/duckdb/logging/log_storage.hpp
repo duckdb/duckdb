@@ -32,8 +32,10 @@ public:
 			   const RegisteredLoggingContext &context) = 0;
 	virtual void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) = 0;
 	virtual void Flush() = 0;
-	//! Registers a logging context. TODO: figure out if this is optional or a requirement?
-	virtual void WriteLoggingContext(RegisteredLoggingContext &context) = 0;
+	//! Registers a logging context. TOOD: remove?
+	virtual void WriteLoggingContext(RegisteredLoggingContext &context) {
+		
+	};
 
 	//! READING (OPTIONAL)
 	virtual bool IsInternal() {
@@ -47,7 +49,19 @@ public:
 	}
 };
 
-// TODO: class ColumnDataCollectionInMemoryLogStorage : public InMemoryLogStorage
+class StdOutLogStorage : public LogStorage {
+public:
+	explicit StdOutLogStorage();
+	~StdOutLogStorage() override;
+
+	//! LogStorage API: WRITING
+	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
+					   const RegisteredLoggingContext &context) override;
+	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
+	void Flush() override;
+	void WriteLoggingContext(RegisteredLoggingContext &context) override;
+};
+
 class InMemoryLogStorage : public LogStorage {
 public:
 	explicit InMemoryLogStorage(shared_ptr<DatabaseInstance> &db);
@@ -65,7 +79,7 @@ public:
 	ColumnDataCollection &GetEntries() override;
 	ColumnDataCollection &GetContexts() override;
 
-private:
+protected:
 	//! Internal log entry storage
 	unique_ptr<ColumnDataCollection> log_entries;
 	unique_ptr<ColumnDataCollection> log_contexts;
