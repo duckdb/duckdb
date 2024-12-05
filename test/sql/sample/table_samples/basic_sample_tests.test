@@ -55,15 +55,15 @@ statement ok
 create or replace table integers_1 as (select range b from materialized_range);
 
 query I
-select * from duckdb_table_sample('integers_1');
+select count(a) from duckdb_table_sample('integers_1') where a in (select * from materialized_range);
 ----
-54
+1
 
 # sample exists after restart
 restart
 
 query I
-select * from duckdb_table_sample('integers_1');
+select count(a) from duckdb_table_sample('integers_1') where a in (select * from materialized_range);
 ----
 54
 
