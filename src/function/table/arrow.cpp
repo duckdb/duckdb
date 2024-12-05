@@ -120,7 +120,7 @@ static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &ex
 	}
 }
 
-static unique_ptr<ArrowType> GetArrowLogicalTypeFromFormat(string &format) {
+static unique_ptr<ArrowType> GetArrowLogicalTypeFromFormat(const string &format) {
 	if (format == "n") {
 		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
@@ -271,7 +271,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeFromFormatNested(ArrowSchema &sc
 			throw InvalidInputException(
 			    "Attempted to convert a STRUCT with no fields to DuckDB which is not supported");
 		}
-		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
+		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
 			children.emplace_back(ArrowTableFunction::GetArrowLogicalType(*schema.children[type_idx]));
 			child_types.emplace_back(schema.children[type_idx]->name, children.back()->GetDuckType());
 		}
@@ -293,7 +293,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeFromFormatNested(ArrowSchema &sc
 		if (schema.n_children == 0) {
 			throw InvalidInputException("Attempted to convert a UNION with no fields to DuckDB which is not supported");
 		}
-		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
+		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
 			auto type = schema.children[type_idx];
 
 			children.emplace_back(ArrowTableFunction::GetArrowLogicalType(*type));
@@ -306,7 +306,7 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeFromFormatNested(ArrowSchema &sc
 	} else if (format == "+r") {
 		child_list_t<LogicalType> members;
 		vector<unique_ptr<ArrowType>> children;
-		idx_t n_children = idx_t(schema.n_children);
+		idx_t n_children = static_cast<idx_t>(schema.n_children);
 		D_ASSERT(n_children == 2);
 		D_ASSERT(string(schema.children[0]->name) == "run_ends");
 		D_ASSERT(string(schema.children[1]->name) == "values");
@@ -369,9 +369,9 @@ unique_ptr<ArrowType> ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schem
 	return arrow_type;
 }
 
-void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, ArrowSchemaWrapper &schema_p,
+void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, const ArrowSchemaWrapper &schema_p,
                                                 vector<string> &names, vector<LogicalType> &return_types) {
-	for (idx_t col_idx = 0; col_idx < (idx_t)schema_p.arrow_schema.n_children; col_idx++) {
+	for (idx_t col_idx = 0; col_idx < static_cast<idx_t>(schema_p.arrow_schema.n_children); col_idx++) {
 		auto &schema = *schema_p.arrow_schema.children[col_idx];
 		if (!schema.release) {
 			throw InvalidInputException("arrow_scan: released schema passed");
@@ -529,7 +529,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 	auto &global_state = data_p.global_state->Cast<ArrowScanGlobalState>();
 
 	//! Out of tuples in this chunk
-	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
+	if (state.chunk_offset >= static_cast<idx_t>(state.chunk->arrow_array.length)) {
 		if (!ArrowScanParallelStateNext(context, data_p.bind_data.get(), state, global_state)) {
 			return;
 		}
@@ -596,7 +596,7 @@ bool ArrowTableFunction::ArrowPushdownType(const LogicalType &type) {
 		default:
 			return false;
 		}
-	} break;
+	}
 	case LogicalTypeId::STRUCT: {
 		auto struct_types = StructType::GetChildTypes(type);
 		for (auto &struct_type : struct_types) {
