@@ -7,7 +7,7 @@ require httpfs
 require parquet
 
 statement ok
-pragma enable_object_cache;
+set parquet_metadata_cache=true;
 
 # the constant comparison that is pushed down is longer than DuckDB's 8 bytes that are used in StringStatistics
 # its prefix is equal to the max up to the last byte
