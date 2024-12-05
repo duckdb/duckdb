@@ -86,12 +86,6 @@ public:
 	string GetFirstFile();
 	//! Syntactic sugar for GetExpandResult() == FileExpandResult::NO_FILES
 	bool IsEmpty();
-	//! Number of files in the File List
-	virtual idx_t Size() const;
-	//! Swap file from file_idx with 0
-	virtual void SwapToFirst(const idx_t file_idx);
-	//! If the first path is a Glob
-	virtual bool IsFirstPathGlob() const;
 
 	//! Virtual functions for subclasses
 public:
@@ -116,7 +110,7 @@ protected:
 
 protected:
 	//! The unexpanded input paths
-	vector<string> paths;
+	const vector<string> paths;
 	//! Whether paths can expand to 0 files
 	const FileGlobOptions glob_options;
 };
@@ -163,9 +157,6 @@ public:
 	vector<string> GetAllFiles() override;
 	FileExpandResult GetExpandResult() override;
 	idx_t GetTotalFileCount() override;
-	void SwapToFirst(const idx_t file_idx) override;
-	idx_t Size() const override;
-	bool IsFirstPathGlob() const override;
 
 protected:
 	//! Main MultiFileList API
