@@ -11,6 +11,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/chunk_scan_state.hpp"
+#include "duckdb/common/arrow/arrow_extension.hpp"
 
 namespace duckdb {
 class ArrowSchemaMetadata {
@@ -35,8 +36,6 @@ public:
 	static constexpr const char *ARROW_EXTENSION_NAME = "ARROW:extension:name";
 	//! Key for encode of the metadata key
 	static constexpr const char *ARROW_METADATA_KEY = "ARROW:extension:metadata";
-	//! Arrow Extension for non-canonical types.
-	static constexpr const char *ARROW_EXTENSION_NON_CANONICAL = "arrow.opaque";
 	//! Creates the metadata based on an extension name
 	static ArrowSchemaMetadata ArrowCanonicalType(const string &extension_name);
 	//! Creates the metadata based on an extension name

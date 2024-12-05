@@ -119,14 +119,8 @@ static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &ex
 		return make_uniq<ArrowType>(error.str(), true);
 	}
 }
-static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
-	auto format = string(schema.format);
-	// Let's first figure out if this type is an extension type
-	ArrowSchemaMetadata schema_metadata(schema.metadata);
-	if (schema_metadata.HasExtension()) {
-		return GetArrowExtensionType(schema_metadata, format);
-	}
-	// If not, we just check the format itself
+
+static unique_ptr<ArrowType> GetArrowLogicalTypeFromFormat(string &format) {
 	if (format == "n") {
 		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
@@ -221,7 +215,40 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 	} else if (format == "tin") {
 		return make_uniq<ArrowType>(LogicalType::INTERVAL,
 		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MONTH_DAY_NANO));
-	} else if (format == "+l") {
+	} else if (format == "z") {
+		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
+		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
+	} else if (format == "Z") {
+		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
+		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
+	} else if (format[0] == 'w') {
+		string parameters = format.substr(format.find(':') + 1);
+		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
+		auto type_info = make_uniq<ArrowStringInfo>(fixed_size);
+		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
+	} else if (format[0] == 't' && format[1] == 's') {
+		// Timestamp with Timezone
+		// TODO right now we just get the UTC value. We probably want to support this properly in the future
+		unique_ptr<ArrowTypeInfo> type_info;
+		if (format[2] == 'n') {
+			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS);
+		} else if (format[2] == 'u') {
+			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS);
+		} else if (format[2] == 'm') {
+			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS);
+		} else if (format[2] == 's') {
+			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS);
+		} else {
+			throw NotImplementedException(" Timestamptz precision of not accepted");
+		}
+		return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
+	}
+
+	return nullptr;
+}
+
+static unique_ptr<ArrowType> GetArrowLogicalTypeFromFormatNested(ArrowSchema &schema, string &format) {
+	if (format == "+l") {
 		return CreateListType(*schema.children[0], ArrowVariableSizeType::NORMAL, false);
 	} else if (format == "+L") {
 		return CreateListType(*schema.children[0], ArrowVariableSizeType::SUPER_SIZE, false);
@@ -311,36 +338,26 @@ static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema
 		                                         make_uniq<ArrowStructInfo>(std::move(children)));
 		auto map_type_info = ArrowListInfo::List(std::move(inner_struct), ArrowVariableSizeType::NORMAL);
 		return make_uniq<ArrowType>(map_type, std::move(map_type_info));
-	} else if (format == "z") {
-		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
-		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
-	} else if (format == "Z") {
-		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
-		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
-	} else if (format[0] == 'w') {
-		string parameters = format.substr(format.find(':') + 1);
-		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
-		auto type_info = make_uniq<ArrowStringInfo>(fixed_size);
-		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
-	} else if (format[0] == 't' && format[1] == 's') {
-		// Timestamp with Timezone
-		// TODO right now we just get the UTC value. We probably want to support this properly in the future
-		unique_ptr<ArrowTypeInfo> type_info;
-		if (format[2] == 'n') {
-			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS);
-		} else if (format[2] == 'u') {
-			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS);
-		} else if (format[2] == 'm') {
-			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS);
-		} else if (format[2] == 's') {
-			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS);
-		} else {
-			throw NotImplementedException(" Timestamptz precision of not accepted");
-		}
-		return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
-	} else {
+	}
+	return nullptr;
+}
+
+static unique_ptr<ArrowType> GetArrowLogicalTypeNoDictionary(ArrowSchema &schema) {
+	auto format = string(schema.format);
+	// Let's first figure out if this type is an extension type
+	ArrowSchemaMetadata schema_metadata(schema.metadata);
+	if (schema_metadata.HasExtension()) {
+		return GetArrowExtensionType(schema_metadata, format);
+	}
+	auto type = GetArrowLogicalTypeFromFormat(format);
+	if (type) {
+		return type;
+	}
+	type = GetArrowLogicalTypeFromFormatNested(schema, format);
+	if (!type) {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 	}
+	return type;
 }
 
 unique_ptr<ArrowType> ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schema) {
