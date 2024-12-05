@@ -21,7 +21,8 @@ FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) {
 }
 
 string StructFilter::ToString(const string &column_name) {
-	return child_filter->ToString(column_name + "." + child_name);
+	string access_name = (child_name == "") ? ("[" + std::to_string(child_idx) + "]") : ("." + child_name);
+	return child_filter->ToString(column_name + access_name);
 }
 
 bool StructFilter::Equals(const TableFilter &other_p) const {
@@ -29,8 +30,8 @@ bool StructFilter::Equals(const TableFilter &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<StructFilter>();
-	return other.child_idx == child_idx && StringUtil::CIEquals(other.child_name, child_name) &&
-	       other.child_filter->Equals(*child_filter);
+	D_ASSERT(child_name == "" || other.child_name == "" || StringUtil::CIEquals(other.child_name, child_name));
+	return other.child_idx == child_idx && other.child_filter->Equals(*child_filter);
 }
 
 unique_ptr<TableFilter> StructFilter::Copy() const {

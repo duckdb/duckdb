@@ -428,9 +428,15 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		if (func.function.name == "struct_extract") {
 			auto &child_expr = func.children[0];
-			auto child_name = func.children[1]->Cast<BoundConstantExpression>().value.GetValue<string>();
-			auto child_index = StructType::GetChildIndexUnsafe(func.children[0]->return_type, child_name);
-
+			auto child_value = func.children[1]->Cast<BoundConstantExpression>().value;
+			string child_name = "";
+			idx_t child_index;
+			if (child_value.type() == duckdb::LogicalType::VARCHAR) {
+				child_name = child_value.GetValue<string>();
+				child_index = StructType::GetChildIndexUnsafe(func.children[0]->return_type, child_name);
+			} else {
+				child_index = child_value.GetValue<idx_t>();
+			}
 			inner_filter = make_uniq<StructFilter>(child_index, child_name, std::move(inner_filter));
 			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
 		}
@@ -520,7 +526,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				if (!column_index.IsRowIdColumn()) {
 					table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, make_uniq<IsNotNullFilter>()));
 				}
-
 				equivalence_map.erase(filter_exp);
 			}
 		}
