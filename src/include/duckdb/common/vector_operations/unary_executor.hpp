@@ -186,7 +186,7 @@ private:
 						ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(
 						    ldata, result_data, dict_size.GetIndex(), FlatVector::Validity(dictionary_values),
 						    FlatVector::Validity(result), dataptr, adds_nulls);
-						// slice the result with the original offests
+						// slice the result with the original offsets
 						auto &offsets = DictionaryVector::SelVector(input);
 						result.Dictionary(result, dict_size.GetIndex(), offsets, count);
 						break;
