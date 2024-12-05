@@ -96,6 +96,7 @@ ScalarFunction MapKeysFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction fun({}, LogicalTypeId::LIST, MapKeysFunction, MapKeysBind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.errors = FunctionErrors::CAN_THROW_ERROR;
 	fun.varargs = LogicalType::ANY;
 	return fun;
 }
@@ -103,6 +104,7 @@ ScalarFunction MapKeysFun::GetFunction() {
 ScalarFunction MapValuesFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::LIST, MapValuesFunction, MapValuesBind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.errors = FunctionErrors::CAN_THROW_ERROR;
 	fun.varargs = LogicalType::ANY;
 	return fun;
 }

@@ -53,6 +53,7 @@ ScalarFunction MapFromEntriesFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::MAP, MapFromEntriesFunction, MapFromEntriesBind);
 	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	fun.varargs = LogicalType::ANY;
+	fun.errors = FunctionErrors::CAN_THROW_ERROR;
 	return fun;
 }
 

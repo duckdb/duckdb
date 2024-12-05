@@ -210,9 +210,13 @@ template <class OP>
 static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
 	const auto array = LogicalType::ARRAY(type, optional_idx());
 	if (type.id() == LogicalTypeId::FLOAT) {
-		set.AddFunction(ScalarFunction({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind));
+		ScalarFunction function({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind);
+		function.errors = FunctionErrors::CAN_THROW_ERROR;
+		set.AddFunction(function);
 	} else if (type.id() == LogicalTypeId::DOUBLE) {
-		set.AddFunction(ScalarFunction({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind));
+		ScalarFunction function({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind);
+		function.errors = FunctionErrors::CAN_THROW_ERROR;
+		set.AddFunction(function);
 	} else {
 		throw NotImplementedException("Array function not implemented for type %s", type.ToString());
 	}

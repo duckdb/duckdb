@@ -131,21 +131,31 @@ ScalarFunctionSet MakeDateFun::GetFunctions() {
 	    {"year", LogicalType::BIGINT}, {"month", LogicalType::BIGINT}, {"day", LogicalType::BIGINT}};
 	make_date.AddFunction(
 	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int64_t>));
+
+	for (auto &func : make_date.functions) {
+		func.errors = FunctionErrors::CAN_THROW_ERROR;
+	}
 	return make_date;
 }
 
 ScalarFunction MakeTimeFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE}, LogicalType::TIME,
-	                      ExecuteMakeTime<int64_t>);
+	ScalarFunction function({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE}, LogicalType::TIME,
+	                        ExecuteMakeTime<int64_t>);
+	function.errors = FunctionErrors::CAN_THROW_ERROR;
+	return function;
 }
 
 ScalarFunctionSet MakeTimestampFun::GetFunctions() {
 	ScalarFunctionSet operator_set("make_timestamp");
-	operator_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
-	                                         LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE},
-	                                        LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
+	ScalarFunction func1({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                      LogicalType::BIGINT, LogicalType::DOUBLE},
+	                     LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>);
+	func1.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction func2({LogicalType::BIGINT}, LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>);
+
+	func2.errors = FunctionErrors::CAN_THROW_ERROR;
+	operator_set.AddFunction(func1);
+	operator_set.AddFunction(func2);
 	return operator_set;
 }
 

@@ -314,7 +314,6 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunctionInternal(const Logi
 	}
 }
 
-
 AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
 	auto result = GetMedianAbsoluteDeviationAggregateFunctionInternal(type);
 	result.errors = FunctionErrors::CAN_THROW_ERROR;
