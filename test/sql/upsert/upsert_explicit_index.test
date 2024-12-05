@@ -34,7 +34,16 @@ insert into tbl values (42, 21), (21, 42);
 statement ok
 create index my_index on tbl(j);
 
-statement error
-insert into tbl values (42, 20) on conflict do update set j = 30
+statement ok
+INSERT INTO tbl VALUES (42, 20) ON CONFLICT DO UPDATE SET j = 30;
+
+query III
+SELECT i, j, rowid FROM tbl WHERE j = 30;
 ----
-Can not assign to column 'j' because it has a UNIQUE/PRIMARY KEY constraint or is referenced by an INDEX
+42	30	2
+
+query III
+SELECT i, j, rowid FROM tbl ORDER BY ALL;
+----
+21	42	1
+42	30	2

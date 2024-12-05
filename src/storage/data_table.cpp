@@ -1412,15 +1412,15 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
-	// update should not be called for indexed columns!
-	// instead update should have been rewritten to delete + update on higher layer
+
 #ifdef DEBUG
+	// Ensure that we never call UPDATE for indexed columns.
+	// Instead, we must rewrite these updates into DELETE + INSERT.
 	info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.IsBound());
 		D_ASSERT(!index.Cast<BoundIndex>().IndexIsUpdated(column_ids));
 		return false;
 	});
-
 #endif
 }
 

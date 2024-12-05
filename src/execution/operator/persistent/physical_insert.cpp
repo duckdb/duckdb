@@ -290,7 +290,7 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, ExecutionContext 
 	// Arrange the columns in the standard table order.
 	DataChunk &append_chunk = lstate.append_chunk;
 	append_chunk.SetCardinality(update_chunk);
-	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+	for (idx_t i = 0; i < append_chunk.ColumnCount(); i++) {
 		append_chunk.data[i].Reference(chunk.data[i]);
 	}
 	for (idx_t i = 0; i < set_columns.size(); i++) {
