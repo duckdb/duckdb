@@ -1,11 +1,10 @@
 #include "json_structure.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "json_executors.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
-
-#include <duckdb/common/extra_type_info.hpp>
 
 namespace duckdb {
 
@@ -716,7 +715,8 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 	}
 
 	// If it's an inconsistent object we also just do MAP with the best-possible, recursively-merged value type
-	if (IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold)) {
+	if (map_inference_threshold != DConstants::INVALID_INDEX &&
+	    IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold)) {
 		return LogicalType::MAP(LogicalType::VARCHAR,
 		                        GetMergedType(context, node, max_depth, field_appearance_threshold,
 		                                      map_inference_threshold, depth + 1, null_type));

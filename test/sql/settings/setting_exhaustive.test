@@ -6,7 +6,7 @@
 statement error
 SET debug_window_mode='unknown';
 ----
-<REGEX>:Parser Error.*Unrecognized option for PRAGMA.*
+<REGEX>:.*unrecognized value.*
 
 # default_order
 foreach default_order ASC DESC
@@ -75,4 +75,4 @@ endloop
 statement error
 SET explain_output='unknown';
 ----
-<REGEX>:Parser Error.*Unrecognized output type.*
+<REGEX>:.*unrecognized value.*

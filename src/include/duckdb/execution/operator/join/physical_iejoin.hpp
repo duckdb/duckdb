@@ -46,7 +46,7 @@ public:
 		return true;
 	}
 
-	double GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const override;
 
 public:
 	// Sink Interface

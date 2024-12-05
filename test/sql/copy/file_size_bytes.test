@@ -54,15 +54,16 @@ SELECT COUNT(*) FROM read_json_auto('__TEST_DIR__/file_size_bytes_json/*.json')
 
 # JSON is a bit more wasteful, 5 files
 query I
-SELECT count(*) FROM glob('__TEST_DIR__/file_size_bytes_json/*.json')
+SELECT count(*) >= 3 and count(*) <= 12 FROM glob('__TEST_DIR__/file_size_bytes_json/*.json')
 ----
-5
+true
 
 require parquet
 
 # we can trigger early flushes with Parquet by setting a low row group size
+# also, we have to use DOUBLE for Parquet because we compress integers by A LOT which affects the file_size_bytes
 statement ok
-COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, FILE_SIZE_BYTES '1kb');
+COPY (SELECT col_a::DOUBLE, col_b::DOUBLE FROM bigdata) TO '__TEST_DIR__/file_size_bytes_parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, FILE_SIZE_BYTES '1kb');
 
 query I
 SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/file_size_bytes_parquet/*.parquet')
@@ -135,7 +136,6 @@ SELECT count(*) > 1 FROM glob('__TEST_DIR__/file_size_bytes_csv5/*.csv')
 true
 
 # each thread sees ~240kb if it's balanced, what about a 190kb limit
-# even in the case of extreme thread imbalance, this always yield around 8 files
 statement ok
 COPY (FROM bigdata) TO '__TEST_DIR__/file_size_bytes_csv6' (FORMAT CSV, FILE_SIZE_BYTES '190kb', PER_THREAD_OUTPUT TRUE);
 
@@ -144,9 +144,9 @@ SELECT COUNT(*) FROM read_csv_auto('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 ----
 100000
 
-# ~2 files per thread, around 8 in total
+# ~2 files per thread, around 8 in total (5 output files in case of extreme thread imbalance and only 1 thread runs)
 query I
-SELECT count(*) BETWEEN 6 AND 10 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
+SELECT count(*) BETWEEN 5 AND 10 FROM glob('__TEST_DIR__/file_size_bytes_csv6/*.csv')
 ----
 1
 

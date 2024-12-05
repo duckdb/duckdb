@@ -496,7 +496,7 @@ class TestReadCSV(object):
         assert rel.columns == ['a', 'b', 'c', 'd']
 
         # Duplicates are not okay
-        with pytest.raises(duckdb.BinderException, match="has duplicate column name"):
+        with pytest.raises(duckdb.BinderException, match="names must have unique values"):
             rel = con.read_csv(file, names=['a', 'b', 'a', 'b'])
             assert rel.columns == ['a', 'b', 'a', 'b']
 
@@ -566,6 +566,14 @@ class TestReadCSV(object):
         ):
             rel = con.read_csv(files)
             res = rel.fetchall()
+
+    def test_read_auto_detect(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one|two|three|four\n1|2|3|4')
+
+        con = duckdb.connect()
+        rel = con.read_csv(str(file1), columns={'a': 'VARCHAR'}, auto_detect=False, header=False)
+        assert rel.fetchall() == [('one|two|three|four',), ('1|2|3|4',)]
 
     def test_read_csv_list_invalid_path(self, tmp_path):
         con = duckdb.connect()

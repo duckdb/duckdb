@@ -50,7 +50,7 @@ idx_t PhysicalOperator::EstimatedThreadCount() const {
 	idx_t result = 0;
 	if (children.empty()) {
 		// Terminal operator, e.g., base table, these decide the degree of parallelism of pipelines
-		result = MaxValue<idx_t>(estimated_cardinality / (Storage::ROW_GROUP_SIZE * 2), 1);
+		result = MaxValue<idx_t>(estimated_cardinality / (DEFAULT_ROW_GROUP_SIZE * 2), 1);
 	} else if (type == PhysicalOperatorType::UNION) {
 		// We can run union pipelines in parallel, so we sum up the thread count of the children
 		for (auto &child : children) {
@@ -122,8 +122,10 @@ OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &conte
 	throw InternalException("Calling GetPartitionData on a node that does not support it");
 }
 
-double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
-	return -1;
+ProgressData PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	ProgressData res;
+	res.SetInvalid();
+	return res;
 }
 // LCOV_EXCL_STOP
 

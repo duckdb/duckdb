@@ -9,11 +9,12 @@
 namespace duckdb {
 
 template <class T>
-void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
+void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info);
+
+template <class T>
+static void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 	info.internal = true;
-	info.description = function.description;
-	info.parameter_names = StringUtil::Split(function.parameters, ",");
-	info.example = function.example;
+	FillFunctionDescriptions(function, info);
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 }
 

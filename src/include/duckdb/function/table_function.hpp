@@ -15,6 +15,7 @@
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/common/column_index.hpp"
 
 #include <functional>
 
@@ -104,15 +105,31 @@ struct TableFunctionBindInput {
 };
 
 struct TableFunctionInitInput {
-	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &column_ids_p,
-	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p)
-	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p) {
+	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<column_t> column_ids_p,
+	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
+	                       optional_ptr<SampleOptions> sample_options_p = nullptr)
+	    : bind_data(bind_data_p), column_ids(std::move(column_ids_p)), projection_ids(projection_ids_p),
+	      filters(filters_p), sample_options(sample_options_p) {
+		for (auto &col_id : column_ids) {
+			column_indexes.emplace_back(col_id);
+		}
+	}
+	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<ColumnIndex> column_indexes_p,
+	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
+	                       optional_ptr<SampleOptions> sample_options_p = nullptr)
+	    : bind_data(bind_data_p), column_indexes(std::move(column_indexes_p)), projection_ids(projection_ids_p),
+	      filters(filters_p), sample_options(sample_options_p) {
+		for (auto &col_id : column_indexes) {
+			column_ids.emplace_back(col_id.GetPrimaryIndex());
+		}
 	}
 
 	optional_ptr<const FunctionData> bind_data;
-	const vector<column_t> &column_ids;
+	vector<column_t> column_ids;
+	vector<ColumnIndex> column_indexes;
 	const vector<idx_t> projection_ids;
 	optional_ptr<TableFilterSet> filters;
+	optional_ptr<SampleOptions> sample_options;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
@@ -149,6 +166,14 @@ struct TableFunctionPartitionInput {
 
 	optional_ptr<const FunctionData> bind_data;
 	const vector<column_t> &partition_ids;
+};
+
+struct TableFunctionToStringInput {
+	TableFunctionToStringInput(const TableFunction &table_function_p, optional_ptr<const FunctionData> bind_data_p)
+	    : table_function(table_function_p), bind_data(bind_data_p) {
+	}
+	const TableFunction &table_function;
+	optional_ptr<const FunctionData> bind_data;
 };
 
 struct TableFunctionGetPartitionInput {
@@ -250,7 +275,7 @@ typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
-typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
+typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
@@ -342,6 +367,9 @@ public:
 	//! Whether or not the table function can immediately prune out filter columns that are unused in the remainder of
 	//! the query plan, e.g., "SELECT i FROM tbl WHERE j = 42;" - j does not need to leave the table function at all
 	bool filter_prune;
+	//! Whether or not the table function supports sampling pushdown. If not supported a sample will be taken after the
+	//! table function.
+	bool sampling_pushdown;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 

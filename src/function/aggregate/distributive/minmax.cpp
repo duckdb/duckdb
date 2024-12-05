@@ -4,6 +4,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate/minmax_n_helpers.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -376,6 +377,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 	function.name = std::move(name);
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	function.distinct_dependent = AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT;
 	if (function.bind) {
 		return function.bind(context, function, arguments);
 	} else {
@@ -389,11 +391,11 @@ static AggregateFunction GetMinMaxOperator(string name) {
 	                         nullptr, nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
 }
 
-AggregateFunction MinFun::GetFunction() {
+AggregateFunction MinFunction::GetFunction() {
 	return GetMinMaxOperator<MinOperation, MinOperationString, MinOperationVector>("min");
 }
 
-AggregateFunction MaxFun::GetFunction() {
+AggregateFunction MaxFunction::GetFunction() {
 	return GetMinMaxOperator<MaxOperation, MaxOperationString, MaxOperationVector>("max");
 }
 
@@ -477,7 +479,7 @@ static void SpecializeMinMaxNFunction(AggregateFunction &function) {
 	using OP = MinMaxNOperation;
 
 	function.state_size = AggregateFunction::StateSize<STATE>;
-	function.initialize = AggregateFunction::StateInitialize<STATE, OP>;
+	function.initialize = AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>;
 	function.combine = AggregateFunction::StateCombine<STATE, OP>;
 	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 
@@ -537,18 +539,18 @@ static AggregateFunction GetMinMaxNFunction() {
 //---------------------------------------------------
 // Function Registration
 //---------------------------------------------------s
-void MinFun::RegisterFunction(BuiltinFunctions &set) {
+AggregateFunctionSet MinFun::GetFunctions() {
 	AggregateFunctionSet min("min");
-	min.AddFunction(GetFunction());
+	min.AddFunction(MinFunction::GetFunction());
 	min.AddFunction(GetMinMaxNFunction<LessThan>());
-	set.AddFunction(min);
+	return min;
 }
 
-void MaxFun::RegisterFunction(BuiltinFunctions &set) {
+AggregateFunctionSet MaxFun::GetFunctions() {
 	AggregateFunctionSet max("max");
-	max.AddFunction(GetFunction());
+	max.AddFunction(MaxFunction::GetFunction());
 	max.AddFunction(GetMinMaxNFunction<GreaterThan>());
-	set.AddFunction(max);
+	return max;
 }
 
 } // namespace duckdb

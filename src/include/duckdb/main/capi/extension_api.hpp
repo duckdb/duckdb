@@ -427,6 +427,32 @@ typedef struct {
 
 	duckdb_state (*duckdb_appender_create_ext)(duckdb_connection connection, const char *catalog, const char *schema,
 	                                           const char *table, duckdb_appender *out_appender);
+	duckdb_state (*duckdb_table_description_create_ext)(duckdb_connection connection, const char *catalog,
+	                                                    const char *schema, const char *table,
+	                                                    duckdb_table_description *out);
+	char *(*duckdb_table_description_get_column_name)(duckdb_table_description table_description, idx_t index);
+	duckdb_logical_type (*duckdb_param_logical_type)(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+	bool (*duckdb_is_null_value)(duckdb_value value);
+	duckdb_value (*duckdb_create_null_value)();
+	idx_t (*duckdb_get_list_size)(duckdb_value value);
+	duckdb_value (*duckdb_get_list_child)(duckdb_value value, idx_t index);
+	duckdb_value (*duckdb_create_enum_value)(duckdb_logical_type type, uint64_t value);
+	uint64_t (*duckdb_get_enum_value)(duckdb_value value);
+	duckdb_value (*duckdb_get_struct_child)(duckdb_value value, idx_t index);
+	duckdb_state (*duckdb_appender_add_column)(duckdb_appender appender, const char *name);
+	duckdb_state (*duckdb_appender_clear_columns)(duckdb_appender appender);
+	bool (*duckdb_is_finite_timestamp_s)(duckdb_timestamp_s ts);
+	bool (*duckdb_is_finite_timestamp_ms)(duckdb_timestamp_ms ts);
+	bool (*duckdb_is_finite_timestamp_ns)(duckdb_timestamp_ns ts);
+	duckdb_value (*duckdb_create_timestamp_tz)(duckdb_timestamp input);
+	duckdb_value (*duckdb_create_timestamp_s)(duckdb_timestamp_s input);
+	duckdb_value (*duckdb_create_timestamp_ms)(duckdb_timestamp_ms input);
+	duckdb_value (*duckdb_create_timestamp_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp (*duckdb_get_timestamp_tz)(duckdb_value val);
+	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
+	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
+	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//
@@ -806,6 +832,30 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_arrow_array_scan = duckdb_arrow_array_scan;
 	result.duckdb_stream_fetch_chunk = duckdb_stream_fetch_chunk;
 	result.duckdb_appender_create_ext = duckdb_appender_create_ext;
+	result.duckdb_table_description_create_ext = duckdb_table_description_create_ext;
+	result.duckdb_table_description_get_column_name = duckdb_table_description_get_column_name;
+	result.duckdb_param_logical_type = duckdb_param_logical_type;
+	result.duckdb_is_null_value = duckdb_is_null_value;
+	result.duckdb_create_null_value = duckdb_create_null_value;
+	result.duckdb_get_list_size = duckdb_get_list_size;
+	result.duckdb_get_list_child = duckdb_get_list_child;
+	result.duckdb_create_enum_value = duckdb_create_enum_value;
+	result.duckdb_get_enum_value = duckdb_get_enum_value;
+	result.duckdb_get_struct_child = duckdb_get_struct_child;
+	result.duckdb_appender_add_column = duckdb_appender_add_column;
+	result.duckdb_appender_clear_columns = duckdb_appender_clear_columns;
+	result.duckdb_is_finite_timestamp_s = duckdb_is_finite_timestamp_s;
+	result.duckdb_is_finite_timestamp_ms = duckdb_is_finite_timestamp_ms;
+	result.duckdb_is_finite_timestamp_ns = duckdb_is_finite_timestamp_ns;
+	result.duckdb_create_timestamp_tz = duckdb_create_timestamp_tz;
+	result.duckdb_create_timestamp_s = duckdb_create_timestamp_s;
+	result.duckdb_create_timestamp_ms = duckdb_create_timestamp_ms;
+	result.duckdb_create_timestamp_ns = duckdb_create_timestamp_ns;
+	result.duckdb_get_timestamp_tz = duckdb_get_timestamp_tz;
+	result.duckdb_get_timestamp_s = duckdb_get_timestamp_s;
+	result.duckdb_get_timestamp_ms = duckdb_get_timestamp_ms;
+	result.duckdb_get_timestamp_ns = duckdb_get_timestamp_ns;
+	result.duckdb_append_value = duckdb_append_value;
 	return result;
 }
 

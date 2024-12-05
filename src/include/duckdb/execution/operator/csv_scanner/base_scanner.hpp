@@ -21,13 +21,18 @@ class ScannerResult {
 public:
 	ScannerResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
 
-	//! Adds a Value to the result
 	static inline void SetQuoted(ScannerResult &result, idx_t quoted_position) {
 		if (!result.quoted) {
 			result.quoted_position = quoted_position;
 		}
 		result.quoted = true;
+		result.unquoted = true;
 	}
+
+	static inline void SetUnquoted(ScannerResult &result) {
+		result.quoted = true;
+	}
+
 	static inline void SetEscaped(ScannerResult &result) {
 		result.escaped = true;
 	}
@@ -44,8 +49,11 @@ public:
 
 	//! Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
+	//! If the current quoted value is unquoted
+	bool unquoted = false;
+	//! If the current value has been escaped
 	bool escaped = false;
-	//! Variable to keep track if we are in a comment row. Hence won't add it
+	//! Variable to keep track if we are in a comment row. Hence, won't add it
 	bool comment = false;
 	idx_t quoted_position = 0;
 
@@ -114,6 +122,8 @@ public:
 
 	bool ever_quoted = false;
 
+	bool ever_escaped = false;
+
 	//! Shared pointer to the buffer_manager, this is shared across multiple scanners
 	shared_ptr<CSVBufferManager> buffer_manager;
 
@@ -121,6 +131,10 @@ public:
 	//! notes are dirty lines on top of the file, before the actual data
 	static CSVIterator SkipCSVRows(shared_ptr<CSVBufferManager> buffer_manager,
 	                               const shared_ptr<CSVStateMachine> &state_machine, idx_t rows_to_skip);
+
+	inline static bool ContainsZeroByte(uint64_t v) {
+		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
+	}
 
 protected:
 	//! Boundaries of this scanner
@@ -141,10 +155,6 @@ protected:
 	//! Internal Functions used to perform the parsing
 	//! Initializes the scanner
 	virtual void Initialize();
-
-	inline static bool ContainsZeroByte(uint64_t v) {
-		return (v - UINT64_C(0x0101010101010101)) & ~(v)&UINT64_C(0x8080808080808080);
-	}
 
 	//! Process one chunk
 	template <class T>
@@ -252,8 +262,16 @@ protected:
 					iterator.pos.buffer_pos++;
 				}
 			} break;
+			case CSVState::UNQUOTED: {
+				T::SetUnquoted(result);
+				iterator.pos.buffer_pos++;
+				break;
+			}
 			case CSVState::ESCAPE:
+			case CSVState::UNQUOTED_ESCAPE:
+			case CSVState::ESCAPED_RETURN:
 				T::SetEscaped(result);
+				ever_escaped = true;
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::STANDARD: {
@@ -264,6 +282,7 @@ protected:
 					if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
 					                     (value ^ state_machine->transition_array.new_line) &
 					                     (value ^ state_machine->transition_array.carriage_return) &
+					                     (value ^ state_machine->transition_array.escape) &
 					                     (value ^ state_machine->transition_array.comment))) {
 						break;
 					}

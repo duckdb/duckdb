@@ -1,0 +1,43 @@
+# name: test/issues/general/test_14540.test
+# description: Issue 14540 - INTERNAL Error: Failed to bind column reference(a unnest rewriter fail)
+# group: [general]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE QueryRequest AS SELECT * FROM (
+  
+    SELECT
+      ['A', 'B']::text[] AS query_request
+   UNION ALL
+  
+    SELECT
+      ['A']::text[] AS query_request
+   UNION ALL
+  
+    SELECT
+      ['B']::text[] AS query_request
+  
+) AS UNUSED_TABLE_NAME;
+
+statement ok
+CREATE TABLE ObjectAttributes AS SELECT
+  'zero' AS object_id,
+  ['a']::text[] AS logica_value;
+
+query IIII rowsort
+SELECT
+  QueryRequest.query_request AS query_request,
+  ObjectAttributes.object_id AS object_id,
+  ObjectAttributes.logica_value AS object_attributes,
+  count(DISTINCT x_9.unnested_pod) AS attributes_union
+FROM
+  QueryRequest AS QueryRequest, ObjectAttributes AS ObjectAttributes, (select unnest(((ObjectAttributes.logica_value) || (QueryRequest.query_request))) as unnested_pod) as x_9
+WHERE
+  (ObjectAttributes.object_id = 'zero')
+GROUP BY QueryRequest.query_request, ObjectAttributes.object_id, ObjectAttributes.logica_value;
+----
+[A, B]	zero	[a]	3
+[A]	zero	[a]	2
+[B]	zero	[a]	2

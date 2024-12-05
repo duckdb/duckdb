@@ -2,10 +2,12 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/stack.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "jaro_winkler.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -15,6 +17,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <random>
+#include <stack>
 
 #include "yyjson.hpp"
 
@@ -35,7 +38,19 @@ string StringUtil::GenerateRandomName(idx_t length) {
 }
 
 bool StringUtil::Contains(const string &haystack, const string &needle) {
-	return (haystack.find(needle) != string::npos);
+	return Find(haystack, needle).IsValid();
+}
+
+optional_idx StringUtil::Find(const string &haystack, const string &needle) {
+	auto index = haystack.find(needle);
+	if (index == string::npos) {
+		return optional_idx();
+	}
+	return optional_idx(index);
+}
+
+bool StringUtil::Contains(const string &haystack, const char &needle_char) {
+	return (haystack.find(needle_char) != string::npos);
 }
 
 void StringUtil::LTrim(string &str) {
@@ -84,16 +99,6 @@ string StringUtil::Repeat(const string &str, idx_t n) {
 		os << str;
 	}
 	return (os.str());
-}
-
-vector<string> StringUtil::Split(const string &str, char delimiter) {
-	std::stringstream ss(str);
-	vector<string> lines;
-	string temp;
-	while (getline(ss, temp, delimiter)) {
-		lines.push_back(temp);
-	}
-	return (lines);
 }
 
 namespace string_util_internal {
@@ -153,6 +158,43 @@ vector<string> StringUtil::SplitWithQuote(const string &str, char delimiter, cha
 	}
 
 	return entries;
+}
+
+vector<string> StringUtil::SplitWithParentheses(const string &str, char delimiter, char par_open, char par_close) {
+	vector<string> result;
+	string current;
+	stack<char> parentheses;
+
+	for (size_t i = 0; i < str.size(); ++i) {
+		char ch = str[i];
+
+		// stack to keep track if we are within parentheses
+		if (ch == par_open) {
+			parentheses.push(ch);
+		}
+		if (ch == par_close) {
+			if (!parentheses.empty()) {
+				parentheses.pop();
+			} else {
+				throw InvalidInputException("Incongruent parentheses in string: '%s'", str);
+			}
+		}
+		// split if not within parentheses
+		if (parentheses.empty() && ch == delimiter) {
+			result.push_back(current);
+			current.clear();
+		} else {
+			current += ch;
+		}
+	}
+	// Add the last segment
+	if (!current.empty()) {
+		result.push_back(current);
+	}
+	if (!parentheses.empty()) {
+		throw InvalidInputException("Incongruent parentheses in string: '%s'", str);
+	}
+	return result;
 }
 
 string StringUtil::Join(const vector<string> &input, const string &separator) {
@@ -236,6 +278,10 @@ bool StringUtil::IsLower(const string &str) {
 	return str == Lower(str);
 }
 
+bool StringUtil::IsUpper(const string &str) {
+	return str == Upper(str);
+}
+
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
 uint64_t StringUtil::CIHash(const string &str) {
 	uint32_t hash = 0;
@@ -254,7 +300,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	if (l1.size() != l2.size()) {
 		return false;
 	}
-	const auto charmap = LowerFun::ASCII_TO_LOWER_MAP;
+	const auto charmap = ASCII_TO_LOWER_MAP;
 	for (idx_t c = 0; c < l1.size(); c++) {
 		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
 			return false;
@@ -264,7 +310,7 @@ bool StringUtil::CIEquals(const string &l1, const string &l2) {
 }
 
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
-	const auto charmap = UpperFun::ASCII_TO_UPPER_MAP;
+	const auto charmap = ASCII_TO_UPPER_MAP;
 
 	unsigned char u1 {}, u2 {};
 
@@ -288,6 +334,16 @@ idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
 		}
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+vector<string> StringUtil::Split(const string &str, char delimiter) {
+	std::stringstream ss(str);
+	vector<string> lines;
+	string temp;
+	while (getline(ss, temp, delimiter)) {
+		lines.push_back(temp);
+	}
+	return (lines);
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {
@@ -509,23 +565,12 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 	return result;
 }
 
-string StringUtil::ToJSONMap(ExceptionType type, const string &message, const unordered_map<string, string> &map) {
-	D_ASSERT(map.find("exception_type") == map.end());
-	D_ASSERT(map.find("exception_message") == map.end());
-
-	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
-	yyjson_mut_val *root = yyjson_mut_obj(doc);
-	yyjson_mut_doc_set_root(doc, root);
-
-	auto except_str = Exception::ExceptionTypeToString(type);
-	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
-	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
+string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
 	for (auto &entry : map) {
 		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
 		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
 		yyjson_mut_obj_add(root, key, value);
 	}
-
 	yyjson_write_err err;
 	size_t len;
 	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
@@ -543,6 +588,29 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 
 	// Return the result
 	return result;
+}
+string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
+	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	yyjson_mut_val *root = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, root);
+
+	return ToJsonMapInternal(map, doc, root);
+}
+
+string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
+                                      const unordered_map<string, string> &map) {
+	D_ASSERT(map.find("exception_type") == map.end());
+	D_ASSERT(map.find("exception_message") == map.end());
+
+	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	yyjson_mut_val *root = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, root);
+
+	auto except_str = Exception::ExceptionTypeToString(type);
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
+
+	return ToJsonMapInternal(map, doc, root);
 }
 
 string StringUtil::GetFileName(const string &file_path) {
@@ -712,5 +780,61 @@ string StringUtil::URLDecode(const string &input, bool plus_to_space) {
 	URLDecodeBuffer(input.c_str(), input.size(), result_data.get(), plus_to_space);
 	return string(result_data.get(), result_size);
 }
+
+uint32_t StringUtil::StringToEnum(const EnumStringLiteral enum_list[], idx_t enum_count, const char *enum_name,
+                                  const char *str_value) {
+	for (idx_t i = 0; i < enum_count; i++) {
+		if (CIEquals(enum_list[i].string, str_value)) {
+			return enum_list[i].number;
+		}
+	}
+	// string to enum conversion failed - generate candidates
+	vector<string> candidates;
+	for (idx_t i = 0; i < enum_count; i++) {
+		candidates.push_back(enum_list[i].string);
+	}
+	auto closest_values = TopNJaroWinkler(candidates, str_value);
+	auto message = CandidatesMessage(closest_values, "Candidates");
+	throw NotImplementedException("Enum value: unrecognized value \"%s\" for enum \"%s\"\n%s", str_value, enum_name,
+	                              message);
+}
+
+const char *StringUtil::EnumToString(const EnumStringLiteral enum_list[], idx_t enum_count, const char *enum_name,
+                                     uint32_t enum_value) {
+	for (idx_t i = 0; i < enum_count; i++) {
+		if (enum_list[i].number == enum_value) {
+			return enum_list[i].string;
+		}
+	}
+	throw NotImplementedException("Enum value: unrecognized enum value \"%d\" for enum \"%s\"", enum_value, enum_name);
+}
+
+const uint8_t StringUtil::ASCII_TO_UPPER_MAP[] = {
+    0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
+    22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
+    44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,
+    66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,  80,  81,  82,  83,  84,  85,  86,  87,
+    88,  89,  90,  91,  92,  93,  94,  95,  96,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,
+    78,  79,  80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  123, 124, 125, 126, 127, 128, 129, 130, 131,
+    132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153,
+    154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+    176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197,
+    198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219,
+    220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241,
+    242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255};
+
+const uint8_t StringUtil::ASCII_TO_LOWER_MAP[] = {
+    0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
+    22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
+    44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  97,
+    98,  99,  100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119,
+    120, 121, 122, 91,  92,  93,  94,  95,  96,  97,  98,  99,  100, 101, 102, 103, 104, 105, 106, 107, 108, 109,
+    110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131,
+    132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153,
+    154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+    176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197,
+    198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219,
+    220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241,
+    242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255};
 
 } // namespace duckdb

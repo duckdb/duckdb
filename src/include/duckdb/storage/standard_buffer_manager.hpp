@@ -49,7 +49,7 @@ public:
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed.
 	//! This buffer can be small (smaller than the block size of the temporary block manager).
 	//! Unpin and Pin are NOPs on this block of memory.
-	shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size) final;
+	shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size) final;
 
 	idx_t GetUsedMemory() const final;
 	idx_t GetMaxMemory() const final;
@@ -76,7 +76,7 @@ public:
 	void SetMemoryLimit(idx_t limit = (idx_t)-1) final;
 	void SetSwapLimit(optional_idx limit = optional_idx()) final;
 
-	//! Returns informaton about memory usage
+	//! Returns information about memory usage
 	vector<MemoryInformation> GetMemoryUsageInfo() const override;
 
 	//! Returns a list of all temporary files
@@ -120,7 +120,7 @@ protected:
 	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy);
 
 	//! Garbage collect eviction queue
-	void PurgeQueue(FileBufferType type) final;
+	void PurgeQueue(const BlockHandle &handle) final;
 
 	BufferPool &GetBufferPool() const final;
 	TemporaryMemoryManager &GetTemporaryMemoryManager() final;
@@ -148,7 +148,7 @@ protected:
 
 	//! When the BlockHandle reaches 0 readers, this creates a new FileBuffer for this BlockHandle and
 	//! overwrites the data within with garbage. Any readers that do not hold the pin will notice
-	void VerifyZeroReaders(shared_ptr<BlockHandle> &handle);
+	void VerifyZeroReaders(BlockLock &l, shared_ptr<BlockHandle> &handle);
 
 	void BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
 	               block_id_t first_block, block_id_t last_block);

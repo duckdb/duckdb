@@ -8,7 +8,7 @@
 #include "duckdb/common/union_by_name.hpp"
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -29,11 +29,12 @@
 
 namespace duckdb {
 
-unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompressionType compression,
+unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, const CSVReaderOptions &options,
                                            ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto &allocator = BufferAllocator::Get(context);
-	return CSVFileHandle::OpenFile(fs, allocator, file_path, compression);
+	auto &db_config = DBConfig::GetConfig(context);
+	return CSVFileHandle::OpenFile(db_config, fs, allocator, file_path, options);
 }
 
 ReadCSVData::ReadCSVData() {
@@ -52,36 +53,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 
 	options.FromNamedParameters(input.named_parameters, context);
-	if (options.rejects_table_name.IsSetByUser() && !options.store_rejects.GetValue() &&
-	    options.store_rejects.IsSetByUser()) {
-		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
-	}
-	if (options.rejects_scan_name.IsSetByUser() && !options.store_rejects.GetValue() &&
-	    options.store_rejects.IsSetByUser()) {
-		throw BinderException("REJECTS_SCAN option is only supported when store_rejects is not manually set to false");
-	}
-	if (options.rejects_scan_name.IsSetByUser() || options.rejects_table_name.IsSetByUser()) {
-		// Ensure we set store_rejects to true automagically
-		options.store_rejects.Set(true, false);
-	}
-	// Validate rejects_table options
-	if (options.store_rejects.GetValue()) {
-		if (!options.ignore_errors.GetValue() && options.ignore_errors.IsSetByUser()) {
-			throw BinderException(
-			    "STORE_REJECTS option is only supported when IGNORE_ERRORS is not manually set to false");
-		}
-		// Ensure we set ignore errors to true automagically
-		options.ignore_errors.Set(true, false);
-		if (options.file_options.union_by_name) {
-			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
-		}
-	}
-	if (options.rejects_limit != 0 && !options.store_rejects.GetValue()) {
-		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
-	}
 
 	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
-
+	options.Verify();
 	if (!options.auto_detect) {
 		if (!options.columns_set) {
 			throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
@@ -196,7 +170,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 		return nullptr;
 	}
 	return make_uniq<CSVGlobalState>(context, bind_data.buffer_manager, bind_data.options,
-	                                 context.db->NumberOfThreads(), bind_data.files, input.column_ids, bind_data);
+	                                 context.db->NumberOfThreads(), bind_data.files, input.column_indexes, bind_data);
 }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
@@ -294,6 +268,8 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
+	table_function.named_parameters["encoding"] = LogicalType::VARCHAR;
+	table_function.named_parameters["rfc_4180"] = LogicalType::BOOLEAN;
 
 	MultiFileReader::AddParameters(table_function);
 }

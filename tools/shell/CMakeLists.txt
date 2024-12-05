@@ -1,5 +1,4 @@
-add_definitions(-DSQLITE_OMIT_LOAD_EXTENSION=1)
-
+include_directories(include)
 include_directories(../sqlite3_api_wrapper/include)
 if(NOT WIN32)
   add_subdirectory(linenoise)
@@ -7,7 +6,8 @@ if(NOT WIN32)
   include_directories(../../third_party/utf8proc/include)
   include_directories(linenoise/include)
 endif()
-set(SHELL_SOURCES ${SHELL_SOURCES} shell.c)
+set(SHELL_SOURCES ${SHELL_SOURCES} shell.cpp shell_renderer.cpp
+                  shell_highlight.cpp)
 
 option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)
 

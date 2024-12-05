@@ -20,8 +20,4 @@ ScalarFunction ErrorFun::GetFunction() {
 	return fun;
 }
 
-void ErrorFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
-}
-
 } // namespace duckdb

@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
@@ -11,7 +11,7 @@ namespace duckdb {
 
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBufferManager> &buffer_manager,
                                const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-                               vector<column_t> column_ids_p, const ReadCSVData &bind_data_p)
+                               vector<ColumnIndex> column_ids_p, const ReadCSVData &bind_data_p)
     : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error), bind_data(bind_data_p) {
 
@@ -75,6 +75,12 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 }
 
 unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScanner> previous_scanner) {
+	if (previous_scanner) {
+		// We have to insert information for validation
+		lock_guard<mutex> parallel_lock(main_mutex);
+		validator.Insert(previous_scanner->csv_file_scan->file_idx, previous_scanner->scanner_idx,
+		                 previous_scanner->GetValidationLine());
+	}
 	if (single_threaded) {
 		idx_t cur_idx;
 		bool empty_file = false;
@@ -183,7 +189,13 @@ void CSVGlobalState::DecrementThread() {
 	D_ASSERT(running_threads > 0);
 	running_threads--;
 	if (running_threads == 0) {
-		for (auto &file : file_scans) {
+		bool ignore_or_store_errors =
+		    bind_data.options.ignore_errors.GetValue() || bind_data.options.store_rejects.GetValue();
+		if (!single_threaded && !ignore_or_store_errors) {
+			// If we are running multithreaded and not ignoring errors, we must run the validator
+			validator.Verify();
+		}
+		for (const auto &file : file_scans) {
 			file->error_handler->ErrorIfNeeded();
 		}
 		FillRejectsTable();

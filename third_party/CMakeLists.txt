@@ -13,6 +13,7 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(mbedtls)
   add_subdirectory(fsst)
   add_subdirectory(yyjson)
+  add_subdirectory(zstd)
 endif()
 
 if(NOT WIN32

@@ -83,8 +83,16 @@ bool ProgressBar::ShouldPrint(bool final) const {
 		// Don't print progress at all
 		return false;
 	}
-	// FIXME - do we need to check supported before running `profiler.Elapsed()` ?
-	auto sufficient_time_elapsed = profiler.Elapsed() > static_cast<double>(show_progress_after) / 1000.0;
+	if (!supported) {
+		return false;
+	}
+
+	double elapsed_time = -1.0;
+	if (elapsed_time < 0.0) {
+		elapsed_time = profiler.Elapsed();
+	}
+
+	auto sufficient_time_elapsed = elapsed_time > static_cast<double>(show_progress_after) / 1000.0;
 	if (!sufficient_time_elapsed) {
 		// Don't print yet
 		return false;
@@ -93,9 +101,6 @@ bool ProgressBar::ShouldPrint(bool final) const {
 		// Print the last completed bar
 		return true;
 	}
-	if (!supported) {
-		return false;
-	}
 	return query_progress.percentage > -1;
 }
 
@@ -103,16 +108,24 @@ void ProgressBar::Update(bool final) {
 	if (!final && !supported) {
 		return;
 	}
-	double new_percentage = -1;
-	auto rows_processed = query_progress.rows_processed.load();
-	auto total_rows_to_process = query_progress.total_rows_to_process.load();
-	supported = executor.GetPipelinesProgress(new_percentage, rows_processed, total_rows_to_process);
-	query_progress.rows_processed = rows_processed;
-	query_progress.total_rows_to_process = total_rows_to_process;
 
-	if (!final && !supported) {
+	ProgressData progress;
+	idx_t invalid_pipelines = executor.GetPipelinesProgress(progress);
+
+	double new_percentage = 0.0;
+	if (invalid_pipelines == 0 && progress.IsValid()) {
+		if (progress.total > 1e15) {
+			progress.Normalize(1e15);
+		}
+		query_progress.rows_processed = idx_t(progress.done);
+		query_progress.total_rows_to_process = idx_t(progress.total);
+		new_percentage = progress.ProgressDone() * 100;
+	}
+
+	if (!final && invalid_pipelines > 0) {
 		return;
 	}
+
 	if (new_percentage > query_progress.percentage) {
 		query_progress.percentage = new_percentage;
 	}

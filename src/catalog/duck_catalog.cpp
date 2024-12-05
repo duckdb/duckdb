@@ -8,6 +8,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/function/function_list.hpp"
 
 namespace duckdb {
 
@@ -32,9 +33,11 @@ void DuckCatalog::Initialize(bool load_builtin) {
 	CreateSchema(data, info);
 
 	if (load_builtin) {
-		// initialize default functions
 		BuiltinFunctions builtin(data, *this);
 		builtin.Initialize();
+
+		// initialize default functions
+		FunctionList::RegisterFunctions(*this, data);
 	}
 
 	Verify();
@@ -42,6 +45,10 @@ void DuckCatalog::Initialize(bool load_builtin) {
 
 bool DuckCatalog::IsDuckCatalog() {
 	return true;
+}
+
+optional_ptr<DependencyManager> DuckCatalog::GetDependencyManager() {
+	return dependency_manager.get();
 }
 
 //===--------------------------------------------------------------------===//
@@ -54,7 +61,7 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction 
 	if (!schemas->CreateEntry(transaction, info.schema, std::move(entry), dependencies)) {
 		return nullptr;
 	}
-	return (CatalogEntry *)result;
+	return result;
 }
 
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {
@@ -106,6 +113,10 @@ void DuckCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaC
 
 void DuckCatalog::ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback) {
 	schemas->Scan([&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
+}
+
+CatalogSet &DuckCatalog::GetSchemaCatalogSet() {
+	return *schemas;
 }
 
 optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,

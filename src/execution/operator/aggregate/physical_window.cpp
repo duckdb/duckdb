@@ -1,30 +1,15 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
-#include "duckdb/common/operator/add.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/radix_partitioning.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
-
-#include "duckdb/common/types/column/column_data_consumer.hpp"
-#include "duckdb/common/types/row/row_data_collection_scanner.hpp"
-#include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/windows_undefs.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/window_executor.hpp"
-#include "duckdb/execution/window_segment_tree.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/function/window/window_aggregate_function.hpp"
+#include "duckdb/function/window/window_cumedist_function.hpp"
+#include "duckdb/function/window/window_executor.hpp"
+#include "duckdb/function/window/window_rank_function.hpp"
+#include "duckdb/function/window/window_rownumber_function.hpp"
+#include "duckdb/function/window/window_shared_expressions.hpp"
+#include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-
-#include <algorithm>
-#include <cmath>
+//
 #include <numeric>
 
 namespace duckdb {
@@ -102,6 +87,8 @@ public:
 	ValidityMask partition_mask;
 	//! The order boundary mask
 	OrderMasks order_masks;
+	//! The fully materialised data collection
+	unique_ptr<WindowCollection> collection;
 	//! External paging
 	bool external;
 	// The processing stage for this group
@@ -145,6 +132,8 @@ public:
 	unique_ptr<WindowPartitionGlobalSinkState> global_partition;
 	//! The execution functions
 	Executors executors;
+	//! The shared expressions library
+	WindowSharedExpressions shared;
 };
 
 class WindowPartitionGlobalSinkState : public PartitionGlobalSinkState {
@@ -215,31 +204,31 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 }
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,
-                                                        WindowAggregationMode mode) {
+                                                        WindowSharedExpressions &shared, WindowAggregationMode mode) {
 	switch (wexpr.type) {
 	case ExpressionType::WINDOW_AGGREGATE:
-		return make_uniq<WindowAggregateExecutor>(wexpr, context, mode);
+		return make_uniq<WindowAggregateExecutor>(wexpr, context, shared, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		return make_uniq<WindowRowNumberExecutor>(wexpr, context);
+		return make_uniq<WindowRowNumberExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_RANK_DENSE:
-		return make_uniq<WindowDenseRankExecutor>(wexpr, context);
+		return make_uniq<WindowDenseRankExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_RANK:
-		return make_uniq<WindowRankExecutor>(wexpr, context);
+		return make_uniq<WindowRankExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_PERCENT_RANK:
-		return make_uniq<WindowPercentRankExecutor>(wexpr, context);
+		return make_uniq<WindowPercentRankExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_CUME_DIST:
-		return make_uniq<WindowCumeDistExecutor>(wexpr, context);
+		return make_uniq<WindowCumeDistExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_NTILE:
-		return make_uniq<WindowNtileExecutor>(wexpr, context);
+		return make_uniq<WindowNtileExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		return make_uniq<WindowLeadLagExecutor>(wexpr, context);
+		return make_uniq<WindowLeadLagExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_FIRST_VALUE:
-		return make_uniq<WindowFirstValueExecutor>(wexpr, context);
+		return make_uniq<WindowFirstValueExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_LAST_VALUE:
-		return make_uniq<WindowLastValueExecutor>(wexpr, context);
+		return make_uniq<WindowLastValueExecutor>(wexpr, context, shared);
 	case ExpressionType::WINDOW_NTH_VALUE:
-		return make_uniq<WindowNthValueExecutor>(wexpr, context);
+		return make_uniq<WindowNthValueExecutor>(wexpr, context, shared);
 		break;
 	default:
 		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
@@ -256,7 +245,7 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
-		auto wexec = WindowExecutorFactory(wexpr, context, mode);
+		auto wexec = WindowExecutorFactory(wexpr, context, shared, mode);
 		executors.emplace_back(std::move(wexec));
 	}
 
@@ -568,6 +557,15 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gstate, const idx_t hash
 	if (rows) {
 		blocks = rows->blocks.size();
 	}
+
+	// Set up the collection for any fully materialised data
+	const auto &shared = WindowSharedExpressions::GetSortedExpressions(gstate.shared.coll_shared);
+	vector<LogicalType> types;
+	for (auto &expr : shared) {
+		types.emplace_back(expr->return_type);
+	}
+	auto &buffer_manager = BufferManager::GetBufferManager(gstate.context);
+	collection = make_uniq<WindowCollection>(buffer_manager, count, types);
 }
 
 // Per-thread scan state
@@ -606,6 +604,19 @@ protected:
 	void Sink();
 	void Finalize();
 	void GetData(DataChunk &chunk);
+
+	//! Storage and evaluation for the fully materialised data
+	unique_ptr<WindowBuilder> builder;
+	ExpressionExecutor coll_exec;
+	DataChunk coll_chunk;
+
+	//! Storage and evaluation for chunks used in the sink/build phase
+	ExpressionExecutor sink_exec;
+	DataChunk sink_chunk;
+
+	//! Storage and evaluation for chunks used in the evaluate phase
+	ExpressionExecutor eval_exec;
+	DataChunk eval_chunk;
 };
 
 WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::Initialize(WindowGlobalSinkState &gsink) {
@@ -660,8 +671,30 @@ void WindowLocalSourceState::Sink() {
 				break;
 			}
 
+			//	Compute fully materialised expressions
+			if (coll_chunk.data.empty()) {
+				coll_chunk.SetCardinality(input_chunk);
+			} else {
+				coll_chunk.Reset();
+				coll_exec.Execute(input_chunk, coll_chunk);
+				auto collection = window_hash_group->collection.get();
+				if (!builder || &builder->collection != collection) {
+					builder = make_uniq<WindowBuilder>(*collection);
+				}
+
+				builder->Sink(coll_chunk, input_idx);
+			}
+
+			// Compute sink expressions
+			if (sink_chunk.data.empty()) {
+				sink_chunk.SetCardinality(input_chunk);
+			} else {
+				sink_chunk.Reset();
+				sink_exec.Execute(input_chunk, sink_chunk);
+			}
+
 			for (idx_t w = 0; w < executors.size(); ++w) {
-				executors[w]->Sink(input_chunk, input_idx, window_hash_group->count, *gestates[w], *local_states[w]);
+				executors[w]->Sink(sink_chunk, coll_chunk, input_idx, *gestates[w], *local_states[w]);
 			}
 
 			window_hash_group->sunk += input_chunk.size();
@@ -677,15 +710,20 @@ void WindowLocalSourceState::Finalize() {
 	D_ASSERT(task);
 	D_ASSERT(task->stage == WindowGroupStage::FINALIZE);
 
+	// First finalize the collection (so the executors can use it)
+	auto &gsink = gsource.gsink;
+	if (window_hash_group->collection) {
+		window_hash_group->collection->Combine(gsink.shared.coll_validity);
+	}
+
 	// Finalize all the executors.
 	// Parallel finalisation is handled internally by the executor,
 	// and should not return until all threads have completed work.
-	auto &gsink = gsource.gsink;
 	const auto &executors = gsink.executors;
 	auto &gestates = window_hash_group->gestates;
 	auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
 	for (idx_t w = 0; w < executors.size(); ++w) {
-		executors[w]->Finalize(*gestates[w], *local_states[w]);
+		executors[w]->Finalize(*gestates[w], *local_states[w], window_hash_group->collection);
 	}
 
 	//	Mark this range as done
@@ -693,7 +731,9 @@ void WindowLocalSourceState::Finalize() {
 	task->begin_idx = task->end_idx;
 }
 
-WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource) : gsource(gsource), batch_index(0) {
+WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
+    : gsource(gsource), batch_index(0), coll_exec(gsource.context), sink_exec(gsource.context),
+      eval_exec(gsource.context) {
 	auto &gsink = gsource.gsink;
 	auto &global_partition = *gsink.global_partition;
 
@@ -705,6 +745,11 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 		output_types.emplace_back(wexpr.return_type);
 	}
 	output_chunk.Initialize(global_partition.allocator, output_types);
+
+	auto &shared = gsink.shared;
+	shared.PrepareCollection(coll_exec, coll_chunk);
+	shared.PrepareSink(sink_exec, sink_chunk);
+	shared.PrepareEvaluate(eval_exec, eval_chunk);
 
 	++gsource.locals;
 }
@@ -819,7 +864,13 @@ void WindowLocalSourceState::GetData(DataChunk &result) {
 		auto &gstate = *gestates[expr_idx];
 		auto &lstate = *local_states[expr_idx];
 		auto &result = output_chunk.data[expr_idx];
-		executor.Evaluate(position, input_chunk, result, lstate, gstate);
+		if (eval_chunk.data.empty()) {
+			eval_chunk.SetCardinality(input_chunk);
+		} else {
+			eval_chunk.Reset();
+			eval_exec.Execute(input_chunk, eval_chunk);
+		}
+		executor.Evaluate(position, eval_chunk, result, lstate, gstate);
 	}
 	output_chunk.SetCardinality(input_chunk);
 	output_chunk.Verify();
@@ -881,13 +932,20 @@ OrderPreservationType PhysicalWindow::SourceOrder() const {
 	return OrderPreservationType::FIXED_ORDER;
 }
 
-double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
+ProgressData PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
 	const auto returned = gsource.returned.load();
 
 	auto &gsink = gsource.gsink;
 	const auto count = gsink.global_partition->count.load();
-	return count ? (double(returned) / double(count)) : -1;
+	ProgressData res;
+	if (count) {
+		res.done = double(returned);
+		res.total = double(count);
+	} else {
+		res.SetInvalid();
+	}
+	return res;
 }
 
 OperatorPartitionData PhysicalWindow::GetPartitionData(ExecutionContext &context, DataChunk &chunk,

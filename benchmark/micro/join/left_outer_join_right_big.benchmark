@@ -1,23 +1,23 @@
 # name: benchmark/micro/join/left_outer_join_right_big.benchmark
-# description: LEFT OUTER JOIN between two tables, where the right table is significantly bigger than the left table
+# description: LEFT OUTER JOIN between two tables, where the right table is significantly bigger than the LEFT table
 # group: [join]
 
-name Left Outer Join (big RHS, small LHS)
+name LEFT OUTER JOIN (big RHS, small LHS)
 group join
 
 load
-select setseed(0.4);
+SELECT setseed(0.4);
 CREATE TABLE small_table ( pkey integer, c0 char(2), c_1k integer, c_10k integer, c_100k integer, c_1m integer, c_10m integer, c_100m integer );
-insert into small_table
-select i, concat('A',mod(i,2)), (random()* 1000)::int, (random()* 10000)::int, (random()* 100000)::int,
-         (random()* 1000000)::int, (random()* 10000000)::int, (random()* 100000000)::int  FROM range(0,10000) tbl(i) ;
+INSERT INTO small_table
+SELECT i, concat('A',mod(i,2)), (random()* 1000)::int, (random()* 10000)::int, (random()* 100000)::int,
+     (random()* 1000000)::int, (random()* 10000000)::int, (random()* 100000000)::int FROM range(0,10000) tbl(i) ;
 CREATE TABLE big_table ( pkey integer, c0 char(2), c_1k integer, c_10k integer, c_100k integer, c_1m integer, c_10m integer, c_100m integer);
-insert into big_table
-select i, concat('A',mod(i,2)), (random()* 1000)::int, (random()* 10000)::int, (random()* 100000)::int,
-         (random()* 1000000)::int, (random()* 10000000)::int, (random()* 100000000)::int  FROM range(0,100000000) tbl(i);
+INSERT INTO big_table
+SELECT i, concat('A',mod(i,2)), (random()* 1000)::int, (random()* 10000)::int, (random()* 100000)::int,
+     (random()* 1000000)::int, (random()* 10000000)::int, (random()* 100000000)::int FROM range(0,100000000) tbl(i);
 
 run
-select count(*) from small_table d left outer join big_table f on ( d.pkey=f.c_10k);
+SELECT count(*) FROM small_table d LEFT OUTER JOIN big_table f ON ( d.pkey=f.c_10k);
 
 result I
-99995031
+99995004

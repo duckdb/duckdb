@@ -59,7 +59,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {
-	if (!partitioned_data || RadixPartitioning::RadixBits(partitioned_data->PartitionCount()) != radix_bits) {
+	if (!partitioned_data ||
+	    RadixPartitioning::RadixBitsOfPowerOfTwo(partitioned_data->PartitionCount()) != radix_bits) {
 		D_ASSERT(!partitioned_data || partitioned_data->Count() == 0);
 		partitioned_data =
 		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
@@ -131,7 +132,11 @@ idx_t GroupedAggregateHashTable::Capacity() const {
 }
 
 idx_t GroupedAggregateHashTable::ResizeThreshold() const {
-	return LossyNumericCast<idx_t>(static_cast<double>(Capacity()) / LOAD_FACTOR);
+	return ResizeThreshold(Capacity());
+}
+
+idx_t GroupedAggregateHashTable::ResizeThreshold(const idx_t capacity) {
+	return LossyNumericCast<idx_t>(static_cast<double>(capacity) / LOAD_FACTOR);
 }
 
 idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
@@ -155,7 +160,7 @@ void GroupedAggregateHashTable::Verify() {
 }
 
 void GroupedAggregateHashTable::ClearPointerTable() {
-	std::fill_n(entries, capacity, ht_entry_t::GetEmptyEntry());
+	std::fill_n(entries, capacity, ht_entry_t());
 }
 
 void GroupedAggregateHashTable::ResetCount() {
@@ -166,11 +171,15 @@ void GroupedAggregateHashTable::SetRadixBits(idx_t radix_bits_p) {
 	radix_bits = radix_bits_p;
 }
 
+idx_t GroupedAggregateHashTable::GetRadixBits() const {
+	return radix_bits;
+}
+
 void GroupedAggregateHashTable::Resize(idx_t size) {
 	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 	D_ASSERT(IsPowerOfTwo(size));
-	if (size < capacity) {
-		throw InternalException("Cannot downsize a hash table!");
+	if (Count() != 0 && size < capacity) {
+		throw InternalException("Cannot downsize a non-empty hash table!");
 	}
 
 	capacity = size;

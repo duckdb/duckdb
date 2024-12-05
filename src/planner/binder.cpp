@@ -7,6 +7,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -343,9 +344,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
 	if (node.type != QueryNodeType::CTE_NODE && // Issue #13850 - Don't auto-materialize if users materialize (for now)
-	    context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
-	        context.db->config.options.disabled_optimizers.end() &&
-	    context.config.enable_optimizer && OptimizeCTEs(node)) {
+	    !Optimizer::OptimizerDisabled(context, OptimizerType::MATERIALIZED_CTE) && context.config.enable_optimizer &&
+	    OptimizeCTEs(node)) {
 		switch (node.type) {
 		case QueryNodeType::SELECT_NODE:
 			result = BindWithCTE(node.Cast<SelectNode>());
@@ -682,13 +682,13 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 
 	auto binder = Binder::CreateBinder(context);
 
-	vector<column_t> bound_columns;
+	vector<ColumnIndex> bound_columns;
 	idx_t column_count = 0;
 	for (auto &col : table.GetColumns().Logical()) {
 		names.push_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {
-			bound_columns.push_back(column_count);
+			bound_columns.emplace_back(column_count);
 		}
 		column_count++;
 	}

@@ -1,7 +1,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -492,12 +492,12 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 				info.collated_groups[i] = result->aggregates.size();
 
-				auto first_fun = FirstFun::GetFunction(bound_expr_ref.return_type);
+				auto first_fun = FirstFunctionGetter::GetFunction(bound_expr_ref.return_type);
 				vector<unique_ptr<Expression>> first_children;
 				// FIXME: would be better to just refer to this expression, but for now we copy
 				first_children.push_back(bound_expr_ref.Copy());
 
-				FunctionBinder function_binder(context);
+				FunctionBinder function_binder(*this);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
 				function->alias = "__collated_group";
 				result->aggregates.push_back(std::move(function));
@@ -616,12 +616,22 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// push the GROUP BY ALL expressions into the group set
+
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result->select_list[group_by_all_index];
 		auto group_ref = make_uniq<BoundColumnRefExpression>(
 		    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
 		result->groups.group_expressions.push_back(std::move(expr));
 		expr = std::move(group_ref);
+	}
+	set<idx_t> group_by_all_indexes_set;
+	if (!group_by_all_indexes.empty()) {
+		idx_t num_set_indexes = result->groups.group_expressions.size();
+		for (idx_t i = 0; i < num_set_indexes; i++) {
+			group_by_all_indexes_set.insert(i);
+		}
+		D_ASSERT(result->groups.grouping_sets.empty());
+		result->groups.grouping_sets.push_back(group_by_all_indexes_set);
 	}
 	result->column_count = new_names.size();
 	result->names = std::move(new_names);

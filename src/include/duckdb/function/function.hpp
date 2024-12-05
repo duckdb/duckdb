@@ -43,8 +43,19 @@ enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_H
 //!                            but the result might change across queries (e.g. NOW(), CURRENT_TIME)
 //! VOLATILE                -> the result of this function might change per row (e.g. RANDOM())
 enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
+
 //! Whether or not a function can throw an error or not
 enum class FunctionErrors : uint8_t { CANNOT_ERROR = 0, CAN_THROW_ERROR = 1 };
+
+//! How to handle collations
+//! PROPAGATE_COLLATIONS        -> this function combines collation from its inputs and emits them again (default)
+//! PUSH_COMBINABLE_COLLATIONS  -> combinable collations are executed for the input arguments
+//! IGNORE_COLLATIONS           -> collations are completely ignored by the function
+enum class FunctionCollationHandling : uint8_t {
+	PROPAGATE_COLLATIONS = 0,
+	PUSH_COMBINABLE_COLLATIONS = 1,
+	IGNORE_COLLATIONS = 2
+};
 
 struct FunctionData {
 	DUCKDB_API virtual ~FunctionData();
@@ -164,6 +175,8 @@ public:
 	FunctionNullHandling null_handling;
 	//! Whether or not this function can throw an error
 	FunctionErrors errors;
+	//! Collation handling of the function
+	FunctionCollationHandling collation_handling;
 
 public:
 	DUCKDB_API hash_t Hash() const;
