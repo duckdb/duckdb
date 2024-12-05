@@ -21,8 +21,9 @@ FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) {
 }
 
 string StructFilter::ToString(const string &column_name) {
-	string access_name = (child_name == "") ? ("[" + std::to_string(child_idx) + "]") : ("." + child_name);
-	return child_filter->ToString(column_name + access_name);
+	string method_name = (child_name == "") ? "struct_extract_at" : "struct_extract";
+	string access_name = (child_name == "") ? std::to_string(child_idx+1) : child_name;
+	return child_filter->ToString(method_name + "(" + column_name + "," + access_name + ")");
 }
 
 bool StructFilter::Equals(const TableFilter &other_p) const {
