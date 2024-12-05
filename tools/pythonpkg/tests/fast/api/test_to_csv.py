@@ -181,10 +181,10 @@ class TestToCSV(object):
             f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);'''
         )
         expected = [
-            (True, 3.0, 123.0, 'e', 'b'),
-            (True, 4.0, 321.0, 'f', 'b'),
             (True, 1.0, 42.0, 'a', 'a'),
             (False, 3.2, None, 'b,c', 'a'),
+            (True, 3.0, 123.0, 'e', 'b'),
+            (True, 4.0, 321.0, 'f', 'b'),
         ]
 
         assert csv_rel.execute().fetchall() == expected
@@ -230,12 +230,11 @@ class TestToCSV(object):
         )
         # When partition columns are read from directory names, column order become different from original
         expected = [
-            ('d', True, 3.0, 123.0, 'e', 'b'),
-            ('d', True, 4.0, 321.0, 'f', 'b'),
             ('c', True, 1.0, 42.0, 'a', 'a'),
             ('c', False, 3.2, None, 'b,c', 'a'),
+            ('d', True, 3.0, 123.0, 'e', 'b'),
+            ('d', True, 4.0, 321.0, 'f', 'b'),
         ]
-
         assert csv_rel.execute().fetchall() == expected
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
