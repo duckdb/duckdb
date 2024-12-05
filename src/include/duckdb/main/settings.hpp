@@ -519,7 +519,7 @@ struct EnableMacroDependenciesSetting {
 struct EnableObjectCacheSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_object_cache";
-	static constexpr const char *Description = "Whether or not object cache is used to cache e.g. Parquet metadata";
+	static constexpr const char *Description = "[PLACEHOLDER] Legacy setting - does nothing";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

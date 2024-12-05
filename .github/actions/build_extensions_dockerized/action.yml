@@ -185,7 +185,7 @@ runs:
             elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
               duckdb/scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
             elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
-              duckdb/scripts/extension-upload-all.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
+              duckdb/scripts/extension-upload-all.sh ${{ inputs.deploy_as }} "${GITHUB_SHA:0:10}"
             fi
           fi
 

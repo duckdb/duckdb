@@ -61,7 +61,7 @@ select id, value as filename, date from parquet_scan('data/parquet-testing/hive-
 # These tests confirm that the ParquetScanStats will properly handle the pruned files list
 
 statement ok
-pragma enable_object_cache
+SET parquet_metadata_cache=true;
 
 query II
 select id, value from parquet_scan('data/parquet-testing/hive-partitioning/*/*/*/test.parquet', FILENAME=1) where filename like '%mismatching_count%' and id > 1;
