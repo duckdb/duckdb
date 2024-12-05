@@ -2,6 +2,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include <unordered_set>
 
 namespace duckdb {
 
@@ -637,7 +638,7 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesFast(idx_t sample_ch
 
 	// how much weight to the other tuples have compared to the ones in this chunk?
 	auto weight_tuples_other = static_cast<double>(chunk_length) / static_cast<double>(GetTuplesSeen() + chunk_length);
-	auto num_to_pop = static_cast<uint32_t>(round(weight_tuples_other * sample_count));
+	auto num_to_pop = static_cast<uint32_t>(round(weight_tuples_other * static_cast<double>(sample_count)));
 	D_ASSERT(num_to_pop <= sample_count);
 	D_ASSERT(num_to_pop <= sel_size);
 	SelectionVectorHelper ret;
