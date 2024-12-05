@@ -6,47 +6,47 @@ PRAGMA enable_verification
 
 load __TEST_DIR__/test_samples_basic.db
 
-#query I
-#select count(*) from range(100000) using sample (10000);
-#----
-#10000
-#
-#query I
-#select count(*) from range(100) using sample (10);
-#----
-#10
-#
-#query I
-#select count(*) from range(205000) using sample (10000);
-#----
-#10000
-#
-#statement ok
-#create table t1 as select range a from range(204800);
-#
-#statement ok
-#select * from duckdb_table_sample('t1');
-#
-#statement ok
-#create or replace table t1 as select range a from range(1000);
-#
-#query II
-#select avg(a) > 200, avg(a) < 800 from duckdb_table_sample('t1');
-#----
-#true	true
-#
-#statement ok
-#create or replace table t1 as select range a from range(204800);
-#
-#query II
-#select avg(a) > 20480, avg(a) < (0.9*204800) from duckdb_table_sample('t1');
-#----
-#true	true
-#
-#query I
-#select count(*) from t1 using sample (200000);
-#----
-#200000
+query I
+select count(*) from range(100000) using sample (10000);
+----
+10000
+
+query I
+select count(*) from range(100) using sample (10);
+----
+10
+
+query I
+select count(*) from range(205000) using sample (10000);
+----
+10000
+
+statement ok
+create table t1 as select range a from range(204800);
+
+statement ok
+select * from duckdb_table_sample('t1');
+
+statement ok
+create or replace table t1 as select range a from range(1000);
+
+query II
+select avg(a) > 200, avg(a) < 800 from duckdb_table_sample('t1');
+----
+true	true
+
+statement ok
+create or replace table t1 as select range a from range(204800);
+
+query II
+select avg(a) > 20480, avg(a) < (0.9*204800) from duckdb_table_sample('t1');
+----
+true	true
+
+query I
+select count(*) from t1 using sample (200000);
+----
+200000
 
 statement ok
 create or replace table materialized_range as select * from range(100);
@@ -57,7 +57,7 @@ create or replace table integers_1 as (select range b from materialized_range);
 query I
 select * from duckdb_table_sample('integers_1');
 ----
-33
+54
 
 # sample exists after restart
 restart
@@ -65,5 +65,5 @@ restart
 query I
 select * from duckdb_table_sample('integers_1');
 ----
-33
+54
 

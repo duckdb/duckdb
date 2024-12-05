@@ -85,7 +85,7 @@ SourceResultType PhysicalReservoirSample::GetData(ExecutionContext &context, Dat
 	if (!sink.sample) {
 		return SourceResultType::FINISHED;
 	}
-	auto sample_chunk = sink.sample->GetChunk(0, true);
+	auto sample_chunk = sink.sample->GetChunk();
 	if (!sample_chunk) {
 		return SourceResultType::FINISHED;
 	}

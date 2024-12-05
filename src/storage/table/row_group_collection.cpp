@@ -451,7 +451,7 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 		auto &ingest_sample = global_sample->Cast<ReservoirSample>();
 		ingest_sample.Merge(std::move(local_sample));
 		// initialize the thread local sample again
-		auto new_local_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
+		auto new_local_sample = make_uniq<ReservoirSample>(ingest_sample.GetSampleCount());
 		state.stats.SetTableSample(*local_stats_lock, std::move(new_local_sample));
 		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
 	} else {
@@ -1247,8 +1247,9 @@ unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 	auto &sample = stats.GetTableSampleRef(*lock);
 	if (!sample.destroyed) {
 		D_ASSERT(sample.type == SampleType::RESERVOIR_SAMPLE);
-		auto &reservoir = sample.Cast<ReservoirSample>();
-		return reservoir.Copy();
+		auto ret = sample.Copy();
+		ret->Cast<ReservoirSample>().EvictOverBudgetSamples();
+		return ret;
 	}
 	return nullptr;
 }

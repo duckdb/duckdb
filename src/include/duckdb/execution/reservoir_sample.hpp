@@ -15,13 +15,31 @@
 
 #include "duckdb/common/queue.hpp"
 
-#define FIXED_SAMPLE_SIZE STANDARD_VECTOR_SIZE
+// Originally intended to be the vector size, but in order to run on
+// vector size = 2, we had to change it.
+#define FIXED_SAMPLE_SIZE 2048
 
 namespace duckdb {
 
 enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RESERVOIR_PERCENTAGE_SAMPLE = 2 };
 
 enum class SamplingState : uint8_t { RANDOM = 0, RESERVOIR = 1 };
+
+class ReservoirRNG : public RandomEngine {
+public:
+	typedef uint32_t result_type;
+
+	explicit ReservoirRNG(int64_t seed) : RandomEngine(seed) {};
+	result_type operator()() {
+		return NextRandomInteger();
+	};
+	static constexpr result_type min() {
+		return NumericLimits<result_type>::Minimum();
+	}; // function pointer will be set in subclass constructor
+	static constexpr result_type max() {
+		return NumericLimits<result_type>::Maximum();
+	};
+};
 
 //! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
 class BaseReservoirSampling {
@@ -46,7 +64,7 @@ public:
 	unique_ptr<BaseReservoirSampling> Copy();
 
 	//! The random generator
-	RandomEngine random;
+	ReservoirRNG random;
 
 	//! The next element to sample
 	idx_t next_index_to_sample;
@@ -100,7 +118,7 @@ public:
 
 	//! Fetches a chunk from the sample. destroy = true should only be used when
 	//! querying from a sample defined in a query and not a duckdb_table_sample.
-	virtual unique_ptr<DataChunk> GetChunk(idx_t offset = 0, bool destroy = false) = 0;
+	virtual unique_ptr<DataChunk> GetChunk() = 0;
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<BlockingSample> Deserialize(Deserializer &deserializer);
@@ -165,12 +183,12 @@ public:
 
 	SamplingState GetSamplingState() const;
 
-	//! Shrink the Ingestion Sample to only contain the tuples that are in the
-	//! reservoir weights or are in the "actual_indexes"
-	void Shrink();
+	//! Vacuum the Reservoir Sample so it throws away tuples that are not in the
+	//! reservoir weights or in the selection vector
+	void Vacuum();
 
-	//! Transform To "Slow" Merging IngestionSample
-	void ConvertToSlowSample();
+	//! Transform To sample based on reservoir sampling paper
+	void ConvertToReservoirSample();
 
 	//! Get the capactiy of the data chunk reserved for storing samples
 	idx_t GetReservoirChunkCapacity() const;
@@ -183,7 +201,7 @@ public:
 	idx_t FillReservoir(DataChunk &chunk);
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
-	//! Merge two Ingestion Samples. Other must be an ingestion sample
+	//! Merge two Reservoir Samples. Other must be a reservoir sample
 	void Merge(unique_ptr<BlockingSample> other);
 
 	void ShuffleSel(SelectionVector &sel, idx_t range, idx_t size) const;
@@ -203,7 +221,7 @@ public:
 	//! Fetches a chunk from the sample. Note that this method is destructive and should only be used after the
 	//! sample is completely built.
 	// unique_ptr<DataChunk> GetChunkAndDestroy() override;
-	unique_ptr<DataChunk> GetChunk(idx_t offset, bool destroy = false) override;
+	unique_ptr<DataChunk> GetChunk() override;
 	void Destroy() override;
 	void Finalize() override;
 	void Verify();
@@ -228,16 +246,15 @@ private:
 	// the selection vector. If throw away values at selection vector index i = 5 , we need to update all indexes
 	// i > 5. Otherwise we will have indexes in the weights that are greater than the length of our sample.
 	void NormalizeWeights();
-	bool IsShuffled() const;
 
 	SelectionVectorHelper GetReplacementIndexesSlow(const idx_t sample_chunk_offset, const idx_t chunk_length);
 	SelectionVectorHelper GetReplacementIndexesFast(const idx_t sample_chunk_offset, const idx_t chunk_length);
 	void SimpleMerge(ReservoirSample &other);
-	void WeightedMerge(ReservoirSample &other_ingest);
+	void WeightedMerge(ReservoirSample &other_sample);
 
 	// Helper methods for Shrink().
-	// Shrink has different logic depending on if the IngestionSample is still in
-	// "Fast" mode or in "Slow" mode. This function creates a new sample chunk
+	// Shrink has different logic depending on if the Reservoir sample is still in
+	// "Random" mode or in "reservoir" mode. This function creates a new sample chunk
 	// to copy the old sample chunk into
 	unique_ptr<ReservoirChunk> CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const;
 
@@ -248,7 +265,7 @@ private:
 	idx_t sample_count;
 	Allocator &allocator;
 	unique_ptr<ReservoirChunk> reservoir_chunk;
-	bool internal_sample;
+	bool stats_sample;
 	SelectionVector sel;
 	idx_t sel_size;
 };
@@ -270,7 +287,7 @@ public:
 	unique_ptr<BlockingSample> Copy() const override;
 
 	//! Fetches a chunk from the sample. If destory = true this method is descructive
-	unique_ptr<DataChunk> GetChunk(idx_t offset, bool destroy = false) override;
+	unique_ptr<DataChunk> GetChunk() override;
 	void Finalize() override;
 
 	void Serialize(Serializer &serializer) const override;

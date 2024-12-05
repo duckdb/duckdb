@@ -67,7 +67,7 @@ static void DuckDBTableSampleTable(ClientContext &context, DuckDBTableSampleOper
 		data.sample = table.GetSample();
 	}
 	if (data.sample) {
-		auto sample_chunk = data.sample->GetChunk(data.sample_offset);
+		auto sample_chunk = data.sample->GetChunk();
 		if (sample_chunk) {
 			sample_chunk->Copy(output, 0);
 			data.sample_offset += sample_chunk->size();

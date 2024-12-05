@@ -18,11 +18,11 @@ namespace duckdb {
 class ClientContext;
 struct RandomState;
 
-struct RandomEngine {
+class RandomEngine {
+public:
 	explicit RandomEngine(int64_t seed = -1);
 	~RandomEngine();
 
-public:
 	//! Generate a random number between min and max
 	double NextRandom(double min, double max);
 

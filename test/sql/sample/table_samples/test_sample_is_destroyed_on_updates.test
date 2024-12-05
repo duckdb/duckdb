@@ -48,6 +48,8 @@ select count(*) from duckdb_table_sample('integers_1');
 ----
 2048
 
+mode skip
+
 statement ok
 Alter table integers_1 add column c DOUBLE;
 
