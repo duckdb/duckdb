@@ -88,7 +88,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 }
 
 static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context, ScalarFunction &bound_function,
-                                                          vector<unique_ptr<Expression>> &arguments, bool unnamed_only) {
+                                                          vector<unique_ptr<Expression>> &arguments, bool by_pos) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	auto &child_type = arguments[0]->return_type;
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
@@ -99,7 +99,7 @@ static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context
 	if (struct_children.empty()) {
 		throw InternalException("Can't extract something from an empty struct");
 	}
-	if (unnamed_only && !StructType::IsUnnamed(child_type)) {
+	if (by_pos && !StructType::IsUnnamed(child_type)) {
 		throw BinderException(
 		    "struct_extract with an integer key can only be used on unnamed structs, use a string key instead");
 	}
