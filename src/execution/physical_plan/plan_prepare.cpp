@@ -8,8 +8,8 @@ namespace duckdb {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
 	D_ASSERT(op.children.size() <= 1);
 
-	// generate physical plan
-	if (!op.children.empty()) {
+	// generate physical plan only when all parameters are bound (otherwise the physical plan won't be used anyway)
+	if (op.prepared->properties.bound_all_parameters && !op.children.empty()) {
 		auto plan = CreatePlan(*op.children[0]);
 		op.prepared->types = plan->types;
 		op.prepared->plan = std::move(plan);
