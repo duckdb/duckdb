@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-StructFilter::StructFilter(idx_t child_idx_p, string child_name_p, unique_ptr<TableFilter> child_filter_p)
+StructFilter::StructFilter(idx_t child_idx_p, unique_ptr<TableFilter> child_filter_p, string child_name_p)
     : TableFilter(TableFilterType::STRUCT_EXTRACT), child_idx(child_idx_p), child_name(std::move(child_name_p)),
       child_filter(std::move(child_filter_p)) {
 }
@@ -35,7 +35,7 @@ bool StructFilter::Equals(const TableFilter &other_p) const {
 }
 
 unique_ptr<TableFilter> StructFilter::Copy() const {
-	return make_uniq<StructFilter>(child_idx, child_name, child_filter->Copy());
+	return make_uniq<StructFilter>(child_idx, child_filter->Copy(), child_name);
 }
 
 unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) const {
@@ -43,7 +43,7 @@ unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) cons
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(column.Copy());
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx + 1))));
-	auto child = make_uniq<BoundFunctionExpression>(child_type, GetIndexExtractFunction(), std::move(arguments),
+	auto child = make_uniq<BoundFunctionExpression>(child_type, GetExtractAtFunction(), std::move(arguments),
 	                                                GetBindData(child_idx));
 	return child_filter->ToExpression(*child);
 }

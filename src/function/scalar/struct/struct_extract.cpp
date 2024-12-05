@@ -87,8 +87,8 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	return GetBindData(key_index);
 }
 
-static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context, ScalarFunction &bound_function,
+                                                          vector<unique_ptr<Expression>> &arguments, bool unnamed_only) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	auto &child_type = arguments[0]->return_type;
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
@@ -98,6 +98,10 @@ static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, S
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
 		throw InternalException("Can't extract something from an empty struct");
+	}
+	if (unnamed_only && !StructType::IsUnnamed(child_type)) {
+		throw BinderException(
+			"struct_extract with an integer key can only be used on unnamed structs, use a string key instead");
 	}
 	bound_function.arguments[0] = child_type;
 
@@ -117,6 +121,16 @@ static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, S
 	}
 	bound_function.return_type = struct_children[NumericCast<idx_t>(index - 1)].second;
 	return GetBindData(NumericCast<idx_t>(index - 1));
+}
+
+static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<unique_ptr<Expression>> &arguments) {
+	return StructExtractBindInternal(context, bound_function, arguments, true);
+}
+
+static unique_ptr<FunctionData> StructExtractAtBind(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
+	return StructExtractBindInternal(context, bound_function, arguments, false);
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -142,12 +156,23 @@ ScalarFunction GetIndexExtractFunction() {
 	                      StructExtractFunction, StructExtractBindIndex);
 }
 
+ScalarFunction GetExtractAtFunction() {
+	return ScalarFunction("struct_extract_at", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
+	                      StructExtractFunction, StructExtractAtBind);
+}
+
 ScalarFunctionSet StructExtractFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunctionSet struct_extract_set("struct_extract");
 	struct_extract_set.AddFunction(GetKeyExtractFunction());
 	struct_extract_set.AddFunction(GetIndexExtractFunction());
 	return struct_extract_set;
+}
+
+ScalarFunctionSet StructExtractAtFun::GetFunctions() {
+	ScalarFunctionSet struct_extractat_set("struct_extract_at");
+	struct_extractat_set.AddFunction(GetExtractAtFunction());
+	return struct_extractat_set;
 }
 
 } // namespace duckdb
