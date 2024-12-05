@@ -236,16 +236,17 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 }
 
 GroupedAggregateHashTable::AggregateDictionaryState::AggregateDictionaryState()
-	: hashes(LogicalType::HASH), new_dictionary_pointers(LogicalType::POINTER), unique_entries(STANDARD_VECTOR_SIZE) {
+    : hashes(LogicalType::HASH), new_dictionary_pointers(LogicalType::POINTER), unique_entries(STANDARD_VECTOR_SIZE) {
 }
 
-optional_idx GroupedAggregateHashTable::TryAddChunkDictionary(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter) {
+optional_idx GroupedAggregateHashTable::TryAddChunkDictionary(DataChunk &groups, DataChunk &payload,
+                                                              const unsafe_vector<idx_t> &filter) {
 	if (groups.ColumnCount() != 1) {
 		// only single column supported (for now)
 		return optional_idx();
 	}
 	// all columns must be dict
-	for(auto &group : groups.data) {
+	for (auto &group : groups.data) {
 		if (group.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
 			return optional_idx();
 		}
@@ -277,14 +278,14 @@ optional_idx GroupedAggregateHashTable::TryAddChunkDictionary(DataChunk &groups,
 	auto &unique_entries = dict_state.unique_entries;
 	idx_t unique_count = 0;
 	auto &offsets = DictionaryVector::SelVector(groups.data[0]);
-	for(idx_t i = 0; i < groups.size(); i++) {
+	for (idx_t i = 0; i < groups.size(); i++) {
 		auto dict_idx = offsets.get_index(i);
-		if (!found_entry[dict_idx]) {
-			unique_entries.set_index(unique_count++, dict_idx);
-			found_entry[dict_idx] = true;
-		}
+		unique_entries.set_index(unique_count, dict_idx);
+		unique_count += !found_entry[dict_idx];
+		found_entry[dict_idx] = true;
 	}
 	auto &dictionary_addresses = *dict_state.dictionary_addresses;
+	auto &new_dictionary_pointers = dict_state.new_dictionary_pointers;
 	auto dict_addresses = FlatVector::GetData<uintptr_t>(dictionary_addresses);
 	idx_t new_group_count = 0;
 	if (unique_count > 0) {
@@ -298,22 +299,25 @@ optional_idx GroupedAggregateHashTable::TryAddChunkDictionary(DataChunk &groups,
 		auto &hashes = dict_state.hashes;
 		unique_values.Hash(hashes);
 
-		auto &new_dictionary_pointers = dict_state.new_dictionary_pointers;
-
 		// add the dictionary groups to the hash table
 		new_group_count = FindOrCreateGroups(unique_values, hashes, new_dictionary_pointers, state.new_groups);
+	}
+	auto &aggregates = layout.GetAggregates();
+	if (aggregates.empty()) {
+		// early-out - no aggregates to update
+		return new_group_count;
+	}
 
-		// for each of the new groups, add them to the global (cached) list of addresses for the dictionary
-		auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
-		for(idx_t i = 0; i < unique_count; i++) {
-			auto dict_idx = unique_entries.get_index(i);
-			dict_addresses[dict_idx] = new_dict_addresses[i] + layout.GetAggrOffset();
-		}
+	// for each of the new groups, add them to the global (cached) list of addresses for the dictionary
+	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
+	for (idx_t i = 0; i < unique_count; i++) {
+		auto dict_idx = unique_entries.get_index(i);
+		dict_addresses[dict_idx] = new_dict_addresses[i] + layout.GetAggrOffset();
 	}
 
 	// set the addresses that we found for each of the unique groups in the main addresses vector
 	auto result_addresses = FlatVector::GetData<uintptr_t>(state.addresses);
-	for(idx_t i = 0; i < groups.size(); i++) {
+	for (idx_t i = 0; i < groups.size(); i++) {
 		auto dict_idx = offsets.get_index(i);
 		result_addresses[i] = dict_addresses[dict_idx];
 	}
@@ -354,7 +358,7 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 
 		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
 			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(i), aggr, state.addresses, payload,
-												payload_idx);
+			                                    payload_idx);
 		} else {
 			RowOperations::UpdateStates(row_state, aggr, state.addresses, payload, payload_idx, payload.size());
 		}

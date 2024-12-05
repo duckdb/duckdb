@@ -313,7 +313,8 @@ struct DictionaryVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 #else
 		if (vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
-			throw InternalException("Operation requires a dictionary vector but a non-dictionary vector was encountered");
+			throw InternalException(
+			    "Operation requires a dictionary vector but a non-dictionary vector was encountered");
 		}
 #endif
 	}
