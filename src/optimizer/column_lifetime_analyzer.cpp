@@ -102,6 +102,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), rhs_unused, comp_join.right_projection_map);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
