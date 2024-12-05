@@ -30,6 +30,7 @@ public:
 	typedef uint32_t result_type;
 
 	explicit ReservoirRNG(int64_t seed) : RandomEngine(seed) {};
+
 	result_type operator()() {
 		return NextRandomInteger();
 	};
