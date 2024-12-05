@@ -67,7 +67,7 @@ public:
 	// Append functions
 	template <class T>
 	void Append(T value) = delete;
-	DUCKDB_API void Append(DataChunk &target, Value value, idx_t row, idx_t column);
+	DUCKDB_API void Append(DataChunk &target, const Value &value, idx_t row, idx_t column);
 
 	DUCKDB_API void Append(const char *value, uint32_t length);
 

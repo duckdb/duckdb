@@ -373,7 +373,7 @@ void BaseAppender::Append(Value value) { // NOLINT: template stuff
 	AppendValue(value);
 }
 
-void BaseAppender::Append(DataChunk &target, Value value, idx_t row, idx_t column) {
+void BaseAppender::Append(DataChunk &target, const Value &value, idx_t row, idx_t column) {
 	if (column >= target.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
