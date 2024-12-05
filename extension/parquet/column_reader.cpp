@@ -656,12 +656,13 @@ void ColumnReader::ApplyPendingSkips(idx_t num_values) {
 	dummy_repeat.zero();
 
 	// TODO this can be optimized, for example we dont actually have to bitunpack offsets
-	Vector dummy_result(type, nullptr);
+	Vector base_result(type, nullptr);
 
 	idx_t remaining = num_values;
 	idx_t read = 0;
 
 	while (remaining) {
+		Vector dummy_result(base_result);
 		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
 		read += Read(to_read, none_filter, dummy_define.ptr, dummy_repeat.ptr, dummy_result);
 		remaining -= to_read;

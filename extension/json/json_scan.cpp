@@ -185,8 +185,9 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 			continue;
 		}
 
-		gstate.column_indices.push_back(col_idx);
 		gstate.names.push_back(bind_data.names[col_id]);
+		gstate.column_ids.push_back(col_idx);
+		gstate.column_indices.push_back(input.column_indexes[col_idx]);
 	}
 
 	if (gstate.names.size() < bind_data.names.size() || bind_data.options.file_options.union_by_name) {

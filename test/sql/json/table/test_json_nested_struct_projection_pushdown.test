@@ -1,0 +1,51 @@
+# name: test/sql/json/table/test_json_nested_struct_projection_pushdown.test
+# description: Test JSON struct projection pushdown on deeply nested data
+# group: [table]
+
+require json
+
+statement ok
+pragma enable_verification
+
+statement ok
+COPY (SELECT {goose: 42, pigeon: 4.2, nested_duck: {nested_nested_duck: {goose: 42, pigeon: 4.2, nested_nested_nested_duck: {goose: 42, pigeon: 4.2}}, goose: 42, pigeon: 4.2}} AS duck) TO '__TEST_DIR__/nested.json'
+
+query I
+SELECT duck.goose FROM '__TEST_DIR__/nested.json'
+----
+42
+
+query I
+SELECT json.duck.goose FROM read_json('__TEST_DIR__/nested.json', records=false)
+----
+42
+
+query I
+SELECT duck.nested_duck.goose FROM '__TEST_DIR__/nested.json'
+----
+42
+
+query I
+SELECT json.duck.nested_duck.goose FROM read_json('__TEST_DIR__/nested.json', records=false)
+----
+42
+
+query I
+SELECT duck.nested_duck.nested_nested_duck.goose FROM '__TEST_DIR__/nested.json'
+----
+42
+
+query I
+SELECT json.duck.nested_duck.nested_nested_duck.goose FROM read_json('__TEST_DIR__/nested.json', records=false)
+----
+42
+
+query I
+SELECT duck.nested_duck.nested_nested_duck.nested_nested_nested_duck.goose FROM '__TEST_DIR__/nested.json'
+----
+42
+
+query I
+SELECT json.duck.nested_duck.nested_nested_duck.nested_nested_nested_duck.goose FROM read_json('__TEST_DIR__/nested.json', records=false)
+----
+42

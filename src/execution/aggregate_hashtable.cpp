@@ -171,6 +171,10 @@ void GroupedAggregateHashTable::SetRadixBits(idx_t radix_bits_p) {
 	radix_bits = radix_bits_p;
 }
 
+idx_t GroupedAggregateHashTable::GetRadixBits() const {
+	return radix_bits;
+}
+
 void GroupedAggregateHashTable::Resize(idx_t size) {
 	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 	D_ASSERT(IsPowerOfTwo(size));

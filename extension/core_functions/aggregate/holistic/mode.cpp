@@ -17,33 +17,7 @@
 // Returns the most frequent value for the values within expr1.
 // NULL values are ignored. If all the values are NULL, or there are 0 rows, then the function returns NULL.
 
-namespace std {
-
-template <>
-struct hash<duckdb::interval_t> {
-	inline size_t operator()(const duckdb::interval_t &val) const {
-		int64_t months, days, micros;
-		val.Normalize(months, days, micros);
-		return hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(days)) ^
-		       hash<int32_t> {}(duckdb::UnsafeNumericCast<int32_t>(months)) ^ hash<int64_t> {}(micros);
-	}
-};
-
-template <>
-struct hash<duckdb::hugeint_t> {
-	inline size_t operator()(const duckdb::hugeint_t &val) const {
-		return hash<int64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
-	}
-};
-
-template <>
-struct hash<duckdb::uhugeint_t> {
-	inline size_t operator()(const duckdb::uhugeint_t &val) const {
-		return hash<uint64_t> {}(val.upper) ^ hash<uint64_t> {}(val.lower);
-	}
-};
-
-} // namespace std
+namespace std {} // namespace std
 
 namespace duckdb {
 
