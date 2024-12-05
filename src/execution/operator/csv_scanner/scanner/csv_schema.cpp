@@ -103,7 +103,7 @@ vector<string> CSVSchema::GetNames() const {
 		names.push_back(column.name);
 	}
 	return names;
-};
+}
 
 vector<LogicalType> CSVSchema::GetTypes() const {
 	vector<LogicalType> types;
@@ -111,7 +111,7 @@ vector<LogicalType> CSVSchema::GetTypes() const {
 		types.push_back(column.type);
 	}
 	return types;
-};
+}
 
 bool CSVSchema::Empty() const {
 	return columns.empty();
