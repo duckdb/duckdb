@@ -41,7 +41,7 @@ unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) cons
 	auto &child_type = StructType::GetChildType(column.return_type, child_idx);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(column.Copy());
-	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx))));
+	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx+1))));
 	auto child = make_uniq<BoundFunctionExpression>(child_type, GetIndexExtractFunction(), std::move(arguments),
 	                                                GetBindData(child_idx));
 	return child_filter->ToExpression(*child);

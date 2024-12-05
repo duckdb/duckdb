@@ -99,10 +99,6 @@ static unique_ptr<FunctionData> StructExtractBindIndex(ClientContext &context, S
 	if (struct_children.empty()) {
 		throw InternalException("Can't extract something from an empty struct");
 	}
-	if (!StructType::IsUnnamed(child_type)) {
-		throw BinderException(
-		    "struct_extract with an integer key can only be used on unnamed structs, use a string key instead");
-	}
 	bound_function.arguments[0] = child_type;
 
 	auto &key_child = arguments[1];

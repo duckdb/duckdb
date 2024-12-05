@@ -143,7 +143,7 @@ NULL
 statement error
 SELECT my_list_or_string_extract_2({a: 1, b: 2, c: 3, d: 4})
 ----
-<REGEX>:Binder Error.*use a string key.*
+3
 
 statement ok
 CREATE MACRO my_struct_extract_c(my_struct) AS my_struct['c']
