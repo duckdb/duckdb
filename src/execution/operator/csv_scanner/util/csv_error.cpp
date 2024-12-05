@@ -90,6 +90,7 @@ idx_t CSVErrorHandler::GetMaxLineLength() {
 }
 
 void CSVErrorHandler::DontPrintErrorLine() {
+	lock_guard<mutex> parallel_lock(main_mutex);
 	print_line = false;
 }
 
