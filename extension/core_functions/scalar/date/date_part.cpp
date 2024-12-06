@@ -2046,9 +2046,10 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 	auto operator_set = GetDatePartFunction<DatePart::TimezoneOperator>();
 
 	//	PG also defines timezone(INTERVAL, TIME_TZ) => TIME_TZ
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
-	                   DatePart::TimezoneOperator::BinaryFunction<interval_t, dtime_tz_t, dtime_tz_t>));
+	ScalarFunction func({LogicalType::INTERVAL, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
+	                    DatePart::TimezoneOperator::BinaryFunction<interval_t, dtime_tz_t, dtime_tz_t>);
+	func.errors = FunctionErrors::CAN_THROW_ERROR;
+	operator_set.AddFunction(func);
 
 	return operator_set;
 }

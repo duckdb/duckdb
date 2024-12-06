@@ -1049,6 +1049,10 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
+		} else if (type.id() == LogicalTypeId::HUGEINT) {
+			ScalarFunction func({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType()));
+			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			full_divide.AddFunction(func);
 		} else {
 			full_divide.AddFunction(
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType())));
@@ -1104,6 +1108,10 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindBinaryFloatingPoint<ModuloOperator>));
 		} else if (type.id() == LogicalTypeId::DECIMAL) {
 			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>));
+		} else if (type.id() == LogicalTypeId::HUGEINT) {
+			ScalarFunction func({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>);
+			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			modulo.AddFunction(func);
 		} else {
 			modulo.AddFunction(
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type.InternalType())));
