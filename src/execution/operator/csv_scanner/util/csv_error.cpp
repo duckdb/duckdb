@@ -84,6 +84,11 @@ bool CSVErrorHandler::AnyErrors() {
 	return !errors.empty();
 }
 
+void CSVErrorHandler::SetIgnoreErrors(bool ignore_errors_p) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	ignore_errors = ignore_errors_p;
+}
+
 CSVError::CSVError(string error_message_p, CSVErrorType type_p, LinesPerBoundary error_info_p)
     : error_message(std::move(error_message_p)), type(type_p), error_info(error_info_p) {
 }
