@@ -66,7 +66,7 @@ void BaseReservoirSampling::SetNextEntry() {
 	//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
 	auto &min_key = reservoir_weights.top();
 	double t_w = -min_key.first;
-	double r = random.NextRandom();
+	double r = random.NextRandom32();
 	double x_w = log(r) / log(t_w);
 	//! 5. From the current item vc skip items until item vi , such that:
 	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi

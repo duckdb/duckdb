@@ -26,23 +26,17 @@ enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RES
 
 enum class SamplingState : uint8_t { RANDOM = 0, RESERVOIR = 1 };
 
-struct ReservoirRNG {
-
-	RandomEngine random;
+class ReservoirRNG : public RandomEngine {
+public:
 	// return type must be called result type to be a valid URNG
 	typedef uint32_t result_type;
 
-	explicit ReservoirRNG(int64_t seed) : random(seed) {};
+	explicit ReservoirRNG(int64_t seed) : RandomEngine(seed) {};
 
 	result_type operator()() {
-		return random.NextRandomInteger();
+		return NextRandomInteger();
 	};
-	double NextRandom() {
-		return random.NextRandom32();
-	};
-	double NextRandom(double min, double max) {
-		return random.NextRandom32(min, max);
-	};
+
 	static constexpr result_type min() {
 		return NumericLimits<result_type>::Minimum();
 	};
