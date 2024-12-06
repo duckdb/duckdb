@@ -14,30 +14,45 @@
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
-class ArrowExtension {
-public:
-	ArrowExtension(string extension_name, string arrow_format);
-	ArrowExtension(string vendor_name, string type_name, string arrow_format);
-	unique_ptr<ArrowType> GetArrowExtensionType() const;
-	hash_t GetHash() const;
+
+struct ArrowExtensionInfo {
+
+	ArrowExtensionInfo(string extension_name, string arrow_format);
+	ArrowExtensionInfo(string vendor_name, string type_name, string arrow_format);
+
 	//! Arrow Extension for non-canonical types.
 	static constexpr const char *ARROW_EXTENSION_NON_CANONICAL = "arrow.opaque";
-
-private:
 	//! The extension name (e.g., 'arrow.uuid', 'arrow.opaque',...)
-	string extension_name;
+	const string extension_name;
 	//! If the extension name is 'arrow.opaque' a vendor and type must be defined.
 	//! The vendor_name is the system that produced the type (e.g., DuckDB)
-	string vendor_name;
+	const string vendor_name;
 	//! The type_name is the name of the type produced by the vendor (e.g., hugeint)
-	string type_name;
+	const string type_name;
 	//! The arrow format (e.g., z)
-	string arrow_format;
+	const string arrow_format;
+
+	hash_t GetHash() const;
+
+	string ToString() const;
+};
+
+class ArrowExtension {
+public:
+	ArrowExtension(string extension_name, string arrow_format, ArrowType type);
+	ArrowExtension(string vendor_name, string type_name, string arrow_format, ArrowType type);
+
+	ArrowExtensionInfo GetInfo() const;
+
+private:
+	ArrowExtensionInfo extension_info;
+	//! Arrow Type
+	ArrowType type;
 };
 
 struct HashArrowExtension {
-	size_t operator()(ArrowExtension const &arrow_extension) const noexcept {
-		return arrow_extension.GetHash();
+	size_t operator()(ArrowExtensionInfo const &arrow_extension_info) const noexcept {
+		return arrow_extension_info.GetHash();
 	}
 };
 
@@ -46,7 +61,8 @@ struct ArrowExtensionSet {
 	ArrowExtensionSet() {};
 	static void Initialize(DBConfig &config);
 	mutex lock;
-	case_insensitive_map_t<EncodingFunction> functions;
+	unordered_map<ArrowExtensionInfo, ArrowExtension, HashArrowExtension> extensions;
+
 };
 
 } // namespace duckdb
