@@ -306,7 +306,8 @@ idx_t RadixHTConfig::SinkCapacity(const idx_t number_of_threads_p) {
 	const auto cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / number_of_threads_p;
 
 	// Divide cache per active thread by entry size, round up to next power of two, to get capacity
-	const auto size_per_entry = sizeof(ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR;
+	constexpr idx_t ASSUMED_ROW_SIZE = 32;
+	const auto size_per_entry = sizeof(ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR + ASSUMED_ROW_SIZE;
 	const auto capacity =
 	    NextPowerOfTwo(LossyNumericCast<uint64_t>(static_cast<double>(cache_per_active_thread) / size_per_entry));
 

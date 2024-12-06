@@ -68,14 +68,28 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 		partitioned_data->Reset();
 	}
 
+	if (!unpartitioned_data) {
+		unpartitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, 0, layout.ColumnCount() - 1);
+	} else {
+		unpartitioned_data->Reset();
+	}
+
 	D_ASSERT(GetLayout().GetAggrWidth() == layout.GetAggrWidth());
 	D_ASSERT(GetLayout().GetDataWidth() == layout.GetDataWidth());
 	D_ASSERT(GetLayout().GetRowWidth() == layout.GetRowWidth());
 
-	partitioned_data->InitializeAppendState(state.append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	partitioned_data->InitializeAppendState(state.partitioned_append_state,
+	                                        TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	unpartitioned_data->InitializeAppendState(state.unpartitioned_append_state,
+	                                          TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 }
 
 unique_ptr<PartitionedTupleData> &GroupedAggregateHashTable::GetPartitionedData() {
+	unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
+	unpartitioned_data->Unpin();
+	unpartitioned_data->Repartition(*partitioned_data);
+	unpartitioned_data->InitializeAppendState(state.unpartitioned_append_state,
+	                                          TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	return partitioned_data;
 }
 
@@ -323,30 +337,31 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	D_ASSERT(state.hash_salts.GetType() == LogicalType::HASH);
 
 	// Need to fit the entire vector, and resize at threshold
-	if (Count() + groups.size() > capacity || Count() + groups.size() > ResizeThreshold()) {
+	const auto chunk_size = groups.size();
+	if (Count() + chunk_size > capacity || Count() + chunk_size > ResizeThreshold()) {
 		Verify();
 		Resize(capacity * 2);
 	}
-	D_ASSERT(capacity - Count() >= groups.size()); // we need to be able to fit at least one vector of data
+	D_ASSERT(capacity - Count() >= chunk_size); // we need to be able to fit at least one vector of data
 
-	group_hashes_v.Flatten(groups.size());
-	auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
+	group_hashes_v.Flatten(chunk_size);
+	const auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
 
-	addresses_v.Flatten(groups.size());
-	auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
+	addresses_v.Flatten(chunk_size);
+	const auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
 
 	// Compute the entry in the table based on the hash using a modulo,
 	// and precompute the hash salts for faster comparison below
-	auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
+	const auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
 	const auto hash_salts = FlatVector::GetData<hash_t>(state.hash_salts);
-	for (idx_t r = 0; r < groups.size(); r++) {
+	for (idx_t r = 0; r < chunk_size; r++) {
 		const auto &hash = hashes[r];
 		ht_offsets[r] = ApplyBitMask(hash);
 		D_ASSERT(ht_offsets[r] == hash % capacity);
 		hash_salts[r] = ht_entry_t::ExtractSalt(hash);
 	}
 
-	// we start out with all entries [0, 1, 2, ..., groups.size()]
+	// we start out with all entries [0, 1, 2, ..., chunk_size]
 	const SelectionVector *sel_vector = FlatVector::IncrementalSelectionVector();
 
 	// Make a chunk that references the groups and the hashes and convert to unified format
@@ -361,15 +376,14 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	state.group_chunk.SetCardinality(groups);
 
 	// convert all vectors to unified format
-	auto &chunk_state = state.append_state.chunk_state;
-	TupleDataCollection::ToUnifiedFormat(chunk_state, state.group_chunk);
+	TupleDataCollection::ToUnifiedFormat(state.partitioned_append_state.chunk_state, state.group_chunk);
 	if (!state.group_data) {
 		state.group_data = make_unsafe_uniq_array_uninitialized<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
 	}
-	TupleDataCollection::GetVectorData(chunk_state, state.group_data.get());
+	TupleDataCollection::GetVectorData(state.partitioned_append_state.chunk_state, state.group_data.get());
 
 	idx_t new_group_count = 0;
-	idx_t remaining_entries = groups.size();
+	idx_t remaining_entries = chunk_size;
 	idx_t iteration_count;
 	for (iteration_count = 0; remaining_entries > 0 && iteration_count < capacity; iteration_count++) {
 		idx_t new_entry_count = 0;
@@ -379,7 +393,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		// For each remaining entry, figure out whether or not it belongs to a full or empty group
 		for (idx_t i = 0; i < remaining_entries; i++) {
 			const auto index = sel_vector->get_index(i);
-			const auto &salt = hash_salts[index];
+			const auto salt = hash_salts[index];
 			auto &ht_offset = ht_offsets[index];
 
 			idx_t inner_iteration_count;
@@ -409,16 +423,26 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 		if (new_entry_count != 0) {
 			// Append everything that belongs to an empty group
-			partitioned_data->AppendUnified(state.append_state, state.group_chunk, state.empty_vector, new_entry_count);
-			RowOperations::InitializeStates(layout, chunk_state.row_locations,
+			optional_ptr<PartitionedTupleData> data;
+			optional_ptr<PartitionedTupleDataAppendState> append_state;
+			if (radix_bits != 0 && new_entry_count / RadixPartitioning::NumberOfPartitions(radix_bits) < 8) {
+				TupleDataCollection::ToUnifiedFormat(state.unpartitioned_append_state.chunk_state, state.group_chunk);
+				data = unpartitioned_data.get();
+				append_state = &state.unpartitioned_append_state;
+			} else {
+				data = partitioned_data.get();
+				append_state = &state.partitioned_append_state;
+			}
+			data->AppendUnified(*append_state, state.group_chunk, state.empty_vector, new_entry_count);
+			RowOperations::InitializeStates(layout, append_state->chunk_state.row_locations,
 			                                *FlatVector::IncrementalSelectionVector(), new_entry_count);
 
 			// Set the entry pointers in the 1st part of the HT now that the data has been appended
-			const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-			const auto &row_sel = state.append_state.reverse_partition_sel;
+			const auto row_locations = FlatVector::GetData<data_ptr_t>(append_state->chunk_state.row_locations);
+			const auto &row_sel = append_state->reverse_partition_sel;
 			for (idx_t new_entry_idx = 0; new_entry_idx < new_entry_count; new_entry_idx++) {
-				const auto index = state.empty_vector.get_index(new_entry_idx);
-				const auto row_idx = row_sel.get_index(index);
+				const auto &index = state.empty_vector[new_entry_idx];
+				const auto &row_idx = row_sel[index];
 				const auto &row_location = row_locations[row_idx];
 
 				auto &entry = entries[ht_offsets[index]];
@@ -431,19 +455,20 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		if (need_compare_count != 0) {
 			// Get the pointers to the rows that need to be compared
 			for (idx_t need_compare_idx = 0; need_compare_idx < need_compare_count; need_compare_idx++) {
-				const auto index = state.group_compare_vector.get_index(need_compare_idx);
+				const auto &index = state.group_compare_vector[need_compare_idx];
 				const auto &entry = entries[ht_offsets[index]];
 				addresses[index] = entry.GetPointer();
 			}
 
 			// Perform group comparisons
-			row_matcher.Match(state.group_chunk, chunk_state.vector_data, state.group_compare_vector,
-			                  need_compare_count, layout, addresses_v, &state.no_match_vector, no_match_count);
+			row_matcher.Match(state.group_chunk, state.partitioned_append_state.chunk_state.vector_data,
+			                  state.group_compare_vector, need_compare_count, layout, addresses_v,
+			                  &state.no_match_vector, no_match_count);
 		}
 
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
-			const auto index = state.no_match_vector.get_index(i);
+			const auto &index = state.no_match_vector[i];
 			auto &ht_offset = ht_offsets[index];
 			IncrementAndWrap(ht_offset, bitmask);
 		}
@@ -540,12 +565,13 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	idx_t chunk_idx = 0;
 	const auto chunk_count = other_data.ChunkCount();
 	while (fm_state.Scan()) {
+		const auto input_chunk_size = fm_state.groups.size();
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
 		RowOperations::CombineStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
-		                             fm_state.group_addresses, fm_state.groups.size());
+		                             fm_state.group_addresses, input_chunk_size);
 		if (layout.HasDestructor()) {
 			RowOperations::DestroyStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
-			                             fm_state.groups.size());
+			                             input_chunk_size);
 		}
 
 		if (progress) {
@@ -557,7 +583,7 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 }
 
 void GroupedAggregateHashTable::UnpinData() {
-	partitioned_data->FlushAppendState(state.append_state);
+	partitioned_data->FlushAppendState(state.partitioned_append_state);
 	partitioned_data->Unpin();
 }
 

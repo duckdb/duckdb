@@ -108,7 +108,8 @@ private:
 	struct AggregateHTAppendState {
 		AggregateHTAppendState();
 
-		PartitionedTupleDataAppendState append_state;
+		PartitionedTupleDataAppendState partitioned_append_state;
+		PartitionedTupleDataAppendState unpartitioned_append_state;
 
 		Vector ht_offsets;
 		Vector hash_salts;
@@ -125,6 +126,7 @@ private:
 	idx_t radix_bits;
 	//! The data of the HT
 	unique_ptr<PartitionedTupleData> partitioned_data;
+	unique_ptr<PartitionedTupleData> unpartitioned_data;
 
 	//! Predicates for matching groups (always ExpressionType::COMPARE_EQUAL)
 	vector<ExpressionType> predicates;
