@@ -97,7 +97,7 @@ static void MapExtractFunc(DataChunk &args, ExpressionState &state, Vector &resu
 ScalarFunction MapExtractFun::GetFunction() {
 	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunc, MapExtractBind);
 	fun.varargs = LogicalType::ANY;
-	fun.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction::SetReturnsError(fun);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }

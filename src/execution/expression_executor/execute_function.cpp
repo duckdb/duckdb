@@ -77,19 +77,19 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 
 	D_ASSERT(expr.function.function);
 	// #ifdef DEBUG
-	try {
-		// #endif
-		expr.function.function(arguments, *state, result);
-		// #ifdef DEBUG
-	} catch (std::exception &ex) {
-		if (expr.function.errors == FunctionErrors::CANNOT_ERROR) {
-			ErrorData err(ex);
-			throw InternalException("Error thrown in function \"%s\" - but function is labeled as not being able to "
-			                        "throw errors\n\nError thrown: %s",
-			                        expr.function.name, err.Message());
-		}
-		throw;
-	}
+	// try {
+	// #endif
+	expr.function.function(arguments, *state, result);
+	// #ifdef DEBUG
+	// } catch (std::exception &ex) {
+	// 	if (expr.function.errors == FunctionErrors::CANNOT_ERROR) {
+	// 		ErrorData err(ex);
+	// 		throw InternalException("Error thrown in function \"%s\" - but function is labeled as not being able to "
+	// 		                        "throw errors\n\nError thrown: %s",
+	// 		                        expr.function.name, err.Message());
+	// 	}
+	// 	throw;
+	// }
 	// #endif
 
 	VerifyNullHandling(expr, arguments, result);

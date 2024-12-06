@@ -449,7 +449,7 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ArraySliceFunction,
 	                   ArraySliceBind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction::SetReturnsError(fun);
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);

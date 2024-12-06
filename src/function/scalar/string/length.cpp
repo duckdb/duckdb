@@ -242,7 +242,7 @@ ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	array_length.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
 	                                        LogicalType::BIGINT, nullptr, ArrayOrListLengthBinaryBind));
 	for (auto &func : array_length.functions) {
-		func.errors = FunctionErrors::CAN_THROW_ERROR;
+		ScalarFunction::SetReturnsError(func);
 	}
 	return (array_length);
 }

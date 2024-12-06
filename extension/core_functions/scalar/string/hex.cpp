@@ -409,7 +409,7 @@ ScalarFunctionSet HexFun::GetFunctions() {
 
 ScalarFunction UnhexFun::GetFunction() {
 	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction);
-	function.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction::SetReturnsError(function);
 	return function;
 }
 
@@ -433,7 +433,7 @@ ScalarFunctionSet BinFun::GetFunctions() {
 
 ScalarFunction UnbinFun::GetFunction() {
 	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::BLOB, FromBinaryFunction);
-	function.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction::SetReturnsError(function);
 	return function;
 }
 

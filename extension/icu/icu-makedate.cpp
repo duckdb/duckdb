@@ -139,7 +139,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static ScalarFunction GetSenaryFunction(const LogicalTypeId &type) {
 		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
 		                        Execute<TA>, Bind);
-		function.errors = FunctionErrors::CAN_THROW_ERROR;
+		ScalarFunction::SetReturnsError(function);
 		return function;
 	}
 
@@ -147,7 +147,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static ScalarFunction GetSeptenaryFunction(const LogicalTypeId &type) {
 		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
 		                        LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
-		function.errors = FunctionErrors::CAN_THROW_ERROR;
+		ScalarFunction::SetReturnsError(function);
 		return function;
 	}
 
@@ -156,7 +156,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
 		ScalarFunction function({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>);
-		function.errors = FunctionErrors::CAN_THROW_ERROR;
+		ScalarFunction::SetReturnsError(function);
 		set.AddFunction(function);
 		ExtensionUtil::RegisterFunction(db, set);
 	}

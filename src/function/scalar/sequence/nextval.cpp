@@ -136,7 +136,7 @@ ScalarFunction NextvalFun::GetFunction() {
 	                        NextValFunction<NextSequenceValueOperator>, nullptr, nullptr);
 	next_val.bind_extended = NextValBind;
 	next_val.stability = FunctionStability::VOLATILE;
-	next_val.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction::SetReturnsError(next_val);
 	next_val.serialize = Serialize;
 	next_val.deserialize = Deserialize;
 	next_val.get_modified_databases = NextValModifiedDatabases;
@@ -149,7 +149,7 @@ ScalarFunction CurrvalFun::GetFunction() {
 	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
 	curr_val.bind_extended = NextValBind;
 	curr_val.stability = FunctionStability::VOLATILE;
-	curr_val.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction::SetReturnsError(curr_val);
 	curr_val.serialize = Serialize;
 	curr_val.deserialize = Deserialize;
 	curr_val.init_local_state = NextValLocalFunction;

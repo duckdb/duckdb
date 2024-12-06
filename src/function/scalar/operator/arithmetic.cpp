@@ -315,19 +315,19 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			                        BindDecimalAddSubtract<AddOperator, DecimalAddOverflowCheck>);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>;
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
 			                        GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()),
 			                        nullptr, nullptr,
 			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
 			                        GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		}
 	}
@@ -337,22 +337,22 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		if (right_type.id() == LogicalTypeId::INTEGER) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::DATE,
 			                        ScalarFunction::BinaryFunction<date_t, int32_t, date_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<date_t, interval_t, timestamp_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<date_t, dtime_t, timestamp_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME_TZ) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
 			                        ScalarFunction::BinaryFunction<date_t, dtime_tz_t, timestamp_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		}
 		break;
@@ -360,7 +360,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction function("+", {left_type, right_type}, right_type,
 			                        ScalarFunction::BinaryFunction<int32_t, date_t, date_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		}
 		break;
@@ -368,28 +368,28 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::INTERVAL,
 			                        ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<interval_t, date_t, timestamp_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIME,
 			                        ScalarFunction::BinaryFunction<interval_t, dtime_t, dtime_t, AddTimeOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME_TZ) {
 			ScalarFunction function(
 			    "+", {left_type, right_type}, LogicalType::TIME_TZ,
 			    ScalarFunction::BinaryFunction<interval_t, dtime_tz_t, dtime_tz_t, AddTimeOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIMESTAMP) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		}
 		break;
@@ -397,12 +397,12 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIME,
 			                        ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, AddTimeOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<dtime_t, date_t, timestamp_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		}
 		break;
@@ -410,13 +410,13 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
 			                        ScalarFunction::BinaryFunction<dtime_tz_t, date_t, timestamp_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function(
 			    "+", {left_type, right_type}, LogicalType::TIME_TZ,
 			    ScalarFunction::BinaryFunction<dtime_tz_t, interval_t, dtime_tz_t, AddTimeOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		}
 		break;
@@ -424,7 +424,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, AddOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		}
 		break;
@@ -617,17 +617,17 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::INTERVAL) {
 		ScalarFunction func("-", {type}, type, ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>);
-		func.errors = FunctionErrors::CAN_THROW_ERROR;
+		ScalarFunction::SetReturnsError(func);
 		return func;
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
 		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind, nullptr, NegateBindStatistics);
-		func.errors = FunctionErrors::CAN_THROW_ERROR;
+		ScalarFunction::SetReturnsError(func);
 		return func;
 	}
 	D_ASSERT(type.IsNumeric());
 	ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type), nullptr,
 	                    nullptr, NegateBindStatistics);
-	func.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction::SetReturnsError(func);
 	return func;
 }
 
@@ -638,20 +638,20 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			                        BindDecimalAddSubtract<SubtractOperator, DecimalSubtractOverflowCheck, true>);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>;
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
 			    "-", {left_type, right_type}, left_type,
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		} else {
 
 			ScalarFunction func("-", {left_type, right_type}, left_type,
 			                    GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			return func;
 		}
 	}
@@ -661,18 +661,18 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 		if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction func("-", {left_type, right_type}, LogicalType::BIGINT,
 			                    ScalarFunction::BinaryFunction<date_t, date_t, int64_t, SubtractOperator>);
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			return func;
 
 		} else if (right_type.id() == LogicalTypeId::INTEGER) {
 			ScalarFunction func("-", {left_type, right_type}, LogicalType::DATE,
 			                    ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>);
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			return func;
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction func("-", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                    ScalarFunction::BinaryFunction<date_t, interval_t, timestamp_t, SubtractOperator>);
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			return func;
 		}
 		break;
@@ -680,12 +680,12 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 		if (right_type.id() == LogicalTypeId::TIMESTAMP) {
 			ScalarFunction func("-", {left_type, right_type}, LogicalType::INTERVAL,
 			                    ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>);
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			return func;
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction func("-", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                    ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>);
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			return func;
 		}
 		break;
@@ -694,7 +694,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			ScalarFunction function(
 			    "-", {left_type, right_type}, LogicalType::INTERVAL,
 			    ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			return function;
 		}
 		break;
@@ -702,7 +702,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction func("-", {left_type, right_type}, LogicalType::TIME,
 			                    ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SubtractTimeOperator>);
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			return func;
 		}
 		break;
@@ -711,7 +711,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			ScalarFunction func(
 			    "-", {left_type, right_type}, LogicalType::TIME_TZ,
 			    ScalarFunction::BinaryFunction<dtime_tz_t, interval_t, dtime_tz_t, SubtractTimeOperator>);
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			return func;
 		}
 		break;
@@ -868,14 +868,14 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 			ScalarFunction function({type, type}, type, nullptr, BindDecimalMultiply);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>;
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			multiply.AddFunction(function);
 		} else if (TypeIsIntegral(type.InternalType())) {
 			ScalarFunction function(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, nullptr,
 			    PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>);
-			function.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(function);
 			multiply.AddFunction(function);
 		} else {
 			multiply.AddFunction(
@@ -1033,9 +1033,9 @@ ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	                     BindBinaryFloatingPoint<DivideOperator>);
 	ScalarFunction func3({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                     BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>);
-	func1.errors = FunctionErrors::CAN_THROW_ERROR;
-	func2.errors = FunctionErrors::CAN_THROW_ERROR;
-	func3.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction::SetReturnsError(func1);
+	ScalarFunction::SetReturnsError(func2);
+	ScalarFunction::SetReturnsError(func3);
 
 	fp_divide.AddFunction(func1);
 	fp_divide.AddFunction(func2);
@@ -1051,7 +1051,7 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 			continue;
 		} else if (type.id() == LogicalTypeId::HUGEINT) {
 			ScalarFunction func({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type.InternalType()));
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			full_divide.AddFunction(func);
 		} else {
 			full_divide.AddFunction(
@@ -1110,7 +1110,7 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 			modulo.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>));
 		} else if (type.id() == LogicalTypeId::HUGEINT) {
 			ScalarFunction func({type, type}, type, nullptr, BindDecimalModulo<ModuloOperator>);
-			func.errors = FunctionErrors::CAN_THROW_ERROR;
+			ScalarFunction::SetReturnsError(func);
 			modulo.AddFunction(func);
 		} else {
 			modulo.AddFunction(

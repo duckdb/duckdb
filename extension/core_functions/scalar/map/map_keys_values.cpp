@@ -94,19 +94,19 @@ static unique_ptr<FunctionData> MapValuesBind(ClientContext &context, ScalarFunc
 
 ScalarFunction MapKeysFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun({}, LogicalTypeId::LIST, MapKeysFunction, MapKeysBind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.errors = FunctionErrors::CAN_THROW_ERROR;
-	fun.varargs = LogicalType::ANY;
-	return fun;
+	ScalarFunction function({}, LogicalTypeId::LIST, MapKeysFunction, MapKeysBind);
+	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	ScalarFunction::SetReturnsError(function);
+	function.varargs = LogicalType::ANY;
+	return function;
 }
 
 ScalarFunction MapValuesFun::GetFunction() {
-	ScalarFunction fun({}, LogicalTypeId::LIST, MapValuesFunction, MapValuesBind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.errors = FunctionErrors::CAN_THROW_ERROR;
-	fun.varargs = LogicalType::ANY;
-	return fun;
+	ScalarFunction function({}, LogicalTypeId::LIST, MapValuesFunction, MapValuesBind);
+	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	ScalarFunction::SetReturnsError(function);
+	function.varargs = LogicalType::ANY;
+	return function;
 }
 
 } // namespace duckdb

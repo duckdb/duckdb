@@ -133,7 +133,7 @@ ScalarFunctionSet MakeDateFun::GetFunctions() {
 	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int64_t>));
 
 	for (auto &func : make_date.functions) {
-		func.errors = FunctionErrors::CAN_THROW_ERROR;
+		ScalarFunction::SetReturnsError(func);
 	}
 	return make_date;
 }
@@ -141,7 +141,7 @@ ScalarFunctionSet MakeDateFun::GetFunctions() {
 ScalarFunction MakeTimeFun::GetFunction() {
 	ScalarFunction function({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE}, LogicalType::TIME,
 	                        ExecuteMakeTime<int64_t>);
-	function.errors = FunctionErrors::CAN_THROW_ERROR;
+	ScalarFunction::SetReturnsError(function);
 	return function;
 }
 
