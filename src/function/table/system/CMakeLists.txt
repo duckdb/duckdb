@@ -30,6 +30,7 @@ add_library_unity(
   pragma_table_info.cpp
   pragma_user_agent.cpp
   test_all_types.cpp
+  test_logging.cpp
   test_vector_types.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_table_func_system>
