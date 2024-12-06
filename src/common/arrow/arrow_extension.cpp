@@ -42,9 +42,7 @@ ArrowExtensionInfo ArrowExtension::GetInfo() const {
 }
 
 
-
-
-	void ArrowExtensionSet::Initialize(DBConfig &config) {
+void ArrowExtensionSet::Initialize(DBConfig &config) {
 	config.RegisterEncodeFunction({"utf-8", DecodeUTF8, 1, 1});
 	config.RegisterEncodeFunction({"latin-1", DecodeLatin1ToUTF8, 2, 1});
 	config.RegisterEncodeFunction({"utf-16", DecodeUTF16ToUTF8, 2, 2});
