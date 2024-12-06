@@ -32,7 +32,7 @@ bool StructFilter::Equals(const TableFilter &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<StructFilter>();
-        if (child_name != "" && other.child_name != "") { // if both child_names are known, sanity check
+	if (child_name != "" && other.child_name != "") { // if both child_names are known, sanity check
 		D_ASSERT((other.child_idx == child_idx) == StringUtil::CIEquals(other.child_name, child_name));
 	}
 	return other.child_idx == child_idx && other.child_filter->Equals(*child_filter);
