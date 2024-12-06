@@ -190,7 +190,7 @@ public:
 	}
 
 	static ScalarFunction SetReturnsError(ScalarFunction function) {
-		ScalarFunction::SetReturnsError(function);
+		function.errors = FunctionErrors::CAN_THROW_ERROR;
 		return function;
 	}
 
