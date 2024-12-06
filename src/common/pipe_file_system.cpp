@@ -7,8 +7,9 @@
 namespace duckdb {
 class PipeFile : public FileHandle {
 public:
-	PipeFile(unique_ptr<FileHandle> child_handle_p, const string &path)
-	    : FileHandle(pipe_fs, path), child_handle(std::move(child_handle_p)) {
+	explicit PipeFile(unique_ptr<FileHandle> child_handle_p)
+	    : FileHandle(pipe_fs, child_handle_p->path, child_handle_p->GetFlags()),
+	      child_handle(std::move(child_handle_p)) {
 	}
 
 	PipeFileSystem pipe_fs;
@@ -51,8 +52,7 @@ void PipeFileSystem::FileSync(FileHandle &handle) {
 }
 
 unique_ptr<FileHandle> PipeFileSystem::OpenPipe(unique_ptr<FileHandle> handle) {
-	auto path = handle->path;
-	return make_uniq<PipeFile>(std::move(handle), path);
+	return make_uniq<PipeFile>(std::move(handle));
 }
 
 } // namespace duckdb

@@ -95,6 +95,10 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 	candidate.dialect_options.date_format[sql_type].Set(strpformat, false);
 }
 
+idx_t CSVSniffer::LinesSniffed() const {
+	return lines_sniffed;
+}
+
 bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
                               const DialectOptions &dialect_options, const bool is_null, const char decimal_separator) {
 	if (is_null) {
