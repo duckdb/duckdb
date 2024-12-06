@@ -214,7 +214,7 @@ public:
 	                                                      const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(ConstraintState &constraint_state, ClientContext &context, DataChunk &chunk,
-	                             optional_ptr<TableIndexList> delete_indexes, optional_ptr<ConflictManager> manager);
+	                             optional_ptr<LocalTableStorage> local_storage, optional_ptr<ConflictManager> manager);
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
 
@@ -233,7 +233,7 @@ public:
 
 	idx_t GetRowGroupSize() const;
 
-	static void VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
+	static void VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalTableStorage> storage,
 	                                DataChunk &chunk, optional_ptr<ConflictManager> manager);
 
 	//! AddIndex initializes an index and adds it to the table's index list.

@@ -54,10 +54,10 @@ bool TableIndexList::NameIsUnique(const string &name) {
 	return true;
 }
 
-optional_ptr<Index> TableIndexList::Find(const string &name) {
+optional_ptr<BoundIndex> TableIndexList::Find(const string &name) {
 	for (auto &index : indexes) {
 		if (index->GetIndexName() == name) {
-			return *index;
+			return index->Cast<BoundIndex>();
 		}
 	}
 	return nullptr;

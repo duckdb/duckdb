@@ -626,15 +626,7 @@ TableIndexList &LocalStorage::GetIndexes(DataTable &table) {
 	return storage->append_indexes;
 }
 
-TableIndexList &LocalStorage::GetDeleteIndexes(DataTable &table) {
-	auto storage = table_manager.GetStorage(table);
-	if (!storage) {
-		throw InternalException("LocalStorage::GetDeleteIndexes - local storage not found");
-	}
-	return storage->delete_indexes;
-}
-
-bool LocalStorage::IsInitialized(DataTable &table) {
+optional_ptr<LocalTableStorage> LocalStorage::GetStorage(DataTable &table) {
 	return table_manager.GetStorage(table);
 }
 

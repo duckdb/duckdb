@@ -158,8 +158,7 @@ public:
 	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	TableIndexList &GetIndexes(DataTable &table);
-	TableIndexList &GetDeleteIndexes(DataTable &table);
-	bool IsInitialized(DataTable &table);
+	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 

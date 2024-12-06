@@ -670,7 +670,7 @@ void DataTable::VerifyNewConstraint(LocalStorage &local_storage, DataTable &pare
 	local_storage.VerifyNewConstraint(parent, constraint);
 }
 
-void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
+void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalTableStorage> storage,
                                     DataChunk &chunk, optional_ptr<ConflictManager> manager) {
 	// Verify the constraint without a conflict manager.
 	if (!manager) {
@@ -679,14 +679,13 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 				return false;
 			}
 			D_ASSERT(index.IsBound());
-			if (delete_indexes) {
-				auto delete_index = delete_indexes->Find(index.GetIndexName());
-				if (delete_index) {
-					index.Cast<BoundIndex>().VerifyAppend(chunk, delete_index->Cast<BoundIndex>(), nullptr);
-					return false;
-				}
+
+			if (storage) {
+				auto delete_index = storage->delete_indexes.Find(index.GetIndexName());
+				index.Cast<BoundIndex>().VerifyAppend(chunk, delete_index, nullptr);
+			} else {
+				index.Cast<BoundIndex>().VerifyAppend(chunk, nullptr, nullptr);
 			}
-			index.Cast<BoundIndex>().VerifyAppend(chunk, nullptr, nullptr);
 			return false;
 		});
 	}
@@ -703,14 +702,13 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 		if (!conflict_info.ConflictTargetMatches(index)) {
 			return false;
 		}
-		if (delete_indexes) {
-			auto delete_index = delete_indexes->Find(index.GetIndexName());
-			if (delete_index) {
-				manager->AddIndex(index.Cast<BoundIndex>(), delete_index->Cast<BoundIndex>());
-				return false;
-			}
+
+		if (storage) {
+			auto delete_index = storage->delete_indexes.Find(index.GetIndexName());
+			manager->AddIndex(index.Cast<BoundIndex>(), delete_index);
+		} else {
+			manager->AddIndex(index.Cast<BoundIndex>(), nullptr);
 		}
-		manager->AddIndex(index.Cast<BoundIndex>(), nullptr);
 		return false;
 	});
 
@@ -733,21 +731,19 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<TableI
 		if (manager->MatchedIndex(bound_index)) {
 			return false;
 		}
-		if (delete_indexes) {
-			auto delete_index = delete_indexes->Find(index.GetIndexName());
-			if (delete_index) {
-				bound_index.VerifyAppend(chunk, delete_index->Cast<BoundIndex>(), *manager);
-				return false;
-			}
+
+		if (storage) {
+			auto delete_index = storage->delete_indexes.Find(index.GetIndexName());
+			bound_index.VerifyAppend(chunk, delete_index, *manager);
+		} else {
+			bound_index.VerifyAppend(chunk, nullptr, *manager);
 		}
-		bound_index.VerifyAppend(chunk, nullptr, *manager);
 		return false;
 	});
 }
 
 void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, ClientContext &context, DataChunk &chunk,
-                                        optional_ptr<TableIndexList> delete_indexes,
-                                        optional_ptr<ConflictManager> manager) {
+                                        optional_ptr<LocalTableStorage> storage, optional_ptr<ConflictManager> manager) {
 
 	auto &table = constraint_state.table;
 
@@ -769,7 +765,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 	}
 
 	if (HasUniqueIndexes()) {
-		VerifyUniqueIndexes(info->indexes, delete_indexes, chunk, manager);
+		VerifyUniqueIndexes(info->indexes, storage, chunk, manager);
 	}
 
 	auto &constraints = table.GetConstraints();
@@ -828,6 +824,7 @@ void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, C
 	if (chunk.size() == 0) {
 		return;
 	}
+	// TODO: move the assert outside
 	D_ASSERT(chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
 	if (!is_root) {
 		throw TransactionException("write conflict: adding entries to a table that has been altered");
@@ -838,8 +835,7 @@ void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, C
 	// This happens only for the global indexes.
 	if (!unsafe) {
 		auto &constraint_state = *state.constraint_state;
-		auto &delete_indexes = state.storage->delete_indexes;
-		VerifyAppendConstraints(constraint_state, context, chunk, delete_indexes, nullptr);
+		VerifyAppendConstraints(constraint_state, context, chunk, *state.storage, nullptr);
 	}
 
 	// Append to the transaction-local data.
@@ -1128,12 +1124,11 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		}
 		auto &index = index_to_append.Cast<BoundIndex>();
 
-		// Try to find the matching delete index.
+		// Find the matching delete index.
 		optional_ptr<BoundIndex> delete_index;
-		if (delete_indexes) {
-			auto unbound_delete_index = delete_indexes->Find(index.name);
-			if (unbound_delete_index) {
-				delete_index = unbound_delete_index->Cast<BoundIndex>();
+		if (index.IsUnique()) {
+			if (delete_indexes) {
+				delete_index = delete_indexes->Find(index.name);
 			}
 		}
 

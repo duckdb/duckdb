@@ -85,9 +85,9 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	// If we only delete local row IDs, then the delete_chunk is empty.
 	if (l_state.has_unique_indexes && l_state.delete_chunk.size() != 0) {
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
-		auto &delete_indexes = local_storage.GetDeleteIndexes(table);
-		delete_indexes.Scan([&](Index &index) {
-			if (!index.IsBound()) {
+		auto storage = local_storage.GetStorage(table);
+		storage->delete_indexes.Scan([&](Index &index) {
+			if (!index.IsBound() || !index.IsUnique()) {
 				return false;
 			}
 			auto &bound_index = index.Cast<BoundIndex>();

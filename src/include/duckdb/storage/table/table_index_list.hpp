@@ -66,7 +66,7 @@ public:
 	//! Returns true, if the index name does not exist.
 	bool NameIsUnique(const string &name);
 	//! Returns an optional pointer to the index matching the name.
-	optional_ptr<Index> Find(const string &name);
+	optional_ptr<BoundIndex> Find(const string &name);
 	//! Initializes unknown indexes that are possibly present after an extension load, optionally throwing an exception
 	//! on failure.
 	void InitializeIndexes(ClientContext &context, DataTableInfo &table_info, const char *index_type = nullptr);
