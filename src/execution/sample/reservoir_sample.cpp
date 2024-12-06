@@ -404,12 +404,12 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 	auto &other_sample = other->Cast<ReservoirSample>();
 
 	// if the other sample has not collected anything yet return
-	if (!other_sample.reservoir_chunk) {
+	if (!other_sample.reservoir_chunk || other_sample.reservoir_chunk->chunk.size() == 0) {
 		return;
 	}
 
 	// this has not collected samples, take over the other
-	if (!reservoir_chunk) {
+	if (!reservoir_chunk || reservoir_chunk->chunk.size() == 0) {
 		base_reservoir_sample = std::move(other->base_reservoir_sample);
 		reservoir_chunk = std::move(other_sample.reservoir_chunk);
 		sel = SelectionVector(other_sample.sel);

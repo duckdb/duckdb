@@ -12,6 +12,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 #include "duckdb/common/queue.hpp"
 
