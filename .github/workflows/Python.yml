@@ -167,7 +167,7 @@ jobs:
     with:
       extension_artifact_name: manylinux-extensions-x64
       duckdb_arch: linux_amd64_gcc4
-      duckdb_sha: ${{ github.ref }}
+      duckdb_sha: ${{ github.sha }}
 
    linux-python3:
     name: Python 3 Linux
