@@ -18,7 +18,7 @@ LogicalType ExpressionBinder::ResolveNotType(OperatorExpression &op, vector<uniq
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-LogicalType ExpressionBinder::ResolveInType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
+LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
 	if (children.empty()) {
 		throw InternalException("IN requires at least a single child node");
 	}
@@ -50,11 +50,10 @@ LogicalType ExpressionBinder::ResolveInType(OperatorExpression &op, vector<uniqu
 		child = BoundCastExpression::AddCastToType(context, std::move(child), max_type);
 		if (is_in_operator) {
 			// If it's IN/NOT_IN operator, push collation functions.
-			ExpressionBinder::PushCollation(context, child, max_type, true);
+			ExpressionBinder::PushCollation(context, child, max_type);
 		}
 	}
-	// (NOT) IN always returns a boolean
-	return LogicalType::BOOLEAN;
+	return max_type;
 }
 
 LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
@@ -68,10 +67,11 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 		return LogicalType::BOOLEAN;
 	case ExpressionType::COMPARE_IN:
 	case ExpressionType::COMPARE_NOT_IN:
-		return ResolveInType(op, children);
+		ResolveCoalesceType(op, children);
+		// (NOT) IN always returns a boolean
+		return LogicalType::BOOLEAN;
 	case ExpressionType::OPERATOR_COALESCE: {
-		ResolveInType(op, children);
-		return children[0]->return_type;
+		return ResolveCoalesceType(op, children);
 	}
 	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);

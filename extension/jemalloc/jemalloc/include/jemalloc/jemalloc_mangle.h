@@ -5,9 +5,6 @@
  * name mangling that matches the API prefixing that happened as a result of
  * --with-mangling and/or --with-jemalloc-prefix configuration settings.
  */
-
-namespace duckdb_jemalloc {
-
 #ifdef JEMALLOC_MANGLE
 #  ifndef JEMALLOC_NO_DEMANGLE
 #    define JEMALLOC_NO_DEMANGLE
@@ -16,6 +13,8 @@ namespace duckdb_jemalloc {
 #  define calloc je_calloc
 #  define dallocx je_dallocx
 #  define free je_free
+#  define free_sized je_free_sized
+#  define free_aligned_sized je_free_aligned_sized
 #  define mallctl je_mallctl
 #  define mallctlbymib je_mallctlbymib
 #  define mallctlnametomib je_mallctlnametomib
@@ -26,7 +25,7 @@ namespace duckdb_jemalloc {
 #  define malloc_stats_print je_malloc_stats_print
 #  define malloc_usable_size je_malloc_usable_size
 #  define mallocx je_mallocx
-#  define smallocx_54eaed1d8b56b1aa528be3bdd1877e59c56fa90c je_smallocx_54eaed1d8b56b1aa528be3bdd1877e59c56fa90c
+#  define smallocx_a25b9b8ba91881964be3083db349991bbbbf1661 je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661
 #  define nallocx je_nallocx
 #  define posix_memalign je_posix_memalign
 #  define rallocx je_rallocx
@@ -50,6 +49,8 @@ namespace duckdb_jemalloc {
 #  undef je_calloc
 #  undef je_dallocx
 #  undef je_free
+#  undef je_free_sized
+#  undef je_free_aligned_sized
 #  undef je_mallctl
 #  undef je_mallctlbymib
 #  undef je_mallctlnametomib
@@ -60,7 +61,7 @@ namespace duckdb_jemalloc {
 #  undef je_malloc_stats_print
 #  undef je_malloc_usable_size
 #  undef je_mallocx
-#  undef je_smallocx_54eaed1d8b56b1aa528be3bdd1877e59c56fa90c
+#  undef je_smallocx_a25b9b8ba91881964be3083db349991bbbbf1661
 #  undef je_nallocx
 #  undef je_posix_memalign
 #  undef je_rallocx
@@ -71,5 +72,3 @@ namespace duckdb_jemalloc {
 #  undef je_valloc
 #  undef je_malloc_size
 #endif
-
-} // namespace duckdb_jemalloc

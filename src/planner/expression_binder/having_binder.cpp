@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression_binder/having_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -32,6 +33,11 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetName());
 		if (lambda_ref) {
 			return BindLambdaReference(lambda_ref->Cast<LambdaRefExpression>(), depth);
+		}
+		// column was not found - check if it is a SQL value function
+		auto value_function = GetSQLValueFunction(col_ref.GetColumnName());
+		if (value_function) {
+			return BindExpression(value_function, depth);
 		}
 	}
 
@@ -69,7 +75,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 }
 
 BindResult HavingBinder::BindWindow(WindowExpression &expr, idx_t depth) {
-	return BindResult("HAVING clause cannot contain window functions!");
+	return BindResult(BinderException::Unsupported(expr, "HAVING clause cannot contain window functions!"));
 }
 
 } // namespace duckdb

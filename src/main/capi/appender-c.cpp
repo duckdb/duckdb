@@ -140,6 +140,24 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	return DuckDBSuccess;
 }
 
+duckdb_state duckdb_append_default(duckdb_appender appender) {
+	if (!appender) {
+		return DuckDBError;
+	}
+	auto *appender_instance = reinterpret_cast<AppenderWrapper *>(appender);
+
+	try {
+		appender_instance->appender->AppendDefault();
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		appender_instance->error = error.RawMessage();
+		return DuckDBError;
+	} catch (...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
+}
+
 duckdb_state duckdb_append_bool(duckdb_appender appender, bool value) {
 	return duckdb_append_internal<bool>(appender, value);
 }

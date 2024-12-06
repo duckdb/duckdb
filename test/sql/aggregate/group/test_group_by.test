@@ -187,6 +187,7 @@ NULL	NULL	NULL
 statement error
 SELECT 1 AS k, SUM(i) FROM integers GROUP BY k+1 ORDER BY 2;
 ----
+aliases cannot be used as part of an expression in the GROUP BY
 
 # group by column refs should be recognized, even if one uses an explicit table specifier and the other does not
 query IR

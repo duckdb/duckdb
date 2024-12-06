@@ -1,0 +1,55 @@
+# name: test/sql/function/list/array_to_string_comma_default.test
+# description: Test array_to_string_comma_default function
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT array_to_string_comma_default([1,2,3])
+----
+1,2,3
+
+query I
+SELECT array_to_string_comma_default([1,2,3], sep:=',')
+----
+1,2,3
+
+query I
+SELECT array_to_string_comma_default([1,2,3], sep:='')
+----
+123
+
+query I
+SELECT array_to_string_comma_default([1,2,3], sep:='-')
+----
+1-2-3
+
+query I
+SELECT array_to_string_comma_default(NULL, sep:='-')
+----
+NULL
+
+query I
+SELECT array_to_string_comma_default([1, 2, 3], sep:=NULL)
+----
+1,2,3
+
+
+query I
+SELECT array_to_string_comma_default([], sep:='-')
+----
+NULL
+
+query I
+SELECT array_to_string_comma_default([i, i + 1], sep:='-') FROM range(6) t(i) WHERE i<=2 OR i>4
+----
+0-1
+1-2
+2-3
+5-6
+
+statement error
+SELECT array_to_string_comma_default([1, 2, 3], sep:=k) FROM repeat(',', 5) t(k)
+----
+Separator argument to StringAgg must be a constant

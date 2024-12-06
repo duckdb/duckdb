@@ -25,8 +25,12 @@ function get_validity(vector::Vec, size = VECTOR_SIZE)::ValidityMask
     return ValidityMask(validity_vector)
 end
 
-function all_valid(vector::Vec)::Bool
-    return duckdb_vector_get_validity(vector.handle) == C_NULL
+function all_valid(vector::Vec, size = VECTOR_SIZE)::Bool
+    validity_ptr = duckdb_vector_get_validity(vector.handle)
+    validity_ptr == C_NULL && return true
+    size_words = div(size, BITS_PER_VALUE, RoundUp)
+    validity_vector = unsafe_wrap(Vector{UInt64}, validity_ptr, size_words, own = false)
+    return all_valid(ValidityMask(validity_vector))
 end
 
 function list_child(vector::Vec)::Vec

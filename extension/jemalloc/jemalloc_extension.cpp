@@ -4,10 +4,6 @@
 #include "duckdb/common/allocator.hpp"
 #include "jemalloc/jemalloc.h"
 
-#ifndef DUCKDB_NO_THREADS
-#include "duckdb/common/thread.hpp"
-#endif
-
 namespace duckdb {
 
 void JemallocExtension::Load(DuckDB &db) {
@@ -19,20 +15,20 @@ std::string JemallocExtension::Name() {
 }
 
 data_ptr_t JemallocExtension::Allocate(PrivateAllocatorData *private_data, idx_t size) {
-	return data_ptr_cast(duckdb_jemalloc::je_malloc(size));
+	return data_ptr_cast(duckdb_je_malloc(size));
 }
 
 void JemallocExtension::Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-	duckdb_jemalloc::je_free(pointer);
+	duckdb_je_free(pointer);
 }
 
 data_ptr_t JemallocExtension::Reallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
                                          idx_t size) {
-	return data_ptr_cast(duckdb_jemalloc::je_realloc(pointer, size));
+	return data_ptr_cast(duckdb_je_realloc(pointer, size));
 }
 
 static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {
-	if (duckdb_jemalloc::je_mallctl(name, old_ptr, old_len, new_ptr, new_len) != 0) {
+	if (duckdb_je_mallctl(name, old_ptr, old_len, new_ptr, new_len) != 0) {
 #ifdef DEBUG
 		// We only want to throw an exception here when debugging
 		throw InternalException("je_mallctl failed for setting \"%s\"", name);
@@ -42,7 +38,7 @@ static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *
 
 template <class T>
 static void SetJemallocCTL(const char *name, T &val) {
-	JemallocCTL(name, &val, sizeof(T));
+	JemallocCTL(name, nullptr, nullptr, &val, sizeof(T));
 }
 
 static void SetJemallocCTL(const char *name) {
@@ -57,9 +53,17 @@ static T GetJemallocCTL(const char *name) {
 	return result;
 }
 
+static inline string PurgeArenaString(idx_t arena_idx) {
+	return StringUtil::Format("arena.%llu.purge", arena_idx);
+}
+
+int64_t JemallocExtension::DecayDelay() {
+	return DUCKDB_JEMALLOC_DECAY;
+}
+
 void JemallocExtension::ThreadFlush(idx_t threshold) {
 	// We flush after exceeding the threshold
-	if (GetJemallocCTL<uint64_t>("thread.peak.read") < threshold) {
+	if (GetJemallocCTL<uint64_t>("thread.peak.read") > threshold) {
 		return;
 	}
 
@@ -67,8 +71,16 @@ void JemallocExtension::ThreadFlush(idx_t threshold) {
 	SetJemallocCTL("thread.tcache.flush");
 
 	// Flush this thread's arena
-	const auto purge_arena = StringUtil::Format("arena.%llu.purge", idx_t(GetJemallocCTL<unsigned>("thread.arena")));
+	const auto purge_arena = PurgeArenaString(idx_t(GetJemallocCTL<unsigned>("thread.arena")));
 	SetJemallocCTL(purge_arena.c_str());
+
+	// Reset the peak after resetting
+	SetJemallocCTL("thread.peak.reset");
+}
+
+void JemallocExtension::ThreadIdle() {
+	// Indicate that this thread is idle
+	SetJemallocCTL("thread.idle");
 
 	// Reset the peak after resetting
 	SetJemallocCTL("thread.peak.reset");
@@ -79,11 +91,15 @@ void JemallocExtension::FlushAll() {
 	SetJemallocCTL("thread.tcache.flush");
 
 	// Flush all arenas
-	const auto purge_arena = StringUtil::Format("arena.%llu.purge", MALLCTL_ARENAS_ALL);
+	const auto purge_arena = PurgeArenaString(MALLCTL_ARENAS_ALL);
 	SetJemallocCTL(purge_arena.c_str());
 
 	// Reset the peak after resetting
 	SetJemallocCTL("thread.peak.reset");
+}
+
+void JemallocExtension::SetBackgroundThreads(bool enable) {
+	SetJemallocCTL("background_thread", enable);
 }
 
 std::string JemallocExtension::Version() const {

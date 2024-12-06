@@ -33,6 +33,14 @@ NULL
 1
 
 # subquery returning multiple results
+statement error
+SELECT i, (SELECT 42+i1.i FROM integers) AS j FROM integers i1 ORDER BY i;
+----
+More than one row returned by a subquery used as an expression
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=false
+
 query II
 SELECT i, (SELECT 42+i1.i FROM integers) AS j FROM integers i1 ORDER BY i;
 ----
@@ -40,6 +48,9 @@ NULL	NULL
 1	43
 2	44
 3	45
+
+statement ok
+SET scalar_subquery_error_on_multiple_rows=true
 
 # subquery with LIMIT
 query II

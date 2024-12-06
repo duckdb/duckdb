@@ -1,0 +1,26 @@
+# name: test/sql/copy/csv/test_wrong_newline_delimiter.test
+# description: Test error messages printing exact newline delimiters
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r')
+----
+new_line = \r (Set By User)
+
+statement error
+FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n')
+----
+new_line = \n (Set By User)
+
+statement error
+FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n')
+----
+new_line = \r\n (Set By User)
+
+statement error
+FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n\r')
+----
+This is not accepted as a newline: \n\r

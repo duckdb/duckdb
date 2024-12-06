@@ -111,12 +111,19 @@
         "struct": "ListRangeFun"
     },
     {
+        "name": "list_cosine_distance",
+        "parameters": "list1,list2",
+        "description": "Compute the cosine distance between two lists",
+        "example": "list_cosine_distance([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["<=>"]
+    },
+    {
         "name": "list_cosine_similarity",
         "parameters": "list1,list2",
         "description": "Compute the cosine similarity between two lists",
         "example": "list_cosine_similarity([1, 2, 3], [1, 2, 3])",
-        "type": "scalar_function_set",
-        "aliases": ["<=>"]
+        "type": "scalar_function_set"
     },
     {
         "name": "list_distance",
@@ -132,7 +139,15 @@
         "description": "Compute the inner product between two lists",
         "example": "list_inner_product([1, 2, 3], [1, 2, 3])",
         "type": "scalar_function_set",
-        "aliases": ["list_dot_product", "<#>"]
+        "aliases": ["list_dot_product"]
+    },
+    {
+        "name": "list_negative_inner_product",
+        "parameters": "list1,list2",
+        "description": "Compute the negative inner product between two lists",
+        "example": "list_negative_inner_product([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["list_negative_dot_product"]
     },
     {
         "name": "unpivot_list",
@@ -140,5 +155,21 @@
         "description": "Identical to list_value, but generated as part of unpivot for better error messages",
         "example": "unpivot_list(4, 5, 6)",
         "type": "scalar_function"
+    },
+    {
+        "name": "list_has_any",
+        "parameters": "l1, l2",
+        "description": "Returns true if the lists have any element in common. NULLs are ignored.",
+        "example": "list_has_any([1, 2, 3], [2, 3, 4])",
+        "type": "scalar_function",
+        "aliases": ["array_has_any", "&&"]
+    },
+    {
+        "name": "list_has_all",
+        "parameters": "l1, l2",
+        "description": "Returns true if all elements of l2 are in l1. NULLs are ignored.",
+        "example": "list_has_all([1, 2, 3], [2, 3])",
+        "type": "scalar_function",
+        "aliases": ["array_has_all", "@>", "<@"]
     }
 ]

@@ -396,4 +396,58 @@ struct TruncFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct CoshFun {
+	static constexpr const char *Name = "cosh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the hyperbolic cos of x";
+	static constexpr const char *Example = "cosh(1)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct SinhFun {
+	static constexpr const char *Name = "sinh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the hyperbolic sin of x";
+	static constexpr const char *Example = "sinh(1)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct TanhFun {
+	static constexpr const char *Name = "tanh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the hyperbolic tan of x";
+	static constexpr const char *Example = "tanh(1)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct AcoshFun {
+	static constexpr const char *Name = "acosh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the inverse hyperbolic cos of x";
+	static constexpr const char *Example = "acosh(2.3)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct AsinhFun {
+	static constexpr const char *Name = "asinh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the inverse hyperbolic sin of x";
+	static constexpr const char *Example = "asinh(0.5)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct AtanhFun {
+	static constexpr const char *Name = "atanh";
+	static constexpr const char *Parameters = "x";
+	static constexpr const char *Description = "Computes the inverse hyperbolic tan of x";
+	static constexpr const char *Example = "atanh(0.5)";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

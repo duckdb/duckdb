@@ -50,9 +50,9 @@ void my_function(duckdb_function_info info, duckdb_data_chunk output) {
 	duckdb_data_chunk_set_size(output, i);
 }
 
-static duckdb_state capi_register_table_function(duckdb_connection connection, const char *name,
-                                                 duckdb_table_function_bind_t bind, duckdb_table_function_init_t init,
-                                                 duckdb_table_function_t f) {
+static void capi_register_table_function(duckdb_connection connection, const char *name,
+                                         duckdb_table_function_bind_t bind, duckdb_table_function_init_t init,
+                                         duckdb_table_function_t f, duckdb_state expected_state = DuckDBSuccess) {
 	duckdb_state status;
 	// create a table function
 	auto function = duckdb_create_table_function();
@@ -78,15 +78,10 @@ static duckdb_state capi_register_table_function(duckdb_connection connection, c
 
 	// register and cleanup
 	status = duckdb_register_table_function(connection, function);
-	if (status == DuckDBError) {
-		duckdb_destroy_table_function(&function);
-		return status;
-	}
-
 	duckdb_destroy_table_function(&function);
 	duckdb_destroy_table_function(&function);
 	duckdb_destroy_table_function(nullptr);
-	return status;
+	REQUIRE(status == expected_state);
 }
 
 TEST_CASE("Test Table Functions C API", "[capi]") {
@@ -95,6 +90,8 @@ TEST_CASE("Test Table Functions C API", "[capi]") {
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function);
+	// registering again causes an error
+	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function, DuckDBError);
 
 	// now call it
 	result = tester.Query("SELECT * FROM my_function(1)");
@@ -160,9 +157,9 @@ TEST_CASE("Test Table Function register errors in C API", "[capi]") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));
 
-	REQUIRE(capi_register_table_function(tester.connection, "x", my_error_bind, my_init, my_function) == DuckDBSuccess);
+	capi_register_table_function(tester.connection, "x", my_error_bind, my_init, my_function, DuckDBSuccess);
 	// Try to register it again with the same name, name collision
-	REQUIRE(capi_register_table_function(tester.connection, "x", my_error_bind, my_init, my_function) == DuckDBError);
+	capi_register_table_function(tester.connection, "x", my_error_bind, my_init, my_function, DuckDBError);
 }
 
 struct my_named_bind_data_struct {

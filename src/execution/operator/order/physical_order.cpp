@@ -22,9 +22,10 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 class OrderGlobalSinkState : public GlobalSinkState {
 public:
 	OrderGlobalSinkState(BufferManager &buffer_manager, const PhysicalOrder &order, RowLayout &payload_layout)
-	    : global_sort_state(buffer_manager, order.orders, payload_layout) {
+	    : order(order), global_sort_state(buffer_manager, order.orders, payload_layout) {
 	}
 
+	const PhysicalOrder &order;
 	//! Global sort state
 	GlobalSortState global_sort_state;
 	//! Memory usage per thread
@@ -112,8 +113,9 @@ SinkCombineResultType PhysicalOrder::Combine(ExecutionContext &context, Operator
 
 class PhysicalOrderMergeTask : public ExecutorTask {
 public:
-	PhysicalOrderMergeTask(shared_ptr<Event> event_p, ClientContext &context, OrderGlobalSinkState &state)
-	    : ExecutorTask(context, std::move(event_p)), context(context), state(state) {
+	PhysicalOrderMergeTask(shared_ptr<Event> event_p, ClientContext &context, OrderGlobalSinkState &state,
+	                       const PhysicalOperator &op_p)
+	    : ExecutorTask(context, std::move(event_p), op_p), context(context), state(state) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -132,11 +134,12 @@ private:
 
 class OrderMergeEvent : public BasePipelineEvent {
 public:
-	OrderMergeEvent(OrderGlobalSinkState &gstate_p, Pipeline &pipeline_p)
-	    : BasePipelineEvent(pipeline_p), gstate(gstate_p) {
+	OrderMergeEvent(OrderGlobalSinkState &gstate_p, Pipeline &pipeline_p, const PhysicalOperator &op_p)
+	    : BasePipelineEvent(pipeline_p), gstate(gstate_p), op(op_p) {
 	}
 
 	OrderGlobalSinkState &gstate;
+	const PhysicalOperator &op;
 
 public:
 	void Schedule() override {
@@ -148,7 +151,7 @@ public:
 
 		vector<shared_ptr<Task>> merge_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			merge_tasks.push_back(make_uniq<PhysicalOrderMergeTask>(shared_from_this(), context, gstate));
+			merge_tasks.push_back(make_uniq<PhysicalOrderMergeTask>(shared_from_this(), context, gstate, op));
 		}
 		SetTasks(std::move(merge_tasks));
 	}
@@ -187,7 +190,7 @@ SinkFinalizeType PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, Clien
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalSinkState &state) {
 	// Initialize global sort state for a round of merging
 	state.global_sort_state.InitializeMergeRound();
-	auto new_event = make_shared_ptr<OrderMergeEvent>(state, pipeline);
+	auto new_event = make_shared_ptr<OrderMergeEvent>(state, pipeline, state.order);
 	event.InsertEvent(std::move(new_event));
 }
 
@@ -267,15 +270,17 @@ idx_t PhysicalOrder::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, 
 	return lstate.batch_index;
 }
 
-string PhysicalOrder::ParamsToString() const {
-	string result = "ORDERS:\n";
+InsertionOrderPreservingMap<string> PhysicalOrder::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	string orders_info;
 	for (idx_t i = 0; i < orders.size(); i++) {
 		if (i > 0) {
-			result += "\n";
+			orders_info += "\n";
 		}
-		result += orders[i].expression->ToString() + " ";
-		result += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
+		orders_info += orders[i].expression->ToString() + " ";
+		orders_info += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
 	}
+	result["__order_by__"] = orders_info;
 	return result;
 }
 

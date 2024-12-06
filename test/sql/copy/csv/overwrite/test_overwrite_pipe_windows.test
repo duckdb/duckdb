@@ -2,6 +2,9 @@
 # description: Test overwrite to pipe on windows systems
 # group: [overwrite]
 
+statement ok
+PRAGMA enable_verification
+
 require windows
 
 require notmingw

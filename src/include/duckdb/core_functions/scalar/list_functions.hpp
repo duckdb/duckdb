@@ -261,6 +261,21 @@ struct ListRangeFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ListCosineDistanceFun {
+	static constexpr const char *Name = "list_cosine_distance";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the cosine distance between two lists";
+	static constexpr const char *Example = "list_cosine_distance([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListCosineDistanceFunAlias {
+	using ALIAS = ListCosineDistanceFun;
+
+	static constexpr const char *Name = "<=>";
+};
+
 struct ListCosineSimilarityFun {
 	static constexpr const char *Name = "list_cosine_similarity";
 	static constexpr const char *Parameters = "list1,list2";
@@ -268,12 +283,6 @@ struct ListCosineSimilarityFun {
 	static constexpr const char *Example = "list_cosine_similarity([1, 2, 3], [1, 2, 3])";
 
 	static ScalarFunctionSet GetFunctions();
-};
-
-struct ListCosineSimilarityFunAlias {
-	using ALIAS = ListCosineSimilarityFun;
-
-	static constexpr const char *Name = "<=>";
 };
 
 struct ListDistanceFun {
@@ -306,10 +315,19 @@ struct ListDotProductFun {
 	static constexpr const char *Name = "list_dot_product";
 };
 
-struct ListInnerProductFunAlias {
-	using ALIAS = ListInnerProductFun;
+struct ListNegativeInnerProductFun {
+	static constexpr const char *Name = "list_negative_inner_product";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the negative inner product between two lists";
+	static constexpr const char *Example = "list_negative_inner_product([1, 2, 3], [1, 2, 3])";
 
-	static constexpr const char *Name = "<#>";
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListNegativeDotProductFun {
+	using ALIAS = ListNegativeInnerProductFun;
+
+	static constexpr const char *Name = "list_negative_dot_product";
 };
 
 struct UnpivotListFun {
@@ -319,6 +337,54 @@ struct UnpivotListFun {
 	static constexpr const char *Example = "unpivot_list(4, 5, 6)";
 
 	static ScalarFunction GetFunction();
+};
+
+struct ListHasAnyFun {
+	static constexpr const char *Name = "list_has_any";
+	static constexpr const char *Parameters = "l1, l2";
+	static constexpr const char *Description = "Returns true if the lists have any element in common. NULLs are ignored.";
+	static constexpr const char *Example = "list_has_any([1, 2, 3], [2, 3, 4])";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayHasAnyFun {
+	using ALIAS = ListHasAnyFun;
+
+	static constexpr const char *Name = "array_has_any";
+};
+
+struct ListHasAnyFunAlias {
+	using ALIAS = ListHasAnyFun;
+
+	static constexpr const char *Name = "&&";
+};
+
+struct ListHasAllFun {
+	static constexpr const char *Name = "list_has_all";
+	static constexpr const char *Parameters = "l1, l2";
+	static constexpr const char *Description = "Returns true if all elements of l2 are in l1. NULLs are ignored.";
+	static constexpr const char *Example = "list_has_all([1, 2, 3], [2, 3])";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayHasAllFun {
+	using ALIAS = ListHasAllFun;
+
+	static constexpr const char *Name = "array_has_all";
+};
+
+struct ListHasAllFunAlias {
+	using ALIAS = ListHasAllFun;
+
+	static constexpr const char *Name = "@>";
+};
+
+struct ListHasAllFunAlias2 {
+	using ALIAS = ListHasAllFun;
+
+	static constexpr const char *Name = "<@";
 };
 
 } // namespace duckdb

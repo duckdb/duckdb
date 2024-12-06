@@ -3,6 +3,7 @@
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -10,10 +11,11 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p), size(0) {
-	buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false, &handle);
+	auto buffer_handle = buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false);
+	handle = buffer_handle.GetBlockHandle();
 }
 
-TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept {
+TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept : capacity(0), size(0) {
 	std::swap(handle, other.handle);
 	std::swap(capacity, other.capacity);
 	std::swap(size, other.size);
@@ -32,6 +34,23 @@ TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, const Tupl
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
     : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
+}
+
+void TupleDataAllocator::SetDestroyBufferUponUnpin() {
+	for (auto &block : row_blocks) {
+		if (block.handle) {
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+		}
+	}
+	for (auto &block : heap_blocks) {
+		if (block.handle) {
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+		}
+	}
+}
+
+TupleDataAllocator::~TupleDataAllocator() {
+	SetDestroyBufferUponUnpin();
 }
 
 BufferManager &TupleDataAllocator::GetBufferManager() {
@@ -118,10 +137,11 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
                                                       TupleDataChunk &chunk) {
 	D_ASSERT(append_count != 0);
 	TupleDataChunkPart result(*chunk.lock);
+	const auto block_size = buffer_manager.GetBlockSize();
 
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
-		row_blocks.emplace_back(buffer_manager, (idx_t)Storage::BLOCK_SIZE);
+		row_blocks.emplace_back(buffer_manager, block_size);
 	}
 	result.row_block_index = NumericCast<uint32_t>(row_blocks.size() - 1);
 	auto &row_block = row_blocks[result.row_block_index];
@@ -142,9 +162,8 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 		if (total_heap_size == 0) {
 			result.SetHeapEmpty();
 		} else {
-			const auto heap_remaining = MaxValue<idx_t>(heap_blocks.empty() ? (idx_t)Storage::BLOCK_SIZE
-			                                                                : heap_blocks.back().RemainingCapacity(),
-			                                            heap_sizes[append_offset]);
+			const auto heap_remaining = MaxValue<idx_t>(
+			    heap_blocks.empty() ? block_size : heap_blocks.back().RemainingCapacity(), heap_sizes[append_offset]);
 
 			if (total_heap_size <= heap_remaining) {
 				// Everything fits
@@ -167,7 +186,7 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 			} else {
 				// Allocate heap block (if needed)
 				if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
-					const auto size = MaxValue<idx_t>((idx_t)Storage::BLOCK_SIZE, heap_sizes[append_offset]);
+					const auto size = MaxValue<idx_t>(block_size, heap_sizes[append_offset]);
 					heap_blocks.emplace_back(buffer_manager, size);
 				}
 				result.heap_block_index = NumericCast<uint32_t>(heap_blocks.size() - 1);
@@ -440,7 +459,10 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
 			case TupleDataPinProperties::ALREADY_PINNED:
 				break;
 			case TupleDataPinProperties::DESTROY_AFTER_DONE:
-				blocks[block_id].handle = nullptr;
+				// Prevent it from being added to the eviction queue
+				blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+				// Destroy
+				blocks[block_id].handle.reset();
 				break;
 			default:
 				D_ASSERT(properties == TupleDataPinProperties::INVALID);

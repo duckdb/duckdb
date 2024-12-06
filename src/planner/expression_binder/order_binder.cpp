@@ -12,14 +12,15 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
-OrderBinder::OrderBinder(vector<Binder *> binders, SelectBindState &bind_state)
+OrderBinder::OrderBinder(vector<reference<Binder>> binders, SelectBindState &bind_state)
     : binders(std::move(binders)), extra_list(nullptr), bind_state(bind_state) {
 }
-OrderBinder::OrderBinder(vector<Binder *> binders, SelectNode &node, SelectBindState &bind_state)
+OrderBinder::OrderBinder(vector<reference<Binder>> binders, SelectNode &node, SelectBindState &bind_state)
     : binders(std::move(binders)), bind_state(bind_state) {
 	this->extra_list = &node.select_list;
 }
@@ -49,19 +50,67 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 	return result;
 }
 
-unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr, const Value &val) {
-	// ORDER BY a constant
-	if (!val.type().IsIntegral()) {
-		// non-integral expression, we just leave the constant here.
-		// ORDER BY <constant> has no effect
-		// CONTROVERSIAL: maybe we should throw an error
+optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) const {
+	switch (expr.expression_class) {
+	case ExpressionClass::CONSTANT: {
+		auto &constant = expr.Cast<ConstantExpression>();
+		// ORDER BY a constant
+		if (!constant.value.type().IsIntegral()) {
+			// non-integral expression
+			// ORDER BY <constant> has no effect
+			// this is disabled by default (matching Postgres) - but we can control this with a setting
+			auto &config = ClientConfig::GetConfig(binders[0].get().context);
+			if (!config.order_by_non_integer_literal) {
+				throw BinderException(expr,
+				                      "%s non-integer literal has no effect.\n* SET "
+				                      "order_by_non_integer_literal=true to allow this behavior.",
+				                      query_component);
+			}
+			break;
+		}
+		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
+		auto order_value = constant.value.GetValue<int64_t>();
+		return static_cast<idx_t>(order_value <= 0 ? NumericLimits<int64_t>::Maximum() : order_value - 1);
+	}
+	case ExpressionClass::COLUMN_REF: {
+		auto &colref = expr.Cast<ColumnRefExpression>();
+		// if there is an explicit table name we can't bind to an alias
+		if (colref.IsQualified()) {
+			break;
+		}
+		// check the alias list
+		auto entry = bind_state.alias_map.find(colref.column_names[0]);
+		if (entry == bind_state.alias_map.end()) {
+			break;
+		}
+		// this is an alias - return the index
+		return entry->second;
+	}
+	case ExpressionClass::POSITIONAL_REFERENCE: {
+		auto &posref = expr.Cast<PositionalReferenceExpression>();
+		return posref.index - 1;
+	}
+	default:
+		break;
+	}
+	return optional_idx();
+}
+
+void OrderBinder::SetQueryComponent(string component) {
+	if (component.empty()) {
+		query_component = "ORDER BY";
+	} else {
+		query_component = std::move(component);
+	}
+}
+
+unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
+	auto index = TryGetProjectionReference(expr);
+	if (!index.IsValid()) {
 		return nullptr;
 	}
-	// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-	auto order_value = val.GetValue<int64_t>();
-	auto index = order_value <= 0 ? NumericLimits<idx_t>::Maximum() : idx_t(order_value - 1);
 	child_list_t<Value> values;
-	values.push_back(make_pair("index", Value::UBIGINT(index)));
+	values.push_back(make_pair("index", Value::UBIGINT(index.GetIndex())));
 	auto result = make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
 	result->alias = std::move(expr.alias);
 	result->query_location = expr.query_location;
@@ -78,48 +127,27 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	case ExpressionClass::CONSTANT: {
 		// ORDER BY constant
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)
-		auto &constant = expr->Cast<ConstantExpression>();
-		return BindConstant(*expr, constant.value);
+		return BindConstant(*expr);
 	}
-	case ExpressionClass::COLUMN_REF: {
+	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::POSITIONAL_REFERENCE: {
 		// COLUMN REF expression
 		// check if we can bind it to an alias in the select list
-		auto &colref = expr->Cast<ColumnRefExpression>();
-		// if there is an explicit table name we can't bind to an alias
-		if (colref.IsQualified()) {
-			break;
-		}
-		// check the alias list
-		auto entry = bind_state.alias_map.find(colref.column_names[0]);
-		if (entry != bind_state.alias_map.end()) {
-			// it does! point it to that entry
-			return CreateProjectionReference(*expr, entry->second);
+		auto index = TryGetProjectionReference(*expr);
+		if (index.IsValid()) {
+			return CreateProjectionReference(*expr, index.GetIndex());
 		}
 		break;
 	}
-	case ExpressionClass::POSITIONAL_REFERENCE: {
-		auto &posref = expr->Cast<PositionalReferenceExpression>();
-		return CreateProjectionReference(*expr, posref.index - 1);
-	}
 	case ExpressionClass::PARAMETER: {
-		throw ParameterNotAllowedException("Parameter not supported in ORDER BY clause");
+		throw ParameterNotAllowedException("Parameter not supported in %s clause", query_component);
 	}
 	case ExpressionClass::COLLATE: {
 		auto &collation = expr->Cast<CollateExpression>();
-		if (collation.child->expression_class == ExpressionClass::CONSTANT) {
-			auto &constant = collation.child->Cast<ConstantExpression>();
-
-			// non-integral expression, we just leave the constant here.
-			// ORDER BY <constant> has no effect
-			// CONTROVERSIAL: maybe we should throw an error
-			if (!constant.value.type().IsIntegral()) {
-				return nullptr;
-			}
-
-			D_ASSERT(constant.value.GetValue<idx_t>() > 0);
-			auto index = constant.value.GetValue<idx_t>() - 1;
+		auto collation_index = TryGetProjectionReference(*collation.child);
+		if (collation_index.IsValid()) {
 			child_list_t<Value> values;
-			values.push_back(make_pair("index", Value::UBIGINT(index)));
+			values.push_back(make_pair("index", Value::UBIGINT(collation_index.GetIndex())));
 			values.push_back(make_pair("collation", Value(std::move(collation.collation))));
 			return make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
 		}
@@ -131,7 +159,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// general case
 	// first bind the table names of this entry
 	for (auto &binder : binders) {
-		ExpressionBinder::QualifyColumnNames(*binder, expr);
+		ExpressionBinder::QualifyColumnNames(binder.get(), expr);
 	}
 	// first check if the ORDER BY clause already points to an entry in the projection list
 	auto entry = bind_state.projection_map.find(*expr);

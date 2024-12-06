@@ -21,3 +21,20 @@ select * from tbl;
 ----
 5	10
 3	2
+
+statement ok
+drop table tbl cascade;
+
+statement ok
+create table tbl (i integer PRIMARY KEY, j integer);
+
+statement ok
+insert into tbl values (42, 21), (21, 42);
+
+statement ok
+create index my_index on tbl(j);
+
+statement error
+insert into tbl values (42, 20) on conflict do update set j = 30
+----
+Can not assign to column 'j' because it has a UNIQUE/PRIMARY KEY constraint or is referenced by an INDEX

@@ -18,7 +18,7 @@ void ExtraTypeInfo::Serialize(Serializer &serializer) const {
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ExtraTypeInfoType>(100, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(101, "alias");
-	auto modifiers = deserializer.ReadPropertyWithDefault<vector<Value>>(102, "modifiers", vector<Value>());
+	auto modifiers = deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(102, "modifiers", vector<Value>());
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
@@ -173,9 +173,9 @@ void UserTypeInfo::Serialize(Serializer &serializer) const {
 shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<UserTypeInfo>(new UserTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "user_type_name", result->user_type_name);
-	deserializer.ReadPropertyWithDefault<string>(201, "catalog", result->catalog, string());
-	deserializer.ReadPropertyWithDefault<string>(202, "schema", result->schema, string());
-	deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_modifiers", result->user_type_modifiers, vector<Value>());
+	deserializer.ReadPropertyWithExplicitDefault<string>(201, "catalog", result->catalog, string());
+	deserializer.ReadPropertyWithExplicitDefault<string>(202, "schema", result->schema, string());
+	deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(203, "user_type_modifiers", result->user_type_modifiers, vector<Value>());
 	return std::move(result);
 }
 

@@ -27,10 +27,11 @@ enum class AppenderType : uint8_t {
 
 //! The Appender class can be used to append elements to a table.
 class BaseAppender {
-protected:
+public:
 	//! The amount of tuples that will be gathered in the column data collection before flushing
-	static constexpr const idx_t FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100ULL;
+	static constexpr const idx_t DEFAULT_FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100ULL;
 
+protected:
 	Allocator &allocator;
 	//! The append types
 	vector<LogicalType> types;
@@ -42,10 +43,13 @@ protected:
 	idx_t column = 0;
 	//! The type of the appender
 	AppenderType appender_type;
+	//! The amount of rows after which we flush the appender automatically
+	idx_t flush_count = DEFAULT_FLUSH_COUNT;
 
 protected:
 	DUCKDB_API BaseAppender(Allocator &allocator, AppenderType type);
-	DUCKDB_API BaseAppender(Allocator &allocator, vector<LogicalType> types, AppenderType type);
+	DUCKDB_API BaseAppender(Allocator &allocator, vector<LogicalType> types, AppenderType type,
+	                        idx_t flush_count = DEFAULT_FLUSH_COUNT);
 
 public:
 	DUCKDB_API virtual ~BaseAppender();
@@ -110,19 +114,24 @@ protected:
 };
 
 class Appender : public BaseAppender {
+	//! The default expressions
+	unordered_map<idx_t, Value> default_values;
+
 public:
-	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name, const vector<LogicalType> &logical_types);
 	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
-	DUCKDB_API Appender(Connection &con, const string &table_name, const vector<LogicalType> &logical_types);
 	DUCKDB_API Appender(Connection &con, const string &table_name);
 	DUCKDB_API ~Appender() override;
 
+public:
+	void AppendDefault();
+
 protected:
-	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name, const vector<LogicalType> &logical_types, const optional_ptr<const vector<string>> &column_names);
-  	//! A reference to a database connection that created this appender
+	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name, const optional_ptr<const vector<string>> &column_names);
+	//! A reference to a database connection that created this appender
 	shared_ptr<ClientContext> context;
 	//! The table description (including column names)
 	unique_ptr<TableDescription> description;
+
 	void FlushInternal(ColumnDataCollection &collection) override;
 };
 
@@ -132,16 +141,14 @@ class Merger : public Appender {
 public:
 	// Mergers and inserts columns for the given column names.  This function is
 	DUCKDB_API Merger(Connection &con, const string &schema_name, const string &table_name, const vector<string> &column_names);
-	DUCKDB_API Merger(Connection &con, const string &schema_name, const string &table_name, const vector<LogicalType> &types);
 	DUCKDB_API Merger(Connection &con, const string &schema_name, const string &table_name);
-	DUCKDB_API Merger(Connection &con, const string &table_name, const vector<LogicalType> &types);
 	DUCKDB_API Merger(Connection &con, const string &table_name, const vector<string> &column_names);
 	DUCKDB_API Merger(Connection &con, const string &table_name);
 	DUCKDB_API ~Merger() override;
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
 };
-  
+
 class InternalAppender : public BaseAppender {
 	//! The client context
 	ClientContext &context;
@@ -149,7 +156,8 @@ class InternalAppender : public BaseAppender {
 	TableCatalogEntry &table;
 
 public:
-	DUCKDB_API InternalAppender(ClientContext &context, TableCatalogEntry &table);
+	DUCKDB_API InternalAppender(ClientContext &context, TableCatalogEntry &table,
+	                            idx_t flush_count = DEFAULT_FLUSH_COUNT);
 	DUCKDB_API ~InternalAppender() override;
 
 protected:

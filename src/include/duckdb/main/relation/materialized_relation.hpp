@@ -17,12 +17,9 @@ class MaterializedRelation : public Relation {
 public:
 	MaterializedRelation(const shared_ptr<ClientContext> &context, unique_ptr<ColumnDataCollection> &&collection,
 	                     vector<string> names, string alias = "materialized");
-	MaterializedRelation(const shared_ptr<ClientContext> &context, const string &values, vector<string> names,
-	                     string alias = "materialized");
-
-	unique_ptr<ColumnDataCollection> collection;
 	vector<ColumnDefinition> columns;
 	string alias;
+	shared_ptr<ColumnDataCollection> collection;
 
 public:
 	const vector<ColumnDefinition> &Columns() override;

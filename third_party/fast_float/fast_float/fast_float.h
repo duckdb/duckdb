@@ -75,7 +75,7 @@ struct from_chars_result {
  */
 template<typename T>
 from_chars_result from_chars(const char *first, const char *last,
-                             T &value,
+                             T &value, bool strict=false,
                              const char decimal_separator = '.',
                              chars_format fmt = chars_format::general)  noexcept;
 
@@ -504,7 +504,7 @@ struct parsed_number_string {
 // Assuming that you use no more than 19 digits, this will
 // parse an ASCII string.
 fastfloat_really_inline
-parsed_number_string parse_number_string(const char *p, const char *pend, const char decimal_separator, chars_format fmt) noexcept {
+parsed_number_string parse_number_string(const char *p, const char *pend, const char decimal_separator, chars_format fmt, bool strict) noexcept {
   parsed_number_string answer;
   answer.valid = false;
   answer.too_many_digits = false;
@@ -530,6 +530,10 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
           uint64_t(*p - '0'); // might overflow, we will handle the overflow later
       ++p;
 	  if(p != pend && *p == '_') {
+	    if (strict) {
+	      answer.valid = false;
+	      return answer;
+	    }
 		  // skip 1 underscore if it is not the last character and followed by a digit
 		  ++p;
 		  if(p == pend || !is_integer(*p)) {
@@ -565,6 +569,10 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
         i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
 
 		if(p != pend && *p == '_') {
+		  if (strict) {
+	      answer.valid = false;
+	      return answer;
+	    }
 		  // skip 1 underscore if it is not the last character and followed by a digit
 		  ++p;
 		  ++skipped_underscores;
@@ -611,6 +619,10 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
           ++p;
 
 		  if(p != pend && *p == '_') {
+		    if (strict) {
+	      answer.valid = false;
+	      return answer;
+	    }
 			// skip 1 underscore if it is not the last character and followed by a digit
 			++p;
 			if(p == pend || !is_integer(*p)) {
@@ -659,6 +671,10 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
           ++p;
 
 		  if(p != pend && *p == '_') {
+		    if (strict) {
+	      answer.valid = false;
+	      return answer;
+	    }
 			// skip 1 underscore if it is not the last character and followed by a digit
 			++p;
 			if(p == pend || !is_integer(*p)) {
@@ -2445,7 +2461,7 @@ fastfloat_really_inline void to_float(bool negative, adjusted_mantissa am, T &va
 
 template<typename T>
 from_chars_result from_chars(const char *first, const char *last,
-                             T &value, const char decimal_separator, chars_format fmt
+                             T &value, bool strict, const char decimal_separator, chars_format fmt
                               /*= chars_format::general*/)  noexcept  {
   static_assert (std::is_same<T, double>::value || std::is_same<T, float>::value, "only float and double are supported");
 
@@ -2456,7 +2472,7 @@ from_chars_result from_chars(const char *first, const char *last,
     answer.ptr = first;
     return answer;
   }
-  parsed_number_string pns = parse_number_string(first, last, decimal_separator, fmt);
+  parsed_number_string pns = parse_number_string(first, last, decimal_separator, fmt, strict);
   if (!pns.valid) {
     return detail::parse_infnan(first, last, value);
   }

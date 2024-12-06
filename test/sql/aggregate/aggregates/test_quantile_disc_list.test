@@ -21,6 +21,16 @@ SELECT quantile_disc(r, [0.1, 0.5, 0.9]) FROM quantiles
 ----
 [999, 4999, 8999]
 
+query I
+SELECT quantile_disc(case when r is null then null else [r] end, [0.1, 0.5, 0.9]) FROM quantiles
+----
+[[999], [4999], [8999]]
+
+query I
+SELECT quantile_disc(case when r is null then null else {'i': r} end, [0.1, 0.5, 0.9]) FROM quantiles
+----
+[{'i': 999}, {'i': 4999}, {'i': 8999}]
+
 foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
 
 query I

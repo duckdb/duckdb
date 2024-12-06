@@ -1,0 +1,12 @@
+# name: test/sql/copy/parquet/parquet_12621.test
+# description: Issue #12621: Parquet read : Invalid decimal encoding in Parquet file
+# group: [parquet]
+
+require parquet
+
+query I
+select *
+from read_parquet('data/parquet-testing/issue12621.parquet')
+limit 1;
+----
+0.0000

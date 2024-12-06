@@ -174,11 +174,13 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
                                                           const string &extension_name) {
 
-	return AddExtensionInstallHintToErrorMsg(DBConfig::GetConfig(context), base_error, extension_name);
+	return AddExtensionInstallHintToErrorMsg(DatabaseInstance::GetDatabase(context), base_error, extension_name);
 }
-string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DBConfig &config, const string &base_error,
+string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, const string &base_error,
                                                           const string &extension_name) {
 	string install_hint;
+
+	auto &config = db.config;
 
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
 		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
@@ -211,7 +213,9 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(context, extension_name, false, autoinstall_repo, false);
+			ExtensionInstallOptions options;
+			options.repository = autoinstall_repo;
+			ExtensionHelper::InstallExtension(context, extension_name, options);
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 		return true;
@@ -220,7 +224,28 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
-static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileSystem &fs,
+bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const string &extension_name) noexcept {
+	if (instance.ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
+	auto &dbconfig = DBConfig::GetConfig(instance);
+	try {
+		auto &fs = FileSystem::GetFileSystem(instance);
+		if (dbconfig.options.autoinstall_known_extensions) {
+			auto autoinstall_repo =
+			    ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
+			ExtensionInstallOptions options;
+			options.repository = autoinstall_repo;
+			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
+		}
+		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
+		return true;
+	} catch (...) {
+		return false;
+	}
+}
+
+static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
                                                      const string &full_extension_path, const string &extension_name) {
 	ExtensionUpdateResult result;
 	result.extension_name = extension_name;
@@ -270,10 +295,15 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 	auto repository_from_info = ExtensionRepository::GetRepositoryByUrl(extension_install_info->repository_url);
 	result.repository = repository_from_info.ToReadableString();
 
-	// We force install the full url found in this file, throwing
+	// Force install the full url found in this file, enabling etags to ensure efficient updating
+	ExtensionInstallOptions options;
+	options.repository = repository_from_info;
+	options.force_install = true;
+	options.use_etags = true;
+
 	unique_ptr<ExtensionInstallInfo> install_result;
 	try {
-		install_result = ExtensionHelper::InstallExtension(config, fs, extension_name, true, repository_from_info);
+		install_result = ExtensionHelper::InstallExtension(context, extension_name, options);
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		error.Throw("Extension updating failed when trying to install '" + extension_name + "', original error: ");
@@ -294,19 +324,15 @@ static ExtensionUpdateResult UpdateExtensionInternal(DatabaseInstance &db, FileS
 
 vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	return ExtensionHelper::UpdateExtensions(DatabaseInstance::GetDatabase(context), fs);
-}
 
-vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance &db, FileSystem &fs) {
 	vector<ExtensionUpdateResult> result;
-
-	auto &config = DBConfig::GetConfig(db);
+	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
 
 #ifndef WASM_LOADABLE_EXTENSIONS
 	case_insensitive_set_t seen_extensions;
 
 	// scan the install directory for installed extensions
-	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
+	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);
 	fs.ListFiles(ext_directory, [&](const string &path, bool is_directory) {
 		if (!StringUtil::EndsWith(path, ".duckdb_extension")) {
 			return;
@@ -317,7 +343,7 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 
 		seen_extensions.insert(extension_name);
 
-		result.push_back(UpdateExtensionInternal(db, fs, fs.JoinPath(ext_directory, path), extension_name));
+		result.push_back(UpdateExtensionInternal(context, db, fs, fs.JoinPath(ext_directory, path), extension_name));
 	});
 #endif
 
@@ -326,23 +352,18 @@ vector<ExtensionUpdateResult> ExtensionHelper::UpdateExtensions(DatabaseInstance
 
 ExtensionUpdateResult ExtensionHelper::UpdateExtension(ClientContext &context, const string &extension_name) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	return ExtensionHelper::UpdateExtension(DatabaseInstance::GetDatabase(context), fs, extension_name);
-}
-
-ExtensionUpdateResult ExtensionHelper::UpdateExtension(DatabaseInstance &db, FileSystem &fs,
-                                                       const string &extension_name) {
-	auto &config = DBConfig::GetConfig(db);
-	auto ext_directory = ExtensionHelper::ExtensionDirectory(config, fs);
+	DatabaseInstance &db = DatabaseInstance::GetDatabase(context);
+	auto ext_directory = ExtensionHelper::ExtensionDirectory(db, fs);
 
 	auto full_extension_path = fs.JoinPath(ext_directory, extension_name + ".duckdb_extension");
 
-	auto update_result = UpdateExtensionInternal(db, fs, full_extension_path, extension_name);
+	auto update_result = UpdateExtensionInternal(context, db, fs, full_extension_path, extension_name);
 
 	if (update_result.tag == ExtensionUpdateResultTag::NOT_INSTALLED) {
 		throw InvalidInputException("Failed to update the extension '%s', the extension is not installed!",
 		                            extension_name);
 	} else if (update_result.tag == ExtensionUpdateResultTag::UNKNOWN) {
-		throw InternalException("Failed to update extension '%s', an unknown error ocurred", extension_name);
+		throw InternalException("Failed to update extension '%s', an unknown error occurred", extension_name);
 	}
 	return update_result;
 }
@@ -363,7 +384,9 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		if (dbconfig.options.autoinstall_known_extensions) {
 			//! Get the autoloading repository
 			auto repository = ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
-			ExtensionHelper::InstallExtension(db.config, *fs, extension_name, false, repository);
+			ExtensionInstallOptions options;
+			options.repository = repository;
+			ExtensionHelper::InstallExtension(db, *fs, extension_name, options);
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
@@ -380,8 +403,8 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// The in-tree extensions that we check. Non-cmake builds are currently limited to these for static linking
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 	//		 these can be removed
-	unordered_set<string> extensions {"parquet", "icu",   "tpch",     "tpcds", "fts",      "httpfs",
-	                                  "json",    "excel", "sqlsmith", "inet",  "jemalloc", "autocomplete"};
+	unordered_set<string> extensions {"parquet", "icu",   "tpch", "tpcds",    "fts",         "httpfs",
+	                                  "json",    "excel", "inet", "jemalloc", "autocomplete"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -492,13 +515,6 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	} else if (extension == "excel") {
 #if DUCKDB_EXTENSION_EXCEL_LINKED
 		db.LoadStaticExtension<ExcelExtension>();
-#else
-		// excel extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "sqlsmith") {
-#if DUCKDB_EXTENSION_SQLSMITH_LINKED
-		db.LoadStaticExtension<SqlsmithExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
@@ -752,17 +768,6 @@ EMS5gLv50CzQqJXK9mNzPuYXNUIc4Pw4ssVWe0OfN3Od90gl5uFUwk/G9lWSYnBN
 )", nullptr};
 
 static const char *const community_public_keys[] = {
-    R"(
------BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv+Jki3aiZt0eOzShgD2g
-BYPjPpkhHowOwPzUKtTVPob7vxyzd2wPyWDF/Zn6sN8QzravAdlXFE3SNF7ayO86
-IPHhMxO6P2YlxbipyKzPOUJsasXBiwYw2aSvb0RtwnYwD5lJs8Tz2ET1RQCFgXGc
-LW7bDjKRbHSME0Me5rLRWVztOqULeoMeY1oCOmKKeAYxjFOASJJfQF9oQxkuu3j1
-qpcXnfHldlPGzFM77OFlWFtlc9QW4WNoxkO3HwskFW6ZRaQipM8vgSzkIfPFESGL
-TtDRw+RcUPqmS6NVW8nhaiptBIMXy+9cP/l1LGmGwrZRhWP0YBlk6V9MUMzjyo+R
-JQIDAQAB
------END PUBLIC KEY-----
-)",
     R"(
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtXl28loGwAH3ZGQXXgJQ

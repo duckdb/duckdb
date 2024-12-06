@@ -105,8 +105,9 @@ public:
 	//! Load a secret storage
 	DUCKDB_API void LoadSecretStorage(unique_ptr<SecretStorage> storage);
 
-	//! Deserialize a secret by automatically selecting the correct deserializer
-	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(Deserializer &deserializer);
+	//! Deserialize a secret by automatically selecting the correct deserializer, secret_path can be set to improve
+	//! error hints
+	DUCKDB_API unique_ptr<BaseSecret> DeserializeSecret(Deserializer &deserializer, const string &secret_path = "");
 	//! Register a new SecretType
 	DUCKDB_API void RegisterSecretType(SecretType &type);
 	//! Lookup a SecretType
@@ -153,8 +154,14 @@ public:
 	                                 const string &storage = "");
 
 private:
-	//! Lookup a SecretType
+	//! Register a secret type
+	void RegisterSecretTypeInternal(SecretType &type);
+	//! Lookup a SecretType, throws if not found
 	SecretType LookupTypeInternal(const string &type);
+	//! Try to lookup a SecretType
+	bool TryLookupTypeInternal(const string &type, SecretType &type_out);
+	//! Register a secret provider
+	void RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict);
 	//! Lookup a CreateSecretFunction
 	optional_ptr<CreateSecretFunction> LookupFunctionInternal(const string &type, const string &provider);
 	//! Register a new Secret
@@ -172,7 +179,7 @@ private:
 	void AutoloadExtensionForFunction(const string &type, const string &provider);
 
 	//! Will throw appropriate error message when type not found
-	[[noreturn]] void ThrowTypeNotFoundError(const string &type);
+	[[noreturn]] void ThrowTypeNotFoundError(const string &type, const string &secret_path = "");
 	[[noreturn]] void ThrowProviderNotFoundError(const string &type, const string &provider, bool was_default = false);
 
 	//! Thread-safe accessors for secret_storages
@@ -204,10 +211,13 @@ public:
 	DefaultSecretGenerator(Catalog &catalog, SecretManager &secret_manager, case_insensitive_set_t &persistent_secrets);
 
 public:
+	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name) override;
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
 	vector<string> GetDefaultEntries() override;
 
 protected:
+	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const string &entry_name);
+
 	SecretManager &secret_manager;
 	case_insensitive_set_t persistent_secrets;
 };

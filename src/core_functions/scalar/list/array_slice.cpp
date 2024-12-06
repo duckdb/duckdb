@@ -42,7 +42,7 @@ unique_ptr<FunctionData> ListSliceBindData::Copy() const {
 template <typename INDEX_TYPE>
 static idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
 	if (step < 0) {
-		step = abs(step);
+		step = AbsValue(step);
 	}
 	if (step == 0 && svalid) {
 		throw InvalidInputException("Slice step cannot be zero");

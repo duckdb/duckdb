@@ -54,7 +54,7 @@ SELECT SUM(a) FROM test
 
 require skip_reload
 
-# ensure the alter type does not lead to leaking blocks
+# ensure the alter type does not result in leaking blocks
 
 # for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
 # therefore, we need to compare to a range of total block counts

@@ -51,7 +51,9 @@ physical_plan	<REGEX>:.*PERFECT_HASH_GROUP_BY.*
 statement error
 PRAGMA perfect_ht_threshold=-1;
 ----
+<REGEX>:Parser Error:.*out of range.*
 
 statement error
 PRAGMA perfect_ht_threshold=100;
 ----
+<REGEX>:Parser Error:.*out of range.*

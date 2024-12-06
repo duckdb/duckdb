@@ -1,0 +1,18 @@
+# name: test/sql/copy/csv/test_12314.test_slow
+# description: Test CSV reading for issue 12314
+# group: [csv]
+
+require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/sample_data_12314.csv.gz',HEADER = 1,  PARALLEL=false);
+----
+Change the maximum length size, e.g., max_line_size=2097408
+
+query I
+select count(*) from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/sample_data_12314.csv.gz',HEADER = 1, PARALLEL=false , max_line_size=2097408);
+----
+26238

@@ -15,6 +15,8 @@
 
 namespace duckdb {
 class BaseSecret;
+struct SecretEntry;
+struct FileOpenerInfo;
 
 //! Whether a secret is persistent or temporary
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
@@ -76,6 +78,13 @@ struct SecretType {
 	secret_deserializer_t deserializer;
 	//! Provider to use when non is specified
 	string default_provider;
+};
+
+enum class SecretSerializationType : uint8_t {
+	//! The secret is serialized with a custom serialization function
+	CUSTOM = 0,
+	//! The secret has been serialized as a KeyValueSecret
+	KEY_VALUE_SECRET = 1
 };
 
 //! Base class from which BaseSecret classes can be made.
@@ -185,7 +194,7 @@ public:
 
 		for (const auto &entry : ListValue::GetChildren(secret_map_value)) {
 			auto kv_struct = StructValue::GetChildren(entry);
-			result->secret_map[kv_struct[0].ToString()] = kv_struct[1].ToString();
+			result->secret_map[kv_struct[0].ToString()] = kv_struct[1];
 		}
 
 		Value redact_set_value;
@@ -201,10 +210,116 @@ public:
 		return make_uniq<KeyValueSecret>(*this);
 	}
 
+	// Get a value from the secret
+	bool TryGetValue(const string &key, Value &result) const {
+		auto lookup = secret_map.find(key);
+		if (lookup == secret_map.end()) {
+			return false;
+		}
+		result = lookup->second;
+		return true;
+	}
+
+	bool TrySetValue(const string &key, const CreateSecretInput &input) {
+		auto lookup = input.options.find(key);
+		if (lookup != input.options.end()) {
+			secret_map[key] = lookup->second;
+			return true;
+		}
+		return false;
+	}
+
 	//! the map of key -> values that make up the secret
 	case_insensitive_tree_t<Value> secret_map;
 	//! keys that are sensitive and should be redacted
 	case_insensitive_set_t redact_keys;
+};
+
+// Helper class to fetch secret parameters in a cascading way. The idea being that in many cases there is a direct
+// connection between a KeyValueSecret key and a setting and we want to:
+// - check if the secret has a specific key, if so return the corresponding value
+// - check if a setting exists, if so return its value
+// - return a default value
+
+class KeyValueSecretReader {
+public:
+	//! Manually pass in a secret reference
+	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {};
+
+	//! Initializes the KeyValueSecretReader by fetching the secret automatically
+	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,
+	                     idx_t secret_types_len);
+	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char *secret_type);
+
+	//! Initialize KeyValueSecretReader from a db instance
+	KeyValueSecretReader(DatabaseInstance &db, const char **secret_types, idx_t secret_types_len, string path);
+	KeyValueSecretReader(DatabaseInstance &db, const char *secret_type, string path);
+
+	// Initialize KeyValueSecretReader from a client context
+	KeyValueSecretReader(ClientContext &context, const char **secret_types, idx_t secret_types_len, string path);
+	KeyValueSecretReader(ClientContext &context, const char *secret_type, string path);
+
+	~KeyValueSecretReader();
+
+	//! Lookup a KeyValueSecret value
+	SettingLookupResult TryGetSecretKey(const string &secret_key, Value &result);
+	//! Lookup a KeyValueSecret value or a setting
+	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, Value &result);
+	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
+	Value GetSecretKey(const string &secret_key);
+	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
+	Value GetSecretKeyOrSetting(const string &secret_key, const string &setting_name);
+
+	//! Templating around TryGetSecretKey
+	template <class TYPE>
+	SettingLookupResult TryGetSecretKey(const string &secret_key, TYPE &value_out) {
+		Value result;
+		auto lookup_result = TryGetSecretKey(secret_key, result);
+		if (lookup_result) {
+			value_out = result.GetValue<TYPE>();
+		}
+		return lookup_result;
+	}
+
+	//! Templating around TryGetSecretOrSetting
+	template <class TYPE>
+	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
+	                                             TYPE &value_out) {
+		Value result;
+		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
+		if (lookup_result) {
+			value_out = result.GetValue<TYPE>();
+		}
+		return lookup_result;
+	}
+
+	// Like a templated GetSecretOrSetting but instead of throwing on not found, return the default value
+	template <class TYPE>
+	TYPE GetSecretKeyOrSettingOrDefault(const string &secret_key, const string &setting_name, TYPE default_value) {
+		TYPE result;
+		if (TryGetSecretKeyOrSetting(secret_key, setting_name, result)) {
+			return result;
+		}
+		return default_value;
+	}
+
+protected:
+	void Initialize(const char **secret_types, idx_t secret_types_len);
+
+	[[noreturn]] void ThrowNotFoundError(const string &secret_key);
+	[[noreturn]] void ThrowNotFoundError(const string &secret_key, const string &setting_name);
+
+	//! Fetching the secret
+	optional_ptr<const KeyValueSecret> secret;
+	//! Optionally an owning pointer to the secret entry
+	shared_ptr<SecretEntry> secret_entry;
+
+	//! Secrets/settings will be fetched either through a context (local + global settings) or a databaseinstance
+	//! (global only)
+	optional_ptr<DatabaseInstance> db;
+	optional_ptr<ClientContext> context;
+
+	string path;
 };
 
 } // namespace duckdb

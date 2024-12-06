@@ -228,7 +228,10 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 		auto bound_expression = expr_binder.Bind(expression);
 		D_ASSERT(bound_expression);
-		D_ASSERT(!bound_expression->HasSubquery());
+		if (bound_expression->HasSubquery()) {
+			throw BinderException("Failed to bind generated column '%s' because the expression contains a subquery",
+			                      col.Name());
+		}
 		if (col.Type().id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
 			col.ChangeGeneratedExpressionType(bound_expression->return_type);
@@ -349,7 +352,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(column.TypeMutable(), &result->schema.catalog);
+		BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
 	}
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 

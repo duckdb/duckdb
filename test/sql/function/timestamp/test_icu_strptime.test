@@ -421,6 +421,96 @@ ORDER BY ALL
 2022-03-05 20:59:17.877-08	Pacific/Niue
 2022-03-05 21:59:17.877-08	Etc/GMT+12
 
+# First has no TZ
+query II
+SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, ['%Y-%m-%d %H:%M:%S.%g', '%Y-%m-%d %H:%M:%S.%g %Z']) tstz, tz_name
+FROM zones
+ORDER BY ALL
+----
+2022-03-04 19:59:17.877-08	Etc/GMT-14
+2022-03-04 20:14:17.877-08	NZ-CHAT
+2022-03-04 20:59:17.877-08	Pacific/Auckland
+2022-03-04 20:59:17.877-08	Pacific/Enderbury
+2022-03-04 22:59:17.877-08	Australia/LHI
+2022-03-04 22:59:17.877-08	Australia/Melbourne
+2022-03-04 22:59:17.877-08	Pacific/Efate
+2022-03-05 00:29:17.877-08	Australia/Darwin
+2022-03-05 00:59:17.877-08	Asia/Tokyo
+2022-03-05 01:14:17.877-08	Australia/Eucla
+2022-03-05 01:59:17.877-08	Asia/Shanghai
+2022-03-05 02:59:17.877-08	Asia/Novosibirsk
+2022-03-05 03:29:17.877-08	Asia/Yangon
+2022-03-05 03:59:17.877-08	Asia/Omsk
+2022-03-05 04:14:17.877-08	Asia/Kathmandu
+2022-03-05 04:29:17.877-08	Asia/Colombo
+2022-03-05 04:59:17.877-08	Asia/Oral
+2022-03-05 05:29:17.877-08	Asia/Kabul
+2022-03-05 05:59:17.877-08	Europe/Astrakhan
+2022-03-05 06:29:17.877-08	Asia/Tehran
+2022-03-05 06:59:17.877-08	Asia/Kuwait
+2022-03-05 07:59:17.877-08	Asia/Nicosia
+2022-03-05 08:59:17.877-08	Europe/Budapest
+2022-03-05 09:59:17.877-08	Etc/GMT-0
+2022-03-05 10:59:17.877-08	Atlantic/Azores
+2022-03-05 12:59:17.877-08	America/Cayenne
+2022-03-05 12:59:17.877-08	America/Nuuk
+2022-03-05 13:29:17.877-08	CNT
+2022-03-05 13:59:17.877-08	America/Martinique
+2022-03-05 14:59:17.877-08	America/Louisville
+2022-03-05 15:59:17.877-08	America/Rainy_River
+2022-03-05 16:59:17.877-08	America/Shiprock
+2022-03-05 17:59:17.877-08	Mexico/BajaNorte
+2022-03-05 18:59:17.877-08	America/Sitka
+2022-03-05 19:29:17.877-08	Pacific/Marquesas
+2022-03-05 19:59:17.877-08	Pacific/Johnston
+2022-03-05 20:59:17.877-08	Pacific/Niue
+2022-03-05 21:59:17.877-08	Etc/GMT+12
+
+# Neither has TZ - should be TS not TSTZ
+query II
+SELECT ${func}('2022-03-05 17:59:17.877', ['%m/%d/%Y  %H:%M:%S.%g', '%Y-%m-%d %H:%M:%S.%g']) tstz, tz_name
+FROM zones
+ORDER BY ALL
+----
+2022-03-05 17:59:17.877	America/Cayenne
+2022-03-05 17:59:17.877	America/Louisville
+2022-03-05 17:59:17.877	America/Martinique
+2022-03-05 17:59:17.877	America/Nuuk
+2022-03-05 17:59:17.877	America/Rainy_River
+2022-03-05 17:59:17.877	America/Shiprock
+2022-03-05 17:59:17.877	America/Sitka
+2022-03-05 17:59:17.877	Asia/Colombo
+2022-03-05 17:59:17.877	Asia/Kabul
+2022-03-05 17:59:17.877	Asia/Kathmandu
+2022-03-05 17:59:17.877	Asia/Kuwait
+2022-03-05 17:59:17.877	Asia/Nicosia
+2022-03-05 17:59:17.877	Asia/Novosibirsk
+2022-03-05 17:59:17.877	Asia/Omsk
+2022-03-05 17:59:17.877	Asia/Oral
+2022-03-05 17:59:17.877	Asia/Shanghai
+2022-03-05 17:59:17.877	Asia/Tehran
+2022-03-05 17:59:17.877	Asia/Tokyo
+2022-03-05 17:59:17.877	Asia/Yangon
+2022-03-05 17:59:17.877	Atlantic/Azores
+2022-03-05 17:59:17.877	Australia/Darwin
+2022-03-05 17:59:17.877	Australia/Eucla
+2022-03-05 17:59:17.877	Australia/LHI
+2022-03-05 17:59:17.877	Australia/Melbourne
+2022-03-05 17:59:17.877	CNT
+2022-03-05 17:59:17.877	Etc/GMT+12
+2022-03-05 17:59:17.877	Etc/GMT-0
+2022-03-05 17:59:17.877	Etc/GMT-14
+2022-03-05 17:59:17.877	Europe/Astrakhan
+2022-03-05 17:59:17.877	Europe/Budapest
+2022-03-05 17:59:17.877	Mexico/BajaNorte
+2022-03-05 17:59:17.877	NZ-CHAT
+2022-03-05 17:59:17.877	Pacific/Auckland
+2022-03-05 17:59:17.877	Pacific/Efate
+2022-03-05 17:59:17.877	Pacific/Enderbury
+2022-03-05 17:59:17.877	Pacific/Johnston
+2022-03-05 17:59:17.877	Pacific/Marquesas
+2022-03-05 17:59:17.877	Pacific/Niue
+
 endloop
 
 #

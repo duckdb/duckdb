@@ -19,11 +19,6 @@
 #include <sys/clonefile.h>
 #endif
 
-#ifdef LINUX
-#include <linux/fs.h>
-#include <sys/ioctl.h>
-#endif
-
 #ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
@@ -39,6 +34,7 @@
 #ifdef __MINGW32__
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
+extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDWORD);
 #endif
 
 #undef FILE_CREATE // woo mingw
@@ -56,6 +52,7 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 #endif
 #include <fcntl.h>
 #include <libgen.h>
+#include <sys/sendfile.h>
 // See e.g.:
 // https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
 #elif defined(__APPLE__)
@@ -342,11 +339,18 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		filesec = 0666;
 	}
 
+	if (flags.ExclusiveCreate()) {
+		open_flags |= O_EXCL;
+	}
+
 	// Open the file
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
 		if (flags.ReturnNullIfNotExists() && errno == ENOENT) {
+			return nullptr;
+		}
+		if (flags.ReturnNullIfExists() && errno == EEXIST) {
 			return nullptr;
 		}
 		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
@@ -374,32 +378,48 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 			rc = fcntl(fd, F_SETLK, &fl);
 			// Retain the original error.
 			int retained_errno = errno;
-			if (rc == -1) {
-				string message;
-				// try to find out who is holding the lock using F_GETLK
-				rc = fcntl(fd, F_GETLK, &fl);
-				if (rc == -1) { // fnctl does not want to help us
-					message = strerror(errno);
-				} else {
-					message = AdditionalProcessInfo(*this, fl.l_pid);
+			bool has_error = rc == -1;
+			string extended_error;
+			if (has_error) {
+				if (retained_errno == ENOTSUP) {
+					// file lock not supported for this file system
+					if (flags.Lock() == FileLockType::READ_LOCK) {
+						// for read-only, we ignore not-supported errors
+						has_error = false;
+						errno = 0;
+					} else {
+						extended_error = "File locks are not supported for this file system, cannot open the file in "
+						                 "read-write mode. Try opening the file in read-only mode";
+					}
 				}
-
-				if (flags.Lock() == FileLockType::WRITE_LOCK) {
-					// maybe we can get a read lock instead and tell this to the user.
-					fl.l_type = F_RDLCK;
-					rc = fcntl(fd, F_SETLK, &fl);
-					if (rc != -1) { // success!
-						message += ". However, you would be able to open this database in read-only mode, e.g. by "
-						           "using the -readonly parameter in the CLI";
+			}
+			if (has_error) {
+				if (extended_error.empty()) {
+					// try to find out who is holding the lock using F_GETLK
+					rc = fcntl(fd, F_GETLK, &fl);
+					if (rc == -1) { // fnctl does not want to help us
+						extended_error = strerror(errno);
+					} else {
+						extended_error = AdditionalProcessInfo(*this, fl.l_pid);
+					}
+					if (flags.Lock() == FileLockType::WRITE_LOCK) {
+						// maybe we can get a read lock instead and tell this to the user.
+						fl.l_type = F_RDLCK;
+						rc = fcntl(fd, F_SETLK, &fl);
+						if (rc != -1) { // success!
+							extended_error +=
+							    ". However, you would be able to open this database in read-only mode, e.g. by "
+							    "using the -readonly parameter in the CLI";
+						}
 					}
 				}
 				rc = close(fd);
 				if (rc == -1) {
-					message += ". Also, failed closing file";
+					extended_error += ". Also, failed closing file";
 				}
-				message += ". See also https://duckdb.org/docs/connect/concurrency";
+				extended_error += ". See also https://duckdb.org/docs/connect/concurrency";
 				throw IOException("Could not set lock on file \"%s\": %s", {{"errno", std::to_string(retained_errno)}},
-				                  path, message);
+				                  path, extended_error);
 			}
 		}
 	}
@@ -500,7 +520,8 @@ bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_
 	return false;
 #else
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset_bytes, length_bytes);
+	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, UnsafeNumericCast<int64_t>(offset_bytes),
+	                    UnsafeNumericCast<int64_t>(length_bytes));
 	return res == 0;
 #endif
 #else
@@ -621,10 +642,6 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                 FileOpener *opener) {
-	if (!DirectoryExists(directory, opener)) {
-		return false;
-	}
-
 	auto dir = opendir(directory.c_str());
 	if (!dir) {
 		return false;
@@ -643,11 +660,11 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		}
 		// now stat the file to figure out if it is a regular file or directory
 		string full_path = JoinPath(directory, name);
-		if (access(full_path.c_str(), 0) != 0) {
+		struct stat status;
+		auto res = stat(full_path.c_str(), &status);
+		if (res != 0) {
 			continue;
 		}
-		struct stat status;
-		stat(full_path.c_str(), &status);
 		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
 			// not a file or directory: skip
 			continue;
@@ -1096,7 +1113,7 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	}
 }
 
-void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
 	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
 	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!CopyFileW(source_unicode.c_str(), target_unicode.c_str(), FALSE)) {
@@ -1356,19 +1373,43 @@ unique_ptr<FileSystem> FileSystem::CreateLocal() {
 }
 
 #if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
-void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
   int src_fd = src_handle->Cast<UnixFileHandle>().fd;
   fclonefileat(src_fd, AT_FDCWD, target.c_str(), 0);
 }
 #elif LINUX
-void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
-    int dst_fd = dst_handle->Cast<UnixFileHandle>().fd;
-    int src_fd = src_handle->Cast<UnixFileHandle>().fd;
-    ioctl(dst_fd, FICLONE, src_fd);
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
+	int dst_fd = open(target.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);;
+	int src_fd = src_handle->Cast<UnixFileHandle>().fd;
+	off_t len, ret;
+	struct stat stat;
+
+	if (fstat(src_fd, &stat) == -1)
+	{
+		perror("fstat");
+	}
+	len = stat.st_size;
+
+	do
+	{
+		ret = sendfile(dst_fd, src_fd, NULL, len);
+
+		if (ret == -1)
+		{
+			perror("copy_file_range");
+		}
+		len -= ret;
+	}
+	while (len > 0 && ret > 0);
+
+	if (close(dst_fd) == -1)
+	{
+		perror("close");
+	}
 }
 #else
 #ifndef _WIN32
-void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
     throw NotImplementedException("CopyFile Unsupported");
 }
 #endif

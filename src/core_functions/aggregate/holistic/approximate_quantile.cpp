@@ -133,30 +133,53 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 	}
 };
 
-AggregateFunction GetApproximateQuantileAggregateFunction(PhysicalType type) {
-	switch (type) {
+static AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &type) {
+	//	Not binary comparable
+	if (type == LogicalType::TIME_TZ) {
+		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, dtime_tz_t, dtime_tz_t,
+		                                                   ApproxQuantileScalarOperation>(type, type);
+	}
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int8_t, int8_t,
+		                                                   ApproxQuantileScalarOperation>(type, type);
 	case PhysicalType::INT16:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int16_t, int16_t,
-		                                                   ApproxQuantileScalarOperation>(LogicalType::SMALLINT,
-		                                                                                  LogicalType::SMALLINT);
+		                                                   ApproxQuantileScalarOperation>(type, type);
 	case PhysicalType::INT32:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int32_t, int32_t,
-		                                                   ApproxQuantileScalarOperation>(LogicalType::INTEGER,
-		                                                                                  LogicalType::INTEGER);
+		                                                   ApproxQuantileScalarOperation>(type, type);
 	case PhysicalType::INT64:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int64_t, int64_t,
-		                                                   ApproxQuantileScalarOperation>(LogicalType::BIGINT,
-		                                                                                  LogicalType::BIGINT);
+		                                                   ApproxQuantileScalarOperation>(type, type);
 	case PhysicalType::INT128:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, hugeint_t, hugeint_t,
-		                                                   ApproxQuantileScalarOperation>(LogicalType::HUGEINT,
-		                                                                                  LogicalType::HUGEINT);
+		                                                   ApproxQuantileScalarOperation>(type, type);
+	case PhysicalType::FLOAT:
+		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, float, float,
+		                                                   ApproxQuantileScalarOperation>(type, type);
 	case PhysicalType::DOUBLE:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, double, double,
-		                                                   ApproxQuantileScalarOperation>(LogicalType::DOUBLE,
-		                                                                                  LogicalType::DOUBLE);
+		                                                   ApproxQuantileScalarOperation>(type, type);
 	default:
 		throw InternalException("Unimplemented quantile aggregate");
+	}
+}
+
+static AggregateFunction GetApproximateQuantileDecimalAggregateFunction(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::INT8:
+		return GetApproximateQuantileAggregateFunction(LogicalType::TINYINT);
+	case PhysicalType::INT16:
+		return GetApproximateQuantileAggregateFunction(LogicalType::SMALLINT);
+	case PhysicalType::INT32:
+		return GetApproximateQuantileAggregateFunction(LogicalType::INTEGER);
+	case PhysicalType::INT64:
+		return GetApproximateQuantileAggregateFunction(LogicalType::BIGINT);
+	case PhysicalType::INT128:
+		return GetApproximateQuantileAggregateFunction(LogicalType::HUGEINT);
+	default:
+		throw InternalException("Unimplemented quantile decimal aggregate");
 	}
 }
 
@@ -210,14 +233,14 @@ unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFun
 unique_ptr<FunctionData> BindApproxQuantileDecimal(ClientContext &context, AggregateFunction &function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindApproxQuantile(context, function, arguments);
-	function = GetApproximateQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	function = GetApproximateQuantileDecimalAggregateFunction(arguments[0]->return_type);
 	function.name = "approx_quantile";
 	function.serialize = ApproximateQuantileBindData::Serialize;
 	function.deserialize = ApproximateQuantileBindData::Deserialize;
 	return bind_data;
 }
 
-AggregateFunction GetApproximateQuantileAggregate(PhysicalType type) {
+AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	auto fun = GetApproximateQuantileAggregateFunction(type);
 	fun.bind = BindApproxQuantile;
 	fun.serialize = ApproximateQuantileBindData::Serialize;
@@ -287,9 +310,16 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 	case LogicalTypeId::SMALLINT:
 		return GetTypedApproxQuantileListAggregateFunction<int16_t, int16_t>(type);
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
 		return GetTypedApproxQuantileListAggregateFunction<int32_t, int32_t>(type);
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return GetTypedApproxQuantileListAggregateFunction<int64_t, int64_t>(type);
+	case LogicalTypeId::TIME_TZ:
+		//	Not binary comparable
+		return GetTypedApproxQuantileListAggregateFunction<dtime_tz_t, dtime_tz_t>(type);
 	case LogicalTypeId::HUGEINT:
 		return GetTypedApproxQuantileListAggregateFunction<hugeint_t, hugeint_t>(type);
 	case LogicalTypeId::FLOAT:
@@ -307,10 +337,9 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 		case PhysicalType::INT128:
 			return GetTypedApproxQuantileListAggregateFunction<hugeint_t, hugeint_t>(type);
 		default:
-			throw NotImplementedException("Unimplemented approximate quantile list aggregate");
+			throw NotImplementedException("Unimplemented approximate quantile list decimal aggregate");
 		}
 	default:
-		// TODO: Add quantitative temporal types
 		throw NotImplementedException("Unimplemented approximate quantile list aggregate");
 	}
 }
@@ -342,11 +371,17 @@ AggregateFunctionSet ApproxQuantileFun::GetFunctions() {
 	                                              nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                              BindApproxQuantileDecimal));
 
-	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT16));
-	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT32));
-	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT64));
-	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::INT128));
-	approx_quantile.AddFunction(GetApproximateQuantileAggregate(PhysicalType::DOUBLE));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::SMALLINT));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::INTEGER));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::BIGINT));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::HUGEINT));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::DOUBLE));
+
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::DATE));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::TIME));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::TIME_TZ));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::TIMESTAMP));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::TIMESTAMP_TZ));
 
 	// List variants
 	approx_quantile.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::FLOAT)},
@@ -360,6 +395,13 @@ AggregateFunctionSet ApproxQuantileFun::GetFunctions() {
 	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalTypeId::HUGEINT));
 	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalTypeId::FLOAT));
 	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalTypeId::DOUBLE));
+
+	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalType::DATE));
+	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalType::TIME));
+	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalType::TIME_TZ));
+	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalType::TIMESTAMP));
+	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalType::TIMESTAMP_TZ));
+
 	return approx_quantile;
 }
 

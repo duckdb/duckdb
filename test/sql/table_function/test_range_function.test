@@ -16,6 +16,20 @@ SELECT * FROM range(0, 10, 1)
 8
 9
 
+query I
+CALL range(10)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
 # generate_series is similar to range, but has inclusive bounds (for postgres compatibility)
 query I
 SELECT * FROM generate_series(0, 10, 1)

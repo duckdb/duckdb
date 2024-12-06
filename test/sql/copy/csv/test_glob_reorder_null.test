@@ -1,0 +1,36 @@
+# name: test/sql/copy/csv/test_glob_reorder_null.test
+# description: Test the glob reorder on a file that is mostly null
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t1 as select 1 as a,1 as b from range(3);
+
+# Create t2 on a different order
+statement ok
+create table t2 (b integer, a integer);
+
+# Make t2 mostly null
+statement ok
+insert into t2 select NULL as b,NULL as a from range(30000);
+
+statement ok
+insert into t2 values (3,4);
+
+# Create CSV files
+statement ok
+copy t1 to '__TEST_DIR__/null_glob_reorder_1.csv';
+
+statement ok
+copy t2  to '__TEST_DIR__/null_glob_reorder_2.csv';
+
+# Scan should work
+query II
+select * from read_csv(['__TEST_DIR__/null_glob_reorder_*.csv']) where b is not null;
+----
+1	1
+1	1
+1	1
+4	3

@@ -10,6 +10,7 @@ add_library_unity(
   OBJECT
   bound_result_modifier.cpp
   bound_parameter_map.cpp
+  collation_binding.cpp
   expression_iterator.cpp
   expression.cpp
   table_binding.cpp

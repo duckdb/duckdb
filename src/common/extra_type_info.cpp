@@ -1,4 +1,5 @@
 #include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/extra_type_info/enum_type_info.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -220,50 +221,6 @@ PhysicalType EnumTypeInfo::DictType(idx_t size) {
 	}
 }
 
-template <class T>
-struct EnumTypeInfoTemplated : public EnumTypeInfo {
-	explicit EnumTypeInfoTemplated(Vector &values_insert_order_p, idx_t size_p)
-	    : EnumTypeInfo(values_insert_order_p, size_p) {
-		D_ASSERT(values_insert_order_p.GetType().InternalType() == PhysicalType::VARCHAR);
-
-		UnifiedVectorFormat vdata;
-		values_insert_order.ToUnifiedFormat(size_p, vdata);
-
-		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-		for (idx_t i = 0; i < size_p; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(idx)) {
-				throw InternalException("Attempted to create ENUM type with NULL value");
-			}
-			if (values.count(data[idx]) > 0) {
-				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s",
-				                            data[idx].GetString());
-			}
-			values[data[idx]] = UnsafeNumericCast<T>(i);
-		}
-	}
-
-	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &deserializer, uint32_t size) {
-		Vector values_insert_order(LogicalType::VARCHAR, size);
-		auto strings = FlatVector::GetData<string_t>(values_insert_order);
-
-		deserializer.ReadList(201, "values", [&](Deserializer::List &list, idx_t i) {
-			strings[i] = StringVector::AddStringOrBlob(values_insert_order, list.ReadElement<string>());
-		});
-		return make_shared_ptr<EnumTypeInfoTemplated>(values_insert_order, size);
-	}
-
-	const string_map_t<T> &GetValues() const {
-		return values;
-	}
-
-	EnumTypeInfoTemplated(const EnumTypeInfoTemplated &) = delete;
-	EnumTypeInfoTemplated &operator=(const EnumTypeInfoTemplated &) = delete;
-
-private:
-	string_map_t<T> values;
-};
-
 EnumTypeInfo::EnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p)
     : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),
       dict_type(EnumDictType::VECTOR_DICT), dict_size(dict_size_p) {
@@ -428,6 +385,9 @@ IntegerLiteralTypeInfo::IntegerLiteralTypeInfo() : ExtraTypeInfo(ExtraTypeInfoTy
 
 IntegerLiteralTypeInfo::IntegerLiteralTypeInfo(Value constant_value_p)
     : ExtraTypeInfo(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), constant_value(std::move(constant_value_p)) {
+	if (constant_value.IsNull()) {
+		throw InternalException("Integer literal cannot be NULL");
+	}
 }
 
 bool IntegerLiteralTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {

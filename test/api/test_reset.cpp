@@ -43,7 +43,7 @@ struct OptionValueSet {
 void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line);
 #define REQUIRE_VALUE_EQUAL(op, lhs, rhs) RequireValueEqual(op, lhs, rhs, __LINE__)
 
-OptionValueSet &GetValueForOption(const string &name) {
+OptionValueSet GetValueForOption(const string &name, LogicalTypeId type) {
 	static unordered_map<string, OptionValueSet> value_map = {
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
 	    {"checkpoint_threshold", {"4.0 GiB"}},
@@ -52,16 +52,11 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"default_order", {"desc"}},
 	    {"default_null_order", {"nulls_first"}},
 	    {"disabled_optimizers", {"extension"}},
-	    {"debug_asof_iejoin", {Value(true)}},
-	    {"debug_force_external", {Value(true)}},
-	    {"debug_force_no_cross_product", {Value(true)}},
 	    {"debug_force_external", {Value(true)}},
 	    {"old_implicit_casting", {Value(true)}},
 	    {"prefer_range_joins", {Value(true)}},
 	    {"allow_persistent_secrets", {Value(false)}},
 	    {"secret_directory", {"/tmp/some/path"}},
-	    {"enable_macro_dependencies", {Value(true)}},
-	    {"enable_view_dependencies", {Value(true)}},
 	    {"default_secret_storage", {"custom_storage"}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoinstall_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
@@ -75,22 +70,18 @@ OptionValueSet &GetValueForOption(const string &name) {
 #else
 	    {"autoinstall_known_extensions", {true}},
 #endif
-	    {"enable_fsst_vectors", {true}},
-	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
-	    {"enable_progress_bar", {true}},
-	    {"errors_as_json", {true}},
 	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test"}},
 	    {"allow_extensions_metadata_mismatch", {"true"}},
-	    {"integer_division", {true}},
 	    {"extension_directory", {"test"}},
-	    {"immediate_transaction_mode", {true}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
+	    {"merge_join_threshold", {73}},
+	    {"nested_loop_join_threshold", {73}},
 	    {"memory_limit", {"4.0 GiB"}},
 	    {"storage_compatibility_version", {"v0.10.0"}},
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
@@ -104,24 +95,44 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"profile_output", {"test"}},
 	    {"profiling_mode", {"detailed"}},
 	    {"enable_progress_bar_print", {false}},
+	    {"scalar_subquery_error_on_multiple_rows", {false}},
+	    {"ieee_floating_point_ops", {false}},
 	    {"progress_bar_time", {0}},
 	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
-	    {"worker_threads", {42}},
-	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
-	    {"allocator_flush_threshold", {"4.0 GiB"}},
-	    {"arrow_large_buffer_size", {true}},
-	    {"enable_http_logging", {true}},
+	    {"http_proxy", {"localhost:80"}},
+	    {"http_proxy_username", {"john"}},
+	    {"http_proxy_password", {"doe"}},
 	    {"http_logging_output", {"my_cool_outputfile"}},
-	    {"kafka_writer", {true}},
-	    {"kafka_topic_name", {"my_cool_topic"}},
-	    {"kafka_redo_log", {true}},
-	    {"kafka_bootstrap_server_and_port", {"john:117"}},
-	    {"log_extension", {"just_log_me"}},
-	};
+	    {"allocator_flush_threshold", {"4.0 GiB"}},
+	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
+
+		// Anybase additions
+		{"kafka_writer", {true}},
+		{"kafka_topic_name", {"my_cool_topic"}},
+		{"kafka_redo_log", {true}},
+		{"kafka_bootstrap_server_and_port", {"john:117"}},
+		{"log_extension", {"just_log_me"}},
+		};
+
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
+		switch (type) {
+		case LogicalTypeId::BOOLEAN:
+			return OptionValueSet(Value::BOOLEAN(true));
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+			return OptionValueSet(Value::Numeric(type, 42));
+		default:
+			break;
+		}
 		REQUIRE(name == "MISSING_FROM_MAP");
 	}
 	return value_map[name];
@@ -140,6 +151,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allow_unsigned_extensions",  // cant change this while db is running
 	    "allow_community_extensions", // cant change this while db is running
 	    "allow_unredacted_secrets",   // cant change this while db is running
+	    "streaming_buffer_size",
 	    "log_query_path",
 	    "password",
 	    "username",
@@ -147,11 +159,12 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "kafka_redo_log",
-	    "kafka_topic_name",
-	    "kafka_bootstrap_server_and_port",
-	    "log_extension",
-	    "custom_user_agent"};
+	    "custom_user_agent",
+	    "custom_profiling_settings",
+	    "custom_user_agent",
+	    "default_block_size",
+	    "index_scan_percentage",
+	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }
 
@@ -194,7 +207,7 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 		// Get the current value of the option
 		auto original_value = op->get_setting(*con.context);
 
-		auto &value_set = GetValueForOption(option.name);
+		auto value_set = GetValueForOption(option.name, option.parameter_type);
 		// verify that at least one value is different
 		bool any_different = false;
 		string options;

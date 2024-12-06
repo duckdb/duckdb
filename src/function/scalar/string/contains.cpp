@@ -3,7 +3,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/core_functions/scalar/map_functions.hpp"
 namespace duckdb {
 
 template <class UNSIGNED, int NEEDLE_SIZE>
@@ -151,15 +152,25 @@ struct ContainsOperator {
 	}
 };
 
-ScalarFunction ContainsFun::GetFunction() {
-	return ScalarFunction("contains",                                   // name of the function
-	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                      LogicalType::BOOLEAN,                         // return type
-	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
+ScalarFunctionSet ContainsFun::GetFunctions() {
+	auto string_fun = GetStringContains();
+	auto list_fun = ListContainsFun::GetFunction();
+	auto map_fun = MapContainsFun::GetFunction();
+	ScalarFunctionSet set("contains");
+	set.AddFunction(string_fun);
+	set.AddFunction(list_fun);
+	set.AddFunction(map_fun);
+	return set;
+}
+
+ScalarFunction ContainsFun::GetStringContains() {
+	ScalarFunction string_fun("contains", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator>);
+	return string_fun;
 }
 
 void ContainsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
+	set.AddFunction(GetFunctions());
 }
 
 } // namespace duckdb

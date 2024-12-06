@@ -24,7 +24,7 @@ void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &expr) {
 unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink &root) {
 	auto subquery_expr = make_uniq<SubqueryExpression>();
 
-	subquery_expr->subquery = TransformSelect(root.subselect);
+	subquery_expr->subquery = TransformSelectStmt(*root.subselect);
 	SetQueryLocation(*subquery_expr, root.location);
 	D_ASSERT(subquery_expr->subquery);
 	D_ASSERT(!subquery_expr->subquery->node->GetSelectList().empty());

@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -80,6 +81,7 @@ void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionD
 }
 
 unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, AggregateFunction &function) {
+	function.return_type = deserializer.Get<const LogicalType &>();
 	return nullptr;
 }
 

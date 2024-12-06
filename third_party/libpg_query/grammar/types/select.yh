@@ -9,7 +9,7 @@
 %type <node> opt_collate_clause
 
 %type <node> indirection_expr indirection_expr_or_a_expr
-%type <node> struct_expr list_expr
+%type <node> struct_expr list_expr map_expr
 
 
 %type <lockwaitpolicy>	opt_nowait_or_skip
@@ -57,13 +57,14 @@
 
 %type <node> TableFuncElement
 
-
+%type <list> columnrefList
 %type <node> where_clause 				a_expr b_expr c_expr d_expr AexprConst opt_slice_bound extended_indirection_el
-				columnref in_expr having_clause qualify_clause func_table
+				columnref columnref_opt_indirection in_expr having_clause qualify_clause func_table
 %type <list>	rowsfrom_item rowsfrom_list opt_col_def_list
 %type <boolean> opt_ordinality
 %type <list>	func_arg_list
 %type <node>	func_arg_expr
+%type <node>	list_comprehension_lhs
 %type <node>	list_comprehension
 %type <list>	row qualified_row type_list colid_type_list
 %type <node>	case_expr case_arg when_clause case_default

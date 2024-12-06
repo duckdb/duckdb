@@ -56,7 +56,7 @@ public:
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener = nullptr) override;
-        void CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) override;
+    void CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) override;
 	//! Check if a file exists
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 

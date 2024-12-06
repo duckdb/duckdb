@@ -76,7 +76,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
 			// join condition does not reference both sides, add it as filter under the join
-			if (type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
+			if ((type == JoinType::LEFT || ref_type == JoinRefType::ASOF) && total_side == JoinSide::RIGHT) {
 				// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
 				if (right_child->type != LogicalOperatorType::LOGICAL_FILTER) {
 					// not a filter yet, push a new empty filter
@@ -342,12 +342,15 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(context, ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));
-
 	optional_ptr<LogicalOperator> join;
 	if (result->type == LogicalOperatorType::LOGICAL_FILTER) {
 		join = result->children[0].get();
 	} else {
 		join = result.get();
+	}
+
+	if (ref.type == JoinType::MARK) {
+		join->Cast<LogicalJoin>().mark_index = ref.mark_index;
 	}
 	for (auto &child : join->children) {
 		if (child->type == LogicalOperatorType::LOGICAL_FILTER) {
@@ -382,6 +385,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	default:
 		break;
+	}
+	if (!ref.duplicate_eliminated_columns.empty()) {
+		auto &comp_join = join->Cast<LogicalComparisonJoin>();
+		comp_join.type = LogicalOperatorType::LOGICAL_DELIM_JOIN;
+		comp_join.delim_flipped = ref.delim_flipped;
+		for (auto &col : ref.duplicate_eliminated_columns) {
+			comp_join.duplicate_eliminated_columns.emplace_back(col->Copy());
+		}
 	}
 	return result;
 }

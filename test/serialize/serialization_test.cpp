@@ -33,7 +33,7 @@ struct Foo {
 	static unique_ptr<Foo> Deserialize(Deserializer &deserializer) {
 		auto result = make_uniq<Foo>();
 		deserializer.ReadProperty<int32_t>(1, "a", result->a);
-		deserializer.ReadPropertyWithDefault<unique_ptr<Bar>>(2, "bar", result->bar, unique_ptr<Bar>());
+		deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Bar>>(2, "bar", result->bar, unique_ptr<Bar>());
 		deserializer.ReadProperty<int32_t>(3, "c", result->c);
 		return result;
 	}
@@ -144,7 +144,7 @@ struct FooV2 {
 		serializer.WriteProperty<unique_ptr<Complex>>(4, "p4", p4);
 
 		// Because this is a new field, we have to provide a default value
-		// to try to preserve backwards compatability (in best case)
+		// to try to preserve backwards compatibility (in best case)
 		serializer.WritePropertyWithDefault<unique_ptr<Complex>>(5, "p5", p5);
 	}
 

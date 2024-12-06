@@ -5,7 +5,8 @@
 # This file specifically tests the functionality for each type, 
 # it does not necessarily test the correctness (statement ok suffices for some tests)
 
-require strinline
+statement ok
+PRAGMA enable_verification
 
 # BOOLEAN
 
@@ -391,7 +392,7 @@ SELECT list_aggr([{'a': 1}], '${func_name}')
 endloop
 
 # list, struct, any other result
-foreach func_name approx_count_distinct count entropy array_agg list  string_agg group_concat
+foreach func_name approx_count_distinct count entropy array_agg list string_agg group_concat histogram
 
 statement ok
 SELECT list_aggr([[1]], '${func_name}')
@@ -404,7 +405,7 @@ endloop
 # statement error for NESTED types
 
 # list, struct
-foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or histogram kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or kurtosis mad product sem skewness sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr([[1]], '${func_name}')

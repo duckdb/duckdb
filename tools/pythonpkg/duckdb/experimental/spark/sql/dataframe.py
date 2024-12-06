@@ -10,12 +10,13 @@ from typing import (
     cast,
     overload,
 )
+import uuid
 
 import duckdb
 from duckdb import ColumnExpression, Expression, StarExpression
 
 from ._typing import ColumnOrName
-from ..errors import PySparkTypeError
+from ..errors import PySparkTypeError, PySparkValueError, PySparkIndexError
 from ..exception import ContributionsAcceptedError
 from .column import Column
 from .readwriter import DataFrameWriter
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
     from .session import SparkSession
 
 from ..errors import PySparkValueError
-from .functions import _to_column
+from .functions import _to_column_expr, col
 
 
 class DataFrame:
@@ -262,18 +263,62 @@ class DataFrame:
         |  2|Alice|
         +---+-----+
         """
-        if kwargs:
-            raise ContributionsAcceptedError
+        if not cols:
+            raise PySparkValueError(
+                error_class="CANNOT_BE_EMPTY",
+                message_parameters={"item": "column"},
+            )
+        if len(cols) == 1 and isinstance(cols[0], list):
+            cols = cols[0]
+
         columns = []
-        for col in cols:
-            if isinstance(col, (str, Column)):
-                columns.append(_to_column(col))
-            else:
-                raise ContributionsAcceptedError
+        for c in cols:
+            _c = c
+            if isinstance(c, str):
+                _c = col(c)
+            elif isinstance(c, int) and not isinstance(c, bool):
+                # ordinal is 1-based
+                if c > 0:
+                    _c = self[c - 1]
+                # negative ordinal means sort by desc
+                elif c < 0:
+                    _c = self[-c - 1].desc()
+                else:
+                    raise PySparkIndexError(
+                        error_class="ZERO_INDEX",
+                        message_parameters={},
+                    )
+            columns.append(_c)
+
+        ascending = kwargs.get("ascending", True)
+
+        if isinstance(ascending, (bool, int)):
+            if not ascending:
+                columns = [c.desc() for c in columns]
+        elif isinstance(ascending, list):
+            columns = [c if asc else c.desc() for asc, c in zip(ascending, columns)]
+        else:
+            raise PySparkTypeError(
+                error_class="NOT_BOOL_OR_LIST",
+                message_parameters={"arg_name": "ascending", "arg_type": type(ascending).__name__},
+            )
+       
+        columns = [_to_column_expr(c) for c in columns]
         rel = self.relation.sort(*columns)
         return DataFrame(rel, self.session)
 
     orderBy = sort
+
+    def head(self, n: Optional[int] = None) -> Union[Optional[Row], List[Row]]:
+        if n is None:
+            rs = self.head(1)
+            return rs[0] if rs else None
+        return self.take(n)
+
+    first = head
+
+    def take(self, num: int) -> List[Row]:
+        return self.limit(num).collect()
 
     def filter(self, condition: "ColumnOrName") -> "DataFrame":
         """Filters rows using the given condition.
@@ -326,7 +371,15 @@ class DataFrame:
         |  2|Alice|
         +---+-----+
         """
-        cond = condition.expr if isinstance(condition, Column) else condition
+        if isinstance(condition, Column):
+            cond = condition.expr
+        elif isinstance(condition, str):
+            cond = condition
+        else:
+            raise PySparkTypeError(
+                error_class="NOT_COLUMN_OR_STR",
+                message_parameters={"arg_name": "condition", "arg_type": type(condition).__name__},
+            )
         rel = self.relation.filter(cond)
         return DataFrame(rel, self.session)
 
@@ -458,7 +511,7 @@ class DataFrame:
         if on is not None:
             assert isinstance(on, list)
             # Get (or create) the Expressions from the list of Columns
-            on = [_to_column(x) for x in on]
+            on = [_to_column_expr(x) for x in on]
 
             # & all the Expressions together to form one Expression
             assert isinstance(
@@ -632,16 +685,15 @@ class DataFrame:
         [Row(age=5, name='Bob')]
         """
         if isinstance(item, str):
-            return self.item
-        # elif isinstance(item, Column):
-        #    return self.filter(item)
-        # elif isinstance(item, (list, tuple)):
-        #    return self.select(*item)
-        # elif isinstance(item, int):
-        #    jc = self._jdf.apply(self.columns[item])
-        #    return Column(jc)
+            return col(item)
+        elif isinstance(item, Column):
+            return self.filter(item)
+        elif isinstance(item, (list, tuple)):
+            return self.select(*item)
+        elif isinstance(item, int):
+            return col(self._schema[item].name)
         else:
-            raise TypeError("unexpected item type: %s" % type(item))
+            raise TypeError(f"Unexpected item type: {type(item)}")
 
     def __getattr__(self, name: str) -> Column:
         """Returns the :class:`Column` denoted by ``name``.
@@ -655,7 +707,7 @@ class DataFrame:
             raise AttributeError(
                 "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
             )
-        return Column(duckdb.ColumnExpression(name))
+        return col(name)
 
     @overload
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":
@@ -731,8 +783,11 @@ class DataFrame:
         """
         from .group import GroupedData, Grouping
 
-        groups = Grouping(*cols)
-        return GroupedData(groups, self)
+        if len(cols) == 1 and isinstance(cols[0], list):
+            columns = cols[0]
+        else:
+            columns = cols
+        return GroupedData(Grouping(*columns), self)
 
     @property
     def write(self) -> DataFrameWriter:
@@ -903,8 +958,14 @@ class DataFrame:
         +-----+---+------+
         """
         if subset:
-            raise ContributionsAcceptedError
+            rn_col = f"tmp_col_{uuid.uuid1().hex}"
+            subset_str = ', '.join([f'"{c}"' for c in subset])
+            window_spec = f"OVER(PARTITION BY {subset_str}) AS {rn_col}"
+            df = DataFrame(self.relation.row_number(window_spec, "*"), self.session)
+            return df.filter(f"{rn_col} = 1").drop(rn_col)
+
         return self.distinct()
+
 
     def distinct(self) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing the distinct rows in this :class:`DataFrame`.

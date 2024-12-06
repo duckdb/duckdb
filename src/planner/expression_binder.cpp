@@ -6,6 +6,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 
@@ -35,18 +37,21 @@ ExpressionBinder::~ExpressionBinder() {
 }
 
 void ExpressionBinder::InitializeStackCheck() {
+	static constexpr idx_t INITIAL_DEPTH = 5;
 	if (binder.HasActiveBinder()) {
-		stack_depth = binder.GetActiveBinder().stack_depth;
+		stack_depth = binder.GetActiveBinder().stack_depth + INITIAL_DEPTH;
 	} else {
-		stack_depth = 0;
+		stack_depth = INITIAL_DEPTH;
 	}
 }
 
 StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpression &expr, idx_t extra_stack) {
 	D_ASSERT(stack_depth != DConstants::INVALID_INDEX);
-	if (stack_depth + extra_stack >= MAXIMUM_STACK_DEPTH) {
-		throw BinderException("Maximum recursion depth exceeded (Maximum: %llu) while binding \"%s\"",
-		                      MAXIMUM_STACK_DEPTH, expr.ToString());
+	auto &options = ClientConfig::GetConfig(context);
+	if (stack_depth + extra_stack >= options.max_expression_depth) {
+		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+		                      "increase the maximum expression depth.",
+		                      options.max_expression_depth);
 	}
 	return StackChecker<ExpressionBinder>(*this, extra_stack);
 }
@@ -65,7 +70,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	case ExpressionClass::COLLATE:
 		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth);
+		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth, root_expression);
 	case ExpressionClass::LAMBDA_REF:
 		return BindExpression(expr_ref.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
@@ -91,14 +96,101 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<SubqueryExpression>(), depth);
 	case ExpressionClass::PARAMETER:
 		return BindExpression(expr_ref.Cast<ParameterExpression>(), depth);
-	case ExpressionClass::POSITIONAL_REFERENCE: {
+	case ExpressionClass::POSITIONAL_REFERENCE:
 		return BindPositionalReference(expr, depth, root_expression);
-	}
 	case ExpressionClass::STAR:
-		return BindResult(BinderException(expr_ref, "STAR expression is not supported here"));
+		return BindResult(BinderException::Unsupported(expr_ref, "STAR expression is not supported here"));
 	default:
 		throw NotImplementedException("Unimplemented expression class");
 	}
+}
+
+static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
+	auto &current_info = current.ExtraInfo();
+	auto &new_info = new_error.ExtraInfo();
+	auto current_entry = current_info.find("error_subtype");
+	auto new_entry = new_info.find("error_subtype");
+	if (current_entry == current_info.end() || new_entry == new_info.end()) {
+		// no subtype info in either expression
+		return false;
+	}
+	if (current_entry->second != "COLUMN_NOT_FOUND" || new_entry->second != "COLUMN_NOT_FOUND") {
+		// either info is not a `COLUMN_NOT_FOUND`
+		return false;
+	}
+	current_entry = current_info.find("name");
+	new_entry = new_info.find("name");
+	if (current_entry == current_info.end() || new_entry == new_info.end()) {
+		// no candidate info in either column
+		return false;
+	}
+	if (current_entry->second != new_entry->second) {
+		// error does not concern the same name/column
+		return false;
+	}
+	auto column_name = current_entry->second;
+	current_entry = current_info.find("candidates");
+	new_entry = new_info.find("candidates");
+	if (current_entry == current_info.end()) {
+		// no current candidates - use new candidates
+		current = std::move(new_error);
+		return true;
+	}
+	if (new_entry == new_info.end()) {
+		// no new candidates - use current candidates
+		return true;
+	}
+	// both errors have candidates - combine the candidates
+	auto current_candidates = StringUtil::Split(current_entry->second, ",");
+	auto new_candidates = StringUtil::Split(new_entry->second, ",");
+	current_candidates.insert(current_candidates.end(), new_candidates.begin(), new_candidates.end());
+
+	// run the similarity ranking on both sets of candidates
+	unordered_set<string> candidates;
+	vector<pair<string, double>> scores;
+	for (auto &candidate : current_candidates) {
+		// split by "." since the candidates might be in the form "table.column"
+		auto column_splits = StringUtil::Split(candidate, ".");
+		if (column_splits.empty()) {
+			continue;
+		}
+		auto &candidate_column = column_splits.back();
+		auto entry = candidates.find(candidate);
+		if (entry != candidates.end()) {
+			// already found
+			continue;
+		}
+		auto score = StringUtil::SimilarityRating(candidate_column, column_name);
+		candidates.insert(candidate);
+		scores.emplace_back(make_pair(std::move(candidate), score));
+	}
+	// get a new top-n
+	auto top_candidates = StringUtil::TopNStrings(scores);
+	// get query location
+	QueryErrorContext context;
+	current_entry = current_info.find("position");
+	new_entry = new_info.find("position");
+	uint64_t position;
+	if (current_entry != current_info.end() &&
+	    TryCast::Operation<string_t, uint64_t>(current_entry->second, position)) {
+		context = QueryErrorContext(position);
+	} else if (new_entry != new_info.end() && TryCast::Operation<string_t, uint64_t>(new_entry->second, position)) {
+		context = QueryErrorContext(position);
+	}
+	// generate a new (combined) error
+	current = BinderException::ColumnNotFound(column_name, top_candidates, context);
+	return true;
+}
+
+static void CombineErrors(ErrorData &current, ErrorData new_error) {
+	// try to combine missing column exceptions in order to pick the most relevant one
+	if (CombineMissingColumns(current, new_error)) {
+		// keep the old info
+		return;
+	}
+
+	// override the error with the new one
+	current = std::move(new_error);
 }
 
 BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr, ErrorData error_message) {
@@ -113,10 +205,12 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back().get();
 		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
-		bind_error = next_binder.Bind(expr, depth);
-		if (!bind_error.HasError()) {
+		auto next_error = next_binder.Bind(expr, depth);
+		if (!next_error.HasError()) {
+			bind_error = std::move(next_error);
 			break;
 		}
+		CombineErrors(bind_error, std::move(next_error));
 		depth++;
 		active_binders.pop_back();
 	}
@@ -228,7 +322,8 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		// aggregate with constant input must be bound to a root node.
 		auto result = BindCorrelatedColumns(expr, error_msg);
 		if (result.HasError()) {
-			result.error.Throw();
+			CombineErrors(error_msg, std::move(result.error));
+			error_msg.Throw();
 		}
 		auto &bound_expr = expr->Cast<BoundExpression>();
 		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
@@ -282,19 +377,24 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 	return ErrorData();
 }
 
+BindResult ExpressionBinder::BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message) {
+	// we always prefer to throw an error if it occurs in a child expression
+	// since that error might be more descriptive
+	// bind all children
+	ErrorData result;
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](unique_ptr<ParsedExpression> &child) { BindChild(child, depth, result); });
+	if (result.HasError()) {
+		return BindResult(std::move(result));
+	}
+	return BindResult(BinderException::Unsupported(expr, message));
+}
+
 bool ExpressionBinder::IsUnnestFunction(const string &function_name) {
 	return function_name == "unnest" || function_name == "unlist";
 }
 
-bool ExpressionBinder::IsLambdaFunction(const FunctionExpression &function) {
-	// check for lambda parameters, ignore ->> operator (JSON extension)
-	if (function.function_name != "->>") {
-		for (auto &child : function.children) {
-			if (child->expression_class == ExpressionClass::LAMBDA) {
-				return true;
-			}
-		}
-	}
+bool ExpressionBinder::TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result) {
 	return false;
 }
 

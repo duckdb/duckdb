@@ -37,6 +37,7 @@ public:
 	string ToString(idx_t depth) override;
 	string GetAlias() override;
 	void AddNamedParameter(const string &name, Value argument);
+	void RemoveNamedParameterIfExists(const string &name);
 	void SetNamedParameters(named_parameter_map_t &&named_parameters);
 
 private:

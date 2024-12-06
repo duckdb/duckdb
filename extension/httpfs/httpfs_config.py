@@ -14,6 +14,7 @@ source_files = [
             'create_secret_functions.cpp',
             'crypto.cpp',
             'hffs.cpp',
+            'http_state.cpp',
             'httpfs.cpp',
             'httpfs_extension.cpp',
             's3fs.cpp',

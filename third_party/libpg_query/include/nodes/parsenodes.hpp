@@ -318,6 +318,7 @@ typedef struct PGAStar {
 	PGList *except_list;  /* optional: EXCLUDE list */
 	PGList *replace_list; /* optional: REPLACE list */
 	bool columns;         /* whether or not this is a columns list */
+	bool unpacked;        /* whether or not the columns list is unpacked */
 	int location;
 } PGAStar;
 
@@ -1286,8 +1287,9 @@ typedef struct PGSelectStmt {
 	 */
 	PGSetOperation op;         /* type of set op */
 	bool all;                  /* ALL specified? */
-	struct PGSelectStmt *larg; /* left child */
-	struct PGSelectStmt *rarg; /* right child */
+	bool from_first;           /* FROM first or SELECT first */
+	struct PGNode *larg; /* left child */
+	struct PGNode *rarg; /* right child */
 	                           /* Eventually add fields for CORRESPONDING spec here */
 } PGSelectStmt;
 
@@ -1541,18 +1543,20 @@ typedef struct PGCopyStmt {
  * ----------------------
  */
 typedef enum {
+
 	VAR_SET_VALUE,   /* SET var = value */
 	VAR_SET_DEFAULT, /* SET var TO DEFAULT */
 	VAR_SET_CURRENT, /* SET var FROM CURRENT */
 	VAR_SET_MULTI,   /* special case for SET TRANSACTION ... */
 	VAR_RESET,       /* RESET var */
-	VAR_RESET_ALL    /* RESET ALL */
+	VAR_RESET_ALL,   /* RESET ALL */
 } VariableSetKind;
 
 typedef enum {
 	VAR_SET_SCOPE_LOCAL,   /* SET LOCAL var */
 	VAR_SET_SCOPE_SESSION, /* SET SESSION var */
 	VAR_SET_SCOPE_GLOBAL,  /* SET GLOBAL var */
+	VAR_SET_SCOPE_VARIABLE,/* SET VARIABLE var */
 	VAR_SET_SCOPE_DEFAULT  /* SET var (same as SET_SESSION) */
 } VariableSetScope;
 
@@ -1752,13 +1756,16 @@ typedef struct PGAlterSeqStmt {
  *		CREATE FUNCTION Statement
  * ----------------------
  */
+typedef struct PGFunctionDefinition {
+	PGList *params;
+	PGNode *function;
+	PGNode *query;
+} PGFunctionDefinition;
 
 typedef struct PGCreateFunctionStmt {
 	PGNodeTag type;
 	PGRangeVar *name;
-	PGList *params;
-	PGNode *function;
-  	PGNode *query;
+	PGList *functions;
 	PGOnCreateConflict onconflict;
 } PGCreateFunctionStmt;
 
@@ -1857,11 +1864,18 @@ typedef enum PGTransactionStmtKind {
 	TRANS_STMT_ROLLBACK_PREPARED
 } PGTransactionStmtKind;
 
+typedef enum PGTransactionStmtType {
+	PG_TRANS_TYPE_DEFAULT,
+	PG_TRANS_TYPE_READ_ONLY, // explicit READ ONLY
+	PG_TRANS_TYPE_READ_WRITE // explicit READ WRITE
+} PGTransactionStmtType;
+
 typedef struct PGTransactionStmt {
 	PGNodeTag type;
-	PGTransactionStmtKind kind; /* see above */
-	PGList *options;            /* for BEGIN/START and savepoint commands */
-	char *gid;                  /* for two-phase-commit related commands */
+	PGTransactionStmtKind kind;             /* see above */
+	PGList *options;                        /* for BEGIN/START and savepoint commands */
+	char *gid;                              /* for two-phase-commit related commands */
+	PGTransactionStmtType transaction_type; /* read only or read write */
 } PGTransactionStmt;
 
 /* ----------------------

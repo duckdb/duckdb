@@ -13,15 +13,15 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenF
                                                    optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
-		// auto detect compression settings based on file name
+		// auto-detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
 		if (StringUtil::EndsWith(lower_path, ".tmp")) {
 			// strip .tmp
 			lower_path = lower_path.substr(0, lower_path.length() - 4);
 		}
-		if (StringUtil::EndsWith(lower_path, ".gz")) {
+		if (IsFileCompressed(path, FileCompressionType::GZIP)) {
 			compression = FileCompressionType::GZIP;
-		} else if (StringUtil::EndsWith(lower_path, ".zst")) {
+		} else if (IsFileCompressed(path, FileCompressionType::ZSTD)) {
 			compression = FileCompressionType::ZSTD;
 		} else {
 			compression = FileCompressionType::UNCOMPRESSED;
@@ -101,8 +101,8 @@ void VirtualFileSystem::MoveFile(const string &source, const string &target, opt
 	FindFileSystem(source).MoveFile(source, target, opener);
 }
 
-void VirtualFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
-  FindFileSystem(source).CopyFile(source, target, src_handle, dst_handle);
+void VirtualFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
+  FindFileSystem(source).CopyFile(source, target, src_handle);
 }
 
 bool VirtualFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {

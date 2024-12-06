@@ -52,266 +52,83 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
- win-release-64:
+  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-    - name: Install pytest
-      run: |
-        python -m pip install pytest
+      - name: Install pytest
+        run: |
+          python -m pip install pytest
 
-    # lukka/run-vcpkg@v11.1 here as it configures vcpkg to cache to GH actions.
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
-      with:
-        vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
+      # lukka/run-vcpkg@v11.1 here as it configures vcpkg to cache to GH actions.
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11.1
+        with:
+          vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
 
-    - name: Build
-      shell: bash
-      env:
-        VCPKG_TARGET_TRIPLET: x64-windows-static-md
-        VCPKG_CMAKE_SYSTEM_NAME: Windows
-      run: |
-        python scripts/windows_ci.py
-        cd $VCPKG_ROOT && ./vcpkg install librdkafka
-        cd ${GITHUB_WORKSPACE}
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release
+      - name: Build
+        shell: bash
+        env:
+          VCPKG_TARGET_TRIPLET: x64-windows-static-md
+          VCPKG_CMAKE_SYSTEM_NAME: Windows
+        run: |
+          python scripts/windows_ci.py
+          cd $VCPKG_ROOT && ./vcpkg install librdkafka
+          cd ${GITHUB_WORKSPACE}
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DBUILD_ODBC_DRIVER=0 -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+          cmake --build . --config Release
 
-    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-      shell: pwsh
-      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
+      - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+        shell: pwsh
+        run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
 
-    - name: Test DUCKDB_INSTALL_LIB variable
-      shell: bash
-      run: echo $DUCKDB_INSTALL_LIB
+      - name: Test DUCKDB_INSTALL_LIB variable
+        shell: bash
+        run: echo $DUCKDB_INSTALL_LIB
 
-    # - name: Test
-    #   shell: bash
-    #   if: ${{ inputs.skip_tests != 'true' }}
-    #   run: |
-    #     test/Release/unittest.exe
+      # - name: Test
+      #   shell: bash
+      #   if: ${{ inputs.skip_tests != 'true' }}
+      #   run: |
+      #     test/Release/unittest.exe
 
-    # - name: Tools Test
-    #   shell: bash
-    #   if: ${{ inputs.skip_tests != 'true' }}
-    #   run: |
-    #     python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-    #     tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
+      # - name: Tools Test
+      #   shell: bash
+      #   if: ${{ inputs.skip_tests != 'true' }}
+      #   run: |
+      #     python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
+      #     tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
-    - name: Deploy
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-      run: |
-        python scripts/amalgamation.py
-        choco install zip -y --force
-        zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
-        zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          python scripts/amalgamation.py
+          choco install zip -y --force
+          zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
+          zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+          ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
-    - uses: actions/upload-artifact@v3
-      with:
-        name: duckdb-binaries-windows
-        path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
-          duckdb_odbc-windows-amd64.zip
-
-    # - uses: ilammy/msvc-dev-cmd@v1
-    # - name: Duckdb.dll export symbols with C++ on Windows
-    #   shell: bash
-    #   run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
-
-    # - name: Install ODBC Driver
-    #   shell: bash
-    #   run: |
-    #     tools/odbc/bin/Release/odbc_install.exe //CI //Install
-    #     Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
-    #     Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\DuckDB"
-    #     Reg Query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
-
-    # - name: Enable ODBC Trace HKCU
-    #   shell: bash
-    #   run: |
-    #     REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
-    #     REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
-    #     REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceDll //t REG_SZ //d "C:\Windows\system32\odbctrac.dll"
-    #     REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceFile //t REG_SZ //d "D:\a\duckdb\duckdb\ODBC_TRACE.log"
-    #     echo "----------------------------------------------------------------"
-    #     Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
-
-    # - name: Test Standard ODBC tests
-    #   if: ${{ inputs.skip_tests != 'true' }}
-    #   shell: bash
-    #   run: |
-    #     tools/odbc/bin/Release/test_odbc.exe
-
-    # - name: Setup Register For Connection Tests
-    #   shell: bash
-    #   run: |
-    #     REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v database //t REG_SZ //d "/d/a/duckdb/duckdb/test/sql/storage_version/storage_version.db"
-    #     REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v access_mode //t REG_SZ //d "READ_ONLY"
-    #     REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB" //v allow_unsigned_extensions //t REG_SZ //d "true"
-    #     echo "----------------------------------------------------------------"
-    #     Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\DuckDB"
-
-    # - name: Test Connection ODBC tests
-    #   if: ${{ inputs.skip_tests != 'true' }}
-    #   shell: bash
-    #   run: |
-    #     tools/odbc/bin/Release/test_connection_odbc.exe
-
-    # - name: Print ODBC trace on failure
-    #   if: ${{ failure() }}
-    #   shell: bash
-    #   run: cat ODBC_TRACE.log
-      
-    # - name: System.Data.ODBC tests
-    #   shell: bash
-    #   run: |
-    #     tools/odbc/bin/Release/SystemDataODBC_tests.exe
-
-
-#  win-release-32:
-#     name: Windows (32 Bit)
-#     if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
-#     runs-on: windows-2019
-#     needs: win-release-64
-
-#     steps:
-#     - uses: actions/checkout@v3
-#       with:
-#         fetch-depth: 0
-
-#     - uses: actions/setup-python@v5
-#       with:
-#         python-version: '3.12'
-
-#     - name: Setup Ccache
-#       uses: hendrikmuhs/ccache-action@main
-#       with:
-#         key: ${{ github.job }}
-#         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-#     - name: Install pytest
-#       run: |
-#         python -m pip install pytest
-
-#     # Note instead of using scripts/setup_manylinux2014.sh vcpkg, we prefer to use
-#     # lukka/run-vcpkg@v11.1 here as it configures vcpkg to cache to GH actions.
-#     - name: Setup vcpkg
-#       uses: lukka/run-vcpkg@v11.1
-#       with:
-#         vcpkgGitCommitId: a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6
-
-#     - name: Install librdkafka
-#       shell: bash
-#       run: |
-#         cd $VCPKG_ROOT && ./vcpkg install librdkafka --triplet=${{ 'x32-windows' }}
-
-#     - name: Build
-#       shell: bash
-#       run: |
-#         cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-#         cmake --build . --config Release
-
-#     # - name: Test
-#     #   shell: bash
-#     #   run: test/Release/unittest.exe
-
-#     # - name: Tools Test
-#     #   shell: bash
-#     #   run: |
-#     #     python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
-#     #     tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
-
-#  mingw:
-#      name: MingW (64 Bit)
-#      runs-on: windows-latest
-#      if: ${{ inputs.skip_tests != 'true' }}
-#      needs: win-release-64
-#      steps:
-#        - uses: actions/checkout@v3
-#        - uses: msys2/setup-msys2@v2
-#          with:
-#            msystem: MINGW64
-#            update: true
-#            install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
-#        # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
-#        - name: Put MSYS2_MinGW64 on PATH
-#          # there is not yet an environment variable for this path from msys2/setup-msys2
-#          shell: msys2 {0}
-#          run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
-
-#        - name: Setup Ccache
-#          uses: hendrikmuhs/ccache-action@main
-#          with:
-#            key: ${{ github.job }}
-#            save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-#        - name: Build
-#          shell: msys2 {0}
-#          run: |
-#            cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS=parquet -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-#            cmake --build . --config Release
-
-#        # - name: Test
-#        #   shell: msys2 {0}
-#        #   run: |
-#        #     cp src/libduckdb.dll .
-#        #     test/unittest.exe
-
-#        # - name: Tools Test
-#        #   shell: msys2 {0}
-#        #   run: |
-#        #     tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
-
-#  win-extensions-64:
-#    # Builds extensions for windows_amd64
-#    name: Windows Extensions (64-bit)
-#    runs-on: windows-latest
-#    needs: win-release-64
-#    steps:
-#      - name: Keep \n line endings
-#        shell: bash
-#        run: |
-#          git config --global core.autocrlf false
-#          git config --global core.eol lf
-
-#      - uses: actions/checkout@v3
-#        with:
-#          fetch-depth: 0
-
-#      - uses: actions/setup-python@v5
-#        with:
-#          python-version: '3.12'
-
-#      - uses: ./.github/actions/build_extensions
-#        with:
-#          vcpkg_target_triplet: x64-windows-static-md
-#          deploy_as: windows_amd64
-#          treat_warn_as_error: 0
-#          s3_id: ${{ secrets.S3_ID }}
-#          s3_key: ${{ secrets.S3_KEY }}
-#          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-#          run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-#          run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-#          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+      - uses: actions/upload-artifact@v3
+        with:
+          name: duckdb-binaries-windows
+          path: |
+            libduckdb-windows-amd64.zip
+            duckdb_cli-windows-amd64.zip

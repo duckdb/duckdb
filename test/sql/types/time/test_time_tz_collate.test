@@ -5,51 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# Comparison order is unintuitive: Positive offsets are before negative ones.
-# This is similar to how a clock time east of Greenwich is earlier
-# than the same clock time further west.
-# Moreover, the time portions are compared by applying the offsets
-# before comparing them as times
-query I
-SELECT timetz_byte_comparable('09:00:00+00:00'::TIMETZ) >timetz_byte_comparable('09:01:00+01:00'::TIMETZ);
-----
-True
-
-query I
-SELECT timetz_byte_comparable('08:00:00+01:00'::TIMETZ) >timetz_byte_comparable('09:01:00+01:00'::TIMETZ);
-----
-False
-
-query I
-SELECT timetz_byte_comparable('08:00:00+01:00'::TIMETZ) = timetz_byte_comparable('09:01:00+01:00'::TIMETZ);
-----
-False
-
-query I
-SELECT timetz_byte_comparable('08:01:00+00:00'::TIMETZ) = timetz_byte_comparable('09:01:00+01:00'::TIMETZ);
-----
-False
-
-query I
-SELECT timetz_byte_comparable('08:01:00+00:00'::TIMETZ) > timetz_byte_comparable('09:01:00+01:00'::TIMETZ);
-----
-True
-
-query I
-SELECT timetz_byte_comparable('08:02:00+00:00'::TIMETZ) > timetz_byte_comparable('09:01:00+01:00'::TIMETZ);
-----
-True
-
-query I
-SELECT timetz_byte_comparable('08:00:00+00:00'::TIMETZ) > timetz_byte_comparable('09:01:00+01:00'::TIMETZ);
-----
-False
-
-query I
-SELECT timetz_byte_comparable('10:01:00+02:00'::TIMETZ) > timetz_byte_comparable('09:01:00+01:00'::TIMETZ);
-----
-False
-
 statement ok
 CREATE TABLE timetzs (ttz TIMETZ);
 
@@ -69,8 +24,56 @@ INSERT INTO timetzs VALUES
 	('24:00:00-1559'),
 ;
 
+# Comparison order is unintuitive: Positive offsets are before negative ones.
+# This is similar to how a clock time east of Greenwich is earlier
+# than the same clock time further west.
+# Moreover, the time portions are compared by applying the offsets
+# before comparing them as times
+
+foreach comparison_type timetz_byte_comparable( (
+
 query I
-SELECT * FROM timetzs ORDER BY ALL
+SELECT ${comparison_type}'09:00:00+00:00'::TIMETZ) >${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+True
+
+query I
+SELECT ${comparison_type}'08:00:00+01:00'::TIMETZ) >${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT ${comparison_type}'08:00:00+01:00'::TIMETZ) = ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT ${comparison_type}'08:01:00+00:00'::TIMETZ) = ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT ${comparison_type}'08:01:00+00:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+True
+
+query I
+SELECT ${comparison_type}'08:02:00+00:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+True
+
+query I
+SELECT ${comparison_type}'08:00:00+00:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT ${comparison_type}'10:01:00+02:00'::TIMETZ) > ${comparison_type}'09:01:00+01:00'::TIMETZ);
+----
+False
+
+query I
+SELECT * FROM timetzs ORDER BY ${comparison_type}ttz)
 ----
 00:00:00+15:59
 00:00:00+15:58
@@ -89,14 +92,14 @@ query IIIIIIII
 SELECT 
 	lhs.ttz, 
 	rhs.ttz, 
-	timetz_byte_comparable(lhs.ttz) < timetz_byte_comparable(rhs.ttz), 
-	timetz_byte_comparable(lhs.ttz) <= timetz_byte_comparable(rhs.ttz),
-	timetz_byte_comparable(lhs.ttz) = timetz_byte_comparable(rhs.ttz),
-	timetz_byte_comparable(lhs.ttz) >= timetz_byte_comparable(rhs.ttz),
-	timetz_byte_comparable(lhs.ttz) > timetz_byte_comparable(rhs.ttz),
-	timetz_byte_comparable(lhs.ttz) <> timetz_byte_comparable(rhs.ttz),
+	${comparison_type}lhs.ttz) < ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) <= ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) = ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) >= ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) > ${comparison_type}rhs.ttz),
+	${comparison_type}lhs.ttz) <> ${comparison_type}rhs.ttz),
 FROM timetzs lhs, timetzs rhs
-ORDER BY timetz_byte_comparable(lhs.ttz), timetz_byte_comparable(rhs.ttz)
+ORDER BY ${comparison_type}lhs.ttz), ${comparison_type}rhs.ttz)
 ----
 00:00:00+15:59	00:00:00+15:59	false	true	true	true	false	false
 00:00:00+15:59	00:00:00+15:58	true	true	false	false	false	true
@@ -243,3 +246,4 @@ NULL	24:00:00-15:58	NULL	NULL	NULL	NULL	NULL	NULL
 NULL	24:00:00-15:59	NULL	NULL	NULL	NULL	NULL	NULL
 NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 
+endloop

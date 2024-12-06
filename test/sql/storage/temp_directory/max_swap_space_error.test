@@ -1,14 +1,15 @@
 # name: test/sql/storage/temp_directory/max_swap_space_error.test
+# description: Test the maximum swap space.
 # group: [temp_directory]
 
 require skip_reload
 
 require noforcestorage
 
-# this test performs many comparisons against the default block size of 256KiB
+# This test performs comparisons against the DEFAULT_BLOCK_ALLOC_SIZE of 256KiB.
 require block_size 262144
 
-# temp directory usage changes with vector size
+# The temporary directory usage changes with the vector size.
 require vector_size 2048
 
 # Set a temp_directory to offload data

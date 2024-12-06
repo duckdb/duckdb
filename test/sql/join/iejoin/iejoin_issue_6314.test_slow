@@ -3,6 +3,9 @@
 # group: [iejoin]
 
 statement ok
+SET merge_join_threshold=0
+
+statement ok
 create table ota as select timestamp '2019-04-25 14:10:00' + concat(15 * i, ' minutes')::interval as ts,  (i * 5 % 100)::REAL AS val from generate_series(0,167136,1) t(i);
 
 statement ok

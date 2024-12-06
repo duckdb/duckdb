@@ -28,7 +28,7 @@ public:
 
 	bool Equals(const BaseExpression &other) const override;
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 };
 
 } // namespace duckdb

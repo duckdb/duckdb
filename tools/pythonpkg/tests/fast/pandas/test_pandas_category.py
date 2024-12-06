@@ -104,6 +104,18 @@ class TestCategory(object):
             category.append(str(i))
         check_create_table(category)
 
+    def test_empty_categorical(self, duckdb_cursor):
+        empty_categoric_df = pd.DataFrame({'category': pd.Series(dtype='category')})
+        duckdb_cursor.execute("CREATE TABLE test AS SELECT * FROM empty_categoric_df")
+        res = duckdb_cursor.table('test').fetchall()
+        assert res == []
+
+        with pytest.raises(duckdb.ConversionException, match="Could not convert string 'test' to UINT8"):
+            duckdb_cursor.execute("insert into test VALUES('test')")
+        duckdb_cursor.execute("insert into test VALUES(NULL)")
+        res = duckdb_cursor.table('test').fetchall()
+        assert res == [(None,)]
+
     def test_category_fetch_df_chunk(self, duckdb_cursor):
         con = duckdb.connect()
         categories = ['foo', 'bla', None, 'zoo', 'foo', 'foo', None, 'bla']

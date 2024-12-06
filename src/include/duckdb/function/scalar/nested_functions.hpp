@@ -13,7 +13,6 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/built_in_functions.hpp"
-#include "duckdb/function/scalar/list/contains_or_position.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
@@ -125,6 +124,7 @@ struct StructExtractFun {
 	static ScalarFunction KeyExtractFunction();
 	static ScalarFunction IndexExtractFunction();
 	static ScalarFunctionSet GetFunctions();
+	static unique_ptr<FunctionData> GetBindData(idx_t index);
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

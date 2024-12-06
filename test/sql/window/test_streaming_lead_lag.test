@@ -1,0 +1,224 @@
+# name: test/sql/window/test_streaming_lead_lag.test
+# description: Streaming window functions
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+query TT
+EXPLAIN
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	NULL
+1	0
+2	1
+3	2
+4	3
+5	4
+6	5
+7	6
+8	7
+9	8
+
+query TT
+EXPLAIN
+SELECT i, LAG(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+SELECT i, LAG(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	NULL
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, LEAD(i, -1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	NULL
+1	0
+2	1
+3	2
+4	3
+5	4
+6	5
+7	6
+8	7
+9	8
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+SELECT i, LEAD(i, 1) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	NULL
+
+# Test shift down
+query TT
+EXPLAIN
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(3000) tbl(i)
+WHERE i % 2 = 0
+QUALIFY i1 <> i - 2
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+SELECT i, LAG(i, 1) OVER() AS i1
+FROM range(3000) tbl(i)
+WHERE i % 2 = 0
+QUALIFY i1 <> i - 2
+----
+
+# Test constant default value
+query TT
+EXPLAIN
+SELECT i, LAG(i, 1, 50) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, LAG(i, 1, 50) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	50
+1	0
+2	1
+3	2
+4	3
+5	4
+6	5
+7	6
+8	7
+9	8
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, 1, 50) OVER() AS i1
+FROM range(10) tbl(i);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, LEAD(i, 1, 50) OVER() AS i1
+FROM range(10) tbl(i);
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+9	50
+
+# Test sparse leads
+query TT
+EXPLAIN
+SELECT i, LEAD(i, 2) OVER() AS i1
+FROM range(3000) tbl(i)
+WHERE i % 2048 = 0
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+SELECT i, LEAD(i, 2) OVER() AS i1
+FROM range(3000) tbl(i)
+WHERE i % 2048 = 0
+----
+0	NULL
+2048	NULL
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, 2) OVER() AS i1
+FROM range(5000) tbl(i)
+WHERE i % 2048 = 0
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+SELECT i, LEAD(i, 2) OVER() AS i1
+FROM range(5000) tbl(i)
+WHERE i % 2048 = 0
+----
+0	4096
+2048	NULL
+4096	NULL
+
+# Test long deltas
+query TT
+EXPLAIN
+SELECT i, LAG(i, 3000) OVER() AS i1
+FROM range(5000) tbl(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT i, LEAD(i, 3000) OVER() AS i1
+FROM range(5000) tbl(i);
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+# Test multiple, unequal LEADs
+query III
+SELECT i, LEAD(i, 1) OVER(), LEAD(i, 2) OVER()
+FROM range(10) tbl(i)
+----
+0	1	2
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+6	7	8
+7	8	9
+8	9	NULL
+9	NULL	NULL

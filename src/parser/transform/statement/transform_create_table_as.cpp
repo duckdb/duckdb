@@ -15,7 +15,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 	if (stmt.query->type != duckdb_libpgquery::T_PGSelectStmt) {
 		throw ParserException("CREATE TABLE AS requires a SELECT clause");
 	}
-	auto query = TransformSelect(stmt.query, false);
+	auto query = TransformSelectStmt(*stmt.query, false);
 
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTableInfo>();

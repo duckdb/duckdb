@@ -43,6 +43,7 @@ string PragmaShowTables() {
 	ORDER BY "name";)EOF";
 	// clang-format on
 }
+
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
 	return PragmaShowTables();
 }
@@ -91,6 +92,9 @@ string PragmaShowDatabases(ClientContext &context, const FunctionParameters &par
 	return PragmaShowDatabases();
 }
 
+string PragmaShowVariables() {
+	return "SELECT * FROM duckdb_variables() ORDER BY name";
+}
 string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_last_profiling_output() JOIN pragma_detailed_profiling_output() ON "
 	       "(pragma_last_profiling_output.operator_id);";
@@ -124,6 +128,11 @@ string PragmaVersion(ClientContext &context, const FunctionParameters &parameter
 	return "SELECT * FROM pragma_version();";
 }
 
+string PragmaExtensionVersions(ClientContext &context, const FunctionParameters &parameters) {
+	return "select extension_name, extension_version, install_mode, installed_from from duckdb_extensions() where "
+	       "installed";
+}
+
 string PragmaPlatform(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_platform();";
 }
@@ -136,7 +145,7 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	string final_query;
-	// read the "shema.sql" and "load.sql" files
+	// read the "schema.sql" and "load.sql" files
 	vector<string> files = {"schema.sql", "load.sql"};
 	for (auto &file : files) {
 		auto file_path = fs.JoinPath(parameters.values[0].ToString(), file);
@@ -203,6 +212,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", PragmaCollations));
 	set.AddFunction(PragmaFunction::PragmaCall("show", PragmaShow, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("version", PragmaVersion));
+	set.AddFunction(PragmaFunction::PragmaStatement("extension_versions", PragmaExtensionVersions));
 	set.AddFunction(PragmaFunction::PragmaStatement("platform", PragmaPlatform));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_size", PragmaDatabaseSize));
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));

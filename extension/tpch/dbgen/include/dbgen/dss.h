@@ -109,14 +109,12 @@ typedef struct {
 	int count;
 	int max;
 	set_member *list;
-	long *permute;
 } distribution;
 /*
  * some handy access functions
  */
 #define DIST_SIZE(d)       d->count
 #define DIST_MEMBER(d, i)  ((set_member *)((d)->list + i))->text
-#define DIST_PERMUTE(d, i) (d->permute[i])
 
 typedef struct {
 	const char *name;
@@ -152,7 +150,7 @@ long unjulian PROTO((long date));
 long dssncasecmp PROTO((const char *s1, const char *s2, int n));
 long dsscasecmp PROTO((const char *s1, const char *s2));
 int pick_str PROTO((distribution * s, seed_t *seed, char *target));
-void agg_str PROTO((distribution * set, long count, seed_t *seed, char *dest));
+void agg_str PROTO((distribution * set, long count, seed_t *seed, char *dest, DBGenContext *ctx));
 void read_dist PROTO((const char *path, const char *name, distribution *target));
 void embed_str PROTO((distribution * d, int min, int max, int stream, char *dest));
 #ifndef STDLIB_HAS_GETOPT
@@ -216,8 +214,6 @@ EXTERN long verbose;
 EXTERN long force;
 EXTERN long updates;
 EXTERN long table;
-EXTERN long children;
-EXTERN int step;
 EXTERN int set_seeds;
 EXTERN char *d_path;
 
@@ -483,6 +479,13 @@ int dbg_print(int dt, FILE *tgt, void *data, int len, int eol);
 #define BBB_OFFSET_SD 47
 
 struct DBGenContext {
+	~DBGenContext() {
+		if (permute) {
+			free(permute);
+			permute = NULL;
+		}
+	}
+
 	seed_t Seed[MAX_STREAM + 1] = {
 	    {PART, 1, 0, 1},                           /* P_MFG_SD     0 */
 	    {PART, 46831694, 0, 1},                    /* P_BRND_SD    1 */
@@ -550,6 +553,7 @@ struct DBGenContext {
 	};
 
 	long scale_factor = 1;
+	long *permute = NULL;
 };
 
 #endif /* DSS_H */

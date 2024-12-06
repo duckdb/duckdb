@@ -4,6 +4,10 @@
 require parquet
 
 statement ok
+PRAGMA enable_verification
+
+
+statement ok
 COPY (SELECT 1 as a, 2 as a, 3 as a) TO '__TEST_DIR__/dupe_cols.csv' (FORMAT CSV, HEADER);
 
 # The duplicate column(s) get `:{index}` appended to it

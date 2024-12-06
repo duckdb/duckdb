@@ -99,7 +99,7 @@ def open_utf8(fpath: str, flags: str) -> object:
 
 
 def get_child_timings(top_node: object, query_timings: object) -> str:
-    node_timing = NodeTiming(top_node['name'], float(top_node['timing']))
+    node_timing = NodeTiming(top_node['operator_type'], float(top_node['operator_timing']))
     query_timings.add_node_timing(node_timing)
     for child in top_node['children']:
         get_child_timings(child, query_timings)
@@ -121,7 +121,7 @@ color_map = {
 }
 
 
-def get_node_body(name: str, result: str, cardinality: float, extra_info: str, timing: object) -> str:
+def get_node_body(name: str, result: str, cardinality: float, extra_info: str) -> str:
     node_style = ""
     stripped_name = name.strip()
     if stripped_name in color_map:
@@ -131,10 +131,9 @@ def get_node_body(name: str, result: str, cardinality: float, extra_info: str, t
     body += "<div class=\"node-body\">"
     new_name = name.replace("_", " ")
     body += f"<p> <b>{new_name} ({result}s) </b></p>"
-    if extra_info:
-        extra_info = extra_info.replace("[INFOSEPARATOR]", "----")
-        extra_info = extra_info.replace("<br><br>", "<br>")
-        body += f"<p> {extra_info} </p>"
+    body += f"<p> ---------------- </p>"
+    body += f"<p> {extra_info} </p>"
+    body += f"<p> ---------------- </p>"
     body += f"<p> cardinality = {cardinality} </p>"
     # TODO: Expand on timing. Usually available from a detailed profiling
     body += "</div>"
@@ -145,11 +144,15 @@ def get_node_body(name: str, result: str, cardinality: float, extra_info: str, t
 def generate_tree_recursive(json_graph: object) -> str:
     node_prefix_html = "<li>"
     node_suffix_html = "</li>"
-    node_body = get_node_body(json_graph["name"],
-                              json_graph["timing"],
-                              json_graph["cardinality"],
-                              json_graph["extra_info"].replace("\n", "<br>"),
-                              json_graph["timings"])
+
+    extra_info = ""
+    for key in json_graph['extra_info']:
+        extra_info += f"{key}: {json_graph['extra_info'][key]} <br>"
+
+    node_body = get_node_body(json_graph["operator_type"],
+                              json_graph["operator_timing"],
+                              json_graph["operator_cardinality"],
+                              extra_info)
 
     children_html = ""
     if len(json_graph['children']) >= 1:
@@ -164,7 +167,7 @@ def generate_tree_recursive(json_graph: object) -> str:
 def generate_timing_html(graph_json: object, query_timings: object) -> object:
     json_graph = json.loads(graph_json)
     gather_timing_information(json_graph, query_timings)
-    total_time = float(json_graph['timing'])
+    total_time = float(json_graph.get('operator_timing') or json_graph.get('latency'))
     table_head = """
 	<table class=\"styled-table\"> 
 		<thead>
@@ -192,7 +195,7 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:
 	<tr>
 			<td>{phase_column}</td>
             <td>{summarized_phase.time}</td>
-            <td>{str(summarized_phase.percentage * 100)[:6]}%</td>
+            <td>{round(summarized_phase.percentage*100,4)}%</td>
     </tr>
 """
     table_body += table_end

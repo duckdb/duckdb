@@ -8,7 +8,7 @@ namespace duckdb {
 
 template <>
 bool TryMultiplyOperator::Operation(double left, int64_t right, int64_t &result) {
-	return TryCast::Operation<double, int64_t>(left * right, result);
+	return TryCast::Operation<double, int64_t>(left * double(right), result);
 }
 
 struct ToMillenniaOperator {

@@ -43,6 +43,19 @@ unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &context, uni
 	return std::move(result);
 }
 
+void SelectBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
+	// Extract the unnests and check if any match the column index.
+	for (auto &node_pair : node.unnests) {
+		auto &unnest_node = node_pair.second;
+
+		if (unnest_node.index == column_binding.table_index) {
+			if (column_binding.column_index < unnest_node.expressions.size()) {
+				throw BinderException("UNNEST in lambda expressions is not supported");
+			}
+		}
+	}
+}
+
 BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) {
 	// bind the children of the function expression
 	if (depth > 0) {
@@ -55,6 +68,11 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	}
 	if (inside_window) {
 		return BindResult(BinderException(function, UnsupportedUnnestMessage()));
+	}
+
+	if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
+		throw InvalidInputException("\"DISTINCT\", \"FILTER\", and \"ORDER BY\" are not "
+		                            "applicable to \"UNNEST\"");
 	}
 
 	idx_t max_depth = 1;

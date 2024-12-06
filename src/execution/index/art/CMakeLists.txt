@@ -5,12 +5,14 @@ add_library_unity(
   node.cpp
   iterator.cpp
   leaf.cpp
-  node4.cpp
-  node16.cpp
+  base_node.cpp
   node48.cpp
   node256.cpp
   prefix.cpp
-  art.cpp)
+  base_leaf.cpp
+  node256_leaf.cpp
+  art.cpp
+  plan_art.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution_index_art>

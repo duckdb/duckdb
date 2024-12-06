@@ -1,21 +1,22 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -140,6 +141,19 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// Bind the ORDER BYs, if any
 	if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 		for (auto &order : aggr.order_bys->orders) {
+			if (order.expression->type == ExpressionType::VALUE_CONSTANT) {
+				auto &const_expr = order.expression->Cast<ConstantExpression>();
+				if (!const_expr.value.type().IsIntegral()) {
+					auto &config = ClientConfig::GetConfig(context);
+					if (!config.order_by_non_integer_literal) {
+						throw BinderException(
+						    *order.expression,
+						    "ORDER BY non-integer literal has no effect.\n* SET order_by_non_integer_literal=true to "
+						    "allow this behavior.\n\nPerhaps you misplaced ORDER BY; ORDER BY must appear "
+						    "after all regular arguments of the aggregate.");
+					}
+				}
+			}
 			aggregate_binder.BindChild(order.expression, 0, error);
 		}
 	}
@@ -241,6 +255,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = BoundExpression::GetExpression(*order.expression);
+			PushCollation(context, order_expr, order_expr->return_type);
 			const auto sense = config.ResolveOrder(order.type);
 			const auto null_order = config.ResolveNullOrder(sense, order.null_order);
 			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr));

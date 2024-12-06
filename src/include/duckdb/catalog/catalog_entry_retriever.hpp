@@ -64,7 +64,7 @@ private:
 	}
 
 private:
-	//! (optional) callback, called on every succesful entry retrieval
+	//! (optional) callback, called on every successful entry retrieval
 	catalog_entry_callback_t callback = nullptr;
 	ClientContext &context;
 };

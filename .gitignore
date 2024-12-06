@@ -350,3 +350,6 @@ extension_external
 # pyodide (emscripten python) build and test environment
 .pyodide-xbuildenv
 .venv-pyodide
+
+test/sql/pragma/output.json
+tools/pythonpkg/duckdb_build/

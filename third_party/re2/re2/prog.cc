@@ -1143,8 +1143,8 @@ const void* Prog::PrefixAccel_FrontAndBack(const void* data, size_t size) {
     const __m256i* bp = reinterpret_cast<const __m256i*>(
         reinterpret_cast<const char*>(data) + prefix_size_-1);
     const __m256i* endfp = fp + size/sizeof(__m256i);
-    const __m256i f_set1 = _mm256_set1_epi8(prefix_front_);
-    const __m256i b_set1 = _mm256_set1_epi8(prefix_back_);
+    const __m256i f_set1 = _mm256_set1_epi8(prefix_front_back.prefix_front_);
+    const __m256i b_set1 = _mm256_set1_epi8(prefix_front_back.prefix_back_);
     do {
       const __m256i f_loadu = _mm256_loadu_si256(fp++);
       const __m256i b_loadu = _mm256_loadu_si256(bp++);

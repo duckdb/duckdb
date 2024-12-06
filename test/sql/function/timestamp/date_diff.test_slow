@@ -186,6 +186,17 @@ SELECT DATEDIFF('microsecond' , startdate, enddate) FROM time1
 ----
 86399999999
 
+# MS-SQL Weeks are just days // 7. No Mondays involved...
+query I
+SELECT date_diff('WEEK', '2023-01-22'::date, '2024-09-13'::date) AS column;
+----
+85
+
+query I
+SELECT date_diff('WEEK', '2023-01-22 05:30:00'::timestamp, '2024-09-13 05:30:00'::timestamp) AS column;
+----
+85
+
 # Negation
 foreach datepart hour minute second millisecond microsecond
 

@@ -169,6 +169,176 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
 }
 
+TEST_CASE("Test appender with generated column", "[appender]") {
+	DuckDB db(nullptr); // Create an in-memory DuckDB database
+	Connection con(db); // Create a connection to the database
+
+	SECTION("Insert into table with generated column first") {
+		// Try to create a table with a generated column
+		REQUIRE_NOTHROW(con.Query(R"(
+			CREATE TABLE tbl (
+				b VARCHAR GENERATED ALWAYS AS (a),
+				a VARCHAR
+			)
+		)"));
+
+		Appender appender(con, "tbl");
+		REQUIRE_NOTHROW(appender.BeginRow());
+		REQUIRE_NOTHROW(appender.Append("a"));
+
+		// Column 'b' is generated from 'a', so it does not need to be explicitly appended
+		// End the row
+		REQUIRE_NOTHROW(appender.EndRow());
+
+		// Close the appender
+		REQUIRE_NOTHROW(appender.Close());
+
+		// Query the table to verify that the row was inserted correctly
+		auto result = con.Query("SELECT * FROM tbl");
+		REQUIRE_NO_FAIL(*result);
+
+		// Check that the column 'a' contains "a" and 'b' contains the generated value "a"
+		REQUIRE(CHECK_COLUMN(result, 0, {Value("a")}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value("a")}));
+	}
+
+	SECTION("Insert into table with generated column second") {
+		// Try to create a table with a generated column
+		REQUIRE_NOTHROW(con.Query(R"(
+			CREATE TABLE tbl (
+				a VARCHAR,
+				b VARCHAR GENERATED ALWAYS AS (a)
+			)
+		)"));
+
+		Appender appender(con, "tbl");
+		REQUIRE_NOTHROW(appender.BeginRow());
+		REQUIRE_NOTHROW(appender.Append("a"));
+
+		// Column 'b' is generated from 'a', so it does not need to be explicitly appended
+		// End the row
+		REQUIRE_NOTHROW(appender.EndRow());
+
+		// Close the appender
+		REQUIRE_NOTHROW(appender.Close());
+
+		// Query the table to verify that the row was inserted correctly
+		auto result = con.Query("SELECT * FROM tbl");
+		REQUIRE_NO_FAIL(*result);
+
+		// Check that the column 'a' contains "a" and 'b' contains the generated value "a"
+		REQUIRE(CHECK_COLUMN(result, 0, {Value("a")}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value("a")}));
+	}
+}
+
+TEST_CASE("Test default value appender", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	SECTION("Insert DEFAULT into default column") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i iNTEGER, j INTEGER DEFAULT 5)"));
+		{
+			Appender appender(con, "integers");
+			appender.BeginRow();
+			appender.Append<int32_t>(2);
+			appender.AppendDefault();
+			REQUIRE_NOTHROW(appender.EndRow());
+			REQUIRE_NOTHROW(appender.Close());
+		}
+		result = con.Query("SELECT * FROM integers");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(2)}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(5)}));
+	}
+
+	SECTION("Insert DEFAULT into non-default column") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i iNTEGER, j INTEGER DEFAULT 5)"));
+		{
+			Appender appender(con, "integers");
+			appender.BeginRow();
+			// 'i' does not have a DEFAULT value, so it gets NULL
+			REQUIRE_NOTHROW(appender.AppendDefault());
+			REQUIRE_NOTHROW(appender.AppendDefault());
+			REQUIRE_NOTHROW(appender.EndRow());
+			REQUIRE_NOTHROW(appender.Close());
+		}
+		result = con.Query("SELECT * FROM integers");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(LogicalTypeId::INTEGER)}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(5)}));
+	}
+
+	SECTION("Insert DEFAULT into column that can't be NULL") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer NOT NULL)"));
+		{
+			Appender appender(con, "integers");
+			appender.BeginRow();
+			REQUIRE_NOTHROW(appender.AppendDefault());
+			REQUIRE_NOTHROW(appender.EndRow());
+			// NOT NULL constraint failed
+			REQUIRE_THROWS(appender.Close());
+		}
+		result = con.Query("SELECT * FROM integers");
+		auto chunk = result->Fetch();
+		REQUIRE(chunk == nullptr);
+	}
+
+	SECTION("DEFAULT nextval('seq')") {
+		REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i iNTEGER, j INTEGER DEFAULT nextval('seq'))"));
+		{
+			Appender appender(con, "integers");
+			appender.BeginRow();
+			appender.Append<int32_t>(1);
+
+			// NOT_IMPLEMENTED: Non-foldable default values are not supported currently
+			REQUIRE_THROWS(appender.AppendDefault());
+			REQUIRE_THROWS(appender.EndRow());
+			REQUIRE_NOTHROW(appender.Close());
+		}
+		// result = con.Query("SELECT * FROM integers");
+		// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+		// REQUIRE(CHECK_COLUMN(result, 1, {Value::INTEGER(1)}));
+	}
+
+	SECTION("DEFAULT random()") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i iNTEGER, j DOUBLE DEFAULT random())"));
+		con.Query("select setseed(0.42)");
+		{
+			Appender appender(con, "integers");
+			appender.BeginRow();
+			appender.Append<int32_t>(1);
+			// NOT_IMPLEMENTED: Non-foldable default values are not supported currently
+			REQUIRE_THROWS(appender.AppendDefault());
+			REQUIRE_THROWS(appender.EndRow());
+			REQUIRE_NOTHROW(appender.Close());
+		}
+		// result = con.Query("SELECT * FROM integers");
+		// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+		// REQUIRE(CHECK_COLUMN(result, 1, {Value::DOUBLE(0.4729174713138491)}));
+	}
+
+	SECTION("DEFAULT now()") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i iNTEGER, j TIMESTAMPTZ DEFAULT now())"));
+		con.Query("BEGIN TRANSACTION");
+		result = con.Query("select now()");
+		auto &materialized_result = result->Cast<MaterializedQueryResult>();
+		auto current_time = materialized_result.GetValue(0, 0);
+		{
+			Appender appender(con, "integers");
+			appender.BeginRow();
+			appender.Append<int32_t>(1);
+			REQUIRE_NOTHROW(appender.AppendDefault());
+			REQUIRE_NOTHROW(appender.EndRow());
+			REQUIRE_NOTHROW(appender.Close());
+		}
+		result = con.Query("SELECT * FROM integers");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+		REQUIRE(CHECK_COLUMN(result, 1, {current_time}));
+		con.Query("COMMIT");
+	}
+}
+
 TEST_CASE("Test incorrect usage of appender", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

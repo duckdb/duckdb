@@ -95,9 +95,12 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 
 	shared_ptr<DependencyItem> dependency_item;
 	if (ref.external_dependency) {
-		// This was created during the replacement scan (see python_replacement_scan.cpp)
+		// This was created during the replacement scan if this was a pandas DataFrame (see python_replacement_scan.cpp)
 		dependency_item = ref.external_dependency->GetDependency("copy");
-		D_ASSERT(dependency_item);
+		if (!dependency_item) {
+			// This was created during the replacement if this was a numpy scan
+			dependency_item = ref.external_dependency->GetDependency("data");
+		}
 	}
 
 	auto get_fun = df.attr("__getitem__");

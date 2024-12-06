@@ -352,6 +352,22 @@ SELECT d, epoch_ms(d) FROM timetzs ORDER BY ALL;
 24:00:00-15:59	86400000
 NULL	NULL
 
+query II
+SELECT d, nanosecond(d) FROM timetzs ORDER BY ALL;
+----
+00:00:00+15:59	0
+00:00:00+15:58	0
+02:30:00+12	0
+02:30:00+04:30:45	0
+02:30:00+04:30	0
+02:30:00+04	0
+02:30:00+00	0
+02:30:00-12	0
+16:15:03.123456+00	3123456000
+24:00:00-15:58	0
+24:00:00-15:59	0
+NULL	NULL
+
 # Invalid parts
 
 foreach datepart year month day decade century millennium quarter dow isodow doy week isoyear yearweek era julian

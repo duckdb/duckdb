@@ -27,86 +27,84 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
-#  xcode-debug:
-#    name: OSX Debug
-#    runs-on: macos-latest
-#
-#    env:
-#      TREAT_WARNINGS_AS_ERRORS: 1
-#
-#    steps:
-#    - uses: actions/checkout@v3
-#      with:
-#        fetch-depth: 0
-#
-#    - uses: actions/setup-python@v4
-#      with:
-#        python-version: '3.7'
-#
-#    - name: Setup Ccache
-#      uses: hendrikmuhs/ccache-action@main
-#      with:
-#        key: ${{ github.job }}
-#        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-#
-#    - name: Install ninja
-#      shell: bash
-#      run: brew install ninja
-#
-#    # Note instead of using scripts/setup_manylinux2014.sh vcpkg, we prefer to use
-#    # lukka/run-vcpkg@v11.1 here as it configures vcpkg to cache to GH actions.
-#    - name: Setup vcpkg
-#      uses: lukka/run-vcpkg@v11.1
-#      with:
-#        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
-#
-#    - name: Install librdkafka
-#      shell: bash
-#      run: |
-#        cd $VCPKG_ROOT && ./vcpkg install librdkafka --triplet=${{ 'x64-osx' }}
-#
-#    - name: Build
-#      shell: bash
-#      run: VCPKG_TOOLCHAIN_PATH='${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake' GEN=ninja make debug
-#
-#    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-#      shell: bash
-#      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
-#
-#    - name: Test DUCKDB_INSTALL_LIB variable
-#      run: echo $DUCKDB_INSTALL_LIB
-#
-#    # - name: Test
-#    #   if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-#    #   shell: bash
-#    #   run: make unittestci
-#
-#    - name: Amalgamation
-#      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-#      shell: bash
-#      run: |
-#        python scripts/amalgamation.py --extended
-#        cd src/amalgamation
-#        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp
-#        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
-#        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
+  #  xcode-debug:
+  #    name: OSX Debug
+  #    runs-on: macos-latest
+  #
+  #    env:
+  #      TREAT_WARNINGS_AS_ERRORS: 1
+  #
+  #    steps:
+  #    - uses: actions/checkout@v3
+  #      with:
+  #        fetch-depth: 0
+  #
+  #    - uses: actions/setup-python@v4
+  #      with:
+  #        python-version: '3.7'
+  #
+  #    - name: Setup Ccache
+  #      uses: hendrikmuhs/ccache-action@main
+  #      with:
+  #        key: ${{ github.job }}
+  #        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+  #
+  #    - name: Install ninja
+  #      shell: bash
+  #      run: brew install ninja
+  #
+  #    # Note instead of using scripts/setup_manylinux2014.sh vcpkg, we prefer to use
+  #    # lukka/run-vcpkg@v11.1 here as it configures vcpkg to cache to GH actions.
+  #    - name: Setup vcpkg
+  #      uses: lukka/run-vcpkg@v11.1
+  #      with:
+  #        vcpkgGitCommitId: a42af01b72c28a8e1d7b48107b33e4f286a55ef6
+  #
+  #    - name: Install librdkafka
+  #      shell: bash
+  #      run: |
+  #        cd $VCPKG_ROOT && ./vcpkg install librdkafka --triplet=${{ 'x64-osx' }}
+  #
+  #    - name: Build
+  #      shell: bash
+  #      run: VCPKG_TOOLCHAIN_PATH='${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake' GEN=ninja make debug
+  #
+  #    - name: Set DUCKDB_INSTALL_LIB for ADBC tests
+  #      shell: bash
+  #      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
+  #
+  #    - name: Test DUCKDB_INSTALL_LIB variable
+  #      run: echo $DUCKDB_INSTALL_LIB
+  #
+  #    # - name: Test
+  #    #   if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+  #    #   shell: bash
+  #    #   run: make unittestci
+  #
+  #    - name: Amalgamation
+  #      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+  #      shell: bash
+  #      run: |
+  #        python scripts/amalgamation.py --extended
+  #        cd src/amalgamation
+  #        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp
+  #        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
+  #        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
 
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
-    runs-on: macos-latest
-#    needs: xcode-debug
+    runs-on: macos-14
+    #    needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
-      BUILD_ODBC: 1
       OSX_BUILD_UNIVERSAL: 1
       GEN: ninja
-      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -122,11 +120,6 @@ jobs:
         with:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-      - name: Install UnixODBC
-        shell: bash
-        run: |
-          CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
 
       - name: Install pytest
         run: |
@@ -172,23 +165,23 @@ jobs:
         shell: bash
         run: ./build/release/duckdb -c "PRAGMA platform;"
 
-      # - name: Unit Test
-      #   shell: bash
-      #   if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      #   run: make allunit
+        # - name: Unit Test
+        #   shell: bash
+        #   if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        #   run: make allunit
 
-      # - name: Tools Tests
-      #   shell: bash
-      #   if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-      #   run: |
-      #     python -m pytest tools/shell/tests --shell-binary build/release/duckdb
+        # - name: Tools Tests
+        #   shell: bash
+        #   if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        #   run: |
+        #     python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
-#      - name: Examples
-#        shell: bash
-#        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-#        run: |
-#          (cd examples/embedded-c; make)
-#          (cd examples/embedded-c++; make)
+        #      - name: Examples
+        #        shell: bash
+        #        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        #        run: |
+        #          (cd examples/embedded-c; make)
+        #          (cd examples/embedded-c++; make)
 
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries
@@ -203,7 +196,6 @@ jobs:
 
             codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/duckdb
             codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/src/libduckdb*.dylib
-            codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/tools/odbc/libduckdb_odbc.dylib
           fi
 
       - name: Deploy
@@ -212,8 +204,7 @@ jobs:
           python scripts/amalgamation.py
           zip -j duckdb_cli-osx-universal.zip build/release/duckdb
           zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-          zip -j duckdb_odbc-osx-universal.zip build/release/tools/odbc/libduckdb_odbc.dylib
-          python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip
+          python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip
 
       - uses: actions/upload-artifact@v3
         with:
@@ -221,7 +212,6 @@ jobs:
           path: |
             libduckdb-osx-universal.zip
             duckdb_cli-osx-universal.zip
-            duckdb_odbc-osx-universal.zip
 
 #  xcode-extensions:
 #    # Builds extensions for osx_arm64 and osx_amd64

@@ -10,6 +10,11 @@ SELECT BLOB '\x27'
 ----
 \x27
 
+statement ok
+SELECT "/"(42, 84);
+
+statement ok
+SELECT "x-x"."y-y" FROM (SELECT 42) AS "x-x"("y-y");
 
 # FIXME: explicit cross joins not rendered correctly (yet)
 mode skip

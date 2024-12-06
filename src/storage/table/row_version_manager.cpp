@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-RowVersionManager::RowVersionManager(idx_t start) : start(start), has_changes(false) {
+RowVersionManager::RowVersionManager(idx_t start) noexcept : start(start), has_changes(false) {
 }
 
 void RowVersionManager::SetStart(idx_t new_start) {
@@ -124,6 +124,36 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		auto &info = *vector_info[vector_idx];
 		info.CommitAppend(commit_id, vstart, vend);
+	}
+}
+
+void RowVersionManager::CleanupAppend(transaction_t lowest_active_transaction, idx_t row_group_start, idx_t count) {
+	if (count == 0) {
+		return;
+	}
+	idx_t row_group_end = row_group_start + count;
+
+	lock_guard<mutex> lock(version_lock);
+	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
+	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
+	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
+		idx_t vcount =
+		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
+		if (vcount != STANDARD_VECTOR_SIZE) {
+			// not written fully - skip
+			continue;
+		}
+		if (!vector_info[vector_idx]) {
+			// already vacuumed - skip
+			continue;
+		}
+		auto &info = *vector_info[vector_idx];
+		// if we wrote the entire chunk info try to compress it
+		unique_ptr<ChunkInfo> new_info;
+		auto cleanup = info.Cleanup(lowest_active_transaction, new_info);
+		if (cleanup) {
+			vector_info[vector_idx] = std::move(new_info);
+		}
 	}
 }
 

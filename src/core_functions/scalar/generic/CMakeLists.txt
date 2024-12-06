@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_func_generic
   OBJECT
   alias.cpp
+  can_implicitly_cast.cpp
   current_setting.cpp
   error.cpp
   hash.cpp

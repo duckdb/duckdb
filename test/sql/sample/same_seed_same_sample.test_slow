@@ -1,0 +1,45 @@
+# name: test/sql/sample/same_seed_same_sample.test_slow
+# description: Test SAMPLE keyword
+# group: [sample]
+
+# testing a table with less cardinality than the standard vector size
+
+statement ok
+CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_time() c from range(1000);
+
+loop i 1 8
+
+statement ok
+pragma threads=${i};
+
+query III nosort result_1
+SELECT * from t1 using sample reservoir(100) repeatable (1) order by a;
+----
+
+
+query III nosort result_1
+SELECT * from t1 using sample reservoir(100) repeatable (1) order by a;
+----
+
+endloop
+
+# testing a table with greater cardinality than the standard vector size
+
+statement ok
+CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_time() c from range(100000);
+
+loop i 1 8
+
+statement ok
+pragma threads=${i};
+
+query III nosort result_2
+SELECT * from t1 using sample reservoir(6000) repeatable (1) order by a;
+----
+
+
+query III nosort result_2
+SELECT * from t1 using sample reservoir(6000) repeatable (1) order by a;
+----
+
+endloop

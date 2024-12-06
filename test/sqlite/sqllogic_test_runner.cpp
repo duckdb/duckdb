@@ -1,13 +1,15 @@
 
-#include "catch.hpp"
-#include "test_helpers.hpp"
-#include "sqllogic_parser.hpp"
 #include "sqllogic_test_runner.hpp"
-#include "duckdb/main/extension_helper.hpp"
+
+#include "catch.hpp"
+#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/main/extension_entries.hpp"
-#include "duckdb/common/virtual_file_system.hpp"
-#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "sqllogic_parser.hpp"
+#include "test_helpers.hpp"
+#include "sqllogic_test_logger.hpp"
 
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
@@ -86,7 +88,13 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	named_connection_map.clear();
 	// now re-open the current database
 
-	db = make_uniq<DuckDB>(dbpath, config.get());
+	try {
+		db = make_uniq<DuckDB>(dbpath, config.get());
+	} catch (std::exception &ex) {
+		ErrorData err(ex);
+		SQLLogicTestLogger::LoadDatabaseFail(dbpath, err.Message());
+		FAIL();
+	}
 	Reconnect();
 
 	// load any previously loaded extensions again
@@ -164,6 +172,9 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 }
 
 bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<string> &result) {
+	if (parameter.empty()) {
+		return true;
+	}
 	auto token_name = StringUtil::Lower(parameter);
 	StringUtil::Trim(token_name);
 	bool collection = false;
@@ -173,6 +184,18 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 	bool is_integral = is_numeric || token_name == "<integral>";
 	bool is_signed = is_integral || token_name == "<signed>";
 	bool is_unsigned = is_integral || token_name == "<unsigned>";
+	bool is_all_types_column = token_name == "<all_types_columns>";
+	if (token_name[0] == '!') {
+		// !token tries to remove the token from the list of tokens
+		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
+		if (entry == result.end()) {
+			// not found - insert as-is
+			return false;
+		}
+		// found - erase the entry
+		result.erase(entry);
+		collection = true;
+	}
 	if (is_signed) {
 		result.push_back("tinyint");
 		result.push_back("smallint");
@@ -209,6 +232,62 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("fsst");
 		result.push_back("alp");
 		result.push_back("alprd");
+		collection = true;
+	}
+	if (is_all_types_column) {
+		result.push_back("bool");
+		result.push_back("tinyint");
+		result.push_back("smallint");
+		result.push_back("int");
+		result.push_back("bigint");
+		result.push_back("hugeint");
+		result.push_back("uhugeint");
+		result.push_back("utinyint");
+		result.push_back("usmallint");
+		result.push_back("uint");
+		result.push_back("ubigint");
+		result.push_back("date");
+		result.push_back("time");
+		result.push_back("timestamp");
+		result.push_back("timestamp_s");
+		result.push_back("timestamp_ms");
+		result.push_back("timestamp_ns");
+		result.push_back("time_tz");
+		result.push_back("timestamp_tz");
+		result.push_back("float");
+		result.push_back("double");
+		result.push_back("dec_4_1");
+		result.push_back("dec_9_4");
+		result.push_back("dec_18_6");
+		result.push_back("dec38_10");
+		result.push_back("uuid");
+		result.push_back("interval");
+		result.push_back("varchar");
+		result.push_back("blob");
+		result.push_back("bit");
+		result.push_back("small_enum");
+		result.push_back("medium_enum");
+		result.push_back("large_enum");
+		result.push_back("int_array");
+		result.push_back("double_array");
+		result.push_back("date_array");
+		result.push_back("timestamp_array");
+		result.push_back("timestamptz_array");
+		result.push_back("varchar_array");
+		result.push_back("nested_int_array");
+		result.push_back("struct");
+		result.push_back("struct_of_arrays");
+		result.push_back("array_of_structs");
+		result.push_back("map");
+		result.push_back("union");
+		result.push_back("fixed_int_array");
+		result.push_back("fixed_varchar_array");
+		result.push_back("fixed_nested_int_array");
+		result.push_back("fixed_nested_varchar_array");
+		result.push_back("fixed_struct_array");
+		result.push_back("struct_of_fixed_array");
+		result.push_back("fixed_array_of_int_list");
+		result.push_back("list_of_fixed_int_array");
 		collection = true;
 	}
 	return collection;
@@ -323,7 +402,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		// require a specific block size
 		auto required_block_size = NumericCast<idx_t>(std::stoi(params[1]));
-		if (Storage::BLOCK_ALLOC_SIZE != required_block_size) {
+		if (config->options.default_block_alloc_size != required_block_size) {
 			// block size does not match the required block size: skip it
 			return RequireResult::MISSING;
 		}
@@ -335,8 +414,16 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
-	if (param == "noalternativeverify") {
+	if (param == "no_alternative_verify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "no_block_verification") {
+#ifdef DUCKDB_BLOCK_VERIFICATION
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;
@@ -768,35 +855,16 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			environment_variables[env_var] = env_actual;
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
-			if (InLoop()) {
-				parser.Fail("load cannot be called in a loop");
-			}
-
 			bool readonly = token.parameters.size() > 1 && token.parameters[1] == "readonly";
+			string load_db_path;
 			if (!token.parameters.empty()) {
-				dbpath = ReplaceKeywords(token.parameters[0]);
-				if (!readonly) {
-					// delete the target database file, if it exists
-					DeleteDatabase(dbpath);
-				}
+				load_db_path = ReplaceKeywords(token.parameters[0]);
 			} else {
-				dbpath = string();
+				load_db_path = string();
 			}
-			// set up the config file
-			if (readonly) {
-				config->options.use_temporary_directory = false;
-				config->options.access_mode = AccessMode::READ_ONLY;
-			} else {
-				config->options.use_temporary_directory = true;
-				config->options.access_mode = AccessMode::AUTOMATIC;
-			}
-			// now create the database file
-			LoadDatabase(dbpath, true);
+			auto command = make_uniq<LoadCommand>(*this, load_db_path, readonly);
+			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESTART) {
-			if (dbpath.empty()) {
-				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
-			}
-
 			bool load_extensions = !(token.parameters.size() == 1 && token.parameters[0] == "no_extension_load");
 
 			// restart the current database
@@ -825,7 +893,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// file name
 			idx_t filename_start_pos = input_path.find_last_of("/") + 1;
-			if (!StringUtil::EndsWith(input_path, ".gz")) {
+			if (!StringUtil::EndsWith(input_path, CompressionExtensionFromType(FileCompressionType::GZIP))) {
 				parser.Fail("unzip: input has not a GZIP extension");
 			}
 			string filename = input_path.substr(filename_start_pos, input_path.size() - filename_start_pos - 3);

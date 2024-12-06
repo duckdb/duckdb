@@ -1,0 +1,50 @@
+# name: test/optimizer/unused_columns/distinct_on_projection_pushdown.test
+# description: Test DISTINCT ON ORDER BY
+# group: [unused_columns]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t0 as select range%1000 col0, random()*1000 col1, random()*100 col2, '1' col3, '2' col4, '3' col5 from range(10000);
+
+query I nosort res_1
+SELECT col0
+FROM 
+(
+    SELECT 
+    DISTINCT ON (floor(col0))
+    *
+    FROM t0
+    ORDER by col0 DESC
+);
+----
+1000 values hashing to 796a92aea33b9601284e2a4ac9e6587e
+
+query I nosort res_1
+SELECT col0
+FROM 
+(
+    SELECT 
+    DISTINCT ON (floor(col0))
+    col0
+    FROM t0
+    ORDER by col0 DESC
+);
+----
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT col0
+FROM 
+(
+    SELECT 
+    DISTINCT ON (floor(col0))
+    *
+    FROM t0
+    ORDER by col0 DESC
+)
+----
+logical_opt	<!REGEX>:.*col[1-5].*

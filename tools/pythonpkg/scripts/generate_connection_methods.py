@@ -12,6 +12,10 @@ INITIALIZE_METHOD = (
 END_MARKER = "} // END_OF_CONNECTION_METHODS"
 
 
+def is_py_kwargs(method):
+    return 'kwargs_as_dict' in method and method['kwargs_as_dict'] == True
+
+
 def generate():
     # Read the PYCONNECTION_SOURCE file
     with open(PYCONNECTION_SOURCE, 'r') as source_file:
@@ -80,9 +84,12 @@ def generate():
             definition += ', '.join(arguments)
         if 'kwargs' in method:
             definition += ", "
-            definition += "py::kw_only(), "
-            arguments = create_arguments(method['kwargs'])
-            definition += ', '.join(arguments)
+            if is_py_kwargs(method):
+                definition += "py::kw_only()"
+            else:
+                definition += "py::kw_only(), "
+                arguments = create_arguments(method['kwargs'])
+                definition += ', '.join(arguments)
         definition += ");"
         return definition
 

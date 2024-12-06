@@ -13,7 +13,7 @@ from pytest import raises, importorskip, fixture, MonkeyPatch, mark
 importorskip('fsspec', '2022.11.0')
 from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
-from fsspec.implementations.local import LocalFileOpener
+from fsspec.implementations.local import LocalFileOpener, LocalFileSystem
 
 FILENAME = 'integers.csv'
 
@@ -21,18 +21,18 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
-    error_occured = []
+    error_occurred = []
     orig = getattr(obj, name)
 
     def ceptor(*args, **kwargs):
         try:
             return orig(*args, **kwargs)
         except Exception as e:
-            error_occured.append(e)
+            error_occurred.append(e)
             raise e
 
     monkeypatch.setattr(obj, name, ceptor)
-    return error_occured
+    return error_occurred
 
 
 @fixture()
@@ -191,13 +191,52 @@ class TestPythonFilesystem:
     def test_copy_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute("copy (select 1 as a) to 'memory://root' (partition_by (a), HEADER 0)")
+        duckdb_cursor.execute("copy (select 1 as a, 2 as b) to 'memory://root' (partition_by (a), HEADER 0)")
+
+        assert memory.open('/root/a=1/data_0.csv').read() == b'2\n'
+
+    def test_copy_partition_with_columns_written(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+        duckdb_cursor.register_filesystem(memory)
+
+        duckdb_cursor.execute(
+            "copy (select 1 as a) to 'memory://root' (partition_by (a), HEADER 0, WRITE_PARTITION_COLUMNS)"
+        )
 
         assert memory.open('/root/a=1/data_0.csv').read() == b'1\n'
 
     def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
-        duckdb_cursor.execute("copy (select 2 as a) to 'memory://partition' (partition_by (a), HEADER 0)")
+        duckdb_cursor.execute(
+            "copy (select 2 as a, 3 as b, 4 as c) to 'memory://partition' (partition_by (a), HEADER 0)"
+        )
+
+        path = 'memory:///partition/*/*.csv'
+
+        query = "SELECT * FROM read_csv_auto('" + path + "'"
+
+        # hive partitioning
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ');')
+        assert duckdb_cursor.fetchall() == [(3, 4, 2)]
+
+        # hive partitioning: auto detection
+        duckdb_cursor.execute(query + ');')
+        assert duckdb_cursor.fetchall() == [(3, 4, 2)]
+
+        # hive partitioning: cast to int
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=1' + ');')
+        assert duckdb_cursor.fetchall() == [(3, 4, 2)]
+
+        # hive partitioning: no cast to int
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=0' + ');')
+        assert duckdb_cursor.fetchall() == [(3, 4, '2')]
+
+    def test_read_hive_partition_with_columns_written(
+        self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem
+    ):
+        duckdb_cursor.register_filesystem(memory)
+        duckdb_cursor.execute(
+            "copy (select 2 as a) to 'memory://partition' (partition_by (a), HEADER 0, WRITE_PARTITION_COLUMNS)"
+        )
 
         path = 'memory:///partition/*/*.csv'
 
@@ -218,3 +257,32 @@ class TestPythonFilesystem:
         # hive partitioning: no cast to int
         duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=0' + ');')
         assert duckdb_cursor.fetchall() == [(2, '2')]
+
+    def test_parallel_union_by_name(self, tmp_path):
+        pa = importorskip('pyarrow')
+        pq = importorskip('pyarrow.parquet')
+        fsspec = importorskip('fsspec')
+
+        table1 = pa.Table.from_pylist(
+            [
+                {'time': 1719568210134107692, 'col1': 1},
+            ]
+        )
+        table1_path = tmp_path / "table1.parquet"
+        pa.parquet.write_table(table1, table1_path)
+
+        table2 = pa.Table.from_pylist(
+            [
+                {'time': 1719568210134107692, 'col1': 1},
+            ]
+        )
+        table2_path = tmp_path / "table2.parquet"
+        pq.write_table(table2, table2_path)
+
+        c = duckdb.connect()
+        c.register_filesystem(LocalFileSystem())
+
+        q = f"SELECT * FROM read_parquet('file://{tmp_path}/table*.parquet', union_by_name = TRUE) ORDER BY time DESC LIMIT 1"
+
+        res = c.sql(q).fetchall()
+        assert res == [(1719568210134107692, 1)]

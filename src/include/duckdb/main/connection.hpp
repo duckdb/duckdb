@@ -20,6 +20,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/main/profiling_node.hpp"
 
 namespace duckdb {
 
@@ -54,6 +55,9 @@ public:
 public:
 	//! Returns query profiling information for the current query
 	DUCKDB_API string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);
+
+	//! Returns the first node of the query profiling tree
+	DUCKDB_API optional_ptr<ProfilingNode> GetProfilingTree();
 
 	//! Interrupt execution of the current query
 	DUCKDB_API void Interrupt();
@@ -146,7 +150,7 @@ public:
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(const string &query, const string &alias = "queryrelation",
 	                                                  const string &error = "Expected a single SELECT statement");
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(unique_ptr<SelectStatement> select_stmt,
-	                                                  const string &alias = "queryrelation");
+	                                                  const string &alias = "queryrelation", const string &query = "");
 
 	//! Returns a substrait BLOB from a valid query
 	DUCKDB_API string GetSubstrait(const string &query);

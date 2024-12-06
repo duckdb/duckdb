@@ -42,7 +42,7 @@ static void WriteHugeIntHexBytes(T x, char *&output, idx_t buffer_size) {
 static void WriteBinBytes(uint64_t x, char *&output, idx_t buffer_size) {
 	idx_t offset = buffer_size;
 	for (; offset >= 1; offset -= 1) {
-		*output = ((x >> (offset - 1)) & 0x01) + '0';
+		*output = NumericCast<char>(((x >> (offset - 1)) & 0x01) + '0');
 		output++;
 	}
 }
@@ -393,6 +393,8 @@ ScalarFunctionSet HexFun::GetFunctions() {
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
+	    ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
+	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction<int64_t, HexIntegralOperator>));
@@ -414,6 +416,8 @@ ScalarFunctionSet BinFun::GetFunctions() {
 
 	to_binary.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
+	to_binary.AddFunction(
+	    ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
 	to_binary.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR,
 	                                     ToBinaryFunction<uint64_t, BinaryIntegralOperator>));
 	to_binary.AddFunction(

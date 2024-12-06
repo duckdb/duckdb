@@ -106,6 +106,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		result = LogicalExplain::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_EXPORT:
+		result = LogicalExport::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		result = LogicalExpressionGet::Deserialize(deserializer);
 		break;
@@ -297,7 +300,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &des
 	deserializer.ReadPropertyWithDefault<vector<JoinCondition>>(204, "conditions", result->conditions);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "mark_types", result->mark_types);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
-	deserializer.ReadPropertyWithDefault<bool>(207, "delim_flipped", result->delim_flipped, false);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(207, "delim_flipped", result->delim_flipped, false);
 	return std::move(result);
 }
 
@@ -439,6 +442,19 @@ unique_ptr<LogicalOperator> LogicalExplain::Deserialize(Deserializer &deserializ
 	deserializer.ReadPropertyWithDefault<string>(201, "physical_plan", result->physical_plan);
 	deserializer.ReadPropertyWithDefault<string>(202, "logical_plan_unopt", result->logical_plan_unopt);
 	deserializer.ReadPropertyWithDefault<string>(203, "logical_plan_opt", result->logical_plan_opt);
+	return std::move(result);
+}
+
+void LogicalExport::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<CopyInfo>>(200, "copy_info", copy_info);
+	serializer.WritePropertyWithDefault<unique_ptr<BoundExportData>>(201, "exported_tables", exported_tables);
+}
+
+unique_ptr<LogicalOperator> LogicalExport::Deserialize(Deserializer &deserializer) {
+	auto copy_info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "copy_info");
+	auto exported_tables = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(201, "exported_tables");
+	auto result = duckdb::unique_ptr<LogicalExport>(new LogicalExport(deserializer.Get<ClientContext &>(), std::move(copy_info), std::move(exported_tables)));
 	return std::move(result);
 }
 
@@ -658,8 +674,8 @@ void LogicalSetOperation::Serialize(Serializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(Deserializer &deserializer) {
 	auto table_index = deserializer.ReadPropertyWithDefault<idx_t>(200, "table_index");
 	auto column_count = deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count");
-	auto setop_all = deserializer.ReadPropertyWithDefault<bool>(202, "setop_all", true);
-	auto allow_out_of_order = deserializer.ReadPropertyWithDefault<bool>(203, "allow_out_of_order", true);
+	auto setop_all = deserializer.ReadPropertyWithExplicitDefault<bool>(202, "setop_all", true);
+	auto allow_out_of_order = deserializer.ReadPropertyWithExplicitDefault<bool>(203, "allow_out_of_order", true);
 	auto result = duckdb::unique_ptr<LogicalSetOperation>(new LogicalSetOperation(table_index, column_count, deserializer.Get<LogicalOperatorType>(), setop_all, allow_out_of_order));
 	return std::move(result);
 }

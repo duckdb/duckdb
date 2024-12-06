@@ -27,6 +27,18 @@ struct TemplatedParquetValueConversion {
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.inc(sizeof(VALUE_TYPE));
 	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available(count * sizeof(VALUE_TYPE));
+	}
+
+	static VALUE_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		return plain_data.unsafe_read<VALUE_TYPE>();
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.unsafe_inc(sizeof(VALUE_TYPE));
+	}
 };
 
 template <class VALUE_TYPE, class VALUE_CONVERSION>
@@ -56,25 +68,10 @@ public:
 
 	void Offsets(uint32_t *offsets, uint8_t *defines, uint64_t num_values, parquet_filter_t &filter,
 	             idx_t result_offset, Vector &result) override {
-		if (!dict) {
-			throw IOException(
-			    "Parquet file is likely corrupted, cannot have dictionary offsets without seeing a dictionary first.");
-		}
-		auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
-
-		idx_t offset_idx = 0;
-		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (HasDefines() && defines[row_idx + result_offset] != max_define) {
-				result_mask.SetInvalid(row_idx + result_offset);
-				continue;
-			}
-			if (filter[row_idx + result_offset]) {
-				VALUE_TYPE val = VALUE_CONVERSION::DictRead(*dict, offsets[offset_idx++], *this);
-				result_ptr[row_idx + result_offset] = val;
-			} else {
-				offset_idx++;
-			}
+		if (HasDefines()) {
+			OffsetsInternal<true>(*dict, offsets, defines, num_values, filter, result_offset, result);
+		} else {
+			OffsetsInternal<false>(*dict, offsets, defines, num_values, filter, result_offset, result);
 		}
 	}
 
@@ -82,6 +79,27 @@ public:
 	           idx_t result_offset, Vector &result) override {
 		PlainTemplated<VALUE_TYPE, VALUE_CONVERSION>(std::move(plain_data), defines, num_values, filter, result_offset,
 		                                             result);
+	}
+
+private:
+	template <bool HAS_DEFINES>
+	void OffsetsInternal(ResizeableBuffer &dict_ref, uint32_t *__restrict offsets, const uint8_t *__restrict defines,
+	                     const uint64_t num_values, const parquet_filter_t &filter, const idx_t result_offset,
+	                     Vector &result) {
+		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		auto &result_mask = FlatVector::Validity(result);
+		idx_t offset_idx = 0;
+		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
+			if (HAS_DEFINES && defines[row_idx] != max_define) {
+				result_mask.SetInvalid(row_idx);
+				continue;
+			}
+			if (filter.test(row_idx)) {
+				result_ptr[row_idx] = VALUE_CONVERSION::DictRead(dict_ref, offsets[offset_idx++], *this);
+			} else {
+				offset_idx++;
+			}
+		}
 	}
 };
 
@@ -98,6 +116,18 @@ struct CallbackParquetValueConversion {
 
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		plain_data.inc(sizeof(PARQUET_PHYSICAL_TYPE));
+	}
+
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return plain_data.check_available(count * sizeof(PARQUET_PHYSICAL_TYPE));
+	}
+
+	static DUCKDB_PHYSICAL_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		return FUNC(plain_data.unsafe_read<PARQUET_PHYSICAL_TYPE>());
+	}
+
+	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		plain_data.unsafe_inc(sizeof(PARQUET_PHYSICAL_TYPE));
 	}
 };
 

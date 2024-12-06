@@ -29,7 +29,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
-
+#include "duckdb/common/types/varint.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
@@ -240,8 +240,13 @@ Value Value::MinimumValue(const LogicalType &type) {
 		const auto min_us = MinimumValue(LogicalType::TIMESTAMP).GetValue<timestamp_t>();
 		return Value::TIMESTAMPMS(timestamp_t(Timestamp::GetEpochMs(min_us)));
 	}
-	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
+	case LogicalTypeId::TIMESTAMP_NS: {
+		// Clear the fractional day.
+		auto min_ns = NumericLimits<int64_t>::Minimum();
+		min_ns /= Interval::NANOS_PER_DAY;
+		min_ns *= Interval::NANOS_PER_DAY;
+		return Value::TIMESTAMPNS(timestamp_t(min_ns));
+	}
 	case LogicalTypeId::TIME_TZ:
 		//	"00:00:00+1559" from the PG docs, but actually 00:00:00+15:59:59
 		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MAX_OFFSET));
@@ -270,6 +275,11 @@ Value Value::MinimumValue(const LogicalType &type) {
 	}
 	case LogicalTypeId::ENUM:
 		return Value::ENUM(0, type);
+	case LogicalTypeId::VARINT:
+		return Value::VARINT(Varint::VarcharToVarInt(
+		    "-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540"
+		    "4589535143824642343213268894641827684675467035375169860499105765512820762454900903893289440758685084551339"
+		    "42304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368"));
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
@@ -346,8 +356,15 @@ Value Value::MaximumValue(const LogicalType &type) {
 			throw InternalException("Unknown decimal type");
 		}
 	}
-	case LogicalTypeId::ENUM:
-		return Value::ENUM(EnumType::GetSize(type) - 1, type);
+	case LogicalTypeId::ENUM: {
+		auto enum_size = EnumType::GetSize(type);
+		return Value::ENUM(enum_size - (enum_size ? 1 : 0), type);
+	}
+	case LogicalTypeId::VARINT:
+		return Value::VARINT(Varint::VarcharToVarInt(
+		    "1797693134862315708145274237317043567980705675258449965989174768031572607800285387605895586327668781715404"
+		    "5895351438246423432132688946418276846754670353751698604991057655128207624549009038932894407586850845513394"
+		    "2304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368"));
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}
@@ -399,9 +416,9 @@ Value Value::NegativeInfinity(const LogicalType &type) {
 	}
 }
 
-Value Value::BOOLEAN(int8_t value) {
+Value Value::BOOLEAN(bool value) {
 	Value result(LogicalType::BOOLEAN);
-	result.value_.boolean = bool(value);
+	result.value_.boolean = value;
 	result.is_null = false;
 	return result;
 }
@@ -841,6 +858,17 @@ Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	return result;
 }
 
+Value Value::VARINT(const_data_ptr_t data, idx_t len) {
+	return VARINT(string(const_char_ptr_cast(data), len));
+}
+
+Value Value::VARINT(const string &data) {
+	Value result(LogicalType::VARINT);
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(data);
+	return result;
+}
+
 Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
@@ -1190,6 +1218,10 @@ template <>
 timestamp_t Value::GetValue() const {
 	return GetValueInternal<timestamp_t>();
 }
+template <>
+dtime_tz_t Value::GetValue() const {
+	return GetValueInternal<dtime_tz_t>();
+}
 
 template <>
 DUCKDB_API interval_t Value::GetValue() const {
@@ -1210,7 +1242,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		D_ASSERT(value == 0 || value == 1);
-		return Value::BOOLEAN(value ? 1 : 0);
+		return Value::BOOLEAN(value ? true : false);
 	case LogicalTypeId::TINYINT:
 		D_ASSERT(value >= NumericLimits<int8_t>::Minimum() && value <= NumericLimits<int8_t>::Maximum());
 		return Value::TINYINT((int8_t)value);
@@ -1625,6 +1657,16 @@ const vector<Value> &StructValue::GetChildren(const Value &value) {
 		throw InternalException("Calling StructValue::GetChildren on a NULL value");
 	}
 	D_ASSERT(value.type().InternalType() == PhysicalType::STRUCT);
+	D_ASSERT(value.value_info_);
+	return value.value_info_->Get<NestedValueInfo>().GetValues();
+}
+
+const vector<Value> &MapValue::GetChildren(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling MapValue::GetChildren on a NULL value");
+	}
+	D_ASSERT(value.type().id() == LogicalTypeId::MAP);
+	D_ASSERT(value.type().InternalType() == PhysicalType::LIST);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }

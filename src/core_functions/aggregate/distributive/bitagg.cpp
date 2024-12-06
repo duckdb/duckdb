@@ -53,10 +53,10 @@ struct BitwiseOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		if (!state.is_set) {
-			OP::template Assign(state, input);
+			OP::template Assign<INPUT_TYPE>(state, input);
 			state.is_set = true;
 		} else {
-			OP::template Execute(state, input);
+			OP::template Execute<INPUT_TYPE>(state, input);
 		}
 	}
 
@@ -79,10 +79,10 @@ struct BitwiseOperation {
 		}
 		if (!target.is_set) {
 			// target is NULL, use source value directly.
-			OP::template Assign(target, source.value);
+			OP::template Assign<typename STATE::TYPE>(target, source.value);
 			target.is_set = true;
 		} else {
-			OP::template Execute(target, source.value);
+			OP::template Execute<typename STATE::TYPE>(target, source.value);
 		}
 	}
 

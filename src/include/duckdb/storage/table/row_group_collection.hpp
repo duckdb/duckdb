@@ -27,10 +27,13 @@ struct TableAppendState;
 class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
+class StorageCommitState;
 struct ColumnSegmentInfo;
 class MetadataManager;
 struct VacuumState;
 struct CollectionCheckpointState;
+struct PersistentCollectionData;
+class CheckpointTask;
 
 class RowGroupCollection {
 public:
@@ -41,6 +44,7 @@ public:
 	idx_t GetTotalRows() const;
 	Allocator &GetAllocator() const;
 
+	void Initialize(PersistentCollectionData &data);
 	void Initialize(PersistentTableData &data);
 	void InitializeEmpty();
 
@@ -80,8 +84,11 @@ public:
 	void FinalizeAppend(TransactionData transaction, TableAppendState &state);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row);
+	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 
-	void MergeStorage(RowGroupCollection &data);
+	void MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
+	                  optional_ptr<StorageCommitState> commit_state);
+	bool IsPersistent() const;
 
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
@@ -94,8 +101,9 @@ public:
 
 	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
 	                           vector<SegmentNode<RowGroup>> &segments);
-	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx);
-	void ScheduleCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
+	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
+	                         bool schedule_vacuum);
+	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();

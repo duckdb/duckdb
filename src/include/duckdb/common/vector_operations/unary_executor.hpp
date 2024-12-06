@@ -72,7 +72,6 @@ private:
 #endif
 
 		if (!mask.AllValid()) {
-			result_mask.EnsureWritable();
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				if (mask.RowIsValidUnsafe(idx)) {
@@ -83,9 +82,6 @@ private:
 				}
 			}
 		} else {
-			if (adds_nulls) {
-				result_mask.EnsureWritable();
-			}
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				result_data[i] =
@@ -133,9 +129,6 @@ private:
 				}
 			}
 		} else {
-			if (adds_nulls) {
-				result_mask.EnsureWritable();
-			}
 			for (idx_t i = 0; i < count; i++) {
 				result_data[i] =
 				    OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(ldata[i], result_mask, i, dataptr);

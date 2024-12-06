@@ -1,5 +1,14 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/storage/string_uncompressed.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
+#include "duckdb/common/likely.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
@@ -9,22 +18,21 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/likely.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 struct StringDictionaryContainer {
 	//! The size of the dictionary
 	uint32_t size;
-	//! The end of the dictionary (typically Storage::BLOCK_SIZE)
+	//! The end of the dictionary, which defaults to the block size.
 	uint32_t end;
 
-	void Verify() {
-		D_ASSERT(size <= Storage::BLOCK_SIZE);
-		D_ASSERT(end <= Storage::BLOCK_SIZE);
+	void Verify(const idx_t block_size) {
+		D_ASSERT(size <= block_size);
+		D_ASSERT(end <= block_size);
 		D_ASSERT(size <= end);
 	}
 };
@@ -43,8 +51,6 @@ public:
 	static constexpr idx_t BIG_STRING_MARKER_BASE_SIZE = sizeof(block_id_t) + sizeof(int32_t);
 	//! The marker size of the big string
 	static constexpr idx_t BIG_STRING_MARKER_SIZE = BIG_STRING_MARKER_BASE_SIZE;
-	//! The size below which the segment is compacted on flushing
-	static constexpr size_t COMPACTION_FLUSH_LIMIT = (size_t)Storage::BLOCK_SIZE / 5 * 4;
 
 public:
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
@@ -111,7 +117,7 @@ public:
 			auto end = handle.Ptr() + *dictionary_end;
 
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify();
+			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
 #endif
 			// Unknown string, continue
 			// non-null value, check if we can fit it within the block
@@ -120,7 +126,8 @@ public:
 			// determine whether or not we have space in the block for this string
 			bool use_overflow_block = false;
 			idx_t required_space = string_length;
-			if (DUCKDB_UNLIKELY(required_space >= StringUncompressed::STRING_BLOCK_LIMIT)) {
+			if (DUCKDB_UNLIKELY(required_space >=
+			                    StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()))) {
 				// string exceeds block limit, store in overflow block and only write a marker here
 				required_space = BIG_STRING_MARKER_SIZE;
 				use_overflow_block = true;
@@ -150,7 +157,8 @@ public:
 				// place the dictionary offset into the set of vectors
 				// note: for overflow strings we write negative value
 
-				D_ASSERT(*dictionary_size <= int32_t(Storage::BLOCK_SIZE));
+				// dictionary_size is an uint32_t value, so we can cast up.
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
 				result_data[target_idx] = -NumericCast<int32_t>((*dictionary_size));
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
@@ -161,13 +169,14 @@ public:
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
-				// place the dictionary offset into the set of vectors
-				D_ASSERT(*dictionary_size <= int32_t(Storage::BLOCK_SIZE));
+				// dictionary_size is an uint32_t value, so we can cast up.
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				// Place the dictionary offset into the set of vectors.
 				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
-			D_ASSERT(RemainingSpace(segment, handle) <= Storage::BLOCK_SIZE);
+			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockManager().GetBlockSize());
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify();
+			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
 #endif
 		}
 		segment.count += count;
@@ -193,10 +202,10 @@ public:
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
-	static string_location_t FetchStringLocation(StringDictionaryContainer dict, data_ptr_t baseptr,
-	                                             int32_t dict_offset);
+	static string_location_t FetchStringLocation(StringDictionaryContainer dict, data_ptr_t base_ptr,
+	                                             int32_t dict_offset, const idx_t block_size);
 	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                                    data_ptr_t baseptr, int32_t dict_offset, uint32_t string_length);
+	                                    data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length);
 	static string_t FetchString(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
 	                            data_ptr_t baseptr, string_location_t location, uint32_t string_length);
 

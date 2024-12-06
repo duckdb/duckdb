@@ -21,6 +21,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <string.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
@@ -56,6 +57,8 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_APPEND;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_PRIVATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -65,6 +68,8 @@ void FileOpenFlags::Verify() {
 	    (flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE) || (flags & FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	bool is_private = (flags & FileOpenFlags::FILE_FLAGS_PRIVATE);
 	bool null_if_not_exists = flags & FileOpenFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS;
+	bool exclusive_create = flags & FileOpenFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
+	bool null_if_exists = flags & FileOpenFlags::FILE_FLAGS_NULL_IF_EXISTS;
 
 	// require either READ or WRITE (or both)
 	D_ASSERT(is_read || is_write);
@@ -79,6 +84,10 @@ void FileOpenFlags::Verify() {
 	D_ASSERT(!is_private || is_create);
 	// FILE_FLAGS_NULL_IF_NOT_EXISTS cannot be combined with CREATE/CREATE_NEW
 	D_ASSERT(!(null_if_not_exists && is_create));
+	// FILE_FLAGS_EXCLUSIVE_CREATE only can be combined with CREATE/CREATE_NEW
+	D_ASSERT(!exclusive_create || is_create);
+	// FILE_FLAGS_NULL_IF_EXISTS only can be set with EXCLUSIVE_CREATE
+	D_ASSERT(!null_if_exists || exclusive_create);
 #endif
 }
 
@@ -415,7 +424,7 @@ void FileSystem::MoveFile(const string &source, const string &target, optional_p
 	throw NotImplementedException("%s: MoveFile is not implemented!", GetName());
 }
 
-void FileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle, unique_ptr<FileHandle>& dst_handle) {
+void FileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
 	throw NotImplementedException("%s: CopyFile is not implemented!", GetName());
 }
   
@@ -588,6 +597,10 @@ bool FileHandle::CanSeek() {
 	return file_system.CanSeek();
 }
 
+FileCompressionType FileHandle::GetFileCompressionType() {
+	return FileCompressionType::UNCOMPRESSED;
+}
+
 bool FileHandle::IsPipe() {
 	return file_system.IsPipe(path);
 }
@@ -626,10 +639,19 @@ FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
 }
 
+idx_t FileHandle::GetProgress() {
+	throw NotImplementedException("GetProgress is not implemented for this file handle");
+}
+
 bool FileSystem::IsRemoteFile(const string &path) {
-	const string prefixes[] = {"http://", "https://", "s3://", "s3a://", "s3n://", "gcs://", "gs://", "r2://", "hf://"};
-	for (auto &prefix : prefixes) {
-		if (StringUtil::StartsWith(path, prefix)) {
+	string extension = "";
+	return IsRemoteFile(path, extension);
+}
+
+bool FileSystem::IsRemoteFile(const string &path, string &extension) {
+	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
+		if (StringUtil::StartsWith(path, entry.name)) {
+			extension = entry.extension;
 			return true;
 		}
 	}

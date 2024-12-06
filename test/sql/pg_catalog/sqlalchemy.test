@@ -212,7 +212,7 @@ FROM
 	t.oid = (SELECT MIN(table_oid) FROM duckdb_tables) and ix.indisprimary = 't'
 ORDER BY a.attnum
 
-mode skip
+
 # get_pk_constraint, >= v8.4
 statement ok
 SELECT a.attname
@@ -224,8 +224,6 @@ FROM pg_attribute a JOIN (
 	) k ON a.attnum=k.attnum
 WHERE a.attrelid = (SELECT MIN(table_oid) FROM duckdb_tables)
 ORDER BY k.ord
-
-mode unskip
 
 # get_foreign_keys
 statement ok
@@ -330,21 +328,23 @@ WHERE
 	pgd.objsubid = 0 AND
 	pgd.objoid = (SELECT MIN(table_oid) FROM duckdb_tables)
 
-# get_check_constraints
-mode skip
 
-# FIXME: pg_get_constraintdef overload
 statement ok
+CREATE TABLE check_constraint_tbl (
+	i INTEGER CHECK (i < 42)
+);
+
+# get_check_constraints
+query II
 SELECT
 	cons.conname as name,
 	pg_get_constraintdef(cons.oid) as src
 FROM
 	pg_catalog.pg_constraint cons
 WHERE
-	cons.conrelid = (SELECT MIN(table_oid) FROM duckdb_tables) AND
 	cons.contype = 'c'
-
-mode unskip
+----
+CHECK((i < 42))	CHECK((i < 42))
 
 # load_enums
 query IIII

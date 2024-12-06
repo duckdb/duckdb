@@ -52,9 +52,10 @@ statement error
 SELECT MIN()
 ----
 
-statement error
+query I
 SELECT MIN(1, 2)
 ----
+[1]
 
 query IIRTTTT
 SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-02'), MAX(TIMESTAMP '2008-01-01 00:00:01')
@@ -65,9 +66,10 @@ statement error
 SELECT MAX()
 ----
 
-statement error
+query I
 SELECT MAX(1, 2)
 ----
+[1]
 
 query IIRTTTT
 SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST(DATE '1992-02-02'), FIRST(TIMESTAMP '2008-01-01 00:00:01')

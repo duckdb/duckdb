@@ -108,18 +108,17 @@ ignored_directories = [
     os.path.join('extension', 'tpcds', 'dsdgen'),
     os.path.join('extension', 'jemalloc', 'jemalloc'),
     os.path.join('extension', 'icu', 'third_party'),
-    os.path.join('src', 'include', 'duckdb', 'core_functions', 'aggregate'),
-    os.path.join('src', 'include', 'duckdb', 'core_functions', 'scalar'),
     os.path.join('tools', 'nodejs', 'src', 'duckdb'),
 ]
 format_all = False
 check_only = True
 confirm = True
 silent = False
+force = False
 
 
 def print_usage():
-    print("Usage: python scripts/format.py [revision|--all] [--check|--fix]")
+    print("Usage: python scripts/format.py [revision|--all] [--check|--fix] [--force]")
     print(
         "   [revision]     is an optional revision number, all files that changed since that revision will be formatted (default=HEAD)"
     )
@@ -147,6 +146,8 @@ if len(sys.argv) > 2:
             confirm = True
         elif arg == '--silent':
             silent = True
+        elif arg == '--force':
+            force = True
         else:
             print_usage()
 
@@ -169,9 +170,6 @@ def can_format_file(full_path):
     if not os.path.isfile(full_path):
         return False
     fname = full_path.split(os.path.sep)[-1]
-    # check ignored files
-    if file_is_ignored(full_path):
-        return False
     found = False
     # check file extension
     for ext in extensions:
@@ -179,6 +177,9 @@ def can_format_file(full_path):
             found = True
             break
     if not found:
+        return False
+    # check ignored files
+    if file_is_ignored(full_path):
         return False
     # now check file directory
     for dname in formatted_directories:
@@ -262,8 +263,13 @@ base_dir = os.path.join(os.getcwd(), 'src/include')
 
 def get_formatted_text(f, full_path, directory, ext):
     if not can_format_file(full_path):
-        print("Eek, cannot format file " + full_path + " but attempted to format anyway")
-        exit(1)
+        if not force:
+            print(
+                "File "
+                + full_path
+                + " is not normally formatted - but attempted to format anyway. Use --force if formatting is desirable"
+            )
+            exit(1)
     if f == 'list.hpp':
         # fill in list file
         file_list = [

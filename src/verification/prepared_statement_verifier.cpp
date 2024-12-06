@@ -22,7 +22,6 @@ void PreparedStatementVerifier::Extract() {
 	// replace all the constants from the select statement and replace them with parameter expressions
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *select.node, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
-	statement->n_param = values.size();
 	for (auto &kv : values) {
 		statement->named_param_map[kv.first] = 0;
 	}

@@ -69,6 +69,9 @@ public:
 	void Verify(Catalog &catalog) override;
 
 private:
+	void OnDropEntry(CatalogTransaction transaction, CatalogEntry &entry);
+
+private:
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);
 };

@@ -6,6 +6,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
+#include "duckdb/common/types/varint.hpp"
 
 namespace duckdb {
 
@@ -477,7 +478,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		return BoundCastInfo(&VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return BoundCastInfo(
-		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_t, duckdb::TryCastToTimestampNS>);
+		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ns_t, duckdb::TryCastToTimestampNS>);
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return BoundCastInfo(
 		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_t, duckdb::TryCastToTimestampSec>);
@@ -502,10 +503,10 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		    ListBoundCastData::InitListLocalState);
 	case LogicalTypeId::ARRAY:
 		// the second argument allows for a secondary casting function to be passed in the CastParameters
-		return BoundCastInfo(
-		    &StringToNestedTypeCast<VectorStringToArray>,
-		    ArrayBoundCastData::BindArrayToArrayCast(input, LogicalType::ARRAY(LogicalType::VARCHAR), target),
-		    ArrayBoundCastData::InitArrayLocalState);
+		return BoundCastInfo(&StringToNestedTypeCast<VectorStringToArray>,
+		                     ArrayBoundCastData::BindArrayToArrayCast(
+		                         input, LogicalType::ARRAY(LogicalType::VARCHAR, optional_idx()), target),
+		                     ArrayBoundCastData::InitArrayLocalState);
 	case LogicalTypeId::STRUCT:
 		return BoundCastInfo(&StringToNestedTypeCast<VectorStringToStruct>,
 		                     StructBoundCastData::BindStructToStructCast(input, InitVarcharStructType(target), target),
@@ -515,6 +516,8 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		                     MapBoundCastData::BindMapToMapCast(
 		                         input, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR), target),
 		                     InitMapCastLocalState);
+	case LogicalTypeId::VARINT:
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, TryCastToVarInt>);
 	default:
 		return VectorStringCastNumericSwitch(input, source, target);
 	}

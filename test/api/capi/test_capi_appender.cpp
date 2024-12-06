@@ -6,6 +6,32 @@
 using namespace duckdb;
 using namespace std;
 
+namespace {
+
+struct CAPIAppender {
+public:
+	CAPIAppender(CAPITester &tester, const char *schema, const char *table) {
+		auto status = duckdb_appender_create(tester.connection, schema, table, &appender);
+		REQUIRE(status == DuckDBSuccess);
+	}
+	~CAPIAppender() {
+		auto status = duckdb_appender_close(appender);
+		REQUIRE(status == DuckDBSuccess);
+		duckdb_appender_destroy(&appender);
+	}
+	operator duckdb_appender() const {
+		return appender;
+	}
+	operator duckdb_appender *() {
+		return &appender;
+	}
+
+public:
+	duckdb_appender appender = nullptr;
+};
+
+} // namespace
+
 void TestAppenderError(duckdb_appender &appender, const string &expected) {
 	auto error = duckdb_appender_error(appender);
 	REQUIRE(error != nullptr);
@@ -221,7 +247,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	// Missing column.
 	REQUIRE(duckdb_appender_end_row(appender) == DuckDBError);
 	REQUIRE(duckdb_appender_error(appender) != nullptr);
-	TestAppenderError(appender, "Call to EndRow before all rows have been appended to");
+	TestAppenderError(appender, "Call to EndRow before all columns have been appended to");
 
 	// Append the missing column.
 	REQUIRE(duckdb_append_varchar(appender, "Hello, World") == DuckDBSuccess);
@@ -567,6 +593,59 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	uhugeint = duckdb_double_to_uhugeint(NAN);
 	REQUIRE(uhugeint.lower == 0);
 	REQUIRE(uhugeint.upper == 0);
+}
+
+TEST_CASE("Test append DEFAULT in C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	SECTION("BASIC DEFAULT VALUE") {
+		tester.Query("CREATE OR REPLACE TABLE test (a INTEGER, b INTEGER DEFAULT 5)");
+		{
+			CAPIAppender appender(tester, nullptr, "test");
+			auto status = duckdb_appender_begin_row(appender);
+			REQUIRE(status == DuckDBSuccess);
+			duckdb_append_int32(appender, 42);
+			// Even though the column has a DEFAULT, we still require explicitly appending a value/default
+			status = duckdb_appender_end_row(appender);
+			REQUIRE(status == DuckDBError);
+			status = duckdb_appender_flush(appender);
+			REQUIRE(status == DuckDBError);
+
+			status = duckdb_append_default(appender);
+			REQUIRE(status == DuckDBSuccess);
+			status = duckdb_appender_end_row(appender);
+			REQUIRE(status == DuckDBSuccess);
+		}
+		result = tester.Query("SELECT * FROM test");
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->Fetch<int32_t>(0, 0) == 42);
+		REQUIRE(result->Fetch<int32_t>(1, 0) == 5);
+	}
+
+	SECTION("NON DEFAULT VALUE") {
+		tester.Query("CREATE OR REPLACE TABLE test (a INTEGER, b INTEGER DEFAULT 5)");
+		{
+			CAPIAppender appender(tester, nullptr, "test");
+			auto status = duckdb_appender_begin_row(appender);
+			REQUIRE(status == DuckDBSuccess);
+
+			// Append default to column without a default
+			status = duckdb_append_default(appender);
+			REQUIRE(status == DuckDBSuccess);
+
+			status = duckdb_append_int32(appender, 42);
+			REQUIRE(status == DuckDBSuccess);
+			status = duckdb_appender_end_row(appender);
+			REQUIRE(status == DuckDBSuccess);
+		}
+		result = tester.Query("SELECT * FROM test");
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->IsNull(0, 0));
+		REQUIRE(result->Fetch<int32_t>(1, 0) == 42);
+	}
 }
 
 TEST_CASE("Test append timestamp in C API", "[capi]") {

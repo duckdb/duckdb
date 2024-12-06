@@ -30,15 +30,15 @@ private:
 	static constexpr idx_t BUFFER_SIZE = 100000;
 
 public:
-  explicit FileBufferedData(weak_ptr<ClientContext> context, FileSystem &fs, string file);
-        explicit FileBufferedData(string filename);
+	explicit FileBufferedData(weak_ptr<ClientContext> context, FileSystem &fs, string file);
 	~FileBufferedData() override;
 
 public:
 	void Append(unique_ptr<DataChunk> chunk);
-	bool BufferIsFull() override;
-	PendingExecutionResult ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) override;
+	bool BufferIsFull();
+	StreamExecutionResult ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock) override;
 	unique_ptr<DataChunk> Scan() override;
+	void UnblockSinks() override;
 
 private:
 	//! The queue of chunks

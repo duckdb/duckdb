@@ -2,12 +2,12 @@
 
 namespace duckdb {
 
-TransactionStatement::TransactionStatement(TransactionType type)
-    : SQLStatement(StatementType::TRANSACTION_STATEMENT), info(make_uniq<TransactionInfo>(type)) {
+TransactionStatement::TransactionStatement(unique_ptr<TransactionInfo> info)
+    : SQLStatement(StatementType::TRANSACTION_STATEMENT), info(std::move(info)) {
 }
 
 TransactionStatement::TransactionStatement(const TransactionStatement &other)
-    : SQLStatement(other), info(make_uniq<TransactionInfo>(other.info->type)) {
+    : SQLStatement(other), info(other.info->Copy()) {
 }
 
 unique_ptr<SQLStatement> TransactionStatement::Copy() const {

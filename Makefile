@@ -40,7 +40,7 @@ ifeq (${DISABLE_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG=-DENABLE_SANITIZER=FALSE -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_UBSAN}, 1)
-	DISABLE_SANITIZER_FLAG=-DENABLE_UBSAN=0
+	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_VPTR_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DDISABLE_VPTR_SANITIZER=1
@@ -60,6 +60,8 @@ CMAKE_VARS_BUILD ?=
 CMAKE_LLVM_VARS ?=
 SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
+CORE_EXTENSIONS ?=
+UNSAFE_NUMERIC_CAST ?=
 ifdef OVERRIDE_GIT_DESCRIBE
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE="${OVERRIDE_GIT_DESCRIBE}"
 else
@@ -70,6 +72,9 @@ ifneq (${CXX_STANDARD}, )
 endif
 ifneq (${DUCKDB_EXTENSIONS}, )
 	BUILD_EXTENSIONS:=${DUCKDB_EXTENSIONS}
+endif
+ifneq (${CORE_EXTENSIONS}, )
+	CORE_EXTENSIONS:=${CORE_EXTENSIONS}
 endif
 ifeq (${DISABLE_PARQUET}, 1)
 	SKIP_EXTENSIONS:=${SKIP_EXTENSIONS};parquet
@@ -89,7 +94,9 @@ endif
 ifneq (${ENABLE_EXTENSION_AUTOINSTALL}, "")
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOINSTALL=${ENABLE_EXTENSION_AUTOINSTALL}
 endif
-
+ifneq (${UNSAFE_NUMERIC_CAST}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DUNSAFE_NUMERIC_CAST=1
+endif
 ifeq (${BUILD_EXTENSIONS_ONLY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS_ONLY=1
 endif
@@ -131,17 +138,8 @@ endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
 endif
-ifeq (${BUILD_SQLSMITH}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};sqlsmith
-endif
 ifeq (${BUILD_TPCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_TPCE=1
-endif
-ifeq (${BUILD_ODBC}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_ODBC_DRIVER=1
-endif
-ifneq ($(ODBC_CONFIG),)
-	CMAKE_VARS:=${CMAKE_VARS} -DODBC_CONFIG=${ODBC_CONFIG}
 endif
 ifeq (${BUILD_PYTHON}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_PYTHON=1 -DDUCKDB_EXTENSION_CONFIGS="tools/pythonpkg/duckdb_extension_config.cmake"
@@ -161,11 +159,17 @@ endif
 ifneq ($(TIDY_BINARY),)
 	TIDY_BINARY_PARAMETER := -clang-tidy-binary ${TIDY_BINARY}
 endif
+ifneq ($(TIDY_CHECKS),)
+        TIDY_PERFORM_CHECKS := '-checks=${TIDY_CHECKS}'
+endif
 ifneq ("${FORCE_QUERY_LOG}a", "a")
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_QUERY_LOG=${FORCE_QUERY_LOG}
 endif
 ifneq ($(BUILD_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS="$(BUILD_EXTENSIONS)"
+endif
+ifneq ($(CORE_EXTENSIONS),)
+	CMAKE_VARS:=${CMAKE_VARS} -DCORE_EXTENSIONS="$(CORE_EXTENSIONS)"
 endif
 ifneq ($(SKIP_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_EXTENSIONS="$(SKIP_EXTENSIONS)"
@@ -180,7 +184,10 @@ ifneq ($(EXTRA_CMAKE_VARIABLES),)
 	CMAKE_VARS:=${CMAKE_VARS} ${EXTRA_CMAKE_VARIABLES}
 endif
 ifeq (${CRASH_ON_ASSERT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DASSERT_EXCEPTION=0
+	CMAKE_VARS:=${CMAKE_VARS} -DCRASH_ON_ASSERT=1
+endif
+ifeq (${FORCE_ASSERT}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_ASSERT=1
 endif
 ifeq (${DISABLE_STRING_INLINE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_STR_INLINE=1
@@ -202,6 +209,12 @@ ifeq (${RUN_SLOW_VERIFIERS}, 1)
 endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
+endif
+ifeq (${LATEST_STORAGE}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
+endif
+ifeq (${BLOCK_VERIFICATION}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_VERIFICATION=1
 endif
 ifneq (${VERIFY_VECTOR}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DVERIFY_VECTOR=${VERIFY_VECTOR}
@@ -236,6 +249,14 @@ ifdef SKIP_PLATFORM_UTIL
 endif
 ifdef DEBUG_STACKTRACE
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
+endif
+
+# Optional overrides
+ifneq (${STANDARD_VECTOR_SIZE}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DSTANDARD_VECTOR_SIZE=${STANDARD_VECTOR_SIZE}
+endif
+ifneq (${BLOCK_ALLOC_SIZE}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_ALLOC_SIZE=${BLOCK_ALLOC_SIZE}
 endif
 
 # Enable VCPKG for this build
@@ -325,6 +346,10 @@ unittest: debug
 	build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
+unittest_release: release
+	build/release/test/unittest
+	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+
 unittestci:
 	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
@@ -372,7 +397,14 @@ tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
-	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER}
+	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
+
+tidy-check-diff:
+	mkdir -p ./build/tidy && \
+	cd build/tidy && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
+	cd ../../ && \
+	git diff origin/main . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | python3 scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
 
 tidy-fix:
 	mkdir -p ./build/tidy && \
@@ -401,6 +433,9 @@ format-changes:
 
 format-main:
 	python3 scripts/format.py main --fix --noconfirm
+
+format-feature:
+	python3 scripts/format.py feature --fix --noconfirm
 
 third_party/sqllogictest:
 	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
@@ -431,11 +466,11 @@ coverage-check:
 	./scripts/coverage_check.sh
 
 generate-files:
+	python3 scripts/generate_c_api.py
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
-	python3 tools/pythonpkg/scripts/generate_connection_code.py
-	./scripts/generate_micro_extended.sh
+	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 

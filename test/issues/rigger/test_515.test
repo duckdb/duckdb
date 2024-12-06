@@ -24,11 +24,14 @@ INSERT INTO t0 VALUES (0);
 statement error
 SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE NOT (t1.c0<<-1);
 ----
+<REGEX>:Out of Range Error.*left-shift by negative number.*
 
 statement error
 SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE (t1.c0<<-1);
 ----
+<REGEX>:Out of Range Error.*left-shift by negative number.*
 
 statement error
 SELECT NOT (t1.c0<<-1) FROM t1;
 ----
+<REGEX>:Out of Range Error.*left-shift by negative number.*

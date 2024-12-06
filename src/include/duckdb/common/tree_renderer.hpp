@@ -10,140 +10,26 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/profiling_node.hpp"
+#include "duckdb/common/render_tree.hpp"
 
 namespace duckdb {
-class LogicalOperator;
-class PhysicalOperator;
-class Pipeline;
-struct PipelineRenderNode;
-
-struct RenderTreeNode {
-	string name;
-	string extra_text;
-};
-
-struct RenderTree {
-	RenderTree(idx_t width, idx_t height);
-
-	unique_ptr<unique_ptr<RenderTreeNode>[]> nodes;
-	idx_t width;
-	idx_t height;
-
-public:
-	RenderTreeNode *GetNode(idx_t x, idx_t y);
-	void SetNode(idx_t x, idx_t y, unique_ptr<RenderTreeNode> node);
-	bool HasNode(idx_t x, idx_t y);
-
-	idx_t GetPosition(idx_t x, idx_t y);
-};
-
-struct TreeRendererConfig {
-	void EnableDetailed() {
-		max_extra_lines = 1000;
-		detailed = true;
-	}
-
-	void EnableStandard() {
-		max_extra_lines = 30;
-		detailed = false;
-	}
-
-	idx_t maximum_render_width = 240;
-	idx_t node_render_width = 29;
-	idx_t minimum_render_width = 15;
-	idx_t max_extra_lines = 30;
-	bool detailed = false;
-
-#ifndef DUCKDB_ASCII_TREE_RENDERER
-	const char *LTCORNER = "\342\224\214"; // NOLINT "┌";
-	const char *RTCORNER = "\342\224\220"; // NOLINT "┐";
-	const char *LDCORNER = "\342\224\224"; // NOLINT "└";
-	const char *RDCORNER = "\342\224\230"; // NOLINT "┘";
-
-	const char *MIDDLE = "\342\224\274";  // NOLINT "┼";
-	const char *TMIDDLE = "\342\224\254"; // NOLINT "┬";
-	const char *LMIDDLE = "\342\224\234"; // NOLINT "├";
-	const char *RMIDDLE = "\342\224\244"; // NOLINT "┤";
-	const char *DMIDDLE = "\342\224\264"; // NOLINT "┴";
-
-	const char *VERTICAL = "\342\224\202";   // NOLINT "│";
-	const char *HORIZONTAL = "\342\224\200"; // NOLINT "─";
-#else
-	// ASCII version
-	const char *LTCORNER = "<";
-	const char *RTCORNER = ">";
-	const char *LDCORNER = "<";
-	const char *RDCORNER = ">";
-
-	const char *MIDDLE = "+";
-	const char *TMIDDLE = "+";
-	const char *LMIDDLE = "+";
-	const char *RMIDDLE = "+";
-	const char *DMIDDLE = "+";
-
-	const char *VERTICAL = "|";
-	const char *HORIZONTAL = "-";
-#endif
-};
 
 class TreeRenderer {
 public:
-	explicit TreeRenderer(TreeRendererConfig config_p = TreeRendererConfig()) : config(config_p) {
+	explicit TreeRenderer() {
+	}
+	virtual ~TreeRenderer() {
 	}
 
-	string ToString(const LogicalOperator &op);
-	string ToString(const PhysicalOperator &op);
-	string ToString(const QueryProfiler::TreeNode &op);
-	string ToString(const Pipeline &op);
-
-	void Render(const LogicalOperator &op, std::ostream &ss);
-	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const QueryProfiler::TreeNode &op, std::ostream &ss);
-	void Render(const Pipeline &op, std::ostream &ss);
-
+public:
 	void ToStream(RenderTree &root, std::ostream &ss);
+	virtual void ToStreamInternal(RenderTree &root, std::ostream &ss) = 0;
+	static unique_ptr<TreeRenderer> CreateRenderer(ExplainFormat format);
 
-	void EnableDetailed() {
-		config.EnableDetailed();
+	virtual bool UsesRawKeyNames() {
+		return false;
 	}
-	void EnableStandard() {
-		config.EnableStandard();
-	}
-
-private:
-	unique_ptr<RenderTree> CreateTree(const LogicalOperator &op);
-	unique_ptr<RenderTree> CreateTree(const PhysicalOperator &op);
-	unique_ptr<RenderTree> CreateTree(const QueryProfiler::TreeNode &op);
-	unique_ptr<RenderTree> CreateTree(const Pipeline &op);
-
-	string ExtraInfoSeparator();
-	unique_ptr<RenderTreeNode> CreateRenderNode(string name, string extra_info);
-	unique_ptr<RenderTreeNode> CreateNode(const LogicalOperator &op);
-	unique_ptr<RenderTreeNode> CreateNode(const PhysicalOperator &op);
-	unique_ptr<RenderTreeNode> CreateNode(const QueryProfiler::TreeNode &op);
-	unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op);
-
-private:
-	//! The configuration used for rendering
-	TreeRendererConfig config;
-
-private:
-	void RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y);
-	void RenderBoxContent(RenderTree &root, std::ostream &ss, idx_t y);
-	void RenderBottomLayer(RenderTree &root, std::ostream &ss, idx_t y);
-
-	bool CanSplitOnThisChar(char l);
-	bool IsPadding(char l);
-	string RemovePadding(string l);
-	void SplitUpExtraInfo(const string &extra_info, vector<string> &result);
-	void SplitStringBuffer(const string &source, vector<string> &result);
-
-	template <class T>
-	idx_t CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y);
-
-	template <class T>
-	unique_ptr<RenderTree> CreateRenderTree(const T &op);
 };
 
 } // namespace duckdb

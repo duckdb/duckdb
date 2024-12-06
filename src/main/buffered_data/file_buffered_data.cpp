@@ -22,14 +22,14 @@ bool FileBufferedData::BufferIsFull() {
 	return buffered_count >= BUFFER_SIZE;
 }
 
-PendingExecutionResult FileBufferedData::ReplenishBuffer(StreamQueryResult &result, ClientContextLock &context_lock) {
+StreamExecutionResult FileBufferedData::ExecuteTaskInternal(StreamQueryResult &result, ClientContextLock &context_lock) {
 	if (Closed() || done) {
-		return PendingExecutionResult::EXECUTION_ERROR;
+		return StreamExecutionResult::EXECUTION_ERROR;
 	}
-	
+
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
-		return PendingExecutionResult::RESULT_READY;
+		return StreamExecutionResult::CHUNK_READY;
 	}
 
 	// max blob size is std::numeric_limits<int32_t>::max().
@@ -42,22 +42,22 @@ PendingExecutionResult FileBufferedData::ReplenishBuffer(StreamQueryResult &resu
 	idx_t count = 0;
 
 	for (idx_t col_idx = 0; col_idx < STANDARD_VECTOR_SIZE; col_idx++) {
-	  auto buffer = make_unsafe_uniq_array<char>(UnsafeNumericCast<size_t>(max_blob_size));
-	  int64_t bytes_read = fs.Read(*handle, buffer.get(), max_blob_size);
-	  auto blob_data = std::string(buffer.get(), (size_t)bytes_read);
-	  to_append->SetValue(0, count, Value::BLOB_RAW(blob_data));
-	  count++;
-	  if (bytes_read < max_blob_size) {
-	    done = true;
-	    break;
-	  }
+		auto buffer = make_unsafe_uniq_array<char>(UnsafeNumericCast<size_t>(max_blob_size));
+		int64_t bytes_read = fs.Read(*handle, buffer.get(), max_blob_size);
+		auto blob_data = std::string(buffer.get(), (size_t)bytes_read);
+		to_append->SetValue(0, count, Value::BLOB_RAW(blob_data));
+		count++;
+		if (bytes_read < max_blob_size) {
+			done = true;
+			break;
+		}
 	}
 	to_append->SetCardinality(count);
 	Append(std::move(to_append));
 	if (result.HasError()) {
 		Close();
 	}
-	return PendingExecutionResult::RESULT_READY;
+	return StreamExecutionResult::BLOCKED;
 }
 
 unique_ptr<DataChunk> FileBufferedData::Scan() {
@@ -76,6 +76,9 @@ unique_ptr<DataChunk> FileBufferedData::Scan() {
 		buffered_count -= chunk->size();
 	}
 	return chunk;
+}
+
+void FileBufferedData::UnblockSinks() {
 }
 
 void FileBufferedData::Append(unique_ptr<DataChunk> chunk) {

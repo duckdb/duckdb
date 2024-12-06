@@ -59,10 +59,10 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto cardinality_after_filters = base_table_cardinality;
 	unique_ptr<BaseStatistics> column_statistics;
 
-	auto table_thing = get.GetTable();
+	auto catalog_table = get.GetTable();
 	auto name = string("some table");
-	if (table_thing) {
-		name = table_thing->name;
+	if (catalog_table) {
+		name = catalog_table->name;
 		return_stats.table_name = name;
 	}
 
@@ -77,14 +77,16 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	}
 
 	// first push back basic distinct counts for each column (if we have them).
-	for (idx_t i = 0; i < get.column_ids.size(); i++) {
+	auto &column_ids = get.GetColumnIds();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
 		bool have_distinct_count_stats = false;
 		if (get.function.statistics) {
-			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
+			column_statistics = get.function.statistics(context, get.bind_data.get(), column_ids[i]);
 			if (column_statistics && have_catalog_table_statistics) {
-				auto column_distinct_count = DistinctCount({column_statistics->GetDistinctCount(), true});
+				auto distinct_count = MaxValue((idx_t)1, column_statistics->GetDistinctCount());
+				auto column_distinct_count = DistinctCount({distinct_count, true});
 				return_stats.column_distinct_count.push_back(column_distinct_count);
-				return_stats.column_names.push_back(name + "." + get.names.at(get.column_ids.at(i)));
+				return_stats.column_names.push_back(name + "." + get.names.at(column_ids.at(i)));
 				have_distinct_count_stats = true;
 			}
 		}
@@ -95,8 +97,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
 			auto column_name = string("column");
-			if (get.column_ids.at(i) < get.names.size()) {
-				column_name = get.names.at(get.column_ids.at(i));
+			if (column_ids.at(i) < get.names.size()) {
+				column_name = get.names.at(column_ids.at(i));
 			}
 			return_stats.column_names.push_back(get.GetName() + "." + column_name);
 		}
@@ -105,9 +107,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	if (!get.table_filters.filters.empty()) {
 		column_statistics = nullptr;
 		for (auto &it : get.table_filters.filters) {
-			if (get.bind_data && get.function.name.compare("seq_scan") == 0) {
-				auto &table_scan_bind_data = get.bind_data->Cast<TableScanBindData>();
-				column_statistics = get.function.statistics(context, &table_scan_bind_data, it.first);
+			if (get.bind_data && get.function.statistics) {
+				column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
 			}
 
 			if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
@@ -122,7 +123,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		bool has_equality_filter = (cardinality_after_filters != base_table_cardinality);
 		if (!has_equality_filter && !get.table_filters.filters.empty()) {
 			cardinality_after_filters = MaxValue<idx_t>(
-			    NumericCast<idx_t>(base_table_cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY), 1U);
+			    LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
+			    1U);
 		}
 		if (base_table_cardinality == 0) {
 			cardinality_after_filters = 0;
@@ -237,6 +239,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(Log
 		case JoinType::ANTI:
 		case JoinType::SEMI:
 		case JoinType::SINGLE:
+		case JoinType::MARK:
 			ret.cardinality = child_1_card;
 			break;
 		default:
@@ -335,17 +338,18 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 				// be grouped by. Hopefully this can be fixed with duckdb-internal#606
 				continue;
 			}
-			if (new_card < child_stats.column_distinct_count[col_index].distinct_count) {
-				new_card = child_stats.column_distinct_count[col_index].distinct_count;
+			double distinct_count = double(child_stats.column_distinct_count[col_index].distinct_count);
+			if (new_card < distinct_count) {
+				new_card = distinct_count;
 			}
 		}
 	}
-	if (new_card < 0 || new_card >= child_stats.cardinality) {
+	if (new_card < 0 || new_card >= double(child_stats.cardinality)) {
 		// We have no good statistics on distinct count.
 		// most likely we are running on parquet files. Therefore we divide by 2.
 		new_card = (double)child_stats.cardinality / 2;
 	}
-	stats.cardinality = NumericCast<idx_t>(new_card);
+	stats.cardinality = LossyNumericCast<idx_t>(new_card);
 	stats.column_names = child_stats.column_names;
 	stats.stats_initialized = true;
 	auto num_child_columns = aggr.GetColumnBindings().size();

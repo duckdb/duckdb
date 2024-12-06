@@ -1,10 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_EHOOKS_H
 #define JEMALLOC_INTERNAL_EHOOKS_H
 
+#include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/atomic.h"
 #include "jemalloc/internal/extent_mmap.h"
-
-namespace duckdb_jemalloc {
+#include "jemalloc/internal/tsd.h"
+#include "jemalloc/internal/tsd_types.h"
 
 /*
  * This module is the internal interface to the extent hooks (both
@@ -55,7 +56,7 @@ bool ehooks_default_purge_lazy_impl(void *addr, size_t offset, size_t length);
 #ifdef PAGES_CAN_PURGE_FORCED
 bool ehooks_default_purge_forced_impl(void *addr, size_t offset, size_t length);
 #endif
-bool ehooks_default_split_impl();
+bool ehooks_default_split_impl(void);
 /*
  * Merge is the only default extent hook we declare -- see the comment in
  * ehooks_merge.
@@ -410,7 +411,5 @@ ehooks_unguard(tsdn_t *tsdn, ehooks_t *ehooks, void *guard1, void *guard2) {
 
 	return err;
 }
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EHOOKS_H */

@@ -27,6 +27,7 @@ SELECT * FROM range(3) ORDER BY 1
 statement error
 ${statement_type} default_order='unknown_order'
 ----
+<REGEX>:Invalid Input Error.*Unrecognized parameter.*
 
 endloop
 
@@ -34,3 +35,4 @@ endloop
 statement error
 SET SESSION default_order='asc'
 ----
+<REGEX>:Catalog Error.*option.*cannot be set locally.*

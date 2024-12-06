@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
@@ -27,7 +28,7 @@ public:
 	IndexPointer() : data(0) {};
 	//! Constructs an in-memory IndexPointer with a buffer ID and an offset
 	IndexPointer(const uint32_t buffer_id, const uint32_t offset) : data(0) {
-		auto shifted_offset = ((idx_t)offset) << SHIFT_OFFSET;
+		auto shifted_offset = UnsafeNumericCast<idx_t>(offset) << SHIFT_OFFSET;
 		data += shifted_offset;
 		data += buffer_id;
 	};
@@ -52,7 +53,8 @@ public:
 	}
 	//! Set metadata (zero to 7th bit)
 	inline void SetMetadata(const uint8_t metadata) {
-		data += (idx_t)metadata << SHIFT_METADATA;
+		data &= ~AND_METADATA;
+		data |= UnsafeNumericCast<idx_t>(metadata) << SHIFT_METADATA;
 	}
 
 	//! Get the offset (8th to 23rd bit)
