@@ -1,8 +1,6 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-
-#include <fmt/format.h>
 #include <unordered_set>
 
 namespace duckdb {

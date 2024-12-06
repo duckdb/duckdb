@@ -35,19 +35,19 @@ struct ReservoirRNG {
 
 	result_type operator()() {
 		return random.NextRandomInteger();
-	}
+	};
 	double NextRandom() {
 		return random.NextRandom32();
-	}
+	};
 	double NextRandom(double min, double max) {
 		return random.NextRandom32(min, max);
-	}
+	};
 	static constexpr result_type min() {
 		return NumericLimits<result_type>::Minimum();
-	}
+	};
 	static constexpr result_type max() {
 		return NumericLimits<result_type>::Maximum();
-	}
+	};
 };
 
 //! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
