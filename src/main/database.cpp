@@ -278,6 +278,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	create_api_v0 = CreateAPIv0Wrapper;
 
+	auto shared = shared_from_this(); // tODO: why this madness?
+	log_manager = make_shared_ptr<LogManager>(shared, LogConfig());
+	log_manager->Initialize();
+
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	if (config.buffer_manager) {
@@ -288,10 +292,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
-
-	auto shared = shared_from_this(); // tODO: why this madness?
-	log_manager = make_shared_ptr<LogManager>(shared, LogConfig());
-	log_manager->Initialize();
 
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);

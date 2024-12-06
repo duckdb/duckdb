@@ -284,6 +284,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 
+	if (opener) {
+		Logger::Info(*opener, "Opening file '%s' with LocalFileSystem", path_p);
+	}
+
 	flags.Verify();
 
 	int open_flags = 0;
@@ -810,6 +814,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 	flags.Verify();
+
+	if (opener) {
+		Logger::Info(*opener, "Opening file '%s' with LocalFileSystem", path_p);
+	}
 
 	DWORD desired_access;
 	DWORD share_mode;

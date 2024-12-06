@@ -80,6 +80,8 @@ public:
 	atomic<bool> interrupted;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
+	//! The logger to be used by this ClientContext
+	unique_ptr<Logger> logger;
 	//! The client configuration
 	ClientConfig config;
 	//! The set of client-specific data
@@ -297,12 +299,6 @@ private:
 	                                optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 
 private:
-	//! The logger to be used by this ClientContext
-	//! Thread-safety of this is a little special: This logger will be re-created when on query start. This ensures the settings
-	//! are synchronized with the global log settings on every query. However during query execution, this logger will be accessed
-	//! without holding the context_lock
-	unique_ptr<Logger> logger;
-
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
 	//! The currently active query context

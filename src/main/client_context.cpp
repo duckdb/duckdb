@@ -135,7 +135,7 @@ struct DebugClientContextState : public ClientContextState {
 #endif
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
+    : db(std::move(database)), interrupted(false), transaction(*this) {
 	registered_state = make_uniq<RegisteredStateManager>();
 #ifdef DEBUG
 	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
@@ -143,6 +143,7 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 	LoggingContext context(LogContextScope::CONNECTION);
 	context.client_context = reinterpret_cast<idx_t>(this);
 	logger = db->GetLogManager().CreateLogger(context, true);
+	client_data = make_uniq<ClientData>(*this);
 }
 
 ClientContext::~ClientContext() {

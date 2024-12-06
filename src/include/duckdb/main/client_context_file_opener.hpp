@@ -18,9 +18,10 @@ class ClientContext;
 //! This object is owned by ClientContext and never outlives it.
 class ClientContextFileOpener : public FileOpener {
 public:
-	explicit ClientContextFileOpener(ClientContext &context_p) : FileOpener(Logger::Get(context_p)), context(context_p) {
+	explicit ClientContextFileOpener(ClientContext &context_p) : context(context_p) {
 	}
 
+	Logger& GetLogger() override;
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) override;
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override;
 

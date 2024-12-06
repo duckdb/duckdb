@@ -29,7 +29,7 @@ public:
 	void Initialize();
 
 	static LogManager &Get(ClientContext &context);
-	unique_ptr<Logger> CreateLogger(LoggingContext &context, bool thread_safe = true, bool mutable_settings = false);
+	unique_ptr<Logger> CreateLogger(LoggingContext context, bool thread_safe = true, bool mutable_settings = false);
 
 	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
 	// TODO: never called yet

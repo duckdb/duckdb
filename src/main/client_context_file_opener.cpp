@@ -11,6 +11,10 @@ SettingLookupResult ClientContextFileOpener::TryGetCurrentSetting(const string &
 	return context.TryGetCurrentSetting(key, result);
 }
 
+Logger& ClientContextFileOpener::GetLogger() {
+	return Logger::Get(context);
+}
+
 // LCOV_EXCL_START
 SettingLookupResult ClientContextFileOpener::TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &) {
 	return context.TryGetCurrentSetting(key, result);
@@ -18,10 +22,6 @@ SettingLookupResult ClientContextFileOpener::TryGetCurrentSetting(const string &
 
 optional_ptr<DatabaseInstance> ClientContextFileOpener::TryGetDatabase() {
 	return context.db.get();
-}
-
-Logger& FileOpener::GetLogger() {
-	return logger;
 }
 
 unique_ptr<CatalogTransaction> FileOpener::TryGetCatalogTransaction(optional_ptr<FileOpener> opener) {

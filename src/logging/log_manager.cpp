@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-unique_ptr<Logger> LogManager::CreateLogger(LoggingContext &context, bool thread_safe, bool mutable_settings) {
+unique_ptr<Logger> LogManager::CreateLogger(LoggingContext context, bool thread_safe, bool mutable_settings) {
 	// Make a copy of the config holding the lock
 	LogConfig config_copy;
 	{

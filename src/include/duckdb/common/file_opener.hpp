@@ -27,7 +27,7 @@ struct FileOpenerInfo {
 //! Abstract type that provide client-specific context to FileSystem.
 class FileOpener {
 public:
-	FileOpener(Logger &logger_p) : logger(logger_p) {
+	FileOpener() {
 	}
 	virtual ~FileOpener() {};
 
@@ -36,7 +36,7 @@ public:
 	virtual optional_ptr<ClientContext> TryGetClientContext() = 0;
 	virtual optional_ptr<DatabaseInstance> TryGetDatabase() = 0;
 
-	DUCKDB_API Logger& GetLogger();
+	DUCKDB_API virtual Logger& GetLogger() = 0;
 	DUCKDB_API static unique_ptr<CatalogTransaction> TryGetCatalogTransaction(optional_ptr<FileOpener> opener);
 	DUCKDB_API static optional_ptr<ClientContext> TryGetClientContext(optional_ptr<FileOpener> opener);
 	DUCKDB_API static optional_ptr<DatabaseInstance> TryGetDatabase(optional_ptr<FileOpener> opener);
@@ -62,10 +62,8 @@ public:
 			result = output.GetValue<TYPE>();
 		}
 		return lookup_result;
-	}
+		}
 
-protected:
-	Logger &logger;
 };
 
 } // namespace duckdb
