@@ -642,7 +642,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		}
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
-		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
+		D_ASSERT(lstate.insert_chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
+		storage.LocalAppend(gstate.append_state, context.client, lstate.insert_chunk, true);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
 			// Flush the append so we can target the data we just appended with the update
 			storage.FinalizeLocalAppend(gstate.append_state);
@@ -705,7 +706,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
-			storage.LocalAppend(gstate.append_state, table, context.client, insert_chunk, false);
+			D_ASSERT(insert_chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
+			storage.LocalAppend(gstate.append_state, context.client, insert_chunk, false);
 			return true;
 		});
 		storage.FinalizeLocalAppend(gstate.append_state);

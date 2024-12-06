@@ -377,12 +377,11 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 		return;
 	}
 
-	delete_indexes.ScanBound<ART>([&](Index &delete_index) {
-		if (!delete_index.IsUnique()) {
+	delete_indexes.ScanBound<ART>([&](ART &art) {
+		if (!art.IsUnique()) {
 			return false;
 		}
-		auto &bound_delete_index = delete_index.Cast<BoundIndex>();
-		auto result = bound_delete_index.Append(delete_chunk, row_ids);
+		auto result = art.Cast<BoundIndex>().Append(delete_chunk, row_ids);
 		if (result.HasError()) {
 			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 		}

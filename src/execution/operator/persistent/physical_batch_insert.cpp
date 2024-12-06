@@ -629,7 +629,8 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 
 			memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
 			entry.collection->Scan(transaction, [&](DataChunk &insert_chunk) {
-				storage.LocalAppend(append_state, table, context, insert_chunk, false);
+				D_ASSERT(insert_chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
+				storage.LocalAppend(append_state, context, insert_chunk, false);
 				return true;
 			});
 		}

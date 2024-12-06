@@ -674,17 +674,16 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
                                     DataChunk &chunk, optional_ptr<ConflictManager> manager) {
 	// Verify the constraint without a conflict manager.
 	if (!manager) {
-		return indexes.Scan([&](Index &index) {
-			if (!index.IsUnique()) {
+		return indexes.ScanBound<ART>([&](ART &art) {
+			if (!art.IsUnique()) {
 				return false;
 			}
-			D_ASSERT(index.IsBound());
 
 			if (storage) {
-				auto delete_index = storage->delete_indexes.Find(index.GetIndexName());
-				index.Cast<BoundIndex>().VerifyAppend(chunk, delete_index, nullptr);
+				auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
+				art.VerifyAppend(chunk, delete_index, nullptr);
 			} else {
-				index.Cast<BoundIndex>().VerifyAppend(chunk, nullptr, nullptr);
+				art.VerifyAppend(chunk, nullptr, nullptr);
 			}
 			return false;
 		});
@@ -694,20 +693,19 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 	auto &conflict_info = manager->GetConflictInfo();
 
 	// Find all indexes matching the conflict target.
-	indexes.Scan([&](Index &index) {
-		if (!index.IsUnique()) {
+	indexes.ScanBound<ART>([&](ART &art) {
+		if (!art.IsUnique()) {
 			return false;
 		}
-		D_ASSERT(index.IsBound());
-		if (!conflict_info.ConflictTargetMatches(index)) {
+		if (!conflict_info.ConflictTargetMatches(art)) {
 			return false;
 		}
 
 		if (storage) {
-			auto delete_index = storage->delete_indexes.Find(index.GetIndexName());
-			manager->AddIndex(index.Cast<BoundIndex>(), delete_index);
+			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
+			manager->AddIndex(art, delete_index);
 		} else {
-			manager->AddIndex(index.Cast<BoundIndex>(), nullptr);
+			manager->AddIndex(art, nullptr);
 		}
 		return false;
 	});
@@ -722,21 +720,19 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 
 	// Scan the other indexes and throw, if there are any conflicts.
 	manager->SetMode(ConflictManagerMode::THROW);
-	indexes.Scan([&](Index &index) {
-		if (!index.IsUnique()) {
+	indexes.ScanBound<ART>([&](ART &art) {
+		if (!art.IsUnique()) {
 			return false;
 		}
-		D_ASSERT(index.IsBound());
-		auto &bound_index = index.Cast<BoundIndex>();
-		if (manager->MatchedIndex(bound_index)) {
+		if (manager->MatchedIndex(art)) {
 			return false;
 		}
 
 		if (storage) {
-			auto delete_index = storage->delete_indexes.Find(index.GetIndexName());
-			bound_index.VerifyAppend(chunk, delete_index, *manager);
+			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
+			art.VerifyAppend(chunk, delete_index, *manager);
 		} else {
-			bound_index.VerifyAppend(chunk, nullptr, *manager);
+			art.VerifyAppend(chunk, nullptr, *manager);
 		}
 		return false;
 	});
@@ -819,13 +815,10 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry
 	state.constraint_state = InitializeConstraintState(table, bound_constraints);
 }
 
-void DataTable::LocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                            bool unsafe) {
+void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, DataChunk &chunk, bool unsafe) {
 	if (chunk.size() == 0) {
 		return;
 	}
-	// TODO: move the assert outside
-	D_ASSERT(chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
 	if (!is_root) {
 		throw TransactionException("write conflict: adding entries to a table that has been altered");
 	}
@@ -866,7 +859,9 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Da
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
-	storage.LocalAppend(append_state, table, context, chunk, false);
+
+	D_ASSERT(chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
+	storage.LocalAppend(append_state, context, chunk, false);
 	storage.FinalizeLocalAppend(append_state);
 }
 
@@ -877,7 +872,9 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Da
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 	append_state.storage->AppendToDeleteIndexes(row_ids, delete_chunk);
-	storage.LocalAppend(append_state, table, context, chunk, false);
+
+	D_ASSERT(chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
+	storage.LocalAppend(append_state, context, chunk, false);
 	storage.FinalizeLocalAppend(append_state);
 }
 
@@ -891,7 +888,8 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	if (!column_ids || column_ids->empty()) {
 		for (auto &chunk : collection.Chunks()) {
-			storage.LocalAppend(append_state, table, context, chunk, false);
+			D_ASSERT(chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
+			storage.LocalAppend(append_state, context, chunk, false);
 		}
 		storage.FinalizeLocalAppend(append_state);
 		return;
@@ -934,7 +932,8 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	for (auto &chunk : collection.Chunks()) {
 		expression_executor.Execute(chunk, result);
-		storage.LocalAppend(append_state, table, context, result, false);
+		D_ASSERT(chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
+		storage.LocalAppend(append_state, context, result, false);
 		result.Reset();
 	}
 	storage.FinalizeLocalAppend(append_state);
