@@ -642,7 +642,7 @@ SelectionVectorHelper ReservoirSample::GetReplacementIndexesSlow(const idx_t sam
 		// ret[index_in_new_chunk] = index_in_sample_chunk (the sample chunk offset will be applied later)
 		// D_ASSERT(sample_chunk_index == ret.size());
 		ret_map[base_offset + offset] = sample_chunk_index;
-		double r2 = base_reservoir_sample->random.NextRandom32(base_reservoir_sample->min_weight_threshold, 1);
+		double r2 = base_reservoir_sample->random.random.NextRandom32(base_reservoir_sample->min_weight_threshold, 1);
 		// replace element in our max_heap
 		// first get the top most pair
 		const auto top = PopFromWeightQueue();

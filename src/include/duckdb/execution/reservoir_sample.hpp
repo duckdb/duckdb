@@ -25,16 +25,29 @@ enum class SampleType : uint8_t { BLOCKING_SAMPLE = 0, RESERVOIR_SAMPLE = 1, RES
 
 enum class SamplingState : uint8_t { RANDOM = 0, RESERVOIR = 1 };
 
-class ReservoirRNG : public RandomEngine {
-public:
+struct ReservoirRNG {
+
+	RandomEngine random;
 	// return type must be called result type to be a valid URNG
 	typedef uint32_t result_type;
 
-	explicit ReservoirRNG(int64_t seed);
+	explicit ReservoirRNG(int64_t seed) : random(seed) {};
 
-	result_type operator()();
-	static constexpr result_type min();
-	static constexpr result_type max();
+	result_type operator()() {
+		return random.NextRandomInteger();
+	}
+	double NextRandom() {
+		return random.NextRandom32();
+	}
+	double NextRandom(double min, double max) {
+		return random.NextRandom32(min, max);
+	}
+	static constexpr result_type min() {
+		return NumericLimits<result_type>::Minimum();
+	}
+	static constexpr result_type max() {
+		return NumericLimits<result_type>::Maximum();
+	}
 };
 
 //! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
