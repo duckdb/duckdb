@@ -26,15 +26,7 @@ Logger& Logger::Get(ClientContext &client_context) {
 }
 
 Logger& Logger::Get(FileOpener &opener) {
-	auto maybe_context = opener.TryGetClientContext();
-	if (maybe_context) {
-		Get(*maybe_context);
-	}
-	auto maybe_db = opener.TryGetDatabase();
-	if (maybe_db) {
-		Get(*maybe_db);
-	}
-	throw NotImplementedException("Logger::Get(FileOpener)");
+	return opener.GetLogger();
 }
 
 void Logger::Log(const char *log_type, LogLevel log_level, const char *log_message) {

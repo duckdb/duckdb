@@ -18,7 +18,7 @@ class DatabaseInstance;
 
 class DatabaseFileOpener : public FileOpener {
 public:
-	explicit DatabaseFileOpener(DatabaseInstance &db_p) : db(db_p) {
+	explicit DatabaseFileOpener(DatabaseInstance &db_p) : FileOpener(Logger::Get(db_p)), db(db_p) {
 	}
 
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override {

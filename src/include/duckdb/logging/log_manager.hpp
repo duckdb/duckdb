@@ -38,7 +38,6 @@ public:
 	//! The global logger can be used whe
 	Logger &GlobalLogger();
 
-	// TODO: allow modifying log settings
 	unique_ptr<LogStorage> log_storage;
 
 	void SetEnableLogging(bool enable);

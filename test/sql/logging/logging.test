@@ -22,11 +22,26 @@ default	INFO	Running query 'SELECT 1;'	CONNECTION	NULL
 default	INFO	Running query 'SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs'	CONNECTION	NULL
 
 statement ok
-set logging_storage='stdout';
+set enable_logging=false;
 
-# Storage is now cleared
+# With logging disabled, the log will persist
 query IIIII
 SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs
 ----
+default	INFO	Running query 'SELECT 1;'	CONNECTION	NULL
+default	INFO	Running query 'SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs'	CONNECTION	NULL
+default	INFO	Running query 'set enable_logging=false;'	CONNECTION	NULL
+
+statement ok
+set logging_storage='stdout';
+
+statement ok
+set logging_storage='memory';
+
+# Storage is now cleared because switching storage will clear it
+query IIIII
+SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs
+----
+
 
 
