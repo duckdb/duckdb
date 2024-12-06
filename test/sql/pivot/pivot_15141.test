@@ -19,7 +19,7 @@ INSERT INTO p VALUES
     ('2024-12-04 09:30:07', 100),
     ('2024-12-04 09:30:08', 100);
 
-query II rowsort
+query II
 pivot p using sum (col2) group by col1 order by col1;
 ----
 2024-12-04 09:30:01	100
