@@ -17,7 +17,6 @@ TEST_CASE("Test DB config configuration", "[api]") {
 	test_options["default_order"] = {"asc", "desc"};
 	test_options["default_null_order"] = {"nulls_first", "nulls_last"};
 	test_options["enable_external_access"] = {"true", "false"};
-	test_options["enable_object_cache"] = {"true", "false"};
 	test_options["max_memory"] = {"-1", "16GB"};
 	test_options["threads"] = {"1", "4"};
 
