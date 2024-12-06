@@ -649,6 +649,7 @@ void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSi
 	D_ASSERT(node.HasMetadata());
 
 	if (node.GetGateStatus() == GateStatus::GATE_SET) {
+		D_ASSERT(node.GetType() != NType::LEAF_INLINED);
 		return Leaf::TransformToDeprecated(art, node);
 	}
 

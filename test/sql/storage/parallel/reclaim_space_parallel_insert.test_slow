@@ -42,7 +42,7 @@ INSERT INTO integers2 VALUES (9999998);
 statement error
 INSERT INTO integers2 SELECT * FROM integers WHERE i <= 9999998;
 ----
-PRIMARY KEY or UNIQUE constraint violated
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
 
 statement ok
 ROLLBACK

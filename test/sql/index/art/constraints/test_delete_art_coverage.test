@@ -1,0 +1,4 @@
+# name: test/sql/index/art/constraints/test_delete_art_coverage.test
+# description: Tests many edge cases of the delete ART implementation.
+# group: [constraints]
+

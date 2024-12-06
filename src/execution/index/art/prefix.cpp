@@ -134,14 +134,8 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
 
 	if (status == GateStatus::GATE_SET && child.GetType() == NType::LEAF_INLINED) {
 		auto row_id = child.GetRowId();
-		if (parent.GetType() == PREFIX) {
-			auto parent_status = parent.GetGateStatus();
-			Free(art, parent);
-			Leaf::New(parent, row_id);
-			parent.SetGateStatus(parent_status);
-		} else {
-			Leaf::New(parent, row_id);
-		}
+		Free(art, parent);
+		Leaf::New(parent, row_id);
 		return;
 	}
 

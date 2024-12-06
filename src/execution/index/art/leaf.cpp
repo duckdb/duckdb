@@ -13,13 +13,9 @@ namespace duckdb {
 
 void Leaf::New(Node &node, const row_t row_id) {
 	D_ASSERT(row_id < MAX_ROW_ID_LOCAL);
-
-	auto status = node.GetGateStatus();
 	node.Clear();
-
 	node.SetMetadata(static_cast<uint8_t>(INLINED));
 	node.SetRowId(row_id);
-	node.SetGateStatus(status);
 }
 
 void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,

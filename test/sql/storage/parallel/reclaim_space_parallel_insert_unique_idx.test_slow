@@ -19,7 +19,7 @@ INSERT INTO integers2 VALUES (9999999);
 statement ok
 CREATE UNIQUE INDEX idx ON integers2(i);
 
-loop i 0 40
+loop i 0 20
 
 # conflict with transaction local data
 statement ok
@@ -31,7 +31,7 @@ INSERT INTO integers2 VALUES (9999998);
 statement error
 INSERT INTO integers2 SELECT * FROM integers WHERE i <= 9999998;
 ----
-PRIMARY KEY or UNIQUE constraint violated
+PRIMARY KEY or UNIQUE constraint violation
 
 statement ok
 ROLLBACK

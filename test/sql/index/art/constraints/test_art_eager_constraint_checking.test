@@ -193,6 +193,31 @@ SELECT i, j FROM t_11288 WHERE i = 1;
 ----
 1	{c=d}
 
+# Original issue: 4807
+
+#statement ok
+#CREATE TABLE s_4807 (id INT PRIMARY KEY, i INT);
+#
+#statement ok
+#INSERT INTO s_4807 SELECT 1, 41;
+#
+#statement ok
+#UPDATE st SET i = 42 WHERE id = 1;
+
+statement ok
+CREATE TABLE t_4807 (id INT PRIMARY KEY, u UNION (i INT));
+
+statement ok
+INSERT INTO t_4807 SELECT 1, 41;
+
+statement ok
+UPDATE t_4807 SET u = 42 WHERE id = 1;
+
+query III
+SELECT id, u, rowid FROM t_4807;
+----
+1	42	1
+
 # Original issue: 6500
 
 load __TEST_DIR__/eager_constraint_issue.db
@@ -226,5 +251,3 @@ SELECT i, j FROM tbl_6500 ORDER BY ALL;
 ----
 1	100
 2	200
-
-
