@@ -27,19 +27,14 @@ enum class SamplingState : uint8_t { RANDOM = 0, RESERVOIR = 1 };
 
 class ReservoirRNG : public RandomEngine {
 public:
+	// return type must be called result type to be a valid URNG
 	typedef uint32_t result_type;
 
-	explicit ReservoirRNG(int64_t seed) : RandomEngine(seed) {};
+	explicit ReservoirRNG(int64_t seed);
 
-	result_type operator()() {
-		return NextRandomInteger();
-	};
-	static constexpr result_type min() {
-		return NumericLimits<result_type>::Minimum();
-	}; // function pointer will be set in subclass constructor
-	static constexpr result_type max() {
-		return NumericLimits<result_type>::Maximum();
-	};
+	result_type operator()();
+	static constexpr result_type min();
+	static constexpr result_type max();
 };
 
 //! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis

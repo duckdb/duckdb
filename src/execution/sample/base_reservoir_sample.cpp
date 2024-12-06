@@ -1,5 +1,5 @@
 #include "duckdb/execution/reservoir_sample.hpp"
-#include "math.h"
+#include <math.h>
 
 namespace duckdb {
 
