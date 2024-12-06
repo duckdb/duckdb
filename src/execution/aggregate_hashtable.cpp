@@ -69,7 +69,8 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	}
 
 	if (!unpartitioned_data) {
-		unpartitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, 0, layout.ColumnCount() - 1);
+		unpartitioned_data =
+		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, 0ULL, layout.ColumnCount() - 1);
 	} else {
 		unpartitioned_data->Reset();
 	}
@@ -84,13 +85,17 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	                                          TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 }
 
-unique_ptr<PartitionedTupleData> &GroupedAggregateHashTable::GetPartitionedData() {
+PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() {
+	return *partitioned_data;
+}
+
+unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedData() {
 	unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
 	unpartitioned_data->Unpin();
 	unpartitioned_data->Repartition(*partitioned_data);
 	unpartitioned_data->InitializeAppendState(state.unpartitioned_append_state,
 	                                          TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-	return partitioned_data;
+	return std::move(partitioned_data);
 }
 
 shared_ptr<ArenaAllocator> GroupedAggregateHashTable::GetAggregateAllocator() {
@@ -399,24 +404,22 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			idx_t inner_iteration_count;
 			for (inner_iteration_count = 0; inner_iteration_count < capacity; inner_iteration_count++) {
 				auto &entry = entries[ht_offset];
-				if (entry.IsOccupied()) { // Cell is occupied: Compare salts
-					if (entry.GetSalt() == salt) {
-						// Same salt, compare group keys
-						state.group_compare_vector.set_index(need_compare_count++, index);
-						break;
-					}
-					// Different salts, move to next entry (linear probing)
-					IncrementAndWrap(ht_offset, bitmask);
-				} else { // Cell is unoccupied, let's claim it
-					// Set salt (also marks as occupied)
+				if (!entry.IsOccupied()) { // Unoccupied: claim it
 					entry.SetSalt(salt);
-					// Update selection lists for outer loops
 					state.empty_vector.set_index(new_entry_count++, index);
 					new_groups_out.set_index(new_group_count++, index);
 					break;
 				}
+
+				if (DUCKDB_LIKELY(entry.GetSalt() == salt)) { // Matching salt: compare groups
+					state.group_compare_vector.set_index(need_compare_count++, index);
+					break;
+				}
+
+				// Linear probing
+				IncrementAndWrap(ht_offset, bitmask);
 			}
-			if (inner_iteration_count == capacity) {
+			if (DUCKDB_UNLIKELY(inner_iteration_count == capacity)) {
 				throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
 			}
 		}
@@ -425,7 +428,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			// Append everything that belongs to an empty group
 			optional_ptr<PartitionedTupleData> data;
 			optional_ptr<PartitionedTupleDataAppendState> append_state;
-			if (radix_bits != 0 && new_entry_count / RadixPartitioning::NumberOfPartitions(radix_bits) < 8) {
+			if (radix_bits > 1 && new_entry_count / RadixPartitioning::NumberOfPartitions(radix_bits) < 8) {
 				TupleDataCollection::ToUnifiedFormat(state.unpartitioned_append_state.chunk_state, state.group_chunk);
 				data = unpartitioned_data.get();
 				append_state = &state.unpartitioned_append_state;
@@ -540,7 +543,7 @@ struct FlushMoveState {
 };
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
-	auto other_data = other.partitioned_data->GetUnpartitioned();
+	auto other_data = other.AcquirePartitionedData()->GetUnpartitioned();
 	Combine(*other_data);
 
 	// Inherit ownership to all stored aggregate allocators

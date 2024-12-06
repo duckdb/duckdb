@@ -77,7 +77,8 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
-	unique_ptr<PartitionedTupleData> &GetPartitionedData();
+	PartitionedTupleData &GetPartitionedData();
+	unique_ptr<PartitionedTupleData> AcquirePartitionedData();
 	shared_ptr<ArenaAllocator> GetAggregateAllocator();
 
 	//! Resize the HT to the specified size. Must be larger than the current size.

@@ -363,13 +363,12 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
 	auto &config = gstate.config;
 	auto &ht = *lstate.ht;
-	auto &partitioned_data = ht.GetPartitionedData();
 
 	// Check if we're approaching the memory limit
 	auto &temporary_memory_state = *gstate.temporary_memory_state;
 	const auto aggregate_allocator_size = ht.GetAggregateAllocator()->AllocationSize();
 	const auto total_size =
-	    aggregate_allocator_size + partitioned_data->SizeInBytes() + ht.Capacity() * sizeof(ht_entry_t);
+	    aggregate_allocator_size + ht.GetPartitionedData().SizeInBytes() + ht.Capacity() * sizeof(ht_entry_t);
 	idx_t thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
 	if (total_size > thread_limit) {
 		// We're over the thread memory limit
@@ -399,7 +398,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 			}
 
 			ht.UnpinData();
-			partitioned_data->Repartition(*lstate.abandoned_data);
+			ht.AcquirePartitionedData()->Repartition(*lstate.abandoned_data);
 			ht.SetRadixBits(gstate.config.GetRadixBits());
 			ht.InitializePartitionedData();
 		}
@@ -410,13 +409,13 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 		return;
 	}
 
-	const auto partition_count = partitioned_data->PartitionCount();
+	const auto partition_count = ht.GetPartitionedData().PartitionCount();
 	const auto current_radix_bits = RadixPartitioning::RadixBitsOfPowerOfTwo(partition_count);
 	D_ASSERT(current_radix_bits <= config.GetRadixBits());
 
 	const auto block_size = BufferManager::GetBufferManager(context).GetBlockSize();
 	const auto row_size_per_partition =
-	    partitioned_data->Count() * partitioned_data->GetLayout().GetRowWidth() / partition_count;
+	    ht.GetPartitionedData().Count() * ht.GetPartitionedData().GetLayout().GetRowWidth() / partition_count;
 	if (row_size_per_partition > LossyNumericCast<idx_t>(config.BLOCK_FILL_FACTOR * static_cast<double>(block_size))) {
 		// We crossed our block filling threshold, try to increment radix bits
 		config.SetRadixBits(current_radix_bits + config.REPARTITION_RADIX_BITS);
@@ -429,10 +428,10 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 
 	// We're out-of-sync with the global radix bits, repartition
 	ht.UnpinData();
-	auto old_partitioned_data = std::move(partitioned_data);
+	auto old_partitioned_data = ht.AcquirePartitionedData();
 	ht.SetRadixBits(global_radix_bits);
 	ht.InitializePartitionedData();
-	old_partitioned_data->Repartition(*ht.GetPartitionedData());
+	old_partitioned_data->Repartition(ht.GetPartitionedData());
 }
 
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
@@ -497,14 +496,15 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	auto &ht = *lstate.ht;
 	ht.UnpinData();
 
+	auto lstate_data = lstate.ht->AcquirePartitionedData();
 	if (lstate.abandoned_data) {
 		D_ASSERT(gstate.external);
-		D_ASSERT(lstate.abandoned_data->PartitionCount() == lstate.ht->GetPartitionedData()->PartitionCount());
+		D_ASSERT(lstate.abandoned_data->PartitionCount() == lstate.ht->GetPartitionedData().PartitionCount());
 		D_ASSERT(lstate.abandoned_data->PartitionCount() ==
 		         RadixPartitioning::NumberOfPartitions(gstate.config.GetRadixBits()));
-		lstate.abandoned_data->Combine(*lstate.ht->GetPartitionedData());
+		lstate.abandoned_data->Combine(*lstate_data);
 	} else {
-		lstate.abandoned_data = std::move(ht.GetPartitionedData());
+		lstate.abandoned_data = std::move(lstate_data);
 	}
 
 	auto guard = gstate.Lock();
@@ -756,7 +756,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	// Move the combined data back to the partition
 	partition.data =
 	    make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context), sink.radix_ht.GetLayout());
-	partition.data->Combine(*ht->GetPartitionedData()->GetPartitions()[0]);
+	partition.data->Combine(*ht->GetPartitionedData().GetPartitions()[0]);
 
 	// Update thread-global state
 	auto guard = sink.Lock();
