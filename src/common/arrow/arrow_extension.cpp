@@ -38,6 +38,23 @@ string ArrowExtensionInfo::ToString() const {
 	info << "Format: " << arrow_format << ". ";
 	return info.str();
 }
+
+string ArrowExtensionInfo::GetExtensionName() const {
+	return extension_name;
+}
+
+string ArrowExtensionInfo::GetVendorName() const {
+	return vendor_name;
+}
+
+string ArrowExtensionInfo::GetTypeName() const {
+	return type_name;
+}
+
+string ArrowExtensionInfo::GetArrowFormat() const {
+	return arrow_format;
+}
+
 bool ArrowExtensionInfo::operator==(const ArrowExtensionInfo &other) const {
 	return extension_name == other.extension_name && type_name == other.type_name &&
 	       arrow_format == other.arrow_format && vendor_name == other.vendor_name;
@@ -55,6 +72,10 @@ shared_ptr<ArrowType> ArrowExtension::GetType() const {
 	return type;
 }
 
+LogicalTypeId ArrowExtension::GetLogicalTypeId() const {
+	return type->GetDuckType().id();
+}
+
 void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
 	lock_guard<mutex> l(encoding_functions->lock);
 	auto extension_info = extension.GetInfo();
@@ -63,6 +84,7 @@ void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
 		                            extension_info.ToString());
 	}
 	arrow_extensions->extensions[extension_info] = extension;
+	arrow_extensions->type_id_to_info[extension.GetLogicalTypeId()].push_back(extension_info);
 }
 
 ArrowExtension DBConfig::GetArrowExtension(const ArrowExtensionInfo &info) const {
@@ -70,6 +92,14 @@ ArrowExtension DBConfig::GetArrowExtension(const ArrowExtensionInfo &info) const
 		throw InvalidInputException("Arrow Extension with configuration %s is not yet registered", info.ToString());
 	}
 	return arrow_extensions->extensions[info];
+}
+
+ArrowExtension DBConfig::GetArrowExtension(const LogicalTypeId &id) {
+	return GetArrowExtension(arrow_extensions->type_id_to_info[id].front());
+}
+
+bool DBConfig::HasArrowExtension(const LogicalTypeId &id) {
+	return !arrow_extensions->type_id_to_info[id].empty();
 }
 
 void ArrowExtensionSet::Initialize(DBConfig &config) {
