@@ -33,12 +33,6 @@ UPDATE tbl SET id = 3 WHERE id = 1;
 statement ok con1
 INSERT INTO tbl VALUES (1, 'new payload');
 
-# Workaround to prevent this transaction from cleaning up.
-# FIXME: remove after fixing internal issue 3645.
-
-statement ok con1
-CREATE TABLE unrelated (i INT);
-
 # Ensure that we can still see the old value.
 
 query III
@@ -60,12 +54,6 @@ query II
 SELECT id, payload FROM tbl WHERE id = 1;
 ----
 1	second payload
-
-# Workaround to prevent this transaction from cleaning up.
-# FIXME: remove after fixing internal issue 3645.
-
-statement ok
-CREATE TABLE unrelated_other (i INT);
 
 # Transaction-local state.
 

@@ -36,12 +36,6 @@ UPDATE tbl_list SET id = 3 WHERE id = 2;
 statement ok con1
 INSERT INTO tbl_list VALUES (2, ['new payload']);
 
-# Workaround to prevent this transaction from cleaning up.
-# FIXME: remove after fixing internal issue 3645.
-
-statement ok con1
-CREATE TABLE unrelated (i INT);
-
 # Ensure that we can still see the old value.
 
 query III

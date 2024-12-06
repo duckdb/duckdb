@@ -30,12 +30,6 @@ BEGIN;
 statement ok con1
 INSERT OR REPLACE INTO tbl_list VALUES (1, ['con1 payload']);
 
-# Workaround to prevent this transaction from cleaning up.
-# FIXME: remove after fixing internal issue 3645.
-
-statement ok con1
-CREATE TABLE unrelated (i INT);
-
 # Ensure that we can still see the old value.
 
 query III
