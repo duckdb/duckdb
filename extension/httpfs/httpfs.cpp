@@ -441,8 +441,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 }
 
 HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags flags, const HTTPParams &http_params)
-    : FileHandle(fs, path), http_params(http_params), flags(flags), length(0), buffer_available(0), buffer_idx(0),
-      file_offset(0), buffer_start(0), buffer_end(0) {
+    : FileHandle(fs, path, flags), http_params(http_params), flags(flags), length(0), buffer_available(0),
+      buffer_idx(0), file_offset(0), buffer_start(0), buffer_end(0) {
 }
 
 unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, FileOpenFlags flags,

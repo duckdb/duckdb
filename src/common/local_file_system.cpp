@@ -129,7 +129,8 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, std::move(path)), fd(fd) {
+	UnixFileHandle(FileSystem &file_system, string path, int fd, FileOpenFlags flags)
+	    : FileHandle(file_system, std::move(path), flags), fd(fd) {
 	}
 	~UnixFileHandle() override {
 		UnixFileHandle::Close();
@@ -417,7 +418,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 			}
 		}
 	}
-	return make_uniq<UnixFileHandle>(*this, path, fd);
+	return make_uniq<UnixFileHandle>(*this, path, fd, flags);
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
@@ -716,8 +717,8 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 
 struct WindowsFileHandle : public FileHandle {
 public:
-	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd)
-	    : FileHandle(file_system, path), position(0), fd(fd) {
+	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags)
+	    : FileHandle(file_system, path, flags), position(0), fd(fd) {
 	}
 	~WindowsFileHandle() override {
 		Close();
@@ -855,7 +856,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 			throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 		}
 	}
-	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);
+	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags);
 	if (flags.OpenForAppending()) {
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
