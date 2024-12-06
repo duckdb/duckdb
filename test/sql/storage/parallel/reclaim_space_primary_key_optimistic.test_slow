@@ -1,8 +1,8 @@
-# name: test/sql/storage/parallel/reclaim_space_parallel_insert.test_slow
-# description: Test space reclamation of optimistic writing with failures
+# name: test/sql/storage/parallel/reclaim_space_primary_key_optimistic.test_slow
+# description: Test space reclamation of optimistic writing with a PK constraint violation.
 # group: [parallel]
 
-load __TEST_DIR__/reclaim_space_parallel_insert.db
+load __TEST_DIR__/reclaim_space_primary_key.db
 
 statement ok
 SET preserve_insertion_order=false;
@@ -19,22 +19,20 @@ INSERT INTO integers2 VALUES (9999999);
 statement error
 INSERT INTO integers2 SELECT * FROM integers;
 ----
-violates primary key constraint
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement ok
-CREATE TABLE block_count(count int);
+CREATE TABLE block_count (count INT);
 
 loop i 0 10
 
-# conflict with base table data
 statement error
 INSERT INTO integers2 SELECT * FROM integers;
 ----
-violates primary key constraint
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
-# conflict with transaction local data
 statement ok
-BEGIN TRANSACTION
+BEGIN;
 
 statement ok
 INSERT INTO integers2 VALUES (9999998);
@@ -66,9 +64,10 @@ SELECT COUNT(*) - ${i} FROM integers2;
 ----
 2
 
-# ensure there is a small diff between min and max block counts
+# Ensure there is only a small difference between the MIN and MAX block counts.
+
 query I
-SELECT (max(count) - min(count)) < 20 FROM block_count;
+SELECT (MAX(count) - MIN(count)) < 20 FROM block_count;
 ----
 true
 

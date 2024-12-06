@@ -43,7 +43,7 @@ statement ok
 CREATE TABLE blocks_del_tbl AS SELECT total_blocks, used_blocks FROM pragma_database_size();
 
 statement ok
-INSERT INTO tbl SELECT i FROM range(1000) tbl(i);
+INSERT INTO tbl SELECT i FROM range(10000) tbl(i);
 
 statement ok
 CHECKPOINT;
