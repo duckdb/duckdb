@@ -217,11 +217,31 @@ jobs:
           run_autoload_tests: 0
           ninja: 1
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: linux-extensions-64
           path: |
             build/release/extension/*/*.duckdb_extension
+
+ upload-linux-extensions-64:
+    name: Upload Linux Extensions (x64)
+    needs: linux-extensions-64
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: linux-extensions-64
+      duckdb_arch: linux_amd64
+      duckdb_sha: ${{ github.sha }}
+
+ upload-linux-extensions-64-aarch64:
+    name: Upload Linux Extensions (aarch64)
+    needs: linux-extensions-64-aarch64
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: linux-extensions-64-aarch64
+      duckdb_arch: linux_arm64
+      duckdb_sha: ${{ github.sha }}
 
  linux-extensions-64-aarch64:
     # Builds extensions for linux_arm64
@@ -251,7 +271,7 @@ jobs:
           run_autoload_tests: 0
           ninja: 1
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: linux-extensions-64-aarch64
           path: |
@@ -295,7 +315,7 @@ jobs:
       run: |
         make
 
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
         name: linux-extensions-64
         path: build/release/repository
