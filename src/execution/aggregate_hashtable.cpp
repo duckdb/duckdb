@@ -241,7 +241,7 @@ GroupedAggregateHashTable::AggregateDictionaryState::AggregateDictionaryState()
 
 optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups, DataChunk &payload,
                                                                const unsafe_vector<idx_t> &filter) {
-	static constexpr idx_t AGGREGATE_DICTIONARY_THRESHOLD = 20000;
+	static constexpr idx_t DICTIONARY_THRESHOLD = 2;
 	// dictionary vector - check if this is a duplicate eliminated dictionary from the storage
 	auto &dict_col = groups.data[0];
 	auto opt_dict_size = DictionaryVector::DictionarySize(dict_col);
@@ -250,23 +250,21 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		return optional_idx();
 	}
 	idx_t dict_size = opt_dict_size.GetIndex();
-	if (dict_size >= AGGREGATE_DICTIONARY_THRESHOLD) {
+	if (dict_size >= groups.size() * DICTIONARY_THRESHOLD) {
 		// dictionary is too large - use regular aggregation
 		return optional_idx();
 	}
 	auto &dictionary_vector = DictionaryVector::Child(dict_col);
 	auto &offsets = DictionaryVector::SelVector(dict_col);
 	auto &dict_state = state.dict_state;
-	if (dict_state.dictionary != dictionary_vector) {
-		// new dictionary - initialize the index state
-		if (dict_size > dict_state.capacity) {
-			dict_state.dictionary_addresses = make_uniq<Vector>(LogicalType::POINTER, dict_size);
-			dict_state.found_entry = make_unsafe_uniq_array<bool>(dict_size);
-			dict_state.capacity = dict_size;
-		}
-		memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
-		dict_state.dictionary = dictionary_vector;
+	// initialize the index state
+	if (dict_size > dict_state.capacity) {
+		dict_state.dictionary_addresses = make_uniq<Vector>(LogicalType::POINTER, dict_size);
+		dict_state.found_entry = make_unsafe_uniq_array<bool>(dict_size);
+		dict_state.capacity = dict_size;
 	}
+	memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
+	dict_state.dictionary = dictionary_vector;
 
 	auto &found_entry = dict_state.found_entry;
 	auto &unique_entries = dict_state.unique_entries;
