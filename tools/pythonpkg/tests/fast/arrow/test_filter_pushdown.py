@@ -30,6 +30,7 @@ def create_pyarrow_dataset(rel):
 
 
 def test_decimal_filter_pushdown(duckdb_cursor):
+    pytest.skip("panic in polars is triggered, to be reviewed")
     pl = pytest.importorskip("polars")
     np = pytest.importorskip("numpy")
     np.random.seed(10)
