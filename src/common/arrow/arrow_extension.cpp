@@ -5,12 +5,14 @@
 
 namespace duckdb {
 
-ArrowExtensionInfo::ArrowExtensionInfo(string extension_name, string arrow_format): extension_name(std::move(extension_name)), arrow_format(std::move(arrow_format)) {};
+ArrowExtensionInfo::ArrowExtensionInfo(string extension_name, string arrow_format)
+    : extension_name(std::move(extension_name)), arrow_format(std::move(arrow_format)) {};
 
-ArrowExtensionInfo::ArrowExtensionInfo(string vendor_name, string type_name, string arrow_format): vendor_name(std::move(vendor_name)), type_name(std::move(type_name)),arrow_format(std::move(arrow_format)) {};
+ArrowExtensionInfo::ArrowExtensionInfo(string vendor_name, string type_name, string arrow_format)
+    : vendor_name(std::move(vendor_name)), type_name(std::move(type_name)), arrow_format(std::move(arrow_format)) {};
 
-ArrowExtension::ArrowExtension(string extension_name, string arrow_format, ArrowType type)
-    : extension_info(std::move(extension_name),std::move(arrow_format)), type(std::move(type)) {
+ArrowExtension::ArrowExtension(string extension_name, string arrow_format, shared_ptr<ArrowType> type)
+    : extension_info(std::move(extension_name), std::move(arrow_format)), type(std::move(type)) {
 }
 
 hash_t ArrowExtensionInfo::GetHash() const {
@@ -27,25 +29,23 @@ string ArrowExtensionInfo::ToString() const {
 		info << "Vendor: " << vendor_name << ", ";
 	}
 	if (!type_name.empty()) {
-			info << "Type: " << type_name << ", ";
+		info << "Type: " << type_name << ", ";
 	}
 	info << "Format: " << arrow_format << ". ";
 	return info.str();
 }
 
-ArrowExtension::ArrowExtension(string vendor_name, string type_name, string arrow_format, ArrowType type)
-    : extension_info(std::move(vendor_name),std::move(type_name),std::move(arrow_format)), type(std::move(type)) {
+ArrowExtension::ArrowExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowType> type)
+    : extension_info(std::move(vendor_name), std::move(type_name), std::move(arrow_format)), type(std::move(type)) {
 }
 
 ArrowExtensionInfo ArrowExtension::GetInfo() const {
 	return extension_info;
 }
 
-
 void ArrowExtensionSet::Initialize(DBConfig &config) {
-	config.RegisterEncodeFunction({"utf-8", DecodeUTF8, 1, 1});
-	config.RegisterEncodeFunction({"latin-1", DecodeLatin1ToUTF8, 2, 1});
-	config.RegisterEncodeFunction({"utf-16", DecodeUTF16ToUTF8, 2, 2});
-
+	// config.RegisterEncodeFunction({"utf-8", DecodeUTF8, 1, 1});
+	// config.RegisterEncodeFunction({"latin-1", DecodeLatin1ToUTF8, 2, 1});
+	// config.RegisterEncodeFunction({"utf-16", DecodeUTF16ToUTF8, 2, 2});
 }
 } // namespace duckdb

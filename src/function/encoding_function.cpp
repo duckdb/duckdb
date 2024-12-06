@@ -117,10 +117,11 @@ void DBConfig::RegisterEncodeFunction(const EncodingFunction &function) const {
 void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
 	lock_guard<mutex> l(encoding_functions->lock);
 	const auto extension_info = extension.GetInfo();
-	if (arrow_extensions->extensions.find(extension_info) != arrow_extensions->extensions.end()) {
-		throw InvalidInputException("Decoding function with configuration %s is already registered", extension_info.ToString());
-	}
-	arrow_extensions->extensions[extension_info] = std::move(extension);
+	// if (arrow_extensions->extensions.find(extension_info) != arrow_extensions->extensions.end()) {
+	// throw InvalidInputException("Decoding function with configuration %s is already registered",
+	// extension_info.ToString());
+	// }
+	// arrow_extensions->extensions[extension_info] = std::move(extension);
 }
 
 optional_ptr<EncodingFunction> DBConfig::GetEncodeFunction(const string &name) const {

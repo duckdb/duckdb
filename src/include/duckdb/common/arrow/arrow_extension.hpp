@@ -11,10 +11,11 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/chunk_scan_state.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
+struct DBConfig;
 struct ArrowExtensionInfo {
 
 	ArrowExtensionInfo(string extension_name, string arrow_format);
@@ -39,15 +40,15 @@ struct ArrowExtensionInfo {
 
 class ArrowExtension {
 public:
-	ArrowExtension(string extension_name, string arrow_format, ArrowType type);
-	ArrowExtension(string vendor_name, string type_name, string arrow_format, ArrowType type);
+	ArrowExtension(string extension_name, string arrow_format, shared_ptr<ArrowType> type);
+	ArrowExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowType> type);
 
 	ArrowExtensionInfo GetInfo() const;
 
 private:
 	ArrowExtensionInfo extension_info;
 	//! Arrow Type
-	ArrowType type;
+	shared_ptr<ArrowType> type;
 };
 
 struct HashArrowExtension {
@@ -60,9 +61,8 @@ struct HashArrowExtension {
 struct ArrowExtensionSet {
 	ArrowExtensionSet() {};
 	static void Initialize(DBConfig &config);
-	mutex lock;
+	std::mutex lock;
 	unordered_map<ArrowExtensionInfo, ArrowExtension, HashArrowExtension> extensions;
-
 };
 
 } // namespace duckdb

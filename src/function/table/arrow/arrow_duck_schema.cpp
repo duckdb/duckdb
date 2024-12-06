@@ -55,7 +55,7 @@ void ArrowType::ThrowIfInvalid() const {
 	}
 }
 
-static unique_ptr<ArrowType> GetArrowLogicalTypeFromFormat(const string &format) {
+unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(const string &format) {
 	if (format == "n") {
 		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
@@ -342,9 +342,9 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(ArrowSchema &schema) {
 	auto format = string(schema.format);
 	// Let's first figure out if this type is an extension type
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
-	if (schema_metadata.HasExtension()) {
-		return GetArrowExtensionType(schema_metadata, format);
-	}
+	// if (schema_metadata.HasExtension()) {
+	// 	return GetArrowExtensionType(schema_metadata, format);
+	// }
 	auto type = GetTypeFromFormat(format);
 	if (type) {
 		return type;

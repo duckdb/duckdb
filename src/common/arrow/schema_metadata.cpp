@@ -59,7 +59,7 @@ ArrowSchemaMetadata ArrowSchemaMetadata::ArrowCanonicalType(const string &extens
 
 ArrowSchemaMetadata ArrowSchemaMetadata::DuckDBInternalType(const string &type_name) {
 	ArrowSchemaMetadata metadata;
-	metadata.AddOption(ARROW_EXTENSION_NAME, ARROW_EXTENSION_NON_CANONICAL);
+	metadata.AddOption(ARROW_EXTENSION_NAME, ArrowExtensionInfo::ARROW_EXTENSION_NON_CANONICAL);
 	// We have to set the metadata key with type_name and vendor_name.
 	metadata.extension_metadata_map["vendor_name"] = "DuckDB";
 	metadata.extension_metadata_map["type_name"] = type_name;
@@ -71,7 +71,7 @@ bool ArrowSchemaMetadata::IsNonCanonicalType(const string &type, const string &v
 	if (schema_metadata_map.find(ARROW_EXTENSION_NAME) == schema_metadata_map.end()) {
 		return false;
 	}
-	if (schema_metadata_map.find(ARROW_EXTENSION_NAME)->second != ARROW_EXTENSION_NON_CANONICAL) {
+	if (schema_metadata_map.find(ARROW_EXTENSION_NAME)->second != ArrowExtensionInfo::ARROW_EXTENSION_NON_CANONICAL) {
 		return false;
 	}
 	if (extension_metadata_map.find("type_name") == extension_metadata_map.end() ||
