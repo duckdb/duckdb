@@ -428,14 +428,13 @@ static void VerifyOnConflictCondition(ExecutionContext &context, DataChunk &comb
 
 	// Verify and throw.
 	if (GLOBAL) {
-		data_table.VerifyAppendConstraints(constraint_state, context.client, combined_chunk, nullptr, nullptr, nullptr,
-		                                   nullptr);
+		data_table.VerifyAppendConstraints(constraint_state, context.client, combined_chunk, nullptr, nullptr);
 		throw InternalException("VerifyAppendConstraints was expected to throw but didn't");
 	}
 
 	auto &indexes = local_storage.GetIndexes(data_table);
 	auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
-	DataTable::VerifyUniqueIndexes(indexes, delete_indexes, tuples, nullptr, nullptr, nullptr);
+	DataTable::VerifyUniqueIndexes(indexes, delete_indexes, tuples, nullptr);
 	throw InternalException("VerifyUniqueIndexes was expected to throw but didn't");
 }
 
@@ -456,16 +455,15 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		auto &constraint_state = lstate.GetConstraintState(data_table, table);
 		if (local_storage.IsInitialized(data_table)) {
 			auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
-			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, delete_indexes,
-			                                   nullptr, &conflict_manager);
-		} else {
-			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, nullptr, nullptr,
+			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, delete_indexes,
 			                                   &conflict_manager);
+		} else {
+			data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, nullptr, &conflict_manager);
 		}
 	} else {
 		auto &indexes = local_storage.GetIndexes(data_table);
 		auto &delete_indexes = local_storage.GetDeleteIndexes(data_table);
-		DataTable::VerifyUniqueIndexes(indexes, delete_indexes, tuples, nullptr, nullptr, &conflict_manager);
+		DataTable::VerifyUniqueIndexes(indexes, delete_indexes, tuples, &conflict_manager);
 	}
 
 	conflict_manager.Finalize();
@@ -535,8 +533,8 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 
 	if (action_type == OnConflictAction::THROW) {
 		auto &constraint_state = lstate.GetConstraintState(data_table, table);
-		data_table.VerifyAppendConstraints(constraint_state, context.client, lstate.insert_chunk, nullptr,
-		                                   delete_indexes, nullptr, nullptr);
+		data_table.VerifyAppendConstraints(constraint_state, context.client, lstate.insert_chunk, delete_indexes,
+		                                   nullptr);
 		return 0;
 	}
 
@@ -650,7 +648,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		}
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
-		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, nullptr, nullptr, true);
+		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
 			// Flush the append so we can target the data we just appended with the update
 			storage.FinalizeLocalAppend(gstate.append_state);
@@ -713,7 +711,7 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
-			storage.LocalAppend(gstate.append_state, table, context.client, insert_chunk, nullptr, nullptr, false);
+			storage.LocalAppend(gstate.append_state, table, context.client, insert_chunk, false);
 			return true;
 		});
 		storage.FinalizeLocalAppend(gstate.append_state);

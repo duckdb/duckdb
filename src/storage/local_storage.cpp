@@ -372,6 +372,24 @@ void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
 	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
 }
 
+void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk) {
+	if (delete_chunk.size() == 0) {
+		return;
+	}
+
+	delete_indexes.ScanBound<ART>([&](Index &delete_index) {
+		if (!delete_index.IsUnique()) {
+			return false;
+		}
+		auto &bound_delete_index = delete_index.Cast<BoundIndex>();
+		auto result = bound_delete_index.Append(delete_chunk, row_ids);
+		if (result.HasError()) {
+			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
+		}
+		return false;
+	});
+}
+
 void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	// Append to any unique indexes.
 	auto storage = state.storage;

@@ -738,7 +738,7 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 	// Append to the current table without constraint verification.
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	auto &storage = state.current_table->GetStorage();
-	storage.LocalAppend(*state.current_table, context, chunk, bound_constraints, nullptr, nullptr);
+	storage.LocalAppend(*state.current_table, context, chunk, bound_constraints);
 }
 
 static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &col_data) {
