@@ -913,25 +913,24 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	}
 }
 
-double RadixPartitionedHashTable::GetProgress(ClientContext &, GlobalSinkState &sink_p,
-                                              GlobalSourceState &gstate_p) const {
+ProgressData RadixPartitionedHashTable::GetProgress(ClientContext &, GlobalSinkState &sink_p,
+                                                    GlobalSourceState &gstate_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSourceState>();
 
 	// Get partition combine progress, weigh it 2x
-	double total_progress = 0;
+	ProgressData progress;
 	for (auto &partition : sink.partitions) {
-		total_progress += 2.0 * partition->progress;
+		progress.done += 2.0 * partition->progress;
 	}
 
 	// Get scan progress, weigh it 1x
-	total_progress += 1.0 * double(gstate.task_done);
+	progress.done += 1.0 * double(gstate.task_done);
 
 	// Divide by 3x for the weights, and the number of partitions to get a value between 0 and 1 again
-	total_progress /= 3.0 * double(sink.partitions.size());
+	progress.total += 3.0 * double(sink.partitions.size());
 
-	// Multiply by 100 to get a percentage
-	return 100.0 * total_progress;
+	return progress;
 }
 
 } // namespace duckdb

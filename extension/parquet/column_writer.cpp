@@ -5,9 +5,8 @@
 #include "parquet_dbp_encoder.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
-#include "parquet_writer.hpp"
 #include "parquet_statistics.hpp"
-#include "geo_parquet.hpp"
+#include "parquet_writer.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -785,10 +784,10 @@ public:
 		return NumericLimits<SRC>::IsSigned() ? GetMaxValue() : string();
 	}
 	string GetMinValue() override {
-		return HasStats() ? string((char *)&min, sizeof(T)) : string();
+		return HasStats() ? string(char_ptr_cast(&min), sizeof(T)) : string();
 	}
 	string GetMaxValue() override {
-		return HasStats() ? string((char *)&max, sizeof(T)) : string();
+		return HasStats() ? string(char_ptr_cast(&max), sizeof(T)) : string();
 	}
 };
 
@@ -919,7 +918,7 @@ struct ParquetStringOperator : public BaseParquetOperator {
 
 	template <class SRC, class TGT>
 	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
-		auto &string_stats = (StringStatisticsState &)*stats;
+		auto &string_stats = stats->Cast<StringStatisticsState>();
 		string_stats.Update(target_value);
 	}
 
