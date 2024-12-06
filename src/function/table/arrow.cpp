@@ -17,113 +17,24 @@
 
 namespace duckdb {
 
-static unique_ptr<ArrowType> GetArrowExtensionType(const ArrowSchemaMetadata &extension_type, const string &format) {
-	auto arrow_extension = extension_type.GetExtensionName();
-	// Check for arrow canonical extensions
-	if (arrow_extension == "arrow.uuid") {
-		if (format != "w:16") {
-			std::ostringstream error;
-			error
-			    << "arrow.uuid must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly defined as:"
-			    << format;
-			return make_uniq<ArrowType>(error.str());
-		}
-		return make_uniq<ArrowType>(LogicalType::UUID);
-	} else if (arrow_extension == "arrow.json") {
-		if (format == "u") {
-			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
-		} else if (format == "U") {
-			return make_uniq<ArrowType>(LogicalType::JSON(),
-			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
-		} else if (format == "vu") {
-			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
-		} else {
-			std::ostringstream error;
-			error
-			    << "arrow.json must be of a varchar format (i.e., \'u\',\'U\' or \'vu\'). It is incorrectly defined as:"
-			    << format;
-			return make_uniq<ArrowType>(error.str());
-		}
-	}
-	// Check for DuckDB canonical extensions
-	else if (extension_type.IsNonCanonicalType("hugeint")) {
-		if (format != "w:16") {
-			std::ostringstream error;
-			error << "DuckDB hugeint must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly "
-			         "defined as:"
-			      << format;
-			return make_uniq<ArrowType>(error.str());
-		}
-		return make_uniq<ArrowType>(LogicalType::HUGEINT);
-	} else if (extension_type.IsNonCanonicalType("uhugeint")) {
-		if (format != "w:16") {
-			std::ostringstream error;
-			error << "DuckDB uhugeint must be a fixed-size binary of 16 bytes (i.e., \'w:16\'). It is incorrectly "
-			         "defined as:"
-			      << format;
-			return make_uniq<ArrowType>(error.str());
-		}
-		return make_uniq<ArrowType>(LogicalType::UHUGEINT);
-	} else if (extension_type.IsNonCanonicalType("time_tz")) {
-		if (format != "w:8") {
-			std::ostringstream error;
-			error << "DuckDB time_tz must be a fixed-size binary of 8 bytes (i.e., \'w:8\'). It is incorrectly defined "
-			         "as:"
-			      << format;
-			return make_uniq<ArrowType>(error.str());
-		}
-		return make_uniq<ArrowType>(LogicalType::TIME_TZ,
-		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
-	} else if (extension_type.IsNonCanonicalType("bit")) {
-		if (format != "z" && format != "Z") {
-			std::ostringstream error;
-			error << "DuckDB bit must be a blob (i.e., \'z\' or \'Z\'). It is incorrectly defined as:" << format;
-			return make_uniq<ArrowType>(error.str());
-		} else if (format == "z") {
-			auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
-			return make_uniq<ArrowType>(LogicalType::BIT, std::move(type_info));
-		}
-		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
-		return make_uniq<ArrowType>(LogicalType::BIT, std::move(type_info));
-
-	} else if (extension_type.IsNonCanonicalType("varint")) {
-		if (format != "z" && format != "Z") {
-			std::ostringstream error;
-			error << "DuckDB bit must be a blob (i.e., \'z\'). It is incorrectly defined as:" << format;
-			return make_uniq<ArrowType>(error.str());
-		}
-		unique_ptr<ArrowStringInfo> type_info;
-		if (format == "z") {
-			type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
-		} else {
-			type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
-		}
-		return make_uniq<ArrowType>(LogicalType::VARINT, std::move(type_info));
-	} else {
-		std::ostringstream error;
-		error << "Arrow Type with extension name: " << arrow_extension << " and format: " << format
-		      << ", is not currently supported in DuckDB.";
-		return make_uniq<ArrowType>(error.str(), true);
-	}
-}
-
-unique_ptr<ArrowType> ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schema) {
-	auto arrow_type = ArrowType::GetTypeFromSchema(schema);
+shared_ptr<ArrowType> ArrowTableFunction::GetArrowLogicalType(DBConfig &config, ArrowSchema &schema) {
+	auto arrow_type = ArrowType::GetTypeFromSchema(config, schema);
 	if (schema.dictionary) {
-		auto dictionary = GetArrowLogicalType(*schema.dictionary);
+		auto dictionary = GetArrowLogicalType(config, *schema.dictionary);
 		arrow_type->SetDictionary(std::move(dictionary));
 	}
 	return arrow_type;
 }
 
-void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, const ArrowSchemaWrapper &schema_p,
-                                                vector<string> &names, vector<LogicalType> &return_types) {
+void ArrowTableFunction::PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table,
+                                                const ArrowSchemaWrapper &schema_p, vector<string> &names,
+                                                vector<LogicalType> &return_types) {
 	for (idx_t col_idx = 0; col_idx < static_cast<idx_t>(schema_p.arrow_schema.n_children); col_idx++) {
 		auto &schema = *schema_p.arrow_schema.children[col_idx];
 		if (!schema.release) {
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
-		auto arrow_type = GetArrowLogicalType(schema);
+		auto arrow_type = GetArrowLogicalType(config, schema);
 		return_types.emplace_back(arrow_type->GetDuckType(true));
 		arrow_table.AddColumn(col_idx, std::move(arrow_type));
 		auto name = string(schema.name);
@@ -166,7 +77,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 
 	auto &data = *res;
 	stream_factory_get_schema(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr), data.schema_root.arrow_schema);
-	PopulateArrowTableType(res->arrow_table, data.schema_root, names, return_types);
+	PopulateArrowTableType(DBConfig::GetConfig(context), res->arrow_table, data.schema_root, names, return_types);
 	QueryResult::DeduplicateColumns(names);
 	res->all_types = return_types;
 	if (return_types.empty()) {

@@ -28,8 +28,8 @@ public:
 	unsafe_unique_array<char> SerializeMetadata() const;
 	//! If the arrow extension is set
 	bool HasExtension() const;
-	//! If this extension type is an 'arrow.opaque', and the internal type and vendors match.
-	bool IsNonCanonicalType(const string &type, const string &vendor = "DuckDB") const;
+
+	ArrowExtensionInfo GetExtensionInfo(string format);
 	//! Get the extension name if set, otherwise returns empty
 	string GetExtensionName() const;
 	//! Key for encode of the extension type name

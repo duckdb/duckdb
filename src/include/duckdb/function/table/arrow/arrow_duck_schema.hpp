@@ -16,6 +16,7 @@
 #include "duckdb/common/arrow/arrow.hpp"
 
 namespace duckdb {
+class DBConfig;
 
 class ArrowType {
 public:
@@ -31,7 +32,7 @@ public:
 public:
 	LogicalType GetDuckType(bool use_dictionary = false) const;
 
-	void SetDictionary(unique_ptr<ArrowType> dictionary);
+	void SetDictionary(shared_ptr<ArrowType> dictionary);
 	bool HasDictionary() const;
 	const ArrowType &GetDictionary() const;
 
@@ -44,18 +45,19 @@ public:
 	}
 	void ThrowIfInvalid() const;
 
-	static unique_ptr<ArrowType> GetTypeFromFormat(const string &format);
+	static shared_ptr<ArrowType> GetTypeFromFormat(const string &format);
 
-	static unique_ptr<ArrowType> GetTypeFromSchema(ArrowSchema &schema);
+	static shared_ptr<ArrowType> GetTypeFromSchema(DBConfig &config, ArrowSchema &schema);
 
-	static unique_ptr<ArrowType> CreateListType(ArrowSchema &child, ArrowVariableSizeType size_type, bool view);
+	static shared_ptr<ArrowType> CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
+	                                            bool view);
 
-	static unique_ptr<ArrowType> GetTypeFromFormatNested(ArrowSchema &schema, string &format);
+	static shared_ptr<ArrowType> GetTypeFromFormatNested(DBConfig &config, ArrowSchema &schema, string &format);
 
 private:
 	LogicalType type;
 	//! Hold the optional type if the array is a dictionary
-	unique_ptr<ArrowType> dictionary_type;
+	shared_ptr<ArrowType> dictionary_type;
 	//! Is run-end-encoded
 	bool run_end_encoded = false;
 	unique_ptr<ArrowTypeInfo> type_info;
@@ -65,11 +67,11 @@ private:
 	bool not_implemented = false;
 };
 
-using arrow_column_map_t = unordered_map<idx_t, unique_ptr<ArrowType>>;
+using arrow_column_map_t = unordered_map<idx_t, shared_ptr<ArrowType>>;
 
 struct ArrowTableType {
 public:
-	void AddColumn(idx_t index, unique_ptr<ArrowType> type);
+	void AddColumn(idx_t index, shared_ptr<ArrowType> type);
 	const arrow_column_map_t &GetColumns() const;
 
 private:

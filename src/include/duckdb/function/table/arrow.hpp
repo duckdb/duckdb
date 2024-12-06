@@ -210,8 +210,9 @@ public:
 
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-	static void PopulateArrowTableType(ArrowTableType &arrow_table, const ArrowSchemaWrapper &schema_p,
-	                                   vector<string> &names, vector<LogicalType> &return_types);
+	static void PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table,
+	                                   const ArrowSchemaWrapper &schema_p, vector<string> &names,
+	                                   vector<LogicalType> &return_types);
 
 protected:
 	//! Defines Maximum Number of Threads
@@ -231,7 +232,7 @@ protected:
 
 public:
 	//! Helper function to get the DuckDB logical type
-	static unique_ptr<ArrowType> GetArrowLogicalType(ArrowSchema &schema);
+	static shared_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
 };
 
 } // namespace duckdb

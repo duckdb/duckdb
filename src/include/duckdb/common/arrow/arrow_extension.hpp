@@ -17,33 +17,42 @@ namespace duckdb {
 
 struct DBConfig;
 struct ArrowExtensionInfo {
-
+	ArrowExtensionInfo() {
+	}
 	ArrowExtensionInfo(string extension_name, string arrow_format);
 	ArrowExtensionInfo(string vendor_name, string type_name, string arrow_format);
-
-	//! Arrow Extension for non-canonical types.
-	static constexpr const char *ARROW_EXTENSION_NON_CANONICAL = "arrow.opaque";
-	//! The extension name (e.g., 'arrow.uuid', 'arrow.opaque',...)
-	const string extension_name;
-	//! If the extension name is 'arrow.opaque' a vendor and type must be defined.
-	//! The vendor_name is the system that produced the type (e.g., DuckDB)
-	const string vendor_name;
-	//! The type_name is the name of the type produced by the vendor (e.g., hugeint)
-	const string type_name;
-	//! The arrow format (e.g., z)
-	const string arrow_format;
+	ArrowExtensionInfo(string extension_name, string vendor_name, string type_name, string arrow_format);
 
 	hash_t GetHash() const;
 
 	string ToString() const;
+
+	bool operator==(const ArrowExtensionInfo &other) const;
+
+	//! Arrow Extension for non-canonical types.
+	static constexpr const char *ARROW_EXTENSION_NON_CANONICAL = "arrow.opaque";
+
+private:
+	//! The extension name (e.g., 'arrow.uuid', 'arrow.opaque',...)
+	string extension_name {};
+	//! If the extension name is 'arrow.opaque' a vendor and type must be defined.
+	//! The vendor_name is the system that produced the type (e.g., DuckDB)
+	string vendor_name {};
+	//! The type_name is the name of the type produced by the vendor (e.g., hugeint)
+	string type_name {};
+	//! The arrow format (e.g., z)
+	string arrow_format {};
 };
 
 class ArrowExtension {
 public:
+	ArrowExtension() {};
 	ArrowExtension(string extension_name, string arrow_format, shared_ptr<ArrowType> type);
 	ArrowExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowType> type);
 
 	ArrowExtensionInfo GetInfo() const;
+
+	shared_ptr<ArrowType> GetType() const;
 
 private:
 	ArrowExtensionInfo extension_info;

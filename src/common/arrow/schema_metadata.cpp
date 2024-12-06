@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
@@ -37,6 +39,7 @@ ArrowSchemaMetadata::ArrowSchemaMetadata(const char *metadata) {
 void ArrowSchemaMetadata::AddOption(const string &key, const string &value) {
 	schema_metadata_map[key] = value;
 }
+
 string ArrowSchemaMetadata::GetOption(const string &key) const {
 	auto it = schema_metadata_map.find(key);
 	if (it != schema_metadata_map.end()) {
@@ -44,10 +47,6 @@ string ArrowSchemaMetadata::GetOption(const string &key) const {
 	} else {
 		return "";
 	}
-}
-
-string ArrowSchemaMetadata::GetExtensionName() const {
-	return GetOption(ARROW_EXTENSION_NAME);
 }
 
 ArrowSchemaMetadata ArrowSchemaMetadata::ArrowCanonicalType(const string &extension_name) {
@@ -67,26 +66,14 @@ ArrowSchemaMetadata ArrowSchemaMetadata::DuckDBInternalType(const string &type_n
 	return metadata;
 }
 
-bool ArrowSchemaMetadata::IsNonCanonicalType(const string &type, const string &vendor) const {
-	if (schema_metadata_map.find(ARROW_EXTENSION_NAME) == schema_metadata_map.end()) {
-		return false;
-	}
-	if (schema_metadata_map.find(ARROW_EXTENSION_NAME)->second != ArrowExtensionInfo::ARROW_EXTENSION_NON_CANONICAL) {
-		return false;
-	}
-	if (extension_metadata_map.find("type_name") == extension_metadata_map.end() ||
-	    extension_metadata_map.find("vendor_name") == extension_metadata_map.end()) {
-		return false;
-	}
-	auto vendor_name = extension_metadata_map.find("vendor_name")->second;
-	auto type_name = extension_metadata_map.find("type_name")->second;
-	return vendor_name == vendor && type_name == type;
-}
-
 bool ArrowSchemaMetadata::HasExtension() const {
 	auto arrow_extension = GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
-	// FIXME: We are currently ignoring the ogc extensions
-	return !arrow_extension.empty() && !StringUtil::StartsWith(arrow_extension, "ogc");
+	return !arrow_extension.empty();
+}
+
+ArrowExtensionInfo ArrowSchemaMetadata::GetExtensionInfo(string format) {
+	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map["vendor_name"],
+	        extension_metadata_map["type_name"], std::move(format)};
 }
 
 unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {

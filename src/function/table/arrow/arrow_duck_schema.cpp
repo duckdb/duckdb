@@ -4,10 +4,11 @@
 
 #include <duckdb/common/string_util.hpp>
 #include <duckdb/common/arrow/schema_metadata.hpp>
+#include <duckdb/main/config.hpp>
 
 namespace duckdb {
 
-void ArrowTableType::AddColumn(idx_t index, unique_ptr<ArrowType> type) {
+void ArrowTableType::AddColumn(idx_t index, shared_ptr<ArrowType> type) {
 	D_ASSERT(arrow_convert_data.find(index) == arrow_convert_data.end());
 	arrow_convert_data.emplace(std::make_pair(index, std::move(type)));
 }
@@ -16,7 +17,7 @@ const arrow_column_map_t &ArrowTableType::GetColumns() const {
 	return arrow_convert_data;
 }
 
-void ArrowType::SetDictionary(unique_ptr<ArrowType> dictionary) {
+void ArrowType::SetDictionary(shared_ptr<ArrowType> dictionary) {
 	D_ASSERT(!this->dictionary_type);
 	dictionary_type = std::move(dictionary);
 }
@@ -55,31 +56,31 @@ void ArrowType::ThrowIfInvalid() const {
 	}
 }
 
-unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(const string &format) {
+shared_ptr<ArrowType> ArrowType::GetTypeFromFormat(const string &format) {
 	if (format == "n") {
-		return make_uniq<ArrowType>(LogicalType::SQLNULL);
+		return make_shared_ptr<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
-		return make_uniq<ArrowType>(LogicalType::BOOLEAN);
+		return make_shared_ptr<ArrowType>(LogicalType::BOOLEAN);
 	} else if (format == "c") {
-		return make_uniq<ArrowType>(LogicalType::TINYINT);
+		return make_shared_ptr<ArrowType>(LogicalType::TINYINT);
 	} else if (format == "s") {
-		return make_uniq<ArrowType>(LogicalType::SMALLINT);
+		return make_shared_ptr<ArrowType>(LogicalType::SMALLINT);
 	} else if (format == "i") {
-		return make_uniq<ArrowType>(LogicalType::INTEGER);
+		return make_shared_ptr<ArrowType>(LogicalType::INTEGER);
 	} else if (format == "l") {
-		return make_uniq<ArrowType>(LogicalType::BIGINT);
+		return make_shared_ptr<ArrowType>(LogicalType::BIGINT);
 	} else if (format == "C") {
-		return make_uniq<ArrowType>(LogicalType::UTINYINT);
+		return make_shared_ptr<ArrowType>(LogicalType::UTINYINT);
 	} else if (format == "S") {
-		return make_uniq<ArrowType>(LogicalType::USMALLINT);
+		return make_shared_ptr<ArrowType>(LogicalType::USMALLINT);
 	} else if (format == "I") {
-		return make_uniq<ArrowType>(LogicalType::UINTEGER);
+		return make_shared_ptr<ArrowType>(LogicalType::UINTEGER);
 	} else if (format == "L") {
-		return make_uniq<ArrowType>(LogicalType::UBIGINT);
+		return make_shared_ptr<ArrowType>(LogicalType::UBIGINT);
 	} else if (format == "f") {
-		return make_uniq<ArrowType>(LogicalType::FLOAT);
+		return make_shared_ptr<ArrowType>(LogicalType::FLOAT);
 	} else if (format == "g") {
-		return make_uniq<ArrowType>(LogicalType::DOUBLE);
+		return make_shared_ptr<ArrowType>(LogicalType::DOUBLE);
 	} else if (format[0] == 'd') { //! this can be either decimal128 or decimal 256 (e.g., d:38,0)
 		auto extra_info = StringUtil::Split(format, ':');
 		if (extra_info.size() != 2) {
@@ -104,63 +105,72 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(const string &format) {
 		if (width > 38 || bitwidth > 128) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
-		return make_uniq<ArrowType>(LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)));
+		return make_shared_ptr<ArrowType>(
+		    LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)));
 	} else if (format == "u") {
-		return make_uniq<ArrowType>(LogicalType::VARCHAR, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+		return make_shared_ptr<ArrowType>(LogicalType::VARCHAR,
+		                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 	} else if (format == "U") {
-		return make_uniq<ArrowType>(LogicalType::VARCHAR,
-		                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		return make_shared_ptr<ArrowType>(LogicalType::VARCHAR,
+		                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
 	} else if (format == "vu") {
-		return make_uniq<ArrowType>(LogicalType::VARCHAR, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
+		return make_shared_ptr<ArrowType>(LogicalType::VARCHAR,
+		                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
 	} else if (format == "tsn:") {
-		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_NS);
+		return make_shared_ptr<ArrowType>(LogicalTypeId::TIMESTAMP_NS);
 	} else if (format == "tsu:") {
-		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP);
+		return make_shared_ptr<ArrowType>(LogicalTypeId::TIMESTAMP);
 	} else if (format == "tsm:") {
-		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_MS);
+		return make_shared_ptr<ArrowType>(LogicalTypeId::TIMESTAMP_MS);
 	} else if (format == "tss:") {
-		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_SEC);
+		return make_shared_ptr<ArrowType>(LogicalTypeId::TIMESTAMP_SEC);
 	} else if (format == "tdD") {
-		return make_uniq<ArrowType>(LogicalType::DATE, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::DAYS));
+		return make_shared_ptr<ArrowType>(LogicalType::DATE, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::DAYS));
 	} else if (format == "tdm") {
-		return make_uniq<ArrowType>(LogicalType::DATE, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
+		return make_shared_ptr<ArrowType>(LogicalType::DATE,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
 	} else if (format == "tts") {
-		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS));
+		return make_shared_ptr<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS));
 	} else if (format == "ttm") {
-		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
+		return make_shared_ptr<ArrowType>(LogicalType::TIME,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
 	} else if (format == "ttu") {
-		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
+		return make_shared_ptr<ArrowType>(LogicalType::TIME,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
 	} else if (format == "ttn") {
-		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
+		return make_shared_ptr<ArrowType>(LogicalType::TIME,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
 	} else if (format == "tDs") {
-		return make_uniq<ArrowType>(LogicalType::INTERVAL, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS));
+		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS));
 	} else if (format == "tDm") {
-		return make_uniq<ArrowType>(LogicalType::INTERVAL,
-		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
+		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
 	} else if (format == "tDu") {
-		return make_uniq<ArrowType>(LogicalType::INTERVAL,
-		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
+		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
 	} else if (format == "tDn") {
-		return make_uniq<ArrowType>(LogicalType::INTERVAL,
-		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
+		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
 	} else if (format == "tiD") {
-		return make_uniq<ArrowType>(LogicalType::INTERVAL, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::DAYS));
+		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::DAYS));
 	} else if (format == "tiM") {
-		return make_uniq<ArrowType>(LogicalType::INTERVAL, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MONTHS));
+		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MONTHS));
 	} else if (format == "tin") {
-		return make_uniq<ArrowType>(LogicalType::INTERVAL,
-		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MONTH_DAY_NANO));
+		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
+		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MONTH_DAY_NANO));
 	} else if (format == "z") {
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
-		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
+		return make_shared_ptr<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format == "Z") {
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
-		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
+		return make_shared_ptr<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 'w') {
 		string parameters = format.substr(format.find(':') + 1);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		auto type_info = make_uniq<ArrowStringInfo>(fixed_size);
-		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
+		return make_shared_ptr<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
 		// TODO right now we just get the UTC value. We probably want to support this properly in the future
@@ -176,14 +186,15 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(const string &format) {
 		} else {
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
-		return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
+		return make_shared_ptr<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
 	}
 
 	return nullptr;
 }
 
-unique_ptr<ArrowType> ArrowType::CreateListType(ArrowSchema &child, ArrowVariableSizeType size_type, bool view) {
-	auto child_type = GetTypeFromSchema(child);
+shared_ptr<ArrowType> ArrowType::CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
+                                                bool view) {
+	auto child_type = GetTypeFromSchema(config, child);
 
 	unique_ptr<ArrowTypeInfo> type_info;
 	auto type = LogicalType::LIST(child_type->GetDuckType());
@@ -195,32 +206,32 @@ unique_ptr<ArrowType> ArrowType::CreateListType(ArrowSchema &child, ArrowVariabl
 	return make_uniq<ArrowType>(type, std::move(type_info));
 }
 
-unique_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(ArrowSchema &schema, string &format) {
+shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, ArrowSchema &schema, string &format) {
 	if (format == "+l") {
-		return CreateListType(*schema.children[0], ArrowVariableSizeType::NORMAL, false);
+		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::NORMAL, false);
 	} else if (format == "+L") {
-		return CreateListType(*schema.children[0], ArrowVariableSizeType::SUPER_SIZE, false);
+		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::SUPER_SIZE, false);
 	} else if (format == "+vl") {
-		return CreateListType(*schema.children[0], ArrowVariableSizeType::NORMAL, true);
+		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::NORMAL, true);
 	} else if (format == "+vL") {
-		return CreateListType(*schema.children[0], ArrowVariableSizeType::SUPER_SIZE, true);
+		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::SUPER_SIZE, true);
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
-		auto child_type = GetTypeFromSchema(*schema.children[0]);
+		auto child_type = GetTypeFromSchema(config, *schema.children[0]);
 
 		auto array_type = LogicalType::ARRAY(child_type->GetDuckType(), fixed_size);
 		auto type_info = make_uniq<ArrowArrayInfo>(std::move(child_type), fixed_size);
 		return make_uniq<ArrowType>(array_type, std::move(type_info));
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
-		vector<unique_ptr<ArrowType>> children;
+		vector<shared_ptr<ArrowType>> children;
 		if (schema.n_children == 0) {
 			throw InvalidInputException(
 			    "Attempted to convert a STRUCT with no fields to DuckDB which is not supported");
 		}
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
-			children.emplace_back(GetTypeFromSchema(*schema.children[type_idx]));
+			children.emplace_back(GetTypeFromSchema(config, *schema.children[type_idx]));
 			child_types.emplace_back(schema.children[type_idx]->name, children.back()->GetDuckType());
 		}
 		auto type_info = make_uniq<ArrowStructInfo>(std::move(children));
@@ -237,14 +248,14 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(ArrowSchema &schema, st
 		auto type_ids = StringUtil::Split(format.substr(prefix.size()), ',');
 
 		child_list_t<LogicalType> members;
-		vector<unique_ptr<ArrowType>> children;
+		vector<shared_ptr<ArrowType>> children;
 		if (schema.n_children == 0) {
 			throw InvalidInputException("Attempted to convert a UNION with no fields to DuckDB which is not supported");
 		}
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
 			auto type = schema.children[type_idx];
 
-			children.emplace_back(GetTypeFromSchema(*type));
+			children.emplace_back(GetTypeFromSchema(config, *type));
 			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
 
@@ -253,14 +264,14 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(ArrowSchema &schema, st
 		return union_type;
 	} else if (format == "+r") {
 		child_list_t<LogicalType> members;
-		vector<unique_ptr<ArrowType>> children;
+		vector<shared_ptr<ArrowType>> children;
 		idx_t n_children = static_cast<idx_t>(schema.n_children);
 		D_ASSERT(n_children == 2);
 		D_ASSERT(string(schema.children[0]->name) == "run_ends");
 		D_ASSERT(string(schema.children[1]->name) == "values");
 		for (idx_t i = 0; i < n_children; i++) {
 			auto type = schema.children[i];
-			children.emplace_back(GetTypeFromSchema(*type));
+			children.emplace_back(GetTypeFromSchema(config, *type));
 			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
 
@@ -271,14 +282,14 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(ArrowSchema &schema, st
 	} else if (format == "+m") {
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);
-		auto key_type = GetTypeFromSchema(*arrow_struct_type.children[0]);
-		auto value_type = GetTypeFromSchema(*arrow_struct_type.children[1]);
+		auto key_type = GetTypeFromSchema(config, *arrow_struct_type.children[0]);
+		auto value_type = GetTypeFromSchema(config, *arrow_struct_type.children[1]);
 		child_list_t<LogicalType> key_value;
 		key_value.emplace_back(std::make_pair("key", key_type->GetDuckType()));
 		key_value.emplace_back(std::make_pair("value", value_type->GetDuckType()));
 
 		auto map_type = LogicalType::MAP(key_type->GetDuckType(), value_type->GetDuckType());
-		vector<unique_ptr<ArrowType>> children;
+		vector<shared_ptr<ArrowType>> children;
 		children.reserve(2);
 		children.push_back(std::move(key_type));
 		children.push_back(std::move(value_type));
@@ -338,18 +349,19 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	}
 }
 
-unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(ArrowSchema &schema) {
+shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema &schema) {
 	auto format = string(schema.format);
 	// Let's first figure out if this type is an extension type
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
-	// if (schema_metadata.HasExtension()) {
-	// 	return GetArrowExtensionType(schema_metadata, format);
-	// }
+	if (schema_metadata.HasExtension()) {
+		auto extension_info = schema_metadata.GetExtensionInfo(string(schema.format));
+		return config.GetArrowExtension(extension_info).GetType();
+	}
 	auto type = GetTypeFromFormat(format);
 	if (type) {
 		return type;
 	}
-	type = GetTypeFromFormatNested(schema, format);
+	type = GetTypeFromFormatNested(config, schema, format);
 	if (!type) {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 	}

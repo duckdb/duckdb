@@ -371,11 +371,9 @@ public:
 	//! Returns the encode function names.
 	DUCKDB_API vector<reference<EncodingFunction>> GetLoadedEncodedFunctions() const;
 	//! Returns the encode function matching the encoding name.
-	// DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(const string &name) const;
-	DUCKDB_API void RegisterArrowExtension(const ArrowExtension &extension) const;
+	DUCKDB_API ArrowExtension GetArrowExtension(const ArrowExtensionInfo &info) const;
 
-	//! Returns the encode function names.
-	// DUCKDB_API vector<reference<EncodingFunction>> GetLoadedEncodedFunctions() const;
+	DUCKDB_API void RegisterArrowExtension(const ArrowExtension &extension) const;
 
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);

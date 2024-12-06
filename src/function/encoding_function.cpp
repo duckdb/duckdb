@@ -114,16 +114,6 @@ void DBConfig::RegisterEncodeFunction(const EncodingFunction &function) const {
 	encoding_functions->functions[decode_type] = function;
 }
 
-void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
-	lock_guard<mutex> l(encoding_functions->lock);
-	const auto extension_info = extension.GetInfo();
-	// if (arrow_extensions->extensions.find(extension_info) != arrow_extensions->extensions.end()) {
-	// throw InvalidInputException("Decoding function with configuration %s is already registered",
-	// extension_info.ToString());
-	// }
-	// arrow_extensions->extensions[extension_info] = std::move(extension);
-}
-
 optional_ptr<EncodingFunction> DBConfig::GetEncodeFunction(const string &name) const {
 	lock_guard<mutex> l(encoding_functions->lock);
 	// Check if the function is already loaded into the global compression functions.
