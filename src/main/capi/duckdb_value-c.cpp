@@ -1,6 +1,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 
@@ -115,6 +116,18 @@ duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val) {
 	auto res = CAPIGetValue<duckdb::uhugeint_t, LogicalTypeId::UHUGEINT>(val);
 	return {res.lower, res.upper};
 }
+duckdb_value duckdb_create_varint(duckdb_varint input) {
+	return nullptr;
+}
+duckdb_varint duckdb_get_varint(duckdb_value val) {
+	return {nullptr, 0, false};
+}
+duckdb_value duckdb_create_decimal(duckdb_decimal input) {
+	return nullptr;
+}
+duckdb_decimal duckdb_get_decimal(duckdb_value val) {
+	return {0, 0, {0, 0}};
+}
 duckdb_value duckdb_create_float(float input) {
 	return CAPICreateValue(input);
 }
@@ -223,6 +236,22 @@ duckdb_blob duckdb_get_blob(duckdb_value val) {
 	auto result = reinterpret_cast<void *>(malloc(sizeof(char) * str.size()));
 	memcpy(result, str.c_str(), str.size());
 	return {result, str.size()};
+}
+duckdb_value duckdb_create_bit(duckdb_bit input) {
+	return nullptr;
+}
+duckdb_bit duckdb_get_bit(duckdb_value val) {
+	return {nullptr, 0};
+}
+duckdb_value duckdb_create_uuid(duckdb_uhugeint input) {
+	// uhugeint_t has a constexpr ctor with upper first
+	return WrapValue(new duckdb::Value(duckdb::Value::UUID(duckdb::UUID::FromUHugeint({input.upper, input.lower}))));
+}
+duckdb_uhugeint duckdb_get_uuid(duckdb_value val) {
+	auto hugeint = CAPIGetValue<duckdb::hugeint_t, LogicalTypeId::UUID>(val);
+	auto uhugeint = duckdb::UUID::ToUHugeint(hugeint);
+	// duckdb_uhugeint has no constexpr ctor; struct is lower first
+	return {uhugeint.lower, uhugeint.upper};
 }
 
 duckdb_logical_type duckdb_get_value_type(duckdb_value val) {
