@@ -532,7 +532,27 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
 	auto new_segment = ColumnSegment::CreateTransientSegment(db, *function, type, start_row, segment_size, block_size);
-	data.AppendSegment(l, std::move(new_segment));
+	AppendSegment(l, std::move(new_segment));
+}
+
+void ColumnData::UpdateCompressionFunction(SegmentLock &l, CompressionFunction &function) {
+	if (!compression) {
+		// compression is empty...
+		// if we have no segments - we have not set it yet, so assign it
+		// if we have segments, the compression is mixed, so ignore it
+		if (data.GetSegmentCount(l) == 0) {
+			compression = function;
+		}
+	} else if (compression->type != function.type) {
+		// we already have compression set - and we are adding a segment with a different compression
+		// compression in the segment is mixed - clear the compression pointer
+		compression = nullptr;
+	}
+}
+
+void ColumnData::AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment) {
+	UpdateCompressionFunction(l, segment->function);
+	data.AppendSegment(l, std::move(segment));
 }
 
 void ColumnData::CommitDropColumn() {
@@ -580,8 +600,13 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
 	checkpointer.Checkpoint(std::move(nodes));
 
+	// reset the compression function
+	compression = nullptr;
 	// replace the old tree with the new one
-	data.Replace(l, checkpoint_state->new_tree);
+	auto new_segments = checkpoint_state->new_tree.MoveSegments();
+	for(auto &new_segment : new_segments) {
+		AppendSegment(l, std::move(new_segment.node));
+	}
 	ClearUpdates();
 
 	return checkpoint_state;
@@ -610,7 +635,8 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
 		    std::move(data_pointer.statistics), std::move(data_pointer.segment_state));
 
-		data.AppendSegment(std::move(segment));
+		auto l = data.Lock();
+		AppendSegment(l, std::move(segment));
 	}
 }
 

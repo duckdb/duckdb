@@ -177,6 +177,7 @@ public:
 protected:
 	//! Append a transient segment
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
+	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
 	void BeginScanVectorInternal(ColumnScanState &state);
 	//! Scans a base vector from the column
@@ -196,6 +197,9 @@ protected:
 
 	idx_t GetVectorCount(idx_t vector_index) const;
 
+private:
+	void UpdateCompressionFunction(SegmentLock &l, CompressionFunction &function);
+
 protected:
 	//! The segments holding the data of this column segment
 	ColumnSegmentTree data;
@@ -209,6 +213,9 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
+	//!	The compression function used by the ColumnData
+	//! This is empty if the segments have mixed compression or the ColumnData is empty
+	optional_ptr<CompressionFunction> compression;
 };
 
 struct PersistentColumnData {
