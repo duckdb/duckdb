@@ -70,6 +70,7 @@ void ParquetOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", encryption_config, nullptr);
 	serializer.WritePropertyWithDefault<bool>(105, "debug_use_openssl", debug_use_openssl, true);
+	serializer.WritePropertyWithDefault<idx_t>(106, "explicit_cardinality", explicit_cardinality, 0);
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
@@ -80,6 +81,7 @@ ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", result.schema);
 	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", result.encryption_config, nullptr);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(105, "debug_use_openssl", result.debug_use_openssl, true);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "explicit_cardinality", result.explicit_cardinality, 0);
 	return result;
 }
 

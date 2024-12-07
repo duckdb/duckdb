@@ -42,6 +42,10 @@ if (NOT MINGW)
             )
 endif()
 
+### Currently libxml2, an azure dependency, has the repository repo return 503
+### Re-enable AZURE when the problem goes away. This means AZURE needs to be
+### build on a side
+if (NO)
 ################# AZURE
 if (NOT MINGW)
     duckdb_extension_load(azure
@@ -50,6 +54,7 @@ if (NOT MINGW)
             GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
             APPLY_PATCHES
             )
+endif()
 endif()
 
 ################# DELTA

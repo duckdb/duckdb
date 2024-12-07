@@ -99,11 +99,9 @@ static void PragmaDisableForceParallelism(ClientContext &context, const Function
 }
 
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.object_cache_enable = true;
 }
 
 static void PragmaDisableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).options.object_cache_enable = false;
 }
 
 static void PragmaEnableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {

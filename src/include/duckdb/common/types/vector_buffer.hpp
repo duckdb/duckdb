@@ -159,9 +159,16 @@ public:
 	void SetSelVector(const SelectionVector &vector) {
 		this->sel_vector.Initialize(vector);
 	}
+	void SetDictionarySize(idx_t dict_size) {
+		dictionary_size = dict_size;
+	}
+	optional_idx GetDictionarySize() const {
+		return dictionary_size;
+	}
 
 private:
 	SelectionVector sel_vector;
+	optional_idx dictionary_size;
 };
 
 class VectorStringBuffer : public VectorBuffer {

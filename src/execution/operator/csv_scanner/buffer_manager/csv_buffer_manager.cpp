@@ -4,11 +4,16 @@
 namespace duckdb {
 
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOptions &options, const string &file_path_p,
-                                   const idx_t file_idx_p, bool per_file_single_threaded_p)
+                                   const idx_t file_idx_p, bool per_file_single_threaded_p,
+                                   unique_ptr<CSVFileHandle> file_handle_p)
     : context(context_p), per_file_single_threaded(per_file_single_threaded_p), file_idx(file_idx_p),
       file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
 	D_ASSERT(!file_path.empty());
-	file_handle = ReadCSV::OpenCSV(file_path, options, context);
+	if (file_handle_p) {
+		file_handle = std::move(file_handle_p);
+	} else {
+		file_handle = ReadCSV::OpenCSV(file_path, options, context);
+	}
 	is_pipe = file_handle->IsPipe();
 	skip_rows = options.dialect_options.skip_rows.GetValue();
 	auto file_size = file_handle->FileSize();
@@ -153,6 +158,10 @@ bool CSVBufferManager::IsBlockUnloaded(idx_t block_idx) {
 		return cached_buffers[block_idx]->IsUnloaded();
 	}
 	return false;
+}
+
+idx_t CSVBufferManager::GetBytesRead() const {
+	return bytes_read;
 }
 
 } // namespace duckdb

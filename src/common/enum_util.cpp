@@ -28,6 +28,7 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/enums/function_errors.hpp"
 #include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
@@ -1700,6 +1701,24 @@ const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandli
 template<>
 FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const char *value) {
 	return static_cast<FunctionCollationHandling>(StringUtil::StringToEnum(GetFunctionCollationHandlingValues(), 3, "FunctionCollationHandling", value));
+}
+
+const StringUtil::EnumStringLiteral *GetFunctionErrorsValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FunctionErrors::CANNOT_ERROR), "CANNOT_ERROR" },
+		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_ERROR), "CAN_THROW_ERROR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value) {
+	return StringUtil::EnumToString(GetFunctionErrorsValues(), 2, "FunctionErrors", static_cast<uint32_t>(value));
+}
+
+template<>
+FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value) {
+	return static_cast<FunctionErrors>(StringUtil::StringToEnum(GetFunctionErrorsValues(), 2, "FunctionErrors", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFunctionNullHandlingValues() {

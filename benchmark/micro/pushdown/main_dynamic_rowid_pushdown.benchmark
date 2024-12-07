@@ -1,0 +1,17 @@
+# name: benchmark/micro/pushdown/main_dynamic_rowid_pushdown.benchmark
+# description: Show the performance of rowid pushdown
+# group: [pushdown]
+
+name RowIdPushdownDynamic
+group micro
+subgroup pushdown
+
+require tpch
+
+cache tpch_sf10.duckdb
+
+load
+CALL dbgen(sf=10);
+
+run
+SELECT * FROM lineitem WHERE rowid IN (SELECT rowid FROM lineitem ORDER BY l_orderkey DESC LIMIT 5);
