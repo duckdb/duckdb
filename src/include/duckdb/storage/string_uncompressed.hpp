@@ -214,12 +214,25 @@ public:
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
-	static string_location_t FetchStringLocation(StringDictionaryContainer dict, data_ptr_t base_ptr,
-	                                             int32_t dict_offset, const idx_t block_size);
-	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                                    data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length);
-	static string_t FetchString(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                            data_ptr_t baseptr, string_location_t location, uint32_t string_length);
+	inline static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
+	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
+		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
+		if (DUCKDB_LIKELY(dict_offset >= 0)) {
+			// regular string - fetch from dictionary
+			auto dict_end = base_ptr + dict.end;
+			auto dict_pos = dict_end - dict_offset;
+
+			auto str_ptr = char_ptr_cast(dict_pos);
+			return string_t(str_ptr, string_length);
+		} else {
+			// read overflow string
+			block_id_t block_id;
+			int32_t offset;
+			ReadStringMarker(base_ptr + dict.end - AbsValue<int32_t>(dict_offset), block_id, offset);
+
+			return ReadOverflowString(segment, result, block_id, offset);
+		}
+	}
 
 	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
 	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);

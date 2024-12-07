@@ -362,9 +362,14 @@ static bool TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 
 bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
                                     const vector<string> &names, const vector<Vector *> &result_vectors,
-                                    JSONTransformOptions &options) {
+                                    JSONTransformOptions &options,
+                                    optional_ptr<const vector<ColumnIndex>> column_indices, bool error_unknown_key) {
+	if (column_indices && column_indices->empty()) {
+		column_indices = nullptr;
+	}
 	D_ASSERT(alc);
 	D_ASSERT(names.size() == result_vectors.size());
+	D_ASSERT(!column_indices || column_indices->size() == names.size());
 	const idx_t column_count = names.size();
 
 	// Build hash map from key to column index so we don't have to linearly search using the key
@@ -429,7 +434,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 					found_keys[col_idx] = true;
 					found_key_count++;
 				}
-			} else if (success && options.error_unknown_key) {
+			} else if (success && error_unknown_key && options.error_unknown_key) {
 				options.error_message =
 				    StringUtil::Format("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
 				                       JSONCommon::ValToString(objects[i], 50));
@@ -458,7 +463,9 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	}
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		if (!JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options)) {
+		auto child_column_index = column_indices ? &(*column_indices)[col_idx] : nullptr;
+		if (!JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options,
+		                              child_column_index)) {
 			success = false;
 		}
 	}
@@ -471,7 +478,11 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 }
 
 static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
-                                    JSONTransformOptions &options) {
+                                    JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index) {
+	if (column_index && column_index->ChildIndexCount() == 0) {
+		column_index = nullptr;
+	}
+
 	// Set validity first
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
@@ -485,14 +496,31 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	auto &child_vs = StructVector::GetEntries(result);
 	vector<string> child_names;
 	vector<Vector *> child_vectors;
-	child_names.reserve(child_vs.size());
-	child_vectors.reserve(child_vs.size());
-	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
-		child_names.push_back(StructType::GetChildName(result.GetType(), child_i));
-		child_vectors.push_back(child_vs[child_i].get());
+
+	const auto child_count = column_index ? column_index->ChildIndexCount() : child_vs.size();
+	child_names.reserve(child_count);
+	child_vectors.reserve(child_count);
+
+	unordered_set<idx_t> projected_indices;
+	for (idx_t child_i = 0; child_i < child_count; child_i++) {
+		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
+		projected_indices.insert(actual_i);
+
+		child_names.push_back(StructType::GetChildName(result.GetType(), actual_i));
+		child_vectors.push_back(child_vs[actual_i].get());
 	}
 
-	return JSONTransform::TransformObject(objects, alc, count, child_names, child_vectors, options);
+	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
+		if (projected_indices.find(child_i) == projected_indices.end()) {
+			child_vs[child_i]->SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(*child_vs[child_i], true);
+		}
+	}
+
+	auto child_indices = column_index ? &column_index->GetChildIndexes() : nullptr;
+	const auto error_unknown_key = child_count == child_vs.size(); // Nothing projected out, error if unknown
+	return JSONTransform::TransformObject(objects, alc, count, child_names, child_vectors, options, child_indices,
+	                                      error_unknown_key);
 }
 
 static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
@@ -562,7 +590,7 @@ static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &
 	}
 
 	// Transform array values
-	if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options)) {
+	if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options, nullptr)) {
 		success = false;
 	}
 
@@ -652,7 +680,7 @@ static bool TransformArrayToArray(yyjson_val *arrays[], yyjson_alc *alc, Vector 
 	}
 
 	// Transform array values
-	if (!JSONTransform::Transform(nested_vals, alc, ArrayVector::GetEntry(result), child_count, options)) {
+	if (!JSONTransform::Transform(nested_vals, alc, ArrayVector::GetEntry(result), child_count, options, nullptr)) {
 		success = false;
 	}
 
@@ -720,13 +748,13 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	D_ASSERT(list_offset == list_size);
 
 	// Transform keys
-	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options)) {
+	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options, nullptr)) {
 		throw ConversionException(
 		    StringUtil::Format(options.error_message + ". Cannot default to NULL, because map keys cannot be NULL"));
 	}
 
 	// Transform values
-	if (!JSONTransform::Transform(vals, alc, MapVector::GetValues(result), list_size, options)) {
+	if (!JSONTransform::Transform(vals, alc, MapVector::GetValues(result), list_size, options, nullptr)) {
 		success = false;
 	}
 
@@ -813,7 +841,7 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 		idx_t actual_tag = tag - names.begin();
 
 		Vector single(UnionType::GetMemberType(type, actual_tag), 1);
-		if (!JSONTransform::Transform(&val, alc, single, 1, options)) {
+		if (!JSONTransform::Transform(&val, alc, single, 1, options, nullptr)) {
 			success = false;
 		}
 
@@ -824,7 +852,7 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 }
 
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
-                              JSONTransformOptions &options) {
+                              JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index) {
 	auto result_type = result.GetType();
 	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map &&
 	    options.date_format_map->HasFormats(result_type.id())) {
@@ -899,7 +927,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
-		return TransformObjectInternal(vals, alc, result, count, options);
+		return TransformObjectInternal(vals, alc, result, count, options, column_index);
 	case LogicalTypeId::LIST:
 		return TransformArrayToList(vals, alc, result, count, options);
 	case LogicalTypeId::MAP:
@@ -935,7 +963,7 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 		}
 	}
 
-	auto success = JSONTransform::Transform(vals, alc, result, count, options);
+	auto success = JSONTransform::Transform(vals, alc, result, count, options, nullptr);
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}

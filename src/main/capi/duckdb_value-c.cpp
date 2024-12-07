@@ -153,9 +153,57 @@ duckdb_value duckdb_create_timestamp(duckdb_timestamp input) {
 
 duckdb_timestamp duckdb_get_timestamp(duckdb_value val) {
 	if (!val) {
-		return duckdb_timestamp {0};
+		return {0};
 	}
 	return {CAPIGetValue<duckdb::timestamp_t, LogicalTypeId::TIMESTAMP>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_tz(duckdb_timestamp input) {
+	duckdb::timestamp_tz_t ts(input.micros);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_tz_t, LogicalTypeId::TIMESTAMP_TZ>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_s(duckdb_timestamp_s input) {
+	duckdb::timestamp_sec_t ts(input.seconds);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp_s duckdb_get_timestamp_s(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_sec_t, LogicalTypeId::TIMESTAMP_SEC>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_ms(duckdb_timestamp_ms input) {
+	duckdb::timestamp_ms_t ts(input.millis);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp_ms duckdb_get_timestamp_ms(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_ms_t, LogicalTypeId::TIMESTAMP_MS>(val).value};
+}
+
+duckdb_value duckdb_create_timestamp_ns(duckdb_timestamp_ns input) {
+	duckdb::timestamp_ns_t ts(input.nanos);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp_ns duckdb_get_timestamp_ns(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_ns_t, LogicalTypeId::TIMESTAMP_NS>(val).value};
 }
 
 duckdb_value duckdb_create_interval(duckdb_interval input) {

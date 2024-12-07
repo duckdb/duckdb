@@ -179,7 +179,8 @@ public:
 
 	//! Column names that we're actually reading (after projection pushdown)
 	vector<string> names;
-	vector<column_t> column_indices;
+	vector<column_t> column_ids;
+	vector<ColumnIndex> column_indices;
 
 	//! Buffer manager allocator
 	Allocator &allocator;

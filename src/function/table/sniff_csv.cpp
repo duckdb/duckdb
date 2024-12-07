@@ -111,6 +111,13 @@ string FormatOptions(char opt) {
 	return result;
 }
 
+string FormatOptions(string opt) {
+	if (opt.size() == 1) {
+		return FormatOptions(opt[0]);
+	}
+	return opt;
+}
+
 static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &global_state = data_p.global_state->Cast<CSVSniffGlobalState>();
 	// Are we done?

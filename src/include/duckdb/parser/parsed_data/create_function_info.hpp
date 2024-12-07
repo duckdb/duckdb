@@ -13,17 +13,24 @@
 
 namespace duckdb {
 
+struct FunctionDescription {
+	//! Parameter types (if any)
+	vector<LogicalType> parameter_types;
+	//! Parameter names (if any)
+	vector<string> parameter_names;
+	//! The description (if any)
+	string description;
+	//! Examples (if any)
+	vector<string> examples;
+};
+
 struct CreateFunctionInfo : public CreateInfo {
 	explicit CreateFunctionInfo(CatalogType type, string schema = DEFAULT_SCHEMA);
 
 	//! Function name
 	string name;
-	//! The description (if any)
-	string description;
-	//! Parameter names (if any)
-	vector<string> parameter_names;
-	//! The example (if any)
-	string example;
+	//! Function description
+	vector<FunctionDescription> descriptions;
 
 	DUCKDB_API void CopyFunctionProperties(CreateFunctionInfo &other) const;
 };

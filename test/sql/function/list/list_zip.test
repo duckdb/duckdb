@@ -315,3 +315,12 @@ SELECT list_zip('')
 statement error
 SELECT list_zip(3, 4)
 ----
+
+statement error
+SELECT list_zip(FALSE)
+----
+
+statement error
+SELECT list_zip(TRUE)
+----
+

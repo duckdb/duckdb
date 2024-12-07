@@ -279,18 +279,87 @@ void DBConfig::ResetOption(const string &name) {
 
 LogicalType DBConfig::ParseLogicalType(const string &type) {
 	if (StringUtil::EndsWith(type, "[]")) {
-		// array - recurse
+		// list - recurse
 		auto child_type = ParseLogicalType(type.substr(0, type.size() - 2));
 		return LogicalType::LIST(child_type);
 	}
-	if (StringUtil::EndsWith(type, "()")) {
-		if (type != "STRUCT()") {
-			throw InternalException("Error while generating extension function overloads - expected STRUCT(), not %s",
-			                        type);
+
+	if (StringUtil::EndsWith(type, "]")) {
+		// array - recurse
+		auto bracket_open_idx = type.rfind('[');
+		if (bracket_open_idx == DConstants::INVALID_INDEX || bracket_open_idx == 0) {
+			throw InternalException("Ill formatted type: '%s'", type);
 		}
-		return LogicalType::STRUCT({});
+		idx_t array_size = 0;
+		for (auto length_idx = bracket_open_idx + 1; length_idx < type.size() - 1; length_idx++) {
+			if (!isdigit(type[length_idx])) {
+				throw InternalException("Ill formatted array type: '%s'", type);
+			}
+			array_size = array_size * 10 + static_cast<idx_t>(type[length_idx] - '0');
+		}
+		if (array_size == 0 || array_size > ArrayType::MAX_ARRAY_SIZE) {
+			throw InternalException("Invalid array size: '%s'", type);
+		}
+		auto child_type = ParseLogicalType(type.substr(0, bracket_open_idx));
+		return LogicalType::ARRAY(child_type, array_size);
 	}
-	auto type_id = TransformStringToLogicalTypeId(type);
+
+	if (StringUtil::StartsWith(type, "MAP(") && StringUtil::EndsWith(type, ")")) {
+		// map - recurse
+		string map_args = type.substr(4, type.size() - 5);
+		vector<string> map_args_vect = StringUtil::SplitWithParentheses(map_args);
+		if (map_args_vect.size() != 2) {
+			throw InternalException("Ill formatted map type: '%s'", type);
+		}
+		StringUtil::Trim(map_args_vect[0]);
+		StringUtil::Trim(map_args_vect[1]);
+		auto key_type = ParseLogicalType(map_args_vect[0]);
+		auto value_type = ParseLogicalType(map_args_vect[1]);
+		return LogicalType::MAP(key_type, value_type);
+	}
+
+	if (StringUtil::StartsWith(type, "UNION(") && StringUtil::EndsWith(type, ")")) {
+		// union - recurse
+		string union_members_str = type.substr(6, type.size() - 7);
+		vector<string> union_members_vect = StringUtil::SplitWithParentheses(union_members_str);
+		child_list_t<LogicalType> union_members;
+		for (idx_t member_idx = 0; member_idx < union_members_vect.size(); member_idx++) {
+			StringUtil::Trim(union_members_vect[member_idx]);
+			vector<string> union_member_parts = StringUtil::SplitWithParentheses(union_members_vect[member_idx], ' ');
+			if (union_member_parts.size() != 2) {
+				throw InternalException("Ill formatted union type: %s", type);
+			}
+			StringUtil::Trim(union_member_parts[0]);
+			StringUtil::Trim(union_member_parts[1]);
+			auto value_type = ParseLogicalType(union_member_parts[1]);
+			union_members.emplace_back(make_pair(union_member_parts[0], value_type));
+		}
+		if (union_members.empty() || union_members.size() > UnionType::MAX_UNION_MEMBERS) {
+			throw InternalException("Invalid number of union members: '%s'", type);
+		}
+		return LogicalType::UNION(union_members);
+	}
+
+	if (StringUtil::StartsWith(type, "STRUCT(") && StringUtil::EndsWith(type, ")")) {
+		// struct - recurse
+		string struct_members_str = type.substr(7, type.size() - 8);
+		vector<string> struct_members_vect = StringUtil::SplitWithParentheses(struct_members_str);
+		child_list_t<LogicalType> struct_members;
+		for (idx_t member_idx = 0; member_idx < struct_members_vect.size(); member_idx++) {
+			StringUtil::Trim(struct_members_vect[member_idx]);
+			vector<string> struct_member_parts = StringUtil::SplitWithParentheses(struct_members_vect[member_idx], ' ');
+			if (struct_member_parts.size() != 2) {
+				throw InternalException("Ill formatted struct type: %s", type);
+			}
+			StringUtil::Trim(struct_member_parts[0]);
+			StringUtil::Trim(struct_member_parts[1]);
+			auto value_type = ParseLogicalType(struct_member_parts[1]);
+			struct_members.emplace_back(make_pair(struct_member_parts[0], value_type));
+		}
+		return LogicalType::STRUCT(struct_members);
+	}
+
+	LogicalType type_id = StringUtil::CIEquals(type, "ANY") ? LogicalType::ANY : TransformStringToLogicalTypeId(type);
 	if (type_id == LogicalTypeId::USER) {
 		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
 		                        type);

@@ -1,0 +1,22 @@
+# name: test/sql/function/list/aggregates/sum_bool.test
+# description: Test the SUM(bool)
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers SELECT CASE WHEN i%3=0 THEN NULL ELSE i END i FROM range(10000) t(i);
+
+query III
+SELECT SUM(i > 500), SUM(i=1), SUM(i IS NULL) FROM integers
+----
+6332	1	3334
+
+query III
+SELECT COUNTIF(i > 500), COUNT_IF(i=1), COUNTIF(i IS NULL) FROM integers
+----
+6332	1	3334

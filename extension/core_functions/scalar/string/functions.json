@@ -245,9 +245,23 @@
     },
     {
         "name": "trim",
-        "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the characters from either side of the string",
-        "example": "trim('>>>>test<<', '><')",
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"}
+                ],
+                "description": "Removes any spaces from either side of the string.",
+                "example": "trim(' test ')"
+            },
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "characters", "type": "VARCHAR"}
+                ],
+                "description": "Removes any occurrences of any of the characters from either side of the string",
+                "example": "trim('>>>>test<<', '><')"
+            }
+        ],
         "type": "scalar_function_set"
     },
     {

@@ -98,7 +98,7 @@ void ErrorData::ConvertErrorToJSON() {
 		// empty or already JSON
 		return;
 	}
-	raw_message = StringUtil::ToJSONMap(type, raw_message, extra_info);
+	raw_message = StringUtil::ExceptionToJSONMap(type, raw_message, extra_info);
 	final_message = raw_message;
 }
 

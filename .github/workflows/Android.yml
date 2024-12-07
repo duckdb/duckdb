@@ -46,6 +46,7 @@ jobs:
     name: Android
     runs-on: ubuntu-latest
     container: ubuntu:18.04
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
 
     strategy:
       matrix:

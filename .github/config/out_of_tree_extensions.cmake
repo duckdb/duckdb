@@ -34,6 +34,10 @@ if (NOT MINGW)
             )
 endif()
 
+### Currently libxml2, an azure dependency, has the repository repo return 503
+### Re-enable AZURE when the problem goes away. This means AZURE needs to be
+### build on a side
+if (NO)
 ################# AZURE
 if (NOT MINGW)
     duckdb_extension_load(azure
@@ -42,6 +46,7 @@ if (NOT MINGW)
             GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
             APPLY_PATCHES
             )
+endif()
 endif()
 
 ################# DELTA
@@ -132,17 +137,6 @@ duckdb_extension_load(sqlsmith
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
         GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
         )
-
-################# SUBSTRAIT
-if (NOT WIN32)
-    duckdb_extension_load(substrait
-            LOAD_TESTS DONT_LINK
-            GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG be71387cf0a484dc7b261a0cb21abec0d0e0ce5c
-            APPLY_PATCHES
-            )
-endif()
-
 
 ################# VSS
 duckdb_extension_load(vss

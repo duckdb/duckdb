@@ -184,6 +184,8 @@ public:
 	const bool null_padding;
 	const bool ignore_errors;
 
+	const idx_t extra_delimiter_bytes = 0;
+
 	unsafe_unique_array<const char *> null_str_ptr;
 	unsafe_unique_array<idx_t> null_str_size;
 	idx_t null_str_count;
@@ -253,12 +255,14 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
-	//! Force the throw of a unicode error
+	//! Force the throw of a Unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
 	static inline void SetComment(StringValueResult &result, idx_t buffer_pos);
 	static inline bool UnsetComment(StringValueResult &result, idx_t buffer_pos);
+
+	inline idx_t HandleMultiDelimiter(const idx_t buffer_pos) const;
 
 	DataChunk &ToChunk();
 	//! Resets the state of the result
@@ -353,6 +357,8 @@ private:
 	idx_t start_pos;
 	//! Pointer to the previous buffer handle, necessary for over-buffer values
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
+	//! Strict state machine, is basically a state machine with rfc 4180 set to true, used to figure out new line.
+	shared_ptr<CSVStateMachine> state_machine_strict;
 };
 
 } // namespace duckdb
