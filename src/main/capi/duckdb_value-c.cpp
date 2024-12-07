@@ -123,10 +123,26 @@ duckdb_varint duckdb_get_varint(duckdb_value val) {
 	return {nullptr, 0, false};
 }
 duckdb_value duckdb_create_decimal(duckdb_decimal input) {
-	return nullptr;
+	hugeint_t hugeint(input.value.upper, input.value.lower);
+	int64_t int64;
+	if (duckdb::Hugeint::TryCast<int64_t>(hugeint, int64)) {
+		// The int64 DECIMAL value constructor will select the appropriate physical type based on width.
+		return WrapValue(new duckdb::Value(duckdb::Value::DECIMAL(int64, input.width, input.scale)));
+	} else {
+		// The hugeint DECIMAL value constructor always uses a physical hugeint, and requires width >= MAX_WIDTH_INT64.
+		return WrapValue(new duckdb::Value(duckdb::Value::DECIMAL(hugeint, input.width, input.scale)));
+	}
 }
 duckdb_decimal duckdb_get_decimal(duckdb_value val) {
-	return {0, 0, {0, 0}};
+	auto &v = UnwrapValue(val);
+	auto &type = v.type();
+	if (type.id() != LogicalTypeId::DECIMAL) {
+		return {0, 0, {0, 0}};
+	}
+	auto width = duckdb::DecimalType::GetWidth(type);
+	auto scale = duckdb::DecimalType::GetScale(type);
+	hugeint_t hugeint = duckdb::IntegralValue::Get(v);
+	return {width, scale, {hugeint.lower, hugeint.upper}};
 }
 duckdb_value duckdb_create_float(float input) {
 	return CAPICreateValue(input);

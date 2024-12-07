@@ -142,6 +142,137 @@ TEST_CASE("Test NULL value", "[capi]") {
 	duckdb_destroy_value(&null_value);
 }
 
+TEST_CASE("Test DECIMAL value", "[capi]") {
+	{
+		auto hugeint = Hugeint::POWERS_OF_TEN[4] - hugeint_t(1);
+		duckdb_decimal input {4, 1, {hugeint.lower, hugeint.upper}};
+		auto value = duckdb_create_decimal(input);
+		auto type = duckdb_get_value_type(value);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == input.width);
+		REQUIRE(duckdb_decimal_scale(type) == input.scale);
+		REQUIRE(duckdb_decimal_internal_type(type) == DUCKDB_TYPE_SMALLINT);
+		auto output = duckdb_get_decimal(value);
+		REQUIRE(output.width == input.width);
+		REQUIRE(output.scale == input.scale);
+		REQUIRE(output.value.lower == input.value.lower);
+		REQUIRE(output.value.upper == input.value.upper);
+		duckdb_destroy_value(&value);
+	}
+	{
+		auto hugeint = -(Hugeint::POWERS_OF_TEN[4] - hugeint_t(1));
+		duckdb_decimal input {4, 1, {hugeint.lower, hugeint.upper}};
+		auto value = duckdb_create_decimal(input);
+		auto type = duckdb_get_value_type(value);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == input.width);
+		REQUIRE(duckdb_decimal_scale(type) == input.scale);
+		REQUIRE(duckdb_decimal_internal_type(type) == DUCKDB_TYPE_SMALLINT);
+		auto output = duckdb_get_decimal(value);
+		REQUIRE(output.width == input.width);
+		REQUIRE(output.scale == input.scale);
+		REQUIRE(output.value.lower == input.value.lower);
+		REQUIRE(output.value.upper == input.value.upper);
+		duckdb_destroy_value(&value);
+	}
+	{
+		auto hugeint = Hugeint::POWERS_OF_TEN[9] - hugeint_t(1);
+		duckdb_decimal input {9, 4, {hugeint.lower, hugeint.upper}};
+		auto value = duckdb_create_decimal(input);
+		auto type = duckdb_get_value_type(value);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == input.width);
+		REQUIRE(duckdb_decimal_scale(type) == input.scale);
+		REQUIRE(duckdb_decimal_internal_type(type) == DUCKDB_TYPE_INTEGER);
+		auto output = duckdb_get_decimal(value);
+		REQUIRE(output.width == input.width);
+		REQUIRE(output.scale == input.scale);
+		REQUIRE(output.value.lower == input.value.lower);
+		REQUIRE(output.value.upper == input.value.upper);
+		duckdb_destroy_value(&value);
+	}
+	{
+		auto hugeint = -(Hugeint::POWERS_OF_TEN[9] - hugeint_t(1));
+		duckdb_decimal input {9, 4, {hugeint.lower, hugeint.upper}};
+		auto value = duckdb_create_decimal(input);
+		auto type = duckdb_get_value_type(value);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == input.width);
+		REQUIRE(duckdb_decimal_scale(type) == input.scale);
+		REQUIRE(duckdb_decimal_internal_type(type) == DUCKDB_TYPE_INTEGER);
+		auto output = duckdb_get_decimal(value);
+		REQUIRE(output.width == input.width);
+		REQUIRE(output.scale == input.scale);
+		REQUIRE(output.value.lower == input.value.lower);
+		REQUIRE(output.value.upper == input.value.upper);
+		duckdb_destroy_value(&value);
+	}
+	{
+		auto hugeint = Hugeint::POWERS_OF_TEN[18] - hugeint_t(1);
+		duckdb_decimal input {18, 6, {hugeint.lower, hugeint.upper}};
+		auto value = duckdb_create_decimal(input);
+		auto type = duckdb_get_value_type(value);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == input.width);
+		REQUIRE(duckdb_decimal_scale(type) == input.scale);
+		REQUIRE(duckdb_decimal_internal_type(type) == DUCKDB_TYPE_BIGINT);
+		auto output = duckdb_get_decimal(value);
+		REQUIRE(output.width == input.width);
+		REQUIRE(output.scale == input.scale);
+		REQUIRE(output.value.lower == input.value.lower);
+		REQUIRE(output.value.upper == input.value.upper);
+		duckdb_destroy_value(&value);
+	}
+	{
+		auto hugeint = -(Hugeint::POWERS_OF_TEN[18] - hugeint_t(1));
+		duckdb_decimal input {18, 8, {hugeint.lower, hugeint.upper}};
+		auto value = duckdb_create_decimal(input);
+		auto type = duckdb_get_value_type(value);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == input.width);
+		REQUIRE(duckdb_decimal_scale(type) == input.scale);
+		REQUIRE(duckdb_decimal_internal_type(type) == DUCKDB_TYPE_BIGINT);
+		auto output = duckdb_get_decimal(value);
+		REQUIRE(output.width == input.width);
+		REQUIRE(output.scale == input.scale);
+		REQUIRE(output.value.lower == input.value.lower);
+		REQUIRE(output.value.upper == input.value.upper);
+		duckdb_destroy_value(&value);
+	}
+	{
+		auto hugeint = Hugeint::POWERS_OF_TEN[38] - hugeint_t(1);
+		duckdb_decimal input {38, 10, {hugeint.lower, hugeint.upper}};
+		auto value = duckdb_create_decimal(input);
+		auto type = duckdb_get_value_type(value);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == input.width);
+		REQUIRE(duckdb_decimal_scale(type) == input.scale);
+		REQUIRE(duckdb_decimal_internal_type(type) == DUCKDB_TYPE_HUGEINT);
+		auto output = duckdb_get_decimal(value);
+		REQUIRE(output.width == input.width);
+		REQUIRE(output.scale == input.scale);
+		REQUIRE(output.value.lower == input.value.lower);
+		REQUIRE(output.value.upper == input.value.upper);
+		duckdb_destroy_value(&value);
+	}
+	{
+		auto hugeint = -(Hugeint::POWERS_OF_TEN[38] - hugeint_t(1));
+		duckdb_decimal input {38, 10, {hugeint.lower, hugeint.upper}};
+		auto value = duckdb_create_decimal(input);
+		auto type = duckdb_get_value_type(value);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == input.width);
+		REQUIRE(duckdb_decimal_scale(type) == input.scale);
+		REQUIRE(duckdb_decimal_internal_type(type) == DUCKDB_TYPE_HUGEINT);
+		auto output = duckdb_get_decimal(value);
+		REQUIRE(output.width == input.width);
+		REQUIRE(output.scale == input.scale);
+		REQUIRE(output.value.lower == input.value.lower);
+		REQUIRE(output.value.upper == input.value.upper);
+		duckdb_destroy_value(&value);
+	}
+}
+
 TEST_CASE("Test UUID value", "[capi]") {
 	{
 		duckdb_uhugeint uhugeint_input {0x0000000000000000, 0x0000000000000000};
