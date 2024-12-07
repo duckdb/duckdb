@@ -316,7 +316,7 @@ void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnS
 	result.Slice(sel, s_count);
 }
 
-void ColumnData::FilterScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
+void ColumnData::SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
                                      idx_t s_count, bool allow_updates) {
 	ScanCommitted(vector_index, state, result, allow_updates);
 	result.Slice(sel, s_count);
