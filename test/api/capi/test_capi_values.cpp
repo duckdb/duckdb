@@ -146,49 +146,55 @@ TEST_CASE("Test UUID value", "[capi]") {
 	{
 		duckdb_uhugeint uhugeint_input {0x0000000000000000, 0x0000000000000000};
 		auto uuid_value = duckdb_create_uuid(uhugeint_input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(uuid_value)) == DUCKDB_TYPE_UUID);
 		auto uhugeint_output = duckdb_get_uuid(uuid_value);
-		duckdb_destroy_value(&uuid_value);
 		REQUIRE(uhugeint_output.lower == uhugeint_input.lower);
 		REQUIRE(uhugeint_output.upper == uhugeint_input.upper);
+		duckdb_destroy_value(&uuid_value);
 	}
 	{
 		duckdb_uhugeint uhugeint_input {0x0000000000000001, 0x0000000000000000};
 		auto uuid_value = duckdb_create_uuid(uhugeint_input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(uuid_value)) == DUCKDB_TYPE_UUID);
 		auto uhugeint_output = duckdb_get_uuid(uuid_value);
-		duckdb_destroy_value(&uuid_value);
 		REQUIRE(uhugeint_output.lower == uhugeint_input.lower);
 		REQUIRE(uhugeint_output.upper == uhugeint_input.upper);
+		duckdb_destroy_value(&uuid_value);
 	}
 	{
 		duckdb_uhugeint uhugeint_input {0xffffffffffffffff, 0xffffffffffffffff};
 		auto uuid_value = duckdb_create_uuid(uhugeint_input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(uuid_value)) == DUCKDB_TYPE_UUID);
 		auto uhugeint_output = duckdb_get_uuid(uuid_value);
-		duckdb_destroy_value(&uuid_value);
 		REQUIRE(uhugeint_output.lower == uhugeint_input.lower);
 		REQUIRE(uhugeint_output.upper == uhugeint_input.upper);
+		duckdb_destroy_value(&uuid_value);
 	}
 	{
 		duckdb_uhugeint uhugeint_input {0xfffffffffffffffe, 0xffffffffffffffff};
 		auto uuid_value = duckdb_create_uuid(uhugeint_input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(uuid_value)) == DUCKDB_TYPE_UUID);
 		auto uhugeint_output = duckdb_get_uuid(uuid_value);
-		duckdb_destroy_value(&uuid_value);
 		REQUIRE(uhugeint_output.lower == uhugeint_input.lower);
 		REQUIRE(uhugeint_output.upper == uhugeint_input.upper);
+		duckdb_destroy_value(&uuid_value);
 	}
 	{
 		duckdb_uhugeint uhugeint_input {0xffffffffffffffff, 0x8fffffffffffffff};
 		auto uuid_value = duckdb_create_uuid(uhugeint_input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(uuid_value)) == DUCKDB_TYPE_UUID);
 		auto uhugeint_output = duckdb_get_uuid(uuid_value);
-		duckdb_destroy_value(&uuid_value);
 		REQUIRE(uhugeint_output.lower == uhugeint_input.lower);
 		REQUIRE(uhugeint_output.upper == uhugeint_input.upper);
+		duckdb_destroy_value(&uuid_value);
 	}
 	{
 		duckdb_uhugeint uhugeint_input {0x0000000000000000, 0x7000000000000000};
 		auto uuid_value = duckdb_create_uuid(uhugeint_input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(uuid_value)) == DUCKDB_TYPE_UUID);
 		auto uhugeint_output = duckdb_get_uuid(uuid_value);
-		duckdb_destroy_value(&uuid_value);
 		REQUIRE(uhugeint_output.lower == uhugeint_input.lower);
 		REQUIRE(uhugeint_output.upper == uhugeint_input.upper);
+		duckdb_destroy_value(&uuid_value);
 	}
 }
