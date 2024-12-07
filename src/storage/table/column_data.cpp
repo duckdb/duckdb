@@ -136,10 +136,7 @@ void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanSta
 	}
 }
 
-idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
-	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
-		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
-	}
+void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 	state.previous_states.clear();
 	if (!state.initialized) {
 		D_ASSERT(state.current);
@@ -153,6 +150,13 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		state.current->Skip(state);
 	}
 	D_ASSERT(state.current->type == type);
+}
+
+idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
+	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
+		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
+	}
+	BeginScanVectorInternal(state);
 	idx_t initial_remaining = remaining;
 	while (remaining > 0) {
 		D_ASSERT(state.row_index >= state.current->start &&
@@ -230,26 +234,23 @@ void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index,
 	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
-template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             idx_t target_scan) {
-	auto scan_type = GetVectorScanType(state, target_scan, result);
+                             idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode) {
 	auto scan_count = ScanVector(state, result, target_scan, scan_type);
 	if (scan_type != ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		// if we are scanning an entire vector we cannot have updates
-		FetchUpdates(transaction, vector_index, result, scan_count, ALLOW_UPDATES, SCAN_COMMITTED);
+		bool allow_updates = mode != ScanVectorMode::SCAN_COMMITTED_NO_UPDATES;
+		bool scan_committed = mode != ScanVectorMode::REGULAR_SCAN;
+		FetchUpdates(transaction, vector_index, result, scan_count, allow_updates, scan_committed);
 	}
 	return scan_count;
 }
 
-template idx_t ColumnData::ScanVector<false, false>(TransactionData transaction, idx_t vector_index,
-                                                    ColumnScanState &state, Vector &result, idx_t target_scan);
-template idx_t ColumnData::ScanVector<true, false>(TransactionData transaction, idx_t vector_index,
-                                                   ColumnScanState &state, Vector &result, idx_t target_scan);
-template idx_t ColumnData::ScanVector<false, true>(TransactionData transaction, idx_t vector_index,
-                                                   ColumnScanState &state, Vector &result, idx_t target_scan);
-template idx_t ColumnData::ScanVector<true, true>(TransactionData transaction, idx_t vector_index,
-                                                  ColumnScanState &state, Vector &result, idx_t target_scan);
+idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             idx_t target_scan, ScanVectorMode mode) {
+	auto scan_type = GetVectorScanType(state, target_scan, result);
+	return ScanVector(transaction, vector_index, state, result, target_scan, scan_type, mode);
+}
 
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	auto target_count = GetVectorCount(vector_index);
@@ -263,16 +264,14 @@ idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vect
 
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                        idx_t scan_count) {
-	return ScanVector<false, true>(transaction, vector_index, state, result, scan_count);
+	return ScanVector(transaction, vector_index, state, result, scan_count, ScanVectorMode::REGULAR_SCAN);
 }
 
 idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
                                 idx_t scan_count) {
-	if (allow_updates) {
-		return ScanVector<true, true>(TransactionData(0, 0), vector_index, state, result, scan_count);
-	} else {
-		return ScanVector<true, false>(TransactionData(0, 0), vector_index, state, result, scan_count);
-	}
+	auto mode = allow_updates ? ScanVectorMode::SCAN_COMMITTED : ScanVectorMode::SCAN_COMMITTED_NO_UPDATES;
+	TransactionData commit_transaction(0, 0);
+	return ScanVector(commit_transaction, vector_index, state, result, scan_count, mode);
 }
 
 idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
@@ -311,13 +310,13 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                            SelectionVector &sel, idx_t s_count) {
+                        SelectionVector &sel, idx_t s_count) {
 	Scan(transaction, vector_index, state, result);
 	result.Slice(sel, s_count);
 }
 
 void ColumnData::SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                                     idx_t s_count, bool allow_updates) {
+                                 idx_t s_count, bool allow_updates) {
 	ScanCommitted(vector_index, state, result, allow_updates);
 	result.Slice(sel, s_count);
 }
