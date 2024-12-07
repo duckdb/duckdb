@@ -142,9 +142,22 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 }
 
 BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
+	QueryErrorContext error_context(window.query_location);
+	//	Check for macros pretending to be aggregates
+	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
+		auto func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, window.catalog, window.schema,
+		                            window.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+		if (func && func->type == CatalogType::MACRO_ENTRY) {
+			auto macro = make_uniq<FunctionExpression>(window.catalog, window.schema, window.function_name,
+			                                           std::move(window.children), std::move(window.filter_expr),
+			                                           nullptr, window.distinct);
+			auto macro_expr = window.Copy();
+			return BindMacro(*macro, func->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
+		}
+	}
+
 	auto name = window.GetName();
 
-	QueryErrorContext error_context(window.query_location);
 	if (inside_window) {
 		throw BinderException(error_context, "window function calls cannot be nested");
 	}
