@@ -22,6 +22,15 @@ AttachStmt:
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
+				| ATTACH OR REPLACE opt_database Sconst opt_database_alias copy_options
+				{
+					PGAttachStmt *n = makeNode(PGAttachStmt);
+					n->path = $5;
+					n->name = $6;
+					n->options = $7;
+					n->onconflict = PG_REPLACE_ON_CONFLICT;
+					$$ = (PGNode *)n;
+				}
 		;
 
 DetachStmt:
