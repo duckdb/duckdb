@@ -132,7 +132,9 @@ static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFuncti
 		throw BinderException("Provide at least one argument to " + bound_function.name);
 	}
 	if (arguments[size - 1]->return_type.id() == LogicalTypeId::BOOLEAN) {
-		size--;
+		if (--size == 0) {
+			throw BinderException("Provide at least one list argument to " + bound_function.name);
+		}
 	}
 
 	case_insensitive_set_t struct_names;

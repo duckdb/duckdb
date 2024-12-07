@@ -441,8 +441,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 }
 
 HTTPFileHandle::HTTPFileHandle(FileSystem &fs, const string &path, FileOpenFlags flags, const HTTPParams &http_params)
-    : FileHandle(fs, path), http_params(http_params), flags(flags), length(0), buffer_available(0), buffer_idx(0),
-      file_offset(0), buffer_start(0), buffer_end(0) {
+    : FileHandle(fs, path, flags), http_params(http_params), flags(flags), length(0), buffer_available(0),
+      buffer_idx(0), file_offset(0), buffer_start(0), buffer_end(0) {
 }
 
 unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, FileOpenFlags flags,
@@ -651,6 +651,27 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 	return nullptr;
 }
 
+void HTTPFileHandle::FullDownload(HTTPFileSystem &hfs, bool &should_write_cache) {
+	// We are going to download the file at full, we don't need to do no head request.
+	const auto &cache_entry = state->GetCachedFile(path);
+	cached_file_handle = cache_entry->GetHandle();
+	if (!cached_file_handle->Initialized()) {
+		// Try to fully download the file first
+		const auto full_download_result = hfs.GetRequest(*this, path, {});
+		if (full_download_result->code != 200) {
+			throw HTTPException(*full_download_result, "Full download failed to to URL \"%s\": %s (%s)",
+			                    full_download_result->http_url, to_string(full_download_result->code),
+			                    full_download_result->error);
+		}
+		// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
+		cached_file_handle->SetInitialized(length);
+		// We shouldn't write these to cache
+		should_write_cache = false;
+	} else {
+		length = cached_file_handle->GetSize();
+	}
+}
+
 void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
@@ -666,8 +687,12 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	auto current_cache = TryGetMetadataCache(opener, hfs);
 
 	bool should_write_cache = false;
-	if (!http_params.force_download && current_cache && !flags.OpenForWriting()) {
+	if (http_params.force_download) {
+		FullDownload(hfs, should_write_cache);
+		return;
+	}
 
+	if (current_cache && !flags.OpenForWriting()) {
 		HTTPMetadataCacheEntry value;
 		bool found = current_cache->Find(path, value);
 
@@ -704,24 +729,19 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 			// HEAD request fail, use Range request for another try (read only one byte)
 			if (flags.OpenForReading() && res->code != 404) {
 				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
-				if (range_res->code != 206) {
-					throw IOException("Unable to connect to URL \"%s\": %d (%s)", path, res->code, res->error);
+				if (range_res->code != 206 && range_res->code != 202 && range_res->code != 200) {
+					throw IOException("Unable to connect to URL \"%s\": %d (%s).", path, res->code, res->error);
 				}
 				auto range_find = range_res->headers["Content-Range"].find("/");
-
-				if (range_find == std::string::npos || range_res->headers["Content-Range"].size() < range_find + 1) {
-					throw IOException("Unknown Content-Range Header \"The value of Content-Range Header\":  (%s)",
-					                  range_res->headers["Content-Range"]);
+				if (!(range_find == std::string::npos || range_res->headers["Content-Range"].size() < range_find + 1)) {
+					range_length = range_res->headers["Content-Range"].substr(range_find + 1);
+					if (range_length != "*") {
+						res = std::move(range_res);
+					}
 				}
-
-				range_length = range_res->headers["Content-Range"].substr(range_find + 1);
-				if (range_length == "*") {
-					throw IOException("Unknown total length of the document \"%s\": %d (%s)", path, res->code,
-					                  res->error);
-				}
-				res = std::move(range_res);
 			} else {
-				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url,
+				// It failed again
+				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s).", res->http_url,
 				                    to_string(res->code), res->error);
 			}
 		}
@@ -748,31 +768,11 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		}
 	}
-	if (state && (length == 0 || http_params.force_download)) {
-		auto &cache_entry = state->GetCachedFile(path);
-		cached_file_handle = cache_entry->GetHandle();
-		if (!cached_file_handle->Initialized()) {
-			// Try to fully download the file first
-			auto full_download_result = hfs.GetRequest(*this, path, {});
-			if (full_download_result->code != 200) {
-				throw HTTPException(*res, "Full download failed to to URL \"%s\": %s (%s)",
-				                    full_download_result->http_url, to_string(full_download_result->code),
-				                    full_download_result->error);
-			}
-
-			// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
-			cached_file_handle->SetInitialized(length);
-
-			// We shouldn't write these to cache
-			should_write_cache = false;
-		} else {
-			length = cached_file_handle->GetSize();
-		}
+	if (state && length == 0) {
+		FullDownload(hfs, should_write_cache);
 	}
-
 	if (!res->headers["Last-Modified"].empty()) {
 		auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"]);
-
 		struct tm tm {};
 		tm.tm_year = result.data[0] - 1900;
 		tm.tm_mon = result.data[1] - 1;

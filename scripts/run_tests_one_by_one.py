@@ -2,6 +2,7 @@ import sys
 import subprocess
 import time
 import threading
+import tempfile
 
 import argparse
 
@@ -23,6 +24,9 @@ parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
 parser.add_argument('--list', action='store_true', help='Print the list of tests to run')
+parser.add_argument(
+    '--tests-per-invocation', type=int, help='The amount of tests to run per invocation of the runner', default=1
+)
 parser.add_argument(
     '--print-interval', action='store', help='Prints "Still running..." every N seconds', default=300.0, type=float
 )
@@ -117,31 +121,40 @@ def print_interval_background(interval):
             current_ticker = 0
 
 
-for test_number, test_case in enumerate(test_cases):
-    if not profile:
-        print(f"[{test_number}/{test_count}]: {test_case}", end="", flush=True)
-
+def launch_test(test, list_of_tests=False):
+    global is_active
     # start the background thread
     is_active = True
     background_print_thread = threading.Thread(target=print_interval_background, args=[args.print_interval])
     background_print_thread.start()
 
+    unittest_stdout = sys.stdout if list_of_tests else subprocess.PIPE
+    unittest_stderr = sys.stderr if list_of_tests else subprocess.PIPE
+
     start = time.time()
     try:
-        test_cmd = [unittest_program, test_case]
+        test_cmd = [unittest_program] + test
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
-        res = subprocess.run(test_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout)
     except subprocess.TimeoutExpired as e:
-        print(" (TIMED OUT)", flush=True)
+        if list_of_tests:
+            print("[TIMED OUT]", flush=True)
+        else:
+            print(" (TIMED OUT)", flush=True)
         fail()
-        continue
+        return
 
-    stdout = res.stdout.decode('utf8')
-    stderr = res.stderr.decode('utf8')
+    if list_of_tests:
+        stdout = ''
+        stderr = ''
+    else:
+        stdout = res.stdout.decode('utf8')
+        stderr = res.stderr.decode('utf8')
+
     end = time.time()
 
-    # joint he background print thread
+    # join the background print thread
     is_active = False
     background_print_thread.join()
 
@@ -150,36 +163,69 @@ for test_number, test_case in enumerate(test_cases):
         additional_data += " (" + parse_assertions(stdout) + ")"
     if args.time_execution:
         additional_data += f" (Time: {end - start:.4f} seconds)"
-
     print(additional_data, flush=True)
     if profile:
         print(f'{test_case}	{end - start}')
     if res.returncode is None or res.returncode == 0:
-        continue
+        return
 
     print("FAILURE IN RUNNING TEST")
     print(
         """--------------------
 RETURNCODE
---------------------
-"""
+--------------------"""
     )
     print(res.returncode)
-    print(
-        """--------------------
+    if not list_of_tests:
+        print(
+            """--------------------
 STDOUT
---------------------
-"""
-    )
-    print(stdout)
-    print(
-        """--------------------
+--------------------"""
+        )
+        print(stdout)
+        print(
+            """--------------------
 STDERR
---------------------
-"""
-    )
-    print(stderr)
+--------------------"""
+        )
+        print(stderr)
     fail()
+
+
+def run_tests_one_by_one():
+    for test_number, test_case in enumerate(test_cases):
+        if not profile:
+            print(f"[{test_number}/{test_count}]: {test_case}", end="", flush=True)
+        launch_test([test_case])
+
+
+def escape_test_case(test_case):
+    return test_case.replace(',', '\\,')
+
+
+def run_tests_batched(batch_count):
+    tmp = tempfile.NamedTemporaryFile()
+    # write the test list to a temporary file
+    with open(tmp.name, 'w') as f:
+        for test_case in test_cases:
+            f.write(escape_test_case(test_case) + '\n')
+    # use start_offset/end_offset to cycle through the test list
+    test_number = 0
+    while test_number < len(test_cases):
+        # gather test cases
+        next_entry = test_number + batch_count
+        if next_entry > len(test_cases):
+            next_entry = len(test_cases)
+
+        launch_test(['-f', tmp.name, '--start-offset', str(test_number), '--end-offset', str(next_entry)], True)
+        test_number = next_entry
+
+
+if args.tests_per_invocation == 1:
+    run_tests_one_by_one()
+else:
+    assertions = False
+    run_tests_batched(args.tests_per_invocation)
 
 if all_passed:
     exit(0)

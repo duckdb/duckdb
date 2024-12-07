@@ -516,6 +516,7 @@ typedef struct {
 	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
+	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
 #endif
 
 } duckdb_ext_api_v0;
@@ -920,6 +921,7 @@ typedef struct {
 #define duckdb_appender_create_ext               duckdb_ext_api.duckdb_appender_create_ext
 #define duckdb_appender_add_column               duckdb_ext_api.duckdb_appender_add_column
 #define duckdb_appender_clear_columns            duckdb_ext_api.duckdb_appender_clear_columns
+#define duckdb_append_value                      duckdb_ext_api.duckdb_append_value
 #define duckdb_table_description_create_ext      duckdb_ext_api.duckdb_table_description_create_ext
 #define duckdb_table_description_get_column_name duckdb_ext_api.duckdb_table_description_get_column_name
 

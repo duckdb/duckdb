@@ -4,7 +4,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql.column import Column
-from spark_namespace.sql.functions import struct, array
+from spark_namespace.sql.functions import struct, array, col
 from spark_namespace.sql.types import Row
 from spark_namespace.errors import PySparkTypeError
 
@@ -49,3 +49,21 @@ class TestSparkColumn(object):
         assert res[0].array == [1, 2]
         assert res[0].array_single == [1]
         assert res[0].array_str == [2, 3, 4]
+
+    def test_isnull(self, spark):
+        df = spark.createDataFrame([(1, None), (None, 2)], ("a", "b"))
+
+        res = df.select("a", "b", col("a").isNull().alias("r1"), df.b.isNull().alias("r2")).collect()
+        assert res == [
+            Row(a=1, b=None, r1=False, r2=True),
+            Row(a=None, b=2, r1=True, r2=False),
+        ]
+
+    def test_isnotnull(self, spark):
+        df = spark.createDataFrame([(1, None), (None, 2)], ("a", "b"))
+
+        res = df.select("a", "b", col("a").isNotNull().alias("r1"), df.b.isNotNull().alias("r2")).collect()
+        assert res == [
+            Row(a=1, b=None, r1=True, r2=False),
+            Row(a=None, b=2, r1=False, r2=True),
+        ]

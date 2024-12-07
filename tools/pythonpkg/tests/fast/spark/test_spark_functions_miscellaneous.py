@@ -47,3 +47,21 @@ class TestsSparkFunctionsMiscellaneous:
         df2 = spark.createDataFrame([(4, -4, -2)], ('C1', 'C2', 'C3'))
         res = df2.select(F.sequence('C1', 'C2', 'C3').alias('r')).collect()
         assert res == [Row(r=[4, 2, 0, -2, -4])]
+
+    def test_like(self, spark):
+        df = spark.createDataFrame([("Spark", "_park")], ['a', 'b'])
+        res = df.select(F.like(df.a, df.b).alias('r')).collect()
+        assert res == [Row(r=True)]
+
+        df = spark.createDataFrame([("%SystemDrive%/Users/John", "/%SystemDrive/%//Users%")], ['a', 'b'])
+        res = df.select(F.like(df.a, df.b, F.lit('/')).alias('r')).collect()
+        assert res == [Row(r=True)]
+
+    def test_ilike(self, spark):
+        df = spark.createDataFrame([("Spark", "spark")], ['a', 'b'])
+        res = df.select(F.ilike(df.a, df.b).alias('r')).collect()
+        assert res == [Row(r=True)]
+
+        df = spark.createDataFrame([("%SystemDrive%/Users/John", "/%SystemDrive/%//Users%")], ['a', 'b'])
+        res = df.select(F.ilike(df.a, df.b, F.lit('/')).alias('r')).collect()
+        assert res == [Row(r=True)]

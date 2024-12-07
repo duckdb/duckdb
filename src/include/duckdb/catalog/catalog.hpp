@@ -317,6 +317,9 @@ public:
 	DUCKDB_API string GetDefaultTable() const;
 	DUCKDB_API string GetDefaultTableSchema() const;
 
+	//! Returns the dependency manager of this catalog - if the catalog has anye
+	virtual optional_ptr<DependencyManager> GetDependencyManager();
+
 public:
 	template <class T>
 	static optional_ptr<T> GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,

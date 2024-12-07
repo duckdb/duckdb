@@ -438,6 +438,15 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	return inner_filter;
 }
 
+bool FilterCombiner::ContainsNull(vector<Value> &in_list) {
+	for (idx_t i = 0; i < in_list.size(); i++) {
+		if (in_list[i].IsNull()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool FilterCombiner::IsDenseRange(vector<Value> &in_list) {
 	if (in_list.empty()) {
 		return true;
@@ -477,7 +486,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
+			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_NOTEQUAL) &&
 			    (TypeIsNumeric(constant_value.second[0].constant.type().InternalType()) ||
 			     constant_value.second[0].constant.type().InternalType() == PhysicalType::VARCHAR ||
 			     constant_value.second[0].constant.type().InternalType() == PhysicalType::BOOL)) {
@@ -497,9 +507,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				if (!TryGetBoundColumnIndex(column_ids, expr, column_index)) {
 					continue;
 				}
-				if (column_index.IsRowIdColumn()) {
-					break;
-				}
 
 				auto &constant_list = constant_values.find(equiv_set)->second;
 				for (auto &constant_cmp : constant_list) {
@@ -509,7 +516,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				}
 				// We need to apply a IS NOT NULL filter to the column expression because any comparison with NULL
 				// is always false.
-				table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, make_uniq<IsNotNullFilter>()));
+				// However, the rowid pseudocolumn can never be NULL.
+				if (!column_index.IsRowIdColumn()) {
+					table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, make_uniq<IsNotNullFilter>()));
+				}
 
 				equivalence_map.erase(filter_exp);
 			}
@@ -620,7 +630,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
 				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
 				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
-				remaining_filters.erase_at(rem_fil_idx);
+				remaining_filters.erase_at(rem_fil_idx--); // decrement to stay on the same idx next iteration
 				continue;
 			}
 
@@ -646,7 +656,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				table_filters.PushFilter(column_index, std::move(upper_bound));
 				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
-				remaining_filters.erase_at(rem_fil_idx);
+				remaining_filters.erase_at(rem_fil_idx--); // decrement to stay on the same idx next iteration
 			} else {
 				// if this is not a dense range we can push a zone-map filter
 				auto optional_filter = make_uniq<OptionalFilter>();
@@ -670,9 +680,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 						column_id.SetInvalid();
 						break;
 					}
-					optional_ptr<BoundColumnRefExpression> column_ref = nullptr;
-					optional_ptr<BoundConstantExpression> const_val = nullptr;
+					optional_ptr<BoundColumnRefExpression> column_ref;
+					optional_ptr<BoundConstantExpression> const_val;
 					auto &comp = child->Cast<BoundComparisonExpression>();
+					bool invert = false;
 					if (comp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 					    comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
 						column_ref = comp.left->Cast<BoundColumnRefExpression>();
@@ -681,6 +692,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					           comp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 						column_ref = comp.right->Cast<BoundColumnRefExpression>();
 						const_val = comp.left->Cast<BoundConstantExpression>();
+						invert = true;
 					} else {
 						// child of OR filter is not simple so we do not push the or filter down at all
 						column_id.SetInvalid();
@@ -703,7 +715,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 						column_id.SetInvalid();
 						break;
 					}
-					auto const_filter = make_uniq<ConstantFilter>(comp.type, const_val->value);
+					auto comparison_type = invert ? FlipComparisonExpression(comp.type) : comp.type;
+					auto const_filter = make_uniq<ConstantFilter>(comparison_type, const_val->value);
 					conj_filter->child_filters.push_back(std::move(const_filter));
 				}
 				if (column_id.IsValid()) {

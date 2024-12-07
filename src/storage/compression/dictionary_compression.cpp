@@ -441,6 +441,7 @@ void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 struct CompressedStringScanState : public StringScanState {
 	BufferHandle handle;
 	buffer_ptr<Vector> dictionary;
+	idx_t dictionary_size;
 	bitpacking_width_t current_width;
 	buffer_ptr<SelectionVector> sel_vec;
 	idx_t sel_vec_size = 0;
@@ -463,6 +464,7 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 
 	state->dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
+	state->dictionary_size = index_buffer_count;
 	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
 
 	for (uint32_t i = 0; i < index_buffer_count; i++) {
@@ -539,13 +541,13 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 			scan_state.sel_vec = make_buffer<SelectionVector>(decompress_count);
 		}
 
-		// Scanning 1024 values, emitting a dict vector
+		// Scanning 2048 values, emitting a dict vector
 		data_ptr_t dst = data_ptr_cast(scan_state.sel_vec->data());
 		data_ptr_t src = data_ptr_cast(&base_data[(start * scan_state.current_width) / 8]);
 
 		BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, scan_state.current_width);
 
-		result.Slice(*(scan_state.dictionary), *scan_state.sel_vec, scan_count);
+		result.Dictionary(*(scan_state.dictionary), scan_state.dictionary_size, *scan_state.sel_vec, scan_count);
 	}
 }
 

@@ -32,11 +32,18 @@ private:
 
 public:
 	template <class T>
-	static uint32_t BitUnpack(ByteBuffer &src, bitpacking_width_t &bitpack_pos, T *dst, const idx_t count,
-	                          const bitpacking_width_t width) {
+	static void BitUnpack(ByteBuffer &src, bitpacking_width_t &bitpack_pos, T *dst, idx_t count,
+	                      const bitpacking_width_t width) {
 		CheckWidth(width);
 		const auto mask = BITPACK_MASKS[width];
 		src.available(count * width / BITPACK_DLEN); // check if buffer has enough space available once
+		if (bitpack_pos == 0 && count >= BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
+			idx_t remainder = count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+			idx_t aligned_count = count - remainder;
+			BitUnpackAlignedInternal(src, dst, aligned_count, width);
+			dst += aligned_count;
+			count = remainder;
+		}
 		for (idx_t i = 0; i < count; i++) {
 			auto val = (src.unsafe_get<uint8_t>() >> bitpack_pos) & mask;
 			bitpack_pos += width;
@@ -49,7 +56,6 @@ public:
 			}
 			dst[i] = val;
 		}
-		return count;
 	}
 
 	template <class T>
@@ -57,6 +63,25 @@ public:
 		D_ASSERT(width < BITPACK_MASKS_SIZE);
 		D_ASSERT(count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
 		BitpackingPrimitives::PackBuffer<T, true>(dst, src, count, width);
+	}
+
+	template <class T>
+	static void BitUnpackAlignedInternal(ByteBuffer &src, T *dst, const idx_t count, const bitpacking_width_t width) {
+		for (idx_t i = 0; i < count; i += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
+			const auto next_read = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * width / 8;
+
+			// Buffer for alignment
+			T aligned_data[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
+
+			// Copy over to aligned buffer
+			memcpy(aligned_data, src.ptr, next_read);
+
+			// Unpack
+			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(dst), data_ptr_cast(aligned_data), width, true);
+
+			src.unsafe_inc(next_read);
+			dst += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		}
 	}
 
 	template <class T>
@@ -68,18 +93,7 @@ public:
 		}
 		const auto read_size = count * width / BITPACK_DLEN;
 		src.available(read_size); // check if buffer has enough space available once
-		for (idx_t i = 0; i < count; i += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
-			// Buffer for alignment
-			T aligned_data[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
-
-			// Copy over to aligned buffer
-			const auto next_read = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * width / 8;
-			memcpy(aligned_data, src.ptr, next_read);
-			src.unsafe_inc(next_read);
-
-			// Unpack
-			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(dst), data_ptr_cast(aligned_data), width);
-		}
+		BitUnpackAlignedInternal(src, dst, count, width);
 	}
 
 	//===--------------------------------------------------------------------===//

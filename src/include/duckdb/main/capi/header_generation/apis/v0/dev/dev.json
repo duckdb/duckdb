@@ -24,6 +24,7 @@
         "duckdb_get_timestamp_tz",
         "duckdb_get_timestamp_s",
         "duckdb_get_timestamp_ms",
-        "duckdb_get_timestamp_ns"
+        "duckdb_get_timestamp_ns",
+        "duckdb_append_value"
     ]
 }

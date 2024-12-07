@@ -20,7 +20,7 @@ FilterPropagateResult IsNullFilter::CheckStatistics(BaseStatistics &stats) {
 }
 
 string IsNullFilter::ToString(const string &column_name) {
-	return column_name + "IS NULL";
+	return column_name + " IS NULL";
 }
 
 unique_ptr<TableFilter> IsNullFilter::Copy() const {

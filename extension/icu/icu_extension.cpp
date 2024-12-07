@@ -214,9 +214,36 @@ static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parame
 	icu::StringPiece utf8(str);
 	const auto uid = icu::UnicodeString::fromUTF8(utf8);
 	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
-	if (*tz == icu::TimeZone::getUnknown()) {
-		throw NotImplementedException("Unknown TimeZone '%s'", str);
+	if (*tz != icu::TimeZone::getUnknown()) {
+		return;
 	}
+
+	//	Try to be friendlier
+	//	Go through all the zone names and look for a case insensitive match
+	//	If we don't find one, make a suggestion
+	UErrorCode status = U_ZERO_ERROR;
+	duckdb::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
+	duckdb::unique_ptr<icu::StringEnumeration> tzs(icu::TimeZone::createEnumeration());
+	vector<string> candidates;
+	for (;;) {
+		auto long_id = tzs->snext(status);
+		if (U_FAILURE(status) || !long_id) {
+			break;
+		}
+		std::string utf8;
+		long_id->toUTF8String(utf8);
+		if (StringUtil::CIEquals(utf8, str)) {
+			parameter = Value(utf8);
+			return;
+		}
+
+		candidates.emplace_back(utf8);
+	}
+
+	string candidate_str =
+	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, str), "Candidate time zones");
+
+	throw NotImplementedException("Unknown TimeZone '%s'!\n%s", str, candidate_str);
 }
 
 struct ICUCalendarData : public GlobalTableFunctionState {
@@ -273,9 +300,38 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 
 	UErrorCode status = U_ZERO_ERROR;
 	duckdb::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(locale, status));
-	if (U_FAILURE(status) || name != cal->getType()) {
-		throw NotImplementedException("Unknown Calendar setting");
+	if (!U_FAILURE(status) && name == cal->getType()) {
+		return;
 	}
+
+	//	Try to be friendlier
+	//	Go through all the calendar names and look for a case insensitive match
+	//	If we don't find one, make a suggestion
+	status = U_ZERO_ERROR;
+	duckdb::unique_ptr<icu::StringEnumeration> calendars;
+	calendars.reset(icu::Calendar::getKeywordValuesForLocale("calendar", icu::Locale::getDefault(), false, status));
+
+	vector<string> candidates;
+	for (;;) {
+		auto calendar = calendars->snext(status);
+		if (U_FAILURE(status) || !calendar) {
+			break;
+		}
+
+		std::string utf8;
+		calendar->toUTF8String(utf8);
+		if (StringUtil::CIEquals(utf8, name)) {
+			parameter = Value(utf8);
+			return;
+		}
+
+		candidates.emplace_back(utf8);
+	}
+
+	string candidate_str =
+	    StringUtil::CandidatesMessage(StringUtil::TopNJaroWinkler(candidates, name), "Candidate calendars");
+
+	throw NotImplementedException("Unknown Calendar '%s'!\n%s", name, candidate_str);
 }
 
 static void LoadInternal(DuckDB &ddb) {

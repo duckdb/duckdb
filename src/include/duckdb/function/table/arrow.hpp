@@ -65,6 +65,8 @@ public:
 	shared_ptr<DependencyItem> dependency;
 	//! Arrow table data
 	ArrowTableType arrow_table;
+	//! Whether projection pushdown is enabled on the scan
+	bool projection_pushdown_enabled = true;
 };
 
 struct ArrowRunEndEncodingState {
@@ -184,6 +186,8 @@ public:
 	//! Binds an arrow table
 	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names);
+	static unique_ptr<FunctionData> ArrowScanBindDumb(ClientContext &context, TableFunctionBindInput &input,
+	                                                  vector<LogicalType> &return_types, vector<string> &names);
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
 	                          DataChunk &output, idx_t start, bool arrow_scan_is_projected = true);
