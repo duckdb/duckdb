@@ -261,8 +261,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 					if (parse_types[chunk_col_id].type_id != LogicalTypeId::VARCHAR) {
 						// If it is not a varchar, empty values are not accepted, we must error.
 						current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
+					} else {
+						static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 					}
-					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 				} else {
 					if (chunk_col_id == number_of_columns) {
 						// We check for a weird case, where we ignore an extra value, if it is a null value
@@ -422,7 +423,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			if (force_error) {
 				HandleUnicodeError(cur_col_id, last_position);
 			}
-			// If we got here, we are ingoring errors, hence we must ignore this line.
+			// If we got here, we are ignoring errors, hence we must ignore this line.
 			current_errors.Insert(INVALID_UNICODE, cur_col_id, chunk_col_id, last_position);
 			break;
 		}

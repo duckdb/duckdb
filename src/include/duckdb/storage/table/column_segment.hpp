@@ -60,9 +60,9 @@ public:
 	                                                         idx_t start, idx_t count, CompressionType compression_type,
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
-	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
-	                                                        const idx_t start, const idx_t segment_size,
-	                                                        const idx_t block_size);
+	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
+	                                                        const LogicalType &type, const idx_t start,
+	                                                        const idx_t segment_size, const idx_t block_size);
 
 public:
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);
