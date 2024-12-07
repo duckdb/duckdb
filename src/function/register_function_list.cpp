@@ -23,7 +23,7 @@ static void FillFunctionParameters(FunctionDescription &function_description, co
 }
 
 template <class T>
-void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info) {
+static void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info) {
 	vector<string> variants = StringUtil::Split(function.parameters, '\1');
 	vector<string> descriptions = StringUtil::Split(function.description, '\1');
 	vector<string> examples = StringUtil::Split(function.example, '\1');
