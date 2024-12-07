@@ -1,0 +1,49 @@
+# name: test/sql/storage/compression/rle/rle_select.test
+# description: Test selecting from RLE compression
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle_nulls_edge_case.db
+
+statement ok
+pragma enable_verification
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+CREATE TABLE tbl AS SELECT i id, i // 50 rle_val, case when i%8=0 then null else i // 50 end rle_val_null FROM range(100000) t(i);
+
+query III
+SELECT * FROM tbl WHERE id >= 75 and id <= 125 and id%4=0
+----
+76	1	1
+80	1	NULL
+84	1	1
+88	1	NULL
+92	1	1
+96	1	NULL
+100	2	2
+104	2	NULL
+108	2	2
+112	2	NULL
+116	2	2
+120	2	NULL
+124	2	2
+
+query III
+SELECT * FROM tbl WHERE id >= 75 and id <= 125 and id%4=0
+----
+76	1	1
+80	1	NULL
+84	1	1
+88	1	NULL
+92	1	1
+96	1	NULL
+100	2	2
+104	2	NULL
+108	2	2
+112	2	NULL
+116	2	2
+120	2	NULL
+124	2	2

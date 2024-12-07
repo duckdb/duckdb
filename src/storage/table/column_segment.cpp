@@ -123,6 +123,14 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 	}
 }
 
+void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,
+                           idx_t sel_count) {
+	if (!function.get().select) {
+		throw InternalException("ColumnSegment::Select not implemented for this compression method");
+	}
+	function.get().select(*this, state, scan_count, result, sel, sel_count);
+}
+
 void ColumnSegment::Skip(ColumnScanState &state) {
 	function.get().skip(*this, state, state.row_index - state.internal_index);
 	state.internal_index = state.row_index;

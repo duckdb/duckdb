@@ -187,6 +187,8 @@ protected:
 	                 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode);
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                 idx_t target_scan, ScanVectorMode mode);
+	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
+	                  idx_t sel_count);
 
 	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,

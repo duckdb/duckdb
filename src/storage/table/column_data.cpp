@@ -195,6 +195,25 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 	return initial_remaining - remaining;
 }
 
+void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
+                              idx_t sel_count) {
+	BeginScanVectorInternal(state);
+	if (state.current->start + state.current->count - state.row_index < target_count) {
+		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
+	}
+	if (state.scan_options && state.scan_options->force_fetch_row) {
+		for (idx_t i = 0; i < sel_count; i++) {
+			auto source_idx = sel.get_index(i);
+			ColumnFetchState fetch_state;
+			state.current->FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + source_idx), result, i);
+		}
+	} else {
+		state.current->Select(state, target_count, result, sel, sel_count);
+	}
+	state.row_index += target_count;
+	state.internal_index = state.row_index;
+}
+
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 	lock_guard<mutex> update_guard(update_lock);
 	return updates ? updates->GetStatistics() : nullptr;
@@ -604,7 +623,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	compression = nullptr;
 	// replace the old tree with the new one
 	auto new_segments = checkpoint_state->new_tree.MoveSegments();
-	for(auto &new_segment : new_segments) {
+	for (auto &new_segment : new_segments) {
 		AppendSegment(l, std::move(new_segment.node));
 	}
 	ClearUpdates();
