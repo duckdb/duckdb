@@ -1,6 +1,6 @@
 # name: benchmark/micro/compression/rle/select_rle_unselective.benchmark
 # description: RLE selective filter
-# group: [roaring]
+# group: [rle]
 
 name Select RLE Columns (33% selectivity)
 group rle
