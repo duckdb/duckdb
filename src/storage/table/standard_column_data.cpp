@@ -78,6 +78,24 @@ idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_
 	return scan_count;
 }
 
+void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                                SelectionVector &sel, idx_t &count, const TableFilter &filter) {
+	// check if we can do a specialized select
+	// the compression functions need to support this
+	bool has_select = compression && compression->filter;
+	bool validity_has_select = validity.compression && validity.compression->filter;
+	auto target_count = GetVectorCount(vector_index);
+	auto scan_type = GetVectorScanType(state, target_count, result);
+	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
+	if (!has_select || !validity_has_select || !scan_entire_vector) {
+		// we are not scanning an entire vector - this can have several causes (updates, etc)
+		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter);
+		return;
+	}
+	FilterVector(state, result, target_count, sel, count, filter);
+	validity.FilterVector(state.child_states[0], result, target_count, sel, count, filter);
+}
+
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                                 SelectionVector &sel, idx_t sel_count) {
 	// check if we can do a specialized select
