@@ -380,7 +380,7 @@ public:
 
 	void CompressString(const string_t &string, bool end_of_vector) {
 		duckdb_zstd::ZSTD_inBuffer in_buffer = {/*data = */ string.GetData(),
-		                                        /*length = */ string.GetSize(),
+		                                        /*length = */ size_t(string.GetSize()),
 		                                        /*pos = */ 0};
 
 		if (!end_of_vector && string.GetSize() == 0) {

@@ -3,13 +3,11 @@
 
 #include "core_functions/function_list.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/function/register_function_list_helper.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
 namespace duckdb {
-
-template <class T>
-void FillFunctionDescriptions(const StaticFunctionDefinition &function, T &info);
 
 template <class T>
 static void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
