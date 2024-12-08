@@ -297,9 +297,8 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 	return collection;
 }
 
-static string ParseExplanation(SQLLogicParser &parser, const vector<string> &params, int &index) {
+static string ParseExplanation(SQLLogicParser &parser, const vector<string> &params, size_t &index) {
 	string res;
-	std::cout << params[index] << "\n";
 	if (params[index].empty() || params[index][0] != '"') {
 		parser.Fail("Quoted parameter should start with double quotes");
 	}
@@ -485,7 +484,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		if (params.size() < 2) {
 			parser.Fail("require no_extension_autoloading needs an explanation string");
 		}
-		int index = 1;
+		size_t index = 1;
 		string explanation = ParseExplanation(parser, params, index);
 		if (explanation.rfind("EXPECTED", 0) == 0 || explanation.rfind("FIXME", 0) == 0) {
 			// good, explanation is properly formatted
