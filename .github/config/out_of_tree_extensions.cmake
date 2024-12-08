@@ -34,6 +34,10 @@ if (NOT MINGW)
             )
 endif()
 
+### Currently libxml2, an azure dependency, has the repository repo return 503
+### Re-enable AZURE when the problem goes away. This means AZURE needs to be
+### build on a side
+if (NO)
 ################# AZURE
 if (NOT MINGW)
     duckdb_extension_load(azure
@@ -42,6 +46,7 @@ if (NOT MINGW)
             GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
             APPLY_PATCHES
             )
+endif()
 endif()
 
 ################# DELTA
@@ -66,20 +71,20 @@ duckdb_extension_load(excel
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
-if (NOT WIN32)
-    set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
-else ()
-    set(LOAD_ICEBERG_TESTS "")
-endif()
-
-if (NOT MINGW)
-    duckdb_extension_load(iceberg
-            ${LOAD_ICEBERG_TESTS}
-            GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
-            APPLY_PATCHES
-            )
-endif()
+#if (NOT WIN32)
+#    set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
+#else ()
+#    set(LOAD_ICEBERG_TESTS "")
+#endif()
+#
+#if (NOT MINGW)
+#    duckdb_extension_load(iceberg
+#            ${LOAD_ICEBERG_TESTS}
+#            GIT_URL https://github.com/duckdb/duckdb_iceberg
+#            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
+#            APPLY_PATCHES
+#            )
+#endif()
 
 ################# INET
 duckdb_extension_load(inet
@@ -106,10 +111,9 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG 7ea79b614755d2bdee4be468691e4e17b39b8dbc
+    GIT_TAG a60aa3733741a99c49baaf33390c0f7c8a9598a3
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER

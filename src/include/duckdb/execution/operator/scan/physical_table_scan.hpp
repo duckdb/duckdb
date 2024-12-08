@@ -73,7 +73,7 @@ public:
 
 	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 
-	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 };
 
 } // namespace duckdb

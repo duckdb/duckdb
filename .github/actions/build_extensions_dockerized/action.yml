@@ -114,7 +114,7 @@ runs:
         run: |
           docker build \
             --build-arg 'vcpkg_url=https://github.com/microsoft/vcpkg.git' \
-            --build-arg 'vcpkg_commit=a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6' \
+            --build-arg 'vcpkg_commit=5e5d0e1cd7785623065e77eff011afdeec1a3574' \
             --build-arg 'extra_toolchains=;python3;' \
             -t duckdb/${{ inputs.duckdb_arch }} \
             ./extension-ci-tools/docker/${{ inputs.duckdb_arch }}
@@ -167,25 +167,3 @@ runs:
         shell: bash
         run: |
           docker run --env-file=docker_env.txt -v `pwd`:/duckdb_build_dir -v `pwd`/ccache_dir:/ccache_dir duckdb/${{ inputs.duckdb_arch }} make test_release
-
-      - name: Deploy
-        if: ${{ inputs.deploy_as != '' }}
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
-          AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
-          DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
-          AWS_DEFAULT_REGION: us-east-1
-          DUCKDB_DEPLOY_SCRIPT_MODE: for_real
-        run: |
-          cd  ${{ inputs.build_dir}}
-          if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
-              ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
-            elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
-              ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
-            elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
-              ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
-            fi
-          fi
-

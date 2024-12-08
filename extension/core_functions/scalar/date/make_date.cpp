@@ -11,6 +11,11 @@
 
 namespace duckdb {
 
+static void MakeDateFromEpoch(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.ColumnCount() == 1);
+	result.Reinterpret(input.data[0]);
+}
+
 struct MakeDateOperator {
 	template <typename YYYY, typename MM, typename DD, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(YYYY yyyy, MM mm, DD dd) {
@@ -118,6 +123,7 @@ static void ExecuteMakeTimestamp(DataChunk &input, ExpressionState &state, Vecto
 
 ScalarFunctionSet MakeDateFun::GetFunctions() {
 	ScalarFunctionSet make_date("make_date");
+	make_date.AddFunction(ScalarFunction({LogicalType::INTEGER}, LogicalType::DATE, MakeDateFromEpoch));
 	make_date.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                     LogicalType::DATE, ExecuteMakeDate<int64_t>));
 

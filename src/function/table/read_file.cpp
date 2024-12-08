@@ -150,11 +150,30 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 					FlatVector::GetData<string_t>(file_name_vector)[out_idx] = file_name_string;
 				} break;
 				case ReadFileBindData::FILE_CONTENT_COLUMN: {
-					auto file_size = file_handle->GetFileSize();
-					AssertMaxFileSize(file_name, file_size);
+					auto file_size_raw = file_handle->GetFileSize();
+					AssertMaxFileSize(file_name, file_size_raw);
+					auto file_size = UnsafeNumericCast<int64_t>(file_size_raw);
 					auto &file_content_vector = output.data[col_idx];
-					auto content_string = StringVector::EmptyString(file_content_vector, file_size);
-					file_handle->Read(content_string.GetDataWriteable(), file_size);
+					auto content_string = StringVector::EmptyString(file_content_vector, file_size_raw);
+
+					auto remaining_bytes = UnsafeNumericCast<int64_t>(file_size);
+
+					// Read in batches of 100mb
+					constexpr auto MAX_READ_SIZE = 100LL * 1024 * 1024;
+					while (remaining_bytes > 0) {
+						const auto bytes_to_read = MinValue<int64_t>(remaining_bytes, MAX_READ_SIZE);
+						const auto content_string_ptr =
+						    content_string.GetDataWriteable() + (file_size - remaining_bytes);
+						const auto actually_read =
+						    file_handle->Read(content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read));
+						if (actually_read == 0) {
+							// Uh oh, random EOF?
+							throw IOException("Failed to read file '%s' at offset %lu, unexpected EOF", file_name,
+							                  file_size - remaining_bytes);
+						}
+						remaining_bytes -= actually_read;
+					}
+
 					content_string.Finalize();
 
 					OP::VERIFY(file_name, content_string);

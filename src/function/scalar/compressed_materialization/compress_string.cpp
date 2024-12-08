@@ -69,7 +69,8 @@ inline uint8_t StringCompress(const string_t &input) {
 
 template <class RESULT_TYPE>
 static void StringCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, RESULT_TYPE>(args.data[0], result, args.size(), StringCompress<RESULT_TYPE>);
+	UnaryExecutor::Execute<string_t, RESULT_TYPE>(args.data[0], result, args.size(), StringCompress<RESULT_TYPE>,
+	                                              FunctionErrors::CANNOT_ERROR);
 }
 
 template <class RESULT_TYPE>
@@ -162,9 +163,10 @@ template <class INPUT_TYPE>
 static void StringDecompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<StringDecompressLocalState>().allocator;
 	allocator.Reset();
-	UnaryExecutor::Execute<INPUT_TYPE, string_t>(args.data[0], result, args.size(), [&](const INPUT_TYPE &input) {
-		return StringDecompress<INPUT_TYPE>(input, allocator);
-	});
+	UnaryExecutor::Execute<INPUT_TYPE, string_t>(
+	    args.data[0], result, args.size(),
+	    [&](const INPUT_TYPE &input) { return StringDecompress<INPUT_TYPE>(input, allocator); },
+	    FunctionErrors::CANNOT_ERROR);
 }
 
 template <class INPUT_TYPE>

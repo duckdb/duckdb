@@ -149,13 +149,12 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 			throw InternalException("Unsupported internal type for decimal?..");
 		}
 	}
-	case LogicalType::VARCHAR:
-	case LogicalType::BLOB:
-		if (Value::StringIsValid(stats)) {
-			return Value(stats);
-		} else {
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		if (type.id() == LogicalTypeId::BLOB || !Value::StringIsValid(stats)) {
 			return Value(Blob::ToString(string_t(stats)));
 		}
+		return Value(stats);
 	case LogicalTypeId::DATE:
 		if (stats.size() != sizeof(int32_t)) {
 			throw InvalidInputException("Incorrect stats size for type DATE");
@@ -462,10 +461,10 @@ static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilte
 	switch (duckdb_filter.filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = duckdb_filter.Cast<ConstantFilter>();
-		D_ASSERT(constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL);
+		auto is_compare_equal = constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL;
 		D_ASSERT(!constant_filter.constant.IsNull());
 		auto hash = ValueXXH64(constant_filter.constant);
-		return hash > 0 && !bloom_filter.FilterCheck(hash);
+		return hash > 0 && !bloom_filter.FilterCheck(hash) && is_compare_equal;
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();

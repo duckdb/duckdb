@@ -150,8 +150,8 @@ struct RLECompressState : public CompressionState {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto column_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+		auto column_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
+		                                                            info.GetBlockSize());
 		column_segment->function = function;
 		current_segment = std::move(column_segment);
 
@@ -259,10 +259,7 @@ struct RLEScanState : public SegmentScanState {
 		D_ASSERT(rle_count_offset <= segment.GetBlockManager().GetBlockSize());
 	}
 
-	void Skip(ColumnSegment &segment, idx_t skip_count) {
-		auto data = handle.Ptr() + segment.GetBlockOffset();
-		auto index_pointer = reinterpret_cast<rle_count_t *>(data + rle_count_offset);
-
+	inline void SkipInternal(rle_count_t *index_pointer, idx_t skip_count) {
 		while (skip_count > 0) {
 			rle_count_t run_end = index_pointer[entry_pos];
 			idx_t skip_amount = MinValue<idx_t>(skip_count, run_end - position_in_entry);
@@ -273,6 +270,12 @@ struct RLEScanState : public SegmentScanState {
 				ForwardToNextRun();
 			}
 		}
+	}
+
+	void Skip(ColumnSegment &segment, idx_t skip_count) {
+		auto data = handle.Ptr() + segment.GetBlockOffset();
+		auto index_pointer = reinterpret_cast<rle_count_t *>(data + rle_count_offset);
+		SkipInternal(index_pointer, skip_count);
 	}
 
 	inline void ForwardToNextRun() {
@@ -390,6 +393,44 @@ void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, V
 }
 
 //===--------------------------------------------------------------------===//
+// Select
+//===--------------------------------------------------------------------===//
+template <class T>
+void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
+               idx_t sel_count) {
+	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
+
+	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto data_pointer = reinterpret_cast<T *>(data + RLEConstants::RLE_HEADER_SIZE);
+	auto index_pointer = reinterpret_cast<rle_count_t *>(data + scan_state.rle_count_offset);
+
+	// If we are scanning an entire Vector and it contains only a single run we don't need to select at all
+	if (CanEmitConstantVector<true>(scan_state.position_in_entry, index_pointer[scan_state.entry_pos], vector_count)) {
+		RLEScanConstant<T>(scan_state, index_pointer, data_pointer, vector_count, result);
+		return;
+	}
+
+	auto result_data = FlatVector::GetData<T>(result);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+
+	idx_t prev_idx = 0;
+	for (idx_t i = 0; i < sel_count; i++) {
+		auto next_idx = sel.get_index(i);
+		if (next_idx < prev_idx) {
+			throw InternalException("Error in RLESelect - selection vector indices are not ordered");
+		}
+		// skip forward to the next index
+		scan_state.SkipInternal(index_pointer, next_idx - prev_idx);
+		// read the element
+		result_data[i] = data_pointer[scan_state.entry_pos];
+		// move the next to the prev
+		prev_idx = next_idx;
+	}
+	// skip the tail
+	scan_state.SkipInternal(index_pointer, vector_count - prev_idx);
+}
+
+//===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
@@ -411,7 +452,8 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
 	                           RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
 	                           RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>,
-	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>);
+	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>, nullptr,
+	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>);
 }
 
 CompressionFunction RLEFun::GetFunction(PhysicalType type) {

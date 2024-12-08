@@ -932,13 +932,20 @@ OrderPreservationType PhysicalWindow::SourceOrder() const {
 	return OrderPreservationType::FIXED_ORDER;
 }
 
-double PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
+ProgressData PhysicalWindow::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
 	const auto returned = gsource.returned.load();
 
 	auto &gsink = gsource.gsink;
 	const auto count = gsink.global_partition->count.load();
-	return count ? (double(returned) / double(count)) : -1;
+	ProgressData res;
+	if (count) {
+		res.done = double(returned);
+		res.total = double(count);
+	} else {
+		res.SetInvalid();
+	}
+	return res;
 }
 
 OperatorPartitionData PhysicalWindow::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
