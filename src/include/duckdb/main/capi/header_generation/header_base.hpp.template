@@ -79,7 +79,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_FLOAT = 10,
 	// double
 	DUCKDB_TYPE_DOUBLE = 11,
-	// duckdb_timestamp, in microseconds
+	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP = 12,
 	// duckdb_date
 	DUCKDB_TYPE_DATE = 13,
@@ -95,13 +95,13 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_VARCHAR = 17,
 	// duckdb_blob
 	DUCKDB_TYPE_BLOB = 18,
-	// decimal
+	// duckdb_decimal
 	DUCKDB_TYPE_DECIMAL = 19,
-	// duckdb_timestamp, in seconds
+	// duckdb_timestamp_s (seconds)
 	DUCKDB_TYPE_TIMESTAMP_S = 20,
-	// duckdb_timestamp, in milliseconds
+	// duckdb_timestamp_ms (milliseconds)
 	DUCKDB_TYPE_TIMESTAMP_MS = 21,
-	// duckdb_timestamp, in nanoseconds
+	// duckdb_timestamp_ns (nanoseconds)
 	DUCKDB_TYPE_TIMESTAMP_NS = 22,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ENUM = 23,
@@ -121,7 +121,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_BIT = 29,
 	// duckdb_time_tz
 	DUCKDB_TYPE_TIME_TZ = 30,
-	// duckdb_timestamp
+	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 	// ANY type
 	DUCKDB_TYPE_ANY = 34,
