@@ -69,6 +69,8 @@ public:
 	void InitializeScan(ColumnScanState &state);
 	//! Scan one vector from this segment
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset, ScanVectorType scan_type);
+	//! Scan a subset of a vector (defined by the selection vector)
+	void Select(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel, idx_t sel_count);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 

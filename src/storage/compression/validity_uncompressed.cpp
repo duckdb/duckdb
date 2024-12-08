@@ -417,6 +417,28 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 }
 
 //===--------------------------------------------------------------------===//
+// Select
+//===--------------------------------------------------------------------===//
+void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vector &result, SelectionVector &sel,
+                    idx_t sel_count) {
+	result.Flatten(sel_count);
+
+	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
+	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto &result_mask = FlatVector::Validity(result);
+	auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
+
+	auto start = segment.GetRelativeIndex(state.row_index);
+	ValidityMask source_mask(input_data, segment.count);
+	for (idx_t i = 0; i < sel_count; i++) {
+		auto source_idx = start + sel.get_index(i);
+		if (!source_mask.RowIsValidUnsafe(source_idx)) {
+			result_mask.SetInvalid(i);
+		}
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
 void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
