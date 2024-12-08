@@ -119,7 +119,7 @@ FROM sniff_csv('data/csv/comments/simple.csv');
 
 # Test Prompt
 query II
-FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='"', escape='"', new_line='\n', skip=2, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});----
+FROM read_csv('data/csv/comments/simple.csv', auto_detect=false, delim=';', quote='"', escape='"', new_line='\n', skip=2, comment='#', header=true, columns={'a': 'BIGINT', 'b': 'BIGINT'});
 ----
 1	3
 6	7

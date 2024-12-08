@@ -35,6 +35,8 @@ public:
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
 	                    idx_t target_count) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	            SelectionVector &sel, idx_t sel_count) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
