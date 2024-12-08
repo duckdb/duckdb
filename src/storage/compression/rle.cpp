@@ -399,8 +399,8 @@ void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, V
 // Select
 //===--------------------------------------------------------------------===//
 template <class T>
-void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, const SelectionVector &sel,
-               idx_t sel_count) {
+void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+               const SelectionVector &sel, idx_t sel_count) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -438,7 +438,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
-			   idx_t &sel_count, const TableFilter &filter) {
+               idx_t &sel_count, const TableFilter &filter) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -462,10 +462,11 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 
 		SelectionVector run_matches;
 		scan_state.matching_run_count = total_run_count;
-		ColumnSegment::FilterSelection(run_matches, run_vector, run_format, filter, total_run_count, scan_state.matching_run_count);
+		ColumnSegment::FilterSelection(run_matches, run_vector, run_format, filter, total_run_count,
+		                               scan_state.matching_run_count);
 
 		// for any runs that pass the filter - set the matches to true
-		for(idx_t i = 0; i < scan_state.matching_run_count; i++) {
+		for (idx_t i = 0; i < scan_state.matching_run_count; i++) {
 			auto idx = run_matches.get_index(i);
 			scan_state.matching_runs[idx] = true;
 		}
@@ -567,7 +568,8 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	                           RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
 	                           RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>,
 	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>, nullptr,
-	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>, RLEFilter<T>);
+	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>,
+	                           RLEFilter<T>);
 }
 
 CompressionFunction RLEFun::GetFunction(PhysicalType type) {
