@@ -144,16 +144,14 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	QueryErrorContext error_context(window.query_location);
 	//	Check for macros pretending to be aggregates
-	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
-		auto func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, window.catalog, window.schema,
-		                            window.function_name, OnEntryNotFound::RETURN_NULL, error_context);
-		if (func && func->type == CatalogType::MACRO_ENTRY) {
-			auto macro = make_uniq<FunctionExpression>(window.catalog, window.schema, window.function_name,
-			                                           std::move(window.children), std::move(window.filter_expr),
-			                                           nullptr, window.distinct);
-			auto macro_expr = window.Copy();
-			return BindMacro(*macro, func->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
-		}
+	auto entry = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, window.catalog, window.schema,
+	                             window.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+	if (window.type == ExpressionType::WINDOW_AGGREGATE && entry && entry->type == CatalogType::MACRO_ENTRY) {
+		auto macro = make_uniq<FunctionExpression>(window.catalog, window.schema, window.function_name,
+		                                           std::move(window.children), std::move(window.filter_expr), nullptr,
+		                                           window.distinct);
+		auto macro_expr = window.Copy();
+		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
 	}
 
 	auto name = window.GetName();
@@ -256,8 +254,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	unique_ptr<FunctionData> bind_info;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
-		                                                              window.function_name, error_context);
+		if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+			//	Not an aggregate: Look it up to generate error
+			Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
+			                                                 window.function_name, error_context);
+		}
+		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
 		D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 		// bind the aggregate
