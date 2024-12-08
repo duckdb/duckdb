@@ -254,10 +254,15 @@ duckdb_blob duckdb_get_blob(duckdb_value val) {
 	return {result, str.size()};
 }
 duckdb_value duckdb_create_bit(duckdb_bit input) {
-	return nullptr;
+	return WrapValue(new duckdb::Value(duckdb::Value::BIT(input.data, input.size)));
 }
 duckdb_bit duckdb_get_bit(duckdb_value val) {
-	return {nullptr, 0};
+	auto v = UnwrapValue(val).DefaultCastAs(duckdb::LogicalType::BIT);
+	auto &str = duckdb::StringValue::Get(v);
+	auto size = str.size();
+	auto data = reinterpret_cast<uint8_t *>(malloc(size));
+	memcpy(data, str.c_str(), size);
+	return {data, size};
 }
 duckdb_value duckdb_create_uuid(duckdb_uhugeint input) {
 	// uhugeint_t has a constexpr ctor with upper first

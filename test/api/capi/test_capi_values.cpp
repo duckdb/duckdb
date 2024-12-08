@@ -273,6 +273,31 @@ TEST_CASE("Test DECIMAL value", "[capi]") {
 	}
 }
 
+TEST_CASE("Test BIT value", "[capi]") {
+	{
+		uint8_t data[] {5, 0b11111001, 0b01010110};
+		duckdb_bit input {data, 3};
+		auto value = duckdb_create_bit(input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIT);
+		auto output = duckdb_get_bit(value);
+		REQUIRE(output.size == input.size);
+		REQUIRE(!memcmp(output.data, input.data, input.size));
+		duckdb_free(output.data);
+		duckdb_destroy_value(&value);
+	}
+	{
+		uint8_t data[] {0, 0b00000000};
+		duckdb_bit input {data, 2};
+		auto value = duckdb_create_bit(input);
+		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIT);
+		auto output = duckdb_get_bit(value);
+		REQUIRE(output.size == input.size);
+		REQUIRE(!memcmp(output.data, input.data, input.size));
+		duckdb_free(output.data);
+		duckdb_destroy_value(&value);
+	}
+}
+
 TEST_CASE("Test UUID value", "[capi]") {
 	{
 		duckdb_uhugeint uhugeint_input {0x0000000000000000, 0x0000000000000000};
