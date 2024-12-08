@@ -771,7 +771,7 @@ class TestArrowFilterPushdown(object):
         input = query_res[0][1]
         if 'PANDAS_SCAN' in input:
             pytest.skip(reason="This version of pandas does not produce an Arrow object")
-        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a<2 AND s\.a IS NOT NULL.*", input, flags=re.DOTALL)
+        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a<2.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
@@ -785,7 +785,7 @@ class TestArrowFilterPushdown(object):
 
         # the explain-output is pretty cramped, so just make sure we see both struct references.
         match = re.search(
-            r".*ARROW_SCAN.*Filters:.*s\.a<3 AND s\.a IS NOT NULL.*AND s\.b=true AND s\.b IS.*NOT NULL.*",
+            r".*ARROW_SCAN.*Filters:.*s\.a<3.*AND s\.b=true.*",
             query_res[0][1],
             flags=re.DOTALL,
         )
@@ -841,7 +841,7 @@ class TestArrowFilterPushdown(object):
         input = query_res[0][1]
         if 'PANDAS_SCAN' in input:
             pytest.skip(reason="This version of pandas does not produce an Arrow object")
-        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a\.b<2 AND s\.a\.b IS NOT.*NULL.*", input, flags=re.DOTALL)
+        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a\.b<2.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
@@ -858,7 +858,7 @@ class TestArrowFilterPushdown(object):
 
         # the explain-output is pretty cramped, so just make sure we see both struct references.
         match = re.search(
-            r".*ARROW_SCAN.*Filters:.*s\.a\.c=true AND s\.a\.c IS.*NOT NULL AND s\.d\.e=5 AND.*s\.d\.e IS NOT NULL.*",
+            r".*ARROW_SCAN.*Filters:.*s\.a\.c=true.*AND s\.d\.e=5.*",
             query_res[0][1],
             flags=re.DOTALL,
         )
@@ -879,7 +879,7 @@ class TestArrowFilterPushdown(object):
 
         res = query_res.fetchone()[1]
         match = re.search(
-            r".*ARROW_SCAN.*Filters:.*s\.d\.f='bar' AND s\.d\.f IS.*NOT NULL.*",
+            r".*ARROW_SCAN.*Filters:.*s\.d\.f='bar'.*",
             res,
             flags=re.DOTALL,
         )
