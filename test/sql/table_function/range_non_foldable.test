@@ -2,6 +2,8 @@
 # description: Issue #5546: non-foldable constant parameters to table function
 # group: [table_function]
 
+require no_extension_autoloading
+
 require icu
 
 statement ok
