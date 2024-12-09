@@ -1,0 +1,13 @@
+# name: benchmark/micro/logger/disabled/logging_disabled_file_opener.benchmark
+# description: Benchmarking the File Opener logger (has an extra step of indirection so will be a little slower)
+# group: [logger]
+
+name FileOpener NopLogger
+group logger
+
+# Note: this will call the Logger, but logging is disabled so this will call the NopLogger 100000000 times in a tight inner loop
+run
+SELECT sum(value) FROM test_logging(50000000, enable_logging=true, log_message='hello world', logger='file_opener');
+
+result I
+1249999975000000

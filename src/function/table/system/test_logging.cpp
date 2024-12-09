@@ -1,20 +1,23 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function.hpp"
 
 namespace duckdb {
 
 struct TestLoggingBindData : public TableFunctionData {
-	idx_t log_entries_per_tuple = 1;
 	idx_t total_tuples = 10;
 	bool logging_enabled = true;
 	string log_message = "test_logging test message";
 	string logger = "client_context";
 };
 
-struct TestLoggingData : public GlobalTableFunctionState {
-	idx_t current_tuple = 0;
+struct TestLoggingData : public LocalTableFunctionState {
+	explicit TestLoggingData(ExecutionContext &context_p) : context(context_p), current_tuple(0) {
+	};
+	ExecutionContext &context;
+	idx_t current_tuple;
 };
 
 static unique_ptr<FunctionData> TestLoggingBind(ClientContext &context, TableFunctionBindInput &input,
@@ -27,8 +30,6 @@ static unique_ptr<FunctionData> TestLoggingBind(ClientContext &context, TableFun
 		auto param_name = StringUtil::Lower(param.first);
 		if (param_name == "enable_logging") {
 			res->logging_enabled = param.second.GetValue<bool>();
-		} else if (param_name == "log_entries_per_tuple") {
-			res->log_entries_per_tuple = param.second.GetValue<idx_t>();
 		} else if (param_name == "log_message") {
 			res->log_message = param.second.GetValue<string>();
 		} else if (param_name == "logger") {
@@ -44,68 +45,53 @@ static unique_ptr<FunctionData> TestLoggingBind(ClientContext &context, TableFun
 	return std::move(res);
 }
 
-template <bool LOG, bool REQUIRE_LOOP=false, bool USE_GLOBAL_LOGGER=false>
-static void InnerLogTestLoop(TestLoggingData& data, const TestLoggingBindData &bind_data, idx_t tuples_to_create, DataChunk &output, ClientContext &context) {
+template <bool LOG, class LOGGER>
+static void InnerLogTestLoop(TestLoggingData& data, const TestLoggingBindData &bind_data, idx_t tuples_to_create, DataChunk &output, LOGGER &source) {
 	for (idx_t i = 0; i < tuples_to_create; i++) {
 		if(LOG) {
-			if (REQUIRE_LOOP) {
-				for (idx_t j = 0; j < bind_data.log_entries_per_tuple; j++) {
-					if (USE_GLOBAL_LOGGER) {
-						Logger::Info(*context.db, bind_data.log_message.c_str());
-					} else {
-						Logger::Info(context, bind_data.log_message.c_str());
-					}
-				}
-			} else {
-				if (USE_GLOBAL_LOGGER) {
-					Logger::Info(*context.db, bind_data.log_message.c_str());
-				} else {
-					Logger::Info(context, bind_data.log_message.c_str());
-				}
-
-			}
+			Logger::Info(source, bind_data.log_message.c_str());
 		}
 		FlatVector::GetData<idx_t>(output.data[0])[i] = data.current_tuple++;
 	}
 	output.SetCardinality(tuples_to_create);
 }
 
-template <bool LOG, bool REQUIRE_LOOP=false>
-static void InnerLogTestLoop(TestLoggingData& data, const TestLoggingBindData &bind_data, idx_t tuples_to_create, DataChunk &output, ClientContext &context, bool use_global_logger) {
-	if (use_global_logger) {
-		InnerLogTestLoop<LOG,REQUIRE_LOOP, true>(data,bind_data, tuples_to_create, output, context);
+template <bool LOG>
+static void LogTest(TestLoggingData& data, const TestLoggingBindData &bind_data, idx_t tuples_to_create, DataChunk &output, ClientContext &context, const string &logger) {
+	if (logger == "global") {
+		InnerLogTestLoop<LOG>(data,bind_data, tuples_to_create, output, *context.db);
+	} else if (logger == "client_context") {
+		InnerLogTestLoop<LOG>(data,bind_data, tuples_to_create, output, context);
+	} else if (logger == "thread_local") {
+		InnerLogTestLoop<LOG>(data,bind_data, tuples_to_create, output, data.context);
+	} else if (logger == "file_opener") {
+		InnerLogTestLoop<LOG>(data,bind_data, tuples_to_create, output, *context.client_data->file_opener);
 	} else {
-		InnerLogTestLoop<LOG,REQUIRE_LOOP>(data,bind_data, tuples_to_create, output, context);
+		throw InvalidInputException("Invalid logger type: %s", logger);
 	}
 }
 
-unique_ptr<GlobalTableFunctionState> TestLoggingInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_uniq<DuckDBLogData>();
+unique_ptr<LocalTableFunctionState> TestLoggingInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
+																		   GlobalTableFunctionState *global_state) {
+	return make_uniq<TestLoggingData>(context);
 }
 
 static
 void TestLoggingFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.global_state->Cast<TestLoggingData>();
+	auto &data = data_p.local_state->Cast<TestLoggingData>();
 	auto &bind_data = data_p.bind_data->Cast<TestLoggingBindData>();
 
 	idx_t tuples_to_create = MinValue(bind_data.total_tuples - data.current_tuple, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 
-	bool use_global_logger = bind_data.logger == "global";
-
 	if (bind_data.logging_enabled) {
-		if (bind_data.log_entries_per_tuple > 1) {
-			InnerLogTestLoop<true, true>(data,bind_data, tuples_to_create, output, context, use_global_logger);
-		} else {
-			InnerLogTestLoop<true>(data,bind_data, tuples_to_create, output, context, use_global_logger);
-		}
+		LogTest<true>(data,bind_data, tuples_to_create, output, context, bind_data.logger);
 	} else {
-		InnerLogTestLoop<false>(data, bind_data, tuples_to_create, output, context, use_global_logger);
+		LogTest<false>(data, bind_data, tuples_to_create, output, context, bind_data.logger);
 	}
 }
 
 void TestLoggingFun::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction logs_fun("test_logging", {LogicalType::INTEGER}, TestLoggingFunction, TestLoggingBind, TestLoggingInit);
-	logs_fun.named_parameters["log_entries_per_tuple"] = LogicalType::UBIGINT;
+	TableFunction logs_fun("test_logging", {LogicalType::INTEGER}, TestLoggingFunction, TestLoggingBind, nullptr, TestLoggingInitLocal);
 	logs_fun.named_parameters["enable_logging"] = LogicalType::BOOLEAN;
 	logs_fun.named_parameters["log_message"] = LogicalType::VARCHAR;
 	logs_fun.named_parameters["logger"] = LogicalType::VARCHAR;
