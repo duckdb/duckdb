@@ -110,8 +110,8 @@ private:
 	struct AggregateDictionaryState {
 		AggregateDictionaryState();
 
-		//! The current dictionary vector (if any)
-		optional_ptr<Vector> dictionary;
+		//! The current dictionary vector id (if any)
+		string dictionary_id;
 		DataChunk unique_values;
 		Vector hashes;
 		Vector new_dictionary_pointers;

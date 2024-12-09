@@ -338,6 +338,14 @@ struct DictionaryVector {
 		VerifyDictionary(vector);
 		return vector.buffer->Cast<DictionaryBuffer>().GetDictionarySize();
 	}
+	static inline const string &DictionaryId(const Vector &vector) {
+		VerifyDictionary(vector);
+		return vector.buffer->Cast<DictionaryBuffer>().GetDictionaryId();
+	}
+	static inline void SetDictionaryId(Vector &vector, string new_id) {
+		VerifyDictionary(vector);
+		vector.buffer->Cast<DictionaryBuffer>().SetDictionaryId(std::move(new_id));
+	}
 };
 
 struct FlatVector {

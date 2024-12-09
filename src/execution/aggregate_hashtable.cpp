@@ -241,6 +241,7 @@ GroupedAggregateHashTable::AggregateDictionaryState::AggregateDictionaryState()
 
 optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups, DataChunk &payload,
                                                                const unsafe_vector<idx_t> &filter) {
+	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
 	static constexpr idx_t DICTIONARY_THRESHOLD = 2;
 	// dictionary vector - check if this is a duplicate eliminated dictionary from the storage
 	auto &dict_col = groups.data[0];
@@ -250,21 +251,39 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		return optional_idx();
 	}
 	idx_t dict_size = opt_dict_size.GetIndex();
-	if (dict_size >= groups.size() * DICTIONARY_THRESHOLD) {
-		// dictionary is too large - use regular aggregation
-		return optional_idx();
+	auto &dictionary_id = DictionaryVector::DictionaryId(dict_col);
+	if (dictionary_id.empty()) {
+		// dictionary has no id, we can't cache across vectors
+		// only use dictionary compression if there are fewer entries than groups
+		if (dict_size >= groups.size() * DICTIONARY_THRESHOLD) {
+			// dictionary is too large - use regular aggregation
+			return optional_idx();
+		}
+	} else {
+		// dictionary has an id - we can cache across vectors
+		// use a much larger limit for dictionary
+		if (dict_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
+			// dictionary is too large - use regular aggregation
+			return optional_idx();
+		}
 	}
 	auto &dictionary_vector = DictionaryVector::Child(dict_col);
 	auto &offsets = DictionaryVector::SelVector(dict_col);
 	auto &dict_state = state.dict_state;
-	// initialize the index state
-	if (dict_size > dict_state.capacity) {
-		dict_state.dictionary_addresses = make_uniq<Vector>(LogicalType::POINTER, dict_size);
-		dict_state.found_entry = make_unsafe_uniq_array<bool>(dict_size);
-		dict_state.capacity = dict_size;
+	if (dict_state.dictionary_id.empty() || dict_state.dictionary_id != dictionary_id) {
+		// new dictionary - initialize the index state
+		if (dict_size > dict_state.capacity) {
+			dict_state.dictionary_addresses = make_uniq<Vector>(LogicalType::POINTER, dict_size);
+			dict_state.found_entry = make_unsafe_uniq_array<bool>(dict_size);
+			dict_state.capacity = dict_size;
+		}
+		memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
+		dict_state.dictionary_id = dictionary_id;
+	} else if (dict_size > dict_state.capacity) {
+		throw InternalException("AggregateHT - using cached dictionary data but dictionary has changed (dictionary id "
+		                        "%s - dict size %d, current capacity %d)",
+		                        dict_state.dictionary_id, dict_size, dict_state.capacity);
 	}
-	memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
-	dict_state.dictionary = dictionary_vector;
 
 	auto &found_entry = dict_state.found_entry;
 	auto &unique_entries = dict_state.unique_entries;
