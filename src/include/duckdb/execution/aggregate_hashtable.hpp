@@ -82,6 +82,7 @@ public:
 
 	const PartitionedTupleData &GetPartitionedData() const;
 	unique_ptr<PartitionedTupleData> AcquirePartitionedData();
+	void Abandon();
 	void Repartition();
 	shared_ptr<ArenaAllocator> GetAggregateAllocator();
 
@@ -89,8 +90,6 @@ public:
 	void Resize(idx_t size);
 	//! Resets the pointer table of the HT to all 0's
 	void ClearPointerTable();
-	//! Resets the group count to 0
-	void ResetCount();
 	//! Set the radix bits for this HT
 	void SetRadixBits(idx_t radix_bits);
 	//! Get the radix bits for this HT
@@ -171,6 +170,8 @@ private:
 
 	//! Initializes the PartitionedTupleData
 	void InitializePartitionedData();
+	//! Initializes the PartitionedTupleData that only has 1 partition
+	void InitializeUnpartitionedData();
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;
 

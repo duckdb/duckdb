@@ -119,9 +119,9 @@ private:
 	static constexpr idx_t L3_CACHE_SIZE = 1572864 / 2;
 
 	//! Sink radix bits to initialize with
-	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 3;
+	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 4;
 	//! Maximum Sink radix bits (independent of threads)
-	static constexpr idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 7;
+	static constexpr idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 8;
 
 	//! The global sink state
 	RadixHTGlobalSinkState &sink;
@@ -453,8 +453,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
 		// 'Reset' the HT without taking its data, we can just keep appending to the same collection
 		// This only works because we never resize the HT
-		ht.ClearPointerTable();
-		ht.ResetCount();
+		ht.Abandon();
 		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
 	}
 
@@ -465,8 +464,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 
 	if (repartitioned && ht.Count() != 0) {
 		// We repartitioned, but we didn't clear the pointer table / reset the count because we're on 1 or 2 threads
-		ht.ClearPointerTable();
-		ht.ResetCount();
+		ht.Abandon();
 		if (gstate.external) {
 			ht.Resize(gstate.config.sink_capacity);
 		}
@@ -734,8 +732,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 
 		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity_limit), 0);
 	} else {
-		ht->ClearPointerTable();
-		ht->ResetCount();
+		ht->Abandon();
 	}
 
 	// Now combine the uncombined data using this thread's HT

@@ -51,6 +51,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 
 	// Partitioned data and pointer table
 	InitializePartitionedData();
+	InitializeUnpartitionedData();
 	Resize(initial_capacity);
 
 	// Predicates
@@ -68,19 +69,21 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 		partitioned_data->Reset();
 	}
 
-	if (!unpartitioned_data) {
-		unpartitioned_data =
-		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, 0ULL, layout.ColumnCount() - 1);
-	} else {
-		unpartitioned_data->Reset();
-	}
-
 	D_ASSERT(GetLayout().GetAggrWidth() == layout.GetAggrWidth());
 	D_ASSERT(GetLayout().GetDataWidth() == layout.GetDataWidth());
 	D_ASSERT(GetLayout().GetRowWidth() == layout.GetRowWidth());
 
 	partitioned_data->InitializeAppendState(state.partitioned_append_state,
 	                                        TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+}
+
+void GroupedAggregateHashTable::InitializeUnpartitionedData() {
+	if (!unpartitioned_data) {
+		unpartitioned_data =
+		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, 0ULL, layout.ColumnCount() - 1);
+	} else {
+		unpartitioned_data->Reset();
+	}
 	unpartitioned_data->InitializeAppendState(state.unpartitioned_append_state,
 	                                          TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 }
@@ -102,12 +105,24 @@ unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedDa
 	// Return and re-initialize
 	auto result = std::move(partitioned_data);
 	InitializePartitionedData();
+	InitializeUnpartitionedData();
 	return result;
+}
+
+void GroupedAggregateHashTable::Abandon() {
+	// Flush/unpin unpartitioned data and append to partitioned data
+	unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
+	unpartitioned_data->Unpin();
+	unpartitioned_data->Repartition(*partitioned_data);
+	InitializeUnpartitionedData();
+
+	// Start over
+	ClearPointerTable();
+	count = 0;
 }
 
 void GroupedAggregateHashTable::Repartition() {
 	auto old = AcquirePartitionedData();
-	InitializePartitionedData();
 	D_ASSERT(old->GetPartitions().size() != partitioned_data->GetPartitions().size());
 	old->Repartition(*partitioned_data);
 }
@@ -194,10 +209,6 @@ void GroupedAggregateHashTable::Verify() {
 
 void GroupedAggregateHashTable::ClearPointerTable() {
 	std::fill_n(entries, capacity, ht_entry_t());
-}
-
-void GroupedAggregateHashTable::ResetCount() {
-	count = 0;
 }
 
 void GroupedAggregateHashTable::SetRadixBits(idx_t radix_bits_p) {
@@ -616,7 +627,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			// Append everything that belongs to an empty group
 			optional_ptr<PartitionedTupleData> data;
 			optional_ptr<PartitionedTupleDataAppendState> append_state;
-			if (radix_bits > 1 && new_entry_count / RadixPartitioning::NumberOfPartitions(radix_bits) < 8) {
+			if (radix_bits > 1 && new_entry_count / RadixPartitioning::NumberOfPartitions(radix_bits) < 4) {
 				TupleDataCollection::ToUnifiedFormat(state.unpartitioned_append_state.chunk_state, state.group_chunk);
 				data = unpartitioned_data.get();
 				append_state = &state.unpartitioned_append_state;
