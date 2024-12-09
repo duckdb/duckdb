@@ -13,6 +13,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/enums/function_errors.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -43,9 +44,6 @@ enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_H
 //!                            but the result might change across queries (e.g. NOW(), CURRENT_TIME)
 //! VOLATILE                -> the result of this function might change per row (e.g. RANDOM())
 enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
-
-//! Whether or not a function can throw an error or not
-enum class FunctionErrors : uint8_t { CANNOT_ERROR = 0, CAN_THROW_ERROR = 1 };
 
 //! How to handle collations
 //! PROPAGATE_COLLATIONS        -> this function combines collation from its inputs and emits them again (default)
