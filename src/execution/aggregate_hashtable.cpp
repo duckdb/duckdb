@@ -85,17 +85,31 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	                                          TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 }
 
-PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() {
+const PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() const {
 	return *partitioned_data;
 }
 
 unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedData() {
+	// Flush/unpin partitioned data
+	partitioned_data->FlushAppendState(state.partitioned_append_state);
+	partitioned_data->Unpin();
+
+	// Flush/unpin unpartitioned data and append to partitioned data
 	unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
 	unpartitioned_data->Unpin();
 	unpartitioned_data->Repartition(*partitioned_data);
-	unpartitioned_data->InitializeAppendState(state.unpartitioned_append_state,
-	                                          TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-	return std::move(partitioned_data);
+
+	// Return and re-initialize
+	auto result = std::move(partitioned_data);
+	InitializePartitionedData();
+	return result;
+}
+
+void GroupedAggregateHashTable::Repartition() {
+	auto old = AcquirePartitionedData();
+	InitializePartitionedData();
+	D_ASSERT(old->GetPartitions().size() != partitioned_data->GetPartitions().size());
+	old->Repartition(*partitioned_data);
 }
 
 shared_ptr<ArenaAllocator> GroupedAggregateHashTable::GetAggregateAllocator() {
@@ -717,7 +731,8 @@ struct FlushMoveState {
 };
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
-	auto other_data = other.AcquirePartitionedData()->GetUnpartitioned();
+	auto other_partitioned_data = other.AcquirePartitionedData();
+	auto other_data = other_partitioned_data->GetUnpartitioned();
 	Combine(*other_data);
 
 	// Inherit ownership to all stored aggregate allocators
@@ -757,11 +772,6 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	}
 
 	Verify();
-}
-
-void GroupedAggregateHashTable::UnpinData() {
-	partitioned_data->FlushAppendState(state.partitioned_append_state);
-	partitioned_data->Unpin();
 }
 
 } // namespace duckdb

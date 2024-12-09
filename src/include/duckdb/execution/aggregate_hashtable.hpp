@@ -80,8 +80,9 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
-	PartitionedTupleData &GetPartitionedData();
+	const PartitionedTupleData &GetPartitionedData() const;
 	unique_ptr<PartitionedTupleData> AcquirePartitionedData();
+	void Repartition();
 	shared_ptr<ArenaAllocator> GetAggregateAllocator();
 
 	//! Resize the HT to the specified size. Must be larger than the current size.
@@ -94,15 +95,10 @@ public:
 	void SetRadixBits(idx_t radix_bits);
 	//! Get the radix bits for this HT
 	idx_t GetRadixBits() const;
-	//! Initializes the PartitionedTupleData
-	void InitializePartitionedData();
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr);
-
-	//! Unpins the data blocks
-	void UnpinData();
 
 private:
 	//! Efficiently matches groups
@@ -173,6 +169,8 @@ private:
 	//! Destroy the HT
 	void Destroy();
 
+	//! Initializes the PartitionedTupleData
+	void InitializePartitionedData();
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;
 

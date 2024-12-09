@@ -396,11 +396,8 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 				    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayout(), config.GetRadixBits(),
 				    gstate.radix_ht.GetLayout().ColumnCount() - 1);
 			}
-
-			ht.UnpinData();
-			ht.AcquirePartitionedData()->Repartition(*lstate.abandoned_data);
 			ht.SetRadixBits(gstate.config.GetRadixBits());
-			ht.InitializePartitionedData();
+			ht.AcquirePartitionedData()->Repartition(*lstate.abandoned_data);
 		}
 	}
 
@@ -427,11 +424,8 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	}
 
 	// We're out-of-sync with the global radix bits, repartition
-	ht.UnpinData();
-	auto old_partitioned_data = ht.AcquirePartitionedData();
 	ht.SetRadixBits(global_radix_bits);
-	ht.InitializePartitionedData();
-	old_partitioned_data->Repartition(ht.GetPartitionedData());
+	ht.Repartition();
 }
 
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
@@ -494,9 +488,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	MaybeRepartition(context.client, gstate, lstate);
 
 	auto &ht = *lstate.ht;
-	ht.UnpinData();
-
-	auto lstate_data = lstate.ht->AcquirePartitionedData();
+	auto lstate_data = ht.AcquirePartitionedData();
 	if (lstate.abandoned_data) {
 		D_ASSERT(gstate.external);
 		D_ASSERT(lstate.abandoned_data->PartitionCount() == lstate.ht->GetPartitionedData().PartitionCount());
@@ -742,21 +734,18 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 
 		ht = sink.radix_ht.CreateHT(gstate.context, MinValue<idx_t>(capacity, capacity_limit), 0);
 	} else {
-		// We may want to resize here to the size of this partition, but for now we just assume uniform partition sizes
-		ht->InitializePartitionedData();
 		ht->ClearPointerTable();
 		ht->ResetCount();
 	}
 
 	// Now combine the uncombined data using this thread's HT
 	ht->Combine(*partition.data, &partition.progress);
-	ht->UnpinData();
 	partition.progress = 1;
 
 	// Move the combined data back to the partition
 	partition.data =
 	    make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context), sink.radix_ht.GetLayout());
-	partition.data->Combine(*ht->GetPartitionedData().GetPartitions()[0]);
+	partition.data->Combine(*ht->AcquirePartitionedData()->GetPartitions()[0]);
 
 	// Update thread-global state
 	auto guard = sink.Lock();
