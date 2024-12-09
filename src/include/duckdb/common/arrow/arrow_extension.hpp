@@ -67,6 +67,8 @@ public:
 
 	LogicalTypeId GetLogicalTypeId() const;
 
+	LogicalType GetLogicalType() const;
+
 private:
 	//! Extension Info from Arrow
 	ArrowExtensionInfo extension_info;
@@ -80,14 +82,28 @@ struct HashArrowExtension {
 	}
 };
 
+struct TypeInfo {
+	TypeInfo();
+	explicit TypeInfo(const LogicalType &type);
+	string alias;
+	LogicalTypeId type;
+	hash_t GetHash() const;
+	bool operator==(const TypeInfo &other) const;
+};
+
+struct HashTypeInfo {
+	size_t operator()(TypeInfo const &type_info) const noexcept {
+		return type_info.GetHash();
+	}
+};
+
 //! The set of encoding functions
 struct ArrowExtensionSet {
 	ArrowExtensionSet() {};
 	static void Initialize(DBConfig &config);
 	std::mutex lock;
 	unordered_map<ArrowExtensionInfo, ArrowExtension, HashArrowExtension> extensions;
-
-	unordered_map<LogicalTypeId, vector<ArrowExtensionInfo>> type_to_info;
+	unordered_map<TypeInfo, vector<ArrowExtensionInfo>, HashTypeInfo> type_to_info;
 };
 
 } // namespace duckdb

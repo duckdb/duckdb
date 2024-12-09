@@ -26,6 +26,23 @@ hash_t ArrowExtensionInfo::GetHash() const {
 	const auto h_format = Hash(arrow_format.c_str());
 	return CombineHash(h_extension, CombineHash(h_vendor, CombineHash(h_format, h_type)));
 }
+
+TypeInfo::TypeInfo() : type() {
+}
+
+TypeInfo::TypeInfo(const LogicalType &type_p) : alias(type_p.GetAlias()), type(type_p.id()) {
+}
+
+hash_t TypeInfo::GetHash() const {
+	const auto h_type_id = Hash(type);
+	const auto h_alias = Hash(alias.c_str());
+	return CombineHash(h_type_id, h_alias);
+}
+
+bool TypeInfo::operator==(const TypeInfo &other) const {
+	return alias == other.alias && type == other.type;
+}
+
 string ArrowExtensionInfo::ToString() const {
 	std::ostringstream info;
 	info << "Extension Name: " << extension_name << ", ";
@@ -81,6 +98,10 @@ LogicalTypeId ArrowExtension::GetLogicalTypeId() const {
 	return type->GetDuckType().id();
 }
 
+LogicalType ArrowExtension::GetLogicalType() const {
+	return type->GetDuckType();
+}
+
 void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
 	lock_guard<mutex> l(encoding_functions->lock);
 	auto extension_info = extension.GetInfo();
@@ -89,7 +110,8 @@ void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
 		                            extension_info.ToString());
 	}
 	arrow_extensions->extensions[extension_info] = extension;
-	arrow_extensions->type_id_to_info[extension.GetLogicalTypeId()].push_back(extension_info);
+	const TypeInfo type_info(extension.GetLogicalType());
+	arrow_extensions->type_to_info[type_info].push_back(extension_info);
 }
 
 ArrowExtension DBConfig::GetArrowExtension(const ArrowExtensionInfo &info) const {
@@ -99,12 +121,14 @@ ArrowExtension DBConfig::GetArrowExtension(const ArrowExtensionInfo &info) const
 	return arrow_extensions->extensions[info];
 }
 
-ArrowExtension DBConfig::GetArrowExtension(const LogicalTypeId &id) const {
-	return GetArrowExtension(arrow_extensions->type_id_to_info[id].front());
+ArrowExtension DBConfig::GetArrowExtension(const LogicalType &type) const {
+	const TypeInfo type_info(type);
+	return GetArrowExtension(arrow_extensions->type_to_info[type_info].front());
 }
 
-bool DBConfig::HasArrowExtension(const LogicalTypeId &id) const {
-	return !arrow_extensions->type_id_to_info[id].empty();
+bool DBConfig::HasArrowExtension(const LogicalType &type) const {
+	const TypeInfo type_info(type);
+	return !arrow_extensions->type_to_info[type_info].empty();
 }
 
 void ArrowExtensionSet::Initialize(DBConfig &config) {

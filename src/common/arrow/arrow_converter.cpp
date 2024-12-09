@@ -111,8 +111,15 @@ bool SetArrowExtension(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	}
 	return false;
 }
+
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                     const ClientProperties &options, DBConfig &config) {
+	if (type.HasAlias()) {
+		// If the type has an alias, we check if it is an Arrow-Type extension
+		if (SetArrowExtension(root_holder, child, type, config)) {
+			return;
+		}
+	}
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		child.format = "b";
@@ -146,10 +153,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::HUGEINT: {
 		if (options.arrow_lossless_conversion) {
-			child.format = "w:16";
-			auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("hugeint");
-			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-			child.metadata = root_holder.metadata_info.back().get();
+			bool success = SetArrowExtension(root_holder, child, type, config);
+			D_ASSERT(success);
 		} else {
 			child.format = "d:38,0";
 		}
@@ -161,9 +166,9 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		} else {
 			child.format = "z";
 		}
-		auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("varint");
-		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-		child.metadata = root_holder.metadata_info.back().get();
+		// auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("varint");
+		// root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		// child.metadata = root_holder.metadata_info.back().get();
 		break;
 	}
 	case LogicalTypeId::DOUBLE:
@@ -171,11 +176,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::UUID: {
 		if (options.arrow_lossless_conversion) {
-			// This is a canonical extension, hence needs the "arrow." prefix
-			child.format = "w:16";
-			auto schema_metadata = ArrowSchemaMetadata::ArrowCanonicalType("arrow.uuid");
-			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-			child.metadata = root_holder.metadata_info.back().get();
+			bool success = SetArrowExtension(root_holder, child, type, config);
+			D_ASSERT(success);
 		} else {
 			if (options.produce_arrow_string_view) {
 				child.format = "vu";
@@ -210,10 +212,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::TIME_TZ: {
 		if (options.arrow_lossless_conversion) {
-			child.format = "w:8";
-			auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("time_tz");
-			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-			child.metadata = root_holder.metadata_info.back().get();
+			bool success = SetArrowExtension(root_holder, child, type, config);
+			D_ASSERT(success);
 		} else {
 			child.format = "ttu";
 		}
@@ -269,9 +269,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			child.format = "z";
 		}
 		if (options.arrow_lossless_conversion) {
-			auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("bit");
-			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-			child.metadata = root_holder.metadata_info.back().get();
+			bool success = SetArrowExtension(root_holder, child, type, config);
+			D_ASSERT(success);
 		}
 		break;
 	}
