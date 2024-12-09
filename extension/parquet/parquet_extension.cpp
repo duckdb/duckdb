@@ -296,8 +296,24 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	reader_data.file_list_idx = file_idx;
 
 	if (bind_data.parquet_options.schema.empty()) {
+		vector<MultiFileReaderColumn> columns;
+		for (auto &column : bind_data.columns) {
+			columns.push_back(column);
+		}
+		// Set the field_ids on the MultiFileReaderColumns in the bind data,
+		// this can be used by CreateNameMapping to create a mapping using the field ids
+		auto &column_readers = reader.root_reader->Cast<StructColumnReader>().child_readers;
+		// FIXME: why is column_readers.size() one higher than bind_data.columns.size() ???
+		D_ASSERT(bind_data.columns.empty() || column_readers.size() >= bind_data.columns.size());
+		for (idx_t column_index = 0; column_index < columns.size(); column_index++) {
+			auto &column_schema = column_readers[column_index]->Schema();
+			if (column_schema.__isset.field_id) {
+				columns[column_index].field_id = column_schema.field_id;
+			}
+		}
+
 		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
-		                                              bind_data.columns, global_column_ids, table_filters,
+		                                              columns, global_column_ids, table_filters,
 		                                              bind_data.file_list->GetFirstFile(), context, reader_state);
 		return;
 	}

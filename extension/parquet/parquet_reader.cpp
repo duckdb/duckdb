@@ -498,9 +498,19 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	root_reader = CreateReader(context);
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
+
+	auto &struct_reader = root_reader->Cast<StructColumnReader>();
+	auto &child_readers = struct_reader.child_readers;
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
-	for (auto &type_pair : child_types) {
-		columns.emplace_back(type_pair.first, type_pair.second);
+	// FIXME: what is this + 1 logically for???
+	D_ASSERT(child_types.size() + 1 == child_readers.size());
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		auto &type_pair = child_types[i];
+		auto column = MultiFileReaderColumn(type_pair.first, type_pair.second);
+		if (child_readers[i]->Schema().__isset.field_id) {
+			column.field_id = child_readers[i]->Schema().field_id;
+		}
+		columns.emplace_back(std::move(column));
 	}
 
 	// Add generated constant column for row number
