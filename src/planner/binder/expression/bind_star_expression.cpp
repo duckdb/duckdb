@@ -185,6 +185,22 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	root = std::move(columns_expr);
 }
 
+optional_ptr<ParsedExpression> GetStarChildExpression(ParsedExpression &root_expr) {
+	optional_ptr<ParsedExpression> expr = &root_expr;
+	while (expr) {
+		if (expr->type == ExpressionType::COLUMN_REF) {
+			break;
+		}
+		if (expr->type == ExpressionType::OPERATOR_COALESCE) {
+			expr = expr->Cast<OperatorExpression>().children[0].get();
+		} else {
+			// unknown expression
+			return nullptr;
+		}
+	}
+	return expr;
+}
+
 void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	TryTransformStarLike(expr);
@@ -232,7 +248,11 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
 			for (idx_t i = 0; i < star_list.size(); i++) {
-				auto &colref = star_list[i]->Cast<ColumnRefExpression>();
+				auto child_expr = GetStarChildExpression(*star_list[i]);
+				if (!child_expr) {
+					continue;
+				}
+				auto &colref = child_expr->Cast<ColumnRefExpression>();
 				if (!RE2::PartialMatch(colref.GetColumnName(), *regex)) {
 					continue;
 				}
@@ -297,18 +317,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 		auto new_expr = expr->Copy();
 		ReplaceStarExpression(new_expr, star_list[i]);
 		if (StarExpression::IsColumns(*star)) {
-			optional_ptr<ParsedExpression> expr = star_list[i].get();
-			while (expr) {
-				if (expr->type == ExpressionType::COLUMN_REF) {
-					break;
-				}
-				if (expr->type == ExpressionType::OPERATOR_COALESCE) {
-					expr = expr->Cast<OperatorExpression>().children[0].get();
-				} else {
-					// unknown expression
-					expr = nullptr;
-				}
-			}
+			auto expr = GetStarChildExpression(*star_list[i]);
 			if (expr) {
 				auto &colref = expr->Cast<ColumnRefExpression>();
 				if (new_expr->alias.empty()) {
