@@ -170,9 +170,8 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		auto arrow_schema_ptr = &arrow_schema;
 
 		ClientProperties options = (reinterpret_cast<Connection *>(tester.connection)->context->GetClientProperties());
-		duckdb::ArrowConverter::ToArrowSchema(
-		    arrow_schema_ptr, logical_types, column_names, options,
-		    DBConfig::GetConfig(*reinterpret_cast<Connection *>(tester.connection)->context));
+		duckdb::ArrowConverter::ToArrowSchema(arrow_schema_ptr, logical_types, column_names, options,
+		                                      *reinterpret_cast<Connection *>(tester.connection)->context);
 
 		ArrowArray arrow_array;
 		arrow_array.Init();

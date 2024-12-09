@@ -129,7 +129,7 @@ void ArrowTestFactory::GetSchema(ArrowArrayStream *factory_ptr, ArrowSchema &sch
 }
 
 void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
-	ArrowConverter::ToArrowSchema(out, types, names, options, config);
+	ArrowConverter::ToArrowSchema(out, types, names, options, context);
 }
 
 unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector<Value> &params) {
@@ -231,7 +231,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	auto names = initial_result->names;
 	// We create an "arrow object" that consists of the arrays from our ArrowQueryResult
 	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result,
-	                         client_properties, DBConfig::GetConfig(*con.context));
+	                         client_properties, *con.context);
 	// And construct a `arrow_scan` to read the created "arrow object"
 	auto params = ConstructArrowScan(factory);
 

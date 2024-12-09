@@ -29,7 +29,7 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	try {
 		ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
-		                              wrapper->result->client_properties, *wrapper->db_config);
+		                              wrapper->result->client_properties, *wrapper->context);
 	} catch (...) {
 		return DuckDBError;
 	}
@@ -72,7 +72,7 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 	}
 
 	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties,
-	                              duckdb::DBConfig::GetConfig(*wrapper->statement->context));
+	                              *wrapper->statement->context);
 	return DuckDBSuccess;
 }
 

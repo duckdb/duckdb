@@ -14,6 +14,7 @@
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
+struct DuckDBArrowSchemaHolder;
 
 struct DBConfig;
 struct ArrowExtensionInfo {
@@ -55,6 +56,9 @@ private:
 	string arrow_format {};
 };
 
+typedef void (*populate_arrow_schema_t)(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
+                                        const LogicalType &type, ClientContext &context);
+
 class ArrowExtension {
 public:
 	ArrowExtension() {};
@@ -68,6 +72,9 @@ public:
 	LogicalTypeId GetLogicalTypeId() const;
 
 	LogicalType GetLogicalType() const;
+	void PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, ClientContext &context);
+	//! (Optional) Callback to a function that sets up the arrow schema production
+	populate_arrow_schema_t populate_arrow_schema = nullptr;
 
 private:
 	//! Extension Info from Arrow

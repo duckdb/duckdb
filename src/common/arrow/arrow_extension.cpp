@@ -102,6 +102,25 @@ LogicalType ArrowExtension::GetLogicalType() const {
 	return type->GetDuckType();
 }
 
+void ArrowExtension::PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
+                                         ClientContext &context) {
+	if (populate_arrow_schema) {
+		// We do some magic
+		return;
+	}
+	// We do the default way of populating the schema
+	child.format = extension_info.GetArrowFormat().c_str();
+	ArrowSchemaMetadata schema_metadata;
+	if (extension_info.IsCanonical()) {
+		schema_metadata = ArrowSchemaMetadata::ArrowCanonicalType(extension_info.GetExtensionName());
+	} else {
+		schema_metadata =
+		    ArrowSchemaMetadata::NonCanonicalType(extension_info.GetTypeName(), extension_info.GetVendorName());
+	}
+	root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+	child.metadata = root_holder.metadata_info.back().get();
+}
+
 void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
 	lock_guard<mutex> l(encoding_functions->lock);
 	auto extension_info = extension.GetInfo();

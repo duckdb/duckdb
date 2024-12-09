@@ -72,7 +72,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	if (!my_stream->column_types.empty()) {
 		try {
 			ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-			                              my_stream->result->client_properties, my_stream->config);
+			                              my_stream->result->client_properties, my_stream->context);
 		} catch (std::runtime_error &e) {
 			my_stream->last_error = ErrorData(e);
 			return -1;
@@ -98,7 +98,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 	try {
 		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-		                              my_stream->result->client_properties, my_stream->config);
+		                              my_stream->result->client_properties, my_stream->context);
 	} catch (std::runtime_error &e) {
 		my_stream->last_error = ErrorData(e);
 		return -1;
@@ -162,8 +162,8 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 }
 
 ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p,
-                                                             DBConfig &config_p)
-    : result(std::move(result_p)), scan_state(make_uniq<QueryResultChunkScanState>(*result)), config(config_p) {
+                                                             ClientContext &context)
+    : result(std::move(result_p)), scan_state(make_uniq<QueryResultChunkScanState>(*result)), context(context) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
 	//! Ceil Approx_Batch_Size/STANDARD_VECTOR_SIZE

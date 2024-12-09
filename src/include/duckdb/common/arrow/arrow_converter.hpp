@@ -17,7 +17,7 @@ struct DBConfig;
 struct ArrowConverter {
 	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
 	                                     const vector<string> &names, const ClientProperties &options,
-	                                     DBConfig &config);
+	                                     ClientContext &context);
 	DUCKDB_API static void ToArrowArray(DataChunk &input, ArrowArray *out_array, ClientProperties options);
 };
 
