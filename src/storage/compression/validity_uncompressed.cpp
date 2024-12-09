@@ -419,7 +419,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 //===--------------------------------------------------------------------===//
 // Select
 //===--------------------------------------------------------------------===//
-void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vector &result, SelectionVector &sel,
+void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vector &result, const SelectionVector &sel,
                     idx_t sel_count) {
 	result.Flatten(sel_count);
 

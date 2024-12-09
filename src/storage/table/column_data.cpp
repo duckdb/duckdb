@@ -195,7 +195,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 	return initial_remaining - remaining;
 }
 
-void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
+void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
                               idx_t sel_count) {
 	BeginScanVectorInternal(state);
 	if (state.current->start + state.current->count - state.row_index < target_count) {
@@ -210,6 +210,17 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 	} else {
 		state.current->Select(state, target_count, result, sel, sel_count);
 	}
+	state.row_index += target_count;
+	state.internal_index = state.row_index;
+}
+
+void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
+                              idx_t &sel_count, const TableFilter &filter) {
+	BeginScanVectorInternal(state);
+	if (state.current->start + state.current->count - state.row_index < target_count) {
+		throw InternalException("ColumnData::Filter should be able to fetch everything from one segment");
+	}
+	state.current->Filter(state, target_count, result, sel, sel_count, filter);
 	state.row_index += target_count;
 	state.internal_index = state.row_index;
 }
