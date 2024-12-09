@@ -15,6 +15,14 @@
 #  VCPKG_TOOLCHAIN_PATH=~/vcpkg/scripts/buildsystems/vcpkg.cmake
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
+################# HTTPFS
+duckdb_extension_load(httpfs
+    LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_httpfs
+    GIT_TAG 92867fce5a6e90b9a6803fab2b196c00cc11e46c
+    INCLUDE_DIR extension/httpfs/include
+    )
+
 ################# ARROW
 if (NOT MINGW)
     duckdb_extension_load(arrow
@@ -31,6 +39,7 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
             GIT_TAG f743d4b3c2faecda15498d0219a1727ad6d62b5b
+            APPLY_PATCHES
             )
 endif()
 
@@ -93,6 +102,7 @@ duckdb_extension_load(inet
     GIT_TAG 51d7ad789f34eecb36a2071bac5aef0e12747d70
     INCLUDE_DIR src/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER

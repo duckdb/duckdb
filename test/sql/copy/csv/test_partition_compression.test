@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-require no_extension_autoloading
+require no_extension_autoloading "FIXME: Autoloading not working in CSV Value conversion"
 
 statement ok
 CREATE TABLE test AS VALUES ('a', 'foo', 1), ('a', 'foo', 2), ('a', 'bar', 1), ('b', 'bar', 1);
