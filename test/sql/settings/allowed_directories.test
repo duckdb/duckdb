@@ -5,7 +5,7 @@
 require skip_reload
 
 # enable_external_access = false disables extension loading
-require no_extension_autoloading
+require no_extension_autoloading "EXPECTED: Test disable autoloading"
 
 require parquet
 
