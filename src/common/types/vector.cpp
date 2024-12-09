@@ -231,6 +231,8 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// already a dictionary, slice the current dictionary
 		auto &current_sel = DictionaryVector::SelVector(*this);
+		auto dictionary_size = DictionaryVector::DictionarySize(*this);
+		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto sliced_dictionary = current_sel.Slice(sel, count);
 		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary));
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
@@ -239,6 +241,11 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 			Vector new_child(child_vector);
 			new_child.auxiliary = make_buffer<VectorStructBuffer>(new_child, sel, count);
 			auxiliary = make_buffer<VectorChildBuffer>(std::move(new_child));
+		}
+		if (dictionary_size.IsValid()) {
+			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
+			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
+			dict_buffer.SetDictionaryId(std::move(dictionary_id));
 		}
 		return;
 	}
@@ -260,11 +267,25 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	auxiliary = std::move(child_ref);
 }
 
+void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+	Slice(sel, count);
+	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		buffer->Cast<DictionaryBuffer>().SetDictionarySize(dictionary_size);
+	}
+}
+
+void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+	Reference(dict);
+	Dictionary(dictionary_size, sel, count);
+}
+
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && GetType().InternalType() != PhysicalType::STRUCT) {
 		// dictionary vector: need to merge dictionaries
 		// check if we have a cached entry
 		auto &current_sel = DictionaryVector::SelVector(*this);
+		auto dictionary_size = DictionaryVector::DictionarySize(*this);
+		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto target_data = current_sel.data();
 		auto entry = cache.cache.find(target_data);
 		if (entry != cache.cache.end()) {
@@ -274,6 +295,11 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 		} else {
 			Slice(sel, count);
 			cache.cache[target_data] = this->buffer;
+		}
+		if (dictionary_size.IsValid()) {
+			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
+			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
+			dict_buffer.SetDictionaryId(std::move(dictionary_id));
 		}
 	} else {
 		Slice(sel, count);

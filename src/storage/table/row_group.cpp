@@ -675,7 +675,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 					} else {
 						auto &col_data = GetColumn(filter.table_column_index);
-						col_data.Select(transaction, state.vector_index, state.column_scans[scan_idx],
+						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx],
 						                result.data[scan_idx], sel, approved_tuple_count, filter.filter);
 					}
 				}
@@ -723,11 +723,11 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				} else {
 					auto &col_data = GetColumn(column);
 					if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-						col_data.FilterScan(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
-						                    approved_tuple_count);
+						col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
+						                approved_tuple_count);
 					} else {
-						col_data.FilterScanCommitted(state.vector_index, state.column_scans[i], result.data[i], sel,
-						                             approved_tuple_count, ALLOW_UPDATES);
+						col_data.SelectCommitted(state.vector_index, state.column_scans[i], result.data[i], sel,
+						                         approved_tuple_count, ALLOW_UPDATES);
 					}
 				}
 			}

@@ -4,7 +4,7 @@
 
 require skip_reload
 
-require no_extension_autoloading
+require no_extension_autoloading "EXPECTED: This tests what happens when extension is not there"
 
 statement error
 SELECT get_substrait("select 1");
