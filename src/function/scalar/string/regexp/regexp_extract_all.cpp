@@ -240,7 +240,7 @@ unique_ptr<FunctionData> RegexpExtractAll::Bind(ClientContext &context, ScalarFu
 	if (arguments.size() >= 4) {
 		ParseRegexOptions(context, *arguments[3], options);
 	}
-	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, optional_idx());
+	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, "");
 }
 
 } // namespace duckdb

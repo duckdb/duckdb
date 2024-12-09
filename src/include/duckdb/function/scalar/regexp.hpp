@@ -25,15 +25,10 @@ inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
 }
 
-inline string_t Extract(const string_t &input, const RE2 &re, optional_idx group_index) {
-	if (!group_index.IsValid()) {
-		return string_t();
-	}
-	duckdb_re2::StringPiece result_str;
-	if (!RE2::ExtractGroup(CreateStringPiece(input), re, group_index.GetIndex(), result_str)) {
-		return string_t();
-	}
-	return string_t(result_str.data(), UnsafeNumericCast<uint32_t>(result_str.size()));
+inline string_t Extract(const string_t &input, Vector &result, const RE2 &re, const duckdb_re2::StringPiece &rewrite) {
+	string extracted;
+	RE2::Extract(input.GetString(), re, rewrite, &extracted);
+	return StringVector::AddString(result, extracted.c_str(), extracted.size());
 }
 
 } // namespace regexp_util
@@ -84,9 +79,9 @@ struct RegexpReplaceBindData : public RegexpBaseBindData {
 struct RegexpExtractBindData : public RegexpBaseBindData {
 	RegexpExtractBindData();
 	RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern,
-	                      optional_idx group_idx);
+	                      string group_string);
 
-	optional_idx group_idx;
+	string group_string;
 	duckdb_re2::StringPiece rewrite;
 
 	unique_ptr<FunctionData> Copy() const override;

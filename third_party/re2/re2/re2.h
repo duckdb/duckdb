@@ -498,10 +498,6 @@ class RE2 {
                       const StringPiece& rewrite,
                       std::string* out);
 
-  // Extracts a capture group from the source text
-  static bool ExtractGroup(const StringPiece& text,
-                      const RE2& re, size_t capture_group, StringPiece &result);
-
   // Escapes all potentially meaningful regexp characters in
   // 'unquoted'.  The returned string, used as a regular expression,
   // will match exactly the original string.  For example,
