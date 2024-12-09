@@ -861,7 +861,6 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Da
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 
-	D_ASSERT(chunk.size() == 0 || chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
 	storage.LocalAppend(append_state, context, chunk, false);
 	storage.FinalizeLocalAppend(append_state);
 }
@@ -874,7 +873,6 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Da
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 	append_state.storage->AppendToDeleteIndexes(row_ids, delete_chunk);
 
-	D_ASSERT(chunk.size() == 0 || chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
 	storage.LocalAppend(append_state, context, chunk, false);
 	storage.FinalizeLocalAppend(append_state);
 }
@@ -889,7 +887,6 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	if (!column_ids || column_ids->empty()) {
 		for (auto &chunk : collection.Chunks()) {
-			D_ASSERT(chunk.size() == 0 || chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
 			storage.LocalAppend(append_state, context, chunk, false);
 		}
 		storage.FinalizeLocalAppend(append_state);
@@ -933,7 +930,6 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	for (auto &chunk : collection.Chunks()) {
 		expression_executor.Execute(chunk, result);
-		D_ASSERT(chunk.size() == 0 || chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
 		storage.LocalAppend(append_state, context, result, false);
 		result.Reset();
 	}

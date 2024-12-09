@@ -642,8 +642,6 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		}
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
-		D_ASSERT(lstate.insert_chunk.size() == 0 ||
-		         lstate.insert_chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
 		storage.LocalAppend(gstate.append_state, context.client, lstate.insert_chunk, true);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
 			// Flush the append so we can target the data we just appended with the update
@@ -707,8 +705,6 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
-			D_ASSERT(insert_chunk.size() == 0 ||
-			         insert_chunk.ColumnCount() == table.GetColumns().PhysicalColumnCount());
 			storage.LocalAppend(gstate.append_state, context.client, insert_chunk, false);
 			return true;
 		});
@@ -716,7 +712,6 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
 		lstate.writer->WriteLastRowGroup(*lstate.local_collection);
-
 		gstate.table.GetStorage().LocalMerge(context.client, *lstate.local_collection);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 	}

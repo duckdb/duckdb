@@ -597,13 +597,14 @@ void ART::InsertIntoEmpty(Node &node, const ARTKey &key, const idx_t depth, cons
 ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_t depth, const ARTKey &row_id,
                                        const GateStatus status, optional_ptr<ART> delete_art) {
 
-	if (!IsUnique()) {
+	if (!IsUnique() || append_mode == ARTAppendMode::INSERT_DUPLICATES) {
 		Leaf::InsertIntoInlined(*this, node, row_id, depth, status);
 		return ARTConflictType::NO_CONFLICT;
 	}
 
 	if (!delete_art) {
 		if (append_mode == ARTAppendMode::IGNORE_DUPLICATES) {
+			D_ASSERT(node.GetRowId() == row_id.GetRowId());
 			return ARTConflictType::NO_CONFLICT;
 		}
 		return ARTConflictType::CONSTRAINT;
@@ -694,7 +695,6 @@ ARTConflictType ART::Insert(Node &node, const ARTKey &key, idx_t depth, const AR
 		return InsertIntoInlined(node, key, depth, row_id, status, delete_art);
 	}
 	case NType::LEAF: {
-		D_ASSERT(!IsUnique());
 		Leaf::TransformToNested(*this, node);
 		return Insert(node, key, depth, row_id, status, delete_art);
 	}
@@ -1042,6 +1042,74 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 }
 
+void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> delete_art, ConflictManager &manager,
+                     optional_idx &conflict_idx, idx_t i) {
+	// Fast path, the leaf is inlined, and the delete ART does not exist.
+	if (leaf.GetType() == NType::LEAF_INLINED && !delete_art) {
+		if (manager.AddHit(i, leaf.GetRowId())) {
+			conflict_idx = i;
+		}
+		return;
+	}
+
+	// Get the delete_leaf.
+	// All leaves in the delete ART are inlined.
+	auto deleted_leaf = delete_art->Lookup(delete_art->tree, key, 0);
+
+	// The leaf is inlined, and the same key does not exist in the delete ART.
+	if (leaf.GetType() == NType::LEAF_INLINED && !deleted_leaf) {
+		if (manager.AddHit(i, leaf.GetRowId())) {
+			conflict_idx = i;
+		}
+		return;
+	}
+
+	// The leaf is inlined, and the same key exists in the delete ART.
+	if (leaf.GetType() == NType::LEAF_INLINED && deleted_leaf) {
+		auto deleted_row_id = deleted_leaf->GetRowId();
+		auto this_row_id = leaf.GetRowId();
+
+		if (deleted_row_id == this_row_id) {
+			if (manager.AddMiss(i)) {
+				conflict_idx = i;
+			}
+			return;
+		}
+
+		if (manager.AddHit(i, this_row_id)) {
+			conflict_idx = i;
+		}
+		return;
+	}
+
+	// Scan the two row IDs in the leaf.
+	Iterator it(*this);
+	it.FindMinimum(leaf);
+	ARTKey empty_key = ARTKey();
+	unsafe_vector<row_t> row_ids;
+	it.Scan(empty_key, 2, row_ids, false);
+
+	if (!deleted_leaf) {
+		if (manager.AddHit(i, row_ids[0]) || manager.AddHit(i, row_ids[0])) {
+			conflict_idx = i;
+		}
+		return;
+	}
+
+	auto deleted_row_id = deleted_leaf->GetRowId();
+
+	if (deleted_row_id == row_ids[0] || deleted_row_id == row_ids[1]) {
+		if (manager.AddMiss(i)) {
+			conflict_idx = i;
+		}
+		return;
+	}
+
+	if (manager.AddHit(i, row_ids[0]) || manager.AddHit(i, row_ids[1])) {
+		conflict_idx = i;
+	}
+}
+
 void ART::VerifyConstraint(DataChunk &chunk, optional_ptr<BoundIndex> delete_index, ConflictManager &manager) {
 	// Lock the index during constraint checking.
 	lock_guard<mutex> l(lock);
@@ -1075,32 +1143,7 @@ void ART::VerifyConstraint(DataChunk &chunk, optional_ptr<BoundIndex> delete_ind
 			}
 			continue;
 		}
-
-		// Use the delete ART to verify if we actually found a constraint violation.
-		if (delete_art) {
-			auto deleted_leaf = delete_art->Lookup(delete_art->tree, keys[i], 0);
-
-			// The same key exists in the delete index.
-			if (deleted_leaf) {
-				auto deleted_row_id = deleted_leaf->GetRowId();
-				auto this_row_id = leaf->GetRowId();
-
-				// And the row IDs match.
-				if (deleted_row_id == this_row_id) {
-					if (manager.AddMiss(i)) {
-						conflict_idx = i;
-					}
-					continue;
-				}
-			}
-		}
-
-		// If we find a node, we need to update the 'matches' and 'row_ids'.
-		// We only perform constraint checking on unique indexes, i.e., all leaves are inlined.
-		D_ASSERT(leaf->GetType() == NType::LEAF_INLINED);
-		if (manager.AddHit(i, leaf->GetRowId())) {
-			conflict_idx = i;
-		}
+		VerifyLeaf(*leaf, keys[i], delete_art, manager, conflict_idx, i);
 	}
 
 	manager.FinishLookup();

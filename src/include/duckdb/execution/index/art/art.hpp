@@ -16,7 +16,7 @@ namespace duckdb {
 
 enum class VerifyExistenceType : uint8_t { APPEND = 0, APPEND_FK = 1, DELETE_FK = 2 };
 enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACTION = 2 };
-enum class ARTAppendMode : uint8_t { DEFAULT = 0, IGNORE_DUPLICATES = 1 };
+enum class ARTAppendMode : uint8_t { DEFAULT = 0, IGNORE_DUPLICATES = 1, INSERT_DUPLICATES = 2 };
 
 class ConflictManager;
 class ARTKey;
@@ -136,6 +136,8 @@ private:
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
+	void VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> delete_art, ConflictManager &manager,
+	                optional_idx &conflict_idx, idx_t i);
 	void VerifyConstraint(DataChunk &chunk, optional_ptr<BoundIndex> delete_index, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;

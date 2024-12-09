@@ -96,17 +96,26 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 	ArenaAllocator allocator(Allocator::Get(art.db));
 	Node root = Node();
 
+	// Temporarily disable constraint checking.
+	if (art.IsUnique() && art.append_mode == ARTAppendMode::DEFAULT) {
+		art.append_mode = ARTAppendMode::INSERT_DUPLICATES;
+	}
+
 	// Move all row IDs into the nested leaf.
 	reference<const Node> leaf_ref(node);
 	while (leaf_ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, LEAF);
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, leaf.row_ids[i]);
-			art.Insert(root, row_id, 0, row_id, GateStatus::GATE_SET, nullptr);
+			auto conflict_type = art.Insert(root, row_id, 0, row_id, GateStatus::GATE_SET, nullptr);
+			if (conflict_type != ARTConflictType::NO_CONFLICT) {
+				throw InternalException("invalid conflict type in Leaf::TransformToNested");
+			}
 		}
 		leaf_ref = leaf.ptr;
 	}
 
+	art.append_mode = ARTAppendMode::DEFAULT;
 	root.SetGateStatus(GateStatus::GATE_SET);
 	Node::Free(art, node);
 	node = root;

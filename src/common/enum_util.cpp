@@ -148,19 +148,20 @@ namespace duckdb {
 const StringUtil::EnumStringLiteral *GetARTAppendModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ARTAppendMode::DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(ARTAppendMode::IGNORE_DUPLICATES), "IGNORE_DUPLICATES" }
+		{ static_cast<uint32_t>(ARTAppendMode::IGNORE_DUPLICATES), "IGNORE_DUPLICATES" },
+		{ static_cast<uint32_t>(ARTAppendMode::INSERT_DUPLICATES), "INSERT_DUPLICATES" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ARTAppendMode>(ARTAppendMode value) {
-	return StringUtil::EnumToString(GetARTAppendModeValues(), 2, "ARTAppendMode", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetARTAppendModeValues(), 3, "ARTAppendMode", static_cast<uint32_t>(value));
 }
 
 template<>
 ARTAppendMode EnumUtil::FromString<ARTAppendMode>(const char *value) {
-	return static_cast<ARTAppendMode>(StringUtil::StringToEnum(GetARTAppendModeValues(), 2, "ARTAppendMode", value));
+	return static_cast<ARTAppendMode>(StringUtil::StringToEnum(GetARTAppendModeValues(), 3, "ARTAppendMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetARTConflictTypeValues() {
