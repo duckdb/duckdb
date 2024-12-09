@@ -124,8 +124,6 @@ private:
 	//! Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
 	static constexpr idx_t L3_CACHE_SIZE = 1572864 / 2;
 
-	//! Maximum row width that we use for computing the size of the HT
-	static constexpr idx_t MAXIMUM_ROW_WIDTH = 64;
 	//! Sink radix bits to initialize with
 	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 4;
 	//! Maximum Sink radix bits (independent of threads)
@@ -135,6 +133,11 @@ private:
 	atomic<idx_t> sink_radix_bits;
 	//! Maximum Sink radix bits (set based on number of threads)
 	const idx_t maximum_sink_radix_bits;
+
+	//! Thresholds at which we reduce the sink radix bits
+	//! This needed to reduce cache misses when we have very wide rows
+	static constexpr idx_t ROW_WIDTH_THRESHOLD_ONE = 32;
+	static constexpr idx_t ROW_WIDTH_THRESHOLD_TWO = 64;
 
 public:
 	//! If we have this many or less threads, we grow the HT, otherwise we abandon
@@ -259,8 +262,7 @@ void RadixHTGlobalSinkState::Destroy() {
 // LCOV_EXCL_STOP
 
 RadixHTConfig::RadixHTConfig(RadixHTGlobalSinkState &sink_p)
-    : sink(sink_p), number_of_threads(sink.number_of_threads),
-      row_width(MaxValue(NextPowerOfTwo(sink.radix_ht.GetLayout().GetRowWidth()), MAXIMUM_ROW_WIDTH)),
+    : sink(sink_p), number_of_threads(sink.number_of_threads), row_width(sink.radix_ht.GetLayout().GetRowWidth()),
       sink_capacity(SinkCapacity()), sink_radix_bits(InitialSinkRadixBits()),
       maximum_sink_radix_bits(MaximumSinkRadixBits()) {
 }
@@ -303,8 +305,11 @@ idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 	if (number_of_threads <= GROW_STRATEGY_THREAD_THRESHOLD) {
 		return InitialSinkRadixBits(); // Don't repartition unless we go external
 	}
-	if (row_width == MAXIMUM_ROW_WIDTH) {
-		// If rows are very wide we have to reduce the number of partitions, otherwise cache misses get out of hand
+	// If rows are very wide we have to reduce the number of partitions, otherwise cache misses get out of hand
+	if (row_width > ROW_WIDTH_THRESHOLD_TWO) {
+		return MAXIMUM_FINAL_SINK_RADIX_BITS - 2;
+	}
+	if (row_width > ROW_WIDTH_THRESHOLD_ONE) {
 		return MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
 	}
 	return MAXIMUM_FINAL_SINK_RADIX_BITS;
