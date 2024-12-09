@@ -439,46 +439,6 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 	return true;
 }
 
-static idx_t GetFilterScanCount(ColumnScanState &state, TableFilter &filter) {
-	switch (filter.filter_type) {
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		auto &child_state = state.child_states[1 + struct_filter.child_idx]; // +1 for validity
-		auto &child_filter = struct_filter.child_filter;
-		return GetFilterScanCount(child_state, *child_filter);
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_state = filter.Cast<ConjunctionAndFilter>();
-		idx_t max_count = 0;
-		for (auto &child_filter : conjunction_state.child_filters) {
-			max_count = std::max(GetFilterScanCount(state, *child_filter), max_count);
-		}
-		return max_count;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_state = filter.Cast<ConjunctionOrFilter>();
-		idx_t max_count = 0;
-		for (auto &child_filter : conjunction_state.child_filters) {
-			max_count = std::max(GetFilterScanCount(state, *child_filter), max_count);
-		}
-		return max_count;
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &zone_filter = filter.Cast<OptionalFilter>();
-		return GetFilterScanCount(state, *zone_filter.child_filter);
-	}
-	case TableFilterType::IS_NULL:
-	case TableFilterType::IS_NOT_NULL:
-	case TableFilterType::CONSTANT_COMPARISON:
-	case TableFilterType::IN_FILTER:
-	case TableFilterType::DYNAMIC_FILTER:
-		return state.current->start + state.current->count;
-	default: {
-		throw NotImplementedException("Unimplemented filter type for zonemap");
-	}
-	}
-}
-
 bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	auto &filters = state.GetFilterInfo();
 	for (auto &entry : filters.GetFilterList()) {
@@ -502,7 +462,13 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		}
 
 		// check zone map segment.
-		idx_t target_row = GetFilterScanCount(state.column_scans[column_idx], filter);
+		auto &column_scan_state = state.column_scans[column_idx];
+		auto current_segment = column_scan_state.current;
+		if (!current_segment) {
+			// no segment to skip
+			continue;
+		}
+		idx_t target_row = current_segment->start + current_segment->count;
 		if (target_row >= state.max_row) {
 			target_row = state.max_row;
 		}
@@ -675,7 +641,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 					} else {
 						auto &col_data = GetColumn(filter.table_column_index);
-						col_data.Select(transaction, state.vector_index, state.column_scans[scan_idx],
+						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx],
 						                result.data[scan_idx], sel, approved_tuple_count, filter.filter);
 					}
 				}
@@ -723,11 +689,11 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				} else {
 					auto &col_data = GetColumn(column);
 					if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-						col_data.FilterScan(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
-						                    approved_tuple_count);
+						col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
+						                approved_tuple_count);
 					} else {
-						col_data.FilterScanCommitted(state.vector_index, state.column_scans[i], result.data[i], sel,
-						                             approved_tuple_count, ALLOW_UPDATES);
+						col_data.SelectCommitted(state.vector_index, state.column_scans[i], result.data[i], sel,
+						                         approved_tuple_count, ALLOW_UPDATES);
 					}
 				}
 			}

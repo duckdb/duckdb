@@ -103,12 +103,11 @@ endloop
 statement ok
 COMMIT
 
-# NULLs are not RLE compressed - even with block colocation this takes a high number of blocks
-# this number can differ depending on the block size, but for this test it is only relevant that it is
-# significantly higher than without compression
+# NULLs are RLE compressed (with Roaring)
+# So even with nulls we reach a similar compression ratio
 
 query I
-SELECT COUNT(DISTINCT block_id) > 30 FROM pragma_storage_info('integers_batched_load_nulls');
+SELECT COUNT(DISTINCT block_id) < 5 FROM pragma_storage_info('integers_batched_load_nulls');
 ----
 true
 
