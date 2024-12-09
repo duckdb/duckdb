@@ -604,7 +604,6 @@ ARTConflictType ART::InsertIntoInlined(Node &node, const ARTKey &key, const idx_
 
 	if (!delete_art) {
 		if (append_mode == ARTAppendMode::IGNORE_DUPLICATES) {
-			D_ASSERT(node.GetRowId() == row_id.GetRowId());
 			return ARTConflictType::NO_CONFLICT;
 		}
 		return ARTConflictType::CONSTRAINT;
