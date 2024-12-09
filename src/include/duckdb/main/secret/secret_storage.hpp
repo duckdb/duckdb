@@ -74,10 +74,10 @@ protected:
 
 	//! Name of the storage backend (e.g. temporary, file, etc)
 	string storage_name;
-	//! Whether entries in this storage will survive duckdb reboots
-	bool persistent;
 	//! Offset associated to this storage for tie-breaking secrets between storages
 	const int64_t tie_break_offset;
+	//! Whether entries in this storage will survive duckdb reboots
+	bool persistent;
 };
 
 //! Wrapper struct around a SecretEntry to allow storing it
