@@ -19,9 +19,6 @@ unique_ptr<TableRef> Transformer::TransformRangeVar(duckdb_libpgquery::PGRangeVa
 	if (root.sample) {
 		result->sample = TransformSampleOptions(root.sample);
 	}
-	if (root.is_recurring) {
-		result->is_recurring = root.is_recurring;
-	}
 	SetQueryLocation(*result, root.location);
 	return std::move(result);
 }
@@ -42,9 +39,6 @@ QualifiedName Transformer::TransformQualifiedName(duckdb_libpgquery::PGRangeVar 
 		qname.name = root.relname;
 	} else {
 		qname.name = string();
-	}
-	if (root.is_recurring) {
-		qname.is_recurring = root.is_recurring;
 	}
 	return qname;
 }

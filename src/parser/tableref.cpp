@@ -40,9 +40,7 @@ string TableRef::BaseToString(string result, const vector<string> &column_name_a
 }
 
 bool TableRef::Equals(const TableRef &other) const {
-	return type == other.type && alias == other.alias && SampleOptions::Equals(sample.get(), other.sample.get()) &&
-	       other.is_recurring == is_recurring;
-	;
+	return type == other.type && alias == other.alias && SampleOptions::Equals(sample.get(), other.sample.get());
 }
 
 void TableRef::CopyProperties(TableRef &target) const {
@@ -51,7 +49,6 @@ void TableRef::CopyProperties(TableRef &target) const {
 	target.query_location = query_location;
 	target.sample = sample ? sample->Copy() : nullptr;
 	target.external_dependency = external_dependency;
-	target.is_recurring = is_recurring;
 }
 
 void TableRef::Print() {

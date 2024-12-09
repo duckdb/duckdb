@@ -39,7 +39,7 @@ public:
 	idx_t correlated_columns;
 	//! Does this operator read a materialized CTE?
 	CTEMaterialize materialized_cte;
-
+	//! Does this operator read the recurring CTE table
 	bool is_recurring = false;
 
 public:

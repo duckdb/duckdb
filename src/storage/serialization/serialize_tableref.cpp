@@ -14,7 +14,6 @@ void TableRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(101, "alias", alias);
 	serializer.WritePropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample", sample);
 	serializer.WritePropertyWithDefault<optional_idx>(103, "query_location", query_location, optional_idx());
-	serializer.WritePropertyWithDefault<bool>(104, "is_recurring", is_recurring);
 }
 
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
@@ -22,7 +21,6 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	auto alias = deserializer.ReadPropertyWithDefault<string>(101, "alias");
 	auto sample = deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample");
 	auto query_location = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(103, "query_location", optional_idx());
-	auto is_recurring = deserializer.ReadPropertyWithDefault<bool>(104, "is_recurring");
 	unique_ptr<TableRef> result;
 	switch (type) {
 	case TableReferenceType::BASE_TABLE:
@@ -58,7 +56,6 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	result->alias = std::move(alias);
 	result->sample = std::move(sample);
 	result->query_location = query_location;
-	result->is_recurring = is_recurring;
 	return result;
 }
 

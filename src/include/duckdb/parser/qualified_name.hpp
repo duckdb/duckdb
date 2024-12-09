@@ -20,7 +20,6 @@ struct QualifiedName {
 	string catalog;
 	string schema;
 	string name;
-	bool is_recurring = false;
 	QualifiedName() {
 	}
 

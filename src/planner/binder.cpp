@@ -427,7 +427,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		throw InternalException("Unknown table ref type (%s)", EnumUtil::ToString(ref.type));
 	}
 	result->sample = std::move(ref.sample);
-	result->is_recurring = ref.is_recurring;
 	return result;
 }
 

@@ -79,7 +79,6 @@ typedef struct PGRangeVar {
 	PGAlias *alias;      /* table alias & optional column aliases */
 	int location;        /* token location, or -1 if unknown */
 	PGNode *sample;      /* sample, if any */
-	bool is_recurring;			 /* is recurring table called */
 } PGRangeVar;
 
 /*

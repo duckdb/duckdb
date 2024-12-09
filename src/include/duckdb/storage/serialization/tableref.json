@@ -26,11 +26,6 @@
         "name": "query_location",
         "type": "optional_idx",
         "default": "optional_idx()"
-      },
-      {
-        "id": 104,
-        "name": "is_recurring",
-        "type": "bool"
       }
     ]
   },

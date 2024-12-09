@@ -37,8 +37,6 @@ public:
 	shared_ptr<ExternalDependency> external_dependency;
 	//! Aliases for the column names
 	vector<string> column_name_alias;
-	//! Reference recurring table
-	bool is_recurring = false;
 
 public:
 	//! Convert the object to a string
