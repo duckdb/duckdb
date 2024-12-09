@@ -447,10 +447,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	auto &gstate = input.global_state.Cast<RadixHTGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<RadixHTLocalSinkState>();
 	if (!lstate.ht) {
-		const auto capacity = gstate.number_of_threads <= RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD
-		                          ? gstate.config.sink_capacity
-		                          : GroupedAggregateHashTable::InitialCapacity();
-		lstate.ht = CreateHT(context.client, capacity, gstate.config.GetRadixBits());
+		lstate.ht = CreateHT(context.client, gstate.config.sink_capacity, gstate.config.GetRadixBits());
 		gstate.active_threads++;
 	}
 
