@@ -117,6 +117,8 @@ if (NOT MINGW AND NOT $ENV{WASM_EXTENSIONS})
             )
 endif()
 
+# mingw CI with all extensions at once is somehow not happy
+if (NOT MINGW)
 ################# SPATIAL
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
@@ -125,6 +127,7 @@ duckdb_extension_load(spatial
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     )
+endif()
 
 ################# SQLITE_SCANNER
 # Static linking on windows does not properly work due to symbol collision
