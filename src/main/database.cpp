@@ -67,6 +67,7 @@ DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
 	GetDatabaseManager().ResetDatabases(scheduler);
 	// destroy child elements
+	log_manager.reset();
 	connection_manager.reset();
 	object_cache.reset();
 	scheduler.reset();

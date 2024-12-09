@@ -651,7 +651,7 @@ void LoggingLevel::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value
 }
 
 void LoggingLevel::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	db->GetLogManager().SetLogLevel(LogLevel::WARN); // TODO: use central low
+	db->GetLogManager().SetLogLevel(LogConfig::DEFAULT_LOG_LEVEL);
 }
 
 //===----------------------------------------------------------------------===//
@@ -665,7 +665,7 @@ void LoggingStorage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 }
 
 void LoggingStorage::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	db->GetLogManager().SetLogStorage(*db, LogConfig::IN_MEMORY_STORAGE_NAME); // TODO: use central low
+	db->GetLogManager().SetLogStorage(*db, LogConfig::DEFAULT_LOG_STORAGE);
 }
 
 //===----------------------------------------------------------------------===//

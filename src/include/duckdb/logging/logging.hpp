@@ -44,6 +44,9 @@ struct LogConfig {
 	constexpr static const char *STDOUT_STORAGE_NAME = "stdout";
 	constexpr static const char *FILE_STORAGE_NAME = "file";
 
+	constexpr static LogLevel DEFAULT_LOG_LEVEL = LogLevel::WARN;
+	constexpr static const char * DEFAULT_LOG_STORAGE = IN_MEMORY_STORAGE_NAME;
+
 	LogConfig();
 
 	static LogConfig Create(bool enabled, LogLevel level);
