@@ -174,6 +174,8 @@ enum class ForeignKeyType : uint8_t;
 
 enum class FunctionCollationHandling : uint8_t;
 
+enum class FunctionErrors : uint8_t;
+
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionStability : uint8_t;
@@ -587,6 +589,9 @@ const char* EnumUtil::ToChars<ForeignKeyType>(ForeignKeyType value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandling value);
+
+template<>
+const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
@@ -1101,6 +1106,9 @@ ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value);
 
 template<>
 FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const char *value);
+
+template<>
+FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value);
 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
