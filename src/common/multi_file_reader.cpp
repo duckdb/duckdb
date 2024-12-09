@@ -376,9 +376,9 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<MultiF
                                     const vector<MultiFileReaderColumn> &global_columns,
                                     const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
                                     MultiFileReaderData &reader_data, const string &initial_file,
-                                    const MultiFileReaderBindData &options,
+                                    const MultiFileReaderBindData &bind_data,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
-	CreateNameMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, initial_file,
+	CreateNameMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data, initial_file,
 	                  global_state);
 	CreateFilterMap(global_columns, filters, reader_data, global_state);
 }
