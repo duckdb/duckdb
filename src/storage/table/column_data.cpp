@@ -164,16 +164,20 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - state.row_index);
 		idx_t result_offset = initial_remaining - remaining;
 		if (scan_count > 0) {
-			if (state.scan_options && state.scan_options->force_fetch_row) {
+			if (DUCKDB_UNLIKELY(state.scan_options && state.scan_options->force_fetch_row)) {
+				// verification only: test FetchRow
 				for (idx_t i = 0; i < scan_count; i++) {
 					ColumnFetchState fetch_state;
 					state.current->FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + i), result,
 					                        result_offset + i);
 				}
-			} else {
-				state.current->Scan(state, scan_count, result, result_offset, scan_type);
+				state.row_index += scan_count;
+				remaining -= scan_count;
+				state.current->Skip(state);
+				continue;
 			}
 
+			state.current->Scan(state, scan_count, result, result_offset, scan_type);
 			state.row_index += scan_count;
 			remaining -= scan_count;
 		}
@@ -201,15 +205,20 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 	if (state.current->start + state.current->count - state.row_index < target_count) {
 		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
 	}
-	if (state.scan_options && state.scan_options->force_fetch_row) {
+	if (DUCKDB_UNLIKELY(state.scan_options && state.scan_options->force_fetch_row)) {
+		// verification only: test FetchRow
 		for (idx_t i = 0; i < sel_count; i++) {
 			auto source_idx = sel.get_index(i);
 			ColumnFetchState fetch_state;
 			state.current->FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.row_index + source_idx), result, i);
 		}
-	} else {
-		state.current->Select(state, target_count, result, sel, sel_count);
+		state.row_index += target_count;
+		state.internal_index = state.row_index;
+		state.current->Skip(state);
+		return;
 	}
+
+	state.current->Select(state, target_count, result, sel, sel_count);
 	state.row_index += target_count;
 	state.internal_index = state.row_index;
 }
