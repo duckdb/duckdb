@@ -8,6 +8,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
 
