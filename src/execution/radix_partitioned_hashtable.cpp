@@ -306,10 +306,10 @@ idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 		return InitialSinkRadixBits(); // Don't repartition unless we go external
 	}
 	// If rows are very wide we have to reduce the number of partitions, otherwise cache misses get out of hand
-	if (row_width > ROW_WIDTH_THRESHOLD_TWO) {
+	if (row_width >= ROW_WIDTH_THRESHOLD_TWO) {
 		return MAXIMUM_FINAL_SINK_RADIX_BITS - 2;
 	}
-	if (row_width > ROW_WIDTH_THRESHOLD_ONE) {
+	if (row_width >= ROW_WIDTH_THRESHOLD_ONE) {
 		return MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
 	}
 	return MAXIMUM_FINAL_SINK_RADIX_BITS;
@@ -321,8 +321,8 @@ idx_t RadixHTConfig::SinkCapacity() const {
 	const auto cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / number_of_threads;
 
 	// Divide cache per active thread by entry size, round up to next power of two, to get capacity
-	const auto size_per_entry =
-	    LossyNumericCast<idx_t>(sizeof(ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR) + row_width;
+	const auto size_per_entry = LossyNumericCast<idx_t>(sizeof(ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR) +
+	                            MinValue(row_width, ROW_WIDTH_THRESHOLD_TWO);
 	const auto capacity = NextPowerOfTwo(cache_per_active_thread / size_per_entry);
 
 	// Capacity must be at least the minimum capacity
