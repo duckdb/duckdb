@@ -136,6 +136,8 @@ public:
 	static bool CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
 	                         const DialectOptions &dialect_options, const bool is_null, const char decimal_separator);
 
+	idx_t LinesSniffed() const;
+
 private:
 	//! CSV State Machine Cache
 	CSVStateMachineCache &state_machine_cache;
@@ -151,9 +153,10 @@ private:
 	SetColumns set_columns;
 	shared_ptr<CSVErrorHandler> error_handler;
 	shared_ptr<CSVErrorHandler> detection_error_handler;
-
+	//! Number of lines sniffed in this sniffer
+	idx_t lines_sniffed;
 	//! Sets the result options
-	void SetResultOptions();
+	void SetResultOptions() const;
 
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //

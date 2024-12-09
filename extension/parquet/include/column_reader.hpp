@@ -192,6 +192,7 @@ private:
 	SelectionVector dictionary_selection_vector;
 	idx_t dictionary_size;
 	unique_ptr<Vector> dictionary;
+	string dictionary_id;
 
 public:
 	template <class TARGET>
