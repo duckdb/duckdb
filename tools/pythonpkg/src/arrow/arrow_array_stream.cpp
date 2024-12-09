@@ -282,7 +282,8 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 		constant.type().GetDecimalProperties(width, scale);
 		// pyarrow only allows 'decimal.Decimal' to be used to construct decimal scalars such as 0.05
 		auto val = import_cache.decimal.Decimal()(constant.ToString());
-		return dataset_scalar(scalar(std::move(val), decimal_type(width, scale)));
+		return dataset_scalar(
+		    scalar(std::move(val), decimal_type(py::arg("precision") = width, py::arg("scale") = scale)));
 	}
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for Arrow Filter Pushdown",
