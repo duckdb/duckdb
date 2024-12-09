@@ -193,7 +193,6 @@ ScalarFunction MapConcatFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction fun("map_concat", {}, LogicalTypeId::LIST, MapConcatFunction, MapConcatBind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	ScalarFunction::SetReturnsError(fun);
 	fun.varargs = LogicalType::ANY;
 	return fun;
 }

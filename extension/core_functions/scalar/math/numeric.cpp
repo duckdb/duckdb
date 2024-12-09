@@ -180,7 +180,6 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 		case LogicalTypeId::HUGEINT: {
 			ScalarFunction function({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
 			function.statistics = PropagateAbsStats;
-			ScalarFunction::SetReturnsError(function);
 			abs.AddFunction(function);
 			break;
 		}

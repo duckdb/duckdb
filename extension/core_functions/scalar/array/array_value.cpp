@@ -81,7 +81,6 @@ ScalarFunction ArrayValueFun::GetFunction() {
 	                   ArrayValueStats);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	ScalarFunction::SetReturnsError(fun);
 	return fun;
 }
 

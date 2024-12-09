@@ -76,7 +76,21 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	arguments.Verify();
 
 	D_ASSERT(expr.function.function);
-	expr.function.function(arguments, *state, result);
+	// #ifdef DEBUG
+	try {
+		// #endif
+		expr.function.function(arguments, *state, result);
+		// #ifdef DEBUG
+	} catch (std::exception &ex) {
+		if (expr.function.errors == FunctionErrors::CANNOT_ERROR) {
+			ErrorData err(ex);
+			throw InternalException("Error thrown in function \"%s\" - but function is labeled as not being able to "
+			                        "throw errors\n\nError thrown: %s",
+			                        expr.function.name, err.Message());
+		}
+		throw;
+	}
+	// #endif
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);
