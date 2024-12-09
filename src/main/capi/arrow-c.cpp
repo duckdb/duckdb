@@ -29,7 +29,7 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	try {
 		ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
-		                              wrapper->result->client_properties);
+		                              wrapper->result->client_properties, *wrapper->db_config);
 	} catch (...) {
 		return DuckDBError;
 	}
@@ -52,11 +52,11 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 	for (idx_t i = 0; i < count; i++) {
 		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of
 		// 'AdbcStatementGetParameterSchema'
-		auto type = LogicalType::SQLNULL;
+		const auto type = LogicalType::SQLNULL;
 
 		// FIXME: we don't support named parameters yet, but when we do, this needs to be updated
 		auto name = std::to_string(i);
-		prepared_types.push_back(std::move(type));
+		prepared_types.push_back(type);
 		prepared_names.push_back(name);
 	}
 
@@ -71,7 +71,8 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 		D_ASSERT(!result_schema->release);
 	}
 
-	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties);
+	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties,
+	                              duckdb::DBConfig::GetConfig(*wrapper->statement->context));
 	return DuckDBSuccess;
 }
 

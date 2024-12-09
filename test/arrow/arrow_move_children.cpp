@@ -106,8 +106,8 @@ TEST_CASE("Test move children", "[arrow]") {
 	auto res_properties = initial_result->client_properties;
 
 	// Create a test factory and produce a stream from it
-	auto factory =
-	    ArrowTestFactory(std::move(types), std::move(names), std::move(initial_result), false, client_properties);
+	auto factory = ArrowTestFactory(std::move(types), std::move(names), std::move(initial_result), false,
+	                                client_properties, DBConfig::GetConfig(*conn.context));
 	auto stream = ArrowTestFactory::CreateStream((uintptr_t)&factory, parameters);
 
 	// For every array, extract the children and scan them
@@ -122,7 +122,8 @@ TEST_CASE("Test move children", "[arrow]") {
 			ArrowSchema schema;
 			vector<LogicalType> single_type {res_types[i]};
 			vector<string> single_name {res_names[i]};
-			ArrowConverter::ToArrowSchema(&schema, single_type, single_name, res_properties);
+			ArrowConverter::ToArrowSchema(&schema, single_type, single_name, res_properties,
+			                              DBConfig::GetConfig(*conn.context));
 
 			if (i == 0) {
 				AssertExpectedResult<string>(&schema, children[i], "a");

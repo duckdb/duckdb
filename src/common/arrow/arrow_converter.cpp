@@ -386,7 +386,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		// It is possible we can export this type as a registered extension
 		if (config.HasArrowExtension(type.id())) {
 			auto info = config.GetArrowExtension(type.id());
-			child.format = info.format;
+			// child.format = info.format;
 			auto schema_metadata = ArrowSchemaMetadata::DuckDBInternalType("uhugeint");
 			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 			child.metadata = root_holder.metadata_info.back().get();
