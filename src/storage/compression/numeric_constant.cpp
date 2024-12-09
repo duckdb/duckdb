@@ -105,24 +105,33 @@ void ConstantSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector
 // Filter
 //===--------------------------------------------------------------------===//
 void FiltersNullValues(const TableFilter &filter, bool &filters_nulls, bool &filters_valid_values) {
+	filters_nulls = false;
+	filters_valid_values = false;
+
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER:
 		break;
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
+		filters_nulls = true;
+		filters_valid_values = true;
 		for (auto &child_filter : conjunction_or.child_filters) {
-			bool child_filters_nulls = false;
-			bool child_filters_valid_values = false;
+			bool child_filters_nulls, child_filters_valid_values;
 			FiltersNullValues(*child_filter, child_filters_nulls, child_filters_valid_values);
-			filters_nulls = filters_nulls || child_filters_nulls;
-			filters_valid_values = filters_valid_values || child_filters_valid_values;
+			filters_nulls = filters_nulls && child_filters_nulls;
+			filters_valid_values = filters_valid_values && child_filters_valid_values;
 		}
 		break;
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
+		filters_nulls = false;
+		filters_valid_values = false;
 		for (auto &child_filter : conjunction_and.child_filters) {
-			FiltersNullValues(*child_filter, filters_nulls, filters_valid_values);
+			bool child_filters_nulls, child_filters_valid_values;
+			FiltersNullValues(*child_filter, child_filters_nulls, child_filters_valid_values);
+			filters_nulls = filters_nulls || child_filters_nulls;
+			filters_valid_values = filters_valid_values || child_filters_valid_values;
 		}
 		break;
 	}
@@ -143,8 +152,7 @@ void FiltersNullValues(const TableFilter &filter, bool &filters_nulls, bool &fil
 void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                             SelectionVector &sel, idx_t &sel_count, const TableFilter &filter) {
 	// check what effect the filter has on NULL values
-	bool filters_nulls = false;
-	bool filters_valid_values = false;
+	bool filters_nulls, filters_valid_values;
 	FiltersNullValues(filter, filters_nulls, filters_valid_values);
 
 	auto &stats = segment.stats.statistics;
