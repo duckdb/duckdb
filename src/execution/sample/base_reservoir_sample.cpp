@@ -1,5 +1,5 @@
 #include "duckdb/execution/reservoir_sample.hpp"
-#include "math.h"
+#include <math.h>
 
 namespace duckdb {
 
@@ -16,20 +16,9 @@ double BaseReservoirSampling::GetMinWeightFromTuplesSeen(idx_t rows_seen_total) 
 	case 3:
 		return 0.693454;
 	default: {
-		// 0.978 - 1.5194 * std::exp(0.441 * rows_seen_total);
-		// 0.988 - 0.17742 * std::exp(-0.0718 * rows_seen_total);
-		// 0.987 - 0.19 * std::exp(-0.077 * rows_seen_total);
-		return (0.99 - 0.436 * std::exp(-0.07 * rows_seen_total));
+		return (0.99 - 0.355 * std::exp(-0.07 * static_cast<double>(rows_seen_total)));
 	}
 	}
-}
-
-// ReservoirSample::ReservoirSample(idx_t sample_count, int64_t seed)
-//     : ReservoirSample(Allocator::DefaultAllocator(), sample_count, seed) {
-// }
-
-void BaseReservoirSampling::IncreaseNumEntriesSeenTotal(idx_t count) {
-	num_entries_seen_total += count;
 }
 
 BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
@@ -54,7 +43,7 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Copy() {
 	return ret;
 }
 
-void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sample_size, idx_t index_offset) {
+void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sample_size) {
 	//! 1: The first m items of V are inserted into R
 	//! first we need to check if the reservoir already has "m" elements
 	//! 2. For each item vi ∈ R: Calculate a key ki = random(0, 1)
@@ -65,9 +54,8 @@ void BaseReservoirSampling::InitializeReservoirWeights(idx_t cur_size, idx_t sam
 		//! we then define the threshold to enter the reservoir T_w as the minimum key of R
 		//! we use a priority queue to extract the minimum key in O(1) time
 		for (idx_t i = 0; i < sample_size; i++) {
-			idx_t index = i + index_offset;
 			double k_i = random.NextRandom();
-			reservoir_weights.emplace(-k_i, index);
+			reservoir_weights.emplace(-k_i, i);
 		}
 		SetNextEntry();
 	}
@@ -78,7 +66,7 @@ void BaseReservoirSampling::SetNextEntry() {
 	//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
 	auto &min_key = reservoir_weights.top();
 	double t_w = -min_key.first;
-	double r = random.NextRandom();
+	double r = random.NextRandom32();
 	double x_w = log(r) / log(t_w);
 	//! 5. From the current item vc skip items until item vi , such that:
 	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
@@ -138,8 +126,7 @@ void BaseReservoirSampling::FillWeights(SelectionVector &sel, idx_t &sel_size) {
 	auto num_entries_seen_normalized = num_entries_seen_total / FIXED_SAMPLE_SIZE;
 	auto min_weight = GetMinWeightFromTuplesSeen(num_entries_seen_normalized);
 	for (idx_t i = 0; i < sel_size; i++) {
-		RandomEngine new_random_engine;
-		auto weight = new_random_engine.NextRandom(min_weight, 1);
+		auto weight = random.NextRandom(min_weight, 1);
 		reservoir_weights.emplace(-weight, i);
 	}
 	D_ASSERT(reservoir_weights.size() <= sel_size);

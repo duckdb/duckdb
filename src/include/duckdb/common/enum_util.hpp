@@ -278,7 +278,7 @@ enum class SampleMethod : uint8_t;
 
 enum class SampleType : uint8_t;
 
-enum class SamplingMode : uint8_t;
+enum class SamplingState : uint8_t;
 
 enum class ScanType : uint8_t;
 
@@ -745,7 +745,7 @@ template<>
 const char* EnumUtil::ToChars<SampleType>(SampleType value);
 
 template<>
-const char* EnumUtil::ToChars<SamplingMode>(SamplingMode value);
+const char* EnumUtil::ToChars<SamplingState>(SamplingState value);
 
 template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value);
@@ -1259,7 +1259,7 @@ template<>
 SampleType EnumUtil::FromString<SampleType>(const char *value);
 
 template<>
-SamplingMode EnumUtil::FromString<SamplingMode>(const char *value);
+SamplingState EnumUtil::FromString<SamplingState>(const char *value);
 
 template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value);

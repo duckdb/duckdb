@@ -451,7 +451,7 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 		auto &ingest_sample = global_sample->Cast<ReservoirSample>();
 		ingest_sample.Merge(std::move(local_sample));
 		// initialize the thread local sample again
-		auto new_local_sample = make_uniq<ReservoirSample>(FIXED_SAMPLE_SIZE);
+		auto new_local_sample = make_uniq<ReservoirSample>(ingest_sample.GetSampleCount());
 		state.stats.SetTableSample(*local_stats_lock, std::move(new_local_sample));
 		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
 	} else {
@@ -1124,7 +1124,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
 	// When adding a column destroy the sample
-	D_ASSERT(lock);
 	stats.DestroyTableSample(*lock);
 
 	return result;
@@ -1234,7 +1233,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 
 //===--------------------------------------------------------------------===//
 // Statistics
-//===--------------------------------------------------------------------===//
+//===---------------------------------------------------------------r-----===//
 void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 	stats.CopyStats(other_stats);
 }
@@ -1248,10 +1247,9 @@ unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
 	auto &sample = stats.GetTableSampleRef(*lock);
 	if (!sample.destroyed) {
 		D_ASSERT(sample.type == SampleType::RESERVOIR_SAMPLE);
-		auto ingest_sample = sample.Copy();
-		// when get sample is called, return a sample that is min(FIXED_SAMPLE_SIZE, 0.01 * ingested_tuples).
-		// auto ret = ingest_sample.ConvertToReservoirSample();
-		return ingest_sample;
+		auto ret = sample.Copy();
+		ret->Cast<ReservoirSample>().EvictOverBudgetSamples();
+		return ret;
 	}
 	return nullptr;
 }

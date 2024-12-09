@@ -3070,38 +3070,37 @@ const StringUtil::EnumStringLiteral *GetSampleTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SampleType::BLOCKING_SAMPLE), "BLOCKING_SAMPLE" },
 		{ static_cast<uint32_t>(SampleType::RESERVOIR_SAMPLE), "RESERVOIR_SAMPLE" },
-		{ static_cast<uint32_t>(SampleType::RESERVOIR_PERCENTAGE_SAMPLE), "RESERVOIR_PERCENTAGE_SAMPLE" },
-		{ static_cast<uint32_t>(SampleType::INGESTION_SAMPLE), "INGESTION_SAMPLE" }
+		{ static_cast<uint32_t>(SampleType::RESERVOIR_PERCENTAGE_SAMPLE), "RESERVOIR_PERCENTAGE_SAMPLE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<SampleType>(SampleType value) {
-	return StringUtil::EnumToString(GetSampleTypeValues(), 4, "SampleType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSampleTypeValues(), 3, "SampleType", static_cast<uint32_t>(value));
 }
 
 template<>
 SampleType EnumUtil::FromString<SampleType>(const char *value) {
-	return static_cast<SampleType>(StringUtil::StringToEnum(GetSampleTypeValues(), 4, "SampleType", value));
+	return static_cast<SampleType>(StringUtil::StringToEnum(GetSampleTypeValues(), 3, "SampleType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetSamplingModeValues() {
+const StringUtil::EnumStringLiteral *GetSamplingStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(SamplingMode::FAST), "FAST" },
-		{ static_cast<uint32_t>(SamplingMode::SLOW), "SLOW" }
+		{ static_cast<uint32_t>(SamplingState::RANDOM), "RANDOM" },
+		{ static_cast<uint32_t>(SamplingState::RESERVOIR), "RESERVOIR" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<SamplingMode>(SamplingMode value) {
-	return StringUtil::EnumToString(GetSamplingModeValues(), 2, "SamplingMode", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<SamplingState>(SamplingState value) {
+	return StringUtil::EnumToString(GetSamplingStateValues(), 2, "SamplingState", static_cast<uint32_t>(value));
 }
 
 template<>
-SamplingMode EnumUtil::FromString<SamplingMode>(const char *value) {
-	return static_cast<SamplingMode>(StringUtil::StringToEnum(GetSamplingModeValues(), 2, "SamplingMode", value));
+SamplingState EnumUtil::FromString<SamplingState>(const char *value) {
+	return static_cast<SamplingState>(StringUtil::StringToEnum(GetSamplingStateValues(), 2, "SamplingState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {

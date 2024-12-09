@@ -1,5 +1,10 @@
-# name: test/sql/sample/basic_sample_tests.test
-# group: [sample]
+# name: test/sql/sample/table_samples/basic_sample_tests.test
+# group: [table_samples]
+
+statement ok
+PRAGMA enable_verification
+
+load __TEST_DIR__/test_samples_basic.db
 
 query I
 select count(*) from range(100000) using sample (10000);
@@ -42,3 +47,23 @@ query I
 select count(*) from t1 using sample (200000);
 ----
 200000
+
+statement ok
+create or replace table materialized_range as select * from range(100);
+
+statement ok
+create or replace table integers_1 as (select range b from materialized_range);
+
+query I
+select count(b) from duckdb_table_sample('integers_1') where b in (select * from materialized_range);
+----
+1
+
+# sample exists after restart
+restart
+
+query I
+select count(b) from duckdb_table_sample('integers_1') where b in (select * from materialized_range);
+----
+1
+
