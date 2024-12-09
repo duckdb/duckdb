@@ -435,6 +435,10 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 			// label the filter as always true so we don't need to check it anymore
 			filters.SetFilterAlwaysTrue(i);
 		}
+		if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
+			// these are only for row group checking, set as always true so we don't check it
+			filters.SetFilterAlwaysTrue(i);
+		}
 	}
 	return true;
 }
