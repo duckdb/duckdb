@@ -627,7 +627,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			// Append everything that belongs to an empty group
 			optional_ptr<PartitionedTupleData> data;
 			optional_ptr<PartitionedTupleDataAppendState> append_state;
-			if (radix_bits > 1 && new_entry_count / RadixPartitioning::NumberOfPartitions(radix_bits) < 4) {
+			if (radix_bits > 1 && new_entry_count / RadixPartitioning::NumberOfPartitions(radix_bits) <= 4) {
 				TupleDataCollection::ToUnifiedFormat(state.unpartitioned_append_state.chunk_state, state.group_chunk);
 				data = unpartitioned_data.get();
 				append_state = &state.unpartitioned_append_state;

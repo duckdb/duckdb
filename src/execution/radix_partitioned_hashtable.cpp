@@ -92,7 +92,7 @@ class RadixHTGlobalSinkState;
 
 struct RadixHTConfig {
 public:
-	explicit RadixHTConfig(ClientContext &context, RadixHTGlobalSinkState &sink);
+	explicit RadixHTConfig(RadixHTGlobalSinkState &sink);
 
 	void SetRadixBits(const idx_t &radix_bits_p);
 	bool SetRadixBitsToExternal();
@@ -100,13 +100,19 @@ public:
 
 private:
 	void SetRadixBitsInternal(idx_t radix_bits_p, bool external);
-	static idx_t InitialSinkRadixBits(idx_t number_of_threads_p);
-	static idx_t MaximumSinkRadixBits(idx_t number_of_threads_p);
-	static idx_t SinkCapacity(idx_t number_of_threads_p);
+	idx_t InitialSinkRadixBits() const;
+	idx_t MaximumSinkRadixBits() const;
+	idx_t SinkCapacity() const;
+
+private:
+	//! The global sink state
+	RadixHTGlobalSinkState &sink;
 
 public:
 	//! Number of threads (from TaskScheduler)
 	const idx_t number_of_threads;
+	//! Width of tuples
+	const idx_t row_width;
 	//! Capacity of HTs during the Sink
 	const idx_t sink_capacity;
 
@@ -118,13 +124,13 @@ private:
 	//! Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
 	static constexpr idx_t L3_CACHE_SIZE = 1572864 / 2;
 
+	//! Maximum row width that we use for computing the size of the HT
+	static constexpr idx_t MAXIMUM_ROW_WIDTH = 64;
 	//! Sink radix bits to initialize with
 	static constexpr idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 4;
 	//! Maximum Sink radix bits (independent of threads)
 	static constexpr idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 8;
 
-	//! The global sink state
-	RadixHTGlobalSinkState &sink;
 	//! Current thread-global sink radix bits
 	atomic<idx_t> sink_radix_bits;
 	//! Maximum Sink radix bits (set based on number of threads)
@@ -153,11 +159,6 @@ public:
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 	idx_t minimum_reservation;
 
-	//! The radix HT
-	const RadixPartitionedHashTable &radix_ht;
-	//! Config for partitioning
-	RadixHTConfig config;
-
 	//! Whether we've called Finalize
 	bool finalized;
 	//! Whether we are doing an external aggregation
@@ -168,6 +169,11 @@ public:
 	const idx_t number_of_threads;
 	//! If any thread has called combine
 	atomic<bool> any_combined;
+
+	//! The radix HT
+	const RadixPartitionedHashTable &radix_ht;
+	//! Config for partitioning
+	RadixHTConfig config;
 
 	//! Uncombined partitioned data that will be put into the AggregatePartitions
 	unique_ptr<PartitionedTupleData> uncombined_data;
@@ -190,9 +196,9 @@ public:
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht_p)
     : context(context_p), temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)),
-      radix_ht(radix_ht_p), config(context, *this), finalized(false), external(false), active_threads(0),
+      finalized(false), external(false), active_threads(0),
       number_of_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-      any_combined(false), stored_allocators_size(0), finalize_done(0),
+      any_combined(false), radix_ht(radix_ht_p), config(*this), stored_allocators_size(0), finalize_done(0),
       scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0),
       max_partition_size(0) {
 
@@ -252,11 +258,11 @@ void RadixHTGlobalSinkState::Destroy() {
 }
 // LCOV_EXCL_STOP
 
-RadixHTConfig::RadixHTConfig(ClientContext &context, RadixHTGlobalSinkState &sink_p)
-    : number_of_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-      sink_capacity(SinkCapacity(number_of_threads)), sink(sink_p),
-      sink_radix_bits(InitialSinkRadixBits(number_of_threads)),
-      maximum_sink_radix_bits(MaximumSinkRadixBits(number_of_threads)) {
+RadixHTConfig::RadixHTConfig(RadixHTGlobalSinkState &sink_p)
+    : sink(sink_p), number_of_threads(sink.number_of_threads),
+      row_width(MaxValue(NextPowerOfTwo(sink.radix_ht.GetLayout().GetRowWidth()), MAXIMUM_ROW_WIDTH)),
+      sink_capacity(SinkCapacity()), sink_radix_bits(InitialSinkRadixBits()),
+      maximum_sink_radix_bits(MaximumSinkRadixBits()) {
 }
 
 void RadixHTConfig::SetRadixBits(const idx_t &radix_bits_p) {
@@ -288,28 +294,31 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external
 	sink_radix_bits = radix_bits_p;
 }
 
-idx_t RadixHTConfig::InitialSinkRadixBits(const idx_t number_of_threads_p) {
-	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(number_of_threads_p)),
+idx_t RadixHTConfig::InitialSinkRadixBits() const {
+	return MinValue(RadixPartitioning::RadixBitsOfPowerOfTwo(NextPowerOfTwo(number_of_threads)),
 	                MAXIMUM_INITIAL_SINK_RADIX_BITS);
 }
 
-idx_t RadixHTConfig::MaximumSinkRadixBits(const idx_t number_of_threads_p) {
-	if (number_of_threads_p <= GROW_STRATEGY_THREAD_THRESHOLD) {
-		return InitialSinkRadixBits(number_of_threads_p); // Don't repartition unless we go external
+idx_t RadixHTConfig::MaximumSinkRadixBits() const {
+	if (number_of_threads <= GROW_STRATEGY_THREAD_THRESHOLD) {
+		return InitialSinkRadixBits(); // Don't repartition unless we go external
+	}
+	if (row_width == MAXIMUM_ROW_WIDTH) {
+		// If rows are very wide we have to reduce the number of partitions, otherwise cache misses get out of hand
+		return MAXIMUM_FINAL_SINK_RADIX_BITS - 1;
 	}
 	return MAXIMUM_FINAL_SINK_RADIX_BITS;
 }
 
-idx_t RadixHTConfig::SinkCapacity(const idx_t number_of_threads_p) {
+idx_t RadixHTConfig::SinkCapacity() const {
 	// Compute cache size per active thread (assuming cache is shared)
-	const auto total_shared_cache_size = number_of_threads_p * L3_CACHE_SIZE;
-	const auto cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / number_of_threads_p;
+	const auto total_shared_cache_size = number_of_threads * L3_CACHE_SIZE;
+	const auto cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / number_of_threads;
 
 	// Divide cache per active thread by entry size, round up to next power of two, to get capacity
-	constexpr idx_t ASSUMED_ROW_SIZE = 32;
-	const auto size_per_entry = sizeof(ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR + ASSUMED_ROW_SIZE;
-	const auto capacity =
-	    NextPowerOfTwo(LossyNumericCast<uint64_t>(static_cast<double>(cache_per_active_thread) / size_per_entry));
+	const auto size_per_entry =
+	    LossyNumericCast<idx_t>(sizeof(ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR) + row_width;
+	const auto capacity = NextPowerOfTwo(cache_per_active_thread / size_per_entry);
 
 	// Capacity must be at least the minimum capacity
 	return MaxValue<idx_t>(capacity, GroupedAggregateHashTable::InitialCapacity());
