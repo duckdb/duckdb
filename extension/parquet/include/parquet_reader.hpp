@@ -127,8 +127,7 @@ public:
 	FileSystem &fs;
 	Allocator &allocator;
 	string file_name;
-	vector<LogicalType> return_types;
-	vector<string> names;
+	vector<MultiFileReaderColumn> columns;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
@@ -150,17 +149,23 @@ public:
 		auto result = make_uniq<ParquetUnionData>();
 		result->file_name = reader_p->file_name;
 		if (file_idx == 0) {
-			result->names = reader_p->names;
-			result->types = reader_p->return_types;
+			for (auto &column : reader_p->columns) {
+				result->names.push_back(column.name);
+				result->types.push_back(column.type);
+			}
 			result->options = reader_p->parquet_options;
 			result->metadata = reader_p->metadata;
 			result->reader = std::move(reader_p);
 		} else {
-			result->names = std::move(reader_p->names);
-			result->types = std::move(reader_p->return_types);
+			for (auto &column : reader_p->columns) {
+				result->names.push_back(column.name);
+				result->types.push_back(column.type);
+			}
+			reader_p->columns.clear();
 			result->options = std::move(reader_p->parquet_options);
 			result->metadata = std::move(reader_p->metadata);
 		}
+
 		return result;
 	}
 
@@ -183,11 +188,9 @@ public:
 	const string &GetFileName() {
 		return file_name;
 	}
-	const vector<string> &GetNames() {
-		return names;
-	}
-	const vector<LogicalType> &GetTypes() {
-		return return_types;
+
+	const vector<MultiFileReaderColumn> &GetColumns() {
+		return columns;
 	}
 
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,

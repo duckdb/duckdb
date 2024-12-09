@@ -14,7 +14,7 @@
 namespace duckdb {
 //! Basic CSV Column Info
 struct CSVColumnInfo {
-	CSVColumnInfo(string &name_p, LogicalType &type_p) : name(name_p), type(type_p) {
+	CSVColumnInfo(const string &name_p, const LogicalType &type_p) : name(name_p), type(type_p) {
 	}
 	string name;
 	LogicalType type;
@@ -22,7 +22,7 @@ struct CSVColumnInfo {
 
 //! Basic CSV Schema
 struct CSVSchema {
-	void Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path);
+	void Initialize(const vector<string> &names, const vector<LogicalType> &types, const string &file_path);
 	bool Empty() const;
 	bool SchemasMatch(string &error_message, SnifferResult &sniffer_result, const string &cur_file_path,
 	                  bool is_minimal_sniffer) const;

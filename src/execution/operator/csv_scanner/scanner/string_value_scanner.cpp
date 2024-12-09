@@ -74,7 +74,10 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
-		names = csv_file_scan->names;
+		D_ASSERT(names.empty());
+		for (auto &column : csv_file_scan->columns) {
+			names.push_back(column.name);
+		}
 		if (!csv_file_scan->projected_columns.empty()) {
 			projecting_columns = false;
 			projected_columns = make_unsafe_uniq_array<bool>(number_of_columns);
@@ -1036,7 +1039,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					string error_msg = error.str();
 					SanitizeError(error_msg);
 					auto csv_error = CSVError::CastError(
-					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
+					    state_machine->options, csv_file_scan->columns[col_idx].name, error_msg, col_idx, borked_line,
 					    lines_per_batch,
 					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
 					    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
@@ -1067,7 +1070,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						string error_msg = error.str();
 						SanitizeError(error_msg);
 						auto csv_error =
-						    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_msg,
+						    CSVError::CastError(state_machine->options, csv_file_scan->columns[col_idx].name, error_msg,
 						                        col_idx, borked_line, lines_per_batch,
 						                        result.line_positions_per_row[line_error].begin.GetGlobalPosition(
 						                            result.result_size, first_nl),

@@ -53,24 +53,24 @@ public:
 
 	void SetStart();
 	const string &GetFileName() const;
-	const vector<string> &GetNames();
-	const vector<LogicalType> &GetTypes();
+	const vector<MultiFileReaderColumn> &GetColumns();
 	void InitializeProjection();
 	void Finish();
 
 	static unique_ptr<CSVUnionData> StoreUnionReader(unique_ptr<CSVFileScan> scan_p, idx_t file_idx) {
 		auto data = make_uniq<CSVUnionData>();
-		if (file_idx == 0) {
-			data->file_name = scan_p->file_path;
-			data->options = scan_p->options;
-			data->names = scan_p->names;
-			data->types = scan_p->types;
-			data->reader = std::move(scan_p);
+		data->file_name = scan_p->file_path;
+		data->options = scan_p->options;
+		for (auto &column : scan_p->columns) {
+			data->names.push_back(column.name);
+			data->types.push_back(column.type);
+		}
+
+		if (file_idx != 0) {
+			scan_p->columns.clear();
+			scan_p->options = CSVReaderOptions();
 		} else {
-			data->file_name = scan_p->file_path;
-			data->options = std::move(scan_p->options);
-			data->names = std::move(scan_p->names);
-			data->types = std::move(scan_p->types);
+			data->reader = std::move(scan_p);
 		}
 		data->options.auto_detect = false;
 		return data;
@@ -96,8 +96,7 @@ public:
 	//! Whether or not this is an on-disk file
 	bool on_disk_file = true;
 
-	vector<string> names;
-	vector<LogicalType> types;
+	vector<MultiFileReaderColumn> columns;
 	MultiFileReaderData reader_data;
 
 	vector<LogicalType> file_types;

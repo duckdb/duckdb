@@ -43,7 +43,7 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 	}
 }
 
-void CSVSchema::Initialize(vector<string> &names, vector<LogicalType> &types, const string &file_path_p) {
+void CSVSchema::Initialize(const vector<string> &names, const vector<LogicalType> &types, const string &file_path_p) {
 	if (!columns.empty()) {
 		throw InternalException("CSV Schema is already populated, this should not happen.");
 	}
@@ -51,7 +51,7 @@ void CSVSchema::Initialize(vector<string> &names, vector<LogicalType> &types, co
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	for (idx_t i = 0; i < names.size(); i++) {
 		// Populate our little schema
-		columns.push_back({names[i], types[i]});
+		columns.emplace_back(names[i], types[i]);
 		name_idx_map[names[i]] = i;
 	}
 }

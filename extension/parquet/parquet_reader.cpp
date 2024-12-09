@@ -500,18 +500,20 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	auto &child_types = StructType::GetChildTypes(root_type);
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
 	for (auto &type_pair : child_types) {
-		names.push_back(type_pair.first);
-		return_types.push_back(type_pair.second);
+		columns.emplace_back(type_pair.first, type_pair.second);
 	}
 
 	// Add generated constant column for row number
+	vector<string> names;
+	for (auto &column : columns) {
+		names.push_back(column.name);
+	}
 	if (parquet_options.file_row_number) {
 		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
 			throw BinderException(
 			    "Using file_row_number option on file with column named file_row_number is not supported");
 		}
-		return_types.emplace_back(LogicalType::BIGINT);
-		names.emplace_back("file_row_number");
+		columns.emplace_back("file_row_number", LogicalType::BIGINT);
 	}
 }
 
@@ -606,12 +608,12 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 	idx_t file_col_idx;
-	for (file_col_idx = 0; file_col_idx < names.size(); file_col_idx++) {
-		if (names[file_col_idx] == name) {
+	for (file_col_idx = 0; file_col_idx < columns.size(); file_col_idx++) {
+		if (columns[file_col_idx].name == name) {
 			break;
 		}
 	}
-	if (file_col_idx == names.size()) {
+	if (file_col_idx == columns.size()) {
 		return nullptr;
 	}
 
