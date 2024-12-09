@@ -120,6 +120,8 @@ public:
 
 	//! Begin appending to the local storage
 	void InitializeAppend(LocalAppendState &state, DataTable &table);
+	//! Initialize the storage and its indexes, but no row groups.
+	void InitializeStorage(LocalAppendState &state, DataTable &table);
 	//! Append a chunk to the local storage
 	static void Append(LocalAppendState &state, DataChunk &chunk);
 	//! Finish appending to the local storage

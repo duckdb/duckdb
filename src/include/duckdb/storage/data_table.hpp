@@ -92,9 +92,12 @@ public:
 	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_ids, idx_t fetch_count, ColumnFetchState &state);
 
-	//! Initializes an append to transaction-local storage
+	//! Initializes appending to transaction-local storage
 	void InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
 	                           const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+	//! Initializes only the delete-indexes of the transaction-local storage
+	void InitializeLocalStorage(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+	                            const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Append a DataChunk to the transaction-local storage of the table.
 	void LocalAppend(LocalAppendState &state, ClientContext &context, DataChunk &chunk, bool unsafe);
 	//! Finalizes a transaction-local append

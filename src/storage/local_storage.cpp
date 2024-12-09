@@ -372,6 +372,11 @@ void LocalStorage::InitializeAppend(LocalAppendState &state, DataTable &table) {
 	state.storage->row_groups->InitializeAppend(TransactionData(transaction), state.append_state);
 }
 
+void LocalStorage::InitializeStorage(LocalAppendState &state, DataTable &table) {
+	table.InitializeIndexes(context);
+	state.storage = &table_manager.GetOrCreateStorage(context, table);
+}
+
 void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk) {
 	if (delete_chunk.size() == 0) {
 		return;

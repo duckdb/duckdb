@@ -816,6 +816,17 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry
 	state.constraint_state = InitializeConstraintState(table, bound_constraints);
 }
 
+void DataTable::InitializeLocalStorage(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+                                       const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+	if (!is_root) {
+		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
+	}
+
+	auto &local_storage = LocalStorage::Get(context, db);
+	local_storage.InitializeStorage(state, *this);
+	state.constraint_state = InitializeConstraintState(table, bound_constraints);
+}
+
 void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, DataChunk &chunk, bool unsafe) {
 	if (chunk.size() == 0) {
 		return;
