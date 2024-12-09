@@ -9,33 +9,33 @@ statement ok
 CREATE TABLE tbl(a int);
 
 statement error
-SELECT * FROM RECURRING tbl;
+SELECT * FROM  recurring.tbl;
 ----
 Invalid Input Error: RECURRING can only be used with USING KEY in recursive CTE.
 
 statement error
-WITH RECURSIVE tbl2(a) AS (SELECT 1 UNION SELECT a.a + 1 FROM tbl2 AS a, RECURRING tbl2 AS b WHERE a.a < 2) SELECT * FROM tbl2;
+WITH RECURSIVE tbl2(a) AS (SELECT 1 UNION SELECT a.a + 1 FROM tbl2 AS a, recurring.tbl2 AS b WHERE a.a < 2) SELECT * FROM tbl2;
 ----
 Invalid Input Error: RECURRING can only be used with USING KEY in recursive CTE.
 
 statement error
-WITH RECURSIVE tbl2(a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl2 AS a, (SELECT * FROM RECURRING tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
+WITH RECURSIVE tbl2(a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl2 AS a, (SELECT * FROM recurring.tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
 ----
 Invalid Input Error: RECURRING can only be used with USING KEY in recursive CTE.
 
 query I
-WITH RECURSIVE tbl(a) USING KEY (a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS a, (SELECT * FROM RECURRING tbl AS d WHERE d.a = 1) AS b WHERE a.a < 2) SELECT * FROM tbl;
+WITH RECURSIVE tbl(a) USING KEY (a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS a, (SELECT * FROM recurring.tbl AS d WHERE d.a = 1) AS b WHERE a.a < 2) SELECT * FROM tbl;
 ----
 1
 2
 
 statement error
-WITH RECURSIVE tbl2(a,b) AS (SELECT 1, NULL UNION SELECT a.a+1, a.b FROM tbl2 AS a, (SELECT * FROM RECURRING tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
+WITH RECURSIVE tbl2(a,b) AS (SELECT 1, NULL UNION SELECT a.a+1, a.b FROM tbl2 AS a, (SELECT * FROM recurring.tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
 ----
 Invalid Input Error: RECURRING can only be used with USING KEY in recursive CTE.
 
 statement error
-WITH RECURSIVE tbl(a) USING KEY (b) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS a, (SELECT * FROM RECURRING tbl AS d WHERE d.a = 1) AS b WHERE a.a < 2) SELECT * FROM tbl;
+WITH RECURSIVE tbl(a) USING KEY (b) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS a, (SELECT * FROM recurring.tbl AS d WHERE d.a = 1) AS b WHERE a.a < 2) SELECT * FROM tbl;
 ----
 Binder Error: Referenced column "b" not found in FROM clause!
 
@@ -45,7 +45,7 @@ WITH RECURSIVE tbl(a) USING KEY (a) AS (SELECT 1 UNION ALL SELECT a+1 FROM tbl) 
 Binder Error: UNION ALL cannot be used with USING KEY in recursive CTE.
 
 query II
-WITH RECURSIVE tbl2(a,b) USING KEY (a) AS (SELECT 1, NULL UNION SELECT a.a+1, a.b FROM tbl2 AS a, (SELECT * FROM RECURRING tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
+WITH RECURSIVE tbl2(a,b) USING KEY (a) AS (SELECT 1, NULL UNION SELECT a.a+1, a.b FROM tbl2 AS a, (SELECT * FROM recurring.tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
 ----
 1	NULL
 2	NULL
@@ -101,7 +101,7 @@ WITH RECURSIVE tbl(a,b,c) USING KEY (a,b,c) AS (SELECT * FROM (VALUES (1, 2, 3),
 
 # Reference the recurring table more than once
 query III
-WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT 1, NULL, NULL UNION SELECT tbl.a+1, rec1.a, rec2.b FROM tbl, RECURRING tbl AS rec1, RECURRING tbl AS rec2 WHERE tbl.a < 5) SELECT * FROM tbl;
+WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT 1, NULL, NULL UNION SELECT tbl.a+1, rec1.a, rec2.b FROM tbl, recurring.tbl AS rec1, recurring.tbl AS rec2 WHERE tbl.a < 5) SELECT * FROM tbl;
 ----
 1	NULL	NULL
 2	1	NULL
@@ -137,7 +137,7 @@ WITH RECURSIVE cc(node, comp) USING KEY (node) AS (
 	FROM nodes AS n
 		UNION
 	(SELECT DISTINCT ON (u.node) u.node, v.comp
-	FROM RECURRING cc AS u, cc AS v, edges AS e
+	FROM recurring.cc AS u, cc AS v, edges AS e
 	WHERE (e.here, e.there) = (u.node, v.node)
 	AND v.comp < u.comp
 	ORDER BY u.node asc, v.comp asc)
@@ -191,7 +191,7 @@ WITH RECURSIVE bellman(knode, distance) USING KEY (knode) AS (
   FROM   nodes AS n
   UNION
   (SELECT rec.knode AS knode, n.distance + e.length AS distance
-  FROM   bellman AS n, edges AS e, RECURRING bellman AS rec
+  FROM   bellman AS n, edges AS e, recurring.bellman AS rec
   WHERE  (e.here, e.there) = (n.knode, rec.knode)
   AND    rec.distance > n.distance + e.length
   ORDER BY distance DESC)
