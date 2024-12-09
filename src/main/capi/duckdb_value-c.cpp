@@ -3,6 +3,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/varint.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 
 using duckdb::LogicalTypeId;
@@ -117,10 +118,19 @@ duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val) {
 	return {res.lower, res.upper};
 }
 duckdb_value duckdb_create_varint(duckdb_varint input) {
-	return nullptr;
+	return WrapValue(new duckdb::Value(
+	    duckdb::Value::VARINT(duckdb::Varint::FromByteArray(input.data, input.size, input.is_negative))));
 }
 duckdb_varint duckdb_get_varint(duckdb_value val) {
-	return {nullptr, 0, false};
+	auto v = UnwrapValue(val).DefaultCastAs(duckdb::LogicalType::VARINT);
+	auto &str = duckdb::StringValue::Get(v);
+	duckdb::vector<uint8_t> byte_array;
+	bool is_negative;
+	duckdb::Varint::GetByteArray(byte_array, is_negative, string_t(str));
+	auto size = byte_array.size();
+	auto data = reinterpret_cast<uint8_t *>(malloc(size));
+	memcpy(data, byte_array.data(), size);
+	return {data, size, is_negative};
 }
 duckdb_value duckdb_create_decimal(duckdb_decimal input) {
 	hugeint_t hugeint(input.value.upper, input.value.lower);
