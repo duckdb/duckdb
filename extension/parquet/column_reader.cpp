@@ -264,6 +264,7 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		} else if (dictionary_size > old_dict_size) {
 			dictionary->Resize(old_dict_size, dictionary_size + 1);
 		}
+		dictionary_id = reader.file_name + "_" + schema.name + "_" + std::to_string(chunk_read_offset);
 		// we use the first entry as a NULL, dictionary vectors don't have a separate validity mask
 		FlatVector::Validity(*dictionary).SetInvalid(0);
 		PlainReference(block, *dictionary);
@@ -576,7 +577,8 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr),
 			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now, result_offset);
 			if (result_offset == 0) {
-				result.Slice(*dictionary, dictionary_selection_vector, read_now);
+				result.Dictionary(*dictionary, dictionary_size + 1, dictionary_selection_vector, read_now);
+				DictionaryVector::SetDictionaryId(result, dictionary_id);
 				D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 			} else {
 				D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);

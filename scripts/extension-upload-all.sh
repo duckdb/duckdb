@@ -31,9 +31,6 @@ else
     echo "Deploying extensions.. (DRY RUN)"
 fi
 
-echo "$BASE_DIR/*.duckdb_extension"
-tree "$BASE_DIR"
-
 FILES="$BASE_DIR/*.duckdb_extension"
 for f in $FILES
 do
