@@ -67,6 +67,10 @@ static void FlipChildren(LogicalOperator &op) {
 		std::swap(join.left_projection_map, join.right_projection_map);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		// don't need to do anything here.
+		return;
+	}
 	default:
 		throw InternalException("Flipping children, but children were not flipped");
 	}
