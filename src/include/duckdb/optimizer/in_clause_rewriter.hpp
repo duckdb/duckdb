@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {

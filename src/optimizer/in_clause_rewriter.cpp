@@ -6,9 +6,9 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
 
