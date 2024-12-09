@@ -1,5 +1,6 @@
 ---
 BasedOnStyle: LLVM
+SortIncludes: false
 TabWidth: 4
 IndentWidth: 4
 ColumnLimit: 120

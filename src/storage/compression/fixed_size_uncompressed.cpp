@@ -42,19 +42,24 @@ idx_t FixedSizeFinalAnalyze(AnalyzeState &state_p) {
 // Compress
 //===--------------------------------------------------------------------===//
 struct UncompressedCompressState : public CompressionState {
+public:
 	UncompressedCompressState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info);
 
-	ColumnDataCheckpointer &checkpointer;
-	unique_ptr<ColumnSegment> current_segment;
-	ColumnAppendState append_state;
-
+public:
 	virtual void CreateEmptySegment(idx_t row_start);
 	void FlushSegment(idx_t segment_size);
 	void Finalize(idx_t segment_size);
+
+public:
+	ColumnDataCheckpointer &checkpointer;
+	CompressionFunction &function;
+	unique_ptr<ColumnSegment> current_segment;
+	ColumnAppendState append_state;
 };
 
 UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
-    : CompressionState(info), checkpointer(checkpointer) {
+    : CompressionState(info), checkpointer(checkpointer),
+      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED)) {
 	UncompressedCompressState::CreateEmptySegment(checkpointer.GetRowGroup().start);
 }
 
@@ -63,7 +68,7 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 	auto &type = checkpointer.GetType();
 
 	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+	    ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.overflow_writer =
