@@ -55,6 +55,11 @@ string ArrowExtensionInfo::GetArrowFormat() const {
 	return arrow_format;
 }
 
+bool ArrowExtensionInfo::IsCanonical() const {
+	D_ASSERT((!vendor_name.empty() && !type_name.empty()) || (vendor_name.empty() && type_name.empty()));
+	return vendor_name.empty();
+}
+
 bool ArrowExtensionInfo::operator==(const ArrowExtensionInfo &other) const {
 	return extension_name == other.extension_name && type_name == other.type_name &&
 	       arrow_format == other.arrow_format && vendor_name == other.vendor_name;
@@ -94,11 +99,11 @@ ArrowExtension DBConfig::GetArrowExtension(const ArrowExtensionInfo &info) const
 	return arrow_extensions->extensions[info];
 }
 
-ArrowExtension DBConfig::GetArrowExtension(const LogicalTypeId &id) {
+ArrowExtension DBConfig::GetArrowExtension(const LogicalTypeId &id) const {
 	return GetArrowExtension(arrow_extensions->type_id_to_info[id].front());
 }
 
-bool DBConfig::HasArrowExtension(const LogicalTypeId &id) {
+bool DBConfig::HasArrowExtension(const LogicalTypeId &id) const {
 	return !arrow_extensions->type_id_to_info[id].empty();
 }
 

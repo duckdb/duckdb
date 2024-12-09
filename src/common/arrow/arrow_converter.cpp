@@ -93,6 +93,24 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options, config);
 }
 
+bool SetArrowExtension(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
+                       DBConfig &config) {
+	if (config.HasArrowExtension(type.id())) {
+		auto arrow_extension = config.GetArrowExtension(type.id());
+		auto info = arrow_extension.GetInfo();
+		child.format = info.GetArrowFormat().c_str();
+		ArrowSchemaMetadata schema_metadata;
+		if (info.IsCanonical()) {
+			schema_metadata = ArrowSchemaMetadata::ArrowCanonicalType(info.GetExtensionName());
+		} else {
+			schema_metadata = ArrowSchemaMetadata::NonCanonicalType(info.GetTypeName(), info.GetVendorName());
+		}
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
+		return true;
+	}
+	return false;
+}
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                     const ClientProperties &options, DBConfig &config) {
 	switch (type.id()) {
@@ -129,7 +147,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::HUGEINT: {
 		if (options.arrow_lossless_conversion) {
 			child.format = "w:16";
-			auto schema_metadata = ArrowSchemaMetadata::DuckDBInternalType("hugeint");
+			auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("hugeint");
 			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 			child.metadata = root_holder.metadata_info.back().get();
 		} else {
@@ -143,7 +161,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		} else {
 			child.format = "z";
 		}
-		auto schema_metadata = ArrowSchemaMetadata::DuckDBInternalType("varint");
+		auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("varint");
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 		child.metadata = root_holder.metadata_info.back().get();
 		break;
@@ -193,7 +211,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::TIME_TZ: {
 		if (options.arrow_lossless_conversion) {
 			child.format = "w:8";
-			auto schema_metadata = ArrowSchemaMetadata::DuckDBInternalType("time_tz");
+			auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("time_tz");
 			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 			child.metadata = root_holder.metadata_info.back().get();
 		} else {
@@ -251,7 +269,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			child.format = "z";
 		}
 		if (options.arrow_lossless_conversion) {
-			auto schema_metadata = ArrowSchemaMetadata::DuckDBInternalType("bit");
+			auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("bit");
 			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 			child.metadata = root_holder.metadata_info.back().get();
 		}
@@ -384,21 +402,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 	default: {
 		// It is possible we can export this type as a registered extension
-		if (config.HasArrowExtension(type.id())) {
-			auto info = config.GetArrowExtension(type.id());
-			// child.format = info.format;
-			auto schema_metadata = ArrowSchemaMetadata::DuckDBInternalType("uhugeint");
-			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-			child.metadata = root_holder.metadata_info.back().get();
-		}
+
 		throw NotImplementedException("Unsupported Arrow type " + type.ToString());
-		// case LogicalTypeId::UHUGEINT: {
-		// 	child.format = "w:16";
-		// 	auto schema_metadata = ArrowSchemaMetadata::DuckDBInternalType("uhugeint");
-		// 	root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-		// 	child.metadata = root_holder.metadata_info.back().get();
-		// 	break;
-		// }
 	}
 	}
 }

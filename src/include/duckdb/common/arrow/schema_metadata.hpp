@@ -39,7 +39,7 @@ public:
 	//! Creates the metadata based on an extension name
 	static ArrowSchemaMetadata ArrowCanonicalType(const string &extension_name);
 	//! Creates the metadata based on an extension name
-	static ArrowSchemaMetadata DuckDBInternalType(const string &type_name);
+	static ArrowSchemaMetadata NonCanonicalType(const string &type_name, const string &vendor_name);
 
 private:
 	//! The unordered map that holds the metadata

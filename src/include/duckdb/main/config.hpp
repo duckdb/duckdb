@@ -372,8 +372,8 @@ public:
 	DUCKDB_API vector<reference<EncodingFunction>> GetLoadedEncodedFunctions() const;
 	//! Returns the encode function matching the encoding name.
 	DUCKDB_API ArrowExtension GetArrowExtension(const ArrowExtensionInfo &info) const;
-	DUCKDB_API ArrowExtension GetArrowExtension(const LogicalTypeId &id);
-	DUCKDB_API bool HasArrowExtension(const LogicalTypeId &id);
+	DUCKDB_API ArrowExtension GetArrowExtension(const LogicalTypeId &id) const;
+	DUCKDB_API bool HasArrowExtension(const LogicalTypeId &id) const;
 	DUCKDB_API void RegisterArrowExtension(const ArrowExtension &extension) const;
 
 	bool operator==(const DBConfig &other);

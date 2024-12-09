@@ -17,6 +17,7 @@ namespace duckdb {
 
 struct DBConfig;
 struct ArrowExtensionInfo {
+public:
 	ArrowExtensionInfo() {
 	}
 	ArrowExtensionInfo(string extension_name, string arrow_format);
@@ -34,6 +35,8 @@ struct ArrowExtensionInfo {
 	string GetTypeName() const;
 
 	string GetArrowFormat() const;
+
+	bool IsCanonical() const;
 
 	bool operator==(const ArrowExtensionInfo &other) const;
 
@@ -65,6 +68,7 @@ public:
 	LogicalTypeId GetLogicalTypeId() const;
 
 private:
+	//! Extension Info from Arrow
 	ArrowExtensionInfo extension_info;
 	//! Arrow Type
 	shared_ptr<ArrowType> type;
@@ -82,7 +86,8 @@ struct ArrowExtensionSet {
 	static void Initialize(DBConfig &config);
 	std::mutex lock;
 	unordered_map<ArrowExtensionInfo, ArrowExtension, HashArrowExtension> extensions;
-	unordered_map<LogicalTypeId, vector<ArrowExtensionInfo>> type_id_to_info;
+
+	unordered_map<LogicalTypeId, vector<ArrowExtensionInfo>> type_to_info;
 };
 
 } // namespace duckdb
