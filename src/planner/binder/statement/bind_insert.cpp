@@ -494,6 +494,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		if (values_list) {
 			throw BinderException("INSERT BY NAME can only be used when inserting from a SELECT statement");
 		}
+		if (stmt.default_values) {
+			throw BinderException("INSERT BY NAME cannot be combined with with DEFAULT VALUES");
+		}
 		if (!stmt.columns.empty()) {
 			throw BinderException("INSERT BY NAME cannot be combined with an explicit column list");
 		}
