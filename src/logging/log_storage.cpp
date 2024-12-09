@@ -45,7 +45,7 @@ void StdOutLogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {
 	// NOP
 }
 
-InMemoryLogStorage::InMemoryLogStorage(shared_ptr<DatabaseInstance> &db_p) : entry_buffer(make_uniq<DataChunk>()), log_context_buffer(make_uniq<DataChunk>()) {
+InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p) : entry_buffer(make_uniq<DataChunk>()), log_context_buffer(make_uniq<DataChunk>()) {
 	// LogEntry Schema
 	vector<LogicalType> log_entry_schema = {
 		LogicalType::UBIGINT,   // context_id
@@ -67,9 +67,8 @@ InMemoryLogStorage::InMemoryLogStorage(shared_ptr<DatabaseInstance> &db_p) : ent
 	max_buffer_size = 1;
 	entry_buffer->Initialize(Allocator::DefaultAllocator(), log_entry_schema, max_buffer_size);
 	log_context_buffer->Initialize(Allocator::DefaultAllocator(), log_context_schema, max_buffer_size);
-	// TODO: buffer manager may not yet be available at this point
-	log_entries = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), log_entry_schema);
-	log_contexts = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), log_context_schema);
+	log_entries = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_entry_schema);
+	log_contexts = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_context_schema);
 }
 
 InMemoryLogStorage::~InMemoryLogStorage() {

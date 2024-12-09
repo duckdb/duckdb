@@ -29,7 +29,6 @@ unique_ptr<Logger> LogManager::CreateLogger(LoggingContext context, bool thread_
 	}
 	if (!thread_safe) {
 		// TODO: implement ThreadLocalLogger and return it here
-		// return make_uniq<ThreadLocalLogger>(config_copy, context, *this);
 	}
 	return make_uniq<ThreadSafeLogger>(config_copy, context, *this);
 }
@@ -66,7 +65,7 @@ Logger &LogManager::GlobalLogger() {
 	return *global_logger;
 }
 
-LogManager::LogManager(shared_ptr<DatabaseInstance> &db, LogConfig config_p) : config(config_p) {
+LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(config_p) {
 	log_storage = make_uniq<InMemoryLogStorage>(db);
 }
 
@@ -122,7 +121,7 @@ void LogManager::SetDisabledLoggers(unordered_set <string> &disabled_loggers) {
 	global_logger->UpdateConfig(config);
 }
 
-void LogManager::SetLogStorage(shared_ptr<DatabaseInstance> &db, const string &storage_name) {
+void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name) {
 	unique_lock<mutex> lck(lock);
 	auto storage_name_to_lower = StringUtil::Lower(storage_name);
 

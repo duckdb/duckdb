@@ -661,13 +661,11 @@ Value LoggingStorage::GetSetting(const ClientContext &context) {
 	return context.db->GetLogManager().GetConfig().storage;
 }
 void LoggingStorage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
-	auto shared_ptr = db->shared_from_this();
-	db->GetLogManager().SetLogStorage(shared_ptr, parameter.GetValue<string>());
+	db->GetLogManager().SetLogStorage(*db, parameter.GetValue<string>());
 }
 
 void LoggingStorage::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	auto shared_ptr = db->shared_from_this();
-	db->GetLogManager().SetLogStorage(shared_ptr, LogConfig::IN_MEMORY_STORAGE_NAME); // TODO: use central low
+	db->GetLogManager().SetLogStorage(*db, LogConfig::IN_MEMORY_STORAGE_NAME); // TODO: use central low
 }
 
 //===----------------------------------------------------------------------===//

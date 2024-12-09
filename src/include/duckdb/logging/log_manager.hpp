@@ -24,7 +24,7 @@ class LogManager : public enable_shared_from_this<LogManager> {
 
 public:
 	// Note: two step initialization because Logger needs shared pointer to log manager TODO: can we clean up?
-	explicit LogManager(shared_ptr<DatabaseInstance> &db, LogConfig config = LogConfig());
+	explicit LogManager(DatabaseInstance &db, LogConfig config = LogConfig());
 	~LogManager();
 	void Initialize();
 
@@ -45,7 +45,7 @@ public:
 	void SetLogLevel(LogLevel level);
 	void SetEnabledLoggers(unordered_set <string> &enabled_loggers);
 	void SetDisabledLoggers(unordered_set <string> &disabled_loggers);
-	void SetLogStorage(shared_ptr<DatabaseInstance> &db, const string &storage_name);
+	void SetLogStorage(DatabaseInstance &db, const string &storage_name);
 
 	LogConfig GetConfig();
 

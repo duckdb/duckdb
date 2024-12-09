@@ -64,7 +64,7 @@ public:
 
 class InMemoryLogStorage : public LogStorage {
 public:
-	explicit InMemoryLogStorage(shared_ptr<DatabaseInstance> &db);
+	explicit InMemoryLogStorage(DatabaseInstance &db);
 	~InMemoryLogStorage() override;
 
 	//! LogStorage API: WRITING
