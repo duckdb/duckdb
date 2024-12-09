@@ -226,11 +226,11 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	if (!parallel) {
                 if (!gstate.initialized) {
-                  storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
-                  gstate.initialized = true;
+                        storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
+                        gstate.initialized = true;
                 }
-		auto changes = OnConflictHandling(storage, table, context, lstate, gstate, true);
-		gstate.insert_count += changes;
+                auto changes = OnConflictHandling(storage, table, context, lstate, gstate, true);
+                gstate.insert_count += changes;
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append
