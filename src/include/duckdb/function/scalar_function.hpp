@@ -189,7 +189,7 @@ public:
 		                                                     input.size());
 	}
 
-	static ScalarFunction SetReturnsError(ScalarFunction function) {
+	static ScalarFunction SetReturnsError(ScalarFunction &function) {
 		function.errors = FunctionErrors::CAN_THROW_ERROR;
 		return function;
 	}

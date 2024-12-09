@@ -43,7 +43,10 @@ bool BoundFunctionExpression::IsFoldable() const {
 }
 
 bool BoundFunctionExpression::CanThrow() const {
-	return function.errors == FunctionErrors::CAN_THROW_ERROR;
+	if (function.errors == FunctionErrors::CAN_THROW_ERROR) {
+		return true;
+	}
+	return Expression::CanThrow();
 }
 
 string BoundFunctionExpression::ToString() const {

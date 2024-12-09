@@ -882,12 +882,14 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
 		}
 	}
-	multiply.AddFunction(ScalarFunction::SetReturnsError(
-	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>)));
-	multiply.AddFunction(ScalarFunction::SetReturnsError(
-	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>)));
+	ScalarFunction function1({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                         ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>);
+	ScalarFunction function2({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                         ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>);
+	ScalarFunction::SetReturnsError(function1);
+	ScalarFunction::SetReturnsError(function2);
+	multiply.AddFunction(function1);
+	multiply.AddFunction(function2);
 
 	return multiply;
 }
