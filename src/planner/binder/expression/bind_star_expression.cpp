@@ -185,7 +185,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	root = std::move(columns_expr);
 }
 
-optional_ptr<ParsedExpression> GetStarChildExpression(ParsedExpression &root_expr) {
+optional_ptr<ParsedExpression> Binder::GetResolvedColumnExpression(ParsedExpression &root_expr) {
 	optional_ptr<ParsedExpression> expr = &root_expr;
 	while (expr) {
 		if (expr->type == ExpressionType::COLUMN_REF) {
@@ -248,7 +248,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
 			for (idx_t i = 0; i < star_list.size(); i++) {
-				auto child_expr = GetStarChildExpression(*star_list[i]);
+				auto child_expr = GetResolvedColumnExpression(*star_list[i]);
 				if (!child_expr) {
 					continue;
 				}
@@ -317,7 +317,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 		auto new_expr = expr->Copy();
 		ReplaceStarExpression(new_expr, star_list[i]);
 		if (StarExpression::IsColumns(*star)) {
-			auto expr = GetStarChildExpression(*star_list[i]);
+			auto expr = GetResolvedColumnExpression(*star_list[i]);
 			if (expr) {
 				auto &colref = expr->Cast<ColumnRefExpression>();
 				if (new_expr->alias.empty()) {
