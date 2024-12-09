@@ -1,10 +1,13 @@
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+
+#include <fmt/format.h>
+
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/exception.hpp"
 
-#include <duckdb/common/string_util.hpp>
-#include <duckdb/common/arrow/schema_metadata.hpp>
-#include <duckdb/main/config.hpp>
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/arrow/schema_metadata.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -204,6 +207,10 @@ shared_ptr<ArrowType> ArrowType::CreateListType(DBConfig &config, ArrowSchema &c
 		type_info = ArrowListInfo::List(std::move(child_type), size_type);
 	}
 	return make_uniq<ArrowType>(type, std::move(type_info));
+}
+
+string ArrowType::GetArrowFormat() const {
+	return arrow_format;
 }
 
 shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, ArrowSchema &schema, string &format) {

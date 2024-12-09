@@ -14,6 +14,7 @@
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
+class ArrowSchemaMetadata;
 struct DuckDBArrowSchemaHolder;
 
 struct DBConfig;
@@ -21,9 +22,9 @@ struct ArrowExtensionInfo {
 public:
 	ArrowExtensionInfo() {
 	}
-	ArrowExtensionInfo(string extension_name, string arrow_format);
-	ArrowExtensionInfo(string vendor_name, string type_name, string arrow_format);
-	ArrowExtensionInfo(string extension_name, string vendor_name, string type_name, string arrow_format);
+	explicit ArrowExtensionInfo(string extension_name);
+	ArrowExtensionInfo(string vendor_name, string type_name);
+	ArrowExtensionInfo(string extension_name, string vendor_name, string type_name);
 
 	hash_t GetHash() const;
 
@@ -34,8 +35,6 @@ public:
 	string GetVendorName() const;
 
 	string GetTypeName() const;
-
-	string GetArrowFormat() const;
 
 	bool IsCanonical() const;
 
@@ -56,25 +55,40 @@ private:
 	string arrow_format {};
 };
 
+class ArrowExtension;
+
 typedef void (*populate_arrow_schema_t)(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-                                        const LogicalType &type, ClientContext &context);
+                                        const LogicalType &type, ClientContext &context, ArrowExtension &extension);
+
+typedef shared_ptr<ArrowType> (*get_type_t)(const string &format, const ArrowSchemaMetadata &schema_metadata);
 
 class ArrowExtension {
 public:
 	ArrowExtension() {};
+	//! We either have simple extensions where we only return one type
 	ArrowExtension(string extension_name, string arrow_format, shared_ptr<ArrowType> type);
 	ArrowExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowType> type);
 
+	//! We have complex extensions, where we can return multiple types, hence we must have callback functions to do so
+	ArrowExtension(string extension_name, populate_arrow_schema_t populate_arrow_schema, get_type_t get_type);
+	ArrowExtension(string vendor_name, string type_name, populate_arrow_schema_t populate_arrow_schema,
+	               get_type_t get_type);
+
 	ArrowExtensionInfo GetInfo() const;
 
-	shared_ptr<ArrowType> GetType() const;
+	shared_ptr<ArrowType> GetType(const string &format, const ArrowSchemaMetadata &schema_metadata) const;
 
 	LogicalTypeId GetLogicalTypeId() const;
 
 	LogicalType GetLogicalType() const;
-	void PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, ClientContext &context);
+
+	static void PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
+	                                const LogicalType &duckdb_type, ClientContext &context, ArrowExtension &extension);
+
 	//! (Optional) Callback to a function that sets up the arrow schema production
 	populate_arrow_schema_t populate_arrow_schema = nullptr;
+	//! (Optional) Callback to a function that sets up the arrow schema production
+	get_type_t get_type = nullptr;
 
 private:
 	//! Extension Info from Arrow

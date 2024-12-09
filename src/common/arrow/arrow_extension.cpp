@@ -2,20 +2,20 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
-ArrowExtensionInfo::ArrowExtensionInfo(string extension_name, string arrow_format)
-    : extension_name(std::move(extension_name)), arrow_format(std::move(arrow_format)) {};
+ArrowExtensionInfo::ArrowExtensionInfo(string extension_name) : extension_name(std::move(extension_name)) {};
 
-ArrowExtensionInfo::ArrowExtensionInfo(string vendor_name, string type_name, string arrow_format)
-    : vendor_name(std::move(vendor_name)), type_name(std::move(type_name)), arrow_format(std::move(arrow_format)) {};
+ArrowExtensionInfo::ArrowExtensionInfo(string vendor_name, string type_name)
+    : vendor_name(std::move(vendor_name)), type_name(std::move(type_name)) {};
 
 ArrowExtension::ArrowExtension(string extension_name, string arrow_format, shared_ptr<ArrowType> type)
     : extension_info(std::move(extension_name), std::move(arrow_format)), type(std::move(type)) {
 }
 
-ArrowExtensionInfo::ArrowExtensionInfo(string extension_name, string vendor_name, string type_name, string arrow_format)
+ArrowExtensionInfo::ArrowExtensionInfo(string extension_name, string vendor_name, string type_name)
     : extension_name(std::move(extension_name)), vendor_name(std::move(vendor_name)), type_name(std::move(type_name)),
       arrow_format(std::move(arrow_format)) {};
 
@@ -23,8 +23,7 @@ hash_t ArrowExtensionInfo::GetHash() const {
 	const auto h_extension = Hash(extension_name.c_str());
 	const auto h_vendor = Hash(vendor_name.c_str());
 	const auto h_type = Hash(type_name.c_str());
-	const auto h_format = Hash(arrow_format.c_str());
-	return CombineHash(h_extension, CombineHash(h_vendor, CombineHash(h_format, h_type)));
+	return CombineHash(h_extension, CombineHash(h_vendor, h_type));
 }
 
 TypeInfo::TypeInfo() : type() {
@@ -68,10 +67,6 @@ string ArrowExtensionInfo::GetTypeName() const {
 	return type_name;
 }
 
-string ArrowExtensionInfo::GetArrowFormat() const {
-	return arrow_format;
-}
-
 bool ArrowExtensionInfo::IsCanonical() const {
 	D_ASSERT((!vendor_name.empty() && !type_name.empty()) || (vendor_name.empty() && type_name.empty()));
 	return vendor_name.empty();
@@ -86,12 +81,26 @@ ArrowExtension::ArrowExtension(string vendor_name, string type_name, string arro
     : extension_info(std::move(vendor_name), std::move(type_name), std::move(arrow_format)), type(std::move(type)) {
 }
 
+ArrowExtension::ArrowExtension(string extension_name, populate_arrow_schema_t populate_arrow_schema,
+                               get_type_t get_type)
+    : extension_info(std::move(extension_name)), populate_arrow_schema(populate_arrow_schema), get_type(get_type) {
+}
+
+ArrowExtension::ArrowExtension(string vendor_name, string type_name, populate_arrow_schema_t populate_arrow_schema,
+                               get_type_t get_type)
+    : extension_info(std::move(vendor_name), std::move(type_name)), populate_arrow_schema(populate_arrow_schema),
+      get_type(get_type) {};
+
 ArrowExtensionInfo ArrowExtension::GetInfo() const {
 	return extension_info;
 }
 
-shared_ptr<ArrowType> ArrowExtension::GetType() const {
-	return type;
+shared_ptr<ArrowType> ArrowExtension::GetType(const string &format, const ArrowSchemaMetadata &schema_metadata) const {
+	if (type) {
+		return type;
+	}
+	D_ASSERT(get_type);
+	return get_type(format, schema_metadata);
 }
 
 LogicalTypeId ArrowExtension::GetLogicalTypeId() const {
@@ -103,22 +112,24 @@ LogicalType ArrowExtension::GetLogicalType() const {
 }
 
 void ArrowExtension::PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-                                         ClientContext &context) {
-	if (populate_arrow_schema) {
-		// We do some magic
+                                         const LogicalType &duckdb_type, ClientContext &context,
+                                         ArrowExtension &extension) {
+	if (extension.type) {
+		// We do the default way of populating the schema
+		child.format = extension.type->GetArrowFormat().c_str();
+		ArrowSchemaMetadata schema_metadata;
+		if (extension.extension_info.IsCanonical()) {
+			schema_metadata = ArrowSchemaMetadata::ArrowCanonicalType(extension.extension_info.GetExtensionName());
+		} else {
+			schema_metadata = ArrowSchemaMetadata::NonCanonicalType(extension.extension_info.GetTypeName(),
+			                                                        extension.extension_info.GetVendorName());
+		}
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		child.metadata = root_holder.metadata_info.back().get();
 		return;
 	}
-	// We do the default way of populating the schema
-	child.format = extension_info.GetArrowFormat().c_str();
-	ArrowSchemaMetadata schema_metadata;
-	if (extension_info.IsCanonical()) {
-		schema_metadata = ArrowSchemaMetadata::ArrowCanonicalType(extension_info.GetExtensionName());
-	} else {
-		schema_metadata =
-		    ArrowSchemaMetadata::NonCanonicalType(extension_info.GetTypeName(), extension_info.GetVendorName());
-	}
-	root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-	child.metadata = root_holder.metadata_info.back().get();
+	D_ASSERT(extension.populate_arrow_schema);
+	extension.populate_arrow_schema(root_holder, child, duckdb_type, context, extension);
 }
 
 void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
@@ -150,36 +161,107 @@ bool DBConfig::HasArrowExtension(const LogicalType &type) const {
 	return !arrow_extensions->type_to_info[type_info].empty();
 }
 
+struct ArrowJson {
+	static shared_ptr<ArrowType> GetType(const string &format, const ArrowSchemaMetadata &schema_metadata) {
+		if (format == "u") {
+			return make_shared_ptr<ArrowType>(LogicalType::JSON(),
+			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+		} else if (format == "U") {
+			return make_shared_ptr<ArrowType>(LogicalType::JSON(),
+			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		} else if (format == "vu") {
+			return make_shared_ptr<ArrowType>(LogicalType::JSON(),
+			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
+		}
+		throw InvalidInputException("Arrow extension type \"%s\" not supported for arrow.json", format.c_str());
+	}
+
+	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
+	                           ClientContext &context, ArrowExtension &extension) {
+		ArrowSchemaMetadata schema_metadata =
+		    ArrowSchemaMetadata::ArrowCanonicalType(extension.GetInfo().GetExtensionName());
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		schema.metadata = root_holder.metadata_info.back().get();
+		auto options = context.GetClientProperties();
+		;
+		if (options.produce_arrow_string_view) {
+			schema.format = "vu";
+		} else {
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				schema.format = "U";
+			} else {
+				schema.format = "u";
+			}
+		}
+	}
+};
+
+struct ArrowBit {
+	static shared_ptr<ArrowType> GetType(const string &format, const ArrowSchemaMetadata &schema_metadata) {
+		if (format == "z") {
+			return make_shared_ptr<ArrowType>(LogicalType::BIT,
+			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+		} else if (format == "Z") {
+			return make_shared_ptr<ArrowType>(LogicalType::BIT,
+			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		}
+		throw InvalidInputException("Arrow extension type \"%s\" not supported for BIT type", format.c_str());
+	}
+
+	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
+	                           ClientContext &context, ArrowExtension &extension) {
+		ArrowSchemaMetadata schema_metadata = ArrowSchemaMetadata::NonCanonicalType(
+		    extension.GetInfo().GetTypeName(), extension.GetInfo().GetVendorName());
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		schema.metadata = root_holder.metadata_info.back().get();
+		auto options = context.GetClientProperties();
+		;
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			schema.format = "Z";
+		} else {
+			schema.format = "z";
+		}
+	}
+};
+
+struct ArrowVarint {
+	static shared_ptr<ArrowType> GetType(const string &format, const ArrowSchemaMetadata &schema_metadata) {
+		if (format == "z") {
+			return make_shared_ptr<ArrowType>(LogicalType::VARINT,
+			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+		} else if (format == "Z") {
+			return make_shared_ptr<ArrowType>(LogicalType::VARINT,
+			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		}
+		throw InvalidInputException("Arrow extension type \"%s\" not supported for Varint", format.c_str());
+	}
+
+	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
+	                           ClientContext &context, ArrowExtension &extension) {
+		ArrowSchemaMetadata schema_metadata = ArrowSchemaMetadata::NonCanonicalType(
+		    extension.GetInfo().GetTypeName(), extension.GetInfo().GetVendorName());
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		schema.metadata = root_holder.metadata_info.back().get();
+		auto options = context.GetClientProperties();
+		;
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+			schema.format = "Z";
+		} else {
+			schema.format = "z";
+		}
+	}
+};
+
 void ArrowExtensionSet::Initialize(DBConfig &config) {
 	config.RegisterArrowExtension({"arrow.uuid", "w:16", make_shared_ptr<ArrowType>(LogicalType::UUID)});
-	config.RegisterArrowExtension(
-	    {"arrow.json", "u",
-	     make_shared_ptr<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL))});
-	config.RegisterArrowExtension(
-	    {"arrow.json", "U",
-	     make_shared_ptr<ArrowType>(LogicalType::JSON(),
-	                                make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE))});
-	config.RegisterArrowExtension(
-	    {"arrow.json", "vu",
-	     make_shared_ptr<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW))});
+	ArrowExtension extension("arrow.json", &ArrowJson::PopulateSchema, &ArrowJson::GetType);
 	config.RegisterArrowExtension({"hugeint", "DuckDB", "w:16", make_shared_ptr<ArrowType>(LogicalType::HUGEINT)});
 	config.RegisterArrowExtension({"uhugeint", "DuckDB", "w:16", make_shared_ptr<ArrowType>(LogicalType::UHUGEINT)});
 	config.RegisterArrowExtension(
 	    {"time_tz", "DuckDB", "w:8",
 	     make_shared_ptr<ArrowType>(LogicalType::TIME_TZ,
 	                                make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS))});
-	config.RegisterArrowExtension(
-	    {"bit", "DuckDB", "z",
-	     make_shared_ptr<ArrowType>(LogicalType::BIT, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL))});
-	config.RegisterArrowExtension(
-	    {"bit", "DuckDB", "Z",
-	     make_shared_ptr<ArrowType>(LogicalType::BIT, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE))});
-	config.RegisterArrowExtension(
-	    {"varint", "DuckDB", "z",
-	     make_shared_ptr<ArrowType>(LogicalType::VARINT, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL))});
-	config.RegisterArrowExtension(
-	    {"varint", "DuckDB", "Z",
-	     make_shared_ptr<ArrowType>(LogicalType::VARINT,
-	                                make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE))});
+	config.RegisterArrowExtension({"bit", "DuckDB", &ArrowBit::PopulateSchema, &ArrowBit::GetType});
+	config.RegisterArrowExtension({"varint", "DuckDB", &ArrowVarint::PopulateSchema, &ArrowVarint::GetType});
 }
 } // namespace duckdb

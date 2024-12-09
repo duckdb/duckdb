@@ -56,7 +56,7 @@ class RegisteredStateManager;
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
 	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
-	//! Whether or not a stream result should be allowed
+	//! Whether a stream result should be allowed
 	bool allow_stream_result = false;
 };
 
