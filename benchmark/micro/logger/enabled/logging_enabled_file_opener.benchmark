@@ -1,6 +1,6 @@
 # name: benchmark/micro/logger/enabled/logging_enabled_file_opener.benchmark
 # description: Benchmarking the File Opener Memory logger
-# group: [logger]
+# group: [enabled]
 
 name FileOpener Memory Logger
 group logger

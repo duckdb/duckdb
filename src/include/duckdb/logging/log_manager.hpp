@@ -43,8 +43,8 @@ public:
 	void SetEnableLogging(bool enable);
 	void SetLogMode(LogMode mode);
 	void SetLogLevel(LogLevel level);
-	void SetEnabledLoggers(unordered_set <string> &enabled_loggers);
-	void SetDisabledLoggers(unordered_set <string> &disabled_loggers);
+	void SetEnabledLoggers(unordered_set<string> &enabled_loggers);
+	void SetDisabledLoggers(unordered_set<string> &disabled_loggers);
 	void SetLogStorage(DatabaseInstance &db, const string &storage_name);
 
 	LogConfig GetConfig();
@@ -67,4 +67,4 @@ protected:
 	unordered_map<idx_t, LoggingContext> registered_log_contexts;
 };
 
-}
+} // namespace duckdb

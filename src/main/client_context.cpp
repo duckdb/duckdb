@@ -255,7 +255,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 
 	// Refresh the logger
 	logger->Flush();
-	LoggingContext context (LogContextScope::CONNECTION);
+	LoggingContext context(LogContextScope::CONNECTION);
 	context.client_context = reinterpret_cast<idx_t>(this);
 	logger = db->GetLogManager().CreateLogger(context, true);
 

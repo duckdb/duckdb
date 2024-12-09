@@ -681,7 +681,7 @@ Value EnabledLoggers::GetSetting(const ClientContext &context) {
 void EnabledLoggers::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
 	auto values = StringUtil::Split(parameter.GetValue<string>(), ",");
 	unordered_set<string> set;
-	for (const auto &value: values) {
+	for (const auto &value : values) {
 		set.insert(value);
 	}
 	db->GetLogManager().SetEnabledLoggers(set);
@@ -705,7 +705,7 @@ Value DisabledLoggers::GetSetting(const ClientContext &context) {
 void DisabledLoggers::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
 	auto values = StringUtil::Split(parameter.GetValue<string>(), ",");
 	unordered_set<string> set;
-	for (const auto &value: values) {
+	for (const auto &value : values) {
 		set.insert(value);
 	}
 	db->GetLogManager().SetDisabledLoggers(set);
@@ -714,7 +714,6 @@ void DisabledLoggers::SetGlobal(DatabaseInstance *db, DBConfig &config, const Va
 void DisabledLoggers::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	unordered_set<string> set;
 	db->GetLogManager().SetDisabledLoggers(set);
-
 }
 
 //===----------------------------------------------------------------------===//

@@ -1,6 +1,6 @@
 # name: benchmark/micro/logger/enabled/logging_enabled_global.benchmark
 # description: Benchmarking the Global Memory logger
-# group: [logger]
+# group: [enabled]
 
 name Global Memory Logger
 group logger

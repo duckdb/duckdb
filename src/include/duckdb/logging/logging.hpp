@@ -40,9 +40,9 @@ enum class LogMode : uint8_t {
 };
 
 struct LogConfig {
-	constexpr static const char* IN_MEMORY_STORAGE_NAME = "memory";
-	constexpr static const char* STDOUT_STORAGE_NAME = "stdout";
-	constexpr static const char* FILE_STORAGE_NAME = "file";
+	constexpr static const char *IN_MEMORY_STORAGE_NAME = "memory";
+	constexpr static const char *STDOUT_STORAGE_NAME = "stdout";
+	constexpr static const char *FILE_STORAGE_NAME = "file";
 
 	LogConfig();
 
@@ -61,11 +61,11 @@ struct LogConfig {
 
 protected:
 	LogConfig(bool enabled, LogLevel level, LogMode mode, optional_ptr<unordered_set<string>> enabled_loggers,
-		  optional_ptr<unordered_set<string>> disable_loggers);
+	          optional_ptr<unordered_set<string>> disable_loggers);
 };
 
 struct LoggingContext {
-	explicit LoggingContext(LogContextScope scope_p) : scope(scope_p){
+	explicit LoggingContext(LogContextScope scope_p) : scope(scope_p) {
 	}
 
 	LogContextScope scope;
@@ -83,4 +83,4 @@ struct RegisteredLoggingContext {
 	LoggingContext context;
 };
 
-}
+} // namespace duckdb

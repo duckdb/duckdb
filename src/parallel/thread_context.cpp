@@ -15,8 +15,7 @@ ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
 	logger = context.db->GetLogManager().CreateLogger(log_context, true);
 }
 
- ThreadContext::~ThreadContext() {
+ThreadContext::~ThreadContext() {
 }
-
 
 } // namespace duckdb

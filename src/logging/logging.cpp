@@ -40,8 +40,11 @@ LogConfig LogConfig::CreateFromDisabled(bool enabled, LogLevel level, unordered_
 	return LogConfig(enabled, level, LogMode::DISABLE_SELECTED, nullptr, disabled_loggers);
 }
 
-LogConfig::LogConfig(bool enabled, LogLevel level_p, LogMode mode_p, optional_ptr<unordered_set<string>> enabled_loggers_p, optional_ptr<unordered_set<string>> disabled_loggers_p)
-:  enabled(enabled), mode(mode_p), level(level_p), enabled_loggers(enabled_loggers_p), disabled_loggers(disabled_loggers_p) {
+LogConfig::LogConfig(bool enabled, LogLevel level_p, LogMode mode_p,
+                     optional_ptr<unordered_set<string>> enabled_loggers_p,
+                     optional_ptr<unordered_set<string>> disabled_loggers_p)
+    : enabled(enabled), mode(mode_p), level(level_p), enabled_loggers(enabled_loggers_p),
+      disabled_loggers(disabled_loggers_p) {
 	storage = LogConfig::IN_MEMORY_STORAGE_NAME;
 }
 

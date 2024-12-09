@@ -45,10 +45,7 @@ RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &cont
 
 	next_registered_logging_context_index++;
 
-	RegisteredLoggingContext result = {
-		res.first->first,
-		res.first->second
-	};
+	RegisteredLoggingContext result = {res.first->first, res.first->second};
 
 	log_storage->WriteLoggingContext(result);
 
@@ -72,7 +69,6 @@ LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(config
 LogManager::~LogManager() {
 }
 
-
 void LogManager::Initialize() {
 	LoggingContext context(LogContextScope::DATABASE);
 	global_logger = CreateLogger(context, true, true);
@@ -82,7 +78,8 @@ LogManager &LogManager::Get(ClientContext &context) {
 	return context.db->GetLogManager();
 }
 
-void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogLevel log_level, const char *log_message, const RegisteredLoggingContext &context) {
+void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogLevel log_level, const char *log_message,
+                               const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 	log_storage->WriteLogEntry(timestamp, log_level, log_type, log_message, context);
 }
@@ -109,13 +106,13 @@ void LogManager::SetLogLevel(LogLevel level) {
 	global_logger->UpdateConfig(config);
 }
 
-void LogManager::SetEnabledLoggers(unordered_set <string> &enabled_loggers) {
+void LogManager::SetEnabledLoggers(unordered_set<string> &enabled_loggers) {
 	unique_lock<mutex> lck(lock);
 	config.enabled_loggers = enabled_loggers;
 	global_logger->UpdateConfig(config);
 }
 
-void LogManager::SetDisabledLoggers(unordered_set <string> &disabled_loggers) {
+void LogManager::SetDisabledLoggers(unordered_set<string> &disabled_loggers) {
 	unique_lock<mutex> lck(lock);
 	config.disabled_loggers = disabled_loggers;
 	global_logger->UpdateConfig(config);
@@ -147,6 +144,5 @@ LogConfig LogManager::GetConfig() {
 	unique_lock<mutex> lck(lock);
 	return config;
 }
-
 
 } // namespace duckdb

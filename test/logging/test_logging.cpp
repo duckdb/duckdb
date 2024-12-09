@@ -19,9 +19,7 @@ void LogFormatString(SOURCE &src, FUN f) {
 
 template <class SOURCE, typename FUN>
 void LogCallback(SOURCE &src, FUN f) {
-	f(src, []() {
-		return "log-a-lot: 'callback'";
-	});
+	f(src, []() { return "log-a-lot: 'callback'"; });
 }
 
 template <class SOURCE, typename FUN>
@@ -36,19 +34,18 @@ void LogFormatStringCustomType(SOURCE &src, FUN f) {
 
 template <class SOURCE, typename FUN>
 void LogCallbackCustomType(SOURCE &src, FUN f) {
-	f("custom_type", src, []() {
-		return "log-a-lot: 'callback with type'";
-	});
+	f("custom_type", src, []() { return "log-a-lot: 'callback with type'"; });
 }
 
-#define TEST_ALL_LOG_TEMPLATES(FUNCTION, SOURCE, SOURCE_TYPE) \
-	LogSimple<SOURCE_TYPE, void (*)(SOURCE_TYPE&, const char*)>(SOURCE, &FUNCTION); \
-	LogFormatString<SOURCE_TYPE, void (*)(SOURCE_TYPE&, const char*, const char*)>(SOURCE, &FUNCTION); \
-	LogCallback<SOURCE_TYPE, void (*)(SOURCE_TYPE&, std::function<string()>)>(SOURCE, &FUNCTION); \
-	LogSimpleCustomType<SOURCE_TYPE, void (*)(const char*, SOURCE_TYPE&, const char*)>(SOURCE, &FUNCTION); \
-	LogFormatStringCustomType<SOURCE_TYPE, void (*)(const char*, SOURCE_TYPE&, const char*, const char*)>(SOURCE, &FUNCTION); \
-	LogCallbackCustomType<SOURCE_TYPE, void (*)(const char*, SOURCE_TYPE&, std::function<string()>)>(SOURCE, &FUNCTION); \
-
+#define TEST_ALL_LOG_TEMPLATES(FUNCTION, SOURCE, SOURCE_TYPE)                                                          \
+	LogSimple<SOURCE_TYPE, void (*)(SOURCE_TYPE &, const char *)>(SOURCE, &FUNCTION);                                  \
+	LogFormatString<SOURCE_TYPE, void (*)(SOURCE_TYPE &, const char *, const char *)>(SOURCE, &FUNCTION);              \
+	LogCallback<SOURCE_TYPE, void (*)(SOURCE_TYPE &, std::function<string()>)>(SOURCE, &FUNCTION);                     \
+	LogSimpleCustomType<SOURCE_TYPE, void (*)(const char *, SOURCE_TYPE &, const char *)>(SOURCE, &FUNCTION);          \
+	LogFormatStringCustomType<SOURCE_TYPE, void (*)(const char *, SOURCE_TYPE &, const char *, const char *)>(         \
+	    SOURCE, &FUNCTION);                                                                                            \
+	LogCallbackCustomType<SOURCE_TYPE, void (*)(const char *, SOURCE_TYPE &, std::function<string()>)>(SOURCE,         \
+	                                                                                                   &FUNCTION);
 
 // Tests all Logger function entrypoints at the specified log level with the specified enabled/disabled loggers
 void test_logging(const string &minimum_level, const string &enabled_loggers, const string &disabled_loggers) {
@@ -60,13 +57,19 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 	auto minimum_level_index = std::find(log_levels.begin(), log_levels.end(), minimum_level) - log_levels.begin();
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
-	REQUIRE_NO_FAIL(con.Query("set logging_level='" + minimum_level + """';"));
+	REQUIRE_NO_FAIL(con.Query("set logging_level='" + minimum_level +
+	                          ""
+	                          "';"));
 	if (!enabled_loggers.empty()) {
-		REQUIRE_NO_FAIL(con.Query("set enabled_loggers='" + enabled_loggers + """';"));
+		REQUIRE_NO_FAIL(con.Query("set enabled_loggers='" + enabled_loggers +
+		                          ""
+		                          "';"));
 		REQUIRE_NO_FAIL(con.Query("set logging_mode='enable_selected';"));
 	}
 	if (!disabled_loggers.empty()) {
-		REQUIRE_NO_FAIL(con.Query("set disabled_loggers='" + disabled_loggers + """';"));
+		REQUIRE_NO_FAIL(con.Query("set disabled_loggers='" + disabled_loggers +
+		                          ""
+		                          "';"));
 		REQUIRE_NO_FAIL(con.Query("set logging_mode='disable_selected';"));
 	}
 
@@ -98,8 +101,8 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 	for (idx_t i = 0; i < num_runs; i++) {
 		for (idx_t j = minimum_level_index; j < num_log_levels; j++) {
 			if (level_only ||
-				(enabled_mode && enabled_loggers.find(default_types[i].ToString()) != enabled_loggers.npos ) ||
-				(disabled_mode && disabled_loggers.find(default_types[i].ToString()) == enabled_loggers.npos )) {
+			    (enabled_mode && enabled_loggers.find(default_types[i].ToString()) != enabled_loggers.npos) ||
+			    (disabled_mode && disabled_loggers.find(default_types[i].ToString()) == enabled_loggers.npos)) {
 				expected_messages.push_back("log-a-lot: 'simple'");
 				expected_messages.push_back("log-a-lot: 'format'");
 				expected_messages.push_back("log-a-lot: 'callback'");
@@ -111,9 +114,8 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 				expected_log_levels.push_back(Value(log_levels[j]));
 			}
 
-			if (level_only ||
-				(enabled_mode && enabled_loggers.find("custom_type") != enabled_loggers.npos ) ||
-				(disabled_mode && disabled_loggers.find("custom_type") == enabled_loggers.npos )) {
+			if (level_only || (enabled_mode && enabled_loggers.find("custom_type") != enabled_loggers.npos) ||
+			    (disabled_mode && disabled_loggers.find("custom_type") == enabled_loggers.npos)) {
 				expected_messages.push_back("log-a-lot: 'simple with type'");
 				expected_messages.push_back("log-a-lot: 'format with type'");
 				expected_messages.push_back("log-a-lot: 'callback with type'");
@@ -138,7 +140,7 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 // - all combinations of log levels and having either enabled_loggers or disabled_loggers
 TEST_CASE("Test logging", "[logging][.]") {
 	duckdb::vector<string> log_levels = {"DEBUGGING", "INFO", "WARN", "ERROR", "FATAL"};
-	for (const auto & level : log_levels) {
+	for (const auto &level : log_levels) {
 		// Test in regular mode without explicitly enabled or disabled loggers
 		test_logging(level, "", "");
 

@@ -1,6 +1,6 @@
-# name: benchmark/micro/logger/logging_disabled_global.benchmark
+# name: benchmark/micro/logger/disabled/logging_disabled_global.benchmark
 # description: Benchmarking the Global logger
-# group: [case]
+# group: [disabled]
 
 name Global NopLogger
 group case

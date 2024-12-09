@@ -15,7 +15,6 @@
 
 #include <functional>
 
-
 // TODO unify with new logger infra
 
 namespace duckdb {

@@ -1,6 +1,6 @@
 # name: benchmark/micro/logger/enabled/logging_enabled_thread_local.benchmark
 # description: Benchmarking the Thread Local Memory logger
-# group: [logger]
+# group: [enabled]
 
 name Client Context Memory Logger
 group logger

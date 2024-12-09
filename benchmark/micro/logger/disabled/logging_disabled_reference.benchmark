@@ -1,6 +1,6 @@
 # name: benchmark/micro/logger/disabled/logging_disabled_reference.benchmark
 # description: Logger disabled benchmark without Logger calls (for reference)
-# group: [case]
+# group: [disabled]
 
 name Disabled logger reference
 group case

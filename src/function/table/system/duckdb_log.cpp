@@ -23,7 +23,7 @@ struct DuckDBLogData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 	bool context_id_only = false;
 	auto context_id_only_settings = input.named_parameters.find("context_id_only");
 	if (context_id_only_settings != input.named_parameters.end()) {
@@ -98,9 +98,10 @@ static unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFu
 
 	if (!context_id_only) {
 		if (context.db->GetLogManager().log_storage->IsInternal()) {
-			return std::move(ParseSubquery("SELECT * exclude (l.context_id, c.context_id) FROM duckdb_logs(context_id_only=true) as l JOIN "
-										   "duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp;",
-										   context.GetParserOptions(), "Expected a single SELECT statement"));
+			return std::move(ParseSubquery(
+			    "SELECT * exclude (l.context_id, c.context_id) FROM duckdb_logs(context_id_only=true) as l JOIN "
+			    "duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp;",
+			    context.GetParserOptions(), "Expected a single SELECT statement"));
 		}
 	}
 

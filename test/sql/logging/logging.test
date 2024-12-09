@@ -1,6 +1,6 @@
 # name: test/sql/logging/logging.test
 # description: Test logging functionality
-# group: [keywords]
+# group: [logging]
 
 query IIIIIIII
 from duckdb_logs

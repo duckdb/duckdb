@@ -1,6 +1,6 @@
-# name: benchmark/micro/logger/logging_disabled_client_context.benchmark
+# name: benchmark/micro/logger/disabled/logging_disabled_client_context.benchmark
 # description: Benchmarking the Client Context logger
-# group: [logger]
+# group: [disabled]
 
 name Client Context NopLogger
 group logger

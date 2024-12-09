@@ -29,12 +29,12 @@ public:
 
 	//! WRITING
 	virtual void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
-			   const RegisteredLoggingContext &context) = 0;
+	                           const RegisteredLoggingContext &context) = 0;
 	virtual void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) = 0;
 	virtual void Flush() = 0;
 	//! Registers a logging context. TOOD: remove?
 	virtual void WriteLoggingContext(RegisteredLoggingContext &context) {
-		
+
 	};
 
 	//! READING (OPTIONAL)
@@ -56,7 +56,7 @@ public:
 
 	//! LogStorage API: WRITING
 	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
-					   const RegisteredLoggingContext &context) override;
+	                   const RegisteredLoggingContext &context) override;
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
 	void Flush() override;
 	void WriteLoggingContext(RegisteredLoggingContext &context) override;
@@ -69,7 +69,7 @@ public:
 
 	//! LogStorage API: WRITING
 	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
-					   const RegisteredLoggingContext &context) override;
+	                   const RegisteredLoggingContext &context) override;
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
 	void Flush() override;
 	void WriteLoggingContext(RegisteredLoggingContext &context) override;
@@ -90,4 +90,4 @@ protected:
 	idx_t max_buffer_size;
 };
 
-}
+} // namespace duckdb

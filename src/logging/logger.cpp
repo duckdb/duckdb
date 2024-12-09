@@ -13,19 +13,19 @@ Logger &Logger::Get(DatabaseInstance &db) {
 	return db.GetLogManager().GlobalLogger();
 }
 
-Logger& Logger::Get(ThreadContext &thread_context) {
+Logger &Logger::Get(ThreadContext &thread_context) {
 	return *thread_context.logger;
 }
 
-Logger& Logger::Get(ExecutionContext &execution_context) {
+Logger &Logger::Get(ExecutionContext &execution_context) {
 	return *execution_context.thread.logger;
 }
 
-Logger& Logger::Get(ClientContext &client_context) {
+Logger &Logger::Get(ClientContext &client_context) {
 	return client_context.GetLogger();
 }
 
-Logger& Logger::Get(FileOpener &opener) {
+Logger &Logger::Get(FileOpener &opener) {
 	return opener.GetLogger();
 }
 
@@ -55,7 +55,7 @@ void Logger::Log(LogLevel log_level, std::function<string()> callback) {
 }
 
 ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-		: Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
+    : Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
 	// NopLogger should be used instead
 	D_ASSERT(config_p.enabled);
 }
@@ -83,7 +83,8 @@ void ThreadSafeLogger::WriteLog(const char *log_type, LogLevel log_level, const 
 }
 
 void ThreadSafeLogger::WriteLog(LogLevel log_level, const char *log_message) {
-	manager->WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message, context);
+	manager->WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message,
+	                       context);
 }
 
 void ThreadSafeLogger::Flush() {
@@ -91,7 +92,7 @@ void ThreadSafeLogger::Flush() {
 }
 
 ThreadLocalLogger::ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-		: Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
+    : Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
 	// NopLogger should be used instead
 	D_ASSERT(config_p.enabled);
 }
@@ -117,7 +118,7 @@ void ThreadLocalLogger::Flush() {
 }
 
 MutableLogger::MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-		: Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
+    : Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
 	enabled = config.enabled;
 	level = config.level;
 	mode = config.mode;
@@ -138,7 +139,8 @@ void MutableLogger::WriteLog(const char *log_type, LogLevel log_level, const cha
 }
 
 void MutableLogger::WriteLog(LogLevel log_level, const char *log_message) {
-	manager->WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message, context);
+	manager->WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message,
+	                       context);
 }
 
 bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {

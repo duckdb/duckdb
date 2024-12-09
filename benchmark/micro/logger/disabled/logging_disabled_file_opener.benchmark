@@ -1,6 +1,6 @@
 # name: benchmark/micro/logger/disabled/logging_disabled_file_opener.benchmark
 # description: Benchmarking the File Opener logger (has an extra step of indirection so will be a little slower)
-# group: [logger]
+# group: [disabled]
 
 name FileOpener NopLogger
 group logger

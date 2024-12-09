@@ -1,6 +1,6 @@
 # name: benchmark/micro/logger/disabled/logging_disabled_thread_local.benchmark
 # description: Benchmarking the Thread Local logger
-# group: [logger]
+# group: [disabled]
 
 name FileOpener NopLogger
 group logger

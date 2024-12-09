@@ -226,6 +226,7 @@ public:
 		return config;
 	}
 	void UpdateConfig(LogConfig &new_config) override;
+
 protected:
 	// Atomics for lock-free log setting checks
 	atomic<bool> enabled;
