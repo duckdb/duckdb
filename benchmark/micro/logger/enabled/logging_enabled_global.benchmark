@@ -1,0 +1,22 @@
+# name: benchmark/micro/logger/enabled/logging_enabled_global.benchmark
+# description: Benchmarking the Global Memory logger
+# group: [logger]
+
+name Global Memory Logger
+group logger
+
+load
+set enable_logging=true;
+set logging_storage='memory';
+
+run
+SELECT sum(value) FROM test_logging(1000000, enable_logging=true, log_message='hello world', logger='global');
+
+cleanup
+set enable_logging=false;
+set logging_storage='stdout';
+set logging_storage='memory';
+set enable_logging=true;
+
+result I
+499999500000

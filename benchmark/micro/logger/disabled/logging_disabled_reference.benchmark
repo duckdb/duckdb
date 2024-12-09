@@ -1,0 +1,13 @@
+# name: benchmark/micro/logger/disabled/logging_disabled_reference.benchmark
+# description: Logger disabled benchmark without Logger calls (for reference)
+# group: [case]
+
+name Disabled logger reference
+group case
+
+# Note: this will NOT call any logger code, it's simply for reference for the other benchmarks
+run
+SELECT sum(value) FROM test_logging(100000000, enable_logging=false, log_message='hello world');
+
+result I
+4999999950000000

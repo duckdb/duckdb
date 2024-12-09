@@ -1,0 +1,13 @@
+# name: benchmark/micro/logger/logging_disabled_global.benchmark
+# description: Benchmarking the Global logger
+# group: [case]
+
+name Global NopLogger
+group case
+
+# Note: this will call the Logger, but logging is disabled so this will call the NopLogger 100000000 times in a tight inner loop
+run
+SELECT sum(value) FROM test_logging(100000000, enable_logging=true, log_message='hello world', logger='global');
+
+result I
+4999999950000000

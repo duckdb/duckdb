@@ -1,0 +1,13 @@
+# name: benchmark/micro/logger/logging_disabled_client_context.benchmark
+# description: Benchmarking the Client Context logger
+# group: [logger]
+
+name Client Context NopLogger
+group logger
+
+# Note: this will call the Logger, but logging is disabled so this will call the NopLogger 100000000 times in a tight inner loop
+run
+SELECT sum(value) FROM test_logging(100000000, enable_logging=true, log_message='hello world');
+
+result I
+4999999950000000
