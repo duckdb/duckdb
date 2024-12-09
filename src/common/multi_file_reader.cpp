@@ -305,7 +305,7 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileRe
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
                                         const vector<MultiFileReaderColumn> &global_columns,
                                         const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
-                                        const string &initial_file,
+                                        const MultiFileReaderBindData &bind_data, const string &initial_file,
                                         optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// we have expected types: create a map of name -> column index
 	case_insensitive_map_t<idx_t> name_map;

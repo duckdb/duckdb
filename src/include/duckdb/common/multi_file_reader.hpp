@@ -364,7 +364,8 @@ protected:
 	virtual void CreateNameMapping(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
 	                               const vector<MultiFileReaderColumn> &global_columns,
 	                               const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
-	                               const string &initial_file, optional_ptr<MultiFileReaderGlobalState> global_state);
+	                               const MultiFileReaderBindData &bind_data, const string &initial_file,
+	                               optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Used in errors to report which function is using this MultiFileReader
 	string function_name;
