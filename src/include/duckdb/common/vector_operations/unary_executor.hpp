@@ -11,6 +11,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/enums/function_errors.hpp"
 
 #include <functional>
 
@@ -139,7 +140,8 @@ private:
 #endif
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
-	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, void *dataptr, bool adds_nulls) {
+	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, void *dataptr, bool adds_nulls,
+	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_ERROR) {
 		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -165,6 +167,34 @@ private:
 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
 			break;
 		}
+		case VectorType::DICTIONARY_VECTOR: {
+			// dictionary vector - we can run the function ONLY on the dictionary in some cases
+			// we can only do this if the function does not throw errors
+			// we can execute the function on a value that is in the dictionary but that is not referenced
+			// if the function can throw errors - this will result in us (incorrectly) throwing an error
+			if (errors == FunctionErrors::CANNOT_ERROR) {
+				static constexpr idx_t DICTIONARY_THRESHOLD = 2;
+				auto dict_size = DictionaryVector::DictionarySize(input);
+				if (dict_size.IsValid() && dict_size.GetIndex() * DICTIONARY_THRESHOLD <= count) {
+					// we can operate directly on the dictionary if we have a dictionary size
+					// but this only makes sense if the dictionary size is smaller than the count by some factor
+					auto &dictionary_values = DictionaryVector::Child(input);
+					if (dictionary_values.GetVectorType() == VectorType::FLAT_VECTOR) {
+						// execute the function over the dictionary
+						auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+						auto ldata = FlatVector::GetData<INPUT_TYPE>(dictionary_values);
+						ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(
+						    ldata, result_data, dict_size.GetIndex(), FlatVector::Validity(dictionary_values),
+						    FlatVector::Validity(result), dataptr, adds_nulls);
+						// slice the result with the original offsets
+						auto &offsets = DictionaryVector::SelVector(input);
+						result.Dictionary(result, dict_size.GetIndex(), offsets, count);
+						break;
+					}
+				}
+			}
+			DUCKDB_EXPLICIT_FALLTHROUGH;
+		}
 #endif
 		default: {
 			UnifiedVectorFormat vdata;
@@ -188,9 +218,10 @@ public:
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
-	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count,
-		                                                                   reinterpret_cast<void *>(&fun), false);
+	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun,
+	                    FunctionErrors errors = FunctionErrors::CAN_THROW_ERROR) {
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(
+		    input, result, count, reinterpret_cast<void *>(&fun), false, errors);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>

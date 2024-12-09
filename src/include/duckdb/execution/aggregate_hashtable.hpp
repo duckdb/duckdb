@@ -65,6 +65,9 @@ public:
 	idx_t AddChunk(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter);
+	optional_idx TryAddCompressedGroups(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
+	optional_idx TryAddDictionaryGroups(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
+	optional_idx TryAddConstantGroups(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
@@ -105,6 +108,20 @@ private:
 	//! Efficiently matches groups
 	RowMatcher row_matcher;
 
+	struct AggregateDictionaryState {
+		AggregateDictionaryState();
+
+		//! The current dictionary vector id (if any)
+		string dictionary_id;
+		DataChunk unique_values;
+		Vector hashes;
+		Vector new_dictionary_pointers;
+		SelectionVector unique_entries;
+		unique_ptr<Vector> dictionary_addresses;
+		unsafe_unique_array<bool> found_entry;
+		idx_t capacity = 0;
+	};
+
 	//! Append state
 	struct AggregateHTAppendState {
 		AggregateHTAppendState();
@@ -121,6 +138,7 @@ private:
 		Vector addresses;
 		unsafe_unique_array<UnifiedVectorFormat> group_data;
 		DataChunk group_chunk;
+		AggregateDictionaryState dict_state;
 	} state;
 
 	//! The number of radix bits to partition by
@@ -157,6 +175,8 @@ private:
 
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;
+
+	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter);
 
 	//! Does the actual group matching / creation
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
