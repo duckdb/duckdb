@@ -23,11 +23,23 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 
 	auto left = CreatePlan(*op.children[0]);
 
-	vector<LogicalType> payload_types, distinct_types;
-	vector<idx_t> payload_idx, distinct_idx;
-	vector<unique_ptr<BoundAggregateExpression>> payload_aggregates;
+	// If the logical operator has no key targets or all columns are referenced, we create a normal recursive CTE
+	// operator
+	if (op.key_targets.empty()) {
 
-	if (!op.key_targets.empty()) {
+		auto right = CreatePlan(*op.children[1]);
+
+		auto cte = make_uniq<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, std::move(left),
+		                                           std::move(right), op.estimated_cardinality);
+		cte->distinct_types = op.types;
+		cte->working_table = working_table;
+		return std::move(cte);
+	} else {
+
+		vector<LogicalType> payload_types, distinct_types;
+		vector<idx_t> payload_idx, distinct_idx;
+		vector<unique_ptr<BoundAggregateExpression>> payload_aggregates;
+
 		// create a group for each target, these are the columns that should be grouped
 		unordered_map<idx_t, idx_t> group_by_references;
 		for (idx_t i = 0; i < op.key_targets.size(); i++) {
@@ -52,7 +64,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 				distinct_types.push_back(logical_type);
 			} else {
 				// Column is not in the key clause, so we need to create an aggregate
-				auto bound = make_uniq<BoundReferenceExpression>(logical_type, i);
+				auto bound = make_uniq<BoundReferenceExpression>(logical_type, 0U);
 
 				vector<unique_ptr<Expression>> first_children;
 				first_children.push_back(std::move(bound));
@@ -68,20 +80,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 				payload_aggregates.push_back(std::move(first_aggregate));
 			}
 		}
-	}
 
-	// If the logical operator has no key targets or all columns are referenced, we create a normal recursive CTE
-	// operator
-	if (op.key_targets.empty()) {
-
-		auto right = CreatePlan(*op.children[1]);
-
-		auto cte = make_uniq<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, std::move(left),
-		                                           std::move(right), op.estimated_cardinality);
-		cte->distinct_types = op.types;
-		cte->working_table = working_table;
-		return std::move(cte);
-	} else {
 		// If the key variant has been used, a recurring table will be created.
 		auto recurring_table = make_shared_ptr<ColumnDataCollection>(context, op.types);
 		recurring_cte_tables[op.table_index] = recurring_table;
