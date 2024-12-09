@@ -485,7 +485,7 @@ TEST_CASE("Test appending to a different database file", "[appender]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	auto test_dir = GetTestDirectory();
+	auto test_dir = TestDirectoryPath();
 	auto attach_query = "ATTACH '" + test_dir + "/append_to_other.db'";
 	REQUIRE_NO_FAIL(con.Query(attach_query));
 	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE append_to_other.tbl(i INTEGER)"));
@@ -542,7 +542,7 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	auto test_dir = GetTestDirectory();
+	auto test_dir = TestDirectoryPath();
 	auto attach_db1 = "ATTACH '" + test_dir + "/db1.db'";
 	auto attach_db2 = "ATTACH '" + test_dir + "/db2.db'";
 	REQUIRE_NO_FAIL(con.Query(attach_db1));
@@ -607,6 +607,9 @@ TEST_CASE("Test appending with an active default column", "[appender]") {
 }
 
 TEST_CASE("Test appending with two active normal columns", "[appender]") {
+#if STANDARD_VECTOR_SIZE != 2048
+	return;
+#endif
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

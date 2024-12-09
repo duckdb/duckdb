@@ -7,6 +7,7 @@ add_library_unity(
   conjunction_simplification.cpp
   constant_folding.cpp
   date_part_simplification.cpp
+  distinct_aggregate_optimizer.cpp
   distributivity.cpp
   empty_needle_removal.cpp
   enum_comparison.cpp

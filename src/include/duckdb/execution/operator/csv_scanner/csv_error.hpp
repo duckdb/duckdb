@@ -68,7 +68,7 @@ public:
 	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space);
 	//! Produces an error message for a header sniffing error.
 	static CSVError HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
-	                                    idx_t column_count, char delimiter);
+	                                    idx_t column_count, const string &delimiter);
 	//! Produces error messages for unterminated quoted values
 	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
 	                                        LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
@@ -134,6 +134,8 @@ public:
 	void DontPrintErrorLine() {
 		print_line = false;
 	}
+
+	void SetIgnoreErrors(bool ignore_errors);
 
 private:
 	//! Private methods should always be locked by parent method.

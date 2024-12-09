@@ -150,8 +150,8 @@ struct RLECompressState : public CompressionState {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto column_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+		auto column_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
+		                                                            info.GetBlockSize());
 		column_segment->function = function;
 		current_segment = std::move(column_segment);
 
@@ -259,20 +259,34 @@ struct RLEScanState : public SegmentScanState {
 		D_ASSERT(rle_count_offset <= segment.GetBlockManager().GetBlockSize());
 	}
 
+	inline void SkipInternal(rle_count_t *index_pointer, idx_t skip_count) {
+		while (skip_count > 0) {
+			rle_count_t run_end = index_pointer[entry_pos];
+			idx_t skip_amount = MinValue<idx_t>(skip_count, run_end - position_in_entry);
+
+			skip_count -= skip_amount;
+			position_in_entry += skip_amount;
+			if (ExhaustedRun(index_pointer)) {
+				ForwardToNextRun();
+			}
+		}
+	}
+
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
 		auto data = handle.Ptr() + segment.GetBlockOffset();
 		auto index_pointer = reinterpret_cast<rle_count_t *>(data + rle_count_offset);
+		SkipInternal(index_pointer, skip_count);
+	}
 
-		for (idx_t i = 0; i < skip_count; i++) {
-			// assign the current value
-			position_in_entry++;
-			if (position_in_entry >= index_pointer[entry_pos]) {
-				// handled all entries in this RLE value
-				// move to the next entry
-				entry_pos++;
-				position_in_entry = 0;
-			}
-		}
+	inline void ForwardToNextRun() {
+		// handled all entries in this RLE value
+		// move to the next entry
+		entry_pos++;
+		position_in_entry = 0;
+	}
+
+	inline bool ExhaustedRun(rle_count_t *index_pointer) {
+		return position_in_entry >= index_pointer[entry_pos];
 	}
 
 	BufferHandle handle;
@@ -313,27 +327,14 @@ static bool CanEmitConstantVector(idx_t position, idx_t run_length, idx_t scan_c
 }
 
 template <class T>
-inline static void ForwardToNextRun(RLEScanState<T> &scan_state) {
-	// handled all entries in this RLE value
-	// move to the next entry
-	scan_state.entry_pos++;
-	scan_state.position_in_entry = 0;
-}
-
-template <class T>
-inline static bool ExhaustedRun(RLEScanState<T> &scan_state, rle_count_t *index_pointer) {
-	return scan_state.position_in_entry >= index_pointer[scan_state.entry_pos];
-}
-
-template <class T>
 static void RLEScanConstant(RLEScanState<T> &scan_state, rle_count_t *index_pointer, T *data_pointer, idx_t scan_count,
                             Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	auto result_data = ConstantVector::GetData<T>(result);
 	result_data[0] = data_pointer[scan_state.entry_pos];
 	scan_state.position_in_entry += scan_count;
-	if (ExhaustedRun(scan_state, index_pointer)) {
-		ForwardToNextRun(scan_state);
+	if (scan_state.ExhaustedRun(index_pointer)) {
+		scan_state.ForwardToNextRun();
 	}
 	return;
 }
@@ -356,13 +357,27 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 
 	auto result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	for (idx_t i = 0; i < scan_count; i++) {
-		// assign the current value
-		result_data[result_offset + i] = data_pointer[scan_state.entry_pos];
-		scan_state.position_in_entry++;
-		if (ExhaustedRun(scan_state, index_pointer)) {
-			ForwardToNextRun(scan_state);
+
+	idx_t result_end = result_offset + scan_count;
+	while (result_offset < result_end) {
+		rle_count_t run_end = index_pointer[scan_state.entry_pos];
+		idx_t run_count = run_end - scan_state.position_in_entry;
+		idx_t remaining_scan_count = result_end - result_offset;
+		T element = data_pointer[scan_state.entry_pos];
+		if (DUCKDB_UNLIKELY(run_count > remaining_scan_count)) {
+			for (idx_t i = 0; i < remaining_scan_count; i++) {
+				result_data[result_offset + i] = element;
+			}
+			scan_state.position_in_entry += remaining_scan_count;
+			break;
 		}
+
+		for (idx_t i = 0; i < run_count; i++) {
+			result_data[result_offset + i] = element;
+		}
+
+		result_offset += run_count;
+		scan_state.ForwardToNextRun();
 	}
 }
 
@@ -375,6 +390,44 @@ void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 template <class T>
 void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	RLEScanPartialInternal<T, true>(segment, state, scan_count, result, 0);
+}
+
+//===--------------------------------------------------------------------===//
+// Select
+//===--------------------------------------------------------------------===//
+template <class T>
+void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
+               idx_t sel_count) {
+	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
+
+	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto data_pointer = reinterpret_cast<T *>(data + RLEConstants::RLE_HEADER_SIZE);
+	auto index_pointer = reinterpret_cast<rle_count_t *>(data + scan_state.rle_count_offset);
+
+	// If we are scanning an entire Vector and it contains only a single run we don't need to select at all
+	if (CanEmitConstantVector<true>(scan_state.position_in_entry, index_pointer[scan_state.entry_pos], vector_count)) {
+		RLEScanConstant<T>(scan_state, index_pointer, data_pointer, vector_count, result);
+		return;
+	}
+
+	auto result_data = FlatVector::GetData<T>(result);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+
+	idx_t prev_idx = 0;
+	for (idx_t i = 0; i < sel_count; i++) {
+		auto next_idx = sel.get_index(i);
+		if (next_idx < prev_idx) {
+			throw InternalException("Error in RLESelect - selection vector indices are not ordered");
+		}
+		// skip forward to the next index
+		scan_state.SkipInternal(index_pointer, next_idx - prev_idx);
+		// read the element
+		result_data[i] = data_pointer[scan_state.entry_pos];
+		// move the next to the prev
+		prev_idx = next_idx;
+	}
+	// skip the tail
+	scan_state.SkipInternal(index_pointer, vector_count - prev_idx);
 }
 
 //===--------------------------------------------------------------------===//
@@ -399,7 +452,8 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
 	                           RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
 	                           RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>,
-	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>);
+	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>, nullptr,
+	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, RLESelect<T>);
 }
 
 CompressionFunction RLEFun::GetFunction(PhysicalType type) {

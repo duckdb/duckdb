@@ -889,7 +889,7 @@ public:
 		GetNextPair(client, lstate);
 	}
 
-	double GetProgress() const {
+	ProgressData GetProgress() const {
 		auto &left_table = *gsink.tables[0];
 		auto &right_table = *gsink.tables[1];
 
@@ -903,7 +903,14 @@ public:
 		const auto r = MinValue(next_right.load(), right_outers.load());
 		const auto returned = completed.load() + l + r;
 
-		return count ? (double(returned) / double(count)) : -1;
+		ProgressData res;
+		if (count) {
+			res.done = double(returned);
+			res.total = double(count);
+		} else {
+			res.SetInvalid();
+		}
+		return res;
 	}
 
 	const PhysicalIEJoin &op;
@@ -937,7 +944,7 @@ unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContex
 	return make_uniq<IEJoinLocalSourceState>(context.client, *this);
 }
 
-double PhysicalIEJoin::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
+ProgressData PhysicalIEJoin::GetProgress(ClientContext &context, GlobalSourceState &gsource_p) const {
 	auto &gsource = gsource_p.Cast<IEJoinGlobalSourceState>();
 	return gsource.GetProgress();
 }

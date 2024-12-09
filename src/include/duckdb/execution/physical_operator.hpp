@@ -15,6 +15,7 @@
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/execution/progress_data.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
@@ -139,10 +140,11 @@ public:
 	}
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
-	virtual double GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+	virtual ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
-	virtual double GetSinkProgress(ClientContext &context, GlobalSinkState &gstate, double source_progress) const {
+	virtual ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+	                                     const ProgressData source_progress) const {
 		return source_progress;
 	}
 

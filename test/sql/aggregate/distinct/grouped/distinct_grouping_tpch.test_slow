@@ -3,6 +3,8 @@
 
 require tpch
 
+require ram 8gb
+
 statement ok
 pragma enable_verification
 

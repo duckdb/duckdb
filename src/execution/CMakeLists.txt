@@ -19,8 +19,6 @@ add_library_unity(
   physical_plan_generator.cpp
   radix_partitioned_hashtable.cpp
   reservoir_sample.cpp
-  window_executor.cpp
-  window_segment_tree.cpp
   base_reservoir_sample.cpp
   ingestion_sample.cpp)
 set(ALL_OBJECT_FILES

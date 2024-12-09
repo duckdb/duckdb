@@ -15,6 +15,14 @@
 #  VCPKG_TOOLCHAIN_PATH=~/vcpkg/scripts/buildsystems/vcpkg.cmake
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
+################# HTTPFS
+duckdb_extension_load(httpfs
+    LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_httpfs
+    GIT_TAG 92867fce5a6e90b9a6803fab2b196c00cc11e46c
+    INCLUDE_DIR extension/httpfs/include
+    )
+
 ################# ARROW
 if (NOT MINGW)
     duckdb_extension_load(arrow
@@ -31,9 +39,14 @@ if (NOT MINGW)
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
             GIT_TAG f743d4b3c2faecda15498d0219a1727ad6d62b5b
+            APPLY_PATCHES
             )
 endif()
 
+### Currently libxml2, an azure dependency, has the repository repo return 503
+### Re-enable AZURE when the problem goes away. This means AZURE needs to be
+### build on a side
+if (NO)
 ################# AZURE
 if (NOT MINGW)
     duckdb_extension_load(azure
@@ -42,6 +55,7 @@ if (NOT MINGW)
             GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
             APPLY_PATCHES
             )
+endif()
 endif()
 
 ################# DELTA
@@ -66,20 +80,20 @@ duckdb_extension_load(excel
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
-if (NOT WIN32)
-    set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
-else ()
-    set(LOAD_ICEBERG_TESTS "")
-endif()
-
-if (NOT MINGW)
-    duckdb_extension_load(iceberg
-            ${LOAD_ICEBERG_TESTS}
-            GIT_URL https://github.com/duckdb/duckdb_iceberg
-            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
-            APPLY_PATCHES
-            )
-endif()
+#if (NOT WIN32)
+#    set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
+#else ()
+#    set(LOAD_ICEBERG_TESTS "")
+#endif()
+#
+#if (NOT MINGW)
+#    duckdb_extension_load(iceberg
+#            ${LOAD_ICEBERG_TESTS}
+#            GIT_URL https://github.com/duckdb/duckdb_iceberg
+#            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
+#            APPLY_PATCHES
+#            )
+#endif()
 
 ################# INET
 duckdb_extension_load(inet
@@ -88,6 +102,7 @@ duckdb_extension_load(inet
     GIT_TAG 51d7ad789f34eecb36a2071bac5aef0e12747d70
     INCLUDE_DIR src/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER
@@ -106,10 +121,9 @@ endif()
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_spatial.git
-    GIT_TAG 7ea79b614755d2bdee4be468691e4e17b39b8dbc
+    GIT_TAG a60aa3733741a99c49baaf33390c0f7c8a9598a3
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 
 ################# SQLITE_SCANNER
@@ -132,17 +146,6 @@ duckdb_extension_load(sqlsmith
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
         GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
         )
-
-################# SUBSTRAIT
-if (NOT WIN32)
-    duckdb_extension_load(substrait
-            LOAD_TESTS DONT_LINK
-            GIT_URL https://github.com/duckdb/substrait
-            GIT_TAG be71387cf0a484dc7b261a0cb21abec0d0e0ce5c
-            APPLY_PATCHES
-            )
-endif()
-
 
 ################# VSS
 duckdb_extension_load(vss

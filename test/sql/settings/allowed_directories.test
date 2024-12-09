@@ -5,7 +5,7 @@
 require skip_reload
 
 # enable_external_access = false disables extension loading
-require no_extension_autoloading
+require no_extension_autoloading "EXPECTED: Test disable autoloading"
 
 require parquet
 
@@ -172,8 +172,10 @@ EXPORT DATABASE a1 TO 'export_test'
 ----
 Permission Error
 
-statement ok
+statement error
 IMPORT DATABASE '__TEST_DIR__/export_test'
+----
+Table with name "integers" already exists!
 
 statement error
 IMPORT DATABASE 'export_test'

@@ -33,7 +33,7 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 
 	if (!gstate.names.empty()) {
 		// Create the strings without copying them
-		const auto col_idx = gstate.column_indices[0];
+		const auto col_idx = gstate.column_ids[0];
 		auto strings = FlatVector::GetData<string_t>(output.data[col_idx]);
 		auto &validity = FlatVector::Validity(output.data[col_idx]);
 		for (idx_t i = 0; i < count; i++) {
