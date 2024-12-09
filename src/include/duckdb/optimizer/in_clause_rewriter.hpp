@@ -21,6 +21,7 @@ public:
 
 	ClientContext &context;
 	Optimizer &optimizer;
+	optional_ptr<LogicalOperator> current_op;
 	unique_ptr<LogicalOperator> root;
 
 public:
