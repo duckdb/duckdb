@@ -5,7 +5,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
@@ -70,9 +70,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 				first_children.push_back(std::move(bound));
 
 				FunctionBinder function_binder(context);
-				auto first_aggregate =
-				    function_binder.BindAggregateFunction(LastFunctionGetter::GetFunction(logical_type), std::move(first_children),
-				                                          nullptr, AggregateType::NON_DISTINCT);
+				auto first_aggregate = function_binder.BindAggregateFunction(
+				    LastFunctionGetter::GetFunction(logical_type), std::move(first_children), nullptr,
+				    AggregateType::NON_DISTINCT);
 				first_aggregate->order_bys = nullptr;
 
 				payload_types.push_back(logical_type);
