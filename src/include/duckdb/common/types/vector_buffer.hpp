@@ -165,10 +165,18 @@ public:
 	optional_idx GetDictionarySize() const {
 		return dictionary_size;
 	}
+	void SetDictionaryId(string id) {
+		dictionary_id = std::move(id);
+	}
+	const string &GetDictionaryId() const {
+		return dictionary_id;
+	}
 
 private:
 	SelectionVector sel_vector;
 	optional_idx dictionary_size;
+	//! A unique identifier for the dictionary that can be used to check if two dictionaries are equivalent
+	string dictionary_id;
 };
 
 class VectorStringBuffer : public VectorBuffer {

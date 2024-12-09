@@ -114,7 +114,7 @@ runs:
         run: |
           docker build \
             --build-arg 'vcpkg_url=https://github.com/microsoft/vcpkg.git' \
-            --build-arg 'vcpkg_commit=a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6' \
+            --build-arg 'vcpkg_commit=5e5d0e1cd7785623065e77eff011afdeec1a3574' \
             --build-arg 'extra_toolchains=;python3;' \
             -t duckdb/${{ inputs.duckdb_arch }} \
             ./extension-ci-tools/docker/${{ inputs.duckdb_arch }}

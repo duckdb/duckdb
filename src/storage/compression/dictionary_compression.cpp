@@ -548,6 +548,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 		BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, scan_state.current_width);
 
 		result.Dictionary(*(scan_state.dictionary), scan_state.dictionary_size, *scan_state.sel_vec, scan_count);
+		DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
 	}
 }
 
