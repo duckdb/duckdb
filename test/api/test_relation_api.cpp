@@ -519,7 +519,6 @@ TEST_CASE("Test table creations with on_create_conflict using the relation API",
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 
-
 	REQUIRE_NOTHROW(values1 = con.Values({{4, 14}, {5, 15}, {6, 16}}, {"i", "j"}));
 	REQUIRE_THROWS(values1->Create("integers"));
 	result = con.Query("SELECT * FROM integers ORDER BY i");
@@ -556,8 +555,10 @@ TEST_CASE("Test table create from query with on_create_conflict using the relati
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 20, 30, 40}));
 
-	REQUIRE_NOTHROW(
-		con.Table("integers")->Filter("i BETWEEN 2 AND 3")->Project("i + 100 AS k, 'hello' AS l")->Create("new_values"));
+	REQUIRE_NOTHROW(con.Table("integers")
+	                    ->Filter("i BETWEEN 2 AND 3")
+	                    ->Project("i + 100 AS k, 'hello' AS l")
+	                    ->Create("new_values"));
 
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {102, 103}));

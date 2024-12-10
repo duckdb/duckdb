@@ -10,7 +10,7 @@ CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string sc
                                          bool temporary_p, OnCreateConflict on_conflict)
     : Relation(child_p->context, RelationType::CREATE_TABLE_RELATION), child(std::move(child_p)),
       schema_name(std::move(schema_name)), table_name(std::move(table_name)), temporary(temporary_p),
-	 	  on_conflict(on_conflict) {
+      on_conflict(on_conflict) {
 	TryBindRelation(columns);
 }
 
