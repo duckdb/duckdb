@@ -362,8 +362,7 @@ bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optiona
 		return false;
 	}
 	auto &function = expr.Cast<BoundFunctionExpression>();
-	if (function.function.name != "struct_extract_at" &&
-	    function.function.name != "struct_extract" &&
+	if (function.function.name != "struct_extract_at" && function.function.name != "struct_extract" &&
 	    function.function.name != "array_extract") {
 		return false;
 	}
