@@ -148,7 +148,6 @@ void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
                                         TableCatalogEntry &table, TableStorageInfo &storage_info) {
 	D_ASSERT(insert.children.size() == 1);
-	D_ASSERT(insert.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 
 	vector<column_t> logical_column_ids;
 	vector<string> column_names;
@@ -499,6 +498,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	if (stmt.column_order == InsertColumnOrder::INSERT_BY_NAME) {
 		if (values_list) {
 			throw BinderException("INSERT BY NAME can only be used when inserting from a SELECT statement");
+		}
+		if (stmt.default_values) {
+			throw BinderException("INSERT BY NAME cannot be combined with with DEFAULT VALUES");
 		}
 		if (!stmt.columns.empty()) {
 			throw BinderException("INSERT BY NAME cannot be combined with an explicit column list");
