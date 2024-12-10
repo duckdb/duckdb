@@ -1,3 +1,13 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/function/window/window_index_tree.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
@@ -42,7 +52,9 @@ public:
 	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
 	using LocalSortStatePtr = unique_ptr<LocalSortState>;
 
-	WindowIndexTree(ClientContext &context, const BoundOrderModifier &orders, vector<column_t> sort_idx,
+	WindowIndexTree(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<column_t> &sort_idx,
+	                const idx_t count);
+	WindowIndexTree(ClientContext &context, const BoundOrderModifier &order_bys, const vector<column_t> &sort_idx,
 	                const idx_t count);
 	virtual ~WindowIndexTree() = default;
 

@@ -5,9 +5,9 @@
 
 namespace duckdb {
 
-WindowIndexTree::WindowIndexTree(ClientContext &context, const BoundOrderModifier &order_bys, vector<column_t> sort_idx,
-                                 const idx_t count)
-    : context(context), memory_per_thread(PhysicalOperator::GetMaxThreadMemory(context)), sort_idx(std::move(sort_idx)),
+WindowIndexTree::WindowIndexTree(ClientContext &context, const vector<BoundOrderByNode> &orders,
+                                 const vector<column_t> &sort_idx, const idx_t count)
+    : context(context), memory_per_thread(PhysicalOperator::GetMaxThreadMemory(context)), sort_idx(sort_idx),
       build_stage(PartitionSortStage::INIT), tasks_completed(0) {
 	// Sort the unfiltered indices by the orders
 	LogicalType index_type;
@@ -26,8 +26,13 @@ WindowIndexTree::WindowIndexTree(ClientContext &context, const BoundOrderModifie
 	payload_layout.Initialize(payload_types);
 
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	global_sort = make_uniq<GlobalSortState>(buffer_manager, order_bys.orders, payload_layout);
+	global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
 	global_sort->external = ClientConfig::GetConfig(context).force_external;
+}
+
+WindowIndexTree::WindowIndexTree(ClientContext &context, const BoundOrderModifier &order_bys,
+                                 const vector<column_t> &sort_idx, const idx_t count)
+    : WindowIndexTree(context, order_bys.orders, sort_idx, count) {
 }
 
 optional_ptr<LocalSortState> WindowIndexTree::AddLocalSort() {
