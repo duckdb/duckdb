@@ -518,9 +518,13 @@ public:
 				parquet_options.file_row_number = true;
 			}
 			bound_on_first_file = false;
+			// !!TODO!!: do we even need 'columns' in the ParquetReadBindData??
+			// TODO: override the 'columns' in the ParquetReadBindData with those in the MultiFileReaderBindData, if
+			// they are set.
 		} else if (!parquet_options.schema.empty()) {
 			// A schema was supplied: use the schema for binding
 			result->reader_bind = BindSchema(context, bound_types, bound_names, *result, parquet_options);
+			// TODO: initialize the 'columns' with the schema
 		} else {
 			parquet_options.file_options.AutoDetectHivePartitioning(*result->file_list, context);
 			// Default bind
