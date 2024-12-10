@@ -51,8 +51,6 @@ private:
 	string vendor_name {};
 	//! The type_name is the name of the type produced by the vendor (e.g., hugeint)
 	string type_name {};
-	//! The arrow format (e.g., z)
-	string arrow_format {};
 };
 
 class ArrowExtension;

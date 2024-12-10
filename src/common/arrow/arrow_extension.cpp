@@ -16,8 +16,8 @@ ArrowExtension::ArrowExtension(string extension_name, string arrow_format, share
 }
 
 ArrowExtensionInfo::ArrowExtensionInfo(string extension_name, string vendor_name, string type_name)
-    : extension_name(std::move(extension_name)), vendor_name(std::move(vendor_name)), type_name(std::move(type_name)),
-      arrow_format(std::move(arrow_format)) {};
+    : extension_name(std::move(extension_name)), vendor_name(std::move(vendor_name)), type_name(std::move(type_name))
+       {};
 
 hash_t ArrowExtensionInfo::GetHash() const {
 	const auto h_extension = Hash(extension_name.c_str());
@@ -51,7 +51,6 @@ string ArrowExtensionInfo::ToString() const {
 	if (!type_name.empty()) {
 		info << "Type: " << type_name << ", ";
 	}
-	info << "Format: " << arrow_format << ". ";
 	return info.str();
 }
 
@@ -73,8 +72,7 @@ bool ArrowExtensionInfo::IsCanonical() const {
 }
 
 bool ArrowExtensionInfo::operator==(const ArrowExtensionInfo &other) const {
-	return extension_name == other.extension_name && type_name == other.type_name &&
-	       arrow_format == other.arrow_format && vendor_name == other.vendor_name;
+	return extension_name == other.extension_name && type_name == other.type_name && vendor_name == other.vendor_name;
 }
 
 ArrowExtension::ArrowExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowType> type)

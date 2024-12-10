@@ -98,7 +98,7 @@ bool SetArrowExtension(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	auto &config = DBConfig::GetConfig(context);
 	if (config.HasArrowExtension(type.id())) {
 		auto arrow_extension = config.GetArrowExtension(type.id());
-		arrow_extension.PopulateArrowSchema(root_holder, child, context);
+		arrow_extension.PopulateArrowSchema(root_holder, child, type, context,arrow_extension);
 		return true;
 	}
 	return false;
