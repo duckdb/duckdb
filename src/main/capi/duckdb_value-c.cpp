@@ -1,6 +1,8 @@
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/varint.hpp"

@@ -348,7 +348,7 @@ TEST_CASE("Test DECIMAL value", "[capi]") {
 
 TEST_CASE("Test BIT value", "[capi]") {
 	{
-		uint8_t data[] {5, 0b11111001, 0b01010110};
+		uint8_t data[] {5, 0xf9, 0x56}; // 0b11111001 0b01010110
 		duckdb_bit input {data, 3};
 		auto value = duckdb_create_bit(input);
 		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIT);
@@ -359,7 +359,7 @@ TEST_CASE("Test BIT value", "[capi]") {
 		duckdb_destroy_value(&value);
 	}
 	{
-		uint8_t data[] {0, 0b00000000};
+		uint8_t data[] {0, 0x00};
 		duckdb_bit input {data, 2};
 		auto value = duckdb_create_bit(input);
 		REQUIRE(duckdb_get_type_id(duckdb_get_value_type(value)) == DUCKDB_TYPE_BIT);
