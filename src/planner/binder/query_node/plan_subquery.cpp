@@ -457,6 +457,9 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 	vector<JoinCondition> conditions;
 	vector<unique_ptr<Expression>> arbitrary_expressions;
 	if (condition) {
+		if (condition->HasSubquery()) {
+			throw BinderException(*condition, "Subqueries are not supported in LATERAL join conditions");
+		}
 		// extract join conditions, if there are any
 		LogicalComparisonJoin::ExtractJoinConditions(context, join_type, JoinRefType::REGULAR, left, right,
 		                                             std::move(condition), conditions, arbitrary_expressions);
