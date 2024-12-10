@@ -517,12 +517,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					    make_uniq<ConstantFilter>(constant_cmp.comparison_type, constant_cmp.constant);
 					table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, std::move(constant_filter)));
 				}
-				// We need to apply a IS NOT NULL filter to the column expression because any comparison with NULL
-				// is always false.
-				// However, the rowid pseudocolumn can never be NULL.
-				if (!column_index.IsRowIdColumn()) {
-					table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, make_uniq<IsNotNullFilter>()));
-				}
 				equivalence_map.erase(filter_exp);
 			}
 		}
@@ -550,7 +544,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(like_string));
 				table_filters.PushFilter(column_index, std::move(lower_bound));
 				table_filters.PushFilter(column_index, std::move(upper_bound));
-				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 			}
 			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
@@ -583,7 +576,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					//! Here the like can be transformed to an equality query
 					auto equal_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(prefix));
 					table_filters.PushFilter(column_index, std::move(equal_filter));
-					table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
 					auto lower_bound =
@@ -592,7 +584,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix));
 					table_filters.PushFilter(column_index, std::move(lower_bound));
 					table_filters.PushFilter(column_index, std::move(upper_bound));
-					table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 				}
 			}
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
@@ -631,7 +622,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				auto bound_eq_comparison =
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
 				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
-				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 				remaining_filters.erase_at(rem_fil_idx--); // decrement to stay on the same idx next iteration
 				continue;
 			}
@@ -656,7 +646,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(in_list.back()));
 				table_filters.PushFilter(column_index, std::move(lower_bound));
 				table_filters.PushFilter(column_index, std::move(upper_bound));
-				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
 				remaining_filters.erase_at(rem_fil_idx--); // decrement to stay on the same idx next iteration
 			} else {

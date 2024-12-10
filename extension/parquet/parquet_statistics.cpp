@@ -30,16 +30,16 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	Value min;
 	Value max;
 	if (parquet_stats.__isset.min_value) {
-		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value).DefaultCastAs(type);
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value);
 	} else if (parquet_stats.__isset.min) {
-		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min).DefaultCastAs(type);
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min);
 	} else {
 		min = Value(type);
 	}
 	if (parquet_stats.__isset.max_value) {
-		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value).DefaultCastAs(type);
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value);
 	} else if (parquet_stats.__isset.max) {
-		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).DefaultCastAs(type);
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max);
 	} else {
 		max = Value(type);
 	}
@@ -50,6 +50,17 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
                                            const std::string &stats) {
+	Value result;
+	string error;
+	auto stats_val = ConvertValueInternal(type, schema_ele, stats);
+	if (!stats_val.DefaultTryCastAs(type, result, &error)) {
+		return Value(type);
+	}
+	return result;
+}
+Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type,
+                                                   const duckdb_parquet::SchemaElement &schema_ele,
+                                                   const std::string &stats) {
 	auto stats_data = const_data_ptr_cast(stats.c_str());
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN: {
@@ -461,10 +472,10 @@ static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilte
 	switch (duckdb_filter.filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = duckdb_filter.Cast<ConstantFilter>();
-		D_ASSERT(constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL);
+		auto is_compare_equal = constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL;
 		D_ASSERT(!constant_filter.constant.IsNull());
 		auto hash = ValueXXH64(constant_filter.constant);
-		return hash > 0 && !bloom_filter.FilterCheck(hash);
+		return hash > 0 && !bloom_filter.FilterCheck(hash) && is_compare_equal;
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();

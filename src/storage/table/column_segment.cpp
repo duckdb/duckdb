@@ -4,6 +4,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
@@ -44,19 +45,15 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
 }
 
-unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
-                                                                const idx_t start, const idx_t segment_size,
-                                                                const idx_t block_size) {
+unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
+                                                                const LogicalType &type, const idx_t start,
+                                                                const idx_t segment_size, const idx_t block_size) {
 
 	// Allocate a buffer for the uncompressed segment.
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_size);
 
-	// Get the segment compression function.
-	auto &config = DBConfig::GetConfig(db);
-	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
-
-	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, *function,
+	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
 }
 
@@ -124,6 +121,22 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 		ScanPartial(state, scan_count, result, result_offset);
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	}
+}
+
+void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel,
+                           idx_t sel_count) {
+	if (!function.get().select) {
+		throw InternalException("ColumnSegment::Select not implemented for this compression method");
+	}
+	function.get().select(*this, state, scan_count, result, sel, sel_count);
+}
+
+void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,
+                           idx_t &sel_count, const TableFilter &filter) {
+	if (!function.get().filter) {
+		throw InternalException("ColumnSegment::Filter not implemented for this compression method");
+	}
+	function.get().filter(*this, state, scan_count, result, sel, sel_count, filter);
 }
 
 void ColumnSegment::Skip(ColumnScanState &state) {
@@ -433,7 +446,6 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<ConstantFilter>();
-		// the inplace loops take the result as the last parameter
 		switch (vector.GetType().InternalType()) {
 		case PhysicalType::UINT8: {
 			auto predicate = UTinyIntValue::Get(constant_filter.constant);

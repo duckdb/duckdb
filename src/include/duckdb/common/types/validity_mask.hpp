@@ -364,6 +364,7 @@ public:
 	                        idx_t target_offset, idx_t count);
 	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
 	DUCKDB_API string ToString(idx_t count) const;
+	DUCKDB_API string ToString() const;
 
 	DUCKDB_API static bool IsAligned(idx_t count);
 
