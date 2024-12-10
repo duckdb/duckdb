@@ -33,7 +33,6 @@ struct StructExtractAtFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-
 struct StructPackFun {
 	static constexpr const char *Name = "struct_pack";
 	static constexpr const char *Parameters = "name:=any,...";
