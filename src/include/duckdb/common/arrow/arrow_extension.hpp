@@ -22,8 +22,7 @@ struct ArrowExtensionInfo {
 public:
 	ArrowExtensionInfo() {
 	}
-	explicit ArrowExtensionInfo(string extension_name);
-	ArrowExtensionInfo(string vendor_name, string type_name);
+
 	ArrowExtensionInfo(string extension_name, string vendor_name, string type_name, string arrow_format);
 
 	hash_t GetHash() const;
@@ -84,6 +83,8 @@ public:
 
 	LogicalType GetLogicalType() const;
 
+	bool HasType() const;
+
 	static void PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	                                const LogicalType &duckdb_type, ClientContext &context, ArrowExtension &extension);
 
@@ -108,6 +109,7 @@ struct HashArrowExtension {
 struct TypeInfo {
 	TypeInfo();
 	explicit TypeInfo(const LogicalType &type);
+	explicit TypeInfo(string alias);
 	string alias;
 	LogicalTypeId type;
 	hash_t GetHash() const;
