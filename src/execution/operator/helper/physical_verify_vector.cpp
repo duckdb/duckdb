@@ -75,7 +75,7 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &c
 		}
 		}
 		bool can_be_constant = true;
-		switch(chunk.data[c].GetType().id()) {
+		switch (chunk.data[c].GetType().id()) {
 		case LogicalTypeId::INTERVAL:
 			can_be_constant = false;
 			break;
