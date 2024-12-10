@@ -607,7 +607,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		case LogicalTypeId::VARCHAR:
 			return Value(std::move(string_val));
 		case LogicalTypeId::BLOB:
-			return Value::BLOB_RAW(std::move(string_val));
+			return Value::BLOB_RAW(string_val);
 		default:
 			throw InternalException("Unsupported vector type for FSST vector");
 		}
