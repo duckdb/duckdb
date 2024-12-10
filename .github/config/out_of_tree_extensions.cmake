@@ -24,7 +24,7 @@ duckdb_extension_load(httpfs
     )
 
 ################# ARROW
-if (NOT MINGW)
+if (NOT MINGW AND NOT $ENV{WASM_EXTENSIONS})
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
@@ -34,7 +34,7 @@ if (NOT MINGW)
 endif()
 
 ################## AWS
-if (NOT MINGW)
+if (NOT MINGW AND NOT $ENV{WASM_EXTENSIONS})
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
@@ -48,7 +48,7 @@ endif()
 ### build on a side
 if (NO)
 ################# AZURE
-if (NOT MINGW)
+if (NOT MINGW AND NOT $ENV{WASM_EXTENSIONS})
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
@@ -61,7 +61,7 @@ endif()
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
-if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
+if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT $ENV{WASM_EXTENSIONS})
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
@@ -86,7 +86,7 @@ duckdb_extension_load(excel
 #    set(LOAD_ICEBERG_TESTS "")
 #endif()
 #
-#if (NOT MINGW)
+#if (NOT MINGW AND NOT $ENV{WASM_EXTENSIONS})
 #    duckdb_extension_load(iceberg
 #            ${LOAD_ICEBERG_TESTS}
 #            GIT_URL https://github.com/duckdb/duckdb_iceberg
@@ -108,7 +108,7 @@ duckdb_extension_load(inet
 ################# POSTGRES_SCANNER
 # Note: tests for postgres_scanner are currently not run. All of them need a postgres server running. One test
 #       uses a remote rds server but that's not something we want to run here.
-if (NOT MINGW)
+if (NOT MINGW AND NOT $ENV{WASM_EXTENSIONS})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
@@ -117,6 +117,8 @@ if (NOT MINGW)
             )
 endif()
 
+# mingw CI with all extensions at once is somehow not happy
+if (NOT MINGW)
 ################# SPATIAL
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
@@ -125,6 +127,7 @@ duckdb_extension_load(spatial
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     )
+endif()
 
 ################# SQLITE_SCANNER
 # Static linking on windows does not properly work due to symbol collision
@@ -141,11 +144,13 @@ duckdb_extension_load(sqlite_scanner
         APPLY_PATCHES
         )
 
+if (NOT $ENV{WASM_EXTENSIONS})
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
         GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
         )
+endif()
 
 ################# VSS
 duckdb_extension_load(vss
@@ -158,7 +163,7 @@ duckdb_extension_load(vss
     )
 
 ################# MYSQL
-if (NOT MINGW)
+if (NOT MINGW AND NOT $ENV{WASM_EXTENSIONS})
     duckdb_extension_load(mysql_scanner
             DONT_LINK
             LOAD_TESTS
