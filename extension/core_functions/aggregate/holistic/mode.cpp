@@ -404,7 +404,7 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	using STATE = ModeState<string_t, ModeString>;
 	using OP = ModeFallbackFunction<ModeString>;
 	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
-	                       AggregateFunction::StateInitialize<STATE, OP>,
+	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
 	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
@@ -415,7 +415,9 @@ template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = ModeFunction<TYPE_OP>;
-	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
+	auto func =
+	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
+	        type, type);
 	func.window = OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>;
 	return func;
 }
