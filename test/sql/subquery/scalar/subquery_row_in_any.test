@@ -13,6 +13,17 @@ SELECT (1, 2) IN (SELECT i, i + 1 FROM integers)
 ----
 true
 
+# it still works with the row inside the subquery
+query I
+SELECT (1, 2) IN (SELECT (i, i + 1) FROM integers)
+----
+true
+
+query I
+SELECT row(1) IN (SELECT i FROM integers)
+----
+true
+
 # also works with explicit row function
 query I
 SELECT ROW(1, 2) IN (SELECT i, i + 1 FROM integers)
@@ -39,7 +50,12 @@ query I
 select 1 where (1,2) not in (select 1,2);
 ----
 
+statement error
+SELECT (1, 2) IN (SELECT (i, i + 1, i + 2) FROM integers)
+----
+Cannot compare values of type
 
+# FIXME: correlated not yet supported
 statement error
 SELECT ROW(1, 2) IN (SELECT i1.i, i1.i + 1)
 FROM integers i1

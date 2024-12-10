@@ -1,6 +1,7 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -38,16 +39,24 @@ public:
 	}
 };
 
-void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Expression>> &result) {
+bool TypeIsUnnamedStruct(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+	return StructType::IsUnnamed(type);
+}
+
+void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Expression>> &result,
+                             const vector<LogicalType> &types) {
 	// two scenarios
 	// Single Expression (standard):
 	// x IN (...)
 	// Multi-Expression/Struct:
 	// (a, b) IN (SELECT ...)
-	// the latter has a unnamed struct on the LHS that is created by a "ROW" expression
+	// the latter has an unnamed struct on the LHS that is created by a "ROW" expression
 	auto &return_type = child->return_type;
-	if (return_type.id() != LogicalTypeId::STRUCT || !StructType::IsUnnamed(return_type)) {
-		// child is not a struct
+	if (!TypeIsUnnamedStruct(return_type)) {
+		// child is not an unnamed struct
 		return;
 	}
 	if (child->expression_class != ExpressionClass::BOUND_FUNCTION) {
@@ -59,7 +68,14 @@ void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Ex
 		// not "ROW"
 		return;
 	}
-	// we found (a, b, ...) - extract all children of this function
+	// we found (a, b, ...) - we can extract all children of this function
+	// note that we don't always want to do this
+	if (types.size() == 1 && TypeIsUnnamedStruct(types[0]) && function.children.size() != types.size()) {
+		// old case: we have an unnamed struct INSIDE the subquery as well
+		// i.e. (a, b) IN (SELECT (a, b) ...)
+		// unnesting the struct is guaranteed to throw an error - match the structs against each-other instead
+		return;
+	}
 	for (auto &row_child : function.children) {
 		result.push_back(std::move(row_child));
 	}
@@ -96,12 +112,13 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			return BindResult(std::move(error));
 		}
 	}
+	auto &bound_subquery = expr.subquery->node->Cast<BoundSubqueryNode>();
 	vector<unique_ptr<Expression>> child_expressions;
 	if (expr.subquery_type != SubqueryType::EXISTS) {
 		idx_t expected_columns = 1;
 		if (expr.child) {
 			auto &child = BoundExpression::GetExpression(*expr.child);
-			ExtractSubqueryChildren(child, child_expressions);
+			ExtractSubqueryChildren(child, child_expressions, bound_subquery.bound_node->types);
 			if (child_expressions.empty()) {
 				child_expressions.push_back(std::move(child));
 			}
@@ -114,7 +131,6 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	}
 	// both binding the child and binding the subquery was successful
 	D_ASSERT(expr.subquery->node->type == QueryNodeType::BOUND_SUBQUERY_NODE);
-	auto &bound_subquery = expr.subquery->node->Cast<BoundSubqueryNode>();
 	auto subquery_binder = std::move(bound_subquery.subquery_binder);
 	auto bound_node = std::move(bound_subquery.bound_node);
 	LogicalType return_type =
