@@ -1377,7 +1377,7 @@ void LocalFileSystem::CopyFile(const string &source, const string &target, uniqu
   int src_fd = src_handle->Cast<UnixFileHandle>().fd;
   fclonefileat(src_fd, AT_FDCWD, target.c_str(), 0);
 }
-#elif LINUX
+#elif __linux__
 void LocalFileSystem::CopyFile(const string &source, const string &target, unique_ptr<FileHandle>& src_handle) {
 	int dst_fd = open(target.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);;
 	int src_fd = src_handle->Cast<UnixFileHandle>().fd;
