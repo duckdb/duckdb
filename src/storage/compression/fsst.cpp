@@ -56,7 +56,7 @@ struct FSSTStorage {
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
 	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-	                   SelectionVector &sel, idx_t sel_count);
+	                   const SelectionVector &sel, idx_t sel_count);
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
@@ -681,7 +681,7 @@ void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 // Select
 //===--------------------------------------------------------------------===//
 void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                         SelectionVector &sel, idx_t sel_count) {
+                         const SelectionVector &sel, idx_t sel_count) {
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 

@@ -1,0 +1,14 @@
+# name: test/fuzzer/public/cast_index_expression.test
+# description: Test CREATE INDEX using an index expression that triggers a cast
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE v00 (c01 INT, c02 STRING);
+
+statement error
+CREATE INDEX i_index ON v00 USING ART ( NULLIF ( v00, 'string' ) );
+----
+Invalid type for index key
