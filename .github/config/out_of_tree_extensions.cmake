@@ -74,8 +74,8 @@ endif()
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_excel
-    GIT_TAG 0e99dc789038c7af658e30d579b818473a6d6ea8
-    INCLUDE_DIR extension/excel/include
+    GIT_TAG e243577956f36a898d5485189e5288839c2c4b73
+    INCLUDE_DIR src/excel/include
     )
 
 ################# ICEBERG
