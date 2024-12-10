@@ -136,6 +136,8 @@ private:
 		AggregateDictionaryState dict_state;
 	} state;
 
+	//! If we have this many or more radix bits, we use the unpartitioned data collection too
+	static constexpr idx_t UNPARTITIONED_RADIX_BITS_THRESHOLD = 3;
 	//! The number of radix bits to partition by
 	idx_t radix_bits;
 	//! The data of the HT
@@ -174,6 +176,8 @@ private:
 	void InitializeUnpartitionedData();
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;
+	//! Reinserts tuples (triggered by Resize)
+	void ReinsertTuples(PartitionedTupleData &data);
 
 	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter);
 
