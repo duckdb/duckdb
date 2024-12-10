@@ -295,9 +295,10 @@ struct MultiFileReader {
 		} else {
 			shared_ptr<READER_CLASS> reader;
 			reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
-			for (auto &column : reader->columns) {
-				return_types.push_back(column.type);
-				names.push_back(column.name);
+			auto &columns = reader->GetColumns();
+			for (auto &column : columns) {
+				return_types.emplace_back(column.type);
+				names.emplace_back(column.name);
 			}
 			result.Initialize(std::move(reader));
 			MultiFileReaderBindData bind_data;

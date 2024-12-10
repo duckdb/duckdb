@@ -5,6 +5,7 @@
 #include "cast_column_reader.hpp"
 #include "duckdb.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -58,8 +59,8 @@ struct ParquetReadBindData : public TableFunctionData {
 
 	shared_ptr<ParquetReader> initial_reader;
 	atomic<idx_t> chunk_count;
-
-	vector<MultiFileReaderColumn> columns;
+	vector<string> names;
+	vector<LogicalType> types;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
 
@@ -263,15 +264,20 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 
 	vector<string> schema_col_names;
 	vector<LogicalType> schema_col_types;
+	MultiFileReaderBindData bind_data;
 	schema_col_names.reserve(options.schema.size());
 	schema_col_types.reserve(options.schema.size());
 	for (const auto &column : options.schema) {
 		schema_col_names.push_back(column.name);
 		schema_col_types.push_back(column.type);
+
+		auto res = MultiFileReaderColumn(column.name, column.type);
+		res.field_id = column.field_id;
+		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
+		bind_data.schema.emplace_back(std::move(res));
 	}
 
 	// perform the binding on the obtained set of names + types
-	MultiFileReaderBindData bind_data;
 	result.multi_file_reader->BindOptions(options.file_options, *result.file_list, schema_col_types, schema_col_names,
 	                                      bind_data);
 
@@ -295,95 +301,20 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	// Mark the file in the file list we are scanning here
 	reader_data.file_list_idx = file_idx;
 
-	if (bind_data.parquet_options.schema.empty()) {
-		vector<MultiFileReaderColumn> columns;
-		for (auto &column : bind_data.columns) {
-			columns.push_back(column);
-		}
-		// Set the field_ids on the MultiFileReaderColumns in the bind data,
-		// this can be used by CreateNameMapping to create a mapping using the field ids
-		auto &column_readers = reader.root_reader->Cast<StructColumnReader>().child_readers;
-		// FIXME: why is column_readers.size() one higher than bind_data.columns.size() ???
-		D_ASSERT(bind_data.columns.empty() || column_readers.size() >= bind_data.columns.size());
-		for (idx_t column_index = 0; column_index < columns.size(); column_index++) {
-			auto &column_schema = column_readers[column_index]->Schema();
-			if (column_schema.__isset.field_id) {
-				columns[column_index].field_id = column_schema.field_id;
-			}
-		}
-
+	if (!bind_data.reader_bind.schema.empty()) {
+		// Schema was set explicitly
+		// Either by:
+		// 1. The MultiFileReader::Bind call
+		// 2. The 'schema' parquet option
 		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
-		                                              columns, global_column_ids, table_filters,
+		                                              bind_data.reader_bind.schema, global_column_ids, table_filters,
 		                                              bind_data.file_list->GetFirstFile(), context, reader_state);
-		return;
+	} else {
+		auto global_columns = MultiFileReaderColumn::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
+		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
+		                                              global_columns, global_column_ids, table_filters,
+		                                              bind_data.file_list->GetFirstFile(), context, reader_state);
 	}
-
-	// a fixed schema was supplied, initialize the MultiFileReader settings here so we can read using the schema
-
-	// this deals with hive partitioning and filename=true
-	bind_data.multi_file_reader->FinalizeBind(parquet_options.file_options, bind_data.reader_bind, reader.GetFileName(),
-	                                          reader.GetColumns(), bind_data.columns, global_column_ids, reader_data,
-	                                          context, reader_state);
-
-	// create a mapping from field id to column index in file
-	unordered_map<uint32_t, idx_t> field_id_to_column_index;
-	auto &column_readers = reader.root_reader->Cast<StructColumnReader>().child_readers;
-	for (idx_t column_index = 0; column_index < column_readers.size(); column_index++) {
-		auto &column_schema = column_readers[column_index]->Schema();
-		if (column_schema.__isset.field_id) {
-			field_id_to_column_index[column_schema.field_id] = column_index;
-		}
-	}
-
-	// loop through the schema definition
-	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		auto global_column_index = global_column_ids[i].GetPrimaryIndex();
-
-		// check if this is a constant column
-		bool constant = false;
-		for (auto &entry : reader_data.constant_map) {
-			if (entry.column_id == i) {
-				constant = true;
-				break;
-			}
-		}
-		if (constant) {
-			// this column is constant for this file
-			continue;
-		}
-
-		// Handle any generate columns that are not in the schema (currently only file_row_number)
-		if (global_column_index >= parquet_options.schema.size()) {
-			if (bind_data.reader_bind.file_row_number_idx == global_column_index) {
-				reader_data.column_mapping.push_back(i);
-				reader_data.column_ids.push_back(reader.file_row_number_idx);
-			}
-			continue;
-		}
-
-		const auto &column_definition = parquet_options.schema[global_column_index];
-		auto it = field_id_to_column_index.find(column_definition.field_id);
-		if (it == field_id_to_column_index.end()) {
-			// field id not present in file, use default value
-			reader_data.constant_map.emplace_back(i, column_definition.default_value);
-			continue;
-		}
-
-		const auto &local_column_index = it->second;
-		auto &column_reader = column_readers[local_column_index];
-		if (column_reader->Type() != column_definition.type) {
-			// differing types, wrap in a cast column reader
-			reader_data.cast_map[local_column_index] = column_definition.type;
-		}
-
-		reader_data.column_mapping.push_back(i);
-		reader_data.column_ids.push_back(local_column_index);
-	}
-	reader_data.empty_columns = reader_data.column_ids.empty();
-
-	// Finally, initialize the filters
-	bind_data.multi_file_reader->CreateFilterMap(bind_data.columns, table_filters, reader_data, reader_state);
-	reader_data.filters = table_filters;
 }
 
 static bool GetBooleanArgument(const pair<string, vector<Value>> &option) {
@@ -492,7 +423,7 @@ public:
 			return nullptr;
 		}
 		// scanning single parquet file and we have the metadata read already
-		return bind_data.initial_reader->ReadStatistics(bind_data.columns[column_index].name);
+		return bind_data.initial_reader->ReadStatistics(bind_data.names[column_index]);
 
 		return nullptr;
 	}
@@ -507,33 +438,26 @@ public:
 		result->file_list = std::move(file_list);
 
 		bool bound_on_first_file = true;
-		vector<string> bound_names;
-		vector<LogicalType> bound_types;
-		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->file_list, bound_types, bound_names,
-		                                    result->reader_bind)) {
-			result->multi_file_reader->BindOptions(parquet_options.file_options, *result->file_list, bound_types,
-			                                       bound_names, result->reader_bind);
+		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->file_list, result->types,
+		                                    result->names, result->reader_bind)) {
+			result->multi_file_reader->BindOptions(parquet_options.file_options, *result->file_list, result->types,
+			                                       result->names, result->reader_bind);
 			// Enable the parquet file_row_number on the parquet options if the file_row_number_idx was set
 			if (result->reader_bind.file_row_number_idx != DConstants::INVALID_INDEX) {
 				parquet_options.file_row_number = true;
 			}
 			bound_on_first_file = false;
-			// !!TODO!!: do we even need 'columns' in the ParquetReadBindData??
-			// TODO: override the 'columns' in the ParquetReadBindData with those in the MultiFileReaderBindData, if
-			// they are set.
 		} else if (!parquet_options.schema.empty()) {
 			// A schema was supplied: use the schema for binding
-			result->reader_bind = BindSchema(context, bound_types, bound_names, *result, parquet_options);
-			// TODO: initialize the 'columns' with the schema
+			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
 		} else {
 			parquet_options.file_options.AutoDetectHivePartitioning(*result->file_list, context);
 			// Default bind
 			result->reader_bind = result->multi_file_reader->BindReader<ParquetReader>(
-			    context, bound_types, bound_names, *result->file_list, *result, parquet_options);
+			    context, result->types, result->names, *result->file_list, *result, parquet_options);
 		}
-		result->columns = MultiFileReaderColumn::ColumnsFromNamesAndTypes(bound_names, bound_types);
 
-		// Set explicit cardinality if needed
+		// Set the explicit cardinality if requested
 		if (parquet_options.explicit_cardinality) {
 			auto file_count = result->file_list->GetTotalFileCount();
 			result->explicit_cardinality = parquet_options.explicit_cardinality;
@@ -542,12 +466,12 @@ public:
 
 		if (return_types.empty()) {
 			// no expected types - just copy the types
-			return_types.clear();
-			names.clear();
-			MultiFileReaderColumn::ExtractNamesAndTypes(result->columns, names, return_types);
+			return_types = result->types;
+			names = result->names;
 		} else {
-			// We are deserializing from a previously successful bind call
-			if (return_types.size() != result->columns.size()) {
+			// We're deserializing from a previously successful bind call
+			// verify that the amount of columns still matches
+			if (return_types.size() != result->types.size()) {
 				auto file_string = bound_on_first_file ? result->file_list->GetFirstFile()
 				                                       : StringUtil::Join(result->file_list->GetPaths(), ",");
 				string extended_error;
@@ -559,25 +483,21 @@ public:
 					extended_error += names[col_idx] + " " + return_types[col_idx].ToString();
 				}
 				extended_error += "\nParquet schema: ";
-				for (idx_t col_idx = 0; col_idx < result->columns.size(); col_idx++) {
+				for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
 					if (col_idx > 0) {
 						extended_error += ", ";
 					}
-					auto &column = result->columns[col_idx];
-					extended_error += column.name + " " + column.type.ToString();
+					extended_error += result->names[col_idx] + " " + result->types[col_idx].ToString();
 				}
 				extended_error += "\n\nPossible solutions:";
 				extended_error += "\n* Manually specify which columns to insert using \"INSERT INTO tbl SELECT ... "
 				                  "FROM read_parquet(...)\"";
 				throw ConversionException(
 				    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d\n%s",
-				    file_string, return_types.size(), result->columns.size(), extended_error);
+				    file_string, return_types.size(), result->types.size(), extended_error);
 			}
 			// expected types - overwrite the types we want to read instead
-			for (idx_t i = 0; i < return_types.size(); i++) {
-				auto &column = result->columns[i];
-				column.type = return_types[i];
-			}
+			result->types = return_types;
 			result->table_columns = names;
 		}
 		result->parquet_options = parquet_options;
@@ -672,11 +592,8 @@ public:
 		if (!filters) {
 			return nullptr;
 		}
-		vector<string> names;
-		vector<LogicalType> types;
-		MultiFileReaderColumn::ExtractNamesAndTypes(data.columns, names, types);
 		auto new_list = data.multi_file_reader->DynamicFilterPushdown(
-		    context, *data.file_list, data.parquet_options.file_options, names, types, column_ids, *filters);
+		    context, *data.file_list, data.parquet_options.file_options, data.names, data.types, column_ids, *filters);
 		return new_list;
 	}
 
@@ -695,9 +612,17 @@ public:
 		auto &file_list = result->file_list;
 		file_list.InitializeScan(result->file_list_scan);
 
-		result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
-		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, bind_data.columns,
-		    input.column_indexes);
+		if (bind_data.reader_bind.schema.empty()) {
+			auto global_columns = MultiFileReaderColumn::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
+			result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
+			    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, global_columns,
+			    input.column_indexes);
+		} else {
+			result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
+			    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list,
+			    bind_data.reader_bind.schema, input.column_indexes);
+		}
+
 		if (file_list.IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
@@ -757,12 +682,12 @@ public:
 				iota(begin(result->projection_ids), end(result->projection_ids), 0);
 			}
 
-			const auto &table_columns = bind_data.columns;
+			const auto table_types = bind_data.types;
 			for (const auto &col_idx : input.column_indexes) {
 				if (col_idx.IsRowIdColumn()) {
 					result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
 				} else {
-					result->scanned_types.push_back(table_columns[col_idx.GetPrimaryIndex()].type);
+					result->scanned_types.push_back(table_types[col_idx.GetPrimaryIndex()]);
 				}
 			}
 		}
@@ -793,13 +718,8 @@ public:
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 
 		serializer.WriteProperty(100, "files", bind_data.file_list->GetAllFiles());
-
-		vector<string> names;
-		vector<LogicalType> types;
-		MultiFileReaderColumn::ExtractNamesAndTypes(bind_data.columns, names, types);
-
-		serializer.WriteProperty(101, "types", types);
-		serializer.WriteProperty(102, "names", names);
+		serializer.WriteProperty(101, "types", bind_data.types);
+		serializer.WriteProperty(102, "names", bind_data.names);
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
 		if (serializer.ShouldSerialize(3)) {
 			serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
