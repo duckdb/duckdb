@@ -34,7 +34,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// comparison with constant NULL, return NULL
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
-	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST) {
+	if (column_ref_expr->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
 		//! Here we check if we can apply the expression on the constant side
 		//! We can do this if the cast itself is invertible and casting the constant is
 		//! invertible in practice.

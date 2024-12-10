@@ -39,7 +39,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 	// into the children.
 	vector<column_binding_set_t> window_exprs_partition_bindings;
 	for (auto &expr : window.expressions) {
-		if (expr->expression_class != ExpressionClass::BOUND_WINDOW) {
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_WINDOW) {
 			continue;
 		}
 		auto &window_expr = expr->Cast<BoundWindowExpression>();

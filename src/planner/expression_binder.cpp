@@ -60,7 +60,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	auto stack_checker = StackCheck(*expr);
 
 	auto &expr_ref = *expr;
-	switch (expr_ref.expression_class) {
+	switch (expr_ref.GetExpressionClass()) {
 	case ExpressionClass::BETWEEN:
 		return BindExpression(expr_ref.Cast<BetweenExpression>(), depth);
 	case ExpressionClass::CASE:

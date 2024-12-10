@@ -29,7 +29,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	vector<BoundAggregateExpression *> bindings;
 	vector<LogicalType> payload_types_filters;
 	for (auto &expr : aggregates) {
-		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
+		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
 		bindings.push_back(&aggr);

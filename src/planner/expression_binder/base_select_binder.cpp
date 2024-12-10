@@ -27,7 +27,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	if (group_index != DConstants::INVALID_INDEX) {
 		return BindGroup(expr, depth, group_index);
 	}
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	case ExpressionClass::DEFAULT:

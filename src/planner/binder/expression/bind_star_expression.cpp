@@ -136,7 +136,7 @@ static string ReplaceColumnsAlias(const string &alias, const string &column_name
 
 void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	// detect "* LIKE [literal]" and similar expressions
-	if (root->expression_class != ExpressionClass::FUNCTION) {
+	if (root->GetExpressionClass() != ExpressionClass::FUNCTION) {
 		return;
 	}
 	auto &function = root->Cast<FunctionExpression>();
@@ -145,7 +145,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	}
 	auto &left = function.children[0];
 	// expression must have a star on the LHS, and a literal on the RHS
-	if (left->expression_class != ExpressionClass::STAR) {
+	if (left->GetExpressionClass() != ExpressionClass::STAR) {
 		return;
 	}
 	auto &star = left->Cast<StarExpression>();
@@ -159,7 +159,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.function_name);
 	}
 	auto &right = function.children[1];
-	if (right->expression_class != ExpressionClass::CONSTANT) {
+	if (right->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw BinderException(*root, "Pattern applied to a star expression must be a constant");
 	}
 	if (!star.replace_list.empty()) {

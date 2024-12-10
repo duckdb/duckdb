@@ -19,6 +19,14 @@ namespace duckdb {
 //!  part of a SQL statement.
 class BaseExpression {
 public:
+	//! Type of the expression
+	ExpressionType type;
+
+protected:
+	//! The expression class of the node
+	ExpressionClass expression_class;
+
+public:
 	//! Create an Expression
 	BaseExpression(ExpressionType type, ExpressionClass expression_class)
 	    : type(type), expression_class(expression_class) {
@@ -35,10 +43,6 @@ public:
 		return expression_class;
 	}
 
-	//! Type of the expression
-	ExpressionType type;
-	//! The expression class of the node
-	ExpressionClass expression_class;
 	//! The alias of the expression,
 	string alias;
 	//! The location in the query (if any)

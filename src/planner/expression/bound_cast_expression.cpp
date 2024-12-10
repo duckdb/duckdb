@@ -50,7 +50,7 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
                                              CastFunctionSet &cast_functions, GetCastFunctionInput &get_input,
                                              bool try_cast) {
 	D_ASSERT(expr);
-	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = expr->Cast<BoundParameterExpression>();
 		if (!target_type.IsValid()) {
 			// invalidate the parameter
@@ -79,7 +79,7 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
 		parameter.parameter_data->return_type = LogicalType::INVALID;
 		parameter.return_type = target_type;
 		return expr;
-	} else if (expr->expression_class == ExpressionClass::BOUND_DEFAULT) {
+	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_DEFAULT) {
 		D_ASSERT(target_type.IsValid());
 		auto &def = expr->Cast<BoundDefaultExpression>();
 		def.return_type = target_type;

@@ -521,10 +521,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 	//! Here we look for LIKE or IN filters
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
-		if (remaining_filter->expression_class == ExpressionClass::BOUND_FUNCTION) {
+		if (remaining_filter->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 			auto &func = remaining_filter->Cast<BoundFunctionExpression>();
 			if (func.function.name == "prefix" &&
-			    func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+			    func.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
 				//! This is a like function.
 				auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
@@ -542,7 +542,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				table_filters.PushFilter(column_index, std::move(lower_bound));
 				table_filters.PushFilter(column_index, std::move(upper_bound));
 			}
-			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+			if (func.function.name == "~~" &&
+			    func.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
 				//! This is a like function.
 				auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
@@ -586,7 +587,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
 			auto &func = remaining_filter->Cast<BoundOperatorExpression>();
 			D_ASSERT(func.children.size() > 1);
-			if (func.children[0]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+			if (func.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
 			auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
@@ -657,7 +658,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
-		if (remaining_filter->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
+		if (remaining_filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
 			if (conj.type == ExpressionType::CONJUNCTION_OR) {
 				optional_idx column_id;
@@ -672,12 +673,12 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					optional_ptr<BoundConstantExpression> const_val;
 					auto &comp = child->Cast<BoundComparisonExpression>();
 					bool invert = false;
-					if (comp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-					    comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
+					if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+					    comp.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 						column_ref = comp.left->Cast<BoundColumnRefExpression>();
 						const_val = comp.right->Cast<BoundConstantExpression>();
-					} else if (comp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
-					           comp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+					} else if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+					           comp.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 						column_ref = comp.right->Cast<BoundColumnRefExpression>();
 						const_val = comp.left->Cast<BoundConstantExpression>();
 						invert = true;

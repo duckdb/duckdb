@@ -51,7 +51,7 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 }
 
 optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) const {
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::CONSTANT: {
 		auto &constant = expr.Cast<ConstantExpression>();
 		// ORDER BY a constant
@@ -123,7 +123,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// if there is no matching entry in the SELECT list already, we add the expression to the SELECT list and refer the
 	// new expression the new entry will then be bound later during the binding of the SELECT list we also don't do type
 	// resolution here: this only happens after the SELECT list has been bound
-	switch (expr->expression_class) {
+	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::CONSTANT: {
 		// ORDER BY constant
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)

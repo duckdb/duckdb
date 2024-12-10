@@ -69,7 +69,7 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 		return nullptr;
 	}
 	D_ASSERT(expr.get());
-	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	return std::move(BoundExpression::GetExpression(*expr));
 }
 
@@ -78,7 +78,7 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 		return nullptr;
 	}
 	D_ASSERT(expr.get());
-	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 
 	auto &bound = BoundExpression::GetExpression(*expr);
 	bound = BoundCastExpression::AddDefaultCastToType(std::move(bound), type);
@@ -113,12 +113,12 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	vector<unique_ptr<Expression>> children;
 
 	D_ASSERT(order_expr.get());
-	D_ASSERT(order_expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(order_expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound_order = BoundExpression::GetExpression(*order_expr);
 	children.emplace_back(bound_order->Copy());
 
 	D_ASSERT(expr.get());
-	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*expr);
 	QueryErrorContext error_context(bound->query_location);
 	if (bound->return_type == LogicalType::SQLNULL) {
@@ -214,7 +214,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	vector<unique_ptr<Expression>> children;
 	for (auto &child : window.children) {
 		D_ASSERT(child.get());
-		D_ASSERT(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(child->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound = BoundExpression::GetExpression(*child);
 		// Add casts for positional arguments
 		const auto argno = children.size();
@@ -317,7 +317,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 		auto &order_expr = window.orders[0].expression;
 		D_ASSERT(order_expr.get());
-		D_ASSERT(order_expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(order_expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
 		auto order_type = bound_order->return_type;
 		if (window.start_expr) {

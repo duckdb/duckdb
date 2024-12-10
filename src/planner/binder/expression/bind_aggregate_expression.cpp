@@ -90,7 +90,7 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 
 static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
 	D_ASSERT(fractions.get());
-	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(fractions->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*fractions);
 
 	if (!bound->IsFoldable()) {

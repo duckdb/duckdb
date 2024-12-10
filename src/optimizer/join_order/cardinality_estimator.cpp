@@ -219,7 +219,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 		bool set = false;
 		ExpressionType comparison_type = ExpressionType::COMPARE_EQUAL;
 		ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
-			if (expr.expression_class == ExpressionClass::BOUND_COMPARISON) {
+			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 				comparison_type = expr.type;
 				set = true;
 				return;

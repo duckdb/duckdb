@@ -103,7 +103,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	string function_name;
 	switch (op.type) {
 	case ExpressionType::ARRAY_EXTRACT: {
-		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);
 		const auto &b_exp_type = b_exp->return_type;
 		if (b_exp_type.id() == LogicalTypeId::MAP) {
@@ -129,8 +129,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	case ExpressionType::STRUCT_EXTRACT: {
 		D_ASSERT(op.children.size() == 2);
-		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		D_ASSERT(op.children[1]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[1]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
 		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
 		const auto &extract_expr_type = extract_exp->return_type;
@@ -176,7 +176,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < op.children.size(); i++) {
-		D_ASSERT(op.children[i]->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(op.children[i]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		children.push_back(std::move(BoundExpression::GetExpression(*op.children[i])));
 	}
 	// now resolve the types
