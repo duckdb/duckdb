@@ -163,12 +163,15 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		join->AddChild(std::move(root));
 		join->AddChild(std::move(plan));
 		// create the JOIN condition
-		JoinCondition cond;
-		cond.left = std::move(expr.child);
-		cond.right = BoundCastExpression::AddDefaultCastToType(
-		    make_uniq<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
-		cond.comparison = expr.comparison_type;
-		join->conditions.push_back(std::move(cond));
+		for (idx_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
+			JoinCondition cond;
+			cond.left = std::move(expr.children[child_idx]);
+			auto &child_type = expr.child_types[child_idx];
+			cond.right = BoundCastExpression::AddDefaultCastToType(
+			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), expr.child_target);
+			cond.comparison = expr.comparison_type;
+			join->conditions.push_back(std::move(cond));
+		}
 		root = std::move(join);
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
@@ -354,13 +357,24 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 
 		// now we create the join conditions between the dependent join and the original table
 		CreateDelimJoinConditions(*delim_join, correlated_columns, plan_columns, flatten.delim_offset, perform_delim);
+		if (expr.children.size() > 1) {
+			// FIXME: the code to generate the plan here is actually correct
+			// the problem is in the hash join - specifically PhysicalHashJoin::InitializeHashTable
+			// this contains code that is hard-coded for a single comparison
+			// -> (delim_types.size() + 1 == conditions.size())
+			// this needs to be generalized to get this to work
+			throw NotImplementedException("Correlated IN/ANY/ALL with multiple columns not yet supported");
+		}
 		// add the actual condition based on the ANY/ALL predicate
-		JoinCondition compare_cond;
-		compare_cond.left = std::move(expr.child);
-		compare_cond.right = BoundCastExpression::AddDefaultCastToType(
-		    make_uniq<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
-		compare_cond.comparison = expr.comparison_type;
-		delim_join->conditions.push_back(std::move(compare_cond));
+		for (idx_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
+			JoinCondition compare_cond;
+			compare_cond.left = std::move(expr.children[child_idx]);
+			auto &child_type = expr.child_types[child_idx];
+			compare_cond.right = BoundCastExpression::AddDefaultCastToType(
+			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), expr.child_target);
+			compare_cond.comparison = expr.comparison_type;
+			delim_join->conditions.push_back(std::move(compare_cond));
+		}
 
 		delim_join->AddChild(std::move(dependent_join));
 		root = std::move(delim_join);
