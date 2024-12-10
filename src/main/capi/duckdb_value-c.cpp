@@ -128,14 +128,14 @@ duckdb_varint duckdb_get_varint(duckdb_value val) {
 	auto &str = duckdb::StringValue::Get(v);
 	duckdb::vector<uint8_t> byte_array;
 	bool is_negative;
-	duckdb::Varint::GetByteArray(byte_array, is_negative, string_t(str));
+	duckdb::Varint::GetByteArray(byte_array, is_negative, duckdb::string_t(str));
 	auto size = byte_array.size();
 	auto data = reinterpret_cast<uint8_t *>(malloc(size));
 	memcpy(data, byte_array.data(), size);
 	return {data, size, is_negative};
 }
 duckdb_value duckdb_create_decimal(duckdb_decimal input) {
-	hugeint_t hugeint(input.value.upper, input.value.lower);
+	duckdb::hugeint_t hugeint(input.value.upper, input.value.lower);
 	int64_t int64;
 	if (duckdb::Hugeint::TryCast<int64_t>(hugeint, int64)) {
 		// The int64 DECIMAL value constructor will select the appropriate physical type based on width.
@@ -153,7 +153,7 @@ duckdb_decimal duckdb_get_decimal(duckdb_value val) {
 	}
 	auto width = duckdb::DecimalType::GetWidth(type);
 	auto scale = duckdb::DecimalType::GetScale(type);
-	hugeint_t hugeint = duckdb::IntegralValue::Get(v);
+	duckdb::hugeint_t hugeint = duckdb::IntegralValue::Get(v);
 	return {width, scale, {hugeint.lower, hugeint.upper}};
 }
 duckdb_value duckdb_create_float(float input) {
