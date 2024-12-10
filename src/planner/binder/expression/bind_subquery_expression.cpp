@@ -82,7 +82,6 @@ void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Ex
 }
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
-	idx_t subquery_child_count = 0;
 	if (expr.subquery->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = Binder::CreateBinder(context, &binder);
@@ -98,7 +97,6 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 				binder.AddCorrelatedColumn(corr);
 			}
 		}
-		subquery_child_count = bound_node->types.size();
 		auto prior_subquery = std::move(expr.subquery);
 		expr.subquery = make_uniq<SelectStatement>();
 		expr.subquery->node =
@@ -124,9 +122,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			}
 			expected_columns = child_expressions.size();
 		}
-		if (subquery_child_count != expected_columns) {
-			throw BinderException(expr, "Subquery returns %zu columns - expected %d", subquery_child_count,
-			                      expected_columns);
+		if (bound_subquery.bound_node->types.size() != expected_columns) {
+			throw BinderException(expr, "Subquery returns %zu columns - expected %d",
+			                      bound_subquery.bound_node->types.size(), expected_columns);
 		}
 	}
 	// both binding the child and binding the subquery was successful
