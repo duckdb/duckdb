@@ -102,9 +102,11 @@ unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedDa
 
 	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
 		// Flush/unpin unpartitioned data and append to partitioned data
-		unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
-		unpartitioned_data->Unpin();
-		unpartitioned_data->Repartition(*partitioned_data);
+		if (unpartitioned_data) {
+			unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
+			unpartitioned_data->Unpin();
+			unpartitioned_data->Repartition(*partitioned_data);
+		}
 		InitializeUnpartitionedData();
 	}
 
@@ -117,9 +119,11 @@ unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedDa
 void GroupedAggregateHashTable::Abandon() {
 	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
 		// Flush/unpin unpartitioned data and append to partitioned data
-		unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
-		unpartitioned_data->Unpin();
-		unpartitioned_data->Repartition(*partitioned_data);
+		if (unpartitioned_data) {
+			unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
+			unpartitioned_data->Unpin();
+			unpartitioned_data->Repartition(*partitioned_data);
+		}
 		InitializeUnpartitionedData();
 	}
 
@@ -241,7 +245,9 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 
 	if (Count() != 0) {
 		ReinsertTuples(*partitioned_data);
-		ReinsertTuples(*unpartitioned_data);
+		if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
+			ReinsertTuples(*unpartitioned_data);
+		}
 	}
 
 	Verify();
@@ -262,10 +268,10 @@ void GroupedAggregateHashTable::ReinsertTuples(PartitionedTupleData &data) {
 				// Find an empty entry
 				auto ht_offset = ApplyBitMask(hash);
 				D_ASSERT(ht_offset == hash % capacity);
-				auto &entry = entries[ht_offset];
-				while (entry.IsOccupied()) {
+				while (entries[ht_offset].IsOccupied()) {
 					IncrementAndWrap(ht_offset, bitmask);
 				}
+				auto &entry = entries[ht_offset];
 				D_ASSERT(!entry.IsOccupied());
 				entry.SetSalt(ht_entry_t::ExtractSalt(hash));
 				entry.SetPointer(row_location);
