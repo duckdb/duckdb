@@ -78,7 +78,7 @@ struct ModeState {
 	//! The collection being read
 	const ColumnDataCollection *inputs;
 	//! The state used for reading the collection on this thread
-	ColumnDataScanState scan;
+	ColumnDataScanState *scan = nullptr;
 	//! The data chunk paged into into
 	DataChunk page;
 	//! The data pointer
@@ -93,31 +93,37 @@ struct ModeState {
 		if (mode) {
 			delete mode;
 		}
+		if (scan) {
+			delete scan;
+		}
 	}
 
 	void InitializePage(const WindowPartitionInput &partition) {
+		if (!scan) {
+			scan = new ColumnDataScanState();
+		}
 		if (page.ColumnCount() == 0) {
 			D_ASSERT(partition.inputs);
 			inputs = partition.inputs;
 			D_ASSERT(partition.column_ids.size() == 1);
-			inputs->InitializeScan(scan, partition.column_ids);
-			inputs->InitializeScanChunk(scan, page);
+			inputs->InitializeScan(*scan, partition.column_ids);
+			inputs->InitializeScanChunk(*scan, page);
 		}
 	}
 
 	inline sel_t RowOffset(idx_t row_idx) const {
 		D_ASSERT(RowIsVisible(row_idx));
-		return UnsafeNumericCast<sel_t>(row_idx - scan.current_row_index);
+		return UnsafeNumericCast<sel_t>(row_idx - scan->current_row_index);
 	}
 
 	inline bool RowIsVisible(idx_t row_idx) const {
-		return (row_idx < scan.next_row_index && scan.current_row_index <= row_idx);
+		return (row_idx < scan->next_row_index && scan->current_row_index <= row_idx);
 	}
 
 	inline idx_t Seek(idx_t row_idx) {
 		if (!RowIsVisible(row_idx)) {
 			D_ASSERT(inputs);
-			inputs->Seek(row_idx, scan, page);
+			inputs->Seek(row_idx, *scan, page);
 			data = FlatVector::GetData<KEY_TYPE>(page.data[0]);
 			validity = &FlatVector::Validity(page.data[0]);
 		}
@@ -398,7 +404,7 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	using STATE = ModeState<string_t, ModeString>;
 	using OP = ModeFallbackFunction<ModeString>;
 	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
-	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
+	                       AggregateFunction::StateInitialize<STATE, OP>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
 	aggr.destructor = AggregateFunction::StateDestroy<STATE, OP>;
@@ -409,9 +415,7 @@ template <typename INPUT_TYPE, typename TYPE_OP = ModeStandard<INPUT_TYPE>>
 AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	using STATE = ModeState<INPUT_TYPE, TYPE_OP>;
 	using OP = ModeFunction<TYPE_OP>;
-	auto func =
-	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
-	        type, type);
+	auto func = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	func.window = OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>;
 	return func;
 }
