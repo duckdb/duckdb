@@ -74,7 +74,6 @@ public:
 	}
 
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);
-	DUCKDB_API static bool ObjectCacheEnabled(ClientContext &context);
 
 private:
 	//! Object Cache

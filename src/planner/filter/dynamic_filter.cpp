@@ -31,7 +31,7 @@ string DynamicFilter::ToString(const string &column_name) {
 }
 
 unique_ptr<Expression> DynamicFilter::ToExpression(const Expression &column) const {
-	if (!filter_data) {
+	if (!filter_data || !filter_data->initialized) {
 		auto bound_constant = make_uniq<BoundConstantExpression>(Value(true));
 		return std::move(bound_constant);
 	}

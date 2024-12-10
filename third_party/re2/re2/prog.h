@@ -24,6 +24,7 @@
 #include "re2/sparse_set.h"
 
 namespace duckdb_re2 {
+class BitState;
 
 // Opcodes for Inst
 enum InstOp {
@@ -408,6 +409,7 @@ class Prog {
   DFA* GetDFA(MatchKind kind);
   void DeleteDFA(DFA* dfa);
 
+  std::unique_ptr<BitState> bitstate;
   bool anchor_start_;       // regexp has explicit start anchor
   bool anchor_end_;         // regexp has explicit end anchor
   bool reversed_;           // whether program runs backward over input

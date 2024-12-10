@@ -1,0 +1,37 @@
+# name: test/sql/storage/compression/rle/rle_filter.test_slow
+# description: Test filtering from RLE compression
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle_filter.db
+
+statement ok
+pragma enable_verification
+
+statement ok
+SET force_compression = 'rle'
+
+statement ok
+CREATE TABLE tbl AS select unnest(repeat([i], i)) i from range(5000) t(i);
+
+foreach test_val 0 7 993 2525 4375 4999
+
+query I
+SELECT COUNT(*) = ${test_val} FROM tbl WHERE i=${test_val}
+----
+true
+
+endloop
+
+# now with NULL values
+statement ok
+CREATE TABLE tbl2 AS select unnest(repeat([i], i)) i from range(5000) t(i);
+
+foreach test_val 1 12 736 1237 2314 3333
+
+query I
+SELECT COUNT(*) = ${test_val} FROM tbl2 WHERE i=${test_val}
+----
+true
+
+endloop

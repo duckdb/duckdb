@@ -310,7 +310,6 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = bound_mod->Cast<BoundDistinctModifier>();
-			D_ASSERT(!distinct.target_distincts.empty());
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
 				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
