@@ -14,7 +14,7 @@
 namespace duckdb {
 //! Basic CSV Column Info
 struct CSVColumnInfo {
-	CSVColumnInfo(const string &name_p, const LogicalType &type_p) : name(name_p), type(type_p) {
+	CSVColumnInfo(string &name_p, LogicalType &type_p) : name(name_p), type(type_p) {
 	}
 	string name;
 	LogicalType type;
