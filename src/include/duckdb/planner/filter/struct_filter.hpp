@@ -19,7 +19,7 @@ public:
 	static constexpr const TableFilterType TYPE = TableFilterType::STRUCT_EXTRACT;
 
 public:
-	StructFilter(idx_t child_idx, unique_ptr<TableFilter> child_filter, string child_name = "");
+	StructFilter(idx_t child_idx, string child_name, unique_ptr<TableFilter> child_filter);
 
 	//! The field index to filter on
 	idx_t child_idx;

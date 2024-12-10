@@ -431,10 +431,10 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 		if (func.function.name == "struct_extract") {
 			string child_name = child_value.GetValue<string>();
 			auto child_index = StructType::GetChildIndexUnsafe(func.children[0]->return_type, child_name);
-			inner_filter = make_uniq<StructFilter>(child_index, std::move(inner_filter), child_name);
+			inner_filter = make_uniq<StructFilter>(child_index, child_name, std::move(inner_filter));
 			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
 		} else if (func.function.name == "struct_extract_at") {
-			inner_filter = make_uniq<StructFilter>(child_value.GetValue<idx_t>() - 1, std::move(inner_filter));
+			inner_filter = make_uniq<StructFilter>(child_value.GetValue<idx_t>() - 1, "", std::move(inner_filter));
 			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
 		}
 	}
