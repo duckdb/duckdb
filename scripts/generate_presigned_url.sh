@@ -12,10 +12,10 @@ COPY lineitem TO 'data/parquet-testing/presigned/presigned-url-lineitem.parquet'
 
 EOF
 )
-duckdb -c "$generate_large_parquet_query"
+build/release/duckdb -c "$generate_large_parquet_query"
 
 mkdir -p data/attach_test/
 
 # Generate Storage Version
-duckdb  data/attach_test/attach.db < test/sql/storage_version/generate_storage_version.sql
-duckdb  data/attach_test/lineitem_sf1.db -c "CALL dbgen(sf=1)"
+build/release/duckdb  data/attach_test/attach.db < test/sql/storage_version/generate_storage_version.sql
+build/release/duckdb  data/attach_test/lineitem_sf1.db -c "CALL dbgen(sf=1)"
