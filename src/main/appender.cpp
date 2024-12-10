@@ -373,11 +373,14 @@ void BaseAppender::Append(Value value) { // NOLINT: template stuff
 	AppendValue(value);
 }
 
-void BaseAppender::Append(DataChunk &target, const Value &value, idx_t row, idx_t column) {
-	if (column >= target.ColumnCount()) {
+void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t col, idx_t row) {
+	if (col >= target.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
-	target.SetValue(column, row, value);
+	if (row >= target.GetCapacity()) {
+		throw InvalidInputException("Too many rows for chunk!");
+	}
+	target.SetValue(col, row, value);
 }
 
 template <>
@@ -475,13 +478,21 @@ void Appender::AppendDefault() {
 	Append(value);
 }
 
-void Appender::AppendDefault(DataChunk &chunk, idx_t row, idx_t column) {
-	auto value = GetDefaultValue(column);
-	Append(chunk, value, row, column);
+void duckdb::Appender::AppendDefault(DataChunk &chunk, idx_t col, idx_t row) {
+	auto value = GetDefaultValue(col);
+	Append(chunk, value, col, row);
 }
 
 Value Appender::GetDefaultValue(idx_t column) {
-	auto index = column_ids.empty() ? column : column_ids[column].index;
+	auto index = column;
+
+	if (!column_ids.empty()) {
+		if (column >= column_ids.size()) {
+			throw InvalidInputException("Column index out of bounds");
+		}
+		index = column_ids[column].index;
+	}
+
 	auto it = default_values.find(index);
 	if (it == default_values.end()) {
 		auto &name = description->columns[index].Name();

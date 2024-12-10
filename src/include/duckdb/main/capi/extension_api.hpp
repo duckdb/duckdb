@@ -453,8 +453,8 @@ typedef struct {
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
 	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
-	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t row,
-	                                               idx_t column);
+	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
+	                                               idx_t row);
 } duckdb_ext_api_v0;
 
 //===--------------------------------------------------------------------===//

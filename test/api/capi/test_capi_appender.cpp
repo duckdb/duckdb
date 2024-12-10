@@ -1154,8 +1154,8 @@ TEST_CASE("Test appending default value to data chunk in the C API") {
 	col_data2[0] = 16;
 	col_data2[1] = 18;
 
-	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 0, 2) == DuckDBSuccess);
-	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 1, 2) == DuckDBSuccess);
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 2, 0) == DuckDBSuccess);
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 2, 1) == DuckDBSuccess);
 
 	duckdb_data_chunk_set_size(data_chunk, 2);
 
