@@ -127,8 +127,15 @@ void ArrowExtension::PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, A
                                          const LogicalType &duckdb_type, ClientContext &context,
                                          ArrowExtension &extension) {
 	if (extension.type) {
+		auto format = make_unsafe_uniq_array<char>(extension.extension_info.GetArrowFormat().size());
+		idx_t i = 0;
+		for (auto &c : extension.extension_info.GetArrowFormat()) {
+			format[i++] = c;
+		}
 		// We do the default way of populating the schema
-		child.format = extension.extension_info.GetArrowFormat().c_str();
+		root_holder.extension_format.emplace_back(std::move(format));
+
+		child.format = root_holder.extension_format.back().get();
 		ArrowSchemaMetadata schema_metadata;
 		if (extension.extension_info.IsCanonical()) {
 			schema_metadata = ArrowSchemaMetadata::ArrowCanonicalType(extension.extension_info.GetExtensionName());
@@ -200,7 +207,6 @@ struct ArrowJson {
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 		schema.metadata = root_holder.metadata_info.back().get();
 		auto options = context.GetClientProperties();
-		;
 		if (options.produce_arrow_string_view) {
 			schema.format = "vu";
 		} else {
@@ -232,7 +238,6 @@ struct ArrowBit {
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 		schema.metadata = root_holder.metadata_info.back().get();
 		auto options = context.GetClientProperties();
-		;
 		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			schema.format = "Z";
 		} else {
@@ -260,7 +265,6 @@ struct ArrowVarint {
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
 		schema.metadata = root_holder.metadata_info.back().get();
 		auto options = context.GetClientProperties();
-		;
 		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			schema.format = "Z";
 		} else {

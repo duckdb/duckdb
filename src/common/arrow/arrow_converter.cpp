@@ -48,6 +48,7 @@ struct DuckDBArrowSchemaHolder {
 	vector<unsafe_unique_array<char>> owned_column_names;
 	//! This holds any values created for metadata info
 	vector<unsafe_unique_array<char>> metadata_info;
+	vector<unsafe_unique_array<char>> extension_format;
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -168,8 +169,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::UUID: {
 		if (options.arrow_lossless_conversion) {
-			bool success = SetArrowExtension(root_holder, child, type, context);
-			D_ASSERT(success);
+			SetArrowExtension(root_holder, child, type, context);
 		} else {
 			if (options.produce_arrow_string_view) {
 				child.format = "vu";
