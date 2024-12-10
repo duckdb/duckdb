@@ -110,11 +110,11 @@ public:
 	                const unordered_set<column_t> &conflict_target, const vector<PhysicalIndex> &set_columns);
 	void Merge(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk, const vector<unique_ptr<BoundConstraint>> &bound_constraints,
 	                const unordered_set<column_t> &conflict_target, const vector<PhysicalIndex> &set_columns,
-	                LocalAppendState &append_state, bool initialize, bool do_appends,
+	                LocalAppendState &append_state, bool do_appends,
 	                idx_t &update_count, idx_t &insert_count);
 	void Merge(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk, const vector<unique_ptr<BoundConstraint>> &bound_constraints,
 	                const unordered_set<column_t> &conflict_target, const vector<PhysicalIndex> &set_columns,
-	                LocalAppendState &append_state, bool initialize, bool finalize_on_conflict, bool do_appends,
+	                LocalAppendState &append_state, bool finalize_on_conflict, bool do_appends,
 	                idx_t &update_count, idx_t &insert_count, const vector<LogicalType> &types_to_fetch,
 	                const vector<LogicalType> &insert_types, const unique_ptr<Expression> &conflict_condition,
 	                const vector<column_t> &columns_to_fetch, const vector<unique_ptr<Expression>> &set_expressions,

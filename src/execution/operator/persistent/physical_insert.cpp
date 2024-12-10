@@ -198,9 +198,14 @@ idx_t PhysicalInsert::OnConflictHandling(DataTable &storage, TableCatalogEntry &
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
 		insert_count = lstate.insert_chunk.size();
 
-	} else if (!throw_on_conflict && action_type != OnConflictAction::NOTHING) {
+	} else if (!throw_on_conflict) {
+		if (!gstate.initialized) {
+			storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
+			gstate.initialized = true;
+		}
+
 		storage.Merge(table, context.client, lstate.insert_chunk, bound_constraints,
-		                   conflict_target, set_columns, gstate.append_state, !gstate.initialized && do_inserts, true,
+		                   conflict_target, set_columns, gstate.append_state, true,
 		                   do_inserts, update_count, insert_count, types_to_fetch, insert_types, on_conflict_condition,
 		                   columns_to_fetch, set_expressions, set_types, do_update_condition);
 
@@ -225,12 +230,12 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	if (!parallel) {
-        if (!gstate.initialized) {
-            storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
-            gstate.initialized = true;
-        }
-        auto changes = OnConflictHandling(storage, table, context, lstate, gstate, true);
-        gstate.insert_count += changes;
+		if (!gstate.initialized) {
+			storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
+			gstate.initialized = true;
+		}
+		auto changes = OnConflictHandling(storage, table, context, lstate, gstate, true);
+		gstate.insert_count += changes;
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append
