@@ -73,7 +73,7 @@ bool ArrowSchemaMetadata::HasExtension() const {
 
 ArrowExtensionInfo ArrowSchemaMetadata::GetExtensionInfo(string format) {
 	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map["vendor_name"],
-	        extension_metadata_map["type_name"]};
+	        extension_metadata_map["type_name"], format};
 }
 
 unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {

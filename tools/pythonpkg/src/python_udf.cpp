@@ -20,9 +20,9 @@
 namespace duckdb {
 
 static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> &names, DataChunk &input,
-                                     const ClientProperties &options) {
+                                     const ClientProperties &options, ClientContext &context) {
 	ArrowSchema schema;
-	ArrowConverter::ToArrowSchema(&schema, types, names, options);
+	ArrowConverter::ToArrowSchema(&schema, types, names, options, context);
 
 	py::list single_batch;
 	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options);
@@ -32,7 +32,8 @@ static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> 
 	return single_batch;
 }
 
-static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientProperties &options) {
+static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientProperties &options,
+                                                 ClientContext &context) {
 	auto types = input.GetTypes();
 	vector<string> names;
 	names.reserve(types.size());
@@ -40,7 +41,8 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientP
 		names.push_back(StringUtil::Format("c%d", i));
 	}
 
-	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options), options);
+	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options, context), options,
+	                             context);
 }
 
 // If these types are arrow canonical extensions, we must check if they are registered.
@@ -71,7 +73,8 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 	D_ASSERT(py::gil_check());
 	py::gil_scoped_release gil;
 
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties());
+	auto stream_factory =
+	    make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties(), DBConfig::GetConfig(context));
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -210,7 +213,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			}
 		}
 
-		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
+		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options, state.GetContext());
 		py::tuple column_list = pyarrow_table.attr("columns");
 
 		auto count = input.size();

@@ -16,14 +16,14 @@ namespace duckdb {
 
 static void CreateArrowScan(const string &name, py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
-                            PyArrowObjectType type) {
+                            PyArrowObjectType type, DBConfig &config) {
 
 	if (type == PyArrowObjectType::PyCapsuleInterface) {
 		entry = entry.attr("__arrow_c_stream__")();
 		type = PyArrowObjectType::PyCapsule;
 	}
 
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties);
+	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties, config);
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -78,7 +78,8 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
 		if (PandasDataFrame::IsPyArrowBacked(entry)) {
 			auto table = PandasDataFrame::ToArrowTable(entry);
-			CreateArrowScan(name, table, *table_function, children, client_properties, PyArrowObjectType::Table);
+			CreateArrowScan(name, table, *table_function, children, client_properties, PyArrowObjectType::Table,
+			                DBConfig::GetConfig(context));
 		} else {
 			string name = "df_" + StringUtil::GenerateRandomName();
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
@@ -107,13 +108,16 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		return std::move(subquery);
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
 		auto arrow_dataset = entry.attr("to_arrow")();
-		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table);
+		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
+		                DBConfig::GetConfig(context));
 	} else if (PolarsDataFrame::IsLazyFrame(entry)) {
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
-		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table);
+		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
+		                DBConfig::GetConfig(context));
 	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
-		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type);
+		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type,
+		                DBConfig::GetConfig(context));
 	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) {
 		string name = "np_" + StringUtil::GenerateRandomName();
 		py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.

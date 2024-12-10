@@ -10,13 +10,12 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/table/arrow/arrow_type_info.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 
 namespace duckdb {
-class DBConfig;
+struct DBConfig;
 
 class ArrowType {
 public:
@@ -54,8 +53,6 @@ public:
 
 	static shared_ptr<ArrowType> GetTypeFromFormatNested(DBConfig &config, ArrowSchema &schema, string &format);
 
-	string GetArrowFormat() const;
-
 private:
 	LogicalType type;
 	//! Hold the optional type if the array is a dictionary
@@ -65,7 +62,6 @@ private:
 	unique_ptr<ArrowTypeInfo> type_info;
 	//! Error message in case of an invalid type (i.e., from an unsupported extension)
 	string error_message;
-	string arrow_format;
 	//! In case of an error do we throw not implemented?
 	bool not_implemented = false;
 };

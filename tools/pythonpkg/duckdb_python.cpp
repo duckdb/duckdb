@@ -65,6 +65,8 @@ static py::list PyTokenize(const string &query) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
 			tuple[1] = PY_SQL_TOKEN_COMMENT;
 			break;
+		default:
+			break;
 		}
 		result.append(tuple);
 	}

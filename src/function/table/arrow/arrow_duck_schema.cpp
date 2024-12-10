@@ -209,10 +209,6 @@ shared_ptr<ArrowType> ArrowType::CreateListType(DBConfig &config, ArrowSchema &c
 	return make_uniq<ArrowType>(type, std::move(type_info));
 }
 
-string ArrowType::GetArrowFormat() const {
-	return arrow_format;
-}
-
 shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, ArrowSchema &schema, string &format) {
 	if (format == "+l") {
 		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::NORMAL, false);
@@ -362,7 +358,7 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
 	if (schema_metadata.HasExtension()) {
 		auto extension_info = schema_metadata.GetExtensionInfo(string(schema.format));
-		return config.GetArrowExtension(extension_info).GetType(format,schema_metadata);
+		return config.GetArrowExtension(extension_info).GetType(format, schema_metadata);
 	}
 	auto type = GetTypeFromFormat(format);
 	if (type) {

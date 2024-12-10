@@ -24,7 +24,7 @@ public:
 	}
 	explicit ArrowExtensionInfo(string extension_name);
 	ArrowExtensionInfo(string vendor_name, string type_name);
-	ArrowExtensionInfo(string extension_name, string vendor_name, string type_name);
+	ArrowExtensionInfo(string extension_name, string vendor_name, string type_name, string arrow_format);
 
 	hash_t GetHash() const;
 
@@ -35,6 +35,8 @@ public:
 	string GetVendorName() const;
 
 	string GetTypeName() const;
+
+	string GetArrowFormat() const;
 
 	bool IsCanonical() const;
 
@@ -51,6 +53,8 @@ private:
 	string vendor_name {};
 	//! The type_name is the name of the type produced by the vendor (e.g., hugeint)
 	string type_name {};
+	//! The arrow format (e.g., z)
+	string arrow_format {};
 };
 
 class ArrowExtension;
