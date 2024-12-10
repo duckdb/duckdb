@@ -25,7 +25,7 @@
 
 namespace duckdb {
 
-DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::move(result_p)) {
+DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p, ClientContext& context) : result(std::move(result_p)), context(context) {
 	if (!result) {
 		throw InternalException("PyResult created without a result object");
 	}
@@ -426,7 +426,7 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 			}
 			ArrowArray data = array->arrow_array;
 			array->arrow_array.release = nullptr;
-			ArrowConverter::ToArrowSchema(&arrow_schema, arrow_result.types, names, arrow_result.client_properties);
+			ArrowConverter::ToArrowSchema(&arrow_schema, arrow_result.types, names, arrow_result.client_properties, context);
 			TransformDuckToArrowChunk(arrow_schema, data, batches);
 		}
 	} else {
@@ -448,19 +448,19 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 			if (to_polars) {
 				QueryResult::DeduplicateColumns(names);
 			}
-			ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
+			ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties, context);
 			TransformDuckToArrowChunk(arrow_schema, data, batches);
 		}
 	}
 
-	return pyarrow::ToArrowTable(result->types, names, std::move(batches), result->client_properties);
+	return pyarrow::ToArrowTable(result->types, names, std::move(batches), result->client_properties, context);
 }
 
 ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch, context);
 	// The 'result_stream' is part of the 'private_data' of the ArrowArrayStream and its lifetime is bound to that of
 	// the ArrowArrayStream.
 	return result_stream->stream;

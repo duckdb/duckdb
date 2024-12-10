@@ -453,8 +453,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object 
 	}
 	// Set the internal 'result' object
 	if (query_result) {
-		auto py_result = make_uniq<DuckDBPyResult>(std::move(query_result));
-		con.SetResult(make_uniq<DuckDBPyRelation>(std::move(py_result)));
+		auto py_result = make_uniq<DuckDBPyResult>(std::move(query_result), con.GetConnection().context);
+		con.SetResult(make_uniq<DuckDBPyRelation>(std::move(py_result),con.GetConnection().context));
 	}
 
 	return shared_from_this();
@@ -651,7 +651,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &que
 	// Set the internal 'result' object
 	if (res) {
 		auto py_result = make_uniq<DuckDBPyResult>(std::move(res));
-		con.SetResult(make_uniq<DuckDBPyRelation>(std::move(py_result)));
+		con.SetResult(make_uniq<DuckDBPyRelation>(std::move(py_result),con.GetConnection().context));
 	}
 	return shared_from_this();
 }
@@ -920,7 +920,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(
 	if (file_like_object_wrapper) {
 		read_json_relation->AddExternalDependency(std::move(file_like_object_wrapper));
 	}
-	return make_uniq<DuckDBPyRelation>(std::move(read_json_relation));
+	return make_uniq<DuckDBPyRelation>(std::move(read_json_relation), connection.context);
 }
 
 PathLike DuckDBPyConnection::GetPathLike(const py::object &object) {
@@ -1448,7 +1448,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 		read_csv.AddExternalDependency(std::move(file_like_object_wrapper));
 	}
 
-	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(read_csv.alias));
+	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(read_csv.alias), connection.context);
 }
 
 void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements) {
@@ -1533,7 +1533,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 		relation = make_shared_ptr<MaterializedRelation>(connection.context, materialized_result.TakeCollection(),
 		                                                 res->names, alias);
 	}
-	return make_uniq<DuckDBPyRelation>(std::move(relation));
+	return make_uniq<DuckDBPyRelation>(std::move(relation), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
@@ -1543,7 +1543,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 		qualified_name.schema = DEFAULT_SCHEMA;
 	}
 	try {
-		return make_uniq<DuckDBPyRelation>(connection.Table(qualified_name.schema, qualified_name.name));
+		return make_uniq<DuckDBPyRelation>(connection.Table(qualified_name.schema, qualified_name.name), connection.context);
 	} catch (const CatalogException &) {
 		// CatalogException will be of the type '... is not a table'
 		// Not a table in the database, make a query relation that can perform replacement scans
@@ -1609,7 +1609,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(const py::args &args) {
 	py::handle first_arg = args[0];
 	if (arg_count == 1 && py::isinstance<py::list>(first_arg)) {
 		vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(first_arg)};
-		return make_uniq<DuckDBPyRelation>(connection.Values(values));
+		return make_uniq<DuckDBPyRelation>(connection.Values(values), connection.context);
 	} else {
 		vector<vector<unique_ptr<ParsedExpression>>> expressions;
 		if (py::isinstance<py::tuple>(first_arg)) {
@@ -1618,13 +1618,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(const py::args &args) {
 			auto values = ValueListFromExpressions(args);
 			expressions.push_back(std::move(values));
 		}
-		return make_uniq<DuckDBPyRelation>(connection.Values(std::move(expressions)));
+		return make_uniq<DuckDBPyRelation>(connection.Values(std::move(expressions)), connection.context);
 	}
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 	auto &connection = con.GetConnection();
-	return make_uniq<DuckDBPyRelation>(connection.View(vname));
+	return make_uniq<DuckDBPyRelation>(connection.View(vname), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fname, py::object params) {
@@ -1637,7 +1637,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	}
 
 	return make_uniq<DuckDBPyRelation>(
-	    connection.TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(params)));
+	    connection.TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(params)), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &value) {
@@ -1650,7 +1650,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 	auto tableref = PythonReplacementScan::ReplacementObject(value, name, *connection.context);
 	D_ASSERT(tableref);
 	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref), name);
-	return make_uniq<DuckDBPyRelation>(std::move(rel));
+	return make_uniq<DuckDBPyRelation>(std::move(rel), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
@@ -1675,7 +1675,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 	}
 	D_ASSERT(py::gil_check());
 	py::gil_scoped_release gil;
-	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name));
+	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<string> &file_globs, bool binary_as_string,
@@ -1703,7 +1703,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<strin
 		named_parameters["compression"] = Value(py::str(compression));
 	}
 
-	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name));
+	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object) {
@@ -1716,7 +1716,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	auto tableref = PythonReplacementScan::ReplacementObject(arrow_object, name, *connection.context);
 	D_ASSERT(tableref);
 	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref), name);
-	return make_uniq<DuckDBPyRelation>(std::move(rel));
+	return make_uniq<DuckDBPyRelation>(std::move(rel), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto) {
@@ -1724,7 +1724,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto)
 	string name = "substrait_" + StringUtil::GenerateRandomName();
 	vector<Value> params;
 	params.emplace_back(Value::BLOB_RAW(proto));
-	return make_uniq<DuckDBPyRelation>(connection.TableFunction("from_substrait", params)->Alias(name));
+	return make_uniq<DuckDBPyRelation>(connection.TableFunction("from_substrait", params)->Alias(name), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query, bool enable_optimizer) {
@@ -1733,7 +1733,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &quer
 	params.emplace_back(query);
 	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
 	return make_uniq<DuckDBPyRelation>(
-	    connection.TableFunction("get_substrait", params, named_parameters)->Alias(query));
+	    connection.TableFunction("get_substrait", params, named_parameters)->Alias(query), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query, bool enable_optimizer) {
@@ -1742,7 +1742,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &
 	params.emplace_back(query);
 	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
 	return make_uniq<DuckDBPyRelation>(
-	    connection.TableFunction("get_substrait_json", params, named_parameters)->Alias(query));
+	    connection.TableFunction("get_substrait_json", params, named_parameters)->Alias(query), connection.context);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstraitJSON(const string &json) {
@@ -1750,7 +1750,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstraitJSON(const string 
 	string name = "from_substrait_" + StringUtil::GenerateRandomName();
 	vector<Value> params;
 	params.emplace_back(json);
-	return make_uniq<DuckDBPyRelation>(connection.TableFunction("from_substrait_json", params)->Alias(name));
+	return make_uniq<DuckDBPyRelation>(connection.TableFunction("from_substrait_json", params)->Alias(name), connection.context);
 }
 
 unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {

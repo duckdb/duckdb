@@ -24,7 +24,7 @@
 
 namespace duckdb {
 
-DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(rel_p)) {
+DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p, ClientContext& context) : rel(std::move(rel_p), context(context)) {
 	if (!rel) {
 		throw InternalException("DuckDBPyRelation created without a relation");
 	}
@@ -65,7 +65,7 @@ DuckDBPyRelation::~DuckDBPyRelation() {
 	rel.reset();
 }
 
-DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nullptr), result(std::move(result_p)) {
+DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p, ClientContext& context) : rel(nullptr), result(std::move(result_p)), context(context) {
 	if (!result) {
 		throw InternalException("DuckDBPyRelation created without a result");
 	}

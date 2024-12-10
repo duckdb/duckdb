@@ -19,7 +19,7 @@ namespace duckdb {
 
 struct DuckDBPyResult {
 public:
-	explicit DuckDBPyResult(unique_ptr<QueryResult> result);
+	explicit DuckDBPyResult(unique_ptr<QueryResult> result, ClientContext& context);
 	~DuckDBPyResult();
 
 public:
@@ -79,6 +79,7 @@ private:
 	// Holds the categorical type of Categorical/ENUM types
 	unordered_map<idx_t, py::object> categories_type;
 	bool result_closed = false;
+	ClientContext& context;
 };
 
 } // namespace duckdb
