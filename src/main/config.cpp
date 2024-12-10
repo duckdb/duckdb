@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -419,7 +420,7 @@ void DBConfig::SetDefaultTempDirectory() {
 	if (!options.use_temporary_directory) {
 		options.temporary_directory = string();
 	} else if (DBConfig::IsInMemoryDatabase(options.database_path.c_str())) {
-		options.temporary_directory = ".tmp";
+		options.temporary_directory = ".tmp" + UUID::ToString(UUID::GenerateRandomUUID());
 	} else {
 		options.temporary_directory = options.database_path + ".tmp";
 	}
