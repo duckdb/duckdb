@@ -15,8 +15,8 @@ public:
 
 	//! Add a chunk to the local sort
 	void SinkChunk(DataChunk &chunk, const idx_t row_idx, optional_ptr<SelectionVector> filter_sel, idx_t filtered);
-	//! Build the MST from the sorted data
-	void Build();
+	//! Sort the data
+	void Sort();
 	//! Process sorted leaf data
 	void BuildLeaves();
 
@@ -46,7 +46,7 @@ public:
 	                const idx_t count);
 	virtual ~WindowIndexTree() = default;
 
-	unique_ptr<WindowAggregatorState> GetLocalState() const;
+	unique_ptr<WindowAggregatorState> GetLocalState();
 
 	//! Make a local sort for a thread
 	optional_ptr<LocalSortState> AddLocalSort();
@@ -55,6 +55,9 @@ public:
 	bool TryPrepareSortStage(WindowIndexTreeLocalState &lstate);
 	//! Thread-safe post-sort cleanup
 	void CleanupSort();
+
+	//! Build the MST in parallel from the sorted data
+	void Build();
 
 	//! Find the Nth index in the set of subframes
 	idx_t SelectNth(const SubFrames &frames, idx_t n) const;
@@ -76,9 +79,11 @@ public:
 	//! Tasks launched
 	idx_t total_tasks = 0;
 	//! Tasks launched
-	idx_t tasks_assigned;
+	idx_t tasks_assigned = 0;
 	//! Tasks landed
 	atomic<idx_t> tasks_completed;
+	//! The block starts (the scanner doesn't know this) plus the total count
+	vector<idx_t> block_starts;
 
 	// Merge sort trees for various sizes
 	// Smaller is probably not worth the effort.
@@ -90,8 +95,6 @@ public:
 private:
 	//! Find the starts of all the blocks
 	void MeasurePayloadBlocks();
-	//! The block starts (the scanner doesn't know this) plus the total count
-	vector<idx_t> block_starts;
 };
 
 } // namespace duckdb

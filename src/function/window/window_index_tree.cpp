@@ -7,8 +7,8 @@ namespace duckdb {
 
 WindowIndexTree::WindowIndexTree(ClientContext &context, const BoundOrderModifier &order_bys, vector<column_t> sort_idx,
                                  const idx_t count)
-    : context(context), memory_per_thread(PhysicalOperator::GetMaxThreadMemory(context)),
-      sort_idx(std::move(sort_idx)) {
+    : context(context), memory_per_thread(PhysicalOperator::GetMaxThreadMemory(context)), sort_idx(std::move(sort_idx)),
+      build_stage(PartitionSortStage::INIT), tasks_completed(0) {
 	// Sort the unfiltered indices by the orders
 	LogicalType index_type;
 	if (count < std::numeric_limits<uint32_t>::max()) {
@@ -39,7 +39,12 @@ optional_ptr<LocalSortState> WindowIndexTree::AddLocalSort() {
 	return local_sorts.back().get();
 }
 
+unique_ptr<WindowAggregatorState> WindowIndexTree::GetLocalState() {
+	return make_uniq<WindowIndexTreeLocalState>(*this);
+}
+
 WindowIndexTreeLocalState::WindowIndexTreeLocalState(WindowIndexTree &index_tree) : index_tree(index_tree) {
+	sort_chunk.Initialize(index_tree.context, index_tree.global_sort->sort_layout.logical_types);
 	payload_chunk.Initialize(index_tree.context, index_tree.global_sort->payload_layout.GetTypes());
 	local_sort = index_tree.AddLocalSort();
 }
@@ -51,6 +56,7 @@ void WindowIndexTreeLocalState::SinkChunk(DataChunk &chunk, const idx_t row_idx,
 	for (column_t c = 0; c < sort_idx.size(); ++c) {
 		sort_chunk.data[c].Reference(chunk.data[sort_idx[c]]);
 	}
+	sort_chunk.SetCardinality(chunk);
 
 	//	Sequence the payload column
 	auto &indices = payload_chunk.data[0];
@@ -72,12 +78,12 @@ void WindowIndexTreeLocalState::SinkChunk(DataChunk &chunk, const idx_t row_idx,
 }
 
 void WindowIndexTreeLocalState::ExecuteSortTask() {
-	auto &global_sort = *index_tree.global_sort;
 	switch (build_stage) {
 	case PartitionSortStage::SCAN:
-		global_sort.AddLocalState(*index_tree.local_sorts[build_task]);
+		index_tree.global_sort->AddLocalState(*index_tree.local_sorts[build_task]);
 		break;
 	case PartitionSortStage::MERGE: {
+		auto &global_sort = *index_tree.global_sort;
 		MergeSorter merge_sorter(global_sort, global_sort.buffer_manager);
 		merge_sorter.PerformInMergeRound();
 		break;
@@ -117,24 +123,26 @@ void WindowIndexTreeLocalState::BuildLeaves() {
 		return;
 	}
 
-	PayloadScanner scanner(global_sort, build_task, true);
+	PayloadScanner scanner(global_sort, build_task);
+	idx_t row_idx = index_tree.block_starts[build_task];
 	for (;;) {
-		idx_t row_idx = scanner.Scanned();
 		payload_chunk.Reset();
 		scanner.Scan(payload_chunk);
-		if (payload_chunk.size() == 0) {
+		const auto count = payload_chunk.size();
+		if (count == 0) {
 			break;
 		}
 		auto &indices = payload_chunk.data[0];
 		if (index_tree.mst32) {
 			auto &sorted = index_tree.mst32->LowestLevel();
 			auto data = FlatVector::GetData<uint32_t>(indices);
-			std::copy(data, data + payload_chunk.size(), sorted.data() + row_idx);
+			std::copy(data, data + count, sorted.data() + row_idx);
 		} else {
 			auto &sorted = index_tree.mst64->LowestLevel();
 			auto data = FlatVector::GetData<uint64_t>(indices);
-			std::copy(data, data + payload_chunk.size(), sorted.data() + row_idx);
+			std::copy(data, data + count, sorted.data() + row_idx);
 		}
+		row_idx += count;
 	}
 }
 
@@ -228,7 +236,7 @@ bool WindowIndexTree::TryPrepareSortStage(WindowIndexTreeLocalState &lstate) {
 	return true;
 }
 
-void WindowIndexTreeLocalState::Build() {
+void WindowIndexTreeLocalState::Sort() {
 	// Sort, merge and build the tree in parallel
 	while (index_tree.build_stage.load() != PartitionSortStage::FINISHED) {
 		if (index_tree.TryPrepareSortStage(*this)) {
@@ -237,20 +245,21 @@ void WindowIndexTreeLocalState::Build() {
 			std::this_thread::yield();
 		}
 	}
+}
 
-	//	Now build the tree in parallel
-	if (index_tree.mst32) {
-		index_tree.mst32->Build();
+void WindowIndexTree::Build() {
+	if (mst32) {
+		mst32->Build();
 	} else {
-		index_tree.mst64->Build();
+		mst64->Build();
 	}
 }
 
 idx_t WindowIndexTree::SelectNth(const SubFrames &frames, idx_t n) const {
 	if (mst32) {
-		return mst32->SelectNth(frames, n);
+		return mst32->NthElement(mst32->SelectNth(frames, n));
 	} else {
-		return mst64->SelectNth(frames, n);
+		return mst64->NthElement(mst32->SelectNth(frames, n));
 	}
 }
 
