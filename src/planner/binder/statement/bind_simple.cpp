@@ -32,7 +32,7 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
                                          unique_ptr<AlterInfo> alter_info) {
 	auto &table_info = alter_info->Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	auto &table = entry.Cast<DuckTableEntry>();
+	auto &table = entry.Cast<TableCatalogEntry>();
 	auto &column_list = table.GetColumns();
 
 	auto bound_constraint = BindUniqueConstraint(*constraint_info.constraint, table_info.name, column_list);
