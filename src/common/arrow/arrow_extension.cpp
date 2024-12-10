@@ -176,12 +176,20 @@ ArrowExtension DBConfig::GetArrowExtension(const ArrowExtensionInfo &info) const
 }
 
 ArrowExtension DBConfig::GetArrowExtension(const LogicalType &type) const {
-	const TypeInfo type_info(type);
+	TypeInfo type_info(type);
+	if (!arrow_extensions->type_to_info[type_info].empty()) {
+		return GetArrowExtension(arrow_extensions->type_to_info[type_info].front());
+	}
+	type_info.type = LogicalTypeId::ANY;
 	return GetArrowExtension(arrow_extensions->type_to_info[type_info].front());
 }
 
 bool DBConfig::HasArrowExtension(const LogicalType &type) const {
-	const TypeInfo type_info(type);
+	TypeInfo type_info(type);
+	if (!arrow_extensions->type_to_info[type_info].empty()) {
+		return true;
+	}
+	type_info.type = LogicalTypeId::ANY;
 	return !arrow_extensions->type_to_info[type_info].empty();
 }
 

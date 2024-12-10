@@ -153,17 +153,6 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		}
 		break;
 	}
-	case LogicalTypeId::VARINT: {
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			child.format = "Z";
-		} else {
-			child.format = "z";
-		}
-		// auto schema_metadata = ArrowSchemaMetadata::NonCanonicalType("varint");
-		// root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-		// child.metadata = root_holder.metadata_info.back().get();
-		break;
-	}
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;
@@ -204,8 +193,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::TIME_TZ: {
 		if (options.arrow_lossless_conversion) {
-			bool success = SetArrowExtension(root_holder, child, type, context);
-			D_ASSERT(success);
+			SetArrowExtension(root_holder, child, type, context);
 		} else {
 			child.format = "ttu";
 		}
@@ -255,15 +243,16 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		}
 		break;
 	case LogicalTypeId::BIT: {
-		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
-			child.format = "Z";
-		} else {
-			child.format = "z";
-		}
 		if (options.arrow_lossless_conversion) {
-			bool success = SetArrowExtension(root_holder, child, type, context);
-			D_ASSERT(success);
+			SetArrowExtension(root_holder, child, type, context);
+		} else {
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "Z";
+			} else {
+				child.format = "z";
+			}
 		}
+
 		break;
 	}
 	case LogicalTypeId::LIST: {
@@ -393,8 +382,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 	default: {
 		// It is possible we can export this type as a registered extension
-
-		throw NotImplementedException("Unsupported Arrow type " + type.ToString());
+		auto success = SetArrowExtension(root_holder, child, type, context);
+		if (!success) {
+			throw NotImplementedException("Unsupported Arrow type " + type.ToString());
+		}
 	}
 	}
 }
