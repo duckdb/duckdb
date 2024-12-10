@@ -55,6 +55,12 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 				// successfully cast to bigint: bigint value
 				return make_uniq<ConstantExpression>(Value::HUGEINT(hugeint_value));
 			}
+			uhugeint_t uhugeint_value;
+			// if that is not successful; try to cast as uhugeint
+			if (TryCast::Operation<string_t, uhugeint_t>(str_val, uhugeint_value)) {
+				// successfully cast to bigint: bigint value
+				return make_uniq<ConstantExpression>(Value::UHUGEINT(uhugeint_value));
+			}
 		}
 		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;
 		if (try_cast_as_decimal && decimal_position.IsValid() &&
