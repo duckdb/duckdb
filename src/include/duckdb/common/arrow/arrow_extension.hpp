@@ -37,6 +37,8 @@ public:
 
 	string GetArrowFormat() const;
 
+	void SetArrowFormat(string arrow_format);
+
 	bool IsCanonical() const;
 
 	bool operator==(const ArrowExtensionInfo &other) const;
@@ -71,9 +73,10 @@ public:
 	ArrowExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowType> type);
 
 	//! We have complex extensions, where we can return multiple types, hence we must have callback functions to do so
-	ArrowExtension(string extension_name, populate_arrow_schema_t populate_arrow_schema, get_type_t get_type);
+	ArrowExtension(string extension_name, populate_arrow_schema_t populate_arrow_schema, get_type_t get_type,
+	               shared_ptr<ArrowType> type);
 	ArrowExtension(string vendor_name, string type_name, populate_arrow_schema_t populate_arrow_schema,
-	               get_type_t get_type);
+	               get_type_t get_type, shared_ptr<ArrowType> type);
 
 	ArrowExtensionInfo GetInfo() const;
 
