@@ -1144,6 +1144,7 @@ int Linenoise::Edit() {
 
 		Linenoise::Log("%d\n", (int)c);
 		switch (c) {
+		case CTRL_G:
 		case CTRL_J:
 		case ENTER: { /* enter */
 #ifdef LINENOISE_EDITOR
@@ -1180,12 +1181,19 @@ int Linenoise::Edit() {
 				buf[len] = '\0';
 				if (buf[0] != '.' && !AllWhitespace(buf) && !sqlite3_complete(buf)) {
 					// not a complete SQL statement yet! continuation
-					// insert "\r\n" at the end
 					pos = len;
-					if (EditInsertMulti("\r\n")) {
-						return -1;
+					if (c != CTRL_G) {
+						// insert "\r\n" at the end if this is enter/ctrl+j
+						if (EditInsertMulti("\r\n")) {
+							return -1;
+						}
+						break;
+					} else {
+						// if this is Ctrl+G, terminate the statement
+						if (EditInsertMulti(";")) {
+							return -1;
+						}
 					}
-					break;
 				}
 			}
 			// final refresh before returning control to the shell
@@ -1219,7 +1227,6 @@ int Linenoise::Edit() {
 			return (int)new_len;
 		}
 		case CTRL_O:
-		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
 			if (Terminal::IsMultiline()) {
 				continuation_markers = false;
