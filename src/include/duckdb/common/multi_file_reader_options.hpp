@@ -17,12 +17,16 @@ namespace duckdb {
 struct BindInfo;
 class MultiFileList;
 
+enum class MultiFileReaderColumnMapping : uint8_t { BY_NAME, BY_FIELD_ID };
+
 struct MultiFileReaderOptions {
 	bool filename = false;
 	bool hive_partitioning = false;
 	bool auto_detect_hive_partitioning = true;
 	bool union_by_name = false;
 	bool hive_types_autocast = true;
+	MultiFileReaderColumnMapping mapping = MultiFileReaderColumnMapping::BY_NAME;
+
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
 	// Default/configurable name of the column containing the file names

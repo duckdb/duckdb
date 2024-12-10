@@ -66,6 +66,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
@@ -2270,6 +2271,24 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 48, "MetricsType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMultiFileReaderColumnMappingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MultiFileReaderColumnMapping::BY_NAME), "BY_NAME" },
+		{ static_cast<uint32_t>(MultiFileReaderColumnMapping::BY_FIELD_ID), "BY_FIELD_ID" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MultiFileReaderColumnMapping>(MultiFileReaderColumnMapping value) {
+	return StringUtil::EnumToString(GetMultiFileReaderColumnMappingValues(), 2, "MultiFileReaderColumnMapping", static_cast<uint32_t>(value));
+}
+
+template<>
+MultiFileReaderColumnMapping EnumUtil::FromString<MultiFileReaderColumnMapping>(const char *value) {
+	return static_cast<MultiFileReaderColumnMapping>(StringUtil::StringToEnum(GetMultiFileReaderColumnMappingValues(), 2, "MultiFileReaderColumnMapping", value));
 }
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {

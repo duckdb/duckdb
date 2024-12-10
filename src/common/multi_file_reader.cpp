@@ -52,6 +52,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["column_mapping"] = LogicalType::VARCHAR;
 }
 
 vector<string> MultiFileReader::ParsePaths(const Value &input) {
@@ -118,6 +119,9 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
 		options.hive_types_autocast = BooleanValue::Get(val);
+	} else if (loption == "column_mapping") {
+		auto mapping = val.GetValue<string>();
+		options.mapping = EnumUtil::FromString<MultiFileReaderColumnMapping>(mapping);
 	} else if (loption == "hive_types" || loption == "hive_type") {
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
@@ -477,6 +481,7 @@ void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
 	bind_info.InsertOption("hive_types_autocast", Value::BOOLEAN(hive_types_autocast));
+	bind_info.InsertOption("column_mapping", Value("by_name"));
 }
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
