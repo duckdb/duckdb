@@ -421,6 +421,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 	}
 
 	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
+		// see internal issue 3717.
 		if (join_type == JoinType::MARK && !correlated_mark_join_info.correlated_types.empty()) {
 			continue;
 		}
