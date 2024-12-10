@@ -301,7 +301,7 @@ void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {
 	auto &delim_join = op.Cast<LogicalComparisonJoin>();
 	for (idx_t i = 0; i < delim_join.duplicate_eliminated_columns.size(); i++) {
 		auto &expr = *delim_join.duplicate_eliminated_columns[i];
-		D_ASSERT(expr.type == ExpressionType::BOUND_COLUMN_REF);
+		D_ASSERT(expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF);
 		auto &bound_colref_expr = expr.Cast<BoundColumnRefExpression>();
 		delim_columns.push_back(bound_colref_expr.binding);
 	}

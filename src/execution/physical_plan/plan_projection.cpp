@@ -21,7 +21,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 		// e.g. PROJECTION(#0, #1, #2, #3, ...)
 		bool omit_projection = true;
 		for (idx_t i = 0; i < op.types.size(); i++) {
-			if (op.expressions[i]->type == ExpressionType::BOUND_REF) {
+			if (op.expressions[i]->GetExpressionType() == ExpressionType::BOUND_REF) {
 				auto &bound_ref = op.expressions[i]->Cast<BoundReferenceExpression>();
 				if (bound_ref.index == i) {
 					continue;

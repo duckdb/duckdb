@@ -157,7 +157,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// Bind the ORDER BYs, if any
 	if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 		for (auto &order : aggr.order_bys->orders) {
-			if (order.expression->type == ExpressionType::VALUE_CONSTANT) {
+			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
 				if (!const_expr.value.type().IsIntegral()) {
 					auto &config = ClientConfig::GetConfig(context);

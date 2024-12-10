@@ -12,7 +12,7 @@
 namespace duckdb {
 
 string GetColumnsStringValue(ParsedExpression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		return colref.GetColumnName();
 	} else {
@@ -188,10 +188,10 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 optional_ptr<ParsedExpression> Binder::GetResolvedColumnExpression(ParsedExpression &root_expr) {
 	optional_ptr<ParsedExpression> expr = &root_expr;
 	while (expr) {
-		if (expr->type == ExpressionType::COLUMN_REF) {
+		if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 			break;
 		}
-		if (expr->type == ExpressionType::OPERATOR_COALESCE) {
+		if (expr->GetExpressionType() == ExpressionType::OPERATOR_COALESCE) {
 			expr = expr->Cast<OperatorExpression>().children[0].get();
 		} else {
 			// unknown expression

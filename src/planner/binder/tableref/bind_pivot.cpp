@@ -58,7 +58,7 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 }
 
 static void ExtractPivotExpressions(ParsedExpression &expr, case_insensitive_set_t &handled_columns) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &child_colref = expr.Cast<ColumnRefExpression>();
 		if (child_colref.IsQualified()) {
 			throw BinderException("PIVOT expression cannot contain qualified columns");
@@ -71,7 +71,7 @@ static void ExtractPivotExpressions(ParsedExpression &expr, case_insensitive_set
 
 void ExtractPivotAggregateExpression(ClientContext &context, ParsedExpression &expr,
                                      vector<reference<FunctionExpression>> &aggregates) {
-	if (expr.type == ExpressionType::FUNCTION) {
+	if (expr.GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &aggr_function = expr.Cast<FunctionExpression>();
 
 		// check if this is an aggregate to ensure it is an aggregate and not a scalar function
@@ -83,7 +83,7 @@ void ExtractPivotAggregateExpression(ClientContext &context, ParsedExpression &e
 			return;
 		}
 	}
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		throw BinderException(expr, "Columns can only be referenced within the aggregate of a PIVOT expression");
 	}
 	ParsedExpressionIterator::EnumerateChildren(
@@ -546,12 +546,12 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 }
 
 void Binder::ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		result.push_back(colref.GetColumnName());
 		return;
 	}
-	if (expr.type == ExpressionType::SUBQUERY) {
+	if (expr.GetExpressionType() == ExpressionType::SUBQUERY) {
 		throw BinderException(expr, "UNPIVOT list cannot contain subqueries");
 	}
 	ParsedExpressionIterator::EnumerateChildren(
@@ -604,7 +604,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	}
 
 	for (auto &col_expr : all_columns) {
-		if (col_expr->type != ExpressionType::COLUMN_REF) {
+		if (col_expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
 		}
 		auto &columnref = col_expr->Cast<ColumnRefExpression>();

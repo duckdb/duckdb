@@ -190,7 +190,7 @@ optional_ptr<ExpressionListRef> InsertStatement::GetValuesList() const {
 	if (node.aggregate_handling != AggregateHandling::STANDARD_HANDLING) {
 		return nullptr;
 	}
-	if (node.select_list.size() != 1 || node.select_list[0]->type != ExpressionType::STAR) {
+	if (node.select_list.size() != 1 || node.select_list[0]->GetExpressionType() != ExpressionType::STAR) {
 		return nullptr;
 	}
 	if (!node.from_table || node.from_table->type != TableReferenceType::EXPRESSION_LIST) {

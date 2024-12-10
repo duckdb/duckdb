@@ -110,7 +110,7 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 }
 
 bool ExpressionContainsColumnRef(Expression &expression) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		// Here you have a filter on a single column in a table. Return a binding for the column
 		// being filtered on so the filter estimator knows what HLL count to pull
 #ifdef DEBUG
@@ -438,7 +438,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 }
 
 bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
@@ -455,12 +455,12 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 			bindings.insert(relation_mapping[colref.binding.table_index]);
 		}
 	}
-	if (expression.type == ExpressionType::BOUND_REF) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_REF) {
 		// bound expression
 		bindings.clear();
 		return false;
 	}
-	D_ASSERT(expression.type != ExpressionType::SUBQUERY);
+	D_ASSERT(expression.GetExpressionType() != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
 		if (!ExtractBindings(expr, bindings)) {

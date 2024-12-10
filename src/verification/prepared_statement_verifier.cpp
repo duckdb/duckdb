@@ -48,7 +48,7 @@ void PreparedStatementVerifier::Extract() {
 }
 
 void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &child) {
-	if (child->type == ExpressionType::VALUE_CONSTANT) {
+	if (child->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		// constant: extract the constant value
 		auto alias = child->alias;
 		child->alias = string();

@@ -113,7 +113,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
                                           const bool within_function_expression) {
 
 	bool next_within_function_expression = false;
-	switch (expr->type) {
+	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 
@@ -452,7 +452,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	// the above QualifyColumName returns a generated expression for a generated
 	// column, and struct_extract for a struct, or a lambda reference expression,
 	// all of them are not column reference expressions, so we return here
-	if (expr->type != ExpressionType::COLUMN_REF) {
+	if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 		auto alias = expr->alias;
 		auto result = BindExpression(expr, depth);
 		if (result.expression) {

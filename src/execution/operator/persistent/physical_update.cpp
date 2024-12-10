@@ -96,11 +96,11 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	update_chunk.SetCardinality(chunk);
 
 	for (idx_t i = 0; i < expressions.size(); i++) {
-		if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
+		if (expressions[i]->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 			// default expression, set to the default value of the column
 			lstate.default_executor.ExecuteExpression(columns[i].index, update_chunk.data[i]);
 		} else {
-			D_ASSERT(expressions[i]->type == ExpressionType::BOUND_REF);
+			D_ASSERT(expressions[i]->GetExpressionType() == ExpressionType::BOUND_REF);
 			// index into child chunk
 			auto &binding = expressions[i]->Cast<BoundReferenceExpression>();
 			update_chunk.data[i].Reference(chunk.data[binding.index]);

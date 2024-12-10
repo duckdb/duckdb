@@ -33,7 +33,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 				unordered_map<idx_t, LogicalType> new_column_types;
 				bool do_pushdown = true;
 				for (idx_t i = 0; i < op->expressions.size(); i++) {
-					if (op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
+					if (op->expressions[i]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 						auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
 						auto column_id = column_ids[col_ref.binding.column_index].GetPrimaryIndex();
 						if (new_column_types.find(column_id) != new_column_types.end()) {

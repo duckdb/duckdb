@@ -218,7 +218,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto &bound = BoundExpression::GetExpression(*child);
 		// Add casts for positional arguments
 		const auto argno = children.size();
-		switch (window.type) {
+		switch (window.GetExpressionType()) {
 		case ExpressionType::WINDOW_NTILE:
 			// ntile(bigint)
 			if (argno == 0) {
@@ -241,7 +241,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType sql_type;
 	unique_ptr<AggregateFunction> aggregate;
 	unique_ptr<FunctionData> bind_info;
-	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
+	if (window.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
 		auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
 		                                                              window.function_name, error_context);
@@ -267,9 +267,10 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 	} else {
 		// fetch the child of the non-aggregate window function (if any)
-		sql_type = ResolveWindowExpressionType(window.type, types);
+		sql_type = ResolveWindowExpressionType(window.GetExpressionType(), types);
 	}
-	auto result = make_uniq<BoundWindowExpression>(window.type, sql_type, std::move(aggregate), std::move(bind_info));
+	auto result = make_uniq<BoundWindowExpression>(window.GetExpressionType(), sql_type, std::move(aggregate),
+	                                               std::move(bind_info));
 	result->children = std::move(children);
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));

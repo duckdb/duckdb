@@ -24,16 +24,18 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 	}
 	// get the maximum type from the children
 	LogicalType max_type = ExpressionBinder::GetExpressionReturnType(*children[0]);
-	bool is_in_operator = (op.type == ExpressionType::COMPARE_IN || op.type == ExpressionType::COMPARE_NOT_IN);
+	bool is_in_operator = (op.GetExpressionType() == ExpressionType::COMPARE_IN ||
+	                       op.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
 	for (idx_t i = 1; i < children.size(); i++) {
 		auto child_return = ExpressionBinder::GetExpressionReturnType(*children[i]);
 		if (is_in_operator) {
 			// If it's IN/NOT_IN operator, adjust DECIMAL and VARCHAR returned type.
-			if (!BoundComparisonExpression::TryBindComparison(context, max_type, child_return, max_type, op.type)) {
+			if (!BoundComparisonExpression::TryBindComparison(context, max_type, child_return, max_type,
+			                                                  op.GetExpressionType())) {
 				throw BinderException(op,
 				                      "Cannot mix values of type %s and %s in %s clause - an explicit cast is required",
 				                      max_type.ToString(), child_return.ToString(),
-				                      op.type == ExpressionType::COMPARE_IN ? "IN" : "NOT IN");
+				                      op.GetExpressionType() == ExpressionType::COMPARE_IN ? "IN" : "NOT IN");
 			}
 		} else {
 			// If it's COALESCE operator, don't do extra adjustment.
@@ -57,7 +59,7 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 }
 
 LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
-	switch (op.type) {
+	switch (op.GetExpressionType()) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		// IS (NOT) NULL always returns a boolean, and does not cast its children
@@ -85,7 +87,7 @@ BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 }
 
 BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth) {
-	if (op.type == ExpressionType::GROUPING_FUNCTION) {
+	if (op.GetExpressionType() == ExpressionType::GROUPING_FUNCTION) {
 		return BindGroupingFunction(op, depth);
 	}
 
@@ -101,7 +103,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 
 	// all children bound successfully
 	string function_name;
-	switch (op.type) {
+	switch (op.GetExpressionType()) {
 	case ExpressionType::ARRAY_EXTRACT: {
 		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);
@@ -181,7 +183,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	}
 	// now resolve the types
 	LogicalType result_type = ResolveOperatorType(op, children);
-	if (op.type == ExpressionType::OPERATOR_COALESCE) {
+	if (op.GetExpressionType() == ExpressionType::OPERATOR_COALESCE) {
 		if (children.empty()) {
 			throw BinderException("COALESCE needs at least one child");
 		}
@@ -190,7 +192,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		}
 	}
 
-	auto result = make_uniq<BoundOperatorExpression>(op.type, result_type);
+	auto result = make_uniq<BoundOperatorExpression>(op.GetExpressionType(), result_type);
 	for (auto &child : children) {
 		result->children.push_back(std::move(child));
 	}

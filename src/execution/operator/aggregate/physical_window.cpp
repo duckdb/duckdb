@@ -205,7 +205,7 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,
                                                         WindowSharedExpressions &shared, WindowAggregationMode mode) {
-	switch (wexpr.type) {
+	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_AGGREGATE:
 		return make_uniq<WindowAggregateExecutor>(wexpr, context, shared, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
@@ -231,7 +231,7 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 		return make_uniq<WindowNthValueExecutor>(wexpr, context, shared);
 		break;
 	default:
-		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
+		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
 	}
 }
 

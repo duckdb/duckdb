@@ -40,7 +40,7 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 		// remove the expression from the DISTINCT ON list
 		return nullptr;
 	}
-	D_ASSERT(bound_expr->type == ExpressionType::VALUE_CONSTANT);
+	D_ASSERT(bound_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT);
 	return bound_expr;
 }
 
@@ -160,7 +160,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			auto &config = DBConfig::GetConfig(context);
 			D_ASSERT(!order.orders.empty());
 			auto &order_binders = order_binder.GetBinders();
-			if (order.orders.size() == 1 && order.orders[0].expression->type == ExpressionType::STAR) {
+			if (order.orders.size() == 1 && order.orders[0].expression->GetExpressionType() == ExpressionType::STAR) {
 				auto &star = order.orders[0].expression->Cast<StarExpression>();
 				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
 					// ORDER BY ALL
@@ -179,7 +179,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			// e.g. it breaks EXPLAIN output on queries
 			bool can_replace = true;
 			for (auto &order_node : order.orders) {
-				if (order_node.expression->type == ExpressionType::VALUE_CONSTANT) {
+				if (order_node.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 					// we cannot replace the sort key when we order by literals (e.g. ORDER BY 1, 2`
 					can_replace = false;
 					break;
@@ -294,10 +294,10 @@ static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index, co
 	if (!expr) {
 		return;
 	}
-	if (expr->type == ExpressionType::VALUE_CONSTANT) {
+	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
 	}
-	if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return;
 	}
 	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
@@ -374,14 +374,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
-	if (expr->type == ExpressionType::CONJUNCTION_AND) {
+	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr->Cast<ConjunctionExpression>();
 		for (auto &child : conj.children) {
 			BindWhereStarExpression(child);
 		}
 		return;
 	}
-	if (expr->type == ExpressionType::STAR) {
+	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
 		if (!star.columns) {
 			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
@@ -557,7 +557,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
 		result->bound_column_count++;
 
-		if (expr->type == ExpressionType::BOUND_EXPANDED) {
+		if (expr->GetExpressionType() == ExpressionType::BOUND_EXPANDED) {
 			if (!is_original_column) {
 				throw BinderException("UNNEST of struct cannot be used in ORDER BY/DISTINCT ON clause");
 			}

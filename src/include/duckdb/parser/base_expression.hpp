@@ -18,11 +18,10 @@ namespace duckdb {
 //!  The BaseExpression class is a base class that can represent any expression
 //!  part of a SQL statement.
 class BaseExpression {
-public:
+protected:
 	//! Type of the expression
 	ExpressionType type;
 
-protected:
 	//! The expression class of the node
 	ExpressionClass expression_class;
 
@@ -34,21 +33,30 @@ public:
 	virtual ~BaseExpression() {
 	}
 
-	//! Returns the type of the expression
-	ExpressionType GetExpressionType() const {
-		return type;
-	}
 	//! Returns the class of the expression
 	ExpressionClass GetExpressionClass() const {
 		return expression_class;
 	}
 
-	void SetQueryLocation(optional_idx location) {
-		query_location = location;
+	//! Returns the type of the expression
+	ExpressionType GetExpressionType() const {
+		return type;
 	}
 
+	//! Sets the type of the expression unsafely. In general expressions are immutable and should not be changed after
+	//! creation. Only use this if you know what you are doing.
+	void SetExpressionTypeUnsafe(ExpressionType new_type) {
+		type = new_type;
+	}
+
+	//! Returns the location in the query (if any)
 	optional_idx GetQueryLocation() const {
 		return query_location;
+	}
+
+	//! Sets the location in the query
+	void SetQueryLocation(optional_idx location) {
+		query_location = location;
 	}
 
 	//! The alias of the expression,

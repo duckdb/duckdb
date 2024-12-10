@@ -8,7 +8,7 @@
 namespace duckdb {
 
 bool Transformer::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry, bool root_entry) {
-	switch (expr->type) {
+	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		if (colref.IsQualified()) {

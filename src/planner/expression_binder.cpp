@@ -228,7 +228,7 @@ void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth
 }
 
 void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth > 0) {
 			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));

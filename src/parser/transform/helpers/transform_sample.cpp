@@ -26,7 +26,7 @@ unique_ptr<SampleOptions> Transformer::TransformSampleOptions(optional_ptr<duckd
 	auto &sample_options = PGCast<duckdb_libpgquery::PGSampleOptions>(*options);
 	auto &sample_size = *PGPointerCast<duckdb_libpgquery::PGSampleSize>(sample_options.sample_size);
 	auto sample_expression = TransformExpression(sample_size.sample_size);
-	if (sample_expression->type != ExpressionType::VALUE_CONSTANT) {
+	if (sample_expression->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 		throw ParserException(sample_expression->GetQueryLocation(),
 		                      "Only constants are supported in sample clause currently");
 	}

@@ -91,7 +91,7 @@ unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::P
 
 bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, Value &value) {
 	// We have to construct it like this because we don't have the ClientContext for binding/executing the expr here
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
 		if (function.function_name == "struct_pack") {

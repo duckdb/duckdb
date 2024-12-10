@@ -18,7 +18,7 @@
 namespace duckdb {
 
 static void RewriteJoinCondition(Expression &expr, idx_t offset) {
-	if (expr.type == ExpressionType::BOUND_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_REF) {
 		auto &ref = expr.Cast<BoundReferenceExpression>();
 		ref.index += offset;
 	}
