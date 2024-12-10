@@ -43,8 +43,18 @@ public:
 		return expression_class;
 	}
 
+	void SetQueryLocation(optional_idx location) {
+		query_location = location;
+	}
+
+	optional_idx GetQueryLocation() const {
+		return query_location;
+	}
+
 	//! The alias of the expression,
 	string alias;
+
+protected:
 	//! The location in the query (if any)
 	optional_idx query_location;
 

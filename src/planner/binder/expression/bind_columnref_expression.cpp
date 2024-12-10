@@ -136,7 +136,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 			}
 
 			// replace the expression with the qualified column reference
-			new_expr->query_location = col_ref.query_location;
+			new_expr->SetQueryLocation(col_ref.GetQueryLocation());
 			expr = std::move(new_expr);
 		}
 		return;
@@ -447,7 +447,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 		return BindResult(std::move(error));
 	}
 
-	expr->query_location = col_ref_p.query_location;
+	expr->SetQueryLocation(col_ref_p.GetQueryLocation());
 
 	// the above QualifyColumName returns a generated expression for a generated
 	// column, and struct_extract for a struct, or a lambda reference expression,
@@ -483,7 +483,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	// we bound the column reference
 	BoundColumnReferenceInfo ref;
 	ref.name = col_ref.column_names.back();
-	ref.query_location = col_ref.query_location;
+	ref.query_location = col_ref.GetQueryLocation();
 	bound_columns.push_back(std::move(ref));
 	return result;
 }

@@ -36,7 +36,7 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 	}
 	auto result = make_uniq<BoundConstantExpression>(Value::UBIGINT(index));
 	result->alias = std::move(alias);
-	result->query_location = expr.query_location;
+	result->SetQueryLocation(expr.GetQueryLocation());
 	return std::move(result);
 }
 
@@ -113,7 +113,7 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
 	values.push_back(make_pair("index", Value::UBIGINT(index.GetIndex())));
 	auto result = make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
 	result->alias = std::move(expr.alias);
-	result->query_location = expr.query_location;
+	result->SetQueryLocation(expr.GetQueryLocation());
 	return std::move(result);
 }
 

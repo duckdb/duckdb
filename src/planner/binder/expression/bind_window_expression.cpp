@@ -120,7 +120,7 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*expr);
-	QueryErrorContext error_context(bound->query_location);
+	QueryErrorContext error_context(bound->GetQueryLocation());
 	if (bound->return_type == LogicalType::SQLNULL) {
 		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
 	}
@@ -144,7 +144,7 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	auto name = window.GetName();
 
-	QueryErrorContext error_context(window.query_location);
+	QueryErrorContext error_context(window.GetQueryLocation());
 	if (inside_window) {
 		throw BinderException(error_context, "window function calls cannot be nested");
 	}

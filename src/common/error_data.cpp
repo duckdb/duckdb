@@ -120,7 +120,7 @@ void ErrorData::AddQueryLocation(QueryErrorContext error_context) {
 }
 
 void ErrorData::AddQueryLocation(const ParsedExpression &ref) {
-	AddQueryLocation(ref.query_location);
+	AddQueryLocation(ref.GetQueryLocation());
 }
 
 void ErrorData::AddQueryLocation(const TableRef &ref) {

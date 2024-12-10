@@ -42,7 +42,7 @@ unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, co
 		}
 	}
 	auto result = make_uniq<BoundCastExpression>(std::move(expr), target_type, std::move(bound_cast), try_cast);
-	result->query_location = result->child->query_location;
+	result->SetQueryLocation(result->child->GetQueryLocation());
 	return std::move(result);
 }
 
@@ -96,7 +96,7 @@ unique_ptr<Expression> BoundCastExpression::AddDefaultCastToType(unique_ptr<Expr
                                                                  const LogicalType &target_type, bool try_cast) {
 	CastFunctionSet default_set;
 	GetCastFunctionInput get_input;
-	get_input.query_location = expr->query_location;
+	get_input.query_location = expr->GetQueryLocation();
 	return AddCastToTypeInternal(std::move(expr), target_type, default_set, get_input, try_cast);
 }
 
@@ -104,7 +104,7 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(ClientContext &context
                                                           const LogicalType &target_type, bool try_cast) {
 	auto &cast_functions = DBConfig::GetConfig(context).GetCastFunctions();
 	GetCastFunctionInput get_input(context);
-	get_input.query_location = expr->query_location;
+	get_input.query_location = expr->GetQueryLocation();
 	return AddCastToTypeInternal(std::move(expr), target_type, cast_functions, get_input, try_cast);
 }
 

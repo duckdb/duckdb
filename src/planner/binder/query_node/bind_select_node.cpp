@@ -86,7 +86,7 @@ BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<Pars
 				constant_val = val.GetValue<int64_t>();
 			}
 			if (constant_val < 0) {
-				throw BinderException(expr->query_location, "LIMIT/OFFSET cannot be negative");
+				throw BinderException(expr->GetQueryLocation(), "LIMIT/OFFSET cannot be negative");
 			}
 			return BoundLimitNode::ConstantValue(constant_val);
 		}

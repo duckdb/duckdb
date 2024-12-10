@@ -37,7 +37,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	// lookup the function in the catalog
-	QueryErrorContext error_context(function.query_location);
+	QueryErrorContext error_context(function.GetQueryLocation());
 	binder.BindSchemaOrCatalog(function.catalog, function.schema);
 	auto func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
 	                            function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
