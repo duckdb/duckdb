@@ -380,7 +380,18 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 	if (row >= target.GetCapacity()) {
 		throw InvalidInputException("Too many rows for chunk!");
 	}
-	target.SetValue(col, row, value);
+
+	if (value.type() == target.GetTypes()[col]) {
+		target.SetValue(col, row, value);
+	} else {
+		Value new_value;
+		string error_msg;
+		if (value.DefaultTryCastAs(target.GetTypes()[col], new_value, &error_msg)) {
+			target.SetValue(col, row, new_value);
+		} else {
+			throw InvalidInputException("type mismatch in Append, expected %s, got %s for column %d", target.GetTypes()[col], value.type(), col);
+		}
+	}
 }
 
 template <>
