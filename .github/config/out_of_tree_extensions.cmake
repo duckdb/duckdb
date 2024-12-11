@@ -157,9 +157,8 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 96374099476b3427c9ab43c1821e610b0465c864
+        GIT_TAG bae5b0653b18bbd05840d1773a49dc4a1165831f
         TEST_DIR test/sql
-        APPLY_PATCHES
     )
 
 ################# MYSQL
