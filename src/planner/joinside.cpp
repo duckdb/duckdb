@@ -69,8 +69,9 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<idx_t
 		D_ASSERT(expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
 		auto &subquery = expression.Cast<BoundSubqueryExpression>();
 		JoinSide side = JoinSide::NONE;
-		if (subquery.child) {
-			side = GetJoinSide(*subquery.child, left_bindings, right_bindings);
+		for (auto &child : subquery.children) {
+			auto child_side = GetJoinSide(*child, left_bindings, right_bindings);
+			side = CombineJoinSide(side, child_side);
 		}
 		// correlated subquery, check the side of each of correlated columns in the subquery
 		for (auto &corr : subquery.binder->correlated_columns) {

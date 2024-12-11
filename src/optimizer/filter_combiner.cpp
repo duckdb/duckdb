@@ -624,9 +624,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				continue;
 			}
 
-			if (!type.IsIntegral()) {
-				continue;
-			}
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			vector<Value> in_list;
@@ -635,7 +632,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				D_ASSERT(!const_value_expr.value.IsNull());
 				in_list.push_back(const_value_expr.value);
 			}
-			if (IsDenseRange(in_list)) {
+			if (type.IsIntegral() && IsDenseRange(in_list)) {
 				// dense range! turn this into x >= min AND x <= max
 				// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
 				auto lower_bound =
@@ -699,8 +696,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 						break;
 					}
 
-					if (const_val->value.type().IsTemporal() ||
-					    const_val->value.type().id() == LogicalTypeId::VARCHAR) {
+					if (const_val->value.type().IsTemporal()) {
 						column_id.SetInvalid();
 						break;
 					}

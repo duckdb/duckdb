@@ -422,6 +422,9 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 				throw BinderException(ref, "Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
 				                      pivot.pivot_enum, type.ToString());
 			}
+			if (!type.IsComplete()) {
+				throw BinderException("ENUM type is incomplete");
+			}
 			auto enum_size = EnumType::GetSize(type);
 			for (idx_t i = 0; i < enum_size; i++) {
 				auto enum_value = EnumType::GetValue(Value::ENUM(i, type));

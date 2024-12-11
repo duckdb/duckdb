@@ -88,8 +88,8 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_SUBQUERY: {
 		auto &subquery_expr = expr.Cast<BoundSubqueryExpression>();
-		if (subquery_expr.child) {
-			callback(subquery_expr.child);
+		for (auto &child : subquery_expr.children) {
+			callback(child);
 		}
 		break;
 	}

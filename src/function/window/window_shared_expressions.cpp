@@ -23,8 +23,8 @@ column_t WindowSharedExpressions::RegisterExpr(const unique_ptr<Expression> &exp
 	return result;
 }
 
-vector<const Expression *> WindowSharedExpressions::GetSortedExpressions(Shared &shared) {
-	vector<const Expression *> sorted(shared.size, nullptr);
+vector<optional_ptr<const Expression>> WindowSharedExpressions::GetSortedExpressions(Shared &shared) {
+	vector<optional_ptr<const Expression>> sorted(shared.size);
 	for (auto &col : shared.columns) {
 		auto &expr = col.first.get();
 		for (auto col_idx : col.second) {
