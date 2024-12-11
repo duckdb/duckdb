@@ -1,6 +1,6 @@
-# name: benchmark/realnest/04_list_transform_and_list_aggregate.benchmark
+# name: benchmark/realnest/micro/04_list_transform_and_list_aggregate.benchmark
 # description: select average from transformed list and group by, having
-# group: [realnest]
+# group: [micro]
 
 name list_transform plus list_aggregate
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT

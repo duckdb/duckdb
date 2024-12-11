@@ -1,6 +1,6 @@
-# name: benchmark/realnest/15_list_sort.benchmark
+# name: benchmark/realnest/micro/15_list_sort.benchmark
 # description: Benchmarks list_sort function
-# group: [realnest]
+# group: [micro]
 
 name list_sort
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT list_sort(Jet, 'ASC'),

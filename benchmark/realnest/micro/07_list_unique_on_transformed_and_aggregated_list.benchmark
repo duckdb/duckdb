@@ -1,6 +1,6 @@
-# name: benchmark/realnest/07_list_unique_on_transformed_and_aggregated_list.benchmark
+# name: benchmark/realnest/micro/07_list_unique_on_transformed_and_aggregated_list.benchmark
 # description: Creates a list by unnesting and re-aggregating it, then performs list_transform and list_unique on that list
-# group: [realnest]
+# group: [micro]
 
 name list_operations_on_strings
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT list_unique(list_transform(lt, s -> length(s))) 

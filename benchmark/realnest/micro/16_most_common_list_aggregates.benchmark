@@ -1,6 +1,6 @@
-# name: benchmark/realnest/16_most_common_list_aggregates.benchmark
+# name: benchmark/realnest/micro/16_most_common_list_aggregates.benchmark
 # description: Combination of the most common list_aggregate functions
-# group: [realnest]
+# group: [micro]
 
 name most_common_list_aggregates
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT 

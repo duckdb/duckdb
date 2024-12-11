@@ -1,6 +1,6 @@
-# name: benchmark/realnest/17_list_aggregates_histogram_stddev_mode.benchmark
+# name: benchmark/realnest/micro/17_list_aggregates_histogram_stddev_mode.benchmark
 # description: Combination of list_aggregate functions histogram, stddev, mode
-# group: [realnest]
+# group: [micro]
 
 name list_aggregates_histogram_stddev_mode
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT 

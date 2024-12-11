@@ -1,6 +1,6 @@
-# name: benchmark/realnest/02_list_sort.benchmark
+# name: benchmark/realnest/micro/02_list_sort.benchmark
 # description: list_sort text entries
-# group: [realnest]
+# group: [micro]
 
 name list_sort
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT list_sort(body_text) FROM cord;

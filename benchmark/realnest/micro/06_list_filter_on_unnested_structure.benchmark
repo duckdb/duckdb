@@ -1,6 +1,6 @@
-# name: benchmark/realnest/06_list_filter_on_unnested_structure.benchmark
+# name: benchmark/realnest/micro/06_list_filter_on_unnested_structure.benchmark
 # description: list_filter on unnested_muon structure
-# group: [realnest]
+# group: [micro]
 
 name list_filter_on_unnested_structure
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT list_filter(

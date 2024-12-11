@@ -1,6 +1,6 @@
-# name: benchmark/realnest/11_list_sort_reduce_transform.benchmark
+# name: benchmark/realnest/micro/11_list_sort_reduce_transform.benchmark
 # description: Transform, aggregate, reduce and sort a list
-# group: [realnest]
+# group: [micro]
 
 name list_sort_reduce_transform
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT list_sort(

@@ -1,6 +1,6 @@
-# name: benchmark/realnest/14_list_slice.benchmark
+# name: benchmark/realnest/micro/14_list_slice.benchmark
 # description: Benchmark the list_slice function
-# group: [realnest]
+# group: [micro]
 
 name list_slice
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT list_slice(Jet, 2, 9),

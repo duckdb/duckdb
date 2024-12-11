@@ -1,6 +1,6 @@
-# name: benchmark/realnest/13_multi_join_nested_data_with_filtering.benchmark
+# name: benchmark/realnest/micro/13_multi_join_nested_data_with_filtering.benchmark
 # description: Multiple join conditions and filtering on merged and closed pull requests
-# group: [realnest]
+# group: [micro]
 
 name multi_join_nested_data_with_filtering
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT gh_pull.pull_request.base.repo.language AS language,

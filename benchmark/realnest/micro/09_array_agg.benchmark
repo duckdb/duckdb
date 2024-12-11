@@ -1,6 +1,6 @@
-# name: benchmark/realnest/09_array_agg.benchmark
+# name: benchmark/realnest/micro/09_array_agg.benchmark
 # description: Aggregate nested structs
-# group: [realnest]
+# group: [micro]
 
 name aggregate_nested_structs
 group real_nest
@@ -11,7 +11,7 @@ require httpfs
 
 cache real_nest.duckdb
 
-load benchmark/realnest/load.sql
+load benchmark/realnest/micro/load.sql
 
 run
 SELECT array_agg(data.entities.hashtags), 
