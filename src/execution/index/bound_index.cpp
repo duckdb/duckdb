@@ -38,14 +38,15 @@ ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids) {
 	return Append(l, chunk, row_ids);
 }
 
-ErrorData BoundIndex::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
+ErrorData BoundIndex::AppendWithDeleteIndex(IndexLock &l, DataChunk &chunk, Vector &row_ids,
+                                            optional_ptr<BoundIndex> delete_index) {
 	throw NotImplementedException("this implementation of Append does not exist.");
 }
 
-ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
+ErrorData BoundIndex::AppendWithDeleteIndex(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
 	IndexLock l;
 	InitializeLock(l);
-	return Append(l, chunk, row_ids, delete_index);
+	return AppendWithDeleteIndex(l, chunk, row_ids, delete_index);
 }
 
 void BoundIndex::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_index,

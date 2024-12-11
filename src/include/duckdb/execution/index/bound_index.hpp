@@ -72,9 +72,10 @@ public:
 	//! Obtains a lock and calls Append while holding that lock.
 	ErrorData Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends data to the locked index and verifies constraint violations against a delete index.
-	virtual ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index);
+	virtual ErrorData AppendWithDeleteIndex(IndexLock &l, DataChunk &chunk, Vector &row_ids,
+	                                        optional_ptr<BoundIndex> delete_index);
 	//! Obtains a lock and calls Append with an delete_index while holding that lock.
-	ErrorData Append(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index);
+	ErrorData AppendWithDeleteIndex(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index);
 
 	//! Verify that data can be appended to the index without a constraint violation.
 	virtual void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_index,

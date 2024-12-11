@@ -558,7 +558,8 @@ ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
 	return Insert(l, expr_chunk, row_ids, nullptr);
 }
 
-ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
+ErrorData ART::AppendWithDeleteIndex(IndexLock &l, DataChunk &chunk, Vector &row_ids,
+                                     optional_ptr<BoundIndex> delete_index) {
 	// Execute all column expressions before inserting the data chunk.
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);

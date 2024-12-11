@@ -75,7 +75,8 @@ public:
 	//! Appends data to the locked index.
 	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
 	//! Appends data to the locked index and verifies constraint violations against a delete index.
-	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) override;
+	ErrorData AppendWithDeleteIndex(IndexLock &l, DataChunk &chunk, Vector &row_ids,
+	                                optional_ptr<BoundIndex> delete_index) override;
 
 	//! Internally inserts a chunk.
 	ARTConflictType Insert(Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id, const GateStatus status,

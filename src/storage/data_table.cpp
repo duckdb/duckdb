@@ -1140,7 +1140,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		}
 
 		try {
-			error = index.Append(chunk, row_ids, delete_index);
+			error = index.AppendWithDeleteIndex(chunk, row_ids, delete_index);
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 		}
