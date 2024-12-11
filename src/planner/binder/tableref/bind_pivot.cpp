@@ -160,7 +160,7 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, Piv
 				// if there are multiple aggregates specified we add the name of the aggregate as well
 				name += "_" + (aggr_name.empty() ? aggregate->GetName() : aggr_name);
 			}
-			copied_aggr->alias = name;
+			copied_aggr->SetAlias(name);
 			subquery->select_list.push_back(std::move(copied_aggr));
 		}
 	}
@@ -183,7 +183,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 	for (auto &expr : subquery_stage1->select_list) {
 		bind_state.group_names.push_back(expr->GetName());
 		if (expr->alias.empty()) {
-			expr->alias = "__internal_pivot_group" + std::to_string(++group_count);
+			expr->SetAlias("__internal_pivot_group" + std::to_string(++group_count));
 		}
 		bind_state.internal_group_names.push_back(expr->alias);
 	}
@@ -192,7 +192,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 	for (auto &pivot_column : ref.pivots) {
 		for (auto &pivot_expr : pivot_column.pivot_expressions) {
 			if (pivot_expr->alias.empty()) {
-				pivot_expr->alias = "__internal_pivot_ref" + std::to_string(++pivot_count);
+				pivot_expr->SetAlias("__internal_pivot_ref" + std::to_string(++pivot_count));
 			}
 			auto pivot_alias = pivot_expr->alias;
 			subquery_stage1->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
@@ -207,7 +207,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 		auto aggregate_alias = "__internal_pivot_aggregate" + std::to_string(++aggregate_count);
 		bind_state.aggregate_names.push_back(aggregate->alias);
 		bind_state.internal_aggregate_names.push_back(aggregate_alias);
-		aggregate->alias = std::move(aggregate_alias);
+		aggregate->SetAlias(std::move(aggregate_alias));
 		subquery_stage1->select_list.push_back(std::move(aggregate));
 	}
 	return subquery_stage1;
@@ -235,7 +235,7 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 		subquery_stage2->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
 		    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery_stage2->select_list.size() + 1))));
 		auto group_reference = make_uniq<ColumnRefExpression>(bind_state.internal_group_names[gr]);
-		group_reference->alias = bind_state.internal_group_names[gr];
+		group_reference->SetAlias(bind_state.internal_group_names[gr]);
 		subquery_stage2->select_list.push_back(std::move(group_reference));
 	}
 
@@ -245,7 +245,7 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 		vector<unique_ptr<ParsedExpression>> list_children;
 		list_children.push_back(std::move(colref));
 		auto aggregate = make_uniq<FunctionExpression>("list", std::move(list_children));
-		aggregate->alias = bind_state.internal_aggregate_names[aggr];
+		aggregate->SetAlias(bind_state.internal_aggregate_names[aggr]);
 		subquery_stage2->select_list.push_back(std::move(aggregate));
 	}
 	// construct the pivot list
@@ -273,7 +273,7 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 	list_children.push_back(std::move(expr));
 	auto aggregate = make_uniq<FunctionExpression>("list", std::move(list_children));
 
-	aggregate->alias = pivot_name;
+	aggregate->SetAlias(pivot_name);
 	subquery_stage2->select_list.push_back(std::move(aggregate));
 
 	subquery_stage2->from_table = std::move(subquery_ref);
@@ -665,7 +665,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	vector<unique_ptr<ParsedExpression>> unnest_name_children;
 	unnest_name_children.push_back(std::move(unpivot_name_expr));
 	auto unnest_name_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_name_children));
-	unnest_name_expr->alias = unpivot.unpivot_names[0];
+	unnest_name_expr->SetAlias(unpivot.unpivot_names[0]);
 	select_node->select_list.push_back(std::move(unnest_name_expr));
 
 	// construct the UNNEST expression for the set of unpivoted columns
@@ -679,7 +679,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		unnest_val_children.push_back(std::move(list_expr));
 		auto unnest_val_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_val_children));
 		auto unnest_name = i < ref.column_name_alias.size() ? ref.column_name_alias[i] : ref.unpivot_names[i];
-		unnest_val_expr->alias = unnest_name;
+		unnest_val_expr->SetAlias(unnest_name);
 		select_node->select_list.push_back(std::move(unnest_val_expr));
 		if (!ref.include_nulls) {
 			// if we are running with EXCLUDE NULLS we need to add an IS NOT NULL filter

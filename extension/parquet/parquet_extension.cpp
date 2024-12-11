@@ -1597,7 +1597,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			wkb_blob_type.SetAlias("WKB_BLOB");
 
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), wkb_blob_type, false);
-			cast_expr->alias = name;
+			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
@@ -1609,7 +1609,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 
 			// Cast the column to the new type
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
-			cast_expr->alias = name;
+			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
@@ -1622,7 +1622,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			});
 
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
-			cast_expr->alias = name;
+			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}

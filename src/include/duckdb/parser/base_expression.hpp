@@ -59,6 +59,18 @@ public:
 		query_location = location;
 	}
 
+	void SetAlias(const string &alias_p) {
+		alias = alias_p;
+	}
+
+	void SetAlias(string &&alias_p) {
+		alias = std::move(alias_p);
+	}
+
+	void ClearAlias() {
+		alias.clear();
+	}
+
 	//! The alias of the expression,
 	string alias;
 

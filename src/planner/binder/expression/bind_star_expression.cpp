@@ -89,7 +89,7 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 		auto alias = expr->alias;
 		expr = replacement->Copy();
 		if (!alias.empty()) {
-			expr->alias = std::move(alias);
+			expr->SetAlias(std::move(alias));
 		}
 		return;
 	}
@@ -321,9 +321,9 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			if (expr) {
 				auto &colref = expr->Cast<ColumnRefExpression>();
 				if (new_expr->alias.empty()) {
-					new_expr->alias = colref.GetColumnName();
+					new_expr->SetAlias(colref.GetColumnName());
 				} else {
-					new_expr->alias = ReplaceColumnsAlias(new_expr->alias, colref.GetColumnName(), regex.get());
+					new_expr->SetAlias(ReplaceColumnsAlias(new_expr->alias, colref.GetColumnName(), regex.get()));
 				}
 			}
 		}

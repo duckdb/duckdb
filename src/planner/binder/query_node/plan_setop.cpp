@@ -64,7 +64,7 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 				string cur_alias = node->expressions[i]->alias;
 				node->expressions[i] =
 				    BoundCastExpression::AddCastToType(context, std::move(node->expressions[i]), target_types[i]);
-				node->expressions[i]->alias = cur_alias;
+				node->expressions[i]->SetAlias(cur_alias);
 			}
 		}
 		return op;

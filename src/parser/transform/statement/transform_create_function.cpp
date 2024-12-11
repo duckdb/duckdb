@@ -33,7 +33,7 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 				throw ParserException("Duplicate default parameter: '%s'", param->alias);
 			}
 			auto constructed_constant = make_uniq<ConstantExpression>(std::move(const_param));
-			constructed_constant->alias = param->alias;
+			constructed_constant->SetAlias(param->alias);
 			macro_func->default_parameters[param->alias] = std::move(constructed_constant);
 		} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 			// positional parameters

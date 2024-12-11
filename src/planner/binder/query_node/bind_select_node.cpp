@@ -346,7 +346,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 				for (idx_t i = 0; i < sql_types.size(); i++) {
 					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i], ColumnBinding(table_index, i));
 					if (i < names.size()) {
-						expr->alias = names[i];
+						expr->SetAlias(names[i]);
 					}
 					order.orders.emplace_back(order_type, null_order, std::move(expr));
 				}
@@ -498,7 +498,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 				FunctionBinder function_binder(*this);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
-				function->alias = "__collated_group";
+				function->SetAlias("__collated_group");
 				result->aggregates.push_back(std::move(function));
 			}
 			result->groups.group_expressions.push_back(std::move(bound_expr));

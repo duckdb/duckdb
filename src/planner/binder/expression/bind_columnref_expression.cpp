@@ -128,11 +128,11 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		if (new_expr) {
 			if (!expr->alias.empty()) {
 				// Pre-existing aliases are added to the qualified column reference
-				new_expr->alias = expr->alias;
+				new_expr->SetAlias(expr->alias);
 			} else if (within_function_expression) {
 				// Qualifying the column reference may add an alias, but this needs to be removed within function
 				// expressions, because the alias here means a named parameter instead of a positional parameter
-				new_expr->alias = "";
+				new_expr->ClearAlias();
 			}
 
 			// replace the expression with the qualified column reference
@@ -147,7 +147,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 			string table_name, column_name;
 			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
 			if (error.empty()) {
-				ref.alias = column_name;
+				ref.SetAlias(column_name);
 			}
 		}
 		break;
@@ -456,7 +456,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 		auto alias = expr->alias;
 		auto result = BindExpression(expr, depth);
 		if (result.expression) {
-			result.expression->alias = std::move(alias);
+			result.expression->SetAlias(std::move(alias));
 		}
 		return result;
 	}

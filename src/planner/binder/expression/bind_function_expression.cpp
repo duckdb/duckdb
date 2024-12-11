@@ -196,9 +196,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// successfully bound: replace the node with a BoundExpression
 	auto alias = function.children[1]->alias;
-	bind_lambda_result.expression->alias = alias;
+	bind_lambda_result.expression->SetAlias(alias);
 	if (!alias.empty()) {
-		bind_lambda_result.expression->alias = alias;
+		bind_lambda_result.expression->SetAlias(alias);
 	}
 	function.children[1] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
 

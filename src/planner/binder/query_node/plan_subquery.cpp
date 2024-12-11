@@ -190,7 +190,7 @@ CreateDuplicateEliminatedJoin(const vector<CorrelatedColumnInfo> &correlated_col
 		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
-		row_number->alias = "delim_index";
+		row_number->SetAlias("delim_index");
 		window->expressions.push_back(std::move(row_number));
 		window->AddChild(std::move(original_plan));
 		original_plan = std::move(window);
