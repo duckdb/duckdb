@@ -194,7 +194,7 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormat(const string &format) {
 
 shared_ptr<ArrowType> ArrowType::CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
                                                 bool view) {
-	auto child_type = GetTypeFromSchema(config, child);
+	auto child_type = GetArrowLogicalType(config, child);
 
 	unique_ptr<ArrowTypeInfo> type_info;
 	auto type = LogicalType::LIST(child_type->GetDuckType());
@@ -218,7 +218,7 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, Arrow
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
-		auto child_type = GetTypeFromSchema(config, *schema.children[0]);
+		auto child_type = GetArrowLogicalType(config, *schema.children[0]);
 
 		auto array_type = LogicalType::ARRAY(child_type->GetDuckType(), fixed_size);
 		auto type_info = make_uniq<ArrowArrayInfo>(std::move(child_type), fixed_size);
@@ -231,7 +231,7 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, Arrow
 			    "Attempted to convert a STRUCT with no fields to DuckDB which is not supported");
 		}
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
-			children.emplace_back(GetTypeFromSchema(config, *schema.children[type_idx]));
+			children.emplace_back(GetArrowLogicalType(config, *schema.children[type_idx]));
 			child_types.emplace_back(schema.children[type_idx]->name, children.back()->GetDuckType());
 		}
 		auto type_info = make_uniq<ArrowStructInfo>(std::move(children));
@@ -255,7 +255,7 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, Arrow
 		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(schema.n_children); type_idx++) {
 			auto type = schema.children[type_idx];
 
-			children.emplace_back(GetTypeFromSchema(config, *type));
+			children.emplace_back(GetArrowLogicalType(config, *type));
 			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
 
@@ -271,7 +271,7 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, Arrow
 		D_ASSERT(string(schema.children[1]->name) == "values");
 		for (idx_t i = 0; i < n_children; i++) {
 			auto type = schema.children[i];
-			children.emplace_back(GetTypeFromSchema(config, *type));
+			children.emplace_back(GetArrowLogicalType(config, *type));
 			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
 
@@ -282,8 +282,8 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, Arrow
 	} else if (format == "+m") {
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);
-		auto key_type = GetTypeFromSchema(config, *arrow_struct_type.children[0]);
-		auto value_type = GetTypeFromSchema(config, *arrow_struct_type.children[1]);
+		auto key_type = GetArrowLogicalType(config, *arrow_struct_type.children[0]);
+		auto value_type = GetArrowLogicalType(config, *arrow_struct_type.children[1]);
 		child_list_t<LogicalType> key_value;
 		key_value.emplace_back(std::make_pair("key", key_type->GetDuckType()));
 		key_value.emplace_back(std::make_pair("value", value_type->GetDuckType()));
@@ -347,6 +347,15 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		return type;
 	}
 	}
+}
+
+shared_ptr<ArrowType> ArrowType::GetArrowLogicalType(DBConfig &config, ArrowSchema &schema) {
+	auto arrow_type = ArrowType::GetTypeFromSchema(config, schema);
+	if (schema.dictionary) {
+		auto dictionary = GetArrowLogicalType(config, *schema.dictionary);
+		arrow_type->SetDictionary(std::move(dictionary));
+	}
+	return arrow_type;
 }
 
 shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema &schema) {

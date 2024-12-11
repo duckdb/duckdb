@@ -88,9 +88,12 @@ bool SetArrowExtension(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                     const ClientProperties &options, ClientContext &context) {
 	if (type.HasAlias()) {
-		// If the type has an alias, we check if it is an Arrow-Type extension
-		if (SetArrowExtension(root_holder, child, type, context)) {
-			return;
+		// If it is a json type, we only export it as json if arrow_lossless_conversion = True
+		if (!(type.IsJSONType() && !options.arrow_lossless_conversion)) {
+			// If the type has an alias, we check if it is an Arrow-Type extension
+			if (SetArrowExtension(root_holder, child, type, context)) {
+				return;
+			}
 		}
 	}
 	switch (type.id()) {
@@ -153,11 +156,6 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::VARCHAR:
-		if (type.IsJSONType() && options.arrow_lossless_conversion) {
-			auto schema_metadata = ArrowSchemaMetadata::ArrowCanonicalType("arrow.json");
-			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-			child.metadata = root_holder.metadata_info.back().get();
-		}
 		if (options.produce_arrow_string_view) {
 			child.format = "vu";
 		} else {

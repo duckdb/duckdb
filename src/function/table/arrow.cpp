@@ -17,15 +17,6 @@
 
 namespace duckdb {
 
-shared_ptr<ArrowType> ArrowTableFunction::GetArrowLogicalType(DBConfig &config, ArrowSchema &schema) {
-	auto arrow_type = ArrowType::GetTypeFromSchema(config, schema);
-	if (schema.dictionary) {
-		auto dictionary = GetArrowLogicalType(config, *schema.dictionary);
-		arrow_type->SetDictionary(std::move(dictionary));
-	}
-	return arrow_type;
-}
-
 void ArrowTableFunction::PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table,
                                                 const ArrowSchemaWrapper &schema_p, vector<string> &names,
                                                 vector<LogicalType> &return_types) {
@@ -34,7 +25,7 @@ void ArrowTableFunction::PopulateArrowTableType(DBConfig &config, ArrowTableType
 		if (!schema.release) {
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
-		auto arrow_type = GetArrowLogicalType(config, schema);
+		auto arrow_type = ArrowType::GetArrowLogicalType(config, schema);
 		return_types.emplace_back(arrow_type->GetDuckType(true));
 		arrow_table.AddColumn(col_idx, std::move(arrow_type));
 		auto name = string(schema.name);

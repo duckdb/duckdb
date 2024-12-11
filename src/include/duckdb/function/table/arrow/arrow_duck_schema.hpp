@@ -53,6 +53,8 @@ public:
 
 	static shared_ptr<ArrowType> GetTypeFromFormatNested(DBConfig &config, ArrowSchema &schema, string &format);
 
+	static shared_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
+
 private:
 	LogicalType type;
 	//! Hold the optional type if the array is a dictionary

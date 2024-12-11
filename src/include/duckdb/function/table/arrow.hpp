@@ -229,10 +229,6 @@ protected:
 	//! Gets the progress on the table scan, used for Progress Bars
 	static double ArrowProgress(ClientContext &context, const FunctionData *bind_data,
 	                            const GlobalTableFunctionState *global_state);
-
-public:
-	//! Helper function to get the DuckDB logical type
-	static shared_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
 };
 
 } // namespace duckdb
