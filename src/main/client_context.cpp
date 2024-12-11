@@ -76,6 +76,9 @@ private:
 #ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
 	~DebugClientContextState() override {
+		if (Exception::UncaughtException()) {
+			return;
+		}
 		D_ASSERT(!active_transaction);
 		D_ASSERT(!active_query);
 	}
