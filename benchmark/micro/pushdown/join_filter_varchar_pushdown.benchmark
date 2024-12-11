@@ -1,0 +1,19 @@
+# name: benchmark/micro/pushdown/join_filter_varchar_pushdown.benchmark
+# description: Show the performance of dynamic join IN filter pushed down on VARCHAR column
+# group: [pushdown]
+
+name JoinFilterVarcharPushdown
+group micro
+subgroup pushdown
+
+cache varchar_pushdown.duckdb
+
+load
+create table t1s as select printf('%08d', range) i from range(100e6::bigint);
+
+# otherwise we get a projection and the pushdown fails
+init
+set disabled_optimizers to 'compressed_materialization'
+
+run
+select count(*) from t1s t1 join (from t1s where i::bigint % 10e6::bigint = 0) t2 using (i)

@@ -2298,7 +2298,7 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 	double roundedValue = round(value);
 	if (roundedValue <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] ||
 	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
-		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
+		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", input, width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}

@@ -1,0 +1,14 @@
+# name: test/fuzzer/public/lateral_join_subquery.test
+# description: Subqueries in the join condition of lateral joins
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t1 (c1 INT);
+
+statement error
+FROM t1 INNER JOIN (SELECT t1.c1) ON (SELECT 42);
+----
+Subqueries are not supported in LATERAL join conditions

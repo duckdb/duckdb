@@ -664,7 +664,8 @@ static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
     {".ndjson", "json"},
     {".shp", "spatial"},
     {".gpkg", "spatial"},
-    {".fgb", "spatial"}
+    {".fgb", "spatial"},
+    {".xlsx", "excel"},
 }; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py

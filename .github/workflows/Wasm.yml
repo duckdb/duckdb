@@ -99,3 +99,15 @@ jobs:
           path: |
             build/${{ matrix.duckdb_arch }}/extension/*/*.duckdb_extension.wasm
 
+ upload-wasm-extensions:
+    name: Upload Wasm Extensions
+    needs: wasm-extensions
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    strategy:
+      matrix:
+        duckdb_arch: [wasm_mvp, wasm_eh, wasm_threads]
+    with:
+      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
+      duckdb_arch: ${{ matrix.duckdb_arch }}
+      duckdb_sha: ${{ github.sha }}
