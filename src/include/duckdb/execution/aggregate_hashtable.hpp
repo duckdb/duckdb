@@ -51,7 +51,7 @@ public:
 
 public:
 	//! The hash table load factor, when a resize is triggered
-	constexpr static double LOAD_FACTOR = 1.5;
+	constexpr static double LOAD_FACTOR = 1.25;
 
 	//! Get the layout of this HT
 	const TupleDataLayout &GetLayout() const;
@@ -91,28 +91,24 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
-	unique_ptr<PartitionedTupleData> &GetPartitionedData();
+	const PartitionedTupleData &GetPartitionedData() const;
+	unique_ptr<PartitionedTupleData> AcquirePartitionedData();
+	void Abandon();
+	void Repartition();
 	shared_ptr<ArenaAllocator> GetAggregateAllocator();
 
 	//! Resize the HT to the specified size. Must be larger than the current size.
 	void Resize(idx_t size);
 	//! Resets the pointer table of the HT to all 0's
 	void ClearPointerTable();
-	//! Resets the group count to 0
-	void ResetCount();
 	//! Set the radix bits for this HT
 	void SetRadixBits(idx_t radix_bits);
 	//! Get the radix bits for this HT
 	idx_t GetRadixBits() const;
-	//! Initializes the PartitionedTupleData
-	void InitializePartitionedData();
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr);
-
-	//! Unpins the data blocks
-	void UnpinData();
 
 private:
 	//! Efficiently matches groups
@@ -136,7 +132,8 @@ private:
 	struct AggregateHTAppendState {
 		AggregateHTAppendState();
 
-		PartitionedTupleDataAppendState append_state;
+		PartitionedTupleDataAppendState partitioned_append_state;
+		PartitionedTupleDataAppendState unpartitioned_append_state;
 
 		Vector ht_offsets;
 		Vector hash_salts;
@@ -150,10 +147,13 @@ private:
 		AggregateDictionaryState dict_state;
 	} state;
 
+	//! If we have this many or more radix bits, we use the unpartitioned data collection too
+	static constexpr idx_t UNPARTITIONED_RADIX_BITS_THRESHOLD = 3;
 	//! The number of radix bits to partition by
 	idx_t radix_bits;
 	//! The data of the HT
 	unique_ptr<PartitionedTupleData> partitioned_data;
+	unique_ptr<PartitionedTupleData> unpartitioned_data;
 
 	//! Predicates for matching groups (always ExpressionType::COMPARE_EQUAL)
 	vector<ExpressionType> predicates;
@@ -181,8 +181,14 @@ private:
 	//! Destroy the HT
 	void Destroy();
 
+	//! Initializes the PartitionedTupleData
+	void InitializePartitionedData();
+	//! Initializes the PartitionedTupleData that only has 1 partition
+	void InitializeUnpartitionedData();
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;
+	//! Reinserts tuples (triggered by Resize)
+	void ReinsertTuples(PartitionedTupleData &data);
 
 	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter);
 

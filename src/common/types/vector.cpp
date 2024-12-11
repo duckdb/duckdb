@@ -601,9 +601,16 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str_compressed = reinterpret_cast<string_t *>(data)[index];
 		auto decoder = FSSTVector::GetDecoder(*vector);
 		auto &decompress_buffer = FSSTVector::GetDecompressBuffer(*vector);
-		Value result = FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(),
-		                                               decompress_buffer);
-		return result;
+		auto string_val = FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(),
+		                                                  decompress_buffer);
+		switch (vector->GetType().id()) {
+		case LogicalTypeId::VARCHAR:
+			return Value(std::move(string_val));
+		case LogicalTypeId::BLOB:
+			return Value::BLOB_RAW(string_val);
+		default:
+			throw InternalException("Unsupported vector type for FSST vector");
+		}
 	}
 
 	switch (vector->GetType().id()) {
