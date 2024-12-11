@@ -290,15 +290,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto &filter = op.Cast<LogicalFilter>();
-		if (filter.HasProjectionMap()) {
-			// if we have any entries in the filter projection map don't prune any columns
-			// FIXME: we can do something more clever here
-			everything_referenced = true;
-		}
-		break;
-	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		auto &distinct = op.Cast<LogicalDistinct>();
 		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {

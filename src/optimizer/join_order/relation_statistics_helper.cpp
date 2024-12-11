@@ -107,6 +107,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 	if (!get.table_filters.filters.empty()) {
 		column_statistics = nullptr;
+		bool has_non_optional_filters = false;
 		for (auto &it : get.table_filters.filters) {
 			if (get.bind_data && get.function.statistics) {
 				column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
@@ -118,11 +119,15 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				    base_table_cardinality, it.first, filter, *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 			}
+
+			if (it.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+				has_non_optional_filters = true;
+			}
 		}
 		// if the above code didn't find an equality filter (i.e country_code = "[us]")
 		// and there are other table filters (i.e cost > 50), use default selectivity.
 		bool has_equality_filter = (cardinality_after_filters != base_table_cardinality);
-		if (!has_equality_filter && !get.table_filters.filters.empty()) {
+		if (!has_equality_filter && has_non_optional_filters) {
 			cardinality_after_filters = MaxValue<idx_t>(
 			    LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
 			    1U);

@@ -24,7 +24,6 @@ void WindowExecutorBoundsState::UpdateBounds(WindowExecutorGlobalState &gstate, 
 	WindowInputExpression boundary_end(eval_chunk, gstate.executor.boundary_end_idx);
 
 	const auto count = eval_chunk.size();
-	bounds.Reset();
 	state.Bounds(bounds, row_idx, range, count, boundary_start, boundary_end, partition_mask, order_mask);
 }
 
