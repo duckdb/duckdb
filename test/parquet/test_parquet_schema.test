@@ -246,15 +246,45 @@ GROUP BY my_cool_group
 2	125000
 
 # also test multi-file reading with different field ids
+# field id -> value:
+# 1 -> 5
+# 2 -> 4 (unused)
+# 3 -> 3
+# 4 -> - (missing)
+# 5 -> 1
 statement ok
 COPY (
-    SELECT 1 i1, 3 i3, 4 i4, 5 i5
-) TO '__TEST_DIR__/multifile1.parquet' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1})
+    SELECT
+		1 i1,
+		3 i3,
+		4 i4,
+		5 i5
+) TO '__TEST_DIR__/multifile1.parquet' (FIELD_IDS {
+	i1: 5,
+	i3: 3,
+	i4: 2,
+	i5: 1
+})
 
+# field_id -> value:
+# 1 -> 1
+# 2 -> 3 (unused)
+# 3 -> 4
+# 4 -> 5
+# 5 -> - (missing)
 statement ok
 COPY (
-    SELECT 1 j1, 3 j3, 4 j4, 5 j5
-) TO '__TEST_DIR__/multifile2.parquet' (FIELD_IDS {j1: 1, j3: 2, j4: 3, j5: 4})
+    SELECT
+		1 j1,
+		3 j3,
+		4 j4,
+		5 j5
+) TO '__TEST_DIR__/multifile2.parquet' (FIELD_IDS {
+	j1: 1,
+	j3: 2,
+	j4: 3,
+	j5: 4
+})
 
 query IIIII
 SELECT i1, i3, i4, i5, filename[-18:]

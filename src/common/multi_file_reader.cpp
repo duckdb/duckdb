@@ -393,10 +393,10 @@ void MultiFileReader::CreateMappingByFieldId(const string &file_name,
 	}
 #endif
 
-	unordered_map<idx_t, idx_t> field_id_map;
+	unordered_map<int32_t, idx_t> field_id_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 		auto &column = local_columns[col_idx];
-		if (!column.identifier.IsNull()) {
+		if (column.identifier.IsNull()) {
 			// Extra columns at the end will not have a field_id
 			break;
 		}
