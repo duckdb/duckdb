@@ -9,8 +9,7 @@
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
-#include <list>
-#include <duckdb/main/config.hpp>
+#include "duckdb/main/config.hpp"
 
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
@@ -31,25 +30,6 @@ unsafe_unique_array<char> AddName(const string &name) {
 	name_ptr[name.size()] = '\0';
 	return name_ptr;
 }
-
-//===--------------------------------------------------------------------===//
-// Arrow Schema
-//===--------------------------------------------------------------------===//
-struct DuckDBArrowSchemaHolder {
-	// unused in children
-	vector<ArrowSchema> children;
-	// unused in children
-	vector<ArrowSchema *> children_ptrs;
-	//! used for nested structures
-	std::list<vector<ArrowSchema>> nested_children;
-	std::list<vector<ArrowSchema *>> nested_children_ptr;
-	//! This holds strings created to represent decimal types
-	vector<unsafe_unique_array<char>> owned_type_names;
-	vector<unsafe_unique_array<char>> owned_column_names;
-	//! This holds any values created for metadata info
-	vector<unsafe_unique_array<char>> metadata_info;
-	vector<unsafe_unique_array<char>> extension_format;
-};
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	if (!schema || !schema->release) {

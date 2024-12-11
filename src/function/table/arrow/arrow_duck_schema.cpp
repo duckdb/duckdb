@@ -1,7 +1,4 @@
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
-
-#include <fmt/format.h>
-
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/exception.hpp"
 

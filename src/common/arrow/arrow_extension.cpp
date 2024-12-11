@@ -3,6 +3,8 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {
 
