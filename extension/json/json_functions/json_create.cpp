@@ -688,21 +688,9 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 	CreateValues(names, doc, vals, input, count);
 
 	// Write JSON values to string
-	auto objects = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
-	for (idx_t i = 0; i < count; i++) {
-		idx_t idx = input_data.sel->get_index(i);
-		if (input_data.validity.RowIsValid(idx)) {
-			objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(vals[i], alc);
-		} else {
-			result_validity.SetInvalid(i);
-		}
-	}
-	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR || count == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
+	UnaryExecutor::ExecuteWithNulls<data_t, string_t>(input, result, count, [&](data_t, ValidityMask &, idx_t index) {
+		return JSONCommon::WriteVal<yyjson_mut_val>(vals[index], alc);
+	});
 }
 
 static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
