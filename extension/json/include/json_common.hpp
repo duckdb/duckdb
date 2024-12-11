@@ -304,6 +304,9 @@ public:
 private:
 	//! Get JSON pointer (/field/index/... syntax)
 	static inline yyjson_val *GetPointer(yyjson_val *val, const char *ptr, const idx_t &len) {
+		if (len == 1) {
+			return val;
+		}
 		yyjson_ptr_err err;
 		return unsafe_yyjson_ptr_getx(val, ptr, len, &err);
 	}
