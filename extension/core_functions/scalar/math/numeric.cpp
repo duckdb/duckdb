@@ -194,6 +194,9 @@ ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 			break;
 		}
 	}
+	for (auto &func : abs.functions) {
+		ScalarFunction::SetReturnsError(func);
+	}
 	return abs;
 }
 
@@ -1304,8 +1307,10 @@ struct GammaOperator {
 };
 
 ScalarFunction GammaFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, GammaOperator>);
+	auto func = ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                           ScalarFunction::UnaryFunction<double, double, GammaOperator>);
+	ScalarFunction::SetReturnsError(func);
+	return func;
 }
 
 //===--------------------------------------------------------------------===//

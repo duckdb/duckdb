@@ -513,6 +513,7 @@ static unique_ptr<FunctionData> ListUniqueBind(ClientContext &context, ScalarFun
 ScalarFunction ListAggregateFun::GetFunction() {
 	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
 	                             ListAggregateFunction, ListAggregateBind);
+	ScalarFunction::SetReturnsError(result);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.varargs = LogicalType::ANY;
 	result.serialize = ListAggregatesBindData::SerializeFunction;
