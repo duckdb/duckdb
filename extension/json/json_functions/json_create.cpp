@@ -683,15 +683,19 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 static void ToJSONFunctionInternal(const StructNames &names, Vector &input, const idx_t count, Vector &result,
                                    yyjson_alc *alc) {
 	// Initialize array for values
+	bool is_constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto doc = JSONCommon::CreateDocument(alc);
 	auto vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
 	CreateValues(names, doc, vals, input, count);
 
 	// Write JSON values to string
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto input_count = input.GetVectorType() == VectorType::CONSTANT_VECTOR ? 1 : count;
+	auto input_count = is_constant ? 1 : count;
 	for (idx_t i = 0; i < input_count; i++) {
 		result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(vals[i], alc);
+	}
+	if (is_constant) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
