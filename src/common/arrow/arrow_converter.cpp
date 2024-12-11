@@ -129,8 +129,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::HUGEINT: {
 		if (options.arrow_lossless_conversion) {
-			bool success = SetArrowExtension(root_holder, child, type, context);
-			D_ASSERT(success);
+			SetArrowExtension(root_holder, child, type, context);
 		} else {
 			child.format = "d:38,0";
 		}

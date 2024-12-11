@@ -14,7 +14,8 @@ ArrowExtension::ArrowExtension(string extension_name, string arrow_format, share
 
 ArrowExtensionInfo::ArrowExtensionInfo(string extension_name, string vendor_name, string type_name, string arrow_format)
     : extension_name(std::move(extension_name)), vendor_name(std::move(vendor_name)), type_name(std::move(type_name)),
-      arrow_format(std::move(arrow_format)) {};
+      arrow_format(std::move(arrow_format)) {
+}
 
 hash_t ArrowExtensionInfo::GetHash() const {
 	const auto h_extension = Hash(extension_name.c_str());
@@ -105,7 +106,8 @@ ArrowExtension::ArrowExtension(string vendor_name, string type_name, populate_ar
     : populate_arrow_schema(populate_arrow_schema), get_type(get_type),
       extension_info(ArrowExtensionInfo::ARROW_EXTENSION_NON_CANONICAL, std::move(vendor_name), std::move(type_name),
                      {}),
-      type(std::move(type_p)) {};
+      type(std::move(type_p)) {
+}
 
 ArrowExtensionInfo ArrowExtension::GetInfo() const {
 	return extension_info;
