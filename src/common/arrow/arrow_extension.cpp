@@ -101,7 +101,9 @@ ArrowExtension::ArrowExtension(string extension_name, populate_arrow_schema_t po
 ArrowExtension::ArrowExtension(string vendor_name, string type_name, populate_arrow_schema_t populate_arrow_schema,
                                get_type_t get_type, shared_ptr<ArrowType> type_p)
     : populate_arrow_schema(populate_arrow_schema), get_type(get_type),
-      extension_info({}, std::move(vendor_name), std::move(type_name), {}), type(std::move(type_p)) {};
+      extension_info(ArrowExtensionInfo::ARROW_EXTENSION_NON_CANONICAL, std::move(vendor_name), std::move(type_name),
+                     {}),
+      type(std::move(type_p)) {};
 
 ArrowExtensionInfo ArrowExtension::GetInfo() const {
 	return extension_info;
@@ -158,8 +160,8 @@ void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
 	lock_guard<mutex> l(encoding_functions->lock);
 	auto extension_info = extension.GetInfo();
 	if (arrow_extensions->extensions.find(extension_info) != arrow_extensions->extensions.end()) {
-		throw InvalidInputException("Arrow Extension with configuration %s is already registered",
-		                            extension_info.ToString());
+		throw NotImplementedException("Arrow Extension with configuration %s is already registered",
+		                              extension_info.ToString());
 	}
 	arrow_extensions->extensions[extension_info] = extension;
 	if (extension.HasType()) {
@@ -171,15 +173,15 @@ void DBConfig::RegisterArrowExtension(const ArrowExtension &extension) const {
 	arrow_extensions->type_to_info[type_info].push_back(extension_info);
 }
 
-ArrowExtension DBConfig::GetArrowExtension(const ArrowExtensionInfo &info) const {
-	auto info_any = info;
+ArrowExtension DBConfig::GetArrowExtension(ArrowExtensionInfo info) const {
 	if (arrow_extensions->extensions.find(info) == arrow_extensions->extensions.end()) {
-		info_any.SetArrowFormat("");
+		info.SetArrowFormat("");
 		if (arrow_extensions->extensions.find(info) == arrow_extensions->extensions.end()) {
-			throw InvalidInputException("Arrow Extension with configuration:\n%s not yet registered", info.ToString());
+			throw NotImplementedException("Arrow Extension with configuration:\n%s not yet registered",
+			                              info.ToString());
 		}
 	}
-	return arrow_extensions->extensions[info_any];
+	return arrow_extensions->extensions[info];
 }
 
 ArrowExtension DBConfig::GetArrowExtension(const LogicalType &type) const {

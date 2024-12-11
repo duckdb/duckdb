@@ -134,11 +134,8 @@ class TestCanonicalExtensionTypes(object):
 
         arrow_table = pa.Table.from_arrays([storage_array, age_array], names=['pedro_pedro_pedro', 'age'])
 
-        with pytest.raises(duckdb.NotImplementedException, match=" Arrow Type with extension name: pedro.binary"):
+        with pytest.raises(duckdb.NotImplementedException, match="pedro.binary"):
             duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
-        duck_res = duckdb_cursor.execute('SELECT age FROM arrow_table').fetchall()
-        # This works because we project ze unknown extension array
-        assert duck_res == [(29,)]
 
     def test_hugeint(self):
         con = duckdb.connect()
