@@ -98,6 +98,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"scalar_subquery_error_on_multiple_rows", {false}},
 	    {"ieee_floating_point_ops", {false}},
 	    {"progress_bar_time", {0}},
+	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},
 	    {"http_proxy", {"localhost:80"}},
@@ -157,9 +158,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "custom_user_agent",
 	    "default_block_size",
 	    "index_scan_percentage",
-	    "index_scan_max_count",
-	    "temp_directory" // Uses a UUID, see issue #15173
-	};
+	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }
 
