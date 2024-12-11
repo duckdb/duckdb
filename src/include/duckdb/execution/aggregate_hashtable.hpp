@@ -82,8 +82,6 @@ public:
 
 	void InitializeScan(AggregateHTScanState &scan_state);
 	bool Scan(AggregateHTScanState &scan_state, DataChunk &distinct_rows, DataChunk &payload_rows);
-	//! Fetch entries from the hash table into the result chunk
-	void FetchAll(DataChunk &keys, DataChunk &payload);
 
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
@@ -115,8 +113,6 @@ public:
 
 	//! Unpins the data blocks
 	void UnpinData();
-	//! Reset aggregate ht
-	void Reset();
 
 private:
 	//! Efficiently matches groups

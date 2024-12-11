@@ -483,8 +483,8 @@ column_ref_list_opt_comma:
 
 column_ref_list:
 		columnref								{ $$ = list_make1($1); }
-			| column_ref_list ',' columnref		{ $$ = lappend($1, $3); }
-			;
+        | column_ref_list ',' columnref		{ $$ = lappend($1, $3); }
+        ;
 
 opt_materialized:
 		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }
@@ -1527,7 +1527,7 @@ relation_expr:
 					$$->inh = false;
 					$$->alias = NULL;
 				}
-	    ;
+		;
 
 
 /*

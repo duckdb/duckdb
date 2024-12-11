@@ -53,9 +53,8 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 
 		if (cte.aliascolnames) {
 			for (auto node = cte.aliascolnames->head; node != nullptr; node = node->next) {
-
-				info->aliases.emplace_back(
-				    reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
+				auto value = PGPointerCast<duckdb_libpgquery::PGValue>(node->data.ptr_value);
+				info->aliases.emplace_back(value->val.str);
 			}
 		}
 		// lets throw some errors on unsupported features early
@@ -128,13 +127,8 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		result.left = TransformSelectNode(*stmt.larg);
 		result.right = TransformSelectNode(*stmt.rarg);
 		result.aliases = info.aliases;
-		// btodo: Maybe there is another way, we handle unique pointers and therefore can only copy the keys.
 		for (auto &key : info.key_targets) {
 			result.key_targets.emplace_back(key->Copy());
-		}
-
-		if (stmt.op != duckdb_libpgquery::PG_SETOP_UNION) {
-			throw ParserException("Unsupported setop type for recursive CTE: only UNION or UNION ALL are supported");
 		}
 		break;
 	}

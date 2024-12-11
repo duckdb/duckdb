@@ -21,12 +21,12 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
 
 public:
-	LogicalRecursiveCTE(string ctename_p, idx_t table_index, idx_t recurring_index, idx_t column_count, bool union_all,
+	LogicalRecursiveCTE(string ctename_p, idx_t table_index, idx_t column_count, bool union_all,
 	                    vector<unique_ptr<Expression>> key_targets, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), union_all(union_all),
-	      ctename(std::move(ctename_p)), table_index(table_index), recurring_index(recurring_index),
-	      column_count(column_count), key_targets(std::move(key_targets)) {
+	      ctename(std::move(ctename_p)), table_index(table_index), column_count(column_count),
+	      key_targets(std::move(key_targets)) {
 
 		children.push_back(std::move(top));
 		children.push_back(std::move(bottom));
@@ -35,7 +35,6 @@ public:
 	bool union_all;
 	string ctename;
 	idx_t table_index;
-	idx_t recurring_index;
 	idx_t column_count;
 
 	vector<unique_ptr<Expression>> key_targets;

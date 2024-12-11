@@ -516,11 +516,6 @@
         "id": 204,
         "name": "key_targets",
         "type": "vector<Expression*>"
-      },
-      {
-        "id": 205,
-        "name": "recurring_index",
-        "type": "idx_t"
       }
     ]
   },

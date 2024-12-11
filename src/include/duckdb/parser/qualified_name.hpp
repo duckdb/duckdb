@@ -20,12 +20,6 @@ struct QualifiedName {
 	string catalog;
 	string schema;
 	string name;
-	QualifiedName() {
-	}
-
-	QualifiedName(string catalog, string schema, string name)
-	    : catalog(std::move(catalog)), schema(std::move(schema)), name(std::move(name)) {
-	}
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA

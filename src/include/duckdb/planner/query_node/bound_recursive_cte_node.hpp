@@ -35,8 +35,6 @@ public:
 
 	//! Index used by the set operation
 	idx_t setop_index;
-	//! Index for recurring table
-	idx_t recurring_index;
 	//! The binder used by the left side of the set operation
 	shared_ptr<Binder> left_binder;
 	//! The binder used by the right side of the set operation

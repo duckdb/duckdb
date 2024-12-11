@@ -119,7 +119,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 			if (cte == recursive_cte_tables.end()) {
 				throw InvalidInputException("Referenced materialized CTE does not exist.");
 			}
-
 			chunk_scan->collection = cte->second.get();
 			materialized_cte->second.push_back(*chunk_scan.get());
 
