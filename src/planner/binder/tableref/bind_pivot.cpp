@@ -154,7 +154,7 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, Piv
 
 			auto &aggr = aggregates[0].get().Cast<FunctionExpression>();
 			aggr.filter = filter->Copy();
-			auto &aggr_name = aggregate->alias;
+			auto &aggr_name = aggregate->GetAlias();
 			auto name = pivot_value.name;
 			if (ref.aggregates.size() > 1 || !aggr_name.empty()) {
 				// if there are multiple aggregates specified we add the name of the aggregate as well
@@ -182,19 +182,19 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 	idx_t group_count = 0;
 	for (auto &expr : subquery_stage1->select_list) {
 		bind_state.group_names.push_back(expr->GetName());
-		if (expr->alias.empty()) {
+		if (expr->GetAlias().empty()) {
 			expr->SetAlias("__internal_pivot_group" + std::to_string(++group_count));
 		}
-		bind_state.internal_group_names.push_back(expr->alias);
+		bind_state.internal_group_names.push_back(expr->GetAlias());
 	}
 	// group by all of the pivot values
 	idx_t pivot_count = 0;
 	for (auto &pivot_column : ref.pivots) {
 		for (auto &pivot_expr : pivot_column.pivot_expressions) {
-			if (pivot_expr->alias.empty()) {
+			if (pivot_expr->GetAlias().empty()) {
 				pivot_expr->SetAlias("__internal_pivot_ref" + std::to_string(++pivot_count));
 			}
-			auto pivot_alias = pivot_expr->alias;
+			auto pivot_alias = pivot_expr->GetAlias();
 			subquery_stage1->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
 			    Value::INTEGER(UnsafeNumericCast<int32_t>(subquery_stage1->select_list.size() + 1))));
 			subquery_stage1->select_list.push_back(std::move(pivot_expr));
@@ -205,7 +205,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 	// finally add the aggregates
 	for (auto &aggregate : ref.aggregates) {
 		auto aggregate_alias = "__internal_pivot_aggregate" + std::to_string(++aggregate_count);
-		bind_state.aggregate_names.push_back(aggregate->alias);
+		bind_state.aggregate_names.push_back(aggregate->GetAlias());
 		bind_state.internal_aggregate_names.push_back(aggregate_alias);
 		aggregate->SetAlias(std::move(aggregate_alias));
 		subquery_stage1->select_list.push_back(std::move(aggregate));
@@ -318,7 +318,7 @@ void ExtractPivotAggregates(BoundTableRef &node, vector<unique_ptr<Expression>> 
 	}
 	auto &select2 = subq2.subquery->Cast<BoundSelectNode>();
 	for (auto &aggr : select2.aggregates) {
-		if (aggr->alias == "__collated_group") {
+		if (aggr->GetAlias() == "__collated_group") {
 			continue;
 		}
 		aggregates.push_back(aggr->Copy());
@@ -537,8 +537,8 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 	for (auto &expr : star_columns) {
 		// create one pivot entry per result column
 		UnpivotEntry unpivot_entry;
-		if (!expr->alias.empty()) {
-			unpivot_entry.alias = std::move(expr->alias);
+		if (!expr->GetAlias().empty()) {
+			unpivot_entry.alias = expr->GetAlias();
 		}
 		unpivot_entry.expressions.push_back(std::move(expr));
 		unpivot_entries.push_back(std::move(unpivot_entry));

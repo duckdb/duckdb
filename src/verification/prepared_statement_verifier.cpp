@@ -50,7 +50,7 @@ void PreparedStatementVerifier::Extract() {
 void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &child) {
 	if (child->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		// constant: extract the constant value
-		auto alias = child->alias;
+		auto alias = child->GetAlias();
 		child->ClearAlias();
 		// check if the value already exists
 		idx_t index = values.size();

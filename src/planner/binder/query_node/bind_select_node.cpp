@@ -242,10 +242,10 @@ unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const 
 	if (index >= sql_types.size()) {
 		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
 	}
-	auto result = make_uniq<BoundColumnRefExpression>(std::move(expr->alias), sql_types[index],
-	                                                  ColumnBinding(table_index, index));
-	if (result->alias.empty() && index < names.size()) {
-		result->alias = names[index];
+	auto result =
+	    make_uniq<BoundColumnRefExpression>(expr->GetAlias(), sql_types[index], ColumnBinding(table_index, index));
+	if (result->GetAlias().empty() && index < names.size()) {
+		result->SetAlias(names[index]);
 	}
 	return std::move(result);
 }
@@ -434,9 +434,9 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		auto &expr = statement.select_list[i];
 		result->names.push_back(expr->GetName());
 		ExpressionBinder::QualifyColumnNames(*this, expr);
-		if (!expr->alias.empty()) {
-			bind_state.alias_map[expr->alias] = i;
-			result->names[i] = expr->alias;
+		if (!expr->GetAlias().empty()) {
+			bind_state.alias_map[expr->GetAlias()] = i;
+			result->names[i] = expr->GetAlias();
 		}
 		bind_state.projection_map[*expr] = i;
 		bind_state.original_expressions.push_back(expr->Copy());

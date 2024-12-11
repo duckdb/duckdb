@@ -30,8 +30,8 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 	if (extra_list && index < extra_list->size()) {
 		alias = extra_list->at(index)->ToString();
 	} else {
-		if (!expr.alias.empty()) {
-			alias = expr.alias;
+		if (!expr.GetAlias().empty()) {
+			alias = expr.GetAlias();
 		}
 	}
 	auto result = make_uniq<BoundConstantExpression>(Value::UBIGINT(index));
@@ -112,7 +112,7 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
 	child_list_t<Value> values;
 	values.push_back(make_pair("index", Value::UBIGINT(index.GetIndex())));
 	auto result = make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
-	result->SetAlias(std::move(expr.alias));
+	result->SetAlias(expr.GetAlias());
 	result->SetQueryLocation(expr.GetQueryLocation());
 	return std::move(result);
 }

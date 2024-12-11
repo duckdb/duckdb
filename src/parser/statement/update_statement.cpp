@@ -67,7 +67,8 @@ string UpdateStatement::ToString() const {
 			}
 			auto column = returning_list[i]->ToString();
 			if (!returning_list[i]->GetAlias().empty()) {
-				column += StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->GetAlias()));
+				column +=
+				    StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->GetAlias()));
 			}
 			result += column;
 		}

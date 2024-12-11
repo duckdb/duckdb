@@ -18,13 +18,6 @@ namespace duckdb {
 //!  The BaseExpression class is a base class that can represent any expression
 //!  part of a SQL statement.
 class BaseExpression {
-protected:
-	//! Type of the expression
-	ExpressionType type;
-
-	//! The expression class of the node
-	ExpressionClass expression_class;
-
 public:
 	//! Create an Expression
 	BaseExpression(ExpressionType type, ExpressionClass expression_class)
@@ -59,31 +52,41 @@ public:
 		query_location = location;
 	}
 
-	void SetAlias(const string &alias_p) {
-		alias = alias_p;
-	}
-
-	void SetAlias(string &&alias_p) {
-		alias = std::move(alias_p);
-	}
-
-	void ClearAlias() {
-		alias.clear();
-	}
-
+	//! Returns true if the expression has a non-empty alias
 	bool HasAlias() const {
 		return !alias.empty();
 	}
 
+	//! Returns the alias of the expression
 	const string &GetAlias() const {
 		return alias;
 	}
 
+	//! Sets the alias of the expression
+	void SetAlias(const string &alias_p) {
+		alias = alias_p;
+	}
+
+	//! Sets the alias of the expression
+	void SetAlias(string &&alias_p) {
+		alias = std::move(alias_p);
+	}
+
+	//! Clears the alias of the expression
+	void ClearAlias() {
+		alias.clear();
+	}
+
+protected:
+	//! Type of the expression
+	ExpressionType type;
+
+	//! The expression class of the node
+	ExpressionClass expression_class;
 
 	//! The alias of the expression,
 	string alias;
 
-protected:
 	//! The location in the query (if any)
 	optional_idx query_location;
 

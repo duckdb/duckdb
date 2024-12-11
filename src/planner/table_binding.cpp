@@ -73,7 +73,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.table_index = index;
 	binding.column_index = column_index;
 	LogicalType sql_type = types[column_index];
-	if (colref.alias.empty()) {
+	if (colref.GetAlias().empty()) {
 		colref.SetAlias(names[column_index]);
 	}
 	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
@@ -242,7 +242,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[column_index];
-		if (colref.alias.empty()) {
+		if (colref.GetAlias().empty()) {
 			colref.SetAlias(names[column_index]);
 		}
 	}
@@ -293,7 +293,7 @@ unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colre
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
 	auto arg = (*arguments)[column_index]->Copy();
-	arg->SetAlias(colref.alias);
+	arg->SetAlias(colref.GetAlias());
 	return arg;
 }
 

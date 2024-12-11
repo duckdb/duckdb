@@ -195,7 +195,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// successfully bound: replace the node with a BoundExpression
-	auto alias = function.children[1]->alias;
+	auto alias = function.children[1]->GetAlias();
 	bind_lambda_result.expression->SetAlias(alias);
 	if (!alias.empty()) {
 		bind_lambda_result.expression->SetAlias(alias);

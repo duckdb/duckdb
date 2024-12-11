@@ -63,7 +63,7 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot,
 			auto n = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 			auto expr = TransformExpression(n);
 			PivotColumnEntry entry;
-			entry.alias = expr->alias;
+			entry.alias = expr->GetAlias();
 			auto transformed = TransformPivotInList(expr, entry);
 			if (!transformed) {
 				// could not transform into list of constant values

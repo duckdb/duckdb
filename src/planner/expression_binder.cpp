@@ -356,7 +356,7 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 	// bind the node, but only if it has not been bound yet
 	auto query_location = expr->GetQueryLocation();
 	auto &expression = *expr;
-	auto alias = expression.alias;
+	auto alias = expression.GetAlias();
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
 		return ErrorData();

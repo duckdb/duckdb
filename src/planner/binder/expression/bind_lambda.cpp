@@ -129,7 +129,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 	if (original->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
 
 		auto &bound_lambda_ref = original->Cast<BoundLambdaRefExpression>();
-		auto alias = bound_lambda_ref.alias;
+		auto alias = bound_lambda_ref.GetAlias();
 
 		// refers to a lambda parameter outside the current lambda function
 		// so the lambda parameter will be inside the lambda_bindings
@@ -169,7 +169,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 	offset += bound_lambda_expr.parameter_count;
 	offset += bound_lambda_expr.captures.size();
 
-	replacement = make_uniq<BoundReferenceExpression>(original->alias, original->return_type, offset);
+	replacement = make_uniq<BoundReferenceExpression>(original->GetAlias(), original->return_type, offset);
 	bound_lambda_expr.captures.push_back(std::move(original));
 }
 
