@@ -21,7 +21,7 @@ FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) {
 }
 
 string StructFilter::ToString(const string &column_name) {
-	if (child_name != "") {
+	if (!child_name.empty()) {
 		return child_filter->ToString(column_name + "." + child_name);
 	}
 	return child_filter->ToString("struct_extract_at(" + column_name + "," + std::to_string(child_idx + 1) + ")");
@@ -32,7 +32,7 @@ bool StructFilter::Equals(const TableFilter &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<StructFilter>();
-	if (child_name != "" && other.child_name != "") { // if both child_names are known, sanity check
+	if ((!child_name.empty()) && (!other.child_name.empty())) { // if both child_names are known, sanity check
 		D_ASSERT((other.child_idx == child_idx) == StringUtil::CIEquals(other.child_name, child_name));
 	}
 	return other.child_idx == child_idx && other.child_filter->Equals(*child_filter);
