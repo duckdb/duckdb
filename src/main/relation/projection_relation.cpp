@@ -60,7 +60,7 @@ string ProjectionRelation::ToString(idx_t depth) {
 		if (i != 0) {
 			str += ", ";
 		}
-		str += expressions[i]->ToString() + " as " + expressions[i]->alias;
+		str += expressions[i]->ToString() + " as " + expressions[i]->GetAlias();
 	}
 	str += "]\n";
 	return str + child->ToString(depth + 1);

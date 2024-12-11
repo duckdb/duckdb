@@ -84,7 +84,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			idx_t new_column_index = state.expressions.size();
 			state.column_map[bound_column_ref.binding] = new_column_index;
 			state.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    bound_column_ref.alias, bound_column_ref.return_type, bound_column_ref.binding));
+			    bound_column_ref.GetAlias(), bound_column_ref.return_type, bound_column_ref.binding));
 			bound_column_ref.binding = ColumnBinding(state.projection_index, new_column_index);
 		} else {
 			// else: just update the column binding!
@@ -100,7 +100,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 		if (node.count > 1) {
 			// this expression occurs more than once! push it into the projection
 			// check if it has already been pushed into the projection
-			auto alias = expr.alias;
+			auto alias = expr.GetAlias();
 			auto type = expr.return_type;
 			if (!node.column_index.IsValid()) {
 				// has not been pushed yet: push it

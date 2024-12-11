@@ -443,7 +443,7 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
-		if (expression.alias == "SUBQUERY" &&
+		if (expression.GetAlias() == "SUBQUERY" &&
 		    relation_mapping.find(colref.binding.table_index) == relation_mapping.end()) {
 			// most likely a BoundSubqueryExpression that was created from an uncorrelated subquery
 			// Here we return true and don't fill the bindings, the expression can be reordered.

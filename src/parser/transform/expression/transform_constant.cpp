@@ -99,14 +99,14 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 			child_list_t<Value> values;
 			values.reserve(function.children.size());
 			for (const auto &child : function.children) {
-				if (!unique_names.insert(child->alias).second) {
-					throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
+				if (!unique_names.insert(child->GetAlias()).second) {
+					throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
 				}
 				Value child_value;
 				if (!ConstructConstantFromExpression(*child, child_value)) {
 					return false;
 				}
-				values.emplace_back(child->alias, std::move(child_value));
+				values.emplace_back(child->GetAlias(), std::move(child_value));
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;

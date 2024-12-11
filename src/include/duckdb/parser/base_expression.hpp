@@ -71,6 +71,15 @@ public:
 		alias.clear();
 	}
 
+	bool HasAlias() const {
+		return !alias.empty();
+	}
+
+	const string &GetAlias() const {
+		return alias;
+	}
+
+
 	//! The alias of the expression,
 	string alias;
 
