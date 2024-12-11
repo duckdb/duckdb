@@ -683,18 +683,24 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 static void ToJSONFunctionInternal(const StructNames &names, Vector &input, const idx_t count, Vector &result,
                                    yyjson_alc *alc) {
 	// Initialize array for values
-	bool is_constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto doc = JSONCommon::CreateDocument(alc);
 	auto vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
 	CreateValues(names, doc, vals, input, count);
 
 	// Write JSON values to string
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto input_count = is_constant ? 1 : count;
-	for (idx_t i = 0; i < input_count; i++) {
-		result_data[i] = JSONCommon::WriteVal<yyjson_mut_val>(vals[i], alc);
+	auto objects = FlatVector::GetData<string_t>(result);
+	auto &result_validity = FlatVector::Validity(result);
+	UnifiedVectorFormat input_data;
+	input.ToUnifiedFormat(count, input_data);
+	for (idx_t i = 0; i < count; i++) {
+		idx_t idx = input_data.sel->get_index(i);
+		if (input_data.validity.RowIsValid(idx)) {
+			objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(vals[i], alc);
+		} else {
+			result_validity.SetInvalid(i);
+		}
 	}
-	if (is_constant) {
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR || count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
