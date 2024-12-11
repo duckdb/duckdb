@@ -57,3 +57,7 @@ class TestGetAttribute(object):
     def test_getattr_spaces(self, duckdb_cursor):
         rel = duckdb_cursor.sql('select 42 as "hello world"')
         assert rel['hello world'].fetchall()[0][0] == 42
+
+    def test_getattr_doublequotes(self, duckdb_cursor):
+        rel = duckdb_cursor.sql('select 1 as "tricky"", ""quotes", 2 as tricky, 3 as quotes')
+        assert rel[rel.columns[0]].fetchone() == (1,)
