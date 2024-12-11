@@ -423,7 +423,7 @@ void MultiFileReader::CreateMappingByFieldId(const string &file_name,
 		// Handle any generate columns that are not in the schema (currently only file_row_number)
 		auto &global_idx = global_column_ids[i];
 		auto global_id = global_column_ids[i].GetPrimaryIndex();
-		if (global_id >= field_id_map.size()) {
+		if (global_id >= global_columns.size()) {
 			if (bind_data.file_row_number_idx == global_id) {
 				reader_data.column_mapping.push_back(i);
 				// FIXME: 'reader.file_row_number_idx'
