@@ -448,10 +448,10 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 
 	if (local_sample && global_sample) {
 		D_ASSERT(global_sample->type == SampleType::RESERVOIR_SAMPLE);
-		auto &ingest_sample = global_sample->Cast<ReservoirSample>();
-		ingest_sample.Merge(std::move(local_sample));
+		auto &reservoir_sample = global_sample->Cast<ReservoirSample>();
+		reservoir_sample.Merge(std::move(local_sample));
 		// initialize the thread local sample again
-		auto new_local_sample = make_uniq<ReservoirSample>(ingest_sample.GetSampleCount());
+		auto new_local_sample = make_uniq<ReservoirSample>(reservoir_sample.GetSampleCount());
 		state.stats.SetTableSample(*local_stats_lock, std::move(new_local_sample));
 		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
 	} else {

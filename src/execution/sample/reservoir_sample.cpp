@@ -208,7 +208,6 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() const {
 	for (idx_t i = 0; i < values_to_copy; i++) {
 		ret->sel.set_index(i, i);
 	}
-	// ret->sel = SelectionVector(0, values_to_copy);
 	ret->sel_size = sel_size;
 	D_ASSERT(ret->reservoir_chunk->chunk.size() <= sample_count);
 	ret->Verify();
@@ -226,7 +225,21 @@ vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t range, uint32_t s
 	for (uint32_t i = 0; i < range; i++) {
 		ret.push_back(i);
 	}
-	std::shuffle(ret.begin(), ret.end(), base_reservoir_sample->random);
+	if (size >= FIXED_SAMPLE_SIZE - 100) {
+		std::shuffle(ret.begin(), ret.end(), base_reservoir_sample->random);
+		return ret;
+	}
+	for (uint32_t i = 0; i < size; i++) {
+		uint32_t random_shuffle = base_reservoir_sample->random.NextRandomInteger32(i, range);
+		if (random_shuffle == i) {
+			// leave the value where it is
+			continue;
+		}
+		uint32_t tmp = ret[random_shuffle];
+		// basically replacing the tuple that was at index actual_sample_indexes[random_shuffle]
+		ret[random_shuffle] = ret[i];
+		ret[i] = tmp;
+	}
 	return ret;
 }
 
@@ -785,7 +798,7 @@ void ReservoirSample::Verify() {
 		} else {
 			index_count[pair.second] += 1;
 			base_reservoir_copy->reservoir_weights.pop();
-			D_ASSERT(false);
+			throw InternalException("Duplicate selection index in reservoir weights");
 		}
 	}
 	// TODO: Verify the Sel as well. No duplicate indices.

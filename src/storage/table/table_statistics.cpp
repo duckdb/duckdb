@@ -109,15 +109,15 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 	if (table_sample) {
 		if (other.table_sample) {
 			D_ASSERT(table_sample->type == SampleType::RESERVOIR_SAMPLE);
-			auto &this_ingest = table_sample->Cast<ReservoirSample>();
+			auto &this_reservoir = table_sample->Cast<ReservoirSample>();
 			D_ASSERT(other.table_sample->type == SampleType::RESERVOIR_SAMPLE);
-			this_ingest.Merge(std::move(other.table_sample));
+			this_reservoir.Merge(std::move(other.table_sample));
 		}
 		// if no other.table sample, do nothig
 	} else {
 		if (other.table_sample) {
-			auto &other_res = other.table_sample->Cast<ReservoirSample>();
-			auto other_table_sample_copy = other_res.Copy();
+			auto &other_reservoir = other.table_sample->Cast<ReservoirSample>();
+			auto other_table_sample_copy = other_reservoir.Copy();
 			table_sample = std::move(other_table_sample_copy);
 		}
 	}
