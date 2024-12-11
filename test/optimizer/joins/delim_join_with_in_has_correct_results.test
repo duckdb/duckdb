@@ -6,7 +6,7 @@ statement ok
 create table t as FROM  VALUES (4), (NULL)  t(t0);
 
 statement ok
-create table u as FROM VALUES (NULL), (NULL) t(u0)
+create table u as FROM VALUES (NULL), (NULL) t(u0);
 
 query II
 SELECT
