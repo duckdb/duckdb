@@ -81,8 +81,8 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, bool 
 	result += " ";
 
 	if (end) {
-		if (squared_progress_error >= 0.0) {
-			result += "estimated_progress_bar_error:" + to_string(squared_progress_error);
+		if (progress_bar_error >= 0.0) {
+			result += "progress_bar_error:" + to_string(progress_bar_error);
 		}
 	}
 
@@ -108,8 +108,8 @@ void TerminalProgressBarDisplay::Finish() {
 void TerminalProgressBarDisplay::AddInfo(const char *name, double value) {
 	if (strcmp(name, "query_time") == 0) {
 		query_time = value;
-	} else if (strcmp(name, "squared_progress_error") == 0) {
-		squared_progress_error = value;
+	} else if (strcmp(name, "progress_bar_error") == 0) {
+		progress_bar_error = value;
 	}
 }
 

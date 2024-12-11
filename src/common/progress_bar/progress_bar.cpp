@@ -151,7 +151,7 @@ void ProgressBar::Update(bool final) {
 			display->AddInfo("query_time", elapsed_time);
 			if (squared_distance_accumulator) {
 				const double mean_squared_diff = squared_distance_accumulator->GetResult(elapsed_time);
-				display->AddInfo("squared_progress_error", mean_squared_diff);
+				display->AddInfo("progress_bar_error", mean_squared_diff);
 			}
 			FinishProgressBarPrint();
 		} else {
