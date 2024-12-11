@@ -8,6 +8,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
@@ -52,7 +53,6 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["column_mapping"] = LogicalType::VARCHAR;
 }
 
 vector<string> MultiFileReader::ParsePaths(const Value &input) {
@@ -306,11 +306,12 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileRe
 	return nullptr;
 }
 
-void MultiFileReader::CreateNameMapping(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
-                                        const vector<MultiFileReaderColumn> &global_columns,
-                                        const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
-                                        const MultiFileReaderBindData &bind_data, const string &initial_file,
-                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
+void MultiFileReader::CreateMappingByName(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
+                                          const vector<MultiFileReaderColumn> &global_columns,
+                                          const vector<ColumnIndex> &global_column_ids,
+                                          MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
+                                          const string &initial_file,
+                                          optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// we have expected types: create a map of name -> column index
 	case_insensitive_map_t<idx_t> name_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
@@ -335,7 +336,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Mu
 		auto global_id = global_idx.GetPrimaryIndex();
 		if (global_id >= global_columns.size()) {
 			throw InternalException(
-			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
+			    "MultiFileReader::CreateMappingByName - global_id is out of range in global_types for this file");
 		}
 		auto &global_name = global_columns[global_id].name;
 		auto entry = name_map.find(global_name);
@@ -376,12 +377,123 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Mu
 	reader_data.empty_columns = reader_data.column_indexes.empty();
 }
 
+void MultiFileReader::CreateMappingByFieldId(const string &file_name,
+                                             const vector<MultiFileReaderColumn> &local_columns,
+                                             const vector<MultiFileReaderColumn> &global_columns,
+                                             const vector<ColumnIndex> &global_column_ids,
+                                             MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
+                                             const string &initial_file,
+                                             optional_ptr<MultiFileReaderGlobalState> global_state) {
+// we have expected types: create a map of name -> column index
+#ifdef DEBUG
+	//! Make sure the global columns have field_ids to match on
+	for (auto &column : global_columns) {
+		D_ASSERT(!column.identifier.IsNull());
+		D_ASSERT(column.identifier.type().id() == LogicalTypeId::INTEGER);
+	}
+#endif
+
+	unordered_map<idx_t, idx_t> field_id_map;
+	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
+		auto &column = local_columns[col_idx];
+		if (!column.identifier.IsNull()) {
+			// Extra columns at the end will not have a field_id
+			break;
+		}
+		auto field_id = column.identifier.GetValue<int32_t>();
+		field_id_map[field_id] = col_idx;
+	}
+
+	// loop through the schema definition
+	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+
+		// check if this is a constant column
+		bool constant = false;
+		for (auto &entry : reader_data.constant_map) {
+			if (entry.column_id == i) {
+				constant = true;
+				break;
+			}
+		}
+		if (constant) {
+			// this column is constant for this file
+			continue;
+		}
+
+		// Handle any generate columns that are not in the schema (currently only file_row_number)
+		auto &global_idx = global_column_ids[i];
+		auto global_id = global_column_ids[i].GetPrimaryIndex();
+		if (global_id >= field_id_map.size()) {
+			if (bind_data.file_row_number_idx == global_id) {
+				reader_data.column_mapping.push_back(i);
+				// FIXME: 'reader.file_row_number_idx'
+				// It seems to me that we need to push some extra local state for this
+				reader_data.column_ids.push_back(42);
+			}
+			continue;
+		}
+
+		const auto &global_column = global_columns[global_id];
+		D_ASSERT(!global_column.identifier.IsNull());
+		auto it = field_id_map.find(global_column.identifier.GetValue<int32_t>());
+		if (it == field_id_map.end()) {
+			// field id not present in file, use default value
+			auto &default_val = global_column.default_expression;
+			D_ASSERT(default_val);
+			if (default_val->type != ExpressionType::VALUE_CONSTANT) {
+				throw NotImplementedException("Default expression that isn't constant is not supported yet");
+			}
+			auto &constant_expr = default_val->Cast<ConstantExpression>();
+			reader_data.constant_map.emplace_back(i, constant_expr.value);
+			continue;
+		}
+
+		const auto &local_id = it->second;
+		auto &local_column = local_columns[local_id];
+		ColumnIndex local_index(local_id);
+		if (local_column.type != global_column.type) {
+			// differing types, wrap in a cast column reader
+			reader_data.cast_map[local_id] = global_column.type;
+		} else {
+			local_index = ColumnIndex(local_id, global_idx.GetChildIndexes());
+		}
+
+		reader_data.column_mapping.push_back(i);
+		reader_data.column_ids.push_back(local_id);
+		reader_data.column_indexes.push_back(std::move(local_index));
+	}
+	reader_data.empty_columns = reader_data.column_ids.empty();
+}
+
+void MultiFileReader::CreateNameMapping(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
+                                        const vector<MultiFileReaderColumn> &global_columns,
+                                        const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+                                        const MultiFileReaderBindData &bind_data, const string &initial_file,
+                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
+	switch (bind_data.mapping) {
+	case MultiFileReaderColumnMapping::BY_NAME: {
+		CreateMappingByName(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
+		                    initial_file, global_state);
+		break;
+	}
+	case MultiFileReaderColumnMapping::BY_FIELD_ID: {
+		CreateMappingByFieldId(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
+		                       initial_file, global_state);
+		break;
+	}
+	default: {
+		throw InternalException("Unsupported MultiFileReaderColumnMapping type");
+	}
+	}
+}
+
 void MultiFileReader::CreateMapping(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
                                     const vector<MultiFileReaderColumn> &global_columns,
                                     const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
                                     MultiFileReaderData &reader_data, const string &initial_file,
                                     const MultiFileReaderBindData &bind_data,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
+	// copy global columns and inject any different defaults
 	CreateNameMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data, initial_file,
 	                  global_state);
 	CreateFilterMap(global_columns, filters, reader_data, global_state);
@@ -481,7 +593,6 @@ void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
 	bind_info.InsertOption("hive_types_autocast", Value::BOOLEAN(hive_types_autocast));
-	bind_info.InsertOption("column_mapping", Value("by_name"));
 }
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,

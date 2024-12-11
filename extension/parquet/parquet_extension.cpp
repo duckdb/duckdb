@@ -265,6 +265,7 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 	vector<string> schema_col_names;
 	vector<LogicalType> schema_col_types;
 	MultiFileReaderBindData bind_data;
+	bind_data.mapping = MultiFileReaderColumnMapping::BY_FIELD_ID;
 	schema_col_names.reserve(options.schema.size());
 	schema_col_types.reserve(options.schema.size());
 	for (const auto &column : options.schema) {
@@ -272,7 +273,7 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 		schema_col_types.push_back(column.type);
 
 		auto res = MultiFileReaderColumn(column.name, column.type);
-		res.field_id = column.field_id;
+		res.identifier = Value::INTEGER(column.field_id);
 		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
 		bind_data.schema.emplace_back(std::move(res));
 	}

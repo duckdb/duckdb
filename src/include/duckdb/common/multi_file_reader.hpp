@@ -43,7 +43,7 @@ public:
 	MultiFileReaderColumn(const MultiFileReaderColumn &other)
 	    : name(other.name), type(other.type), children(other.children),
 	      default_expression(other.default_expression ? other.default_expression->Copy() : nullptr),
-	      field_id(other.field_id) {
+	      identifier(other.identifier) {
 	}
 
 	MultiFileReaderColumn(MultiFileReaderColumn &&other) noexcept = default;
@@ -53,7 +53,7 @@ public:
 			type = other.type;
 			children = other.children;
 			default_expression = other.default_expression ? other.default_expression->Copy() : nullptr;
-			field_id = other.field_id;
+			identifier = other.identifier;
 		}
 		return *this;
 	}
@@ -87,7 +87,9 @@ public:
 	LogicalType type;
 	vector<MultiFileReaderColumn> children;
 	unique_ptr<ParsedExpression> default_expression;
-	optional_idx field_id;
+
+	//! Either the field_id or the name to map on
+	Value identifier;
 };
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
@@ -100,6 +102,8 @@ struct MultiFileReaderBindData {
 	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! (optional) The schema set by the multi file reader
 	vector<MultiFileReaderColumn> schema;
+	//! The method used to map local -> global columns
+	MultiFileReaderColumnMapping mapping = MultiFileReaderColumnMapping::BY_NAME;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
@@ -367,6 +371,16 @@ protected:
 	                               const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
 	                               const MultiFileReaderBindData &bind_data, const string &initial_file,
 	                               optional_ptr<MultiFileReaderGlobalState> global_state);
+	virtual void CreateMappingByFieldId(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
+	                                    const vector<MultiFileReaderColumn> &global_columns,
+	                                    const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+	                                    const MultiFileReaderBindData &bind_data, const string &initial_file,
+	                                    optional_ptr<MultiFileReaderGlobalState> global_state);
+	virtual void CreateMappingByName(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
+	                                 const vector<MultiFileReaderColumn> &global_columns,
+	                                 const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+	                                 const MultiFileReaderBindData &bind_data, const string &initial_file,
+	                                 optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Used in errors to report which function is using this MultiFileReader
 	string function_name;

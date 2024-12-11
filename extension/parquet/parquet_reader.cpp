@@ -503,12 +503,12 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	auto &child_readers = struct_reader.child_readers;
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
 	// FIXME: what is this + 1 logically for???
-	D_ASSERT(child_types.size() + 1 == child_readers.size());
+	D_ASSERT(child_readers.size() >= child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto &type_pair = child_types[i];
 		auto column = MultiFileReaderColumn(type_pair.first, type_pair.second);
 		if (child_readers[i]->Schema().__isset.field_id) {
-			column.field_id = child_readers[i]->Schema().field_id;
+			column.identifier = Value::INTEGER(child_readers[i]->Schema().field_id);
 		}
 		columns.emplace_back(std::move(column));
 	}
