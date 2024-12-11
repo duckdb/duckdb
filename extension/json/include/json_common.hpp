@@ -283,7 +283,7 @@ public:
 	//! Get JSON value using JSON path query (unsafe)
 	static inline yyjson_val *GetUnsafe(yyjson_val *val, const char *ptr, const idx_t &len) {
 		if (len == 0) {
-			return nullptr;
+			return val;
 		}
 		switch (*ptr) {
 		case '/':
@@ -304,9 +304,6 @@ public:
 private:
 	//! Get JSON pointer (/field/index/... syntax)
 	static inline yyjson_val *GetPointer(yyjson_val *val, const char *ptr, const idx_t &len) {
-		if (len == 1) {
-			return val;
-		}
 		yyjson_ptr_err err;
 		return unsafe_yyjson_ptr_getx(val, ptr, len, &err);
 	}

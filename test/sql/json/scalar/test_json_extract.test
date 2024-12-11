@@ -365,8 +365,10 @@ select '{"duck":null}'->>'$.duck'
 ----
 NULL
 
-# issue 15217 (we should be able to extract the root using JSONPointer - yyjson does not do this itself)
+# issue 15217 (we should be able to extract the root using JSONPointer)
+# the issue is wrong - using '/' should extract the field with an empty string as key
+# but we should still be able to extract the root using a completely empty string
 query I
-select json_extract('{"hello":1}', '/')
+select json_extract('{"hello":1}', '')
 ----
 {"hello":1}
