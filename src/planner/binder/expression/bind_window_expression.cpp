@@ -204,6 +204,10 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	BindChild(window.offset_expr, depth, error);
 	BindChild(window.default_expr, depth, error);
 
+	for (auto &order : window.arg_orders) {
+		BindChild(order.expression, depth, error);
+	}
+
 	inside_window = false;
 	if (error.HasError()) {
 		// failed to bind children of window function
@@ -211,6 +215,11 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	//	Restore any collation expressions
+	for (auto &order : window.arg_orders) {
+		auto &order_expr = order.expression;
+		auto &bound_order = BoundExpression::GetExpression(*order_expr);
+		ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type);
+	}
 	for (auto &part_expr : window.partitions) {
 		auto &bound_partition = BoundExpression::GetExpression(*part_expr);
 		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->return_type);
@@ -352,6 +361,14 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto null_order = config.ResolveNullOrder(type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, std::move(expression));
+	}
+
+	// Argument orders are just like arguments, not frames
+	for (auto &order : window.arg_orders) {
+		auto type = config.ResolveOrder(order.type);
+		auto null_order = config.ResolveNullOrder(type, order.null_order);
+		auto expression = GetExpression(order.expression);
+		result->arg_orders.emplace_back(type, null_order, std::move(expression));
 	}
 
 	result->filter_expr = CastWindowExpression(window.filter_expr, LogicalType::BOOLEAN);

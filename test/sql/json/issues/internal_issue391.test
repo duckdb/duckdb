@@ -1,5 +1,5 @@
 # name: test/sql/json/issues/internal_issue391.test
-# description: Test internal issue 391 - SUMMARIZE over a JSON column will not work since min(JSON) is not well defined
+# description: Test internal issue 391 - SUMMARIZE for a JSON column will not work since min(JSON) is not well defined
 # group: [issues]
 
 require json
