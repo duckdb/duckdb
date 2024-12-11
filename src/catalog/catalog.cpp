@@ -304,6 +304,13 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIn
 	return CreateIndex(GetCatalogTransaction(context), info);
 }
 
+unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
+                                                       unique_ptr<LogicalOperator> plan,
+                                                       unique_ptr<CreateIndexInfo> create_info,
+                                                       unique_ptr<AlterTableInfo> alter_info) {
+	throw NotImplementedException("BindAlterAddIndex not supported by this catalog");
+}
+
 //===--------------------------------------------------------------------===//
 // Lookup Structures
 //===--------------------------------------------------------------------===//
