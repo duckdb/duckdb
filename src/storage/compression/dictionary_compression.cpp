@@ -9,12 +9,47 @@
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
+/*
+Data layout per segment:
++------------------------------------------------------+
+|                  Header                              |
+|   +----------------------------------------------+   |
+|   |   dictionary_compression_header_t  header    |   |
+|   +----------------------------------------------+   |
+|                                                      |
++------------------------------------------------------+
+|               Index Buffer                 |
+|   +------------------------------------+   |
+|   |   uint16_t  dictionary_offset[]    |   |
+|   +------------------------------------+   |
+|  string_index -> offset in the dictionary  |
+|                                            |
++--------------------------------------------+
+|             Selection Buffer               |
+|   +------------------------------------+   |
+|   |   uint16_t index_buffer_idx[]      |   |
+|   +------------------------------------+   |
+|      tuple index -> index buffer idx       |
+|                                            |
++--------------------------------------------+
+|                Dictionary                  |
+|   +------------------------------------+   |
+|   |   uint8_t *raw_string_data         |   |
+|   +------------------------------------+   |
+|      the string data without lengths       |
+|                                            |
++--------------------------------------------+
+*/
+
 namespace duckdb {
 
 //! Abstract class managing the compression state for size analysis or compression.
 class DictionaryCompressionState : public CompressionState {
 public:
-	explicit DictionaryCompressionState(const CompressionInfo &info) : CompressionState(info) {};
+	explicit DictionaryCompressionState(const CompressionInfo &info) : CompressionState(info) {
+	}
+	virtual ~DictionaryCompressionState() {
+	}
 
 public:
 	bool UpdateState(Vector &scan_vector, idx_t count) {
