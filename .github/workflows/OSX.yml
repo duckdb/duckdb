@@ -300,6 +300,8 @@ jobs:
   test-uploaded-extensions:
     name: Test uploaded OSX Extensions
     needs: upload-osx-extensions
+    ### This needs to be reworked, currently some info are missing
+    if: false
     runs-on: macos-14
     steps:
     - uses: actions/checkout@v4
