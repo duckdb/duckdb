@@ -88,7 +88,8 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 }
 
 static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context, ScalarFunction &bound_function,
-                                                          vector<unique_ptr<Expression>> &arguments, bool struct_extract) {
+                                                          vector<unique_ptr<Expression>> &arguments,
+                                                          bool struct_extract) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	auto &child_type = arguments[0]->return_type;
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
