@@ -113,9 +113,11 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
 			}
 
-			idx_t cardinality_with_filter =
-			    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
-			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
+			if (column_statistics) {
+				idx_t cardinality_with_filter =
+					InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
+				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
+			}
 
 			if (it.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
 				has_non_optional_filters = true;
