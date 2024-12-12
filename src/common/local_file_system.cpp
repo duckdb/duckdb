@@ -351,7 +351,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 
 #if defined(__DARWIN__) || defined(__APPLE__)
-	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
+	if (flags.DirectIO()) {
 		// OSX requires fcntl for Direct IO
 		rc = fcntl(fd, F_NOCACHE, 1);
 		if (rc == -1) {
