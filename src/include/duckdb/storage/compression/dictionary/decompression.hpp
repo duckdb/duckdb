@@ -22,13 +22,26 @@ public:
 	                            idx_t scan_count);
 
 public:
+	void Initialize(ColumnSegment &segment, bool initialize_dictionary = true);
+
+public:
 	BufferHandle owned_handle;
 	optional_ptr<BufferHandle> handle;
-	buffer_ptr<Vector> dictionary;
-	idx_t dictionary_size;
+
 	bitpacking_width_t current_width;
 	buffer_ptr<SelectionVector> sel_vec;
 	idx_t sel_vec_size = 0;
+
+	//! Start of the block (pointing to the dictionary_header)
+	data_ptr_t baseptr;
+	//! Start of the data (pointing to the start of the selection buffer)
+	data_ptr_t base_data;
+	uint32_t *index_buffer_ptr;
+	uint32_t index_buffer_count;
+
+	buffer_ptr<Vector> dictionary;
+	idx_t dictionary_size;
+	StringDictionaryContainer dict;
 };
 
 } // namespace duckdb

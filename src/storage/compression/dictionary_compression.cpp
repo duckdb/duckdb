@@ -115,33 +115,7 @@ void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto state = make_uniq<CompressedStringScanState>(buffer_manager.Pin(segment.block));
-	auto baseptr = state->handle->Ptr() + segment.GetBlockOffset();
-
-	// Load header values
-	auto dict = DictionaryCompression::GetDictionary(segment, *state->handle);
-	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
-	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
-	auto index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
-	state->current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
-	if (segment.GetBlockOffset() + index_buffer_offset + sizeof(uint32_t) * index_buffer_count >
-	    segment.GetBlockManager().GetBlockSize()) {
-		throw IOException(
-		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
-	}
-
-	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
-
-	state->dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
-	state->dictionary_size = index_buffer_count;
-	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
-
-	for (uint32_t i = 0; i < index_buffer_count; i++) {
-		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
-		uint16_t str_len = DictionaryCompression::GetStringLength(index_buffer_ptr, i);
-		dict_child_data[i] = DictionaryCompression::FetchStringFromDict(
-		    segment, dict, baseptr, UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
-	}
-
+	state->Initialize(segment, true);
 	return std::move(state);
 }
 

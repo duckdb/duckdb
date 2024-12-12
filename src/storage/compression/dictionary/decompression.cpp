@@ -2,16 +2,42 @@
 
 namespace duckdb {
 
-void CompressedStringScanState::ScanToFlatVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
-                                                 idx_t start, idx_t scan_count) {
-	auto baseptr = handle->Ptr() + segment.GetBlockOffset();
-	auto dict = DictionaryCompression::GetDictionary(segment, *handle);
+void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initialize_dictionary) {
+	baseptr = handle->Ptr() + segment.GetBlockOffset();
 
+	// Load header values
 	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
 	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
-	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
+	index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
+	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
+	if (segment.GetBlockOffset() + index_buffer_offset + sizeof(uint32_t) * index_buffer_count >
+	    segment.GetBlockManager().GetBlockSize()) {
+		throw IOException(
+		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
+	}
+	index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
+	base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
 
-	auto base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
+	if (!initialize_dictionary) {
+		// Used by fetch, as fetch will never produce a DictionaryVector
+		return;
+	}
+
+	dict = DictionaryCompression::GetDictionary(segment, *handle);
+	dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
+	dictionary_size = index_buffer_count;
+	auto dict_child_data = FlatVector::GetData<string_t>(*(dictionary));
+
+	for (uint32_t i = 0; i < index_buffer_count; i++) {
+		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
+		uint16_t str_len = DictionaryCompression::GetStringLength(index_buffer_ptr, i);
+		dict_child_data[i] = DictionaryCompression::FetchStringFromDict(
+		    segment, dict, baseptr, UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
+	}
+}
+
+void CompressedStringScanState::ScanToFlatVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
+                                                 idx_t start, idx_t scan_count) {
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	// Handling non-bitpacking-group-aligned start values;
@@ -44,14 +70,6 @@ void CompressedStringScanState::ScanToFlatVector(ColumnSegment &segment, Vector 
 
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
                                                        idx_t start, idx_t scan_count) {
-	auto baseptr = handle->Ptr() + segment.GetBlockOffset();
-	auto dict = DictionaryCompression::GetDictionary(segment, *handle);
-
-	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
-	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
-	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
-
-	auto base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	D_ASSERT(start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
