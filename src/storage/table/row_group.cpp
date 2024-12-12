@@ -1114,6 +1114,22 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 }
 
 //===--------------------------------------------------------------------===//
+// GetPartitionStats
+//===--------------------------------------------------------------------===//
+PartitionStatistics RowGroup::GetPartitionStats() const {
+	PartitionStatistics result;
+	result.row_start = start;
+	result.count = count;
+	if (HasUnloadedDeletes() || version_info.load().get()) {
+		// we have version info - approx count
+		result.count_type = CountType::COUNT_APPROXIMATE;
+	} else {
+		result.count_type = CountType::COUNT_EXACT;
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 void RowGroup::GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result) {
