@@ -358,8 +358,8 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema
 	// Let's first figure out if this type is an extension type
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
 	if (schema_metadata.HasExtension()) {
-		auto extension_info = schema_metadata.GetExtensionInfo(string(schema.format));
-		return config.GetArrowExtension(extension_info).GetType(format, schema_metadata);
+		auto extension_info = schema_metadata.GetExtensionInfo(string(format));
+		return config.GetArrowExtension(extension_info).GetType(schema, schema_metadata);
 	}
 	return GetTypeFromFormat(config, schema, format);
 }

@@ -116,7 +116,7 @@ ArrowTypeExtensionInfo ArrowTypeExtension::GetInfo() const {
 	return extension_info;
 }
 
-shared_ptr<ArrowType> ArrowTypeExtension::GetType(const string &format,
+shared_ptr<ArrowType> ArrowTypeExtension::GetType(const ArrowSchema &format,
                                                   const ArrowSchemaMetadata &schema_metadata) const {
 	if (get_type) {
 		return get_type(format, schema_metadata);
@@ -211,7 +211,8 @@ bool DBConfig::HasArrowExtension(const LogicalType &type) const {
 }
 
 struct ArrowJson {
-	static shared_ptr<ArrowType> GetType(const string &format, const ArrowSchemaMetadata &schema_metadata) {
+	static shared_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
+		auto format = string(schema.format);
 		if (format == "u") {
 			return make_shared_ptr<ArrowType>(LogicalType::JSON(),
 			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
@@ -245,7 +246,8 @@ struct ArrowJson {
 };
 
 struct ArrowBit {
-	static shared_ptr<ArrowType> GetType(const string &format, const ArrowSchemaMetadata &schema_metadata) {
+	static shared_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
+		auto format = string(schema.format);
 		if (format == "z") {
 			return make_shared_ptr<ArrowType>(LogicalType::BIT,
 			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
@@ -272,7 +274,8 @@ struct ArrowBit {
 };
 
 struct ArrowVarint {
-	static shared_ptr<ArrowType> GetType(const string &format, const ArrowSchemaMetadata &schema_metadata) {
+	static shared_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
+		auto format = string(schema.format);
 		if (format == "z") {
 			return make_shared_ptr<ArrowType>(LogicalType::VARINT,
 			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
