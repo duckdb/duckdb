@@ -351,7 +351,7 @@ from tpcds_queries();
 
 # The file should be from the custom path, NOT the autoinstall repo
 query IIII
-SELECT extension_name, install_mode, parse_filename(installed_from), extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet'
+SELECT extension_name, install_mode, parse_filename(installed_from), extension_version FROM duckdb_extensions() where installed and extension_name != 'jemalloc' and extension_name != 'parquet' and extension_name != 'core_functions'
 ----
 inet	CUSTOM_PATH	inet.duckdb_extension.gz	v0.0.2
 tpcds	REPOSITORY	repository	v0.0.1
