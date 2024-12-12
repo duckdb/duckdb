@@ -41,6 +41,11 @@ SELECT LEAST(NULL, 3, 0, 2, 7, 8, 10, 11, -100, 30, 1)
 ----
 -100
 
+query I
+SELECT GREATEST(NULL, 1.0::FLOAT)
+----
+1
+
 # double
 query R
 SELECT LEAST(1.0, 10.0)
