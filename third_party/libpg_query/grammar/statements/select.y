@@ -2894,6 +2894,12 @@ func_application:       func_name '(' ')'
 				{
 					$$ = (PGNode *) makeFuncCall($1, NIL, @1);
 				}
+			| func_name '(' sort_clause ')'
+				{
+					PGFuncCall *n = makeFuncCall($1, NIL, @1);
+					n->agg_order = $3;
+					$$ = (PGNode *)n;
+				}
 			| func_name '(' func_arg_list opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, $3, @1);

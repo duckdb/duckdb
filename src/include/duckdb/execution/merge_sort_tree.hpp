@@ -110,6 +110,10 @@ struct MergeSortTree {
 		return tree[0].first;
 	}
 
+	inline const Elements &LowestLevel() const {
+		return tree[0].first;
+	}
+
 	Elements &Allocate(idx_t count);
 
 	void Build();

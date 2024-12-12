@@ -1,0 +1,29 @@
+# name: test/sql/window/test_rank_orderby.test
+# description: Test argument ordering for RANK and PERCENT_RANK
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+SELECT 
+	i,
+	(i * 29) % 11 AS outside,
+	rank(ORDER BY i DESC) OVER w,
+	percent_rank(ORDER BY i DESC) OVER w,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY (i * 29) % 11
+)
+ORDER BY 2
+----
+0	0	10	1.0
+8	1	2	0.1111111111111111
+5	2	5	0.4444444444444444
+2	3	8	0.7777777777777778
+7	5	3	0.2222222222222222
+4	6	6	0.5555555555555556
+1	7	9	0.8888888888888888
+9	8	1	0.0
+6	9	4	0.3333333333333333
+3	10	7	0.6666666666666666
