@@ -512,14 +512,13 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	}
 
 	// Add generated constant column for row number
-	vector<string> names;
-	for (auto &column : columns) {
-		names.push_back(column.name);
-	}
 	if (parquet_options.file_row_number) {
-		if (StringUtil::CIFind(names, "file_row_number") != DConstants::INVALID_INDEX) {
-			throw BinderException(
-			    "Using file_row_number option on file with column named file_row_number is not supported");
+		for (auto &column : columns) {
+			auto &name = column.name;
+			if (StringUtil::CIEquals(name, "file_row_number") != DConstants::INVALID_INDEX) {
+				throw BinderException(
+				    "Using file_row_number option on file with column named file_row_number is not supported");
+			}
 		}
 		columns.emplace_back("file_row_number", LogicalType::BIGINT);
 	}
