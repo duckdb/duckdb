@@ -216,7 +216,7 @@ jobs:
       shell: bash
       run: valgrind ./build/debug/test/unittest --start-offset-percentage 50 --end-offset-percentage 60
  valgrind-24:
-    name: Valgrind
+    name: Valgrind Ubuntu 24
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-24.04
     env:
@@ -257,3 +257,48 @@ jobs:
     - name: Test
       shell: bash
       run: valgrind ./build/debug/test/unittest --start-offset-percentage 50 --end-offset-percentage 60
+    - name: Test
+      shell: bash
+      run: valgrind ./build/debug/test/unittest --start-offset-percentage 50 --end-offset-percentage 60
+ valgrind-24:
+    name: Valgrind Ubuntu 24 Reldebug
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-24.04
+    env:
+      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
+      DISABLE_SANITIZER: 1
+      BUILD_JEMALLOC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make reldebug
+
+    - name: Output version info
+      shell: bash
+      run: ./build/reldebug/duckdb -c "PRAGMA version;"
+
+    - name: Test
+      shell: bash
+      run: valgrind ./build/reldebug/test/unittest test/sql/copy/parquet/test_yellow_cab.test_slow
+
+    - name: Test
+      shell: bash
+      run: valgrind ./build/reldebug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+
+    - name: Test
+      shell: bash
+      run: valgrind ./build/reldebug/test/unittest --start-offset-percentage 50 --end-offset-percentage 60
