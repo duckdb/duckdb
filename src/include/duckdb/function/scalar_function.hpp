@@ -189,11 +189,6 @@ public:
 		                                                     input.size());
 	}
 
-	static ScalarFunction SetReturnsError(ScalarFunction &function) {
-		function.errors = FunctionErrors::CAN_THROW_ERROR;
-		return function;
-	}
-
 public:
 	template <class OP>
 	static scalar_function_t GetScalarUnaryFunction(const LogicalType &type) {

@@ -1,3 +1,4 @@
+#include "../../../tpcds/dsdgen/include/dsdgen-c/date.h"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -1706,7 +1707,7 @@ ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar
 	                                        nullptr, ts_stats, DATE_CACHE));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
 	for (auto &func : operator_set.functions) {
-		ScalarFunction::SetReturnsError(func);
+		BaseScalarFunction::SetReturnsError(func);
 	}
 	return operator_set;
 }
@@ -2059,7 +2060,7 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 	operator_set.AddFunction(function);
 
 	for (auto &func : operator_set.functions) {
-		ScalarFunction::SetReturnsError(func);
+		BaseScalarFunction::SetReturnsError(func);
 	}
 
 	return operator_set;
@@ -2236,6 +2237,10 @@ ScalarFunctionSet DatePartFun::GetFunctions() {
 	date_part.AddFunction(StructDatePart::GetFunction<dtime_t>(LogicalType::TIME));
 	date_part.AddFunction(StructDatePart::GetFunction<interval_t>(LogicalType::INTERVAL));
 	date_part.AddFunction(StructDatePart::GetFunction<dtime_tz_t>(LogicalType::TIME_TZ));
+
+	for (auto &func : date_part.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 
 	return date_part;
 }

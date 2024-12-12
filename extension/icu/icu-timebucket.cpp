@@ -632,7 +632,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR},
 		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind));
 		for (auto &func : set.functions) {
-			ScalarFunction::SetReturnsError(func);
+			BaseScalarFunction::SetReturnsError(func);
 		}
 		ExtensionUtil::RegisterFunction(db, set);
 	}
