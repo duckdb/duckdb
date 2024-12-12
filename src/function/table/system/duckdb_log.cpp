@@ -12,14 +12,16 @@
 namespace duckdb {
 
 struct DuckDBLogData : public GlobalTableFunctionState {
-	DuckDBLogData(ColumnDataCollection &collection_p) : collection(collection_p), state() {
-		collection->InitializeScan(state);
+	DuckDBLogData(shared_ptr<LogStorage> log_storage_p) : log_storage(log_storage_p) {
+		scan_state = log_storage->CreateScanEntriesState();
+		log_storage->InitializeScanEntries(*scan_state);
 	}
-	DuckDBLogData() : collection(nullptr), state() {
+	DuckDBLogData() : log_storage(nullptr) {
 	}
 
-	optional_ptr<ColumnDataCollection> collection;
-	ColumnDataScanState state;
+	//! The log storage we are scanning
+	shared_ptr<LogStorage> log_storage;
+	unique_ptr<LogStorageScanState> scan_state;
 };
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
@@ -65,16 +67,19 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, TableFunctionInitInput &input) {
-	if (context.db->GetLogManager().log_storage->IsInternal()) {
-		return make_uniq<DuckDBLogData>(context.db->GetLogManager().log_storage->GetEntries());
+	if (LogManager::Get(context).CanScan()) {
+		return make_uniq<DuckDBLogData>(LogManager::Get(context).GetLogStorage());
 	}
 	return make_uniq<DuckDBLogData>();
 }
 
 void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogData>();
-	if (data.collection) {
-		data.collection->Scan(data.state, output);
+	if (data.log_storage) {
+		data.log_storage->ScanEntries(*data.scan_state, output);
+	}
+	if (output.size() == 0) {
+		data.log_storage = nullptr;
 	}
 }
 
@@ -97,7 +102,7 @@ static unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFu
 	}
 
 	if (!context_id_only) {
-		if (context.db->GetLogManager().log_storage->IsInternal()) {
+		if (LogManager::Get(context).CanScan()) {
 			return std::move(ParseSubquery(
 			    "SELECT * exclude (l.context_id, c.context_id) FROM duckdb_logs(context_id_only=true) as l JOIN "
 			    "duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp;",

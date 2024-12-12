@@ -11,12 +11,16 @@
 namespace duckdb {
 
 struct DuckDBLogContextData : public GlobalTableFunctionState {
-	DuckDBLogContextData(ColumnDataCollection &collection_p) : collection(collection_p), state() {
-		collection.InitializeScan(state);
+	DuckDBLogContextData(shared_ptr<LogStorage> log_storage_p) : log_storage(log_storage_p) {
+		scan_state = log_storage->CreateScanContextsState();
+		log_storage->InitializeScanContexts(*scan_state);
+	}
+	DuckDBLogContextData() : log_storage(nullptr) {
 	}
 
-	ColumnDataCollection &collection;
-	ColumnDataScanState state;
+	//! The log storage we are scanning
+	shared_ptr<LogStorage> log_storage;
+	unique_ptr<LogStorageScanState> scan_state;
 };
 
 static unique_ptr<FunctionData> DuckDBLogContextBind(ClientContext &context, TableFunctionBindInput &input,
@@ -40,13 +44,21 @@ static unique_ptr<FunctionData> DuckDBLogContextBind(ClientContext &context, Tab
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogContextInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_uniq<DuckDBLogContextData>(context.db->GetLogManager().log_storage->GetContexts());
-	return std::move(result);
+	if (LogManager::Get(context).CanScan()) {
+		return make_uniq<DuckDBLogContextData>(LogManager::Get(context).GetLogStorage());
+	}
+	return make_uniq<DuckDBLogContextData>();
 }
+
 
 void DuckDBLogContextFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogContextData>();
-	data.collection.Scan(data.state, output);
+	if (data.log_storage) {
+		data.log_storage->ScanContexts(*data.scan_state, output);
+	}
+	if (output.size() == 0) {
+		data.log_storage = nullptr;
+	}
 }
 
 void DuckDBLogContextFun::RegisterFunction(BuiltinFunctions &set) {

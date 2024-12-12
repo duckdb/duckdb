@@ -29,8 +29,6 @@ class LogStorage;
 //! Main logging interface
 class Logger {
 public:
-	explicit Logger() {
-	}
 	explicit Logger(LogManager &manager) : manager(manager) {
 	}
 
@@ -148,10 +146,7 @@ public:
 	virtual const LogConfig &GetConfig() const = 0;
 
 protected:
-	// Pointer to manager (should be weak?)
-	// Log entries are generally accumulated in loggers and then synced with the loggingManager
-	// TODO: lifetime issues?
-	optional_ptr<LogManager> manager;
+	LogManager &manager;
 };
 
 // Thread-safe logger
@@ -241,7 +236,7 @@ protected:
 // For when logging is disabled: NOPs everything
 class NopLogger : public Logger {
 public:
-	explicit NopLogger() {
+	explicit NopLogger(LogManager &manager) : Logger(manager) {
 	}
 	// TODO: can we do better than a virtual method always returning false?
 	bool ShouldLog(const char *log_type, LogLevel log_level) override {

@@ -14,11 +14,27 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
-#include <duckdb/parallel/thread_context.hpp>
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 struct RegisteredLoggingContext;
 class ColumnDataCollection;
+struct ColumnDataScanState;
+
+class LogStorageScanState {
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
 
 // Interface for writing log entries
 class LogStorage {
@@ -38,15 +54,15 @@ public:
 	};
 
 	//! READING (OPTIONAL)
-	virtual bool IsInternal() {
+	virtual bool CanScan() {
 		return false;
 	}
-	virtual ColumnDataCollection &GetEntries() {
-		throw NotImplementedException("Can not call GetEntries on LogStorage of this type");
-	}
-	virtual ColumnDataCollection &GetContexts() {
-		throw NotImplementedException("Can not call GetContexts on LogStorage of this type");
-	}
+	virtual unique_ptr<LogStorageScanState> CreateScanEntriesState() const ;
+	virtual bool ScanEntries(LogStorageScanState &state, DataChunk &result) const;
+	virtual void InitializeScanEntries(LogStorageScanState &state) const;
+	virtual unique_ptr<LogStorageScanState> CreateScanContextsState() const;
+	virtual bool ScanContexts(LogStorageScanState &state, DataChunk &result) const;
+	virtual void InitializeScanContexts(LogStorageScanState &state) const;
 };
 
 class StdOutLogStorage : public LogStorage {
@@ -62,6 +78,15 @@ public:
 	void WriteLoggingContext(RegisteredLoggingContext &context) override;
 };
 
+class InMemoryLogStorageScanState : public LogStorageScanState {
+public:
+	InMemoryLogStorageScanState();
+	~InMemoryLogStorageScanState();
+
+
+	ColumnDataScanState scan_state;
+};
+
 class InMemoryLogStorage : public LogStorage {
 public:
 	explicit InMemoryLogStorage(DatabaseInstance &db);
@@ -75,11 +100,21 @@ public:
 	void WriteLoggingContext(RegisteredLoggingContext &context) override;
 
 	//! LogStorage API: READING
-	bool IsInternal() override;
-	ColumnDataCollection &GetEntries() override;
-	ColumnDataCollection &GetContexts() override;
+	bool CanScan() override;
+
+	unique_ptr<LogStorageScanState> CreateScanEntriesState() const override;
+	bool ScanEntries(LogStorageScanState &state, DataChunk &result) const override;
+	void InitializeScanEntries(LogStorageScanState &state) const override;
+	unique_ptr<LogStorageScanState> CreateScanContextsState() const override;
+	bool ScanContexts(LogStorageScanState &state, DataChunk &result) const override;
+	void InitializeScanContexts(LogStorageScanState &state) const override;
+
 
 protected:
+	mutable mutex lock;
+
+	void FlushInternal();
+
 	//! Internal log entry storage
 	unique_ptr<ColumnDataCollection> log_entries;
 	unique_ptr<ColumnDataCollection> log_contexts;

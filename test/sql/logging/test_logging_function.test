@@ -1,0 +1,61 @@
+# name: test/sql/logging/test_logging_function.test
+# description: Use test_logging function to test logging
+# group: [logging]
+
+query IIIIIIII
+from duckdb_logs
+----
+
+statement ok
+set enable_logging=true;
+
+statement ok
+set logging_level='debugging';
+
+statement ok
+set logging_storage='memory';
+
+statement ok
+set logging_storage='stdout';
+
+statement ok
+set logging_storage='memory';
+
+statement ok
+set logging_storage='memory';
+
+statement ok
+FROM test_logging(3, log_message='hello from the global_log', logger='global')
+
+statement ok
+FROM test_logging(3, log_message='hello from the client_context', logger='client_context')
+
+#statement ok
+#FROM test_logging(3, log_message='hello from the thread_context', logger='thread_local')
+#
+#statement ok
+#FROM test_logging(3, log_message='hello from the file_opener', logger='file_opener')
+
+
+mode output_result
+
+statement ok
+from duckdb_logs()
+
+mode skip
+
+query IIIII
+SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by timestamp
+----
+default	INFO	hello from the global_log	DATABASE	NULL
+default	INFO	hello from the global_log	DATABASE	NULL
+default	INFO	hello from the global_log	DATABASE	NULL
+default	INFO	hello from the client_context	CONNECTION	NULL
+default	INFO	hello from the client_context	CONNECTION	NULL
+default	INFO	hello from the client_context	CONNECTION	NULL
+default	INFO	hello from the thread_context	THREAD	0
+default	INFO	hello from the thread_context	THREAD	0
+default	INFO	hello from the thread_context	THREAD	0
+default	INFO	hello from the file_opener	CONNECTION	NULL
+default	INFO	hello from the file_opener	CONNECTION	NULL
+default	INFO	hello from the file_opener	CONNECTION	NULL

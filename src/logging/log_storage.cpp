@@ -1,18 +1,27 @@
 #include "duckdb/logging/log_storage.hpp"
-//
-//#include "duckdb/common/types/column/column_data_collection.hpp"
-//#include "duckdb/common/types/data_chunk.hpp"
-//#include "duckdb/main/client_context.hpp"
-//#include "duckdb/main/connection.hpp"
-//#include "duckdb/main/database.hpp"
-//#include "duckdb/main/table_description.hpp"
-//
-//#include <duckdb/common/file_opener.hpp>
-//#include <duckdb/parallel/thread_context.hpp>
 
 #include <iostream>
 
 namespace duckdb {
+
+unique_ptr<LogStorageScanState> LogStorage::CreateScanEntriesState() const {
+	throw NotImplementedException("Not implemented for this LogStorage: CreateScanEntriesState");
+}
+bool LogStorage::ScanEntries(LogStorageScanState &state, DataChunk &result) const {
+	throw NotImplementedException("Not implemented for this LogStorage: ScanEntries");
+}
+void LogStorage::InitializeScanEntries(LogStorageScanState &state) const {
+	throw NotImplementedException("Not implemented for this LogStorage: InitializeScanEntries");
+}
+unique_ptr<LogStorageScanState> LogStorage::CreateScanContextsState() const {
+	throw NotImplementedException("Not implemented for this LogStorage: CreateScanContextsState");
+}
+bool LogStorage::ScanContexts(LogStorageScanState &state, DataChunk &result) const {
+	throw NotImplementedException("Not implemented for this LogStorage: ScanContexts");
+}
+void LogStorage::InitializeScanContexts(LogStorageScanState &state) const {
+	throw NotImplementedException("Not implemented for this LogStorage: InitializeScanContexts");
+}
 
 StdOutLogStorage::StdOutLogStorage() {
 }
@@ -40,6 +49,10 @@ void StdOutLogStorage::Flush() {
 
 void StdOutLogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {
 	// NOP
+}
+InMemoryLogStorageScanState::InMemoryLogStorageScanState() {
+}
+InMemoryLogStorageScanState::~InMemoryLogStorageScanState() {
 }
 
 InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
@@ -69,10 +82,13 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 	log_contexts = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_context_schema);
 }
 
-InMemoryLogStorage::~InMemoryLogStorage() {};
+InMemoryLogStorage::~InMemoryLogStorage() {
+	printf("Destroyed LogStorage\n");
+};
 
 void InMemoryLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
                                        const string &log_message, const RegisteredLoggingContext &context) {
+	unique_lock<mutex> lck(lock);
 	auto size = entry_buffer->size();
 	auto context_id_data = FlatVector::GetData<idx_t>(entry_buffer->data[0]);
 	auto timestamp_data = FlatVector::GetData<timestamp_t>(entry_buffer->data[1]);
@@ -89,7 +105,7 @@ void InMemoryLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, co
 	entry_buffer->SetCardinality(size + 1);
 
 	if (size + 1 >= max_buffer_size) {
-		Flush();
+		FlushInternal();
 	}
 }
 
@@ -98,6 +114,11 @@ void InMemoryLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggi
 }
 
 void InMemoryLogStorage::Flush() {
+	unique_lock<mutex> lck(lock);
+	FlushInternal();
+}
+
+void InMemoryLogStorage::FlushInternal() {
 	log_entries->Append(*entry_buffer);
 	entry_buffer->Reset();
 
@@ -106,6 +127,8 @@ void InMemoryLogStorage::Flush() {
 }
 
 void InMemoryLogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {
+	unique_lock<mutex> lck(lock);
+
 	auto size = log_context_buffer->size();
 
 	auto context_id_data = FlatVector::GetData<idx_t>(log_context_buffer->data[0]);
@@ -137,20 +160,42 @@ void InMemoryLogStorage::WriteLoggingContext(RegisteredLoggingContext &context) 
 	log_context_buffer->SetCardinality(size + 1);
 
 	if (size + 1 >= max_buffer_size) {
-		Flush();
+		FlushInternal();
 	}
 }
 
-bool InMemoryLogStorage::IsInternal() {
+bool InMemoryLogStorage::CanScan() {
 	return true;
 }
 
-ColumnDataCollection &InMemoryLogStorage::GetContexts() {
-	return *log_contexts;
+unique_ptr<LogStorageScanState> InMemoryLogStorage::CreateScanEntriesState() const {
+	return make_uniq<InMemoryLogStorageScanState>();
+}
+bool InMemoryLogStorage::ScanEntries(LogStorageScanState &state, DataChunk &result) const {
+	unique_lock<mutex> lck(lock);
+	auto &in_mem_scan_state = state.Cast<InMemoryLogStorageScanState>();
+	return log_entries->Scan(in_mem_scan_state.scan_state, result);
 }
 
-ColumnDataCollection &InMemoryLogStorage::GetEntries() {
-	return *log_entries;
+void InMemoryLogStorage::InitializeScanEntries(LogStorageScanState &state) const {
+	unique_lock<mutex> lck(lock);
+	auto &in_mem_scan_state = state.Cast<InMemoryLogStorageScanState>();
+	log_entries->InitializeScan(in_mem_scan_state.scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
+}
+
+unique_ptr<LogStorageScanState> InMemoryLogStorage::CreateScanContextsState() const {
+	return make_uniq<InMemoryLogStorageScanState>();
+}
+bool InMemoryLogStorage::ScanContexts(LogStorageScanState &state, DataChunk &result) const {
+	unique_lock<mutex> lck(lock);
+	auto &in_mem_scan_state = state.Cast<InMemoryLogStorageScanState>();
+	return log_contexts->Scan(in_mem_scan_state.scan_state, result);
+}
+
+void InMemoryLogStorage::InitializeScanContexts(LogStorageScanState &state) const {
+	unique_lock<mutex> lck(lock);
+	auto &in_mem_scan_state = state.Cast<InMemoryLogStorageScanState>();
+	log_contexts->InitializeScan(in_mem_scan_state.scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 }
 
 } // namespace duckdb

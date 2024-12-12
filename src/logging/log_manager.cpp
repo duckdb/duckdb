@@ -25,7 +25,7 @@ unique_ptr<Logger> LogManager::CreateLogger(LoggingContext context, bool thread_
 		return make_uniq<MutableLogger>(config_copy, context, *this);
 	}
 	if (!config_copy.enabled) {
-		return make_uniq<NopLogger>();
+		return make_uniq<NopLogger>(*this);
 	}
 	if (!thread_safe) {
 		// TODO: implement ThreadLocalLogger and return it here
@@ -59,7 +59,18 @@ void LogManager::DropLoggingContext(RegisteredLoggingContext &context) {
 }
 
 Logger &LogManager::GlobalLogger() {
+	unique_lock<mutex> lck(lock);
 	return *global_logger;
+}
+
+shared_ptr<LogStorage> LogManager::GetLogStorage() {
+	unique_lock<mutex> lck(lock);
+	return log_storage;
+}
+
+bool LogManager::CanScan() {
+	unique_lock<mutex> lck(lock);
+	return log_storage->CanScan();
 }
 
 LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(config_p) {
@@ -130,10 +141,10 @@ void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name)
 	log_storage->Flush();
 
 	if (storage_name_to_lower == LogConfig::IN_MEMORY_STORAGE_NAME) {
-		log_storage = make_uniq<InMemoryLogStorage>(db);
+		log_storage = make_shared_ptr<InMemoryLogStorage>(db);
 		config.storage = storage_name_to_lower;
 	} else if (storage_name_to_lower == LogConfig::STDOUT_STORAGE_NAME) {
-		log_storage = make_uniq<StdOutLogStorage>();
+		log_storage = make_shared_ptr<StdOutLogStorage>();
 		config.storage = storage_name_to_lower;
 	} else if (storage_name_to_lower == LogConfig::FILE_STORAGE_NAME) {
 		throw NotImplementedException("File log storage is not yet implemented");

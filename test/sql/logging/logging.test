@@ -7,10 +7,10 @@ from duckdb_logs
 ----
 
 statement ok
-set enable_logging=true;
+set logging_level='debugging';
 
 statement ok
-set logging_storage='memory';
+set enable_logging=true;
 
 statement ok
 SELECT 1;

@@ -38,7 +38,9 @@ public:
 	//! The global logger can be used whe
 	Logger &GlobalLogger();
 
-	unique_ptr<LogStorage> log_storage;
+	//! Get a shared_ptr to the log storage (For example, to scan it)
+	shared_ptr<LogStorage> GetLogStorage();
+	bool CanScan();
 
 	void SetEnableLogging(bool enable);
 	void SetLogMode(LogMode mode);
@@ -60,6 +62,8 @@ protected:
 	LogConfig config;
 
 	unique_ptr<Logger> global_logger;
+
+	shared_ptr<LogStorage> log_storage;
 
 	idx_t next_registered_logging_context_index = 0;
 
