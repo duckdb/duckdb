@@ -82,7 +82,7 @@ jobs:
           DUCKDB_GIT_VERSION: ${{ inputs.duckdb_version }}
           WASM_EXTENSIONS: 1
         run: |
-          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 cmake
+          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build cmake
           make configure_ci
 
       - name: Build Wasm module
