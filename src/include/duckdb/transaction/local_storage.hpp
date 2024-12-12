@@ -79,14 +79,14 @@ class LocalTableManager {
 public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
-	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
+	optional_ptr<LocalTableStorage> GetStorage(DataTable &table) const;
 	LocalTableStorage &GetOrCreateStorage(ClientContext &context, DataTable &table);
-	idx_t EstimatedSize();
-	bool IsEmpty();
+	idx_t EstimatedSize() const;
+	bool IsEmpty() const;
 	void InsertEntry(DataTable &table, shared_ptr<LocalTableStorage> entry);
 
 private:
-	mutex table_storage_lock;
+	mutable mutex table_storage_lock;
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> table_storage;
 };
 
@@ -145,6 +145,7 @@ public:
 	bool Find(DataTable &table);
 
 	idx_t AddedRows(DataTable &table);
+	vector<PartitionStatistics> GetPartitionStats(DataTable &table) const;
 
 	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
 	               ExpressionExecutor &default_executor);

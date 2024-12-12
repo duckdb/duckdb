@@ -237,6 +237,9 @@ public:
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index);
 
+	//! Returns a list of the partition stats
+	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);
+
 private:
 	//! Verify the new added constraints against current persistent&local data
 	void VerifyNewConstraint(LocalStorage &local_storage, DataTable &parent, const BoundConstraint &constraint);

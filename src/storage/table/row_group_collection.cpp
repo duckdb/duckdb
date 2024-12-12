@@ -1054,6 +1054,17 @@ void RowGroupCollection::CommitDropTable() {
 }
 
 //===--------------------------------------------------------------------===//
+// GetPartitionStats
+//===--------------------------------------------------------------------===//
+vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
+	vector<PartitionStatistics> result;
+	for (auto &row_group : row_groups->Segments()) {
+		result.push_back(row_group.GetPartitionStats());
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {

@@ -248,6 +248,14 @@ idx_t DataTable::GetRowGroupSize() const {
 	return row_groups->GetRowGroupSize();
 }
 
+vector<PartitionStatistics> DataTable::GetPartitionStats(ClientContext &context) {
+	auto result = row_groups->GetPartitionStats();
+	auto &local_storage = LocalStorage::Get(context, db);
+	auto local_partitions = local_storage.GetPartitionStats(*this);
+	result.insert(result.end(), local_partitions.begin(), local_partitions.end());
+	return result;
+}
+
 idx_t DataTable::MaxThreads(ClientContext &context) const {
 	idx_t row_group_size = GetRowGroupSize();
 	idx_t parallel_scan_vector_count = row_group_size / STANDARD_VECTOR_SIZE;
