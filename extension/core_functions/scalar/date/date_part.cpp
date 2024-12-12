@@ -1,4 +1,3 @@
-#include "../../../tpcds/dsdgen/include/dsdgen-c/date.h"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enum_util.hpp"
