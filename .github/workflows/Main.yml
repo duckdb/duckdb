@@ -175,7 +175,6 @@ jobs:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
-    needs: force-storage
     env:
       OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
@@ -207,4 +206,54 @@ jobs:
 
     - name: Test
       shell: bash
+      run: valgrind ./build/debug/test/unittest test/sql/copy/parquet/test_yellow_cab.test_slow
+
+    - name: Test
+      shell: bash
       run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+
+    - name: Test
+      shell: bash
+      run: valgrind ./build/debug/test/unittest --start-offset-percentage 50 --end-offset-percentage 60
+ valgrind-24:
+    name: Valgrind
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-24.04
+    env:
+      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
+      DISABLE_SANITIZER: 1
+      BUILD_JEMALLOC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make debug
+
+    - name: Output version info
+      shell: bash
+      run: ./build/debug/duckdb -c "PRAGMA version;"
+
+    - name: Test
+      shell: bash
+      run: valgrind ./build/debug/test/unittest test/sql/copy/parquet/test_yellow_cab.test_slow
+
+    - name: Test
+      shell: bash
+      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+
+    - name: Test
+      shell: bash
+      run: valgrind ./build/debug/test/unittest --start-offset-percentage 50 --end-offset-percentage 60
