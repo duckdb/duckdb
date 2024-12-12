@@ -10,11 +10,20 @@ namespace duckdb {
 // FIXME: why is this StringScanState when we also define: `BufferHandle handle` ???
 struct CompressedStringScanState : public StringScanState {
 public:
-	CompressedStringScanState() : StringScanState() {
+	explicit CompressedStringScanState(BufferHandle &&handle_p)
+	    : StringScanState(), owned_handle(std::move(handle_p)), handle(owned_handle) {
+	}
+	explicit CompressedStringScanState(BufferHandle &handle_p) : StringScanState(), owned_handle(), handle(handle_p) {
 	}
 
 public:
-	BufferHandle handle;
+	void ScanToFlatVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start, idx_t scan_count);
+	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
+	                            idx_t scan_count);
+
+public:
+	BufferHandle owned_handle;
+	optional_ptr<BufferHandle> handle;
 	buffer_ptr<Vector> dictionary;
 	idx_t dictionary_size;
 	bitpacking_width_t current_width;

@@ -1,3 +1,79 @@
 #include "duckdb/storage/compression/dictionary/decompression.hpp"
 
-namespace duckdb {} // namespace duckdb
+namespace duckdb {
+
+void CompressedStringScanState::ScanToFlatVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
+                                                 idx_t start, idx_t scan_count) {
+	auto baseptr = handle->Ptr() + segment.GetBlockOffset();
+	auto dict = DictionaryCompression::GetDictionary(segment, *handle);
+
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
+	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
+	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
+
+	auto base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
+	auto result_data = FlatVector::GetData<string_t>(result);
+
+	// Handling non-bitpacking-group-aligned start values;
+	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+	// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
+	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
+
+	// Create a decompression buffer of sufficient size if we don't already have one.
+	if (!sel_vec || sel_vec_size < decompress_count) {
+		sel_vec_size = decompress_count;
+		sel_vec = make_buffer<SelectionVector>(decompress_count);
+	}
+
+	data_ptr_t src = &base_data[((start - start_offset) * current_width) / 8];
+	sel_t *sel_vec_ptr = sel_vec->data();
+
+	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), src, decompress_count, current_width);
+
+	for (idx_t i = 0; i < scan_count; i++) {
+		// Lookup dict offset in index buffer
+		auto string_number = sel_vec->get_index(i + start_offset);
+		auto dict_offset = index_buffer_ptr[string_number];
+		auto str_len =
+		    DictionaryCompression::GetStringLength(index_buffer_ptr, UnsafeNumericCast<sel_t>(string_number));
+		result_data[result_offset + i] = DictionaryCompression::FetchStringFromDict(
+		    segment, dict, baseptr, UnsafeNumericCast<int32_t>(dict_offset), str_len);
+	}
+}
+
+void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
+                                                       idx_t start, idx_t scan_count) {
+	auto baseptr = handle->Ptr() + segment.GetBlockOffset();
+	auto dict = DictionaryCompression::GetDictionary(segment, *handle);
+
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
+	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
+	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
+
+	auto base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
+	auto result_data = FlatVector::GetData<string_t>(result);
+
+	D_ASSERT(start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
+	D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
+	D_ASSERT(result_offset == 0);
+
+	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count);
+
+	// Create a selection vector of sufficient size if we don't already have one.
+	if (!sel_vec || sel_vec_size < decompress_count) {
+		sel_vec_size = decompress_count;
+		sel_vec = make_buffer<SelectionVector>(decompress_count);
+	}
+
+	// Scanning 2048 values, emitting a dict vector
+	data_ptr_t dst = data_ptr_cast(sel_vec->data());
+	data_ptr_t src = data_ptr_cast(&base_data[(start * current_width) / 8]);
+
+	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, current_width);
+
+	result.Dictionary(*(dictionary), dictionary_size, *sel_vec, scan_count);
+	DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
+}
+
+} // namespace duckdb
