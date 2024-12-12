@@ -504,7 +504,7 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	D_ASSERT(child_readers.size() >= child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto &type_pair = child_types[i];
-		auto column = MultiFileReaderColumn(type_pair.first, type_pair.second);
+		auto column = MultiFileReaderColumnDefinition(type_pair.first, type_pair.second);
 		if (child_readers[i]->Schema().__isset.field_id) {
 			column.identifier = Value::INTEGER(child_readers[i]->Schema().field_id);
 		}

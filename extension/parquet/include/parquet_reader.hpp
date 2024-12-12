@@ -127,7 +127,7 @@ public:
 	FileSystem &fs;
 	Allocator &allocator;
 	string file_name;
-	vector<MultiFileReaderColumn> columns;
+	vector<MultiFileReaderColumnDefinition> columns;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
@@ -187,7 +187,7 @@ public:
 		return file_name;
 	}
 
-	const vector<MultiFileReaderColumn> &GetColumns() {
+	const vector<MultiFileReaderColumnDefinition> &GetColumns() {
 		return columns;
 	}
 

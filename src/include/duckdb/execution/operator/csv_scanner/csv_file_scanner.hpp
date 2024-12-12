@@ -59,7 +59,7 @@ public:
 	const string &GetFileName() const;
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
-	const vector<MultiFileReaderColumn> &GetColumns();
+	const vector<MultiFileReaderColumnDefinition> &GetColumns();
 	void InitializeProjection();
 	void Finish();
 
@@ -117,6 +117,6 @@ public:
 private:
 	vector<string> names;
 	vector<LogicalType> types;
-	vector<MultiFileReaderColumn> columns;
+	vector<MultiFileReaderColumnDefinition> columns;
 };
 } // namespace duckdb

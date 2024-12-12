@@ -237,8 +237,8 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 }
 
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
-                                   const string &filename, const vector<MultiFileReaderColumn> &local_columns,
-                                   const vector<MultiFileReaderColumn> &global_columns,
+                                   const string &filename, const vector<MultiFileReaderColumnDefinition> &local_columns,
+                                   const vector<MultiFileReaderColumnDefinition> &global_columns,
                                    const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
                                    ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
 
@@ -300,14 +300,15 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 unique_ptr<MultiFileReaderGlobalState>
 MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
                                        const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
-                                       const vector<MultiFileReaderColumn> &global_columns,
+                                       const vector<MultiFileReaderColumnDefinition> &global_columns,
                                        const vector<ColumnIndex> &global_column_ids) {
 	// By default, the multifilereader does not require any global state
 	return nullptr;
 }
 
-void MultiFileReader::CreateMappingByName(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
-                                          const vector<MultiFileReaderColumn> &global_columns,
+void MultiFileReader::CreateMappingByName(const string &file_name,
+                                          const vector<MultiFileReaderColumnDefinition> &local_columns,
+                                          const vector<MultiFileReaderColumnDefinition> &global_columns,
                                           const vector<ColumnIndex> &global_column_ids,
                                           MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
                                           const string &initial_file,
@@ -378,8 +379,8 @@ void MultiFileReader::CreateMappingByName(const string &file_name, const vector<
 }
 
 void MultiFileReader::CreateMappingByFieldId(const string &file_name,
-                                             const vector<MultiFileReaderColumn> &local_columns,
-                                             const vector<MultiFileReaderColumn> &global_columns,
+                                             const vector<MultiFileReaderColumnDefinition> &local_columns,
+                                             const vector<MultiFileReaderColumnDefinition> &global_columns,
                                              const vector<ColumnIndex> &global_column_ids,
                                              MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
                                              const string &initial_file,
@@ -466,8 +467,9 @@ void MultiFileReader::CreateMappingByFieldId(const string &file_name,
 	reader_data.empty_columns = reader_data.column_ids.empty();
 }
 
-void MultiFileReader::CreateNameMapping(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
-                                        const vector<MultiFileReaderColumn> &global_columns,
+void MultiFileReader::CreateNameMapping(const string &file_name,
+                                        const vector<MultiFileReaderColumnDefinition> &local_columns,
+                                        const vector<MultiFileReaderColumnDefinition> &global_columns,
                                         const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
                                         const MultiFileReaderBindData &bind_data, const string &initial_file,
                                         optional_ptr<MultiFileReaderGlobalState> global_state) {
@@ -488,8 +490,9 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Mu
 	}
 }
 
-void MultiFileReader::CreateMapping(const string &file_name, const vector<MultiFileReaderColumn> &local_columns,
-                                    const vector<MultiFileReaderColumn> &global_columns,
+void MultiFileReader::CreateMapping(const string &file_name,
+                                    const vector<MultiFileReaderColumnDefinition> &local_columns,
+                                    const vector<MultiFileReaderColumnDefinition> &global_columns,
                                     const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
                                     MultiFileReaderData &reader_data, const string &initial_file,
                                     const MultiFileReaderBindData &bind_data,
@@ -500,7 +503,7 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<MultiF
 	CreateFilterMap(global_columns, filters, reader_data, global_state);
 }
 
-void MultiFileReader::CreateFilterMap(const vector<MultiFileReaderColumn> &global_columns,
+void MultiFileReader::CreateFilterMap(const vector<MultiFileReaderColumnDefinition> &global_columns,
                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
                                       optional_ptr<MultiFileReaderGlobalState> global_state) {
 	if (filters) {

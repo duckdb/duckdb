@@ -272,7 +272,7 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 		schema_col_names.push_back(column.name);
 		schema_col_types.push_back(column.type);
 
-		auto res = MultiFileReaderColumn(column.name, column.type);
+		auto res = MultiFileReaderColumnDefinition(column.name, column.type);
 		res.identifier = Value::INTEGER(column.field_id);
 		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
 		bind_data.schema.emplace_back(std::move(res));
@@ -311,7 +311,8 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 		                                              bind_data.reader_bind.schema, global_column_ids, table_filters,
 		                                              bind_data.file_list->GetFirstFile(), context, reader_state);
 	} else {
-		auto global_columns = MultiFileReaderColumn::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
+		auto global_columns =
+		    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
 		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
 		                                              global_columns, global_column_ids, table_filters,
 		                                              bind_data.file_list->GetFirstFile(), context, reader_state);
@@ -614,7 +615,8 @@ public:
 		file_list.InitializeScan(result->file_list_scan);
 
 		if (bind_data.reader_bind.schema.empty()) {
-			auto global_columns = MultiFileReaderColumn::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
+			auto global_columns =
+			    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
 			result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
 			    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, global_columns,
 			    input.column_indexes);
