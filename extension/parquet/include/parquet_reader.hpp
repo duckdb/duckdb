@@ -134,8 +134,6 @@ public:
 	unique_ptr<ColumnReader> root_reader;
 	shared_ptr<EncryptionUtil> encryption_util;
 
-	//! Index of the file_row_number column
-	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! Parquet schema for the generated columns
 	vector<duckdb_parquet::SchemaElement> generated_column_schema;
 	//! Table column names - set when using COPY tbl FROM file.parquet

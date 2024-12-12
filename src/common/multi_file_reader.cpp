@@ -384,7 +384,6 @@ void MultiFileReader::CreateMappingByFieldId(const string &file_name,
                                              MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
                                              const string &initial_file,
                                              optional_ptr<MultiFileReaderGlobalState> global_state) {
-// we have expected types: create a map of name -> column index
 #ifdef DEBUG
 	//! Make sure the global columns have field_ids to match on
 	for (auto &column : global_columns) {
@@ -393,6 +392,7 @@ void MultiFileReader::CreateMappingByFieldId(const string &file_name,
 	}
 #endif
 
+	// we have expected types: create a map of field_id -> column index
 	unordered_map<int32_t, idx_t> field_id_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 		auto &column = local_columns[col_idx];
@@ -426,9 +426,10 @@ void MultiFileReader::CreateMappingByFieldId(const string &file_name,
 		if (global_id >= global_columns.size()) {
 			if (bind_data.file_row_number_idx == global_id) {
 				reader_data.column_mapping.push_back(i);
-				// FIXME: 'reader.file_row_number_idx'
-				// It seems to me that we need to push some extra local state for this
-				reader_data.column_ids.push_back(42);
+				// FIXME: this needs a more extensible solution
+				reader_data.column_ids.push_back(field_id_map.size());
+			} else {
+				throw InternalException("Unexpected generated column");
 			}
 			continue;
 		}
