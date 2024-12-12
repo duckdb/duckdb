@@ -252,7 +252,7 @@ struct LogicalType {
 	inline PhysicalType InternalType() const {
 		return physical_type_;
 	}
-	inline const ExtraTypeInfo *AuxInfo() const {
+	inline const optional_ptr<ExtraTypeInfo> AuxInfo() const {
 		return type_info_.get();
 	}
 	inline bool IsNested() const {

@@ -10,6 +10,8 @@ add_library_unity(
   window_custom_aggregator.cpp
   window_cumedist_function.cpp
   window_distinct_aggregator.cpp
+  window_executor.cpp
+  window_index_tree.cpp
   window_naive_aggregator.cpp
   window_rank_function.cpp
   window_rownumber_function.cpp

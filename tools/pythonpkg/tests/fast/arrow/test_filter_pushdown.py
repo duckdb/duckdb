@@ -30,12 +30,11 @@ def create_pyarrow_dataset(rel):
 
 
 def test_decimal_filter_pushdown(duckdb_cursor):
-    pytest.skip("panic in polars is triggered, to be reviewed")
     pl = pytest.importorskip("polars")
     np = pytest.importorskip("numpy")
     np.random.seed(10)
 
-    df = pl.DataFrame({'x': pl.Series(np.random.uniform(-10, 10, 1000)).cast(pl.Decimal(18, 4))})
+    df = pl.DataFrame({'x': pl.Series(np.random.uniform(-10, 10, 1000)).cast(pl.Decimal(precision=18, scale=4))})
 
     query = """
         SELECT
@@ -930,7 +929,7 @@ class TestArrowFilterPushdown(object):
     def test_join_filter_pushdown(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE probe as select range a from range(10000);")
-        duckdb_conn.execute("CREATE TABLE build as select (random()*10000)::INT b from range(20);")
+        duckdb_conn.execute("CREATE TABLE build as select (random()*9999)::INT b from range(20);")
         duck_probe = duckdb_conn.table("probe")
         duck_build = duckdb_conn.table("build")
         duck_probe_arrow = duck_probe.arrow()
