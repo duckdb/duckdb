@@ -869,7 +869,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, Cat
 	// lookup
 	if (type == CatalogType::TABLE_ENTRY) {
 		auto lookup_result_default_table =
-		    TryLookupDefaultTable(retriever, type, catalog, schema, name, if_not_found, error_context);
+		    TryLookupDefaultTable(retriever, type, catalog, schema, name, OnEntryNotFound::RETURN_NULL, error_context);
 
 		if (lookup_result_default_table.Found() && lookup_result.Found()) {
 			ThrowDefaultTableAmbiguityException(lookup_result, lookup_result_default_table, name);

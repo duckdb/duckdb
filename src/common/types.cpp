@@ -892,14 +892,8 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 template <class OP>
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// left and right are not equal
-	// for enums, match the varchar rules
-	if (left.id() == LogicalTypeId::ENUM) {
-		return OP::Operation(LogicalType::VARCHAR, right, result);
-	} else if (right.id() == LogicalTypeId::ENUM) {
-		return OP::Operation(left, LogicalType::VARCHAR, result);
-	}
-	// NULL/string literals/unknown (parameter) types always take the other type
-	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN, LogicalTypeId::STRING_LITERAL};
+	// NULL/unknown (parameter) types always take the other type
+	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN};
 	for (auto &other_type : other_types) {
 		if (left.id() == other_type) {
 			result = LogicalType::NormalizeType(right);
@@ -908,6 +902,22 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 			result = LogicalType::NormalizeType(left);
 			return true;
 		}
+	}
+
+	// for enums, match the varchar rules
+	if (left.id() == LogicalTypeId::ENUM) {
+		return OP::Operation(LogicalType::VARCHAR, right, result);
+	} else if (right.id() == LogicalTypeId::ENUM) {
+		return OP::Operation(left, LogicalType::VARCHAR, result);
+	}
+
+	// for everything but enums - string literals also take the other type
+	if (left.id() == LogicalTypeId::STRING_LITERAL) {
+		result = LogicalType::NormalizeType(right);
+		return true;
+	} else if (right.id() == LogicalTypeId::STRING_LITERAL) {
+		result = LogicalType::NormalizeType(left);
+		return true;
 	}
 
 	// for other types - use implicit cast rules to check if we can combine the types
