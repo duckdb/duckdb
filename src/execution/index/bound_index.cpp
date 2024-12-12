@@ -40,7 +40,8 @@ ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids) {
 
 ErrorData BoundIndex::AppendWithDeleteIndex(IndexLock &l, DataChunk &chunk, Vector &row_ids,
                                             optional_ptr<BoundIndex> delete_index) {
-	throw NotImplementedException("this implementation of Append does not exist.");
+	// Fallback to the old Append.
+	return Append(l, chunk, row_ids);
 }
 
 ErrorData BoundIndex::AppendWithDeleteIndex(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
