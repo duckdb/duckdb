@@ -131,7 +131,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	auto start = segment.GetRelativeIndex(state.row_index);
 	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE ||
 	    start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
-		scan_state.ScanToFlatVector(segment, result, result_offset, start, scan_count);
+		scan_state.ScanToFlatVector(result, result_offset, start, scan_count);
 	} else {
 		scan_state.ScanToDictionaryVector(segment, result, result_offset, start, scan_count);
 	}
@@ -148,13 +148,9 @@ void DictionaryCompressionStorage::StringScan(ColumnSegment &segment, ColumnScan
 void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
                                                   Vector &result, idx_t result_idx) {
 	// fetch a single row from the string segment
-	// first pin the main buffer if it is not already pinned
 	CompressedStringScanState scan_state(state.GetOrInsertHandle(segment));
-	auto baseptr = scan_state.handle->Ptr() + segment.GetBlockOffset();
-	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
-	scan_state.current_width = (bitpacking_width_t)Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width));
-
-	scan_state.ScanToFlatVector(segment, result, result_idx, row_id, 1);
+	scan_state.Initialize(segment, false);
+	scan_state.ScanToFlatVector(result, result_idx, row_id, 1);
 }
 
 //===--------------------------------------------------------------------===//

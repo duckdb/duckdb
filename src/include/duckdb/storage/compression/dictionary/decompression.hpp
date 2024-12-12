@@ -17,12 +17,14 @@ public:
 	}
 
 public:
-	void ScanToFlatVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start, idx_t scan_count);
+	void Initialize(ColumnSegment &segment, bool initialize_dictionary = true);
+	void ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count);
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
 	                            idx_t scan_count);
 
-public:
-	void Initialize(ColumnSegment &segment, bool initialize_dictionary = true);
+private:
+	string_t FetchStringFromDict(int32_t dict_offset, uint16_t string_len);
+	uint16_t GetStringLength(sel_t index);
 
 public:
 	BufferHandle owned_handle;
@@ -42,6 +44,7 @@ public:
 	buffer_ptr<Vector> dictionary;
 	idx_t dictionary_size;
 	StringDictionaryContainer dict;
+	idx_t block_size;
 };
 
 } // namespace duckdb

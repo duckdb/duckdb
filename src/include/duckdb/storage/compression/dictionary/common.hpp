@@ -29,9 +29,6 @@ public:
 
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
-	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, data_ptr_t baseptr,
-	                                    int32_t dict_offset, uint16_t string_len);
-	static uint16_t GetStringLength(uint32_t *index_buffer_ptr, sel_t index);
 };
 
 //! Abstract class managing the compression state for size analysis or compression.

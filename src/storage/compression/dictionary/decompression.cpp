@@ -2,6 +2,28 @@
 
 namespace duckdb {
 
+uint16_t CompressedStringScanState::GetStringLength(sel_t index) {
+	if (index == 0) {
+		return 0;
+	} else {
+		return UnsafeNumericCast<uint16_t>(index_buffer_ptr[index] - index_buffer_ptr[index - 1]);
+	}
+}
+
+string_t CompressedStringScanState::FetchStringFromDict(int32_t dict_offset, uint16_t string_len) {
+	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(block_size));
+	if (dict_offset == 0) {
+		return string_t(nullptr, 0);
+	}
+
+	// normal string: read string from this block
+	auto dict_end = baseptr + dict.end;
+	auto dict_pos = dict_end - dict_offset;
+
+	auto str_ptr = char_ptr_cast(dict_pos);
+	return string_t(str_ptr, string_len);
+}
+
 void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initialize_dictionary) {
 	baseptr = handle->Ptr() + segment.GetBlockOffset();
 
@@ -18,6 +40,8 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 	base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
 
+	block_size = segment.GetBlockManager().GetBlockSize();
+
 	if (!initialize_dictionary) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
 		return;
@@ -30,14 +54,12 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 
 	for (uint32_t i = 0; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
-		uint16_t str_len = DictionaryCompression::GetStringLength(index_buffer_ptr, i);
-		dict_child_data[i] = DictionaryCompression::FetchStringFromDict(
-		    segment, dict, baseptr, UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
+		uint16_t str_len = GetStringLength(i);
+		dict_child_data[i] = FetchStringFromDict(UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
 	}
 }
 
-void CompressedStringScanState::ScanToFlatVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
-                                                 idx_t start, idx_t scan_count) {
+void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	// Handling non-bitpacking-group-aligned start values;
@@ -61,10 +83,8 @@ void CompressedStringScanState::ScanToFlatVector(ColumnSegment &segment, Vector 
 		// Lookup dict offset in index buffer
 		auto string_number = sel_vec->get_index(i + start_offset);
 		auto dict_offset = index_buffer_ptr[string_number];
-		auto str_len =
-		    DictionaryCompression::GetStringLength(index_buffer_ptr, UnsafeNumericCast<sel_t>(string_number));
-		result_data[result_offset + i] = DictionaryCompression::FetchStringFromDict(
-		    segment, dict, baseptr, UnsafeNumericCast<int32_t>(dict_offset), str_len);
+		auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_number));
+		result_data[result_offset + i] = FetchStringFromDict(UnsafeNumericCast<int32_t>(dict_offset), str_len);
 	}
 }
 

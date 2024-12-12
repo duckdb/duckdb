@@ -36,30 +36,6 @@ void DictionaryCompression::SetDictionary(ColumnSegment &segment, BufferHandle &
 	Store<uint32_t>(container.end, data_ptr_cast(&header_ptr->dict_end));
 }
 
-string_t DictionaryCompression::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
-                                                    data_ptr_t baseptr, int32_t dict_offset, uint16_t string_len) {
-
-	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
-	if (dict_offset == 0) {
-		return string_t(nullptr, 0);
-	}
-
-	// normal string: read string from this block
-	auto dict_end = baseptr + dict.end;
-	auto dict_pos = dict_end - dict_offset;
-
-	auto str_ptr = char_ptr_cast(dict_pos);
-	return string_t(str_ptr, string_len);
-}
-
-uint16_t DictionaryCompression::GetStringLength(uint32_t *index_buffer_ptr, sel_t index) {
-	if (index == 0) {
-		return 0;
-	} else {
-		return UnsafeNumericCast<uint16_t>(index_buffer_ptr[index] - index_buffer_ptr[index - 1]);
-	}
-}
-
 DictionaryCompressionState::DictionaryCompressionState(const CompressionInfo &info) : CompressionState(info) {
 }
 DictionaryCompressionState::~DictionaryCompressionState() {
