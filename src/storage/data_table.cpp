@@ -248,6 +248,14 @@ idx_t DataTable::GetRowGroupSize() const {
 	return row_groups->GetRowGroupSize();
 }
 
+vector<PartitionStatistics> DataTable::GetPartitionStats(ClientContext &context) {
+	auto result = row_groups->GetPartitionStats();
+	auto &local_storage = LocalStorage::Get(context, db);
+	auto local_partitions = local_storage.GetPartitionStats(*this);
+	result.insert(result.end(), local_partitions.begin(), local_partitions.end());
+	return result;
+}
+
 idx_t DataTable::MaxThreads(ClientContext &context) const {
 	idx_t row_group_size = GetRowGroupSize();
 	idx_t parallel_scan_vector_count = row_group_size / STANDARD_VECTOR_SIZE;
@@ -430,18 +438,20 @@ static void VerifyGeneratedExpressionSuccess(ClientContext &context, TableCatalo
 	}
 }
 
-static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &table, Expression &expr,
-                                  DataChunk &chunk) {
+static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &table, Expression &expr, DataChunk &chunk,
+                                  CheckConstraint &check) {
 	ExpressionExecutor executor(context, expr);
 	Vector result(LogicalType::INTEGER);
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, error.RawMessage());
+		throw ConstraintException("CHECK constraint failed on table %s with expression %s (Error: %s)", table.name,
+		                          check.ToString(), error.RawMessage());
 	} catch (...) {
 		// LCOV_EXCL_START
-		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
+		throw ConstraintException("CHECK constraint failed on table %s with expression %s (Unknown Error)", table.name,
+		                          check.ToString());
 	} // LCOV_EXCL_STOP
 	UnifiedVectorFormat vdata;
 	result.ToUnifiedFormat(chunk.size(), vdata);
@@ -450,7 +460,8 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (vdata.validity.RowIsValid(idx) && dataptr[idx] == 0) {
-			throw ConstraintException("CHECK constraint failed: %s", table.name);
+			throw ConstraintException("CHECK constraint failed on table %s with expression %s", table.name,
+			                          check.ToString());
 		}
 	}
 }
@@ -778,8 +789,9 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 			break;
 		}
 		case ConstraintType::CHECK: {
-			auto &check = constraint->Cast<BoundCheckConstraint>();
-			VerifyCheckConstraint(context, table, *check.expression, chunk);
+			auto &check = base_constraint->Cast<CheckConstraint>();
+			auto &bound_check = constraint->Cast<BoundCheckConstraint>();
+			VerifyCheckConstraint(context, table, *bound_check.expression, chunk, check);
 			break;
 		}
 		case ConstraintType::UNIQUE: {
@@ -1379,11 +1391,12 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 			break;
 		}
 		case ConstraintType::CHECK: {
-			auto &check = constraint->Cast<BoundCheckConstraint>();
+			auto &check = base_constraint->Cast<CheckConstraint>();
+			auto &bound_check = constraint->Cast<BoundCheckConstraint>();
 
 			DataChunk mock_chunk;
-			if (CreateMockChunk(table, column_ids, check.bound_columns, chunk, mock_chunk)) {
-				VerifyCheckConstraint(context, table, *check.expression, mock_chunk);
+			if (CreateMockChunk(table, column_ids, bound_check.bound_columns, chunk, mock_chunk)) {
+				VerifyCheckConstraint(context, table, *bound_check.expression, mock_chunk, check);
 			}
 			break;
 		}

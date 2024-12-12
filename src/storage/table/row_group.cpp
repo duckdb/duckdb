@@ -435,6 +435,10 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 			// label the filter as always true so we don't need to check it anymore
 			filters.SetFilterAlwaysTrue(i);
 		}
+		if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
+			// these are only for row group checking, set as always true so we don't check it
+			filters.SetFilterAlwaysTrue(i);
+		}
 	}
 	return true;
 }
@@ -1106,6 +1110,22 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	result.tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");
 	result.data_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(102, "data_pointers");
 	result.deletes_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(103, "delete_pointers");
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// GetPartitionStats
+//===--------------------------------------------------------------------===//
+PartitionStatistics RowGroup::GetPartitionStats() const {
+	PartitionStatistics result;
+	result.row_start = start;
+	result.count = count;
+	if (HasUnloadedDeletes() || version_info.load().get()) {
+		// we have version info - approx count
+		result.count_type = CountType::COUNT_APPROXIMATE;
+	} else {
+		result.count_type = CountType::COUNT_EXACT;
+	}
 	return result;
 }
 

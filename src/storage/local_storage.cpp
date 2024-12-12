@@ -253,7 +253,7 @@ void LocalTableStorage::Rollback() {
 //===--------------------------------------------------------------------===//
 // LocalTableManager
 //===--------------------------------------------------------------------===//
-optional_ptr<LocalTableStorage> LocalTableManager::GetStorage(DataTable &table) {
+optional_ptr<LocalTableStorage> LocalTableManager::GetStorage(DataTable &table) const {
 	lock_guard<mutex> l(table_storage_lock);
 	auto entry = table_storage.find(table);
 	return entry == table_storage.end() ? nullptr : entry->second.get();
@@ -272,7 +272,7 @@ LocalTableStorage &LocalTableManager::GetOrCreateStorage(ClientContext &context,
 	}
 }
 
-bool LocalTableManager::IsEmpty() {
+bool LocalTableManager::IsEmpty() const {
 	lock_guard<mutex> l(table_storage_lock);
 	return table_storage.empty();
 }
@@ -293,7 +293,7 @@ reference_map_t<DataTable, shared_ptr<LocalTableStorage>> LocalTableManager::Mov
 	return std::move(table_storage);
 }
 
-idx_t LocalTableManager::EstimatedSize() {
+idx_t LocalTableManager::EstimatedSize() const {
 	lock_guard<mutex> l(table_storage_lock);
 	idx_t estimated_size = 0;
 	for (auto &storage : table_storage) {
@@ -558,6 +558,14 @@ idx_t LocalStorage::AddedRows(DataTable &table) {
 		return 0;
 	}
 	return storage->row_groups->GetTotalRows() - storage->deleted_rows;
+}
+
+vector<PartitionStatistics> LocalStorage::GetPartitionStats(DataTable &table) const {
+	auto storage = table_manager.GetStorage(table);
+	if (!storage) {
+		return vector<PartitionStatistics>();
+	}
+	return storage->row_groups->GetPartitionStats();
 }
 
 void LocalStorage::DropTable(DataTable &table) {

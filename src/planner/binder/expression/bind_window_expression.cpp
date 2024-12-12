@@ -142,9 +142,20 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 }
 
 BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
+	QueryErrorContext error_context(window.query_location);
+	//	Check for macros pretending to be aggregates
+	auto entry = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, window.catalog, window.schema,
+	                             window.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+	if (window.type == ExpressionType::WINDOW_AGGREGATE && entry && entry->type == CatalogType::MACRO_ENTRY) {
+		auto macro = make_uniq<FunctionExpression>(window.catalog, window.schema, window.function_name,
+		                                           std::move(window.children), std::move(window.filter_expr), nullptr,
+		                                           window.distinct);
+		auto macro_expr = window.Copy();
+		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
+	}
+
 	auto name = window.GetName();
 
-	QueryErrorContext error_context(window.query_location);
 	if (inside_window) {
 		throw BinderException(error_context, "window function calls cannot be nested");
 	}
@@ -193,6 +204,10 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	BindChild(window.offset_expr, depth, error);
 	BindChild(window.default_expr, depth, error);
 
+	for (auto &order : window.arg_orders) {
+		BindChild(order.expression, depth, error);
+	}
+
 	inside_window = false;
 	if (error.HasError()) {
 		// failed to bind children of window function
@@ -200,6 +215,11 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	//	Restore any collation expressions
+	for (auto &order : window.arg_orders) {
+		auto &order_expr = order.expression;
+		auto &bound_order = BoundExpression::GetExpression(*order_expr);
+		ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type);
+	}
 	for (auto &part_expr : window.partitions) {
 		auto &bound_partition = BoundExpression::GetExpression(*part_expr);
 		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->return_type);
@@ -243,8 +263,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	unique_ptr<FunctionData> bind_info;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
-		                                                              window.function_name, error_context);
+		if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+			//	Not an aggregate: Look it up to generate error
+			Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
+			                                                 window.function_name, error_context);
+		}
+		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
 		D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 		// bind the aggregate
@@ -337,6 +361,14 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto null_order = config.ResolveNullOrder(type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, std::move(expression));
+	}
+
+	// Argument orders are just like arguments, not frames
+	for (auto &order : window.arg_orders) {
+		auto type = config.ResolveOrder(order.type);
+		auto null_order = config.ResolveNullOrder(type, order.null_order);
+		auto expression = GetExpression(order.expression);
+		result->arg_orders.emplace_back(type, null_order, std::move(expression));
 	}
 
 	result->filter_expr = CastWindowExpression(window.filter_expr, LogicalType::BOOLEAN);
