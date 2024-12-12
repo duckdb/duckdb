@@ -18,6 +18,7 @@ duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query,
 	Connection *conn = (Connection *)connection;
 	auto wrapper = new ArrowResultWrapper();
 	wrapper->result = conn->Query(query);
+	wrapper->context = conn->context;
 	*out_result = (duckdb_arrow)wrapper;
 	return !wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 }
