@@ -177,7 +177,7 @@ public:
 	FunctionCollationHandling collation_handling;
 
 	static BaseScalarFunction SetReturnsError(BaseScalarFunction &function) {
-		function.errors = FunctionErrors::CAN_THROW_ERROR;
+		function.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
 		return function;
 	}
 
