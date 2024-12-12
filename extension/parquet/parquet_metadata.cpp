@@ -641,7 +641,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 		auto bloom_excludes =
 		    ParquetStatisticsUtils::BloomFilterExcludes(filter, column.meta_data, *protocol, allocator);
 		current_chunk.SetValue(0, count, Value(file_path));
-		current_chunk.SetValue(1, count, Value::BIGINT(row_group_idx));
+		current_chunk.SetValue(1, count, Value::BIGINT(NumericCast<int64_t>(row_group_idx)));
 		current_chunk.SetValue(2, count, Value::BOOLEAN(bloom_excludes));
 
 		count++;

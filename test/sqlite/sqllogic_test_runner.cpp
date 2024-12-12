@@ -297,6 +297,28 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 	return collection;
 }
 
+static string ParseExplanation(SQLLogicParser &parser, const vector<string> &params, size_t &index) {
+	string res;
+	if (params[index].empty() || params[index][0] != '"') {
+		parser.Fail("Quoted parameter should start with double quotes");
+	}
+
+	res += params[index].substr(1);
+	index++;
+
+	while (index < params.size()) {
+		res += " " + params[index];
+		index++;
+
+		if (res.back() == '"') {
+			res.pop_back();
+			break;
+		}
+	}
+
+	return res;
+}
+
 RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vector<string> &params) {
 	if (params.size() < 1) {
 		parser.Fail("require requires a single parameter");
@@ -459,6 +481,17 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "no_extension_autoloading") {
+		if (params.size() < 2) {
+			parser.Fail("require no_extension_autoloading needs an explanation string");
+		}
+		size_t index = 1;
+		string explanation = ParseExplanation(parser, params, index);
+		if (explanation.rfind("EXPECTED", 0) == 0 || explanation.rfind("FIXME", 0) == 0) {
+			// good, explanation is properly formatted
+		} else {
+			parser.Fail(
+			    "require no_extension_autoloading explanation string should begin with either 'EXPECTED' or FIXME'");
+		}
 		if (config->options.autoload_known_extensions) {
 			// If autoloading is on, we skip this test
 			return RequireResult::MISSING;
