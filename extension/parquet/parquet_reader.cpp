@@ -500,7 +500,7 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	auto &struct_reader = root_reader->Cast<StructColumnReader>();
 	auto &child_readers = struct_reader.child_readers;
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
-	// FIXME: what is this + 1 logically for???
+
 	D_ASSERT(child_readers.size() >= child_types.size());
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto &type_pair = child_types[i];
