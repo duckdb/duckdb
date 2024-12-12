@@ -215,7 +215,7 @@ static unique_ptr<FunctionData> MapBind(ClientContext &, ScalarFunction &bound_f
 ScalarFunction MapFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::MAP, MapFunction, MapBind);
 	fun.varargs = LogicalType::ANY;
-	ScalarFunction::SetReturnsError(fun);
+	BaseScalarFunction::SetReturnsError(fun);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }

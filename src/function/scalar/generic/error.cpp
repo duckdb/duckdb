@@ -16,7 +16,7 @@ ScalarFunction ErrorFun::GetFunction() {
 	                          ScalarFunction::UnaryFunction<string_t, int32_t, ErrorOperator>);
 	// Set the function with side effects to avoid the optimization.
 	fun.stability = FunctionStability::VOLATILE;
-	ScalarFunction::SetReturnsError(fun);
+	BaseScalarFunction::SetReturnsError(fun);
 	return fun;
 }
 

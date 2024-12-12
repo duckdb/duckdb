@@ -35,7 +35,7 @@ ScalarFunction EncodeFun::GetFunction() {
 
 ScalarFunction DecodeFun::GetFunction() {
 	ScalarFunction function({LogicalType::BLOB}, LogicalType::VARCHAR, DecodeFunction);
-	ScalarFunction::SetReturnsError(function);
+	BaseScalarFunction::SetReturnsError(function);
 	return function;
 }
 

@@ -351,7 +351,6 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 
 AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
 	auto function = GetApproxQuantileListAggregateFunction(type);
-	// ScalarFunction::SetReturnsError(function);
 	function.name = "approx_quantile";
 	function.serialize = ApproximateQuantileBindData::Serialize;
 	function.deserialize = ApproximateQuantileBindData::Deserialize;

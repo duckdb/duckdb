@@ -96,7 +96,7 @@ ScalarFunction MapKeysFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction function({}, LogicalTypeId::LIST, MapKeysFunction, MapKeysBind);
 	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	ScalarFunction::SetReturnsError(function);
+	BaseScalarFunction::SetReturnsError(function);
 	function.varargs = LogicalType::ANY;
 	return function;
 }
@@ -104,7 +104,7 @@ ScalarFunction MapKeysFun::GetFunction() {
 ScalarFunction MapValuesFun::GetFunction() {
 	ScalarFunction function({}, LogicalTypeId::LIST, MapValuesFunction, MapValuesBind);
 	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	ScalarFunction::SetReturnsError(function);
+	BaseScalarFunction::SetReturnsError(function);
 	function.varargs = LogicalType::ANY;
 	return function;
 }

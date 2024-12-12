@@ -2025,7 +2025,7 @@ ScalarFunctionSet QuarterFun::GetFunctions() {
 ScalarFunctionSet DayOfWeekFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::DayOfWeekOperator>();
 	for (auto &func : set.functions) {
-		ScalarFunction::SetReturnsError(func);
+		BaseScalarFunction::SetReturnsError(func);
 	}
 	return set;
 }
