@@ -38,6 +38,10 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			// aggregate is not count star - bail
 			return;
 		}
+		if (aggr_expr.filter) {
+			// aggregate has a filter - bail
+			return;
+		}
 	}
 	// we can do the rewrite! get the stats
 	GetPartitionStatsInput input(get.function, get.bind_data.get());
