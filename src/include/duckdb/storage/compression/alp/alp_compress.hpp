@@ -93,8 +93,8 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
+		                                                                info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
 
@@ -210,8 +210,7 @@ public:
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
 		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
 
-		handle.Destroy();
-		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
+		checkpoint_state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 		data_bytes_used = 0;
 		vectors_flushed = 0;
 	}

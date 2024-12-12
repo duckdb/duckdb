@@ -166,7 +166,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 		// no next data, we can do a zero-copy read of this vector
 		FlatVector::SetData(result, base_ptr);
-		FlatVector::Validity(result).Initialize(validity_data);
+		FlatVector::Validity(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
 		return vdata.count;
 	}
 
@@ -194,7 +194,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
 		}
-		ValidityMask current_validity(validity_data);
+		ValidityMask current_validity(validity_data, STANDARD_VECTOR_SIZE);
 		target_validity.SliceInPlace(current_validity, current_offset, 0, current_vdata.count);
 		current_offset += current_vdata.count;
 		next_index = current_vdata.next_data;
@@ -216,7 +216,6 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		auto &child_vector = ListVector::GetEntry(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		ListVector::SetListSize(result, child_count);
-
 	} else if (internal_type == PhysicalType::ARRAY) {
 		auto &child_vector = ArrayVector::GetEntry(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
@@ -256,6 +255,7 @@ void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementSt
                                             const vector<column_t> &column_ids) {
 	D_ASSERT(chunk.ColumnCount() == column_ids.size());
 	D_ASSERT(state.properties != ColumnDataScanProperties::INVALID);
+	chunk.Reset();
 	InitializeChunkState(chunk_index, state);
 	auto &chunk_meta = chunk_data[chunk_index];
 	for (idx_t i = 0; i < column_ids.size(); i++) {

@@ -129,6 +129,10 @@ void PhysicalExport::ExtractEntries(ClientContext &context, vector<reference<Sch
                                     ExportEntries &result) {
 	for (auto &schema_p : schema_list) {
 		auto &schema = schema_p.get();
+		auto &catalog = schema.ParentCatalog();
+		if (catalog.IsSystemCatalog() || catalog.IsTemporaryCatalog()) {
+			continue;
+		}
 		if (!schema.internal) {
 			result.schemas.push_back(schema);
 		}
@@ -229,10 +233,9 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 
 	catalog_entry_vector_t catalog_entries;
 	catalog_entries = GetNaiveExportOrder(context.client, catalog);
-	if (catalog.IsDuckCatalog()) {
-		auto &duck_catalog = catalog.Cast<DuckCatalog>();
-		auto &dependency_manager = duck_catalog.GetDependencyManager();
-		dependency_manager.ReorderEntries(catalog_entries, ccontext);
+	auto dependency_manager = catalog.GetDependencyManager();
+	if (dependency_manager) {
+		dependency_manager->ReorderEntries(catalog_entries, ccontext);
 	}
 
 	// write the schema.sql file

@@ -13,6 +13,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -24,11 +25,12 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/main/config.hpp"
+
 #include <cmath>
 
 namespace duckdb {
@@ -170,6 +172,7 @@ string LogicalTypeIdToString(LogicalTypeId type) {
 
 constexpr const LogicalTypeId LogicalType::INVALID;
 constexpr const LogicalTypeId LogicalType::SQLNULL;
+constexpr const LogicalTypeId LogicalType::UNKNOWN;
 constexpr const LogicalTypeId LogicalType::BOOLEAN;
 constexpr const LogicalTypeId LogicalType::TINYINT;
 constexpr const LogicalTypeId LogicalType::UTINYINT;
@@ -676,6 +679,59 @@ bool LogicalType::IsTemporal() const {
 
 bool LogicalType::IsValid() const {
 	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
+}
+
+bool LogicalType::IsComplete() const {
+	// Check if type does not contain incomplete types
+	return !TypeVisitor::Contains(*this, [](const LogicalType &type) {
+		switch (type.id()) {
+		case LogicalTypeId::INVALID:
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::ANY:
+			return true; // These are incomplete by default
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::MAP:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::LIST_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::UNION:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::STRUCT_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::ARRAY:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::ARRAY_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::DECIMAL:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::DECIMAL_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		case LogicalTypeId::ENUM:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
+		default:
+			return false;
+		}
+
+		// Type has type info, check if it is complete
+		D_ASSERT(type.AuxInfo());
+		switch (type.AuxInfo()->type) {
+		case ExtraTypeInfoType::STRUCT_TYPE_INFO:
+			return type.AuxInfo()->Cast<StructTypeInfo>().child_types.empty(); // Cannot be empty
+		case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
+			return DecimalType::GetWidth(type) >= 1 && DecimalType::GetWidth(type) <= Decimal::MAX_WIDTH_DECIMAL &&
+			       DecimalType::GetScale(type) <= DecimalType::GetWidth(type);
+		default:
+			return false; // Nested types are checked by TypeVisitor recursion
+		}
+	});
 }
 
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
@@ -1545,35 +1601,30 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 const string &UserType::GetCatalog(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().catalog;
 }
 
 const string &UserType::GetSchema(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().schema;
 }
 
 const string &UserType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().user_type_name;
 }
 
 const vector<Value> &UserType::GetTypeModifiers(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().user_type_modifiers;
 }
 
 vector<Value> &UserType::GetTypeModifiers(LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.GetAuxInfoShrPtr();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().user_type_modifiers;
 }
 
@@ -1613,21 +1664,18 @@ const string EnumType::GetValue(const Value &val) {
 const Vector &EnumType::GetValuesInsertOrder(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<EnumTypeInfo>().GetValuesInsertOrder();
 }
 
 idx_t EnumType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<EnumTypeInfo>().GetDictSize();
 }
 
 PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto aux_info = type.AuxInfo();
-	D_ASSERT(aux_info);
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
 	return EnumTypeInfo::DictType(info.GetDictSize());
@@ -1653,21 +1701,18 @@ bool LogicalType::IsJSONType() const {
 const LogicalType &ArrayType::GetChildType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<ArrayTypeInfo>().child_type;
 }
 
 idx_t ArrayType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<ArrayTypeInfo>().size;
 }
 
 bool ArrayType::IsAnySize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<ArrayTypeInfo>().size == 0;
 }
 
@@ -1748,7 +1793,7 @@ idx_t AnyType::GetCastScore(const LogicalType &type) {
 LogicalType IntegerLiteral::GetType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::INTEGER_LITERAL);
 	auto info = type.AuxInfo();
-	D_ASSERT(info && info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
+	D_ASSERT(info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
 	return info->Cast<IntegerLiteralTypeInfo>().constant_value.type();
 }
 
@@ -1763,7 +1808,7 @@ bool IntegerLiteral::FitsInType(const LogicalType &type, const LogicalType &targ
 	}
 	// we can cast to integral types if the constant value fits within that type
 	auto info = type.AuxInfo();
-	D_ASSERT(info && info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
+	D_ASSERT(info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
 	auto &literal_info = info->Cast<IntegerLiteralTypeInfo>();
 	Value copy = literal_info.constant_value;
 	return copy.DefaultTryCastAs(target);

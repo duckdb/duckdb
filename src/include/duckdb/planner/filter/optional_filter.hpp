@@ -18,7 +18,7 @@ public:
 	static constexpr const TableFilterType TYPE = TableFilterType::OPTIONAL_FILTER;
 
 public:
-	OptionalFilter();
+	explicit OptionalFilter(unique_ptr<TableFilter> filter = nullptr);
 
 	string ToString(const string &column_name) override;
 	unique_ptr<TableFilter> Copy() const override;

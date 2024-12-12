@@ -538,6 +538,9 @@ idx_t duckdb_column_count(duckdb_result *result) {
 	if (!result) {
 		return 0;
 	}
+	if (result->internal_data == NULL) {
+		return 0;
+	}
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result->internal_data));
 	return result_data.result->ColumnCount();
 }

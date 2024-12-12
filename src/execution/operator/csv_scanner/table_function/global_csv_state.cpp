@@ -11,7 +11,7 @@ namespace duckdb {
 
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBufferManager> &buffer_manager,
                                const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-                               vector<column_t> column_ids_p, const ReadCSVData &bind_data_p)
+                               vector<ColumnIndex> column_ids_p, const ReadCSVData &bind_data_p)
     : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error), bind_data(bind_data_p) {
 
@@ -25,7 +25,12 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		// If not we need to construct it for the first file
 		file_scans.emplace_back(
 		    make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema, false));
-	};
+	}
+	idx_t cur_file_idx = 0;
+	while (file_scans.back()->start_iterator.done && file_scans.size() < files.size()) {
+		file_scans.emplace_back(make_uniq<CSVFileScan>(context, files[++cur_file_idx], options, cur_file_idx, bind_data,
+		                                               column_ids, file_schema, false));
+	}
 	// There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
 	single_threaded = many_csv_files || !options.parallel;

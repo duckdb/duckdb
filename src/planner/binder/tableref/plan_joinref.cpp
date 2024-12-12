@@ -1,22 +1,23 @@
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
-#include "duckdb/planner/tableref/bound_joinref.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/tableref/bound_joinref.hpp"
 
 namespace duckdb {
 
@@ -292,7 +293,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	if (ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
-	    ClientConfig::GetConfig(context).enable_optimizer) {
+	    ClientConfig::GetConfig(context).enable_optimizer &&
+	    !Optimizer::OptimizerDisabled(context, OptimizerType::BUILD_SIDE_PROBE_SIDE)) {
 		// we turn any right outer joins into left outer joins for optimization purposes
 		// they are the same but with sides flipped, so treating them the same simplifies life
 		ref.type = JoinType::LEFT;

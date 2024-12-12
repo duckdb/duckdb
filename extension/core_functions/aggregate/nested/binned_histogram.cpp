@@ -249,7 +249,7 @@ static Value OtherBucketValue(const LogicalType &type) {
 		return Value::STRUCT(std::move(child_list));
 	}
 	case LogicalTypeId::LIST:
-		return Value::EMPTYLIST(ListType::GetChildType(type));
+		return Value::LIST(ListType::GetChildType(type), vector<Value>());
 	default:
 		throw InternalException("Unsupported type for other bucket");
 	}
@@ -342,6 +342,9 @@ static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 
 template <class HIST>
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::DECIMAL) {
+		return GetHistogramBinFunction<HIST>(LogicalType::DOUBLE);
+	}
 	switch (type.InternalType()) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::BOOL:

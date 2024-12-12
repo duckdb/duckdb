@@ -331,7 +331,7 @@ public:
 	void RenderRow(RowResult &result) override {
 		auto &data = result.data;
 		if (data.size() != 2) {
-			throw std::runtime_error("Invalid usage of explain renderer - must have two data points per row");
+			return;
 		}
 		if (strcmp(data[0], "logical_plan") == 0 || strcmp(data[0], "logical_opt") == 0 ||
 		    strcmp(data[0], "physical_plan") == 0) {
@@ -509,6 +509,8 @@ public:
 class ModeAsciiRenderer : public RowRenderer {
 public:
 	explicit ModeAsciiRenderer(ShellState &state) : RowRenderer(state) {
+		col_sep = "\n";
+		row_sep = "\n";
 	}
 
 	void RenderHeader(RowResult &result) override {
@@ -618,6 +620,10 @@ public:
 					state.Print("1e999");
 				} else if (strcmp(data[i], "-inf") == 0) {
 					state.Print("-1e999");
+				} else if (strcmp(data[i], "nan") == 0) {
+					state.Print("null");
+				} else if (strcmp(data[i], "-nan") == 0) {
+					state.Print("null");
 				} else {
 					state.Print(data[i]);
 				}
@@ -830,9 +836,6 @@ unique_ptr<RowRenderer> ShellState::GetRowRenderer(RenderMode mode) {
 		return unique_ptr<RowRenderer>(new ModeSemiRenderer(*this));
 	case RenderMode::PRETTY:
 		return unique_ptr<RowRenderer>(new ModePrettyRenderer(*this));
-	case RenderMode::TRASH:
-		// no renderer
-		return nullptr;
 	default:
 		throw std::runtime_error("Unsupported mode for GetRowRenderer");
 	}

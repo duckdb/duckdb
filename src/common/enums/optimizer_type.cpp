@@ -37,6 +37,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"join_filter_pushdown", OptimizerType::JOIN_FILTER_PUSHDOWN},
     {"extension", OptimizerType::EXTENSION},
     {"materialized_cte", OptimizerType::MATERIALIZED_CTE},
+    {"sum_rewriter", OptimizerType::SUM_REWRITER},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

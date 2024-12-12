@@ -16,7 +16,14 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 		auto &get = op.Cast<LogicalGet>();
 		auto get_bindings = get.GetColumnBindings();
 		auto &column_ids = get.GetColumnIds();
-		if (std::find(column_ids.begin(), column_ids.end(), DConstants::INVALID_INDEX) != column_ids.end()) {
+		bool has_row_id = false;
+		for (auto &col_id : column_ids) {
+			if (col_id.IsRowIdColumn()) {
+				has_row_id = true;
+				break;
+			}
+		}
+		if (has_row_id) {
 			for (auto &binding : get_bindings) {
 				bindings.push_back(binding);
 			}
@@ -41,7 +48,10 @@ BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, Logical
 
 static void FlipChildren(LogicalOperator &op) {
 	std::swap(op.children[0], op.children[1]);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		join.join_type = InverseJoinType(join.join_type);
 		for (auto &cond : join.conditions) {
@@ -49,11 +59,20 @@ static void FlipChildren(LogicalOperator &op) {
 			cond.comparison = FlipComparisonExpression(cond.comparison);
 		}
 		std::swap(join.left_projection_map, join.right_projection_map);
+		return;
 	}
-	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &join = op.Cast<LogicalAnyJoin>();
 		join.join_type = InverseJoinType(join.join_type);
 		std::swap(join.left_projection_map, join.right_projection_map);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		// don't need to do anything here.
+		return;
+	}
+	default:
+		throw InternalException("Flipping children, but children were not flipped");
 	}
 }
 

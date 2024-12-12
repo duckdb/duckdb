@@ -218,7 +218,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		const auto &quantile = bind_data.quantiles[0];
 		auto &window_state = state.GetOrCreateWindowState();
 		MEDIAN_TYPE med;
-		if (gstate && gstate->HasTrees()) {
+		if (gstate && gstate->HasTree()) {
 			med = gstate->GetWindowState().template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
 		} else {
 			window_state.UpdateSkip(data, frames, included);

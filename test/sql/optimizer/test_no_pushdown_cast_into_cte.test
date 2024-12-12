@@ -72,3 +72,35 @@ explain with t(a, b) as  (
 ) select a, b from t where a[1] = '1';
 ----
 logical_opt	<!REGEX>:.*FILTER.*PROJECTION.*FILTER.*
+
+
+statement ok
+create or replace table mytablename2 as
+from (values
+    ('a0'),
+    ('a1'),
+    ('a2'),
+    ('xxx-0'),
+    ('xxx-1'),
+    ('xxx-2'),
+    ('xxx-3'),
+    ('xxxx'),
+    ('xxx0'),
+    ('xxx1'),
+    ('xxx2'),
+    ('xxx3')
+) t(mycolname),
+range(4300) b(someothercolname)
+
+
+query I
+select
+    mycolname[2:]::int as mycolname2
+from mytablename2
+where mycolname[1:3] != 'xxx' AND mycolname2 = 0 limit 5;
+----
+0
+0
+0
+0
+0

@@ -86,18 +86,6 @@ unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, Ta
 	return std::move(result);
 }
 
-static bool TableHasPrimaryKey(TableCatalogEntry &table) {
-	for (auto &constraint : table.GetConstraints()) {
-		if (constraint->type == ConstraintType::UNIQUE) {
-			auto &unique = constraint->Cast<UniqueConstraint>();
-			if (unique.IsPrimaryKey()) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 	idx_t check_count = 0;
 	for (auto &constraint : table.GetConstraints()) {
@@ -148,7 +136,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// temporary, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(table.temporary));
 		// has_primary_key, LogicalType::BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(TableHasPrimaryKey(table)));
+		output.SetValue(col++, count, Value::BOOLEAN(table.HasPrimaryKey()));
 		// estimated_size, LogicalType::BIGINT
 
 		Value card_val = !storage_info.cardinality.IsValid()

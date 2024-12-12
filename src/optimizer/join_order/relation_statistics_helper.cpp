@@ -79,14 +79,15 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	// first push back basic distinct counts for each column (if we have them).
 	auto &column_ids = get.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column_id = column_ids[i].GetPrimaryIndex();
 		bool have_distinct_count_stats = false;
 		if (get.function.statistics) {
-			column_statistics = get.function.statistics(context, get.bind_data.get(), column_ids[i]);
+			column_statistics = get.function.statistics(context, get.bind_data.get(), column_id);
 			if (column_statistics && have_catalog_table_statistics) {
-				auto distinct_count = MaxValue((idx_t)1, column_statistics->GetDistinctCount());
+				auto distinct_count = MaxValue<idx_t>(1, column_statistics->GetDistinctCount());
 				auto column_distinct_count = DistinctCount({distinct_count, true});
 				return_stats.column_distinct_count.push_back(column_distinct_count);
-				return_stats.column_names.push_back(name + "." + get.names.at(column_ids.at(i)));
+				return_stats.column_names.push_back(name + "." + get.names.at(column_id));
 				have_distinct_count_stats = true;
 			}
 		}
@@ -97,8 +98,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
 			auto column_name = string("column");
-			if (column_ids.at(i) < get.names.size()) {
-				column_name = get.names.at(column_ids.at(i));
+			if (column_id < get.names.size()) {
+				column_name = get.names.at(column_id);
 			}
 			return_stats.column_names.push_back(get.GetName() + "." + column_name);
 		}
@@ -106,6 +107,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 	if (!get.table_filters.filters.empty()) {
 		column_statistics = nullptr;
+		bool has_non_optional_filters = false;
 		for (auto &it : get.table_filters.filters) {
 			if (get.bind_data && get.function.statistics) {
 				column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
@@ -117,11 +119,15 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				    base_table_cardinality, it.first, filter, *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 			}
+
+			if (it.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+				has_non_optional_filters = true;
+			}
 		}
 		// if the above code didn't find an equality filter (i.e country_code = "[us]")
 		// and there are other table filters (i.e cost > 50), use default selectivity.
 		bool has_equality_filter = (cardinality_after_filters != base_table_cardinality);
-		if (!has_equality_filter && !get.table_filters.filters.empty()) {
+		if (!has_equality_filter && has_non_optional_filters) {
 			cardinality_after_filters = MaxValue<idx_t>(
 			    LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
 			    1U);
@@ -349,7 +355,8 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 		// most likely we are running on parquet files. Therefore we divide by 2.
 		new_card = (double)child_stats.cardinality / 2;
 	}
-	stats.cardinality = LossyNumericCast<idx_t>(new_card);
+	// an ungrouped aggregate has 1 row
+	stats.cardinality = aggr.groups.empty() ? 1 : LossyNumericCast<idx_t>(new_card);
 	stats.column_names = child_stats.column_names;
 	stats.stats_initialized = true;
 	auto num_child_columns = aggr.GetColumnBindings().size();

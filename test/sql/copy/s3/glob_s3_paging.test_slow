@@ -71,9 +71,9 @@ endloop
 
 endloop
 
-# test with enable_object_cache = true
+# test with parquet_metadata_cache = true
 statement ok
-SET enable_object_cache=true
+SET parquet_metadata_cache=true;
 
 foreach urlstyle path vhost
 

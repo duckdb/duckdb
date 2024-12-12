@@ -128,6 +128,11 @@ select CAST(-33.846 AS DECIMAL(5,0)) d0;
 ----
 -34
 
+query I
+SELECT CAST(1234567890.1235 AS DECIMAL (13, 3));
+----
+1234567890.124
+
 # various error conditions
 # scale must be bigger than or equal to width
 statement error

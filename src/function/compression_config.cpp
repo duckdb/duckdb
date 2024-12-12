@@ -26,6 +26,8 @@ static const DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_ALP, AlpCompressionFun::GetFunction, AlpCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_ALPRD, AlpRDCompressionFun::GetFunction, AlpRDCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_FSST, FSSTFun::GetFunction, FSSTFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_ZSTD, ZSTDFun::GetFunction, ZSTDFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_ROARING, RoaringCompressionFun::GetFunction, RoaringCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
 
 static optional_ptr<CompressionFunction> FindCompressionFunction(CompressionFunctionSet &set, CompressionType type,
@@ -79,6 +81,8 @@ vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(const P
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALP, physical_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALPRD, physical_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_FSST, physical_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ZSTD, physical_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ROARING, physical_type);
 	return result;
 }
 

@@ -3,6 +3,7 @@
 
 #include "core_functions/function_list.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/function/register_function_list_helper.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
@@ -11,9 +12,7 @@ namespace duckdb {
 template <class T>
 static void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 	info.internal = true;
-	info.description = function.description;
-	info.parameter_names = StringUtil::Split(function.parameters, ",");
-	info.example = function.example;
+	FillFunctionDescriptions(function, info);
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 }
 

@@ -380,3 +380,55 @@ class TestDataFrameJoin(object):
                 Row(age=3, name="Dave", id=5, rank="B"),
             ]
         )
+
+    def test_join_with_using_clause(self, spark, dataframe_a):
+        dataframe_a = dataframe_a.select('name', 'year_joined')
+
+        df = dataframe_a.alias('df1')
+        df2 = dataframe_a.alias('df2')
+        res = df.join(df2, ['name', 'year_joined']).sort('name', 'year_joined')
+        res = res.collect()
+        assert res == [
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Brown', year_joined='2010'),
+            Row(name='Jones', year_joined='2005'),
+            Row(name='Rose', year_joined='2010'),
+            Row(name='Smith', year_joined='2018'),
+            Row(name='Williams', year_joined='2010'),
+        ]
+
+    def test_join_with_common_column(self, spark, dataframe_a):
+        dataframe_a = dataframe_a.select('name', 'year_joined')
+
+        df = dataframe_a.alias('df1')
+        df2 = dataframe_a.alias('df2')
+        res = df.join(df2, df.name == df2.name).sort('df1.name')
+        res = res.collect()
+        assert (
+            str(res)
+            == "[Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Jones', year_joined='2005', name='Jones', year_joined='2005'), Row(name='Rose', year_joined='2010', name='Rose', year_joined='2010'), Row(name='Smith', year_joined='2018', name='Smith', year_joined='2018'), Row(name='Williams', year_joined='2010', name='Williams', year_joined='2010')]"
+        )
+
+    @pytest.mark.xfail(condition=True, reason="Selecting from a duplicate binding causes an error")
+    def test_join_on_joined_data_error(self, spark):
+        df = spark.createDataFrame([(2, "Alice"), (5, "Bob")]).toDF("age", "name")
+        df2 = spark.createDataFrame([Row(height=80, name="Tom"), Row(height=85, name="Bob")], ["height", "name"])
+
+        first_join = df.join(df2, "name")
+        second_join = df.join(df2, "name")
+        third_join = first_join.join(second_join, "name")
+
+        third_join.show()
+
+    def test_join_on_column_name_stored_in_variable(self, spark):
+        df = spark.createDataFrame([(2, "Alice"), (5, "Bob")]).toDF("age", "name")
+        df2 = spark.createDataFrame([Row(height=80, name="Tom"), Row(height=85, name="Bob")], ["height", "name"])
+
+        column = "name"
+        col1 = df[column]
+        col2 = df2[column]
+        res = df.join(df2, col1 == col2)
+        res = res.collect()
+        assert str(res) == "[Row(age=5, name='Bob', height=85, name='Bob')]"

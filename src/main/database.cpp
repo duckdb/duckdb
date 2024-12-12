@@ -35,6 +35,8 @@ namespace duckdb {
 
 DBConfig::DBConfig() : allocation_functions(DEFAULT_ALLOCATION_FUNCTIONS) {
 	compression_functions = make_uniq<CompressionFunctionSet>();
+	encoding_functions = make_uniq<EncodingFunctionSet>();
+	encoding_functions->Initialize(*this);
 	cast_functions = make_uniq<CastFunctionSet>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
 	index_types = make_uniq<IndexTypeSet>();

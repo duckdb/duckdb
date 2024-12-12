@@ -341,6 +341,12 @@
         "type": "qualified_column_set_t",
         "default": "qualified_column_set_t()",
         "serialize_property": "SerializedQualifiedExcludeList()"
+      },
+      {
+        "id": 207,
+        "name": "rename_list",
+        "type": "qualified_column_map_t<string>",
+        "default": "qualified_column_map_t<string>()"
       }
     ],
     "constructor": ["exclude_list", "qualified_exclude_list"]
@@ -457,6 +463,11 @@
         "id": 215,
         "name": "distinct",
         "type": "bool"
+      },
+      {
+        "id": 216,
+        "name": "arg_orders",
+        "type": "vector<OrderByNode>"
       }
     ],
     "constructor": ["type"]

@@ -17,6 +17,15 @@ namespace duckdb {
 
 static_assert(sizeof(timestamp_t) == sizeof(int64_t), "timestamp_t was padded");
 
+// Temporal values need to round down when changing precision,
+// but C/C++ rounds towrds 0 when you simply divide.
+// This piece of bit banging solves that problem.
+template <typename T>
+static inline T TemporalRound(T value, T scale) {
+	const auto negative = int(value < 0);
+	return UnsafeNumericCast<T>((value + negative) / scale - negative);
+}
+
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
 // string format is YYYY-MM-DDThh:mm:ssZ
 // T may be a space
@@ -270,9 +279,11 @@ timestamp_t Timestamp::FromString(const string &str) {
 string Timestamp::ToString(timestamp_t timestamp) {
 	if (timestamp == timestamp_t::infinity()) {
 		return Date::PINF;
-	} else if (timestamp == timestamp_t::ninfinity()) {
+	}
+	if (timestamp == timestamp_t::ninfinity()) {
 		return Date::NINF;
 	}
+
 	date_t date;
 	dtime_t time;
 	Timestamp::Convert(timestamp, date, time);
@@ -282,7 +293,8 @@ string Timestamp::ToString(timestamp_t timestamp) {
 date_t Timestamp::GetDate(timestamp_t timestamp) {
 	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::infinity())) {
 		return date_t::infinity();
-	} else if (DUCKDB_UNLIKELY(timestamp == timestamp_t::ninfinity())) {
+	}
+	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::ninfinity())) {
 		return date_t::ninfinity();
 	}
 	return date_t(UnsafeNumericCast<int32_t>((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY -
@@ -339,7 +351,7 @@ void Timestamp::Convert(timestamp_t timestamp, date_t &out_date, dtime_t &out_ti
 }
 
 void Timestamp::Convert(timestamp_ns_t input, date_t &out_date, dtime_t &out_time, int32_t &out_nanos) {
-	timestamp_t ms(input.value / Interval::NANOS_PER_MICRO);
+	timestamp_t ms(TemporalRound(input.value, Interval::NANOS_PER_MICRO));
 	out_date = Timestamp::GetDate(ms);
 	int64_t days_nanos;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(out_date.days, Interval::NANOS_PER_DAY,

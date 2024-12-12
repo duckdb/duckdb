@@ -1067,6 +1067,59 @@ bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(timestamp_sec_t input, timestamp_sec_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_sec_t &result, bool strict) {
+	D_ASSERT(Timestamp::IsFinite(input));
+	result.value = input.value / Interval::MICROS_PER_SEC;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ms_t input, timestamp_ms_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_ms_t &result, bool strict) {
+	D_ASSERT(Timestamp::IsFinite(input));
+	result.value = input.value / Interval::MICROS_PER_MSEC;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_ns_t input, timestamp_ns_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_ns_t &result, bool strict) {
+	D_ASSERT(Timestamp::IsFinite(input));
+	if (!TryMultiplyOperator::Operation(input.value, Interval::NANOS_PER_MSEC, result.value)) {
+		throw ConversionException("Could not convert TIMESTAMP to TIMESTAMP_NS");
+	}
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict) {
+	result.value = input.value;
+	return true;
+}
+
+template <>
 bool TryCast::Operation(timestamp_t input, dtime_tz_t &result, bool strict) {
 	if (!Timestamp::IsFinite(input)) {
 		return false;
@@ -2245,7 +2298,7 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 	double roundedValue = round(value);
 	if (roundedValue <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] ||
 	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
-		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
+		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", input, width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}

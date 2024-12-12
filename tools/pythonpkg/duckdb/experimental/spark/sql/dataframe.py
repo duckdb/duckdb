@@ -12,6 +12,7 @@ from typing import (
     overload,
 )
 import uuid
+from keyword import iskeyword
 
 import duckdb
 from duckdb import ColumnExpression, Expression, StarExpression
@@ -588,6 +589,16 @@ class DataFrame:
         """
         return [f.name for f in self.schema.fields]
 
+    def _ipython_key_completions_(self) -> List[str]:
+        # Provides tab-completion for column names in PySpark DataFrame
+        # when accessed in bracket notation, e.g. df['<TAB>]
+        return self.columns
+
+    def __dir__(self) -> List[str]:
+        out = set(super().__dir__())
+        out.update(c for c in self.columns if c.isidentifier() and not iskeyword(c))
+        return sorted(out)
+
     def join(
         self,
         other: "DataFrame",
@@ -684,8 +695,7 @@ class DataFrame:
 
         if on is not None and not isinstance(on, list):
             on = [on]  # type: ignore[assignment]
-
-        if on is not None:
+        if on is not None and not all([isinstance(x, str) for x in on]):
             assert isinstance(on, list)
             # Get (or create) the Expressions from the list of Columns
             on = [_to_column_expr(x) for x in on]
@@ -696,6 +706,7 @@ class DataFrame:
             ), "on should be Column or list of Column"
             on = reduce(lambda x, y: x.__and__(y), cast(List[Expression], on))
 
+
         if on is None and how is None:
             result = self.relation.join(other.relation)
         else:
@@ -703,6 +714,9 @@ class DataFrame:
                 how = "inner"
             if on is None:
                 on = "true"
+            elif isinstance(on, list) and all([isinstance(x, str) for x in on]):
+                # Passed directly through as a list of strings
+                on = on
             else:
                 on = str(on)
             assert isinstance(how, str), "how should be a string"
@@ -899,7 +913,7 @@ class DataFrame:
         [Row(age=5, name='Bob')]
         """
         if isinstance(item, str):
-            return col(item)
+            return Column(duckdb.ColumnExpression(self.relation.alias, item))
         elif isinstance(item, Column):
             return self.filter(item)
         elif isinstance(item, (list, tuple)):
@@ -921,7 +935,7 @@ class DataFrame:
             raise AttributeError(
                 "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
             )
-        return col(name)
+        return Column(duckdb.ColumnExpression(self.relation.alias, name))
 
     @overload
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":
@@ -1002,6 +1016,8 @@ class DataFrame:
         else:
             columns = cols
         return GroupedData(Grouping(*columns), self)
+
+    groupby = groupBy
 
     @property
     def write(self) -> DataFrameWriter:

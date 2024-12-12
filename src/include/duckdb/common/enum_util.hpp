@@ -36,6 +36,8 @@ enum class AccessMode : uint8_t;
 
 enum class AggregateCombineType : uint8_t;
 
+enum class AggregateDistinctDependent : uint8_t;
+
 enum class AggregateHandling : uint8_t;
 
 enum class AggregateOrderDependent : uint8_t;
@@ -166,6 +168,10 @@ enum class FilterPropagateResult : uint8_t;
 
 enum class ForeignKeyType : uint8_t;
 
+enum class FunctionCollationHandling : uint8_t;
+
+enum class FunctionErrors : uint8_t;
+
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionStability : uint8_t;
@@ -278,6 +284,8 @@ enum class SecretDisplayType : uint8_t;
 
 enum class SecretPersistType : uint8_t;
 
+enum class SecretSerializationType : uint8_t;
+
 enum class SequenceInfo : uint8_t;
 
 enum class SetOperationType : uint8_t;
@@ -370,6 +378,9 @@ const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateCombineType>(AggregateCombineType value);
+
+template<>
+const char* EnumUtil::ToChars<AggregateDistinctDependent>(AggregateDistinctDependent value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateHandling>(AggregateHandling value);
@@ -567,6 +578,12 @@ template<>
 const char* EnumUtil::ToChars<ForeignKeyType>(ForeignKeyType value);
 
 template<>
+const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandling value);
+
+template<>
+const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value);
+
+template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
@@ -735,6 +752,9 @@ template<>
 const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value);
 
 template<>
+const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
+
+template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
 
 template<>
@@ -869,6 +889,9 @@ AccessMode EnumUtil::FromString<AccessMode>(const char *value);
 
 template<>
 AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *value);
+
+template<>
+AggregateDistinctDependent EnumUtil::FromString<AggregateDistinctDependent>(const char *value);
 
 template<>
 AggregateHandling EnumUtil::FromString<AggregateHandling>(const char *value);
@@ -1066,6 +1089,12 @@ template<>
 ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value);
 
 template<>
+FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const char *value);
+
+template<>
+FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value);
+
+template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
 
 template<>
@@ -1232,6 +1261,9 @@ SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
 
 template<>
 SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
+
+template<>
+SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);
 
 template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);

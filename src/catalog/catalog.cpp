@@ -304,6 +304,13 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIn
 	return CreateIndex(GetCatalogTransaction(context), info);
 }
 
+unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
+                                                       unique_ptr<LogicalOperator> plan,
+                                                       unique_ptr<CreateIndexInfo> create_info,
+                                                       unique_ptr<AlterTableInfo> alter_info) {
+	throw NotImplementedException("BindAlterAddIndex not supported by this catalog");
+}
+
 //===--------------------------------------------------------------------===//
 // Lookup Structures
 //===--------------------------------------------------------------------===//
@@ -396,7 +403,12 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 			entries.emplace_back(catalog_name, schema);
 		}
 		if (entries.empty()) {
-			entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+			auto &default_entry = search_path.GetDefault();
+			if (!IsInvalidCatalog(default_entry.catalog)) {
+				entries.emplace_back(default_entry.catalog, schema);
+			} else {
+				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
+			}
 		}
 	} else if (IsInvalidSchema(schema)) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
@@ -1041,6 +1053,10 @@ void Catalog::Alter(ClientContext &context, AlterInfo &info) {
 
 vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 	return vector<MetadataBlockInfo>();
+}
+
+optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
+	return nullptr;
 }
 
 //! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name

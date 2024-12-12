@@ -318,7 +318,7 @@ void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
 
 void ColumnDataCopyValidity(const UnifiedVectorFormat &source_data, validity_t *target, idx_t source_offset,
                             idx_t target_offset, idx_t copy_count) {
-	ValidityMask validity(target);
+	ValidityMask validity(target, STANDARD_VECTOR_SIZE);
 	if (target_offset == 0) {
 		// first time appending to this vector
 		// all data here is still uninitialized
@@ -410,7 +410,7 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 		                                                  current_segment.offset);
 		auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, OP::TypeSize());
 
-		ValidityMask result_validity(validity_data);
+		ValidityMask result_validity(validity_data, STANDARD_VECTOR_SIZE);
 		if (current_segment.count == 0) {
 			// first time appending to this vector
 			// all data here is still uninitialized
@@ -525,7 +525,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
 		                                                  current_segment.offset);
 		auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, sizeof(string_t));
-		ValidityMask target_validity(validity_data);
+		ValidityMask target_validity(validity_data, STANDARD_VECTOR_SIZE);
 		if (current_segment.count == 0) {
 			// first time appending to this vector
 			// all data here is still uninitialized
@@ -780,7 +780,8 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		break;
 	}
 	default:
-		throw InternalException("Unsupported type for ColumnDataCollection::GetCopyFunction");
+		throw InternalException("Unsupported type %s for ColumnDataCollection::GetCopyFunction",
+		                        EnumUtil::ToString(type.InternalType()));
 	}
 	result.function = function;
 	return result;

@@ -772,23 +772,65 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 //===--------------------------------------------------------------------===//
 // Decode Sort Key
 //===--------------------------------------------------------------------===//
+struct DecodeSortKeyVectorData {
+	DecodeSortKeyVectorData(const LogicalType &type, OrderModifiers modifiers)
+	    : flip_bytes(modifiers.order_type == OrderType::DESCENDING) {
+		null_byte = SortKeyVectorData::NULL_FIRST_BYTE;
+		valid_byte = SortKeyVectorData::NULL_LAST_BYTE;
+		if (modifiers.null_type == OrderByNullType::NULLS_LAST) {
+			std::swap(null_byte, valid_byte);
+		}
+
+		// NULLS FIRST/NULLS LAST passed in by the user are only respected at the top level
+		// within nested types NULLS LAST/NULLS FIRST is dependent on ASC/DESC order instead
+		// don't blame me this is what Postgres does
+		auto child_null_type =
+		    modifiers.order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+		OrderModifiers child_modifiers(modifiers.order_type, child_null_type);
+		switch (type.InternalType()) {
+		case PhysicalType::STRUCT: {
+			auto &children = StructType::GetChildTypes(type);
+			for (auto &child_type : children) {
+				child_data.emplace_back(child_type.second, child_modifiers);
+			}
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			auto &child_type = ArrayType::GetChildType(type);
+			child_data.emplace_back(child_type, child_modifiers);
+			break;
+		}
+		case PhysicalType::LIST: {
+			auto &child_type = ListType::GetChildType(type);
+			child_data.emplace_back(child_type, child_modifiers);
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	data_t null_byte;
+	data_t valid_byte;
+	vector<DecodeSortKeyVectorData> child_data;
+	bool flip_bytes;
+};
+
 struct DecodeSortKeyData {
-	explicit DecodeSortKeyData(OrderModifiers modifiers, string_t &sort_key)
-	    : data(const_data_ptr_cast(sort_key.GetData())), size(sort_key.GetSize()), position(0),
-	      flip_bytes(modifiers.order_type == OrderType::DESCENDING) {
+	explicit DecodeSortKeyData(string_t &sort_key)
+	    : data(const_data_ptr_cast(sort_key.GetData())), size(sort_key.GetSize()), position(0) {
 	}
 
 	const_data_ptr_t data;
 	idx_t size;
 	idx_t position;
-	bool flip_bytes;
 };
 
-void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, DecodeSortKeyVectorData &vector_data, Vector &result,
                             idx_t result_idx);
 
 template <class OP>
-void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, DecodeSortKeyVectorData &vector_data, Vector &result,
                             idx_t result_idx) {
 	auto validity_byte = decode_data.data[decode_data.position];
 	decode_data.position++;
@@ -797,11 +839,11 @@ void TemplatedDecodeSortKey(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 		FlatVector::Validity(result).SetInvalid(result_idx);
 		return;
 	}
-	idx_t increment = OP::Decode(decode_data.data + decode_data.position, result, result_idx, decode_data.flip_bytes);
+	idx_t increment = OP::Decode(decode_data.data + decode_data.position, result, result_idx, vector_data.flip_bytes);
 	decode_data.position += increment;
 }
 
-void DecodeSortKeyStruct(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+void DecodeSortKeyStruct(DecodeSortKeyData &decode_data, DecodeSortKeyVectorData &vector_data, Vector &result,
                          idx_t result_idx) {
 	// check if the top-level is valid or not
 	auto validity_byte = decode_data.data[decode_data.position];
@@ -815,11 +857,11 @@ void DecodeSortKeyStruct(DecodeSortKeyData &decode_data, SortKeyVectorData &vect
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t c = 0; c < child_entries.size(); c++) {
 		auto &child_entry = child_entries[c];
-		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[c], *child_entry, result_idx);
+		DecodeSortKeyRecursive(decode_data, vector_data.child_data[c], *child_entry, result_idx);
 	}
 }
 
-void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+void DecodeSortKeyList(DecodeSortKeyData &decode_data, DecodeSortKeyVectorData &vector_data, Vector &result,
                        idx_t result_idx) {
 	// check if the top-level is valid or not
 	auto validity_byte = decode_data.data[decode_data.position];
@@ -833,7 +875,7 @@ void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector
 	// we don't know how many there will be
 	// decode child elements until we encounter the list delimiter
 	auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
-	if (decode_data.flip_bytes) {
+	if (vector_data.flip_bytes) {
 		list_delimiter = ~list_delimiter;
 	}
 	auto list_data = FlatVector::GetData<list_entry_t>(result);
@@ -849,7 +891,7 @@ void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector
 		ListVector::Reserve(result, new_list_size);
 
 		// now decode the entry
-		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[0], child_vector, new_list_size - 1);
+		DecodeSortKeyRecursive(decode_data, vector_data.child_data[0], child_vector, new_list_size - 1);
 	}
 	// skip the list delimiter
 	decode_data.position++;
@@ -859,7 +901,7 @@ void DecodeSortKeyList(DecodeSortKeyData &decode_data, SortKeyVectorData &vector
 	ListVector::SetListSize(result, new_list_size);
 }
 
-void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+void DecodeSortKeyArray(DecodeSortKeyData &decode_data, DecodeSortKeyVectorData &vector_data, Vector &result,
                         idx_t result_idx) {
 	// check if the top-level is valid or not
 	auto validity_byte = decode_data.data[decode_data.position];
@@ -874,7 +916,7 @@ void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vecto
 	// however the decoded data still contains a list delimiter
 	// we use this delimiter to verify we successfully decoded the entire array
 	auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
-	if (decode_data.flip_bytes) {
+	if (vector_data.flip_bytes) {
 		list_delimiter = ~list_delimiter;
 	}
 	auto &child_vector = ArrayVector::GetEntry(result);
@@ -890,7 +932,7 @@ void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vecto
 			break;
 		}
 		// now decode the entry
-		DecodeSortKeyRecursive(decode_data, *vector_data.child_data[0], child_vector, child_start + found_elements - 1);
+		DecodeSortKeyRecursive(decode_data, vector_data.child_data[0], child_vector, child_start + found_elements - 1);
 	}
 	// skip the list delimiter
 	decode_data.position++;
@@ -900,7 +942,7 @@ void DecodeSortKeyArray(DecodeSortKeyData &decode_data, SortKeyVectorData &vecto
 	}
 }
 
-void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &vector_data, Vector &result,
+void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, DecodeSortKeyVectorData &vector_data, Vector &result,
                             idx_t result_idx) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -946,7 +988,7 @@ void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 		TemplatedDecodeSortKey<SortKeyConstantOperator<hugeint_t>>(decode_data, vector_data, result, result_idx);
 		break;
 	case PhysicalType::VARCHAR:
-		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
+		if (result.GetType().id() == LogicalTypeId::VARCHAR) {
 			TemplatedDecodeSortKey<SortKeyVarcharOperator>(decode_data, vector_data, result, result_idx);
 		} else {
 			TemplatedDecodeSortKey<SortKeyBlobOperator>(decode_data, vector_data, result, result_idx);
@@ -962,15 +1004,26 @@ void DecodeSortKeyRecursive(DecodeSortKeyData &decode_data, SortKeyVectorData &v
 		DecodeSortKeyArray(decode_data, vector_data, result, result_idx);
 		break;
 	default:
-		throw NotImplementedException("Unsupported type %s in DecodeSortKey", vector_data.vec.GetType());
+		throw NotImplementedException("Unsupported type %s in DecodeSortKey", result.GetType());
 	}
 }
 
 void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx,
                                          OrderModifiers modifiers) {
-	SortKeyVectorData sort_key_data(result, 0, modifiers);
-	DecodeSortKeyData decode_data(modifiers, sort_key);
+	DecodeSortKeyVectorData sort_key_data(result.GetType(), modifiers);
+	DecodeSortKeyData decode_data(sort_key);
 	DecodeSortKeyRecursive(decode_data, sort_key_data, result, result_idx);
+}
+
+void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx,
+                                         const vector<OrderModifiers> &modifiers) {
+	DecodeSortKeyData decode_data(sort_key);
+	D_ASSERT(modifiers.size() == result.ColumnCount());
+	for (idx_t c = 0; c < result.ColumnCount(); c++) {
+		auto &vec = result.data[c];
+		DecodeSortKeyVectorData vector_data(vec.GetType(), modifiers[c]);
+		DecodeSortKeyRecursive(decode_data, vector_data, vec, result_idx);
+	}
 }
 
 ScalarFunction CreateSortKeyFun::GetFunction() {

@@ -11,7 +11,7 @@ namespace duckdb {
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
-                                     vector<column_t> column_ids_p, vector<idx_t> projection_ids_p,
+                                     vector<ColumnIndex> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
                                      idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
                                      vector<Value> parameters_p)
@@ -112,13 +112,24 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+ProgressData PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
+	ProgressData res;
 	if (function.table_scan_progress) {
-		return function.table_scan_progress(context, bind_data.get(), gstate.global_state.get());
+		double table_progress = function.table_scan_progress(context, bind_data.get(), gstate.global_state.get());
+		if (table_progress < 0.0) {
+			res.SetInvalid();
+		} else {
+			res.done = table_progress;
+			res.total = 100.0;
+			// Assume cardinality is always 1e3
+			res.Normalize(1e3);
+		}
+	} else {
+		// if table_scan_progress is not implemented we don't support this function yet in the progress bar
+		res.SetInvalid();
 	}
-	// if table_scan_progress is not implemented we don't support this function yet in the progress bar
-	return -1;
+	return res;
 }
 
 bool PhysicalTableScan::SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
@@ -145,39 +156,46 @@ string PhysicalTableScan::GetName() const {
 	return StringUtil::Upper(function.name + " " + function.extra_info);
 }
 
+void AddProjectionNames(const ColumnIndex &index, const string &name, const LogicalType &type, string &result) {
+	if (!index.HasChildren()) {
+		// base case - no children projected out
+		if (!result.empty()) {
+			result += "\n";
+		}
+		result += name;
+		return;
+	}
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &child_index : index.GetChildIndexes()) {
+		auto &ele = child_types[child_index.GetPrimaryIndex()];
+		AddProjectionNames(child_index, name + "." + ele.first, ele.second, result);
+	}
+}
+
 InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
-		result["__text__"] = function.to_string(bind_data.get());
+		TableFunctionToStringInput input(function, bind_data.get());
+		auto to_string_result = function.to_string(input);
+		for (const auto &it : to_string_result) {
+			result[it.first] = it.second;
+		}
 	} else {
 		result["Function"] = StringUtil::Upper(function.name);
 	}
 	if (function.projection_pushdown) {
-		if (function.filter_prune) {
-			string projections;
-			for (idx_t i = 0; i < projection_ids.size(); i++) {
-				const auto &column_id = column_ids[projection_ids[i]];
-				if (column_id < names.size()) {
-					if (i > 0) {
-						projections += "\n";
-					}
-					projections += names[column_id];
-				}
+		string projections;
+		idx_t projected_column_count = function.filter_prune ? projection_ids.size() : column_ids.size();
+		for (idx_t i = 0; i < projected_column_count; i++) {
+			auto base_index = function.filter_prune ? projection_ids[i] : i;
+			auto &column_index = column_ids[base_index];
+			auto column_id = column_index.GetPrimaryIndex();
+			if (column_id >= names.size()) {
+				continue;
 			}
-			result["Projections"] = projections;
-		} else {
-			string projections;
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				const auto &column_id = column_ids[i];
-				if (column_id < names.size()) {
-					if (i > 0) {
-						projections += "\n";
-					}
-					projections += names[column_id];
-				}
-			}
-			result["Projections"] = projections;
+			AddProjectionNames(column_index, names[column_id], returned_types[column_id], projections);
 		}
+		result["Projections"] = projections;
 	}
 	if (function.filter_pushdown && table_filters) {
 		string filters_info;
@@ -190,7 +208,13 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 					filters_info += "\n";
 				}
 				first_item = false;
-				filters_info += filter->ToString(names[column_ids[column_index]]);
+
+				const auto col_id = column_ids[column_index].GetPrimaryIndex();
+				if (col_id == COLUMN_IDENTIFIER_ROW_ID) {
+					filters_info += filter->ToString("rowid");
+				} else {
+					filters_info += filter->ToString(names[col_id]);
+				}
 			}
 		}
 		result["Filters"] = filters_info;

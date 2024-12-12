@@ -40,10 +40,14 @@ CompressionType CompressionTypeFromString(const string &str) {
 		return CompressionType::COMPRESSION_CHIMP;
 	} else if (compression == "patas") {
 		return CompressionType::COMPRESSION_PATAS;
+	} else if (compression == "zstd") {
+		return CompressionType::COMPRESSION_ZSTD;
 	} else if (compression == "alp") {
 		return CompressionType::COMPRESSION_ALP;
 	} else if (compression == "alprd") {
 		return CompressionType::COMPRESSION_ALPRD;
+	} else if (compression == "roaring") {
+		return CompressionType::COMPRESSION_ROARING;
 	} else {
 		return CompressionType::COMPRESSION_AUTO;
 	}
@@ -71,10 +75,14 @@ string CompressionTypeToString(CompressionType type) {
 		return "Chimp";
 	case CompressionType::COMPRESSION_PATAS:
 		return "Patas";
+	case CompressionType::COMPRESSION_ZSTD:
+		return "ZSTD";
 	case CompressionType::COMPRESSION_ALP:
 		return "ALP";
 	case CompressionType::COMPRESSION_ALPRD:
 		return "ALPRD";
+	case CompressionType::COMPRESSION_ROARING:
+		return "Roaring";
 	default:
 		throw InternalException("Unrecognized compression type!");
 	}

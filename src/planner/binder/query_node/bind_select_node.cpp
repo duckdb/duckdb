@@ -310,7 +310,6 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = bound_mod->Cast<BoundDistinctModifier>();
-			D_ASSERT(!distinct.target_distincts.empty());
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
 				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
@@ -497,7 +496,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 				// FIXME: would be better to just refer to this expression, but for now we copy
 				first_children.push_back(bound_expr_ref.Copy());
 
-				FunctionBinder function_binder(context);
+				FunctionBinder function_binder(*this);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
 				function->alias = "__collated_group";
 				result->aggregates.push_back(std::move(function));
@@ -616,12 +615,22 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// push the GROUP BY ALL expressions into the group set
+
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result->select_list[group_by_all_index];
 		auto group_ref = make_uniq<BoundColumnRefExpression>(
 		    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
 		result->groups.group_expressions.push_back(std::move(expr));
 		expr = std::move(group_ref);
+	}
+	set<idx_t> group_by_all_indexes_set;
+	if (!group_by_all_indexes.empty()) {
+		idx_t num_set_indexes = result->groups.group_expressions.size();
+		for (idx_t i = 0; i < num_set_indexes; i++) {
+			group_by_all_indexes_set.insert(i);
+		}
+		D_ASSERT(result->groups.grouping_sets.empty());
+		result->groups.grouping_sets.push_back(group_by_all_indexes_set);
 	}
 	result->column_count = new_names.size();
 	result->names = std::move(new_names);

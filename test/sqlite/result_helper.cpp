@@ -88,7 +88,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
-		auto fname = SQLLogicTestRunner::LoopReplacement(values[0], context.running_loops);
+		auto fname = runner.LoopReplacement(values[0], context.running_loops);
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
@@ -510,8 +510,9 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		logger.PrintLineSep();
 		logger.PrintSQL();
 		logger.PrintLineSep();
+
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
-		          << current_column + 1 << std::endl
+		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
 		          << termcolor::reset;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
 		logger.PrintLineSep();

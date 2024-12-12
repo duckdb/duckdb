@@ -3,6 +3,9 @@
 
 #include "duckdb/main/extension_util.hpp"
 #include "jemalloc/jemalloc.h"
+#include "malloc_ncpus.h"
+
+#include <thread>
 
 namespace duckdb {
 
@@ -12,14 +15,6 @@ void JemallocExtension::Load(DuckDB &db) { // This is a static-only extension
 
 std::string JemallocExtension::Name() {
 	return "jemalloc";
-}
-
-std::string JemallocExtension::Version() const {
-#ifdef EXT_VERSION_JEMALLOC
-	return EXT_VERSION_JEMALLOC;
-#else
-	return "";
-#endif
 }
 
 AllocationFunctions JemallocExtension::GetAllocationFunctions() {
@@ -97,9 +92,25 @@ void JemallocExtension::SetBackgroundThreads(bool enable) {
 #endif
 }
 
+std::string JemallocExtension::Version() const {
+#ifdef EXT_VERSION_JEMALLOC
+	return EXT_VERSION_JEMALLOC;
+#else
+	return "";
+#endif
+}
+
 } // namespace duckdb
 
 extern "C" {
+
+unsigned duckdb_malloc_ncpus() {
+#ifdef DUCKDB_NO_THREADS
+	return 1
+#else
+	return duckdb::NumericCast<unsigned>(std::thread::hardware_concurrency());
+#endif
+}
 
 DUCKDB_EXTENSION_API void jemalloc_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);

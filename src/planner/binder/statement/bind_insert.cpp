@@ -148,7 +148,6 @@ void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
                                         TableCatalogEntry &table, TableStorageInfo &storage_info) {
 	D_ASSERT(insert.children.size() == 1);
-	D_ASSERT(insert.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 
 	vector<column_t> logical_column_ids;
 	vector<string> column_names;
@@ -249,6 +248,15 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	}
 
 	return set_info;
+}
+
+vector<column_t> GetColumnsToFetch(const TableBinding &binding) {
+	auto &bound_columns = binding.GetBoundColumnIds();
+	vector<column_t> result;
+	for (auto &col : bound_columns) {
+		result.push_back(col.GetPrimaryIndex());
+	}
+	return result;
 }
 
 void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt) {
@@ -422,7 +430,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		// of the original table, to execute the expressions
 		D_ASSERT(original_binding->binding_type == BindingType::TABLE);
 		auto &table_binding = original_binding->Cast<TableBinding>();
-		insert.columns_to_fetch = table_binding.GetBoundColumnIds();
+		insert.columns_to_fetch = GetColumnsToFetch(table_binding);
 		return;
 	}
 
@@ -448,7 +456,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// of the original table, to execute the expressions
 	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
 	auto &table_binding = original_binding->Cast<TableBinding>();
-	insert.columns_to_fetch = table_binding.GetBoundColumnIds();
+	insert.columns_to_fetch = GetColumnsToFetch(table_binding);
 
 	// Replace the column bindings to refer to the child operator
 	for (auto &expr : insert.expressions) {
@@ -485,6 +493,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	if (stmt.column_order == InsertColumnOrder::INSERT_BY_NAME) {
 		if (values_list) {
 			throw BinderException("INSERT BY NAME can only be used when inserting from a SELECT statement");
+		}
+		if (stmt.default_values) {
+			throw BinderException("INSERT BY NAME cannot be combined with with DEFAULT VALUES");
 		}
 		if (!stmt.columns.empty()) {
 			throw BinderException("INSERT BY NAME cannot be combined with an explicit column list");
@@ -540,7 +551,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	// bind the default values
-	BindDefaultValues(table.GetColumns(), insert->bound_defaults);
+	auto &catalog_name = table.ParentCatalog().GetName();
+	auto &schema_name = table.ParentSchema().name;
+	BindDefaultValues(table.GetColumns(), insert->bound_defaults, catalog_name, schema_name);
 	insert->bound_constraints = BindConstraints(table);
 	if (!stmt.select_statement && !stmt.default_values) {
 		result.plan = std::move(insert);

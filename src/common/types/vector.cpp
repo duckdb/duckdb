@@ -15,6 +15,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/types/varint.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -22,7 +23,6 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "fsst.h"
-#include "duckdb/common/types/varint.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -231,6 +231,8 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// already a dictionary, slice the current dictionary
 		auto &current_sel = DictionaryVector::SelVector(*this);
+		auto dictionary_size = DictionaryVector::DictionarySize(*this);
+		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto sliced_dictionary = current_sel.Slice(sel, count);
 		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary));
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
@@ -239,6 +241,11 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 			Vector new_child(child_vector);
 			new_child.auxiliary = make_buffer<VectorStructBuffer>(new_child, sel, count);
 			auxiliary = make_buffer<VectorChildBuffer>(std::move(new_child));
+		}
+		if (dictionary_size.IsValid()) {
+			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
+			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
+			dict_buffer.SetDictionaryId(std::move(dictionary_id));
 		}
 		return;
 	}
@@ -260,11 +267,25 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	auxiliary = std::move(child_ref);
 }
 
+void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+	Slice(sel, count);
+	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		buffer->Cast<DictionaryBuffer>().SetDictionarySize(dictionary_size);
+	}
+}
+
+void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+	Reference(dict);
+	Dictionary(dictionary_size, sel, count);
+}
+
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && GetType().InternalType() != PhysicalType::STRUCT) {
 		// dictionary vector: need to merge dictionaries
 		// check if we have a cached entry
 		auto &current_sel = DictionaryVector::SelVector(*this);
+		auto dictionary_size = DictionaryVector::DictionarySize(*this);
+		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto target_data = current_sel.data();
 		auto entry = cache.cache.find(target_data);
 		if (entry != cache.cache.end()) {
@@ -274,6 +295,11 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 		} else {
 			Slice(sel, count);
 			cache.cache[target_data] = this->buffer;
+		}
+		if (dictionary_size.IsValid()) {
+			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
+			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
+			dict_buffer.SetDictionaryId(std::move(dictionary_id));
 		}
 	} else {
 		Slice(sel, count);
@@ -304,8 +330,8 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 		}
 	}
 
-	if (capacity > validity.TargetCount()) {
-		validity.Resize(validity.TargetCount(), capacity);
+	if (capacity > validity.Capacity()) {
+		validity.Resize(capacity);
 	}
 }
 
@@ -362,7 +388,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 	for (auto &resize_info_entry : resize_infos) {
 		// Resize the validity mask.
 		auto new_validity_size = new_size * resize_info_entry.multiplier;
-		resize_info_entry.vec.validity.Resize(current_size, new_validity_size);
+		resize_info_entry.vec.validity.Resize(new_validity_size);
 
 		// For nested data types, we only need to resize the validity mask.
 		if (!resize_info_entry.data) {
@@ -575,9 +601,16 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str_compressed = reinterpret_cast<string_t *>(data)[index];
 		auto decoder = FSSTVector::GetDecoder(*vector);
 		auto &decompress_buffer = FSSTVector::GetDecompressBuffer(*vector);
-		Value result = FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(),
-		                                               decompress_buffer);
-		return result;
+		auto string_val = FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(),
+		                                                  decompress_buffer);
+		switch (vector->GetType().id()) {
+		case LogicalTypeId::VARCHAR:
+			return Value(std::move(string_val));
+		case LogicalTypeId::BLOB:
+			return Value::BLOB_RAW(string_val);
+		default:
+			throw InternalException("Unsupported vector type for FSST vector");
+		}
 	}
 
 	switch (vector->GetType().id()) {
@@ -608,13 +641,13 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(reinterpret_cast<timestamp_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(reinterpret_cast<timestamp_t *>(data)[index]);
+		return Value::TIMESTAMPNS(reinterpret_cast<timestamp_ns_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(reinterpret_cast<timestamp_t *>(data)[index]);
+		return Value::TIMESTAMPMS(reinterpret_cast<timestamp_ms_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMPSEC(reinterpret_cast<timestamp_t *>(data)[index]);
+		return Value::TIMESTAMPSEC(reinterpret_cast<timestamp_sec_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(reinterpret_cast<timestamp_t *>(data)[index]);
+		return Value::TIMESTAMPTZ(reinterpret_cast<timestamp_tz_t *>(data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(reinterpret_cast<hugeint_t *>(data)[index]);
 	case LogicalTypeId::UHUGEINT:
@@ -726,7 +759,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		for (idx_t i = offset; i < offset + stride; i++) {
 			children.push_back(child_vec.GetValue(i));
 		}
-		return Value::ARRAY(std::move(children));
+		return Value::ARRAY(ArrayType::GetChildType(type), std::move(children));
 	}
 	default:
 		throw InternalException("Unimplemented type for value access");
@@ -1269,10 +1302,11 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
 
 	auto &validity = FlatVector::Validity(*this);
-	validity.Reset();
+	auto validity_count = MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE);
+	validity.Reset(validity_count);
 	const auto has_validity_mask = deserializer.ReadProperty<bool>(100, "has_validity_mask");
 	if (has_validity_mask) {
-		validity.Initialize(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
+		validity.Initialize(validity_count);
 		deserializer.ReadProperty(101, "validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 

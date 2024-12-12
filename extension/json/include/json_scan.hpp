@@ -132,7 +132,7 @@ public:
 	bool convert_strings_to_integers = false;
 	//! If a struct contains more fields than this threshold with at least 80% similar types,
 	//! we infer it as MAP type
-	idx_t map_inference_threshold = 25;
+	idx_t map_inference_threshold = 200;
 
 	//! All column names (in order)
 	vector<string> names;
@@ -179,7 +179,8 @@ public:
 
 	//! Column names that we're actually reading (after projection pushdown)
 	vector<string> names;
-	vector<column_t> column_indices;
+	vector<column_t> column_ids;
+	vector<ColumnIndex> column_indices;
 
 	//! Buffer manager allocator
 	Allocator &allocator;
