@@ -1,0 +1,7 @@
+# name: benchmark/realnest/hep/q06_2.benchmark
+# description: Q6-2 - For events with at least three jets, plot the 𝑝𝑇 of the trijet system four-momentum (i.e., any combination of three distinct jets within the same event) that has the invariant mass closest to 172.5 GeV in each event and plot the maximum b-tagging discriminant value among the jets in this trijet.
+# group: [hep]
+
+template benchmark/realnest/hep/hep.benchmark.in
+QUERY_NUMBER=6_2
+QUERY_NUMBER_PADDED=06_2

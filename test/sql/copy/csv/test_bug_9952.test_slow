@@ -6,9 +6,12 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-FROM read_csv('data/csv/num.tsv.gz',quote = '"')
+FROM read_csv('data/csv/num.tsv.gz',quote = '"', rfc_4180=true)
 ----
 Value with unterminated quote found.
+
+statement ok
+FROM read_csv('data/csv/num.tsv.gz',quote = '"')
 
 statement ok
 FROM read_csv('data/csv/num.tsv.gz')

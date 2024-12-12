@@ -97,10 +97,11 @@ static unique_ptr<SelectNode> ConstructInitialGrouping(PivotRef &ref, vector<uni
 	if (ref.groups.empty()) {
 		// if rows are not specified any columns that are not pivoted/aggregated on are added to the GROUP BY clause
 		for (auto &entry : all_columns) {
-			if (entry->type != ExpressionType::COLUMN_REF) {
+			auto column_entry = Binder::GetResolvedColumnExpression(*entry);
+			if (!column_entry) {
 				throw InternalException("Unexpected child of pivot source - not a ColumnRef");
 			}
-			auto &columnref = entry->Cast<ColumnRefExpression>();
+			auto &columnref = column_entry->Cast<ColumnRefExpression>();
 			if (handled_columns.find(columnref.GetColumnName()) == handled_columns.end()) {
 				// not handled - add to grouping set
 				subquery->groups.group_expressions.push_back(make_uniq<ConstantExpression>(
@@ -420,6 +421,9 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			if (type.id() != LogicalTypeId::ENUM) {
 				throw BinderException(ref, "Pivot must reference an ENUM type: \"%s\" is of type \"%s\"",
 				                      pivot.pivot_enum, type.ToString());
+			}
+			if (!type.IsComplete()) {
+				throw BinderException("ENUM type is incomplete");
 			}
 			auto enum_size = EnumType::GetSize(type);
 			for (idx_t i = 0; i < enum_size; i++) {

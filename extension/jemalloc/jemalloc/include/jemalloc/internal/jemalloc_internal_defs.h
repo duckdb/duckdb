@@ -347,7 +347,9 @@
  * If defined, explicitly attempt to more uniformly distribute large allocation
  * pointer alignments across all cache indices.
  */
-// #define JEMALLOC_CACHE_OBLIVIOUS
+#if (LG_PAGE == 12)
+#define JEMALLOC_CACHE_OBLIVIOUS
+#endif
 
 /*
  * If defined, enable logging facilities.  We make this a configure option to

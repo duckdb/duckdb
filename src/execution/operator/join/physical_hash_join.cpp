@@ -674,8 +674,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
 				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
 			}
-			// not null filter
-			info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<IsNotNullFilter>());
 		}
 	}
 

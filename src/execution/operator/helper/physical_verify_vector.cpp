@@ -74,6 +74,14 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &c
 			break;
 		}
 		}
+		bool can_be_constant = true;
+		switch (chunk.data[c].GetType().id()) {
+		case LogicalTypeId::INTERVAL:
+			can_be_constant = false;
+			break;
+		default:
+			break;
+		}
 		ConstantOrSequenceInfo info;
 		info.is_constant = true;
 		for (idx_t k = state.const_idx; k < input.size(); k++) {
@@ -81,7 +89,7 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &c
 			if (info.values.empty()) {
 				info.values.push_back(std::move(val));
 			} else if (info.is_constant) {
-				if (!ValueOperations::DistinctFrom(val, info.values[0])) {
+				if (!ValueOperations::DistinctFrom(val, info.values[0]) && can_be_constant) {
 					// found the same value! continue
 					info.values.push_back(std::move(val));
 					continue;

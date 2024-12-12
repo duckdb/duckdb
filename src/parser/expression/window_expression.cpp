@@ -82,11 +82,27 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 	if (a.exclude_clause != b.exclude_clause) {
 		return false;
 	}
-	// check if the framing expressions are equivalentbind_
+	// check if the framing expressions are equivalent
 	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr) ||
 	    !ParsedExpression::Equals(a.offset_expr, b.offset_expr) ||
 	    !ParsedExpression::Equals(a.default_expr, b.default_expr)) {
 		return false;
+	}
+
+	// check if the argument orderings are equivalent
+	if (a.arg_orders.size() != b.arg_orders.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < a.arg_orders.size(); i++) {
+		if (a.arg_orders[i].type != b.arg_orders[i].type) {
+			return false;
+		}
+		if (a.arg_orders[i].null_order != b.arg_orders[i].null_order) {
+			return false;
+		}
+		if (!a.arg_orders[i].expression->Equals(*b.arg_orders[i].expression)) {
+			return false;
+		}
 	}
 
 	// check if the partitions are equivalent
@@ -99,6 +115,9 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 	}
 	for (idx_t i = 0; i < a.orders.size(); i++) {
 		if (a.orders[i].type != b.orders[i].type) {
+			return false;
+		}
+		if (a.orders[i].null_order != b.orders[i].null_order) {
 			return false;
 		}
 		if (!a.orders[i].expression->Equals(*b.orders[i].expression)) {
@@ -127,6 +146,10 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 
 	for (auto &o : orders) {
 		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
+	}
+
+	for (auto &o : arg_orders) {
+		new_window->arg_orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
 
 	new_window->filter_expr = filter_expr ? filter_expr->Copy() : nullptr;

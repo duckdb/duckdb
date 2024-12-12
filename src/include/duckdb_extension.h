@@ -200,6 +200,10 @@ typedef struct {
 	duckdb_value (*duckdb_create_timestamp)(duckdb_timestamp input);
 	duckdb_value (*duckdb_create_interval)(duckdb_interval input);
 	duckdb_value (*duckdb_create_blob)(const uint8_t *data, idx_t length);
+	duckdb_value (*duckdb_create_varint)(duckdb_varint input);
+	duckdb_value (*duckdb_create_decimal)(duckdb_decimal input);
+	duckdb_value (*duckdb_create_bit)(duckdb_bit input);
+	duckdb_value (*duckdb_create_uuid)(duckdb_uhugeint input);
 	bool (*duckdb_get_bool)(duckdb_value val);
 	int8_t (*duckdb_get_int8)(duckdb_value val);
 	uint8_t (*duckdb_get_uint8)(duckdb_value val);
@@ -220,6 +224,10 @@ typedef struct {
 	duckdb_interval (*duckdb_get_interval)(duckdb_value val);
 	duckdb_logical_type (*duckdb_get_value_type)(duckdb_value val);
 	duckdb_blob (*duckdb_get_blob)(duckdb_value val);
+	duckdb_varint (*duckdb_get_varint)(duckdb_value val);
+	duckdb_decimal (*duckdb_get_decimal)(duckdb_value val);
+	duckdb_bit (*duckdb_get_bit)(duckdb_value val);
+	duckdb_uhugeint (*duckdb_get_uuid)(duckdb_value val);
 	char *(*duckdb_get_varchar)(duckdb_value value);
 	duckdb_value (*duckdb_create_struct_value)(duckdb_logical_type type, duckdb_value *values);
 	duckdb_value (*duckdb_create_list_value)(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
@@ -635,6 +643,8 @@ typedef struct {
 #define duckdb_create_int64                            duckdb_ext_api.duckdb_create_int64
 #define duckdb_create_hugeint                          duckdb_ext_api.duckdb_create_hugeint
 #define duckdb_create_uhugeint                         duckdb_ext_api.duckdb_create_uhugeint
+#define duckdb_create_varint                           duckdb_ext_api.duckdb_create_varint
+#define duckdb_create_decimal                          duckdb_ext_api.duckdb_create_decimal
 #define duckdb_create_float                            duckdb_ext_api.duckdb_create_float
 #define duckdb_create_double                           duckdb_ext_api.duckdb_create_double
 #define duckdb_create_date                             duckdb_ext_api.duckdb_create_date
@@ -647,6 +657,8 @@ typedef struct {
 #define duckdb_create_timestamp_ns                     duckdb_ext_api.duckdb_create_timestamp_ns
 #define duckdb_create_interval                         duckdb_ext_api.duckdb_create_interval
 #define duckdb_create_blob                             duckdb_ext_api.duckdb_create_blob
+#define duckdb_create_bit                              duckdb_ext_api.duckdb_create_bit
+#define duckdb_create_uuid                             duckdb_ext_api.duckdb_create_uuid
 #define duckdb_get_bool                                duckdb_ext_api.duckdb_get_bool
 #define duckdb_get_int8                                duckdb_ext_api.duckdb_get_int8
 #define duckdb_get_uint8                               duckdb_ext_api.duckdb_get_uint8
@@ -658,6 +670,8 @@ typedef struct {
 #define duckdb_get_uint64                              duckdb_ext_api.duckdb_get_uint64
 #define duckdb_get_hugeint                             duckdb_ext_api.duckdb_get_hugeint
 #define duckdb_get_uhugeint                            duckdb_ext_api.duckdb_get_uhugeint
+#define duckdb_get_varint                              duckdb_ext_api.duckdb_get_varint
+#define duckdb_get_decimal                             duckdb_ext_api.duckdb_get_decimal
 #define duckdb_get_float                               duckdb_ext_api.duckdb_get_float
 #define duckdb_get_double                              duckdb_ext_api.duckdb_get_double
 #define duckdb_get_date                                duckdb_ext_api.duckdb_get_date
@@ -671,6 +685,8 @@ typedef struct {
 #define duckdb_get_interval                            duckdb_ext_api.duckdb_get_interval
 #define duckdb_get_value_type                          duckdb_ext_api.duckdb_get_value_type
 #define duckdb_get_blob                                duckdb_ext_api.duckdb_get_blob
+#define duckdb_get_bit                                 duckdb_ext_api.duckdb_get_bit
+#define duckdb_get_uuid                                duckdb_ext_api.duckdb_get_uuid
 #define duckdb_get_varchar                             duckdb_ext_api.duckdb_get_varchar
 #define duckdb_create_struct_value                     duckdb_ext_api.duckdb_create_struct_value
 #define duckdb_create_list_value                       duckdb_ext_api.duckdb_create_list_value

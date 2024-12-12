@@ -47,7 +47,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		return;
 	}
 	auto &type = op.orders[0].expression->return_type;
-	if (!TypeIsIntegral(type.InternalType())) {
+	if (!TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
 		// only supported for integral types currently
 		return;
 	}
@@ -79,7 +79,8 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		comparison_type =
 		    op.orders.size() == 1 ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 	}
-	auto base_filter = make_uniq<ConstantFilter>(comparison_type, Value::MinimumValue(type));
+	Value minimum_value = type.InternalType() == PhysicalType::VARCHAR ? Value("") : Value::MinimumValue(type);
+	auto base_filter = make_uniq<ConstantFilter>(comparison_type, std::move(minimum_value));
 	auto filter_data = make_shared_ptr<DynamicFilterData>();
 	filter_data->filter = std::move(base_filter);
 

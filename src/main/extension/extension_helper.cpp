@@ -78,10 +78,6 @@
 #include "tpcds_extension.hpp"
 #endif
 
-#if DUCKDB_EXTENSION_HTTPFS_LINKED
-#include "httpfs_extension.hpp"
-#endif
-
 #if DUCKDB_EXTENSION_JSON_LINKED
 #include "json_extension.hpp"
 #endif

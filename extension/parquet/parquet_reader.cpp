@@ -561,11 +561,13 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
 	}
 
-	// If object cached is disabled
+	// If metadata cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!metadata_p) {
-		if (!ObjectCache::ObjectCacheEnabled(context_p)) {
+		Value metadata_cache = false;
+		context_p.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
+		if (!metadata_cache.GetValue<bool>()) {
 			metadata =
 			    LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, *encryption_util);
 		} else {
@@ -898,6 +900,8 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 			if (!OP::Operation(v_ptr[0], constant)) {
 				filter_mask.reset();
 			}
+		} else {
+			filter_mask.reset();
 		}
 		return;
 	}
@@ -908,8 +912,14 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 
 	if (!unified.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			if (filter_mask.test(i) && unified.validity.RowIsValid(unified.sel->get_index(i))) {
-				filter_mask.set(i, OP::Operation(data_ptr[unified.sel->get_index(i)], constant));
+			if (filter_mask.test(i)) {
+				auto idx = unified.sel->get_index(i);
+				bool is_valid = unified.validity.RowIsValid(idx);
+				if (is_valid) {
+					filter_mask.set(i, OP::Operation(data_ptr[idx], constant));
+				} else {
+					filter_mask.set(i, false);
+				}
 			}
 		}
 	} else {

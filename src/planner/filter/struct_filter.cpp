@@ -21,7 +21,10 @@ FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) {
 }
 
 string StructFilter::ToString(const string &column_name) {
-	return child_filter->ToString(column_name + "." + child_name);
+	if (!child_name.empty()) {
+		return child_filter->ToString(column_name + "." + child_name);
+	}
+	return child_filter->ToString("struct_extract_at(" + column_name + "," + std::to_string(child_idx + 1) + ")");
 }
 
 bool StructFilter::Equals(const TableFilter &other_p) const {
@@ -29,8 +32,10 @@ bool StructFilter::Equals(const TableFilter &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<StructFilter>();
-	return other.child_idx == child_idx && StringUtil::CIEquals(other.child_name, child_name) &&
-	       other.child_filter->Equals(*child_filter);
+	if ((!child_name.empty()) && (!other.child_name.empty())) { // if both child_names are known, sanity check
+		D_ASSERT((other.child_idx == child_idx) == StringUtil::CIEquals(other.child_name, child_name));
+	}
+	return other.child_idx == child_idx && other.child_filter->Equals(*child_filter);
 }
 
 unique_ptr<TableFilter> StructFilter::Copy() const {
@@ -41,8 +46,8 @@ unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) cons
 	auto &child_type = StructType::GetChildType(column.return_type, child_idx);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(column.Copy());
-	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx))));
-	auto child = make_uniq<BoundFunctionExpression>(child_type, GetIndexExtractFunction(), std::move(arguments),
+	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx + 1))));
+	auto child = make_uniq<BoundFunctionExpression>(child_type, GetExtractAtFunction(), std::move(arguments),
 	                                                GetBindData(child_idx));
 	return child_filter->ToExpression(*child);
 }

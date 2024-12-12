@@ -1,0 +1,16 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [hep]
+
+# The HEP benckmarks repository: https://github.com/iris-hep/adl-benchmarks-index/?tab=readme-ov-file
+# The paper: https://www.vldb.org/pvldb/vol15/p154-muller.pdf
+
+require httpfs
+
+cache hep_singleMu.duckdb
+
+load benchmark/realnest/hep/load.sql
+
+run benchmark/realnest/hep/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result benchmark/realnest/hep/answers/q${QUERY_NUMBER_PADDED}.csv

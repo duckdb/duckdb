@@ -100,6 +100,11 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
+option (WASM_ENABLED "Are DuckDB-Wasm extensions build enabled" FALSE)
+if (DEFINED ENV{WASM_EXTENSIONS})
+     set(WASM_ENABLED "$ENV{WASM_EXTENSIONS}")
+endif()
+
 set(M32_FLAG "")
 if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")

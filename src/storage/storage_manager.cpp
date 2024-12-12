@@ -56,10 +56,6 @@ ObjectCache &ObjectCache::GetObjectCache(ClientContext &context) {
 	return context.db->GetObjectCache();
 }
 
-bool ObjectCache::ObjectCacheEnabled(ClientContext &context) {
-	return context.db->config.options.object_cache_enable;
-}
-
 idx_t StorageManager::GetWALSize() {
 	return wal->GetWALSize();
 }
