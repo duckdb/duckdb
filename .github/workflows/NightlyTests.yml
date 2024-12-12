@@ -527,7 +527,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      CORE_EXTENSIONS: "parquet;json;tpch;tpcds"
+      CORE_EXTENSIONS: "parquet;json;tpch;tpcds;httpfs"
       DEBUG_STACKTRACE: 1
       LATEST_STORAGE: 1
       BLOCK_VERIFICATION: 1
