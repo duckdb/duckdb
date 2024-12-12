@@ -11,7 +11,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/chunk_scan_state.hpp"
-#include "duckdb/common/arrow/arrow_extension.hpp"
+#include "duckdb/common/arrow/arrow_type_extension.hpp"
 
 namespace duckdb {
 class ArrowSchemaMetadata {
@@ -29,7 +29,7 @@ public:
 	//! If the arrow extension is set
 	bool HasExtension() const;
 
-	ArrowExtensionInfo GetExtensionInfo(string format);
+	ArrowTypeExtensionInfo GetExtensionInfo(string format);
 	//! Get the extension name if set, otherwise returns empty
 	string GetExtensionName() const;
 	//! Key for encode of the extension type name

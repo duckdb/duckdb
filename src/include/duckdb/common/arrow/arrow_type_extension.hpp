@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/arrow/arrow_extension.hpp
+// duckdb/common/arrow/arrow_type_extension.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -19,12 +19,12 @@ class ArrowSchemaMetadata;
 struct DuckDBArrowSchemaHolder;
 
 struct DBConfig;
-struct ArrowExtensionInfo {
+struct ArrowTypeExtensionInfo {
 public:
-	ArrowExtensionInfo() {
+	ArrowTypeExtensionInfo() {
 	}
 
-	ArrowExtensionInfo(string extension_name, string vendor_name, string type_name, string arrow_format);
+	ArrowTypeExtensionInfo(string extension_name, string vendor_name, string type_name, string arrow_format);
 
 	hash_t GetHash() const;
 
@@ -42,7 +42,7 @@ public:
 
 	bool IsCanonical() const;
 
-	bool operator==(const ArrowExtensionInfo &other) const;
+	bool operator==(const ArrowTypeExtensionInfo &other) const;
 
 	//! Arrow Extension for non-canonical types.
 	static constexpr const char *ARROW_EXTENSION_NON_CANONICAL = "arrow.opaque";
@@ -59,27 +59,27 @@ private:
 	string arrow_format {};
 };
 
-class ArrowExtension;
+class ArrowTypeExtension;
 
 typedef void (*populate_arrow_schema_t)(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-                                        const LogicalType &type, ClientContext &context, ArrowExtension &extension);
+                                        const LogicalType &type, ClientContext &context, ArrowTypeExtension &extension);
 
 typedef shared_ptr<ArrowType> (*get_type_t)(const string &format, const ArrowSchemaMetadata &schema_metadata);
 
-class ArrowExtension {
+class ArrowTypeExtension {
 public:
-	ArrowExtension() {};
+	ArrowTypeExtension() {};
 	//! We either have simple extensions where we only return one type
-	ArrowExtension(string extension_name, string arrow_format, shared_ptr<ArrowType> type);
-	ArrowExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowType> type);
+	ArrowTypeExtension(string extension_name, string arrow_format, shared_ptr<ArrowType> type);
+	ArrowTypeExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowType> type);
 
 	//! We have complex extensions, where we can return multiple types, hence we must have callback functions to do so
-	ArrowExtension(string extension_name, populate_arrow_schema_t populate_arrow_schema, get_type_t get_type,
-	               shared_ptr<ArrowType> type);
-	ArrowExtension(string vendor_name, string type_name, populate_arrow_schema_t populate_arrow_schema,
-	               get_type_t get_type, shared_ptr<ArrowType> type);
+	ArrowTypeExtension(string extension_name, populate_arrow_schema_t populate_arrow_schema, get_type_t get_type,
+	                   shared_ptr<ArrowType> type);
+	ArrowTypeExtension(string vendor_name, string type_name, populate_arrow_schema_t populate_arrow_schema,
+	                   get_type_t get_type, shared_ptr<ArrowType> type);
 
-	ArrowExtensionInfo GetInfo() const;
+	ArrowTypeExtensionInfo GetInfo() const;
 
 	shared_ptr<ArrowType> GetType(const string &format, const ArrowSchemaMetadata &schema_metadata) const;
 
@@ -90,7 +90,8 @@ public:
 	bool HasType() const;
 
 	static void PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-	                                const LogicalType &duckdb_type, ClientContext &context, ArrowExtension &extension);
+	                                const LogicalType &duckdb_type, ClientContext &context,
+	                                ArrowTypeExtension &extension);
 
 	//! (Optional) Callback to a function that sets up the arrow schema production
 	populate_arrow_schema_t populate_arrow_schema = nullptr;
@@ -99,13 +100,13 @@ public:
 
 private:
 	//! Extension Info from Arrow
-	ArrowExtensionInfo extension_info;
+	ArrowTypeExtensionInfo extension_info;
 	//! Arrow Type
 	shared_ptr<ArrowType> type;
 };
 
-struct HashArrowExtension {
-	size_t operator()(ArrowExtensionInfo const &arrow_extension_info) const noexcept {
+struct HashArrowTypeExtension {
+	size_t operator()(ArrowTypeExtensionInfo const &arrow_extension_info) const noexcept {
 		return arrow_extension_info.GetHash();
 	}
 };
@@ -127,12 +128,12 @@ struct HashTypeInfo {
 };
 
 //! The set of encoding functions
-struct ArrowExtensionSet {
-	ArrowExtensionSet() {};
+struct ArrowTypeExtensionSet {
+	ArrowTypeExtensionSet() {};
 	static void Initialize(DBConfig &config);
 	std::mutex lock;
-	unordered_map<ArrowExtensionInfo, ArrowExtension, HashArrowExtension> extensions;
-	unordered_map<TypeInfo, vector<ArrowExtensionInfo>, HashTypeInfo> type_to_info;
+	unordered_map<ArrowTypeExtensionInfo, ArrowTypeExtension, HashArrowTypeExtension> type_extensions;
+	unordered_map<TypeInfo, vector<ArrowTypeExtensionInfo>, HashTypeInfo> type_to_info;
 };
 
 } // namespace duckdb

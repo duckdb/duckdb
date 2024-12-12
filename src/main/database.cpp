@@ -37,7 +37,7 @@ DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	encoding_functions = make_uniq<EncodingFunctionSet>();
 	encoding_functions->Initialize(*this);
-	arrow_extensions = make_uniq<ArrowExtensionSet>();
+	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
 	cast_functions = make_uniq<CastFunctionSet>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
