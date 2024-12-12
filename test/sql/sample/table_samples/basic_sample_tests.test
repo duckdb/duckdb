@@ -38,10 +38,22 @@ true	true
 statement ok
 create or replace table t1 as select range a from range(204800);
 
+# average is not skewed
 query II
-select avg(a) > 20480, avg(a) < (0.9*204800) from duckdb_table_sample('t1');
+select avg(a) > (0.2*204800), avg(a) < (0.8*204800) from duckdb_table_sample('t1');
 ----
 true	true
+
+# about half the samples are below 102400 and half above
+query I
+select count(*) < 1050 from duckdb_table_sample('t1') where a < 102400;
+----
+true
+
+query I
+select count(*) < 1050 from duckdb_table_sample('t1') where a > 102400;
+----
+true
 
 query I
 select count(*) from t1 using sample (200000);

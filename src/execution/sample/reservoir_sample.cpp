@@ -225,7 +225,7 @@ vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t range, uint32_t s
 	for (uint32_t i = 0; i < range; i++) {
 		ret.push_back(i);
 	}
-	if (size >= FIXED_SAMPLE_SIZE - 100) {
+	if (size == FIXED_SAMPLE_SIZE) {
 		std::shuffle(ret.begin(), ret.end(), base_reservoir_sample->random);
 		return ret;
 	}
