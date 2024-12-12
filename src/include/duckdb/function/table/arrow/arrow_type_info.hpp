@@ -23,7 +23,10 @@ class ArrowType;
 
 struct ArrowTypeInfo {
 public:
-	explicit ArrowTypeInfo(ArrowTypeInfoType type = ArrowTypeInfoType::NONE);
+	explicit ArrowTypeInfo() : type() {
+	}
+
+	explicit ArrowTypeInfo(ArrowTypeInfoType type);
 	virtual ~ArrowTypeInfo();
 
 	ArrowTypeInfoType type;

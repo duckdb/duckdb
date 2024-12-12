@@ -51,7 +51,7 @@ struct PendingStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	ClientContext *context;
+	optional_ptr<ClientContext> context;
 };
 
 struct AppenderWrapper {

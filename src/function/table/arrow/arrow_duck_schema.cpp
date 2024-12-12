@@ -56,7 +56,7 @@ void ArrowType::ThrowIfInvalid() const {
 	}
 }
 
-shared_ptr<ArrowType> ArrowType::GetTypeFromFormat(const string &format) {
+shared_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format) {
 	if (format == "n") {
 		return make_shared_ptr<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
@@ -188,25 +188,6 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormat(const string &format) {
 		}
 		return make_shared_ptr<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
 	}
-
-	return nullptr;
-}
-
-shared_ptr<ArrowType> ArrowType::CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
-                                                bool view) {
-	auto child_type = GetArrowLogicalType(config, child);
-
-	unique_ptr<ArrowTypeInfo> type_info;
-	auto type = LogicalType::LIST(child_type->GetDuckType());
-	if (view) {
-		type_info = ArrowListInfo::ListView(std::move(child_type), size_type);
-	} else {
-		type_info = ArrowListInfo::List(std::move(child_type), size_type);
-	}
-	return make_uniq<ArrowType>(type, std::move(type_info));
-}
-
-shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, ArrowSchema &schema, string &format) {
 	if (format == "+l") {
 		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::NORMAL, false);
 	} else if (format == "+L") {
@@ -298,7 +279,21 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormatNested(DBConfig &config, Arrow
 		auto map_type_info = ArrowListInfo::List(std::move(inner_struct), ArrowVariableSizeType::NORMAL);
 		return make_uniq<ArrowType>(map_type, std::move(map_type_info));
 	}
-	return nullptr;
+	throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
+}
+
+shared_ptr<ArrowType> ArrowType::CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
+                                                bool view) {
+	auto child_type = GetArrowLogicalType(config, child);
+
+	unique_ptr<ArrowTypeInfo> type_info;
+	auto type = LogicalType::LIST(child_type->GetDuckType());
+	if (view) {
+		type_info = ArrowListInfo::ListView(std::move(child_type), size_type);
+	} else {
+		type_info = ArrowListInfo::List(std::move(child_type), size_type);
+	}
+	return make_uniq<ArrowType>(type, std::move(type_info));
 }
 
 LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
@@ -366,15 +361,7 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema
 		auto extension_info = schema_metadata.GetExtensionInfo(string(schema.format));
 		return config.GetArrowExtension(extension_info).GetType(format, schema_metadata);
 	}
-	auto type = GetTypeFromFormat(format);
-	if (type) {
-		return type;
-	}
-	type = GetTypeFromFormatNested(config, schema, format);
-	if (!type) {
-		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
-	}
-	return type;
+	return GetTypeFromFormat(config, schema, format);
 }
 
 } // namespace duckdb

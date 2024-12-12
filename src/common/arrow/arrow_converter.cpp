@@ -361,7 +361,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		// It is possible we can export this type as a registered extension
 		auto success = SetArrowExtension(root_holder, child, type, context);
 		if (!success) {
-			throw NotImplementedException("Unsupported Arrow type " + type.ToString());
+			throw NotImplementedException("Unsupported Arrow type %s", type.ToString());
 		}
 	}
 	}

@@ -44,14 +44,12 @@ public:
 	}
 	void ThrowIfInvalid() const;
 
-	static shared_ptr<ArrowType> GetTypeFromFormat(const string &format);
+	static shared_ptr<ArrowType> GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format);
 
 	static shared_ptr<ArrowType> GetTypeFromSchema(DBConfig &config, ArrowSchema &schema);
 
 	static shared_ptr<ArrowType> CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
 	                                            bool view);
-
-	static shared_ptr<ArrowType> GetTypeFromFormatNested(DBConfig &config, ArrowSchema &schema, string &format);
 
 	static shared_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
 
