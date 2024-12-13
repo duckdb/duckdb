@@ -35,10 +35,10 @@ FROM read_csv('data/csv/afl/6.csv', buffer_size=42);
 ----
 It was not possible to automatically detect the CSV Parsing dialect/types
 
-# statement error
-# FROM read_csv('data/csv/afl/7.csv', buffer_size=42);
-# ----
-# It was not possible to automatically detect the CSV Parsing dialect/types
+statement error
+FROM read_csv('data/csv/afl/7.csv', buffer_size=42);
+----
+Value with unterminated quote found.
 
 statement error
 FROM read_csv('data/csv/afl/8.csv', buffer_size=42);
@@ -50,10 +50,10 @@ FROM read_csv('data/csv/afl/9.csv', buffer_size=42);
 ----
 It was not possible to automatically detect the CSV Parsing dialect/types
 
-# statement error
-# FROM read_csv('data/csv/afl/10.csv', buffer_size=42);
-# ----
-# It was not possible to automatically detect the CSV Parsing dialect/types
+statement error
+FROM read_csv('data/csv/afl/10.csv', buffer_size=42);
+----
+It was not possible to automatically detect the CSV Parsing dialect/types
 
 statement error
 FROM read_csv('data/csv/afl/11.csv', max_line_size=-7987305294711008699, rejects_limit=42);
@@ -98,10 +98,8 @@ FROM read_csv('data/csv/afl/23.csv', buffer_size=42);
 ----
 Error when sniffing file "data/csv/afl/23.csv".
 
-# statement error
-# FROM read_csv('data/csv/afl/24.csv', buffer_size=26, delim=';', header=true, allow_quoted_nulls=true, allow_quoted_nulls=true);
-# ----
-# Error when sniffing file "data/csv/afl/24.csv".
+statement ok
+FROM read_csv('data/csv/afl/24.csv', buffer_size=26, delim=';', header=true, allow_quoted_nulls=true, allow_quoted_nulls=true);
 
 statement error
 FROM read_csv('data/csv/afl/25.csv', buffer_size=734771105608237082, max_line_size=-8825501086615982989, allow_quoted_nulls=true);
