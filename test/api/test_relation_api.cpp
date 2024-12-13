@@ -149,7 +149,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"id", "j"}, "v1"));
 	REQUIRE_NOTHROW(v2 = con.Values({{1, 27}, {2, 8}, {3, 20}}, {"id", "k"}, "v2"));
 	REQUIRE_NOTHROW(v3 = con.Values({{1, 2}, {2, 6}, {3, 10}}, {"id", "k"}, "v3"));
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3}));
@@ -158,7 +158,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	// asof join
 	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {6, 5}, {8, 4}, {10, 23}, {12, 12}, {15, 14}}, {"id", "j"}, "v1"));
 	REQUIRE_NOTHROW(v2 = con.Values({{4, 27}, {8, 8}, {14, 20}}, {"id", "k"}, "v2"));
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id>=v2.id", JoinType::INNER, JoinRefType::ASOF)->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id>=v2.id", JoinType::INNER, JoinRefType::ASOF)->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 8, 10, 12, 15}));
 	REQUIRE(CHECK_COLUMN(result, 1, {5, 4, 23, 12, 14}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 8, 8, 8, 14}));
@@ -169,23 +169,24 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(v3 = con.Values({{1, 2}, {2, 6}, {3, 10}}, {"id", "k"}, "v3"));
 
 	// projection after a join
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Project("v1.id+v2.id, j+k")->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Project("v1.id+v2.id, j+k")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {37, 13, 24}));
 
 	// chain multiple joins
 	auto multi_join = v1->Join(v2, "v1.id=v2.id")->Join(v3, "v1.id=v3.id");
-	REQUIRE_NOTHROW(result = multi_join->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE_NOTHROW(result = multi_join->Project("v1.id+v2.id+v3.id")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 6, 9}));
 
 	// multiple joins followed by a filter and a projection
-	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id=1")->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id=1")->Project("v1.id+v2.id+v3.id")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// multiple joins followed by multiple filters
 	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id>0")
 	                             ->Filter("v2.id < 3")
 	                             ->Filter("v3.id=2")
 	                             ->Project("v1.id+v2.id+v3.id")
+	                             ->Order("1")
 	                             ->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 
