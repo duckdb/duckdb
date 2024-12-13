@@ -83,7 +83,6 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 }
 
 InMemoryLogStorage::~InMemoryLogStorage() {
-	printf("Destroyed LogStorage\n");
 };
 
 void InMemoryLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
@@ -119,11 +118,15 @@ void InMemoryLogStorage::Flush() {
 }
 
 void InMemoryLogStorage::FlushInternal() {
-	log_entries->Append(*entry_buffer);
-	entry_buffer->Reset();
+	if (entry_buffer->size() > 0) {
+		log_entries->Append(*entry_buffer);
+		entry_buffer->Reset();
+	}
 
-	log_contexts->Append(*log_context_buffer);
-	log_context_buffer->Reset();
+	if (log_context_buffer->size() > 0) {
+		log_contexts->Append(*log_context_buffer);
+		log_context_buffer->Reset();
+	}
 }
 
 void InMemoryLogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {

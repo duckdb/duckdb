@@ -85,6 +85,13 @@ void LogManager::Initialize() {
 	global_logger = CreateLogger(context, true, true);
 }
 
+void LogManager::Shutdown() {
+	// TODO: avoid re-enabling logging after this
+	SetEnableLogging(false);
+	global_logger = make_uniq<NopLogger>(*this);
+	log_storage = nullptr;
+}
+
 LogManager &LogManager::Get(ClientContext &context) {
 	return context.db->GetLogManager();
 }

@@ -56,9 +56,6 @@ void DuckDBLogContextFunction(ClientContext &context, TableFunctionInput &data_p
 	if (data.log_storage) {
 		data.log_storage->ScanContexts(*data.scan_state, output);
 	}
-	if (output.size() == 0) {
-		data.log_storage = nullptr;
-	}
 }
 
 void DuckDBLogContextFun::RegisterFunction(BuiltinFunctions &set) {

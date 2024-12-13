@@ -64,10 +64,12 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
+	// Clear log manager, freeing all stored logs,
+	log_manager->Shutdown();
+
 	// destroy all attached databases
 	GetDatabaseManager().ResetDatabases(scheduler);
 	// destroy child elements
-	log_manager.reset();
 	connection_manager.reset();
 	object_cache.reset();
 	scheduler.reset();
@@ -80,6 +82,9 @@ DatabaseInstance::~DatabaseInstance() {
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
 	db_cache_entry.reset();
+
+	// stop the log manager, after this point Logger calls are unsafe.
+	log_manager.reset();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {

@@ -78,9 +78,6 @@ void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 	if (data.log_storage) {
 		data.log_storage->ScanEntries(*data.scan_state, output);
 	}
-	if (output.size() == 0) {
-		data.log_storage = nullptr;
-	}
 }
 
 static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOptions &options, const string &err_msg) {

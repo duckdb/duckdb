@@ -27,10 +27,12 @@ public:
 	explicit LogManager(DatabaseInstance &db, LogConfig config = LogConfig());
 	~LogManager();
 	void Initialize();
+	void Shutdown();
 
 	static LogManager &Get(ClientContext &context);
 	unique_ptr<Logger> CreateLogger(LoggingContext context, bool thread_safe = true, bool mutable_settings = false);
 
+	// TODO: do this lazily from logger: we should not register each logging context when logging isn't even enabled
 	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
 	// TODO: never called yet
 	void DropLoggingContext(RegisteredLoggingContext &logging_id);
