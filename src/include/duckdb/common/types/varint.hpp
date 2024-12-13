@@ -47,6 +47,8 @@ public:
 	DUCKDB_API static char DigitToChar(int digit);
 	//! Function to convert a string_t into a vector of bytes
 	DUCKDB_API static void GetByteArray(vector<uint8_t> &byte_array, bool &is_negative, const string_t &blob);
+	//! Function to create a VARINT blob from a byte array containing the absolute value, plus an is_negative bool
+	DUCKDB_API static string FromByteArray(uint8_t *data, idx_t size, bool is_negative);
 	//! Function to convert VARINT blob to a VARCHAR
 	DUCKDB_API static string VarIntToVarchar(const string_t &blob);
 	//! Function to convert Varchar to VARINT blob

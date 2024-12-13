@@ -32,6 +32,10 @@ struct EnumUtil {
     static string ToString(T value) { return string(ToChars<T>(value)); }
 };
 
+enum class ARTAppendMode : uint8_t;
+
+enum class ARTConflictType : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AggregateCombineType : uint8_t;
@@ -169,6 +173,8 @@ enum class FilterPropagateResult : uint8_t;
 enum class ForeignKeyType : uint8_t;
 
 enum class FunctionCollationHandling : uint8_t;
+
+enum class FunctionErrors : uint8_t;
 
 enum class FunctionNullHandling : uint8_t;
 
@@ -370,6 +376,12 @@ enum class WindowBoundary : uint8_t;
 
 enum class WindowExcludeMode : uint8_t;
 
+
+template<>
+const char* EnumUtil::ToChars<ARTAppendMode>(ARTAppendMode value);
+
+template<>
+const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -577,6 +589,9 @@ const char* EnumUtil::ToChars<ForeignKeyType>(ForeignKeyType value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionCollationHandling>(FunctionCollationHandling value);
+
+template<>
+const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
@@ -880,6 +895,12 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
 
 template<>
+ARTAppendMode EnumUtil::FromString<ARTAppendMode>(const char *value);
+
+template<>
+ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
+
+template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
 
 template<>
@@ -1085,6 +1106,9 @@ ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value);
 
 template<>
 FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const char *value);
+
+template<>
+FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value);
 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);

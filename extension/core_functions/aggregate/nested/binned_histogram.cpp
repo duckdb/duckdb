@@ -342,6 +342,9 @@ static AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 
 template <class HIST>
 AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::DECIMAL) {
+		return GetHistogramBinFunction<HIST>(LogicalType::DOUBLE);
+	}
 	switch (type.InternalType()) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::BOOL:

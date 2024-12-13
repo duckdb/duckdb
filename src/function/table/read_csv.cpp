@@ -26,6 +26,7 @@
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 
 #include <limits>
+#include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,80 @@ ReadCSVData::ReadCSVData() {
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
+}
+
+//! Function to do schema discovery over one CSV file or a list/glob of CSV files
+void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptions &options,
+                     vector<LogicalType> &return_types, vector<string> &names, MultiFileList &multi_file_list) {
+	vector<CSVSchema> schemas;
+	const auto option_og = options;
+
+	const auto file_paths = multi_file_list.GetAllFiles();
+
+	// Here what we want to do is to sniff a given number of lines, if we have many files, we might go through them
+	// to reach the number of lines.
+	const idx_t required_number_of_lines = options.sniff_size * options.sample_size_chunks;
+
+	idx_t total_number_of_rows = 0;
+	idx_t current_file = 0;
+	options.file_path = file_paths[current_file];
+
+	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false);
+	{
+		CSVSniffer sniffer(options, result.buffer_manager, CSVStateMachineCache::Get(context));
+		auto sniffer_result = sniffer.SniffCSV();
+		idx_t rows_read = sniffer.LinesSniffed() -
+		                  (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
+
+		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read,
+		                     result.buffer_manager->GetBuffer(0)->actual_size == 0);
+		total_number_of_rows += sniffer.LinesSniffed();
+	}
+
+	// We do a copy of the options to not pollute the options of the first file.
+	const idx_t max_files_to_sniff = 10;
+	idx_t files_to_sniff = file_paths.size() > max_files_to_sniff ? max_files_to_sniff : file_paths.size();
+	while (total_number_of_rows < required_number_of_lines && current_file + 1 < files_to_sniff) {
+		auto option_copy = option_og;
+		current_file++;
+		option_copy.file_path = file_paths[current_file];
+		auto buffer_manager =
+		    make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, current_file, false);
+		// TODO: We could cache the sniffer to be reused during scanning. Currently that's an exercise left to the
+		// reader
+		CSVSniffer sniffer(option_copy, buffer_manager, CSVStateMachineCache::Get(context));
+		auto sniffer_result = sniffer.SniffCSV();
+		idx_t rows_read = sniffer.LinesSniffed() - (option_copy.dialect_options.skip_rows.GetValue() +
+		                                            option_copy.dialect_options.header.GetValue());
+		if (buffer_manager->GetBuffer(0)->actual_size == 0) {
+			schemas.emplace_back(true);
+		} else {
+			schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, option_copy.file_path, rows_read);
+		}
+		total_number_of_rows += sniffer.LinesSniffed();
+	}
+
+	// We might now have multiple schemas, we need to go through them to define the one true schema
+	CSVSchema best_schema;
+	for (auto &schema : schemas) {
+		if (best_schema.Empty()) {
+			// A schema is bettah than no schema
+			best_schema = schema;
+		} else if (best_schema.GetRowsRead() == 0) {
+			// If the best-schema has no data-rows, that's easy, we just take the new schema
+			best_schema = schema;
+		} else if (schema.GetRowsRead() != 0) {
+			// We might have conflicting-schemas, we must merge them
+			best_schema.MergeSchemas(schema, options.null_padding);
+		}
+	}
+
+	if (names.empty()) {
+		names = best_schema.GetNames();
+		return_types = best_schema.GetTypes();
+	}
+	result.csv_types = return_types;
+	result.csv_names = names;
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -67,16 +142,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	if (options.auto_detect && !options.file_options.union_by_name) {
-		options.file_path = multi_file_list->GetFirstFile();
-		result->buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
-		CSVSniffer sniffer(options, result->buffer_manager, CSVStateMachineCache::Get(context));
-		auto sniffer_result = sniffer.SniffCSV();
-		if (names.empty()) {
-			names = sniffer_result.names;
-			return_types = sniffer_result.return_types;
-		}
-		result->csv_types = return_types;
-		result->csv_names = names;
+		SchemaDiscovery(context, *result, options, return_types, names, *multi_file_list);
 	}
 
 	D_ASSERT(return_types.size() == names.size());
@@ -112,7 +178,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->return_types = return_types;
 	result->return_names = names;
 	if (!options.force_not_null_names.empty()) {
-		// Lets first check all column names match
+		// Let's first check all column names match
 		duckdb::unordered_set<string> column_names;
 		for (auto &name : names) {
 			column_names.insert(name);
@@ -301,13 +367,11 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 
 unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
-	idx_t per_file_cardinality = 0;
+	// determined through the scientific method as the average amount of rows in a CSV file
+	idx_t per_file_cardinality = 42;
 	if (bind_data.buffer_manager && bind_data.buffer_manager->file_handle) {
 		auto estimated_row_width = (bind_data.csv_types.size() * 5);
 		per_file_cardinality = bind_data.buffer_manager->file_handle->FileSize() / estimated_row_width;
-	} else {
-		// determined through the scientific method as the average amount of rows in a CSV file
-		per_file_cardinality = 42;
 	}
 	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
 }

@@ -453,6 +453,14 @@ typedef struct {
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
 	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
+	duckdb_value (*duckdb_create_varint)(duckdb_varint input);
+	duckdb_value (*duckdb_create_decimal)(duckdb_decimal input);
+	duckdb_value (*duckdb_create_bit)(duckdb_bit input);
+	duckdb_value (*duckdb_create_uuid)(duckdb_uhugeint input);
+	duckdb_varint (*duckdb_get_varint)(duckdb_value val);
+	duckdb_decimal (*duckdb_get_decimal)(duckdb_value val);
+	duckdb_bit (*duckdb_get_bit)(duckdb_value val);
+	duckdb_uhugeint (*duckdb_get_uuid)(duckdb_value val);
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 } duckdb_ext_api_v0;
@@ -858,6 +866,14 @@ inline duckdb_ext_api_v0 CreateAPIv0() {
 	result.duckdb_get_timestamp_ms = duckdb_get_timestamp_ms;
 	result.duckdb_get_timestamp_ns = duckdb_get_timestamp_ns;
 	result.duckdb_append_value = duckdb_append_value;
+	result.duckdb_create_varint = duckdb_create_varint;
+	result.duckdb_create_decimal = duckdb_create_decimal;
+	result.duckdb_create_bit = duckdb_create_bit;
+	result.duckdb_create_uuid = duckdb_create_uuid;
+	result.duckdb_get_varint = duckdb_get_varint;
+	result.duckdb_get_decimal = duckdb_get_decimal;
+	result.duckdb_get_bit = duckdb_get_bit;
+	result.duckdb_get_uuid = duckdb_get_uuid;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	return result;
 }

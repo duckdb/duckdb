@@ -517,6 +517,14 @@ typedef struct {
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);
 	duckdb_state (*duckdb_append_value)(duckdb_appender appender, duckdb_value value);
+	duckdb_value (*duckdb_create_varint)(duckdb_varint input);
+	duckdb_value (*duckdb_create_decimal)(duckdb_decimal input);
+	duckdb_value (*duckdb_create_bit)(duckdb_bit input);
+	duckdb_value (*duckdb_create_uuid)(duckdb_uhugeint input);
+	duckdb_varint (*duckdb_get_varint)(duckdb_value val);
+	duckdb_decimal (*duckdb_get_decimal)(duckdb_value val);
+	duckdb_bit (*duckdb_get_bit)(duckdb_value val);
+	duckdb_uhugeint (*duckdb_get_uuid)(duckdb_value val);
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
 #endif
@@ -905,14 +913,22 @@ typedef struct {
 #define duckdb_is_finite_timestamp_ms            duckdb_ext_api.duckdb_is_finite_timestamp_ms
 #define duckdb_is_finite_timestamp_ns            duckdb_ext_api.duckdb_is_finite_timestamp_ns
 #define duckdb_param_logical_type                duckdb_ext_api.duckdb_param_logical_type
+#define duckdb_create_varint                     duckdb_ext_api.duckdb_create_varint
+#define duckdb_create_decimal                    duckdb_ext_api.duckdb_create_decimal
 #define duckdb_create_timestamp_tz               duckdb_ext_api.duckdb_create_timestamp_tz
 #define duckdb_create_timestamp_s                duckdb_ext_api.duckdb_create_timestamp_s
 #define duckdb_create_timestamp_ms               duckdb_ext_api.duckdb_create_timestamp_ms
 #define duckdb_create_timestamp_ns               duckdb_ext_api.duckdb_create_timestamp_ns
+#define duckdb_create_bit                        duckdb_ext_api.duckdb_create_bit
+#define duckdb_create_uuid                       duckdb_ext_api.duckdb_create_uuid
+#define duckdb_get_varint                        duckdb_ext_api.duckdb_get_varint
+#define duckdb_get_decimal                       duckdb_ext_api.duckdb_get_decimal
 #define duckdb_get_timestamp_tz                  duckdb_ext_api.duckdb_get_timestamp_tz
 #define duckdb_get_timestamp_s                   duckdb_ext_api.duckdb_get_timestamp_s
 #define duckdb_get_timestamp_ms                  duckdb_ext_api.duckdb_get_timestamp_ms
 #define duckdb_get_timestamp_ns                  duckdb_ext_api.duckdb_get_timestamp_ns
+#define duckdb_get_bit                           duckdb_ext_api.duckdb_get_bit
+#define duckdb_get_uuid                          duckdb_ext_api.duckdb_get_uuid
 #define duckdb_is_null_value                     duckdb_ext_api.duckdb_is_null_value
 #define duckdb_create_null_value                 duckdb_ext_api.duckdb_create_null_value
 #define duckdb_get_list_size                     duckdb_ext_api.duckdb_get_list_size

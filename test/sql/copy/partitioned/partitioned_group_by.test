@@ -2,6 +2,8 @@
 # description: Test partitioned aggregates
 # group: [partitioned]
 
+require no_vector_verification # query plans are not robust against VERIFY_VECTOR operator
+
 require parquet
 
 statement ok

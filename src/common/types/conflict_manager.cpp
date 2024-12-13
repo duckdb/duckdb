@@ -212,16 +212,22 @@ idx_t ConflictManager::ConflictCount() const {
 	return conflicts.Count();
 }
 
-void ConflictManager::AddIndex(BoundIndex &index) {
-	matched_indexes.insert(&index);
+void ConflictManager::AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index) {
+	matched_indexes.push_back(index);
+	matched_delete_indexes.push_back(delete_index);
+	matched_index_names.insert(index.name);
 }
 
 bool ConflictManager::MatchedIndex(BoundIndex &index) {
-	return matched_indexes.count(&index);
+	return matched_index_names.find(index.name) != matched_index_names.end();
 }
 
-const unordered_set<BoundIndex *> &ConflictManager::MatchedIndexes() const {
+const vector<reference<BoundIndex>> &ConflictManager::MatchedIndexes() const {
 	return matched_indexes;
+}
+
+const vector<optional_ptr<BoundIndex>> &ConflictManager::MatchedDeleteIndexes() const {
+	return matched_delete_indexes;
 }
 
 void ConflictManager::Finalize() {
@@ -246,8 +252,8 @@ void ConflictManager::Finalize() {
 		}
 	}
 	// Now create the row_ids Vector, aligned with the selection vector
-	auto &row_ids = InternalRowIds();
-	auto row_id_data = FlatVector::GetData<row_t>(row_ids);
+	auto &internal_row_ids = InternalRowIds();
+	auto row_id_data = FlatVector::GetData<row_t>(internal_row_ids);
 
 	for (idx_t i = 0; i < selection.Count(); i++) {
 		D_ASSERT(!row_id_map.empty());
@@ -260,7 +266,7 @@ void ConflictManager::Finalize() {
 }
 
 VerifyExistenceType ConflictManager::LookupType() const {
-	return this->lookup_type;
+	return lookup_type;
 }
 
 } // namespace duckdb
