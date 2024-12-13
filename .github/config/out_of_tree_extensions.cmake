@@ -126,6 +126,7 @@ duckdb_extension_load(spatial
     GIT_TAG a60aa3733741a99c49baaf33390c0f7c8a9598a3
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()
 
@@ -144,13 +145,11 @@ duckdb_extension_load(sqlite_scanner
         APPLY_PATCHES
         )
 
-if (NOT ${WASM_ENABLED})
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
+        GIT_TAG b13723fe701f1e38d2cd65b3b6eb587c6553a251
         )
-endif()
 
 ################# VSS
 duckdb_extension_load(vss
@@ -159,6 +158,7 @@ duckdb_extension_load(vss
         GIT_URL https://github.com/duckdb/duckdb_vss
         GIT_TAG bae5b0653b18bbd05840d1773a49dc4a1165831f
         TEST_DIR test/sql
+        APPLY_PATCHES
     )
 
 ################# MYSQL

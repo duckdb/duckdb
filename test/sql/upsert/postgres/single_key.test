@@ -45,13 +45,9 @@ insert into insertconflicttest values (2, 'Orange') on conflict (key, key, key) 
 
 # Succeed, since multi-assignment does not involve subquery:
 
-## -- We don't allow assigning to the column that's part of an Index -- ##
-statement error
-insert into insertconflicttest
-values (1, 'Apple'), (2, 'Orange')
-on conflict (key) do update set fruit = excluded.fruit, key = excluded.key;
-----
-Binder Error: Can not assign to column 'key' because it has a UNIQUE/PRIMARY KEY constraint
+statement ok
+INSERT INTO insertconflicttest VALUES (1, 'Apple'), (2, 'Orange')
+ON CONFLICT (key) DO UPDATE SET fruit = excluded.fruit, key = excluded.key;
 
 # Give good diagnostic message when EXCLUDED.* spuriously referenced from
 # RETURNING:

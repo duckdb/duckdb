@@ -596,8 +596,8 @@ void ReservoirSample::Serialize(Serializer &serializer) const {
 
 unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializer) {
 	auto sample_count = deserializer.ReadPropertyWithDefault<idx_t>(200, "sample_count");
-	auto result = duckdb::unique_ptr<ReservoirSample>(new ReservoirSample(sample_count));
-	deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", result->reservoir_chunk);
+	auto reservoir_chunk = deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk");
+	auto result = duckdb::unique_ptr<ReservoirSample>(new ReservoirSample(sample_count, std::move(reservoir_chunk)));
 	return std::move(result);
 }
 
