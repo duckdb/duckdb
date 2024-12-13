@@ -19,10 +19,11 @@
 namespace duckdb {
 struct DBConfig;
 
-class ArrowArrayScanState;
-typedef void (*arrow_to_duckdb_t)(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
-                                  const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
-                                  uint64_t parent_offset);
+struct ArrowArrayScanState;
+
+typedef void (*cast_t)(ClientContext &context, Vector &source, Vector &result, idx_t count);
+enum ArrowTypeEnum { BASE = 0, EXTENSION = 1 };
+
 class ArrowType {
 public:
 	//! From a DuckDB type
@@ -59,10 +60,11 @@ public:
 
 	static shared_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
 
-	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
-	arrow_to_duckdb_t arrow_to_duckdb = nullptr;
+	bool IsExtension() const;
 
-private:
+protected:
+	ArrowTypeEnum type_enum = BASE;
+
 	LogicalType type;
 	//! Hold the optional type if the array is a dictionary
 	shared_ptr<ArrowType> dictionary_type;
@@ -73,6 +75,31 @@ private:
 	string error_message;
 	//! In case of an error do we throw not implemented?
 	bool not_implemented = false;
+};
+
+class ArrowExtensionType : public ArrowType {
+public:
+	ArrowExtensionType(LogicalType type_p, LogicalType internal_type_p, cast_t arrow_to_duckdb, cast_t duckdb_to_arrow,
+	                   unique_ptr<ArrowTypeInfo> type_info = nullptr)
+	    : ArrowType(std::move(type_p), std::move(type_info)), arrow_to_duckdb(arrow_to_duckdb),
+	      duckdb_to_arrow(duckdb_to_arrow), internal_type(std::move(internal_type_p)) {
+		type_enum = EXTENSION;
+	}
+
+	explicit ArrowExtensionType(const LogicalType &type_p, unique_ptr<ArrowTypeInfo> type_info = nullptr)
+	    : ArrowType(type_p, std::move(type_info)), internal_type(type_p) {
+		type_enum = EXTENSION;
+	}
+	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
+	cast_t arrow_to_duckdb = nullptr;
+	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
+	cast_t duckdb_to_arrow = nullptr;
+
+	LogicalType GetInternalType() const;
+
+private:
+	//! Internal type is a type that refers to the actual arrow format
+	LogicalType internal_type;
 };
 
 using arrow_column_map_t = unordered_map<idx_t, shared_ptr<ArrowType>>;

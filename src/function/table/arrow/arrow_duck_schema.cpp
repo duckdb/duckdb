@@ -353,6 +353,10 @@ shared_ptr<ArrowType> ArrowType::GetArrowLogicalType(DBConfig &config, ArrowSche
 	return arrow_type;
 }
 
+bool ArrowType::IsExtension() const {
+	return type_enum == ArrowTypeEnum::EXTENSION;
+}
+
 shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema &schema) {
 	auto format = string(schema.format);
 	// Let's first figure out if this type is an extension type
@@ -362,6 +366,10 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema
 		return config.GetArrowExtension(extension_info).GetType(schema, schema_metadata);
 	}
 	return GetTypeFromFormat(config, schema, format);
+}
+
+LogicalType ArrowExtensionType::GetInternalType() const {
+	return internal_type;
 }
 
 } // namespace duckdb

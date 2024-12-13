@@ -62,26 +62,29 @@ private:
 class ArrowTypeExtension;
 
 typedef void (*populate_arrow_schema_t)(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-                                        const LogicalType &type, const ClientContext &context, const ArrowTypeExtension &extension);
+                                        const LogicalType &type, const ClientContext &context,
+                                        const ArrowTypeExtension &extension);
 
-typedef shared_ptr<ArrowType> (*get_type_t)(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata);
+typedef shared_ptr<ArrowExtensionType> (*get_type_t)(const ArrowSchema &schema,
+                                                     const ArrowSchemaMetadata &schema_metadata);
 
 class ArrowTypeExtension {
 public:
 	ArrowTypeExtension() {};
 	//! We either have simple extensions where we only return one type
-	ArrowTypeExtension(string extension_name, string arrow_format, shared_ptr<ArrowType> type);
-	ArrowTypeExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowType> type);
+	ArrowTypeExtension(string extension_name, string arrow_format, shared_ptr<ArrowExtensionType> type);
+	ArrowTypeExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowExtensionType> type);
 
 	//! We have complex extensions, where we can return multiple types, hence we must have callback functions to do so
 	ArrowTypeExtension(string extension_name, populate_arrow_schema_t populate_arrow_schema, get_type_t get_type,
-	                   shared_ptr<ArrowType> type);
+	                   shared_ptr<ArrowExtensionType> type);
 	ArrowTypeExtension(string vendor_name, string type_name, populate_arrow_schema_t populate_arrow_schema,
-	                   get_type_t get_type, shared_ptr<ArrowType> type, arrow_to_duckdb_t arrow_to_duckdb);
+	                   get_type_t get_type, shared_ptr<ArrowExtensionType> type, cast_t arrow_to_duckdb,
+	                   cast_t duckdb_to_arrow);
 
 	ArrowTypeExtensionInfo GetInfo() const;
 
-	shared_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) const;
+	shared_ptr<ArrowExtensionType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) const;
 
 	LogicalTypeId GetLogicalTypeId() const;
 
@@ -102,7 +105,7 @@ private:
 	//! Extension Info from Arrow
 	ArrowTypeExtensionInfo extension_info;
 	//! Arrow Type
-	shared_ptr<ArrowType> type;
+	shared_ptr<ArrowExtensionType> type;
 };
 
 struct HashArrowTypeExtension {

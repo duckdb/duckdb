@@ -88,7 +88,7 @@ public:
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
-	explicit ArrowArrayScanState(ArrowScanLocalState &state);
+	explicit ArrowArrayScanState(ArrowScanLocalState &state, ClientContext &context);
 
 public:
 	ArrowScanLocalState &state;
@@ -101,6 +101,7 @@ public:
 	unique_ptr<Vector> dictionary;
 	//! Run-end-encoding state
 	ArrowRunEndEncodingState run_end_encoding;
+	ClientContext &context;
 
 public:
 	ArrowArrayScanState &GetChild(idx_t child_idx);
@@ -126,7 +127,8 @@ public:
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
 public:
-	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
+	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk, ClientContext &context)
+	    : chunk(current_chunk.release()), context(context) {
 	}
 
 public:
@@ -139,6 +141,7 @@ public:
 	TableFilterSet *filters = nullptr;
 	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
 	DataChunk all_columns;
+	ClientContext &context;
 
 public:
 	void Reset() {
@@ -150,7 +153,7 @@ public:
 	ArrowArrayScanState &GetState(idx_t child_idx) {
 		auto it = array_states.find(child_idx);
 		if (it == array_states.end()) {
-			auto child_p = make_uniq<ArrowArrayScanState>(*this);
+			auto child_p = make_uniq<ArrowArrayScanState>(*this, context);
 			auto &child = *child_p;
 			array_states.emplace(child_idx, std::move(child_p));
 			return child;

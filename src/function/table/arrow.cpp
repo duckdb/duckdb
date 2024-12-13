@@ -147,7 +147,7 @@ ArrowTableFunction::ArrowScanInitLocalInternal(ClientContext &context, TableFunc
                                                GlobalTableFunctionState *global_state_p) {
 	auto &global_state = global_state_p->Cast<ArrowScanGlobalState>();
 	auto current_chunk = make_uniq<ArrowArrayWrapper>();
-	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
+	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk), context);
 	result->column_ids = input.column_ids;
 	result->filters = input.filters.get();
 	auto &bind_data = input.bind_data->Cast<ArrowScanFunctionData>();
