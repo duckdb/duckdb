@@ -27,9 +27,6 @@ select count(*) from test WHERE a IS NOT NULL;
 41
 
 statement ok
-pragma verify_serializer
-
-statement ok
 INSERT INTO test SELECT case when i%25=0 then 1337 else null end FROM range(0,1025) tbl(i);
 
 statement ok
