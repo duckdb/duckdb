@@ -7,6 +7,7 @@ on:
 env:
   TITLE_PREFIX: "[duckdb/#${{ github.event.pull_request.number }}]"
   PUBLIC_PR_TITLE: ${{ github.event.pull_request.title }}
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   create_or_label_issue:
