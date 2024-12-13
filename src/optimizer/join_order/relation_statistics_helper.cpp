@@ -115,7 +115,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 			if (column_statistics) {
 				idx_t cardinality_with_filter =
-					InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
+				    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
