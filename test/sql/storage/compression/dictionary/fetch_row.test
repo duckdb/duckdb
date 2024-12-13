@@ -18,14 +18,15 @@ CREATE TABLE test (
 
 statement ok
 INSERT INTO test (a, b)
-SELECT x AS a, 
-       CASE (x - 1) % 5
-           WHEN 0 THEN 'aaaa'
-           WHEN 1 THEN 'bbbb'
-           WHEN 2 THEN 'cccc'
-           WHEN 3 THEN 'dddd'
-           WHEN 4 THEN NULL
-       END AS b
+SELECT
+	x AS a,
+	CASE x % 5
+		WHEN 0 THEN 'aaaa'
+		WHEN 1 THEN 'bbbb'
+		WHEN 2 THEN 'cccc'
+		WHEN 3 THEN 'dddd'
+		WHEN 4 THEN NULL
+	END AS b
 FROM range(10_000) t(x);
 
 statement ok
@@ -44,8 +45,8 @@ pragma verify_fetch_row;
 query I
 select distinct b from test order by a % 5;
 ----
-NULL
 aaaa
 bbbb
 cccc
 dddd
+NULL
