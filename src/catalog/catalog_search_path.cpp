@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/default/default_schemas.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/constants.hpp"
@@ -205,6 +206,9 @@ string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
 }
 
 string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
+		return SYSTEM_CATALOG;
+	}
 	for (auto &path : paths) {
 		if (path.catalog == TEMP_CATALOG) {
 			continue;
@@ -218,9 +222,13 @@ string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 
 vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) {
 	vector<string> schemas;
-	for (auto &path : paths) {
-		if (StringUtil::CIEquals(path.schema, schema)) {
-			schemas.push_back(path.catalog);
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
+		schemas.push_back(SYSTEM_CATALOG);
+	} else {
+		for (auto &path : paths) {
+			if (StringUtil::CIEquals(path.schema, schema)) {
+				schemas.push_back(path.catalog);
+			}
 		}
 	}
 	return schemas;

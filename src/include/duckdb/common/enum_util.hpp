@@ -32,6 +32,10 @@ struct EnumUtil {
     static string ToString(T value) { return string(ToChars<T>(value)); }
 };
 
+enum class ARTAppendMode : uint8_t;
+
+enum class ARTConflictType : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AggregateCombineType : uint8_t;
@@ -374,6 +378,12 @@ enum class WindowBoundary : uint8_t;
 
 enum class WindowExcludeMode : uint8_t;
 
+
+template<>
+const char* EnumUtil::ToChars<ARTAppendMode>(ARTAppendMode value);
+
+template<>
+const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -888,6 +898,12 @@ const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
 template<>
 const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
+
+template<>
+ARTAppendMode EnumUtil::FromString<ARTAppendMode>(const char *value);
+
+template<>
+ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);

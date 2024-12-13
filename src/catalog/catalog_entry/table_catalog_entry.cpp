@@ -255,28 +255,6 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 	}
 }
 
-static bool TypeSupportsRegularUpdate(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::LIST:
-	case LogicalTypeId::ARRAY:
-	case LogicalTypeId::MAP:
-	case LogicalTypeId::UNION:
-		// lists and maps and unions don't support updates directly
-		return false;
-	case LogicalTypeId::STRUCT: {
-		auto &child_types = StructType::GetChildTypes(type);
-		for (auto &entry : child_types) {
-			if (!TypeSupportsRegularUpdate(entry.second)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	default:
-		return true;
-	}
-}
-
 vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo() {
 	return {};
 }
@@ -321,7 +299,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	// we also convert any updates on LIST columns into delete + insert
 	for (auto &col_index : update.columns) {
 		auto &column = GetColumns().GetColumn(col_index);
-		if (!TypeSupportsRegularUpdate(column.Type())) {
+		if (!column.Type().SupportsRegularUpdate()) {
 			update.update_is_del_and_insert = true;
 			break;
 		}

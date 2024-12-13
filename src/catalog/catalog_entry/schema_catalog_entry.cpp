@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/default/default_schemas.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/algorithm.hpp"

@@ -111,6 +111,7 @@ public:
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
 
+	vector<PartitionStatistics> GetPartitionStats() const;
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	const vector<LogicalType> &GetTypes() const;
 
