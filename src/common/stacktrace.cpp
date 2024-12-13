@@ -2,14 +2,14 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 
-#if defined(__GLIBC__) || defined (__APPLE__)
+#if defined(__GLIBC__) || defined(__APPLE__)
 #include <execinfo.h>
 #include <cxxabi.h>
 #endif
 
 namespace duckdb {
 
-#if defined(__GLIBC__) || defined (__APPLE__)
+#if defined(__GLIBC__) || defined(__APPLE__)
 static string UnmangleSymbol(string symbol) {
 	// find the mangled name
 	idx_t mangle_start = symbol.size();
