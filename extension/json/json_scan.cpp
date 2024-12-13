@@ -676,8 +676,8 @@ void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, Allocate
 
 	if (!bind_data.ignore_errors && bind_data.options.record_type == JSONRecordType::RECORDS &&
 	    current_reader->GetRecordType() != JSONRecordType::RECORDS) {
-		throw InvalidInputException("Expected file \"%s\" to contain records, detected non-record JSON instead.",
-		                            current_reader->GetFileName());
+		current_reader->ThrowTransformError(buffer_index.GetIndex(), 0,
+		                                    "Expected records, detected non-record JSON instead.");
 	}
 }
 
@@ -829,6 +829,9 @@ bool JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	// Spinlock until the previous batch index has also read its buffer
 	optional_ptr<JSONBufferHandle> previous_buffer_handle;
 	while (!previous_buffer_handle) {
+		if (current_reader->HasThrown()) {
+			return false;
+		}
 		previous_buffer_handle = current_reader->GetBuffer(current_buffer_handle->buffer_index - 1);
 	}
 
