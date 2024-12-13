@@ -76,10 +76,12 @@ static void testRunner() {
 }
 
 static string ParseGroupFromPath(string file) {
+
 	string extension = "";
 	if (file.find(".test_slow") != std::string::npos) {
 		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
-		extension = "[.]";
+		if (rand() % 8 != 2) 
+			extension = "[.]";
 	}
 	if (file.find(".test_coverage") != std::string::npos) {
 		// "coverage" in the name indicates a coverage test (i.e. only run as part of coverage)
@@ -106,6 +108,7 @@ static string ParseGroupFromPath(string file) {
 namespace duckdb {
 
 void RegisterSqllogictests() {
+srand(time(NULL)); // randomize seed
 	vector<string> enable_verification_excludes = {
 	    // too slow for verification
 	    "test/select5.test",
@@ -204,6 +207,7 @@ void RegisterSqllogictests() {
 			}
 		}
 	});
+
 	listFiles(*fs, "test", [&](const string &path) {
 		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 			// parse the name / group from the test
