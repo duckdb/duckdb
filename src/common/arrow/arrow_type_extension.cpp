@@ -22,8 +22,9 @@ hash_t ArrowTypeExtensionInfo::GetHash() const {
 	const auto h_extension = Hash(extension_name.c_str());
 	const auto h_vendor = Hash(vendor_name.c_str());
 	const auto h_type = Hash(type_name.c_str());
-	const auto h_arrow_format = Hash(arrow_format.c_str());
-	return CombineHash(h_extension, CombineHash(h_vendor, CombineHash(h_type, h_arrow_format)));
+	// Most arrow extensions are unique on the extension name
+	// However we use arrow.opaque as all the non-canonical extensions, hence we do a hash-aroo of all.
+	return CombineHash(h_extension, CombineHash(h_vendor, h_type));
 }
 
 TypeInfo::TypeInfo() : type() {
@@ -86,8 +87,7 @@ bool ArrowTypeExtensionInfo::IsCanonical() const {
 }
 
 bool ArrowTypeExtensionInfo::operator==(const ArrowTypeExtensionInfo &other) const {
-	return extension_name == other.extension_name && type_name == other.type_name && vendor_name == other.vendor_name &&
-	       arrow_format == other.arrow_format;
+	return extension_name == other.extension_name && type_name == other.type_name && vendor_name == other.vendor_name;
 }
 
 ArrowTypeExtension::ArrowTypeExtension(string vendor_name, string type_name, string arrow_format,
@@ -144,11 +144,12 @@ void ArrowTypeExtension::PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holde
 		return;
 	}
 
-	auto format = make_unsafe_uniq_array<char>(extension.extension_info.GetArrowFormat().size());
+	auto format = make_unsafe_uniq_array<char>(extension.extension_info.GetArrowFormat().size() + 1);
 	idx_t i = 0;
-	for (auto &c : extension.extension_info.GetArrowFormat()) {
+	for (const auto &c : extension.extension_info.GetArrowFormat()) {
 		format[i++] = c;
 	}
+	format[i++] = '\0';
 	// We do the default way of populating the schema
 	root_holder.extension_format.emplace_back(std::move(format));
 
