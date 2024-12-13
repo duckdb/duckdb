@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/external/small_external_aggregate.test_coverage
+# name: test/sql/aggregate/external/small_external_aggregate.test_slow
 # description: Test coverage for aggregate HT abandoning
 # group: [external]
 
