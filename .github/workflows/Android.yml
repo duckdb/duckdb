@@ -96,7 +96,7 @@ jobs:
         zip -j libduckdb-android_${{matrix.arch}}.zip build/release/src/libduckdb*.*  src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-android_${{matrix.arch}}.zip
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: duckdb-binaries-android-${{matrix.arch}}
         path: |

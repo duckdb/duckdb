@@ -346,6 +346,9 @@ struct LogicalType {
 	DUCKDB_API bool IsValid() const;
 	DUCKDB_API bool IsComplete() const;
 
+	//! True, if this type supports in-place updates.
+	bool SupportsRegularUpdate() const;
+
 
 private:
 	LogicalTypeId id_; // NOLINT: allow this naming for legacy reasons

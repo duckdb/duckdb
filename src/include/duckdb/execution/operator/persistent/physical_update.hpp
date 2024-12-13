@@ -35,6 +35,8 @@ public:
 	bool update_is_del_and_insert;
 	//! If the returning statement is present, return the whole chunk
 	bool return_chunk;
+	//! Set to true, if we are updating an index column.
+	bool index_update;
 
 public:
 	// Source interface

@@ -304,6 +304,13 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIn
 	return CreateIndex(GetCatalogTransaction(context), info);
 }
 
+unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
+                                                       unique_ptr<LogicalOperator> plan,
+                                                       unique_ptr<CreateIndexInfo> create_info,
+                                                       unique_ptr<AlterTableInfo> alter_info) {
+	throw NotImplementedException("BindAlterAddIndex not supported by this catalog");
+}
+
 //===--------------------------------------------------------------------===//
 // Lookup Structures
 //===--------------------------------------------------------------------===//
@@ -862,7 +869,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, Cat
 	// lookup
 	if (type == CatalogType::TABLE_ENTRY) {
 		auto lookup_result_default_table =
-		    TryLookupDefaultTable(retriever, type, catalog, schema, name, if_not_found, error_context);
+		    TryLookupDefaultTable(retriever, type, catalog, schema, name, OnEntryNotFound::RETURN_NULL, error_context);
 
 		if (lookup_result_default_table.Found() && lookup_result.Found()) {
 			ThrowDefaultTableAmbiguityException(lookup_result, lookup_result_default_table, name);

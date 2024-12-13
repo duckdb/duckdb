@@ -1,0 +1,24 @@
+# name: test/sql/index/art/constraints/test_art_tx_returning.test
+# description: Test updates on the primary key containing RETURNING.
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl_list (id INT PRIMARY KEY, payload VARCHAR[]);
+
+statement ok
+INSERT INTO tbl_list SELECT range, [range || ' payload'] FROM range(5);
+
+query II
+UPDATE tbl_list SET id = id + 1 RETURNING id, payload;
+----
+1	[0 payload]
+2	[1 payload]
+3	[2 payload]
+4	[3 payload]
+5	[4 payload]

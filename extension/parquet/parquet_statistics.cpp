@@ -555,7 +555,7 @@ ParquetBloomFilter::ParquetBloomFilter(idx_t num_entries, double bloom_filter_fa
 	double k = 8.0;
 	double n = LossyNumericCast<double>(num_entries);
 	double m = -k * n / std::log(1 - std::pow(f, 1 / k));
-	auto b = MaxValue<idx_t>(NextPowerOfTwo(m / k) / 32, 1);
+	auto b = MaxValue<idx_t>(NextPowerOfTwo(LossyNumericCast<idx_t>(m / k)) / 32, 1);
 
 	D_ASSERT(b > 0 && IsPowerOfTwo(b));
 
@@ -600,7 +600,7 @@ double ParquetBloomFilter::OneRatio() {
 	for (idx_t b_idx = 0; b_idx < data->len / sizeof(uint64_t); ++b_idx) {
 		one_count += PopCnt64(bloom_ptr[b_idx]);
 	}
-	return LossyNumericCast<double>(one_count) / (data->len * 8.0);
+	return LossyNumericCast<double>(one_count) / (LossyNumericCast<double>(data->len) * 8.0);
 }
 
 ResizeableBuffer *ParquetBloomFilter::Get() {

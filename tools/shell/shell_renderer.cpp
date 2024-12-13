@@ -509,6 +509,8 @@ public:
 class ModeAsciiRenderer : public RowRenderer {
 public:
 	explicit ModeAsciiRenderer(ShellState &state) : RowRenderer(state) {
+		col_sep = "\n";
+		row_sep = "\n";
 	}
 
 	void RenderHeader(RowResult &result) override {
