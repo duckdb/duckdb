@@ -35,7 +35,7 @@ public:
 class DictionaryCompressionState : public CompressionState {
 public:
 	explicit DictionaryCompressionState(const CompressionInfo &info);
-	virtual ~DictionaryCompressionState();
+	~DictionaryCompressionState() override;
 
 public:
 	bool UpdateState(Vector &scan_vector, idx_t count);
