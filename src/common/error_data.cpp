@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/stacktrace.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/tableref.hpp"

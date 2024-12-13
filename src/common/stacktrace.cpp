@@ -1,5 +1,6 @@
 #include "duckdb/common/stacktrace.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/to_string.hpp"
 
 #ifndef _WIN32
 #include <execinfo.h>
@@ -31,7 +32,7 @@ static string UnmangleSymbol(string symbol) {
 	string mangled_symbol = symbol.substr(mangle_start, mangle_end - mangle_start);
 
 	int status;
-	auto demangle_result = abi::__cxa_demangle(mangled_symbol.c_str(), NULL, NULL, &status);
+	auto demangle_result = abi::__cxa_demangle(mangled_symbol.c_str(), nullptr, nullptr, &status);
 	if (status != 0 || !demangle_result) {
 		return symbol;
 	}
@@ -70,7 +71,7 @@ string StackTrace::ResolveStacktraceSymbols(const string &pointers) {
 		result += UnmangleSymbol(strs[i]);
 		result += "\n";
 	}
-	free(strs);
+	free(reinterpret_cast<void *>(strs));
 	return "\n" + result;
 }
 
