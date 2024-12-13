@@ -62,7 +62,7 @@ private:
 class ArrowTypeExtension;
 
 typedef void (*populate_arrow_schema_t)(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-                                        const LogicalType &type, ClientContext &context, ArrowTypeExtension &extension);
+                                        const LogicalType &type, const ClientContext &context, const ArrowTypeExtension &extension);
 
 typedef shared_ptr<ArrowType> (*get_type_t)(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata);
 
@@ -90,8 +90,8 @@ public:
 	bool HasType() const;
 
 	static void PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-	                                const LogicalType &duckdb_type, ClientContext &context,
-	                                ArrowTypeExtension &extension);
+	                                const LogicalType &duckdb_type, const ClientContext &context,
+	                                const ArrowTypeExtension &extension);
 
 	//! (Optional) Callback to a function that sets up the arrow schema production
 	populate_arrow_schema_t populate_arrow_schema = nullptr;
@@ -130,7 +130,7 @@ struct HashTypeInfo {
 //! The set of encoding functions
 struct ArrowTypeExtensionSet {
 	ArrowTypeExtensionSet() {};
-	static void Initialize(DBConfig &config);
+	static void Initialize(const DBConfig &config);
 	std::mutex lock;
 	unordered_map<ArrowTypeExtensionInfo, ArrowTypeExtension, HashArrowTypeExtension> type_extensions;
 	unordered_map<TypeInfo, vector<ArrowTypeExtensionInfo>, HashTypeInfo> type_to_info;
