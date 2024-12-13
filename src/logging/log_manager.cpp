@@ -36,26 +36,15 @@ unique_ptr<Logger> LogManager::CreateLogger(LoggingContext context, bool thread_
 RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 
-	// TODO: can this realistically happen?
-	if (registered_log_contexts.find(next_registered_logging_context_index) != registered_log_contexts.end()) {
-		throw InternalException("LogManager ran out of available LoggingContext indices!");
+	RegisteredLoggingContext result = {next_registered_logging_context_index, context};
+
+	next_registered_logging_context_index += 1;
+
+	if (next_registered_logging_context_index == NumericLimits<idx_t>::Maximum() ) {
+		throw InternalException("Ran out of available log context ids.");
 	}
-
-	auto res = registered_log_contexts.insert({next_registered_logging_context_index, context});
-
-	next_registered_logging_context_index++;
-
-	RegisteredLoggingContext result = {res.first->first, res.first->second};
-
-	log_storage->WriteLoggingContext(result);
 
 	return result;
-}
-
-void LogManager::DropLoggingContext(RegisteredLoggingContext &context) {
-	if (registered_log_contexts.find(context.context_id) != registered_log_contexts.end()) {
-		registered_log_contexts.erase(context.context_id);
-	}
 }
 
 Logger &LogManager::GlobalLogger() {

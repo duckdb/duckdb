@@ -47,9 +47,6 @@ void StdOutLogStorage::Flush() {
 	// NOP
 }
 
-void StdOutLogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {
-	// NOP
-}
 InMemoryLogStorageScanState::InMemoryLogStorageScanState() {
 }
 InMemoryLogStorageScanState::~InMemoryLogStorageScanState() {
@@ -88,6 +85,11 @@ InMemoryLogStorage::~InMemoryLogStorage() {
 void InMemoryLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
                                        const string &log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
+
+	if (registered_contexts.find(context.context_id) == registered_contexts.end()) {
+		WriteLoggingContext(context);
+	}
+
 	auto size = entry_buffer->size();
 	auto context_id_data = FlatVector::GetData<idx_t>(entry_buffer->data[0]);
 	auto timestamp_data = FlatVector::GetData<timestamp_t>(entry_buffer->data[1]);
@@ -129,8 +131,8 @@ void InMemoryLogStorage::FlushInternal() {
 	}
 }
 
-void InMemoryLogStorage::WriteLoggingContext(RegisteredLoggingContext &context) {
-	unique_lock<mutex> lck(lock);
+void InMemoryLogStorage::WriteLoggingContext(const RegisteredLoggingContext &context) {
+	registered_contexts.insert(context.context_id);
 
 	auto size = log_context_buffer->size();
 

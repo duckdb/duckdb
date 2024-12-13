@@ -32,10 +32,7 @@ public:
 	static LogManager &Get(ClientContext &context);
 	unique_ptr<Logger> CreateLogger(LoggingContext context, bool thread_safe = true, bool mutable_settings = false);
 
-	// TODO: do this lazily from logger: we should not register each logging context when logging isn't even enabled
 	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
-	// TODO: never called yet
-	void DropLoggingContext(RegisteredLoggingContext &logging_id);
 
 	//! The global logger can be used whe
 	Logger &GlobalLogger();
@@ -68,9 +65,6 @@ protected:
 	shared_ptr<LogStorage> log_storage;
 
 	idx_t next_registered_logging_context_index = 0;
-
-	// TOOD: this can be a set? Should we store at all?
-	unordered_map<idx_t, LoggingContext> registered_log_contexts;
 };
 
 } // namespace duckdb

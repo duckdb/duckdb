@@ -48,10 +48,6 @@ public:
 	                           const RegisteredLoggingContext &context) = 0;
 	virtual void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) = 0;
 	virtual void Flush() = 0;
-	//! Registers a logging context. TOOD: remove?
-	virtual void WriteLoggingContext(RegisteredLoggingContext &context) {
-
-	};
 
 	//! READING (OPTIONAL)
 	virtual bool CanScan() {
@@ -75,7 +71,6 @@ public:
 	                   const RegisteredLoggingContext &context) override;
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
 	void Flush() override;
-	void WriteLoggingContext(RegisteredLoggingContext &context) override;
 };
 
 class InMemoryLogStorageScanState : public LogStorageScanState {
@@ -97,7 +92,6 @@ public:
 	                   const RegisteredLoggingContext &context) override;
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
 	void Flush() override;
-	void WriteLoggingContext(RegisteredLoggingContext &context) override;
 
 	//! LogStorage API: READING
 	bool CanScan() override;
@@ -109,6 +103,8 @@ public:
 	bool ScanContexts(LogStorageScanState &state, DataChunk &result) const override;
 	void InitializeScanContexts(LogStorageScanState &state) const override;
 
+protected:
+	void WriteLoggingContext(const RegisteredLoggingContext &context);
 
 protected:
 	mutable mutex lock;
@@ -118,6 +114,8 @@ protected:
 	//! Internal log entry storage
 	unique_ptr<ColumnDataCollection> log_entries;
 	unique_ptr<ColumnDataCollection> log_contexts;
+
+	unordered_set<idx_t> registered_contexts;
 
 	// Cache for direct logging
 	unique_ptr<DataChunk> entry_buffer;
