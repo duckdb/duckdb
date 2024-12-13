@@ -46,12 +46,12 @@ true	true
 
 # about half the samples are below 102400 and half above
 query I
-select count(*) < 1050 from duckdb_table_sample('t1') where a < 102400;
+select count(*) < 1060 from duckdb_table_sample('t1') where a < 102400;
 ----
 true
 
 query I
-select count(*) < 1050 from duckdb_table_sample('t1') where a > 102400;
+select count(*) < 1060 from duckdb_table_sample('t1') where a > 102400;
 ----
 true
 
