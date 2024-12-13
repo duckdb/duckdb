@@ -76,7 +76,7 @@ string StackTrace::ResolveStacktraceSymbols(const string &pointers) {
 }
 
 #else
-string StackTrace::GetStacktracePointers() {
+string StackTrace::GetStacktracePointers(idx_t max_depth) {
 	return string();
 }
 
