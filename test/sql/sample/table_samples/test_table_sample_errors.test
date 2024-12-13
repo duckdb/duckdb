@@ -1,0 +1,19 @@
+# name: test/sql/sample/table_samples/test_table_sample_errors.test
+# description: test table sampl[e errors
+# group: [table_samples]
+
+statement ok
+create table t1 as select range a from range(204800);
+
+statement ok
+create view v1 as select * from t1;
+
+statement error
+select * from duckdb_table_sample('v1');
+----
+<REGEX>:.*Invalid Catalog type.*
+
+statement error
+select * from duckdb_table_sample('a');
+----
+<REGEX>:.*Catalog Error:.*Table.*does not exist.*

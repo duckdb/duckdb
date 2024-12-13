@@ -3125,6 +3125,24 @@ SampleType EnumUtil::FromString<SampleType>(const char *value) {
 	return static_cast<SampleType>(StringUtil::StringToEnum(GetSampleTypeValues(), 3, "SampleType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetSamplingStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SamplingState::RANDOM), "RANDOM" },
+		{ static_cast<uint32_t>(SamplingState::RESERVOIR), "RESERVOIR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SamplingState>(SamplingState value) {
+	return StringUtil::EnumToString(GetSamplingStateValues(), 2, "SamplingState", static_cast<uint32_t>(value));
+}
+
+template<>
+SamplingState EnumUtil::FromString<SamplingState>(const char *value) {
+	return static_cast<SamplingState>(StringUtil::StringToEnum(GetSamplingStateValues(), 2, "SamplingState", value));
+}
+
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ScanType::TABLE), "TABLE" },
