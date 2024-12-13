@@ -478,7 +478,7 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo &info) {
 	D_ASSERT(!name.empty());
 	auto entry = CTE_bindings.find(name);
 	if (entry != CTE_bindings.end()) {
-		throw InternalException("Duplicate CTE \"%s\" in query!", name);
+		throw BinderException("Duplicate CTE \"%s\" in query!", name);
 	}
 	CTE_bindings.insert(make_pair(name, reference<CommonTableExpressionInfo>(info)));
 }
