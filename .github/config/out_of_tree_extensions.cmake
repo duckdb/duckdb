@@ -145,13 +145,11 @@ duckdb_extension_load(sqlite_scanner
         APPLY_PATCHES
         )
 
-if (NOT ${WASM_ENABLED})
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
+        GIT_TAG b13723fe701f1e38d2cd65b3b6eb587c6553a251
         )
-endif()
 
 ################# VSS
 duckdb_extension_load(vss
