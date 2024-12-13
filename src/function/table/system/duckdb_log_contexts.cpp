@@ -50,7 +50,6 @@ unique_ptr<GlobalTableFunctionState> DuckDBLogContextInit(ClientContext &context
 	return make_uniq<DuckDBLogContextData>();
 }
 
-
 void DuckDBLogContextFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogContextData>();
 	if (data.log_storage) {

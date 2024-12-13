@@ -40,7 +40,7 @@ RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &cont
 
 	next_registered_logging_context_index += 1;
 
-	if (next_registered_logging_context_index == NumericLimits<idx_t>::Maximum() ) {
+	if (next_registered_logging_context_index == NumericLimits<idx_t>::Maximum()) {
 		throw InternalException("Ran out of available log context ids.");
 	}
 

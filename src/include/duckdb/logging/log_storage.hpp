@@ -53,7 +53,7 @@ public:
 	virtual bool CanScan() {
 		return false;
 	}
-	virtual unique_ptr<LogStorageScanState> CreateScanEntriesState() const ;
+	virtual unique_ptr<LogStorageScanState> CreateScanEntriesState() const;
 	virtual bool ScanEntries(LogStorageScanState &state, DataChunk &result) const;
 	virtual void InitializeScanEntries(LogStorageScanState &state) const;
 	virtual unique_ptr<LogStorageScanState> CreateScanContextsState() const;
@@ -77,7 +77,6 @@ class InMemoryLogStorageScanState : public LogStorageScanState {
 public:
 	InMemoryLogStorageScanState();
 	~InMemoryLogStorageScanState();
-
 
 	ColumnDataScanState scan_state;
 };

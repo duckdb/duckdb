@@ -84,7 +84,7 @@ void ThreadSafeLogger::WriteLog(const char *log_type, LogLevel log_level, const 
 
 void ThreadSafeLogger::WriteLog(LogLevel log_level, const char *log_message) {
 	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message,
-	                       context);
+	                      context);
 }
 
 void ThreadSafeLogger::Flush() {
@@ -140,7 +140,7 @@ void MutableLogger::WriteLog(const char *log_type, LogLevel log_level, const cha
 
 void MutableLogger::WriteLog(LogLevel log_level, const char *log_message) {
 	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message,
-	                       context);
+	                      context);
 }
 
 bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {

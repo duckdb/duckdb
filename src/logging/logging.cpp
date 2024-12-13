@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-LogConfig::LogConfig() : enabled(false), mode(LogMode::LEVEL_ONLY), level(DEFAULT_LOG_LEVEL), storage(DEFAULT_LOG_STORAGE) {
+LogConfig::LogConfig()
+    : enabled(false), mode(LogMode::LEVEL_ONLY), level(DEFAULT_LOG_LEVEL), storage(DEFAULT_LOG_STORAGE) {
 }
 
 bool LogConfig::IsConsistent() const {
