@@ -17,8 +17,6 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'fsst')]
     includes += [os.path.join('third_party', 'httplib')]
     includes += [os.path.join('third_party', 'hyperloglog')]
-    includes += [os.path.join('third_party', 'jaro_winkler')]
-    includes += [os.path.join('third_party', 'jaro_winkler', 'details')]
     includes += [os.path.join('third_party', 'libpg_query')]
     includes += [os.path.join('third_party', 'libpg_query', 'include')]
     includes += [os.path.join('third_party', 'lz4')]

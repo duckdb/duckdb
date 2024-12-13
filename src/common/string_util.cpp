@@ -6,7 +6,6 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -19,6 +18,7 @@
 #include <random>
 #include <stack>
 
+#include "rapidfuzz_all.hpp"
 #include "yyjson.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
@@ -483,7 +483,7 @@ idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
 }
 
 double StringUtil::SimilarityRating(const string &s1, const string &s2) {
-	return duckdb_jaro_winkler::jaro_winkler_similarity(s1.data(), s1.data() + s1.size(), s2.data(),
+	return duckdb_rapidfuzz::jaro_winkler_similarity(s1.data(), s1.data() + s1.size(), s2.data(),
 	                                                    s2.data() + s2.size());
 }
 
