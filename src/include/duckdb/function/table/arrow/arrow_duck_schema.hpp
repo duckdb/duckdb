@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/types/validity_mask.hpp"
+
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -17,6 +19,10 @@
 namespace duckdb {
 struct DBConfig;
 
+class ArrowArrayScanState;
+typedef void (*arrow_to_duckdb_t)(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
+                                  const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
+                                  uint64_t parent_offset);
 class ArrowType {
 public:
 	//! From a DuckDB type
@@ -52,6 +58,9 @@ public:
 	                                            bool view);
 
 	static shared_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
+
+	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
+	arrow_to_duckdb_t arrow_to_duckdb = nullptr;
 
 private:
 	LogicalType type;

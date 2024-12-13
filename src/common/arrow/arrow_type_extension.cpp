@@ -105,11 +105,12 @@ ArrowTypeExtension::ArrowTypeExtension(string extension_name, populate_arrow_sch
 
 ArrowTypeExtension::ArrowTypeExtension(string vendor_name, string type_name,
                                        populate_arrow_schema_t populate_arrow_schema, get_type_t get_type,
-                                       shared_ptr<ArrowType> type_p)
+                                       shared_ptr<ArrowType> type_p, arrow_to_duckdb_t arrow_to_duckdb)
     : populate_arrow_schema(populate_arrow_schema), get_type(get_type),
       extension_info(ArrowTypeExtensionInfo::ARROW_EXTENSION_NON_CANONICAL, std::move(vendor_name),
                      std::move(type_name), {}),
       type(std::move(type_p)) {
+	type_p->arrow_to_duckdb = arrow_to_duckdb;
 }
 
 ArrowTypeExtensionInfo ArrowTypeExtension::GetInfo() const {
@@ -315,9 +316,9 @@ void ArrowTypeExtensionSet::Initialize(DBConfig &config) {
 	// Types that are 1:n
 	config.RegisterArrowExtension({"arrow.json", &ArrowJson::PopulateSchema, &ArrowJson::GetType,
 	                               make_shared_ptr<ArrowType>(LogicalType::VARCHAR)});
-	config.RegisterArrowExtension(
-	    {"DuckDB", "bit", &ArrowBit::PopulateSchema, &ArrowBit::GetType, make_shared_ptr<ArrowType>(LogicalType::BIT)});
+	config.RegisterArrowExtension({"DuckDB", "bit", &ArrowBit::PopulateSchema, &ArrowBit::GetType,
+	                               make_shared_ptr<ArrowType>(LogicalType::BIT), nullptr});
 	config.RegisterArrowExtension({"DuckDB", "varint", &ArrowVarint::PopulateSchema, &ArrowVarint::GetType,
-	                               make_shared_ptr<ArrowType>(LogicalType::VARINT)});
+	                               make_shared_ptr<ArrowType>(LogicalType::VARINT), nullptr});
 }
 } // namespace duckdb
