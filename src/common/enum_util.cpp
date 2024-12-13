@@ -1464,19 +1464,20 @@ const StringUtil::EnumStringLiteral *GetExtensionABITypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExtensionABIType::UNKNOWN), "UNKNOWN" },
 		{ static_cast<uint32_t>(ExtensionABIType::CPP), "CPP" },
-		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT), "C_STRUCT" }
+		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT), "C_STRUCT" },
+		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT_UNSTABLE), "C_STRUCT_UNSTABLE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value) {
-	return StringUtil::EnumToString(GetExtensionABITypeValues(), 3, "ExtensionABIType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExtensionABITypeValues(), 4, "ExtensionABIType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value) {
-	return static_cast<ExtensionABIType>(StringUtil::StringToEnum(GetExtensionABITypeValues(), 3, "ExtensionABIType", value));
+	return static_cast<ExtensionABIType>(StringUtil::StringToEnum(GetExtensionABITypeValues(), 4, "ExtensionABIType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtensionInstallModeValues() {
