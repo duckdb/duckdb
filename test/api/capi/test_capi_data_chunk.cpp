@@ -462,7 +462,7 @@ TEST_CASE("Test PK violation in the C API appender", "[capi]") {
 	auto state = duckdb_appender_close(appender);
 	REQUIRE(state == DuckDBError);
 	auto error = duckdb_appender_error(appender);
-	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violated"));
+	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violation"));
 
 	// Destroy the appender despite the error to avoid leaks.
 	state = duckdb_appender_destroy(&appender);
@@ -491,7 +491,7 @@ TEST_CASE("Test PK violation in the C API appender", "[capi]") {
 	state = duckdb_appender_flush(appender);
 	REQUIRE(state == DuckDBError);
 	error = duckdb_appender_error(appender);
-	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violated"));
+	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violation"));
 	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBError);
 
 	// Ensure that only the last row was appended.

@@ -44,8 +44,10 @@ public:
 	Allocator &allocator;
 	//! The main chunk collection holding the data
 	shared_ptr<RowGroupCollection> row_groups;
-	//! The set of unique indexes
-	TableIndexList indexes;
+	//! The set of unique append indexes.
+	TableIndexList append_indexes;
+	//! The set of delete indexes.
+	TableIndexList delete_indexes;
 	//! The number of deleted rows
 	idx_t deleted_rows;
 	//! The main optimistic data writer
@@ -65,10 +67,10 @@ public:
 	void Rollback();
 	idx_t EstimatedSize();
 
-	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, idx_t append_count,
-	                     bool append_to_table);
+	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, bool append_to_table);
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
 	                          const vector<LogicalType> &table_types, row_t &start_row);
+	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
 
 	//! Creates an optimistic writer for this table
 	OptimisticDataWriter &CreateOptimisticWriter();
@@ -118,6 +120,8 @@ public:
 
 	//! Begin appending to the local storage
 	void InitializeAppend(LocalAppendState &state, DataTable &table);
+	//! Initialize the storage and its indexes, but no row groups.
+	void InitializeStorage(LocalAppendState &state, DataTable &table);
 	//! Append a chunk to the local storage
 	static void Append(LocalAppendState &state, DataChunk &chunk);
 	//! Finish appending to the local storage
@@ -157,6 +161,7 @@ public:
 	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	TableIndexList &GetIndexes(DataTable &table);
+	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
