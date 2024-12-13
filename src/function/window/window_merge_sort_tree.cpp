@@ -6,7 +6,7 @@
 namespace duckdb {
 
 WindowMergeSortTree::WindowMergeSortTree(ClientContext &context, const vector<BoundOrderByNode> &orders,
-                                 const vector<column_t> &sort_idx, const idx_t count)
+                                         const vector<column_t> &sort_idx, const idx_t count)
     : context(context), memory_per_thread(PhysicalOperator::GetMaxThreadMemory(context)), sort_idx(sort_idx),
       build_stage(PartitionSortStage::INIT), tasks_completed(0) {
 	// Sort the unfiltered indices by the orders
@@ -39,14 +39,15 @@ optional_ptr<LocalSortState> WindowMergeSortTree::AddLocalSort() {
 	return local_sorts.back().get();
 }
 
-WindowMergeSortTreeLocalState::WindowMergeSortTreeLocalState(WindowMergeSortTree &window_tree) : window_tree(window_tree) {
+WindowMergeSortTreeLocalState::WindowMergeSortTreeLocalState(WindowMergeSortTree &window_tree)
+    : window_tree(window_tree) {
 	sort_chunk.Initialize(window_tree.context, window_tree.global_sort->sort_layout.logical_types);
 	payload_chunk.Initialize(window_tree.context, window_tree.global_sort->payload_layout.GetTypes());
 	local_sort = window_tree.AddLocalSort();
 }
 
 void WindowMergeSortTreeLocalState::SinkChunk(DataChunk &chunk, const idx_t row_idx,
-                                          optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+                                              optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
 	//	Reference the sort columns
 	auto &sort_idx = window_tree.sort_idx;
 	for (column_t c = 0; c < sort_idx.size(); ++c) {
