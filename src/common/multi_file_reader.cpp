@@ -119,9 +119,6 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
 		options.hive_types_autocast = BooleanValue::Get(val);
-	} else if (loption == "column_mapping") {
-		auto mapping = val.GetValue<string>();
-		options.mapping = EnumUtil::FromString<MultiFileReaderColumnMapping>(mapping);
 	} else if (loption == "hive_types" || loption == "hive_type") {
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
@@ -474,18 +471,18 @@ void MultiFileReader::CreateNameMapping(const string &file_name,
                                         const MultiFileReaderBindData &bind_data, const string &initial_file,
                                         optional_ptr<MultiFileReaderGlobalState> global_state) {
 	switch (bind_data.mapping) {
-	case MultiFileReaderColumnMapping::BY_NAME: {
+	case MultiFileReaderColumnMappingMode::BY_NAME: {
 		CreateMappingByName(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
 		                    initial_file, global_state);
 		break;
 	}
-	case MultiFileReaderColumnMapping::BY_FIELD_ID: {
+	case MultiFileReaderColumnMappingMode::BY_FIELD_ID: {
 		CreateMappingByFieldId(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
 		                       initial_file, global_state);
 		break;
 	}
 	default: {
-		throw InternalException("Unsupported MultiFileReaderColumnMapping type");
+		throw InternalException("Unsupported MultiFileReaderColumnMappingMode type");
 	}
 	}
 }

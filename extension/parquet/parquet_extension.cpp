@@ -266,7 +266,7 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 	vector<string> schema_col_names;
 	vector<LogicalType> schema_col_types;
 	MultiFileReaderBindData bind_data;
-	bind_data.mapping = MultiFileReaderColumnMapping::BY_FIELD_ID;
+	bind_data.mapping = MultiFileReaderColumnMappingMode::BY_FIELD_ID;
 	schema_col_names.reserve(options.schema.size());
 	schema_col_types.reserve(options.schema.size());
 	for (const auto &column : options.schema) {

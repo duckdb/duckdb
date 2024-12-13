@@ -2273,22 +2273,22 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 48, "MetricsType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetMultiFileReaderColumnMappingValues() {
+const StringUtil::EnumStringLiteral *GetMultiFileReaderColumnMappingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MultiFileReaderColumnMapping::BY_NAME), "BY_NAME" },
-		{ static_cast<uint32_t>(MultiFileReaderColumnMapping::BY_FIELD_ID), "BY_FIELD_ID" }
+		{ static_cast<uint32_t>(MultiFileReaderColumnMappingMode::BY_NAME), "BY_NAME" },
+		{ static_cast<uint32_t>(MultiFileReaderColumnMappingMode::BY_FIELD_ID), "BY_FIELD_ID" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<MultiFileReaderColumnMapping>(MultiFileReaderColumnMapping value) {
-	return StringUtil::EnumToString(GetMultiFileReaderColumnMappingValues(), 2, "MultiFileReaderColumnMapping", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<MultiFileReaderColumnMappingMode>(MultiFileReaderColumnMappingMode value) {
+	return StringUtil::EnumToString(GetMultiFileReaderColumnMappingModeValues(), 2, "MultiFileReaderColumnMappingMode", static_cast<uint32_t>(value));
 }
 
 template<>
-MultiFileReaderColumnMapping EnumUtil::FromString<MultiFileReaderColumnMapping>(const char *value) {
-	return static_cast<MultiFileReaderColumnMapping>(StringUtil::StringToEnum(GetMultiFileReaderColumnMappingValues(), 2, "MultiFileReaderColumnMapping", value));
+MultiFileReaderColumnMappingMode EnumUtil::FromString<MultiFileReaderColumnMappingMode>(const char *value) {
+	return static_cast<MultiFileReaderColumnMappingMode>(StringUtil::StringToEnum(GetMultiFileReaderColumnMappingModeValues(), 2, "MultiFileReaderColumnMappingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {

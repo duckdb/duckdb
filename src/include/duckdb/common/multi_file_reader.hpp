@@ -103,7 +103,7 @@ struct MultiFileReaderBindData {
 	//! (optional) The schema set by the multi file reader
 	vector<MultiFileReaderColumnDefinition> schema;
 	//! The method used to map local -> global columns
-	MultiFileReaderColumnMapping mapping = MultiFileReaderColumnMapping::BY_NAME;
+	MultiFileReaderColumnMappingMode mapping = MultiFileReaderColumnMappingMode::BY_NAME;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
