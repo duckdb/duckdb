@@ -515,7 +515,7 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	if (parquet_options.file_row_number) {
 		for (auto &column : columns) {
 			auto &name = column.name;
-			if (StringUtil::CIEquals(name, "file_row_number") != DConstants::INVALID_INDEX) {
+			if (StringUtil::CIEquals(name, "file_row_number")) {
 				throw BinderException(
 				    "Using file_row_number option on file with column named file_row_number is not supported");
 			}

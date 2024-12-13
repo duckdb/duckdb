@@ -61,6 +61,7 @@ struct ParquetReadBindData : public TableFunctionData {
 	atomic<idx_t> chunk_count;
 	vector<string> names;
 	vector<LogicalType> types;
+	vector<MultiFileReaderColumnDefinition> columns;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
 
@@ -302,21 +303,13 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	// Mark the file in the file list we are scanning here
 	reader_data.file_list_idx = file_idx;
 
-	if (!bind_data.reader_bind.schema.empty()) {
-		// Schema was set explicitly
-		// Either by:
-		// 1. The MultiFileReader::Bind call
-		// 2. The 'schema' parquet option
-		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
-		                                              bind_data.reader_bind.schema, global_column_ids, table_filters,
-		                                              bind_data.file_list->GetFirstFile(), context, reader_state);
-	} else {
-		auto global_columns =
-		    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
-		bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
-		                                              global_columns, global_column_ids, table_filters,
-		                                              bind_data.file_list->GetFirstFile(), context, reader_state);
-	}
+	// 'reader_bind.schema' could be set explicitly by:
+	// 1. The MultiFileReader::Bind call
+	// 2. The 'schema' parquet option
+	auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
+	bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
+	                                              global_columns, global_column_ids, table_filters,
+	                                              bind_data.file_list->GetFirstFile(), context, reader_state);
 }
 
 static bool GetBooleanArgument(const pair<string, vector<Value>> &option) {
@@ -503,6 +496,7 @@ public:
 			result->table_columns = names;
 		}
 		result->parquet_options = parquet_options;
+		result->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 		return std::move(result);
 	}
 
@@ -614,17 +608,10 @@ public:
 		auto &file_list = result->file_list;
 		file_list.InitializeScan(result->file_list_scan);
 
-		if (bind_data.reader_bind.schema.empty()) {
-			auto global_columns =
-			    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
-			result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
-			    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, global_columns,
-			    input.column_indexes);
-		} else {
-			result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
-			    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list,
-			    bind_data.reader_bind.schema, input.column_indexes);
-		}
+		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
+		result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
+		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, global_columns,
+		    input.column_indexes);
 
 		if (file_list.IsEmpty()) {
 			result->readers = {};
