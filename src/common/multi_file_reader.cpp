@@ -303,13 +303,13 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileRe
 	return nullptr;
 }
 
-void MultiFileReader::CreateMappingByName(const string &file_name,
-                                          const vector<MultiFileReaderColumnDefinition> &local_columns,
-                                          const vector<MultiFileReaderColumnDefinition> &global_columns,
-                                          const vector<ColumnIndex> &global_column_ids,
-                                          MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
-                                          const string &initial_file,
-                                          optional_ptr<MultiFileReaderGlobalState> global_state) {
+void MultiFileReader::CreateColumnMappingByName(const string &file_name,
+                                                const vector<MultiFileReaderColumnDefinition> &local_columns,
+                                                const vector<MultiFileReaderColumnDefinition> &global_columns,
+                                                const vector<ColumnIndex> &global_column_ids,
+                                                MultiFileReaderData &reader_data,
+                                                const MultiFileReaderBindData &bind_data, const string &initial_file,
+                                                optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// we have expected types: create a map of name -> column index
 	case_insensitive_map_t<idx_t> name_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
@@ -334,7 +334,7 @@ void MultiFileReader::CreateMappingByName(const string &file_name,
 		auto global_id = global_idx.GetPrimaryIndex();
 		if (global_id >= global_columns.size()) {
 			throw InternalException(
-			    "MultiFileReader::CreateMappingByName - global_id is out of range in global_types for this file");
+			    "MultiFileReader::CreateColumnMappingByName - global_id is out of range in global_types for this file");
 		}
 		auto &global_name = global_columns[global_id].name;
 		auto entry = name_map.find(global_name);
@@ -375,13 +375,13 @@ void MultiFileReader::CreateMappingByName(const string &file_name,
 	reader_data.empty_columns = reader_data.column_indexes.empty();
 }
 
-void MultiFileReader::CreateMappingByFieldId(const string &file_name,
-                                             const vector<MultiFileReaderColumnDefinition> &local_columns,
-                                             const vector<MultiFileReaderColumnDefinition> &global_columns,
-                                             const vector<ColumnIndex> &global_column_ids,
-                                             MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
-                                             const string &initial_file,
-                                             optional_ptr<MultiFileReaderGlobalState> global_state) {
+void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
+                                                   const vector<MultiFileReaderColumnDefinition> &local_columns,
+                                                   const vector<MultiFileReaderColumnDefinition> &global_columns,
+                                                   const vector<ColumnIndex> &global_column_ids,
+                                                   MultiFileReaderData &reader_data,
+                                                   const MultiFileReaderBindData &bind_data, const string &initial_file,
+                                                   optional_ptr<MultiFileReaderGlobalState> global_state) {
 #ifdef DEBUG
 	//! Make sure the global columns have field_ids to match on
 	for (auto &column : global_columns) {
@@ -464,21 +464,22 @@ void MultiFileReader::CreateMappingByFieldId(const string &file_name,
 	reader_data.empty_columns = reader_data.column_ids.empty();
 }
 
-void MultiFileReader::CreateNameMapping(const string &file_name,
-                                        const vector<MultiFileReaderColumnDefinition> &local_columns,
-                                        const vector<MultiFileReaderColumnDefinition> &global_columns,
-                                        const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
-                                        const MultiFileReaderBindData &bind_data, const string &initial_file,
-                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
+void MultiFileReader::CreateColumnMapping(const string &file_name,
+                                          const vector<MultiFileReaderColumnDefinition> &local_columns,
+                                          const vector<MultiFileReaderColumnDefinition> &global_columns,
+                                          const vector<ColumnIndex> &global_column_ids,
+                                          MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
+                                          const string &initial_file,
+                                          optional_ptr<MultiFileReaderGlobalState> global_state) {
 	switch (bind_data.mapping) {
 	case MultiFileReaderColumnMappingMode::BY_NAME: {
-		CreateMappingByName(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
-		                    initial_file, global_state);
+		CreateColumnMappingByName(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
+		                          initial_file, global_state);
 		break;
 	}
 	case MultiFileReaderColumnMappingMode::BY_FIELD_ID: {
-		CreateMappingByFieldId(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
-		                       initial_file, global_state);
+		CreateColumnMappingByFieldId(file_name, local_columns, global_columns, global_column_ids, reader_data,
+		                             bind_data, initial_file, global_state);
 		break;
 	}
 	default: {
@@ -495,8 +496,8 @@ void MultiFileReader::CreateMapping(const string &file_name,
                                     const MultiFileReaderBindData &bind_data,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// copy global columns and inject any different defaults
-	CreateNameMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data, initial_file,
-	                  global_state);
+	CreateColumnMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
+	                    initial_file, global_state);
 	CreateFilterMap(global_columns, filters, reader_data, global_state);
 }
 
