@@ -1,0 +1,116 @@
+# name: test/sql/index/art/constraints/test_art_tx_updates_pk_col.test
+# description: Test UPDATE on the PK column with different connections and VARCHAR payload.
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'first payload');
+
+# Keep one connection open to ensure we still have the old value in the ART.
+
+statement ok old
+BEGIN;
+
+statement ok old
+INSERT INTO tbl VALUES (5, 'old payload');
+
+# con1 open.
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+UPDATE tbl SET id = 3 WHERE id = 1;
+
+statement ok con1
+INSERT INTO tbl VALUES (1, 'new payload');
+
+# Ensure that we can still see the old value.
+
+query III
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
+----
+1	first payload	0
+
+# Locally update the payload.
+
+statement ok
+BEGIN;
+
+statement ok
+UPDATE tbl SET payload = 'second payload' WHERE id = 1;
+
+# Transaction-local state.
+
+query II
+SELECT id, payload FROM tbl WHERE id = 1;
+----
+1	second payload
+
+# Transaction-local state.
+
+query II con1
+SELECT id, payload FROM tbl WHERE id = 3;
+----
+3	first payload
+
+query II con1
+SELECT id, payload FROM tbl WHERE id = 1;
+----
+1	new payload
+
+statement ok con1
+COMMIT;
+
+# We only see the local changes.
+
+query III
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
+----
+1	second payload	0
+
+query III
+SELECT id, payload, rowid FROM tbl WHERE id = 3;
+----
+
+# This runs into a write-write conflict on commit and rolls back.
+
+statement ok
+COMMIT;
+
+# The result are the committed changes of con1.
+
+query III
+SELECT id, payload, rowid FROM tbl WHERE id = 3;
+----
+3	first payload	1
+
+query III
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
+----
+1	new payload	2
+
+# Ensure that the old transaction can still see the old storage.
+
+query III old
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
+----
+1	first payload	0
+
+statement ok old
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl ORDER BY ALL;
+----
+1	new payload	2
+3	first payload	1
+5	old payload	3

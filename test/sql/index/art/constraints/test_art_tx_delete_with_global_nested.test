@@ -1,0 +1,62 @@
+# name: test/sql/index/art/constraints/test_art_tx_delete_with_global_nested.test
+# description: Test DELETE + INSERT while the global ART has nested leaves.
+# group: [constraints]
+
+load __TEST_DIR__/test_art_tx_delete_with_global_nested.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR[]);
+
+statement ok
+INSERT INTO tbl VALUES (1, ['first payload']);
+
+# Keep one connection open to ensure we still have the old value in the ART.
+
+statement ok old
+BEGIN;
+
+# Now update the ART via DELETE + INSERT.
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+DELETE FROM tbl WHERE id = 1;
+
+statement ok con1
+INSERT INTO tbl VALUES (1, ['con1 payload']);
+
+statement ok con1
+COMMIT;
+
+# The ART leaf contains both the new and the old row ID.
+
+statement ok con2
+BEGIN
+
+statement ok con2
+DELETE FROM tbl WHERE id = 1;
+
+statement ok con2
+INSERT INTO tbl VALUES (1, ['con2 payload']);
+
+# Unique indexes can have a maximum of two row IDs in their leaves.
+
+statement error con2
+COMMIT;
+----
+<REGEX>:TransactionContext Error.*write-write conflict on key.*
+
+statement ok old
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
+----
+1	[con1 payload]	1

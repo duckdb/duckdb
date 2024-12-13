@@ -123,12 +123,20 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 	}
 }
 
-void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,
+void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel,
                            idx_t sel_count) {
 	if (!function.get().select) {
 		throw InternalException("ColumnSegment::Select not implemented for this compression method");
 	}
 	function.get().select(*this, state, scan_count, result, sel, sel_count);
+}
+
+void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,
+                           idx_t &sel_count, const TableFilter &filter) {
+	if (!function.get().filter) {
+		throw InternalException("ColumnSegment::Filter not implemented for this compression method");
+	}
+	function.get().filter(*this, state, scan_count, result, sel, sel_count, filter);
 }
 
 void ColumnSegment::Skip(ColumnScanState &state) {
@@ -438,7 +446,6 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<ConstantFilter>();
-		// the inplace loops take the result as the last parameter
 		switch (vector.GetType().InternalType()) {
 		case PhysicalType::UINT8: {
 			auto predicate = UTinyIntValue::Get(constant_filter.constant);

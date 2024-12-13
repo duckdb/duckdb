@@ -412,6 +412,22 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
+	if (param == "disk_space") {
+		if (params.size() != 2) {
+			parser.Fail("require disk_space requires a parameter");
+		}
+		// require a minimum amount of disk space
+		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto available_space = FileSystem::GetAvailableDiskSpace(".");
+		if (!available_space.IsValid()) {
+			return RequireResult::MISSING;
+		}
+		if (available_space.GetIndex() < required_limit) {
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
 	if (param == "vector_size") {
 		if (params.size() != 2) {
 			parser.Fail("require vector_size requires a parameter");

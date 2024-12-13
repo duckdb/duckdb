@@ -410,7 +410,7 @@ static bool TryGetBoundColumnIndex(const vector<ColumnIndex> &column_ids, const 
 	}
 	case ExpressionType::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.name == "struct_extract") {
+		if (func.function.name == "struct_extract" || func.function.name == "struct_extract_at") {
 			auto &child_expr = func.children[0];
 			return TryGetBoundColumnIndex(column_ids, *child_expr, result);
 		}
@@ -426,12 +426,15 @@ static bool TryGetBoundColumnIndex(const vector<ColumnIndex> &column_ids, const 
 static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, unique_ptr<TableFilter> inner_filter) {
 	if (expr.type == ExpressionType::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
+		auto &child_expr = func.children[0];
+		auto child_value = func.children[1]->Cast<BoundConstantExpression>().value;
 		if (func.function.name == "struct_extract") {
-			auto &child_expr = func.children[0];
-			auto child_name = func.children[1]->Cast<BoundConstantExpression>().value.GetValue<string>();
+			string child_name = child_value.GetValue<string>();
 			auto child_index = StructType::GetChildIndexUnsafe(func.children[0]->return_type, child_name);
-
 			inner_filter = make_uniq<StructFilter>(child_index, child_name, std::move(inner_filter));
+			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
+		} else if (func.function.name == "struct_extract_at") {
+			inner_filter = make_uniq<StructFilter>(child_value.GetValue<idx_t>() - 1, "", std::move(inner_filter));
 			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
 		}
 	}
@@ -623,9 +626,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				continue;
 			}
 
-			if (!type.IsIntegral()) {
-				continue;
-			}
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			vector<Value> in_list;
@@ -634,7 +634,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				D_ASSERT(!const_value_expr.value.IsNull());
 				in_list.push_back(const_value_expr.value);
 			}
-			if (IsDenseRange(in_list)) {
+			if (type.IsIntegral() && IsDenseRange(in_list)) {
 				// dense range! turn this into x >= min AND x <= max
 				// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
 				auto lower_bound =
@@ -698,8 +698,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 						break;
 					}
 
-					if (const_val->value.type().IsTemporal() ||
-					    const_val->value.type().id() == LogicalTypeId::VARCHAR) {
+					if (const_val->value.type().IsTemporal()) {
 						column_id.SetInvalid();
 						break;
 					}

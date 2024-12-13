@@ -213,6 +213,8 @@ public:
 	CatalogEntryRetriever &EntryRetriever() {
 		return entry_retriever;
 	}
+	//! Returns a ColumnRefExpression after it was resolved (i.e. past the STAR expression/USING clauses)
+	static optional_ptr<ParsedExpression> GetResolvedColumnExpression(ParsedExpression &root_expr);
 
 	void SetCanContainNulls(bool can_contain_nulls);
 	void SetAlwaysRequireRebind();

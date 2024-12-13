@@ -42,6 +42,6 @@ COMMIT
 statement error
 INSERT INTO test VALUES (1, 1), (1, 1)
 ----
-<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violated.*
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
 
 

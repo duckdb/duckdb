@@ -283,7 +283,7 @@ public:
 	//! Get JSON value using JSON path query (unsafe)
 	static inline yyjson_val *GetUnsafe(yyjson_val *val, const char *ptr, const idx_t &len) {
 		if (len == 0) {
-			return nullptr;
+			return val;
 		}
 		switch (*ptr) {
 		case '/':
