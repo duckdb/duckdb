@@ -205,6 +205,9 @@ idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
 
 void GroupedAggregateHashTable::Verify() {
 #ifdef DEBUG
+	if (skip_lookups) {
+		return;
+	}
 	idx_t total_count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
 		const auto &entry = entries[i];

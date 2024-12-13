@@ -476,7 +476,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		static constexpr double UNIQUE_PERCENTAGE_THRESHOLD = 0.95;
 		const auto unique_percentage =
 		    static_cast<double>(ht.GetPartitionedData().Count()) / static_cast<double>(ht.GetSinkCount());
-		if (ht.GetSinkCount() > SKIP_LOOKUP_THRESHOLD && unique_percentage < UNIQUE_PERCENTAGE_THRESHOLD) {
+		if (ht.GetSinkCount() > SKIP_LOOKUP_THRESHOLD && unique_percentage > UNIQUE_PERCENTAGE_THRESHOLD) {
 			ht.SkipLookups();
 		}
 	}
