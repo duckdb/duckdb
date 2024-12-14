@@ -101,4 +101,8 @@ optional_ptr<CompressionFunction> DBConfig::GetCompressionFunction(CompressionTy
 	return LoadCompressionFunction(*compression_functions, type, physical_type);
 }
 
+CompressionFunction &DBConfig::GetEmptyValidity() {
+	return *empty_validity;
+}
+
 } // namespace duckdb

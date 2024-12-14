@@ -35,6 +35,10 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 
 	if (block_id == INVALID_BLOCK) {
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+	} else if (type.id() == LogicalTypeId::VALIDITY && compression_type == CompressionType::COMPRESSION_AUTO) {
+		// The validity is not actually stored in this block, this is just a dummy
+		function = config.GetEmptyValidity();
+		block = block_manager.RegisterBlock(block_id);
 	} else {
 		function = config.GetCompressionFunction(compression_type, type.InternalType());
 		block = block_manager.RegisterBlock(block_id);

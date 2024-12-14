@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -15,9 +16,13 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
       checkpoint_info(checkpoint_info_p) {
 
 	auto &config = DBConfig::GetConfig(GetDatabase());
-	auto functions = config.GetCompressionFunctions(GetType().InternalType());
-	for (auto &func : functions) {
-		compression_functions.push_back(&func.get());
+	if (is_validity && col_data_p.IsEmptyValidity()) {
+		compression_functions.push_back(config.GetEmptyValidity());
+	} else {
+		auto functions = config.GetCompressionFunctions(GetType().InternalType());
+		for (auto &func : functions) {
+			compression_functions.push_back(&func.get());
+		}
 	}
 }
 

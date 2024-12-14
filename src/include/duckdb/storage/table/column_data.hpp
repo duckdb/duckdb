@@ -81,6 +81,26 @@ public:
 	idx_t GetAllocationSize() const {
 		return allocation_size;
 	}
+	bool HasCompressionFunction() const {
+		return compression != nullptr;
+	}
+	const CompressionFunction &GetCompressionFunction() const {
+		D_ASSERT(HasCompressionFunction());
+		return *compression;
+	}
+
+	bool IsEmptyValidity() const {
+		if (type.id() != LogicalTypeId::VALIDITY) {
+			return false;
+		}
+		if (!parent->compression) {
+			return false;
+		}
+		if (parent->compression->validity != CompressionValidity::NO_VALIDITY_REQUIRED) {
+			return false;
+		}
+		return true;
+	}
 
 	virtual void SetStart(idx_t new_start);
 	//! The root type of the column
