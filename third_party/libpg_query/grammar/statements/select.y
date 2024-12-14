@@ -4029,7 +4029,7 @@ opt_replace_list: REPLACE '(' replace_list_opt_comma ')'		{ $$ = $3; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
-rename_list_el: ColId AS ColId								{ $$ = list_make2($1, $3); }
+rename_list_el: except_name AS ColId						{ $$ = list_make2($1, $3); }
 		;
 
 rename_list:
