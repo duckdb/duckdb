@@ -522,7 +522,6 @@ public:
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
 		segment = std::move(compressed_segment);
-		segment->function = function;
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		segment_handle = buffer_manager.Pin(segment->block);

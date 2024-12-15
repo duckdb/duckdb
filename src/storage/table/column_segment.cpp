@@ -228,8 +228,12 @@ void ColumnSegment::ConvertToPersistent(optional_ptr<BlockManager> block_manager
 	offset = 0;
 
 	if (block_id == INVALID_BLOCK) {
-		// constant block: reset the block buffer
+		// constant block: no need to write anything to disk besides the stats
+		// set up the compression function to constant
 		D_ASSERT(stats.statistics.IsConstant());
+		auto &config = DBConfig::GetConfig(db);
+		function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+		// reset the block buffer
 		block.reset();
 	} else {
 		D_ASSERT(!stats.statistics.IsConstant());
@@ -548,6 +552,10 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");
 	}
+}
+
+const CompressionFunction &ColumnSegment::GetCompressionFunction() {
+	return function.get();
 }
 
 } // namespace duckdb
