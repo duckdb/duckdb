@@ -174,7 +174,7 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 		auto child_indexes = VerifyInternal(*child);
 		for (auto index : child_indexes) {
 			D_ASSERT(index != DConstants::INVALID_INDEX);
-			const bool is_new = result.emplace(index).second;
+			const bool is_new = result.insert(index).second;
 			if (!is_new) {
 				throw InternalException("Duplicate table index \"%lld\" found", index);
 			}
@@ -183,7 +183,7 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 	auto indexes = op.GetTableIndex();
 	for (auto index : indexes) {
 		D_ASSERT(index != DConstants::INVALID_INDEX);
-		const bool is_new = result.emplace(index).second;
+		const bool is_new = result.insert(index).second;
 		if (!is_new) {
 			throw InternalException("Duplicate table index \"%lld\" found", index);
 		}

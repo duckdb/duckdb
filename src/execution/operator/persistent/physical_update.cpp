@@ -160,7 +160,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	for (idx_t i = 0; i < update_chunk.size(); i++) {
 		auto row_id = row_id_data[i];
-		const auto is_new = g_state.updated_rows.emplace(row_id).second;
+		const auto is_new = g_state.updated_rows.insert(row_id).second;
 		if (is_new) {
 			sel.set_index(update_count++, i);
 		}
