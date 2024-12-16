@@ -63,8 +63,16 @@ public:
 		Logger::Get(log_context_source).Log(log_type, log_level, log_message);
 	}
 	template <class T>
+	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, const string &log_message) {
+		Logger::Get(log_context_source).Log(log_type, log_level, log_message.c_str());
+	}
+	template <class T>
 	static void Log(T &log_context_source, LogLevel log_level, const char *log_message) {
 		Logger::Get(log_context_source).Log(log_level, log_message);
+	}
+	template <class T>
+	static void Log(T &log_context_source, LogLevel log_level, const string &log_message) {
+		Logger::Get(log_context_source).Log(log_level, log_message.c_str());
 	}
 	//! Logger::Log with callback
 	template <class T>

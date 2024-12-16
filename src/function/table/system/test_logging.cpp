@@ -37,6 +37,8 @@ static unique_ptr<FunctionData> TestLoggingBind(ClientContext &context, TableFun
 			res->logger = param.second.GetValue<string>();
 		} else if (param_name == "level") {
 			res->level = EnumUtil::FromString<LogLevel>(param.second.GetValue<string>());
+		} else if (param_name == "log_type") {
+			res->log_type = param.second.GetValue<string>();
 		} else {
 			throw InvalidInputException("Unknown input passed: '%s'", param_name);
 		}

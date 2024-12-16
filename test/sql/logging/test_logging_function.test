@@ -13,16 +13,16 @@ statement ok
 set logging_level='info';
 
 statement ok
-FROM test_logging(3, log_message='hello from the global_log', logger='global', level='info')
+FROM test_logging(3, log_message='hello from the global_log', logger='global', level='info', log_type='global_type')
 
 statement ok
-FROM test_logging(3, log_message='hello from the client_context', logger='client_context', level='info')
+FROM test_logging(3, log_message='hello from the client_context', logger='client_context', level='info', log_type='client_context_type')
 
 statement ok
-FROM test_logging(3, log_message='hello from the thread_context', logger='thread_local', level='info')
+FROM test_logging(3, log_message='hello from the thread_context', logger='thread_local', level='info', log_type='thread_type')
 
 statement ok
-FROM test_logging(3, log_message='hello from the file_opener', logger='file_opener', level='info')
+FROM test_logging(3, log_message='hello from the file_opener', logger='file_opener', level='info', log_type='opener_type')
 
 statement ok
 from duckdb_logs
@@ -30,15 +30,15 @@ from duckdb_logs
 query IIIII
 SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by timestamp
 ----
-default	INFO	hello from the global_log	DATABASE	NULL
-default	INFO	hello from the global_log	DATABASE	NULL
-default	INFO	hello from the global_log	DATABASE	NULL
-default	INFO	hello from the client_context	CONNECTION	NULL
-default	INFO	hello from the client_context	CONNECTION	NULL
-default	INFO	hello from the client_context	CONNECTION	NULL
-default	INFO	hello from the thread_context	THREAD	0
-default	INFO	hello from the thread_context	THREAD	0
-default	INFO	hello from the thread_context	THREAD	0
-default	INFO	hello from the file_opener	CONNECTION	NULL
-default	INFO	hello from the file_opener	CONNECTION	NULL
-default	INFO	hello from the file_opener	CONNECTION	NULL
+global_type	INFO	hello from the global_log	DATABASE	NULL
+global_type	INFO	hello from the global_log	DATABASE	NULL
+global_type	INFO	hello from the global_log	DATABASE	NULL
+client_context_type	INFO	hello from the client_context	CONNECTION	NULL
+client_context_type	INFO	hello from the client_context	CONNECTION	NULL
+client_context_type	INFO	hello from the client_context	CONNECTION	NULL
+thread_type	INFO	hello from the thread_context	THREAD	0
+thread_type	INFO	hello from the thread_context	THREAD	0
+thread_type	INFO	hello from the thread_context	THREAD	0
+opener_type	INFO	hello from the file_opener	CONNECTION	NULL
+opener_type	INFO	hello from the file_opener	CONNECTION	NULL
+opener_type	INFO	hello from the file_opener	CONNECTION	NULL
