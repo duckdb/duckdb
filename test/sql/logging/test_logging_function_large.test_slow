@@ -1,0 +1,37 @@
+# name: test/sql/logging/test_logging_function_large.test
+# description: Use test_logging function with 1 million log entries
+# group: [logging]
+
+query IIIIIIII
+from duckdb_logs
+----
+
+statement ok
+set enable_logging=true;
+
+statement ok
+set logging_level='debugging';
+
+loop i 0 10000
+
+statement ok
+FROM test_logging(25, log_message='hi_global', logger='global')
+
+statement ok
+FROM test_logging(25, log_message='hi_client', logger='client_context')
+
+statement ok
+FROM test_logging(25, log_message='hi_thread', logger='thread_local')
+
+statement ok
+FROM test_logging(25, log_message='hi_file', logger='file_opener')
+
+endloop
+
+query II
+SELECT count(*), message FROM duckdb_logs where starts_with(message, 'hi_') group by message order by message
+----
+250000	hi_client
+250000	hi_file
+250000	hi_global
+250000	hi_thread
