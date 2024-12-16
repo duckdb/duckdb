@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
@@ -276,6 +277,9 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		RelationStats child_stats;
 		auto child_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_WINDOW) {
+			return true;
+		}
 		// the extracted cardinality should be set for window
 		if (!datasource_filters.empty()) {
 			child_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(child_stats.cardinality) *
