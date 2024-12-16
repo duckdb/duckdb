@@ -50,6 +50,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["filename"] = LogicalType::ANY;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["cache_union_readers"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
 }
@@ -116,6 +117,8 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
+	} else if (loption == "cache_union_readers") {
+		options.cache_union_readers = BooleanValue::Get(val);
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
 		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (loption == "hive_types" || loption == "hive_type") {
@@ -476,6 +479,7 @@ void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(hive_partitioning));
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
+	bind_info.InsertOption("cache_union_readers", Value::BOOLEAN(cache_union_readers));
 	bind_info.InsertOption("hive_types_autocast", Value::BOOLEAN(hive_types_autocast));
 }
 

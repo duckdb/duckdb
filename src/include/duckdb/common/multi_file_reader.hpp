@@ -226,7 +226,10 @@ struct MultiFileReader {
 		BindOptions(options.file_options, files, union_col_types, union_col_names, bind_data);
 		names = union_col_names;
 		return_types = union_col_types;
-		result.Initialize(context, result.union_readers[0]);
+		if (!result.union_readers.empty()) {
+			D_ASSERT(options.file_options.cache_union_readers);
+			result.Initialize(context, result.union_readers[0]);
+		}
 		D_ASSERT(names.size() == return_types.size());
 		return bind_data;
 	}
@@ -235,6 +238,12 @@ struct MultiFileReader {
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
 	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options) {
 		if (options.file_options.union_by_name) {
+			if (!options.file_options.cache_union_readers) {
+				// Have to initialize first reader if we're not caching union readers
+				shared_ptr<READER_CLASS> reader;
+				reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
+				result.Initialize(std::move(reader));
+			}
 			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
 		} else {
 			shared_ptr<READER_CLASS> reader;

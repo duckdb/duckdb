@@ -22,6 +22,7 @@ struct MultiFileReaderOptions {
 	bool hive_partitioning = false;
 	bool auto_detect_hive_partitioning = true;
 	bool union_by_name = false;
+	bool cache_union_readers = true;
 	bool hive_types_autocast = true;
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
