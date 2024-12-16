@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/afl/test_afl_null_padding.test
+# description: Test AFL CSV Files work with null padding set
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+loop i 1 46
+
+statement maybe
+FROM read_csv('data/csv/afl/null_padding/${i}.csv', null_padding=true)
+----
+
+endloop
