@@ -330,23 +330,25 @@ list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &co
 			D_ASSERT(insert_count == 1);
 			vector<string> readable_numbers;
 			readable_numbers.resize(column_count);
-			bool any_readable = false;
+			bool all_readable = true;
 			for (idx_t c = 0; c < column_count; c++) {
 				if (!result.Types()[c].IsNumeric()) {
 					// not a numeric type - cannot summarize
-					continue;
+					all_readable = false;
+					break;
 				}
 				// add a readable rendering of the value (i.e. "1234567" becomes "1.23 million")
 				// we only add the rendering if the string is big
 				auto numeric_val = insert_result.data[c].GetValue(0).ToString();
 				readable_numbers[c] = TryFormatLargeNumber(numeric_val);
-				if (!readable_numbers[c].empty()) {
-					readable_numbers[c] = "(" + readable_numbers[c] + ")";
-					any_readable = true;
+				if (readable_numbers[c].empty()) {
+					all_readable = false;
+					break;
 				}
+				readable_numbers[c] = "(" + readable_numbers[c] + ")";
 			}
 			insert_result.Reset();
-			if (any_readable) {
+			if (all_readable) {
 				for (idx_t c = 0; c < column_count; c++) {
 					insert_result.data[c].SetValue(0, Value(readable_numbers[c]));
 				}

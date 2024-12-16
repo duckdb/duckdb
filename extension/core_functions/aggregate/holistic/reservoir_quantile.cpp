@@ -39,7 +39,7 @@ struct ReservoirQuantileState {
 	void FillReservoir(idx_t sample_size, T element) {
 		if (pos < sample_size) {
 			v[pos++] = element;
-			r_samp->InitializeReservoir(pos, len);
+			r_samp->InitializeReservoirWeights(pos, len);
 		} else {
 			D_ASSERT(r_samp->next_index_to_sample >= r_samp->num_entries_to_skip_b4_next_sample);
 			if (r_samp->next_index_to_sample == r_samp->num_entries_to_skip_b4_next_sample) {

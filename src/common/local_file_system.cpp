@@ -319,9 +319,8 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 #endif
 #if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
 		// OSX does not have O_DIRECT, instead we need to use fcntl afterwards to support direct IO
-		open_flags |= O_SYNC;
 #else
-		open_flags |= O_DIRECT | O_SYNC;
+		open_flags |= O_DIRECT;
 #endif
 	}
 
@@ -350,15 +349,17 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		}
 		throw IOException("Cannot open file \"%s\": %s", {{"errno", std::to_string(errno)}}, path, strerror(errno));
 	}
-	// #if defined(__DARWIN__) || defined(__APPLE__)
-	// 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
-	// 		// OSX requires fcntl for Direct IO
-	// 		rc = fcntl(fd, F_NOCACHE, 1);
-	// 		if (fd == -1) {
-	// 			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
-	// 		}
-	// 	}
-	// #endif
+
+#if defined(__DARWIN__) || defined(__APPLE__)
+	if (flags.DirectIO()) {
+		// OSX requires fcntl for Direct IO
+		rc = fcntl(fd, F_NOCACHE, 1);
+		if (rc == -1) {
+			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
+		}
+	}
+#endif
+
 	if (flags.Lock() != FileLockType::NO_LOCK) {
 		// set lock on file
 		// but only if it is not an input/output stream

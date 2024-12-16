@@ -232,6 +232,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		// already a dictionary, slice the current dictionary
 		auto &current_sel = DictionaryVector::SelVector(*this);
 		auto dictionary_size = DictionaryVector::DictionarySize(*this);
+		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto sliced_dictionary = current_sel.Slice(sel, count);
 		buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary));
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
@@ -242,7 +243,9 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 			auxiliary = make_buffer<VectorChildBuffer>(std::move(new_child));
 		}
 		if (dictionary_size.IsValid()) {
-			this->buffer->Cast<DictionaryBuffer>().SetDictionarySize(dictionary_size.GetIndex());
+			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
+			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
+			dict_buffer.SetDictionaryId(std::move(dictionary_id));
 		}
 		return;
 	}
@@ -282,6 +285,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 		// check if we have a cached entry
 		auto &current_sel = DictionaryVector::SelVector(*this);
 		auto dictionary_size = DictionaryVector::DictionarySize(*this);
+		auto dictionary_id = DictionaryVector::DictionaryId(*this);
 		auto target_data = current_sel.data();
 		auto entry = cache.cache.find(target_data);
 		if (entry != cache.cache.end()) {
@@ -293,7 +297,9 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 			cache.cache[target_data] = this->buffer;
 		}
 		if (dictionary_size.IsValid()) {
-			this->buffer->Cast<DictionaryBuffer>().SetDictionarySize(dictionary_size.GetIndex());
+			auto &dict_buffer = buffer->Cast<DictionaryBuffer>();
+			dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
+			dict_buffer.SetDictionaryId(std::move(dictionary_id));
 		}
 	} else {
 		Slice(sel, count);
@@ -595,9 +601,16 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str_compressed = reinterpret_cast<string_t *>(data)[index];
 		auto decoder = FSSTVector::GetDecoder(*vector);
 		auto &decompress_buffer = FSSTVector::GetDecompressBuffer(*vector);
-		Value result = FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(),
-		                                               decompress_buffer);
-		return result;
+		auto string_val = FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(),
+		                                                  decompress_buffer);
+		switch (vector->GetType().id()) {
+		case LogicalTypeId::VARCHAR:
+			return Value(std::move(string_val));
+		case LogicalTypeId::BLOB:
+			return Value::BLOB_RAW(string_val);
+		default:
+			throw InternalException("Unsupported vector type for FSST vector");
+		}
 	}
 
 	switch (vector->GetType().id()) {

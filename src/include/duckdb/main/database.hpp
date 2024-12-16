@@ -59,7 +59,7 @@ public:
 	DUCKDB_API ValidChecker &GetValidChecker();
 	DUCKDB_API void SetExtensionLoaded(const string &extension_name, ExtensionInstallInfo &install_info);
 
-	DUCKDB_API const duckdb_ext_api_v0 GetExtensionAPIV0();
+	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
 
 	idx_t NumberOfThreads();
 
@@ -95,7 +95,7 @@ private:
 	unique_ptr<DatabaseFileSystem> db_file_system;
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 
-	duckdb_ext_api_v0 (*create_api_v0)();
+	duckdb_ext_api_v1 (*create_api_v1)();
 };
 
 //! The database object. This object holds the catalog and all the

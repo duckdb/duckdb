@@ -631,6 +631,12 @@
         "id": 217,
         "name": "expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 218,
+        "name": "update_is_del_and_insert",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": ["$ClientContext", "table_info"]

@@ -26,3 +26,17 @@ query II
 EXPLAIN SELECT * FROM t1 where rowid = 200000;
 ----
 physical_plan	<REGEX>:.*Filters: rowid=200000.*
+
+query I
+SELECT * FROM t1 where rowid IN (SELECT rowid FROM t1 ORDER BY rowid DESC LIMIT 10) ORDER BY rowid;
+----
+250090
+250091
+250092
+250093
+250094
+250095
+250096
+250097
+250098
+250099

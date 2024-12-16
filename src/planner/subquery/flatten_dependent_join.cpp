@@ -750,6 +750,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		throw BinderException("Sampling in correlated subqueries is not (yet) supported");
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		throw BinderException("Positional join in correlated subqueries is not (yet) supported");
 	default:
 		throw InternalException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type));
 	}

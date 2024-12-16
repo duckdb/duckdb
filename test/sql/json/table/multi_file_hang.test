@@ -1,0 +1,15 @@
+# name: test/sql/json/table/multi_file_hang.test
+# description: Test that we do not hang when reading multiple JSON files while only sampling one
+# group: [table]
+
+require json
+
+# needs more threads than the number of files for this to happen
+statement ok
+set threads=8
+
+# only happened with these parameters
+statement error
+from read_json('data/json/multi_file_hang/*.json', sample_size=1, maximum_sample_files=1)
+----
+Invalid Input Error: JSON transform error

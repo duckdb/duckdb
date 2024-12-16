@@ -253,6 +253,7 @@ protected:
 		return level;
 	}
 
+public:
 	void Print() const {
 		std::ostringstream out;
 		const char *separator = "    ";

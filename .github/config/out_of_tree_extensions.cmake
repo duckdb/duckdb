@@ -15,8 +15,16 @@
 #  VCPKG_TOOLCHAIN_PATH=~/vcpkg/scripts/buildsystems/vcpkg.cmake
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
+################# HTTPFS
+duckdb_extension_load(httpfs
+    LOAD_TESTS
+    GIT_URL https://github.com/duckdb/duckdb_httpfs
+    GIT_TAG 92867fce5a6e90b9a6803fab2b196c00cc11e46c
+    INCLUDE_DIR extension/httpfs/include
+    )
+
 ################# ARROW
-if (NOT MINGW)
+if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
@@ -26,11 +34,12 @@ if (NOT MINGW)
 endif()
 
 ################## AWS
-if (NOT MINGW)
+if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_aws
             GIT_TAG f743d4b3c2faecda15498d0219a1727ad6d62b5b
+            APPLY_PATCHES
             )
 endif()
 
@@ -39,7 +48,7 @@ endif()
 ### build on a side
 if (NO)
 ################# AZURE
-if (NOT MINGW)
+if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
@@ -52,7 +61,7 @@ endif()
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
-if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux")
+if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
     duckdb_extension_load(delta
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_delta
@@ -65,8 +74,8 @@ endif()
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb_excel
-    GIT_TAG 0e99dc789038c7af658e30d579b818473a6d6ea8
-    INCLUDE_DIR extension/excel/include
+    GIT_TAG e243577956f36a898d5485189e5288839c2c4b73
+    INCLUDE_DIR src/excel/include
     )
 
 ################# ICEBERG
@@ -77,7 +86,7 @@ duckdb_extension_load(excel
 #    set(LOAD_ICEBERG_TESTS "")
 #endif()
 #
-#if (NOT MINGW)
+#if (NOT MINGW AND NOT ${WASM_ENABLED})
 #    duckdb_extension_load(iceberg
 #            ${LOAD_ICEBERG_TESTS}
 #            GIT_URL https://github.com/duckdb/duckdb_iceberg
@@ -93,12 +102,13 @@ duckdb_extension_load(inet
     GIT_TAG 51d7ad789f34eecb36a2071bac5aef0e12747d70
     INCLUDE_DIR src/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER
 # Note: tests for postgres_scanner are currently not run. All of them need a postgres server running. One test
 #       uses a remote rds server but that's not something we want to run here.
-if (NOT MINGW)
+if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/postgres_scanner
@@ -107,6 +117,8 @@ if (NOT MINGW)
             )
 endif()
 
+# mingw CI with all extensions at once is somehow not happy
+if (NOT MINGW)
 ################# SPATIAL
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
@@ -114,7 +126,9 @@ duckdb_extension_load(spatial
     GIT_TAG a60aa3733741a99c49baaf33390c0f7c8a9598a3
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
+endif()
 
 ################# SQLITE_SCANNER
 # Static linking on windows does not properly work due to symbol collision
@@ -134,7 +148,7 @@ duckdb_extension_load(sqlite_scanner
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
+        GIT_TAG b13723fe701f1e38d2cd65b3b6eb587c6553a251
         )
 
 ################# VSS
@@ -142,13 +156,13 @@ duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 96374099476b3427c9ab43c1821e610b0465c864
+        GIT_TAG bae5b0653b18bbd05840d1773a49dc4a1165831f
         TEST_DIR test/sql
         APPLY_PATCHES
     )
 
 ################# MYSQL
-if (NOT MINGW)
+if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(mysql_scanner
             DONT_LINK
             LOAD_TESTS

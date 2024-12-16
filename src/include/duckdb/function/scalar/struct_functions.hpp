@@ -24,6 +24,15 @@ struct StructExtractFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct StructExtractAtFun {
+	static constexpr const char *Name = "struct_extract_at";
+	static constexpr const char *Parameters = "struct,'entry'";
+	static constexpr const char *Description = "Extract the entry from the STRUCT by position (starts at 1!).";
+	static constexpr const char *Example = "struct_extract_at({'i': 3, 'v2': 3, 'v3': 0}, 2)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct StructPackFun {
 	static constexpr const char *Name = "struct_pack";
 	static constexpr const char *Parameters = "name:=any,...";

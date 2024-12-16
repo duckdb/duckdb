@@ -102,7 +102,7 @@ jobs:
           git clone https://github.com/duckdb/duckdb.git
           cd duckdb
           if [[ -z "${BASE_HASH}" ]]; then
-            export CHECKOUT_HASH=$(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --status=completed --json=headSha --limit=1 --jq '.[0].headSha')
+            export CHECKOUT_HASH=$(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --event=repository_dispatch --status=completed --json=headSha --limit=1 --jq '.[0].headSha')
           else
             export CHECKOUT_HASH="$BASE_HASH"
           fi
