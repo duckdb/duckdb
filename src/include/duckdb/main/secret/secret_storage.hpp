@@ -8,8 +8,13 @@
 
 #pragma once
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -20,6 +25,7 @@ struct CatalogTransaction;
 class DatabaseInstance;
 struct SecretMatch;
 struct SecretEntry;
+class SecretManager;
 
 //! Base class for SecretStorage API
 class SecretStorage {
