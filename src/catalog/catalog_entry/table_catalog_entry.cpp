@@ -43,6 +43,10 @@ LogicalIndex TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exis
 	return entry;
 }
 
+unique_ptr<BlockingSample> TableCatalogEntry::GetSample() {
+	return nullptr;
+}
+
 bool TableCatalogEntry::ColumnExists(const string &name) const {
 	return columns.ColumnExists(name);
 }

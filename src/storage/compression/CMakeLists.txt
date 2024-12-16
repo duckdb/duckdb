@@ -1,6 +1,7 @@
 add_subdirectory(chimp)
 add_subdirectory(alp)
 add_subdirectory(roaring)
+add_subdirectory(dictionary)
 
 add_library_unity(
   duckdb_storage_compression

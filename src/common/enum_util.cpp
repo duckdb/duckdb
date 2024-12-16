@@ -1464,19 +1464,20 @@ const StringUtil::EnumStringLiteral *GetExtensionABITypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExtensionABIType::UNKNOWN), "UNKNOWN" },
 		{ static_cast<uint32_t>(ExtensionABIType::CPP), "CPP" },
-		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT), "C_STRUCT" }
+		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT), "C_STRUCT" },
+		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT_UNSTABLE), "C_STRUCT_UNSTABLE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value) {
-	return StringUtil::EnumToString(GetExtensionABITypeValues(), 3, "ExtensionABIType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExtensionABITypeValues(), 4, "ExtensionABIType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value) {
-	return static_cast<ExtensionABIType>(StringUtil::StringToEnum(GetExtensionABITypeValues(), 3, "ExtensionABIType", value));
+	return static_cast<ExtensionABIType>(StringUtil::StringToEnum(GetExtensionABITypeValues(), 4, "ExtensionABIType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtensionInstallModeValues() {
@@ -3122,6 +3123,24 @@ const char* EnumUtil::ToChars<SampleType>(SampleType value) {
 template<>
 SampleType EnumUtil::FromString<SampleType>(const char *value) {
 	return static_cast<SampleType>(StringUtil::StringToEnum(GetSampleTypeValues(), 3, "SampleType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSamplingStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SamplingState::RANDOM), "RANDOM" },
+		{ static_cast<uint32_t>(SamplingState::RESERVOIR), "RESERVOIR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SamplingState>(SamplingState value) {
+	return StringUtil::EnumToString(GetSamplingStateValues(), 2, "SamplingState", static_cast<uint32_t>(value));
+}
+
+template<>
+SamplingState EnumUtil::FromString<SamplingState>(const char *value) {
+	return static_cast<SamplingState>(StringUtil::StringToEnum(GetSamplingStateValues(), 2, "SamplingState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {

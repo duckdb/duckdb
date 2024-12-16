@@ -7,24 +7,21 @@ include_directories(include)
 # Configure extension: the minimum CAPI version where the extension still
 # compiles should be chosen here
 set(EXTENSION_NAME demo_capi)
-set(CAPI_MAJOR_VERSION 0)
-set(CAPI_MINOR_VERSION 0)
-set(CAPI_PATCH_VERSION 1)
 
-# Generate semver string
-set(CAPI_VERSION
-    v${CAPI_MAJOR_VERSION}.${CAPI_MINOR_VERSION}.${CAPI_PATCH_VERSION})
+set(EXTENSION_FILES add_numbers.cpp capi_demo.cpp)
 
-# Set the dev version to allow using the unstable API
-# add_definitions(-DDUCKDB_EXTENSION_API_VERSION_DEV)
+option(
+  USE_UNSTABLE_C_API
+  "Use the unstable C Extension API (extension will be tied to exact DuckDB version)"
+  TRUE)
 
-# Set the version definitions. These prevent compilation if a function is used
-# that is added in a version > CAPI_VERSION
-add_definitions(-DDUCKDB_EXTENSION_API_VERSION_MAJOR=${CAPI_MAJOR_VERSION})
-add_definitions(-DDUCKDB_EXTENSION_API_VERSION_MINOR=${CAPI_MINOR_VERSION})
-add_definitions(-DDUCKDB_EXTENSION_API_VERSION_PATCH=${CAPI_PATCH_VERSION})
-add_definitions(-DDUCKDB_EXTENSION_NAME=${EXTENSION_NAME})
-
-# Build the loadable extension adding its footer
-build_loadable_extension_capi(${EXTENSION_NAME} ${CAPI_VERSION} add_numbers.cpp
-                              capi_demo.cpp)
+if(USE_UNSTABLE_C_API)
+  build_loadable_extension_capi_unstable(${EXTENSION_NAME} ${EXTENSION_FILES})
+else()
+  # Minimum supported DuckDB version
+  set(CAPI_MAJOR 1)
+  set(CAPI_MINOR 2)
+  set(CAPI_PATCH 0)
+  build_loadable_extension_capi(${EXTENSION_NAME} ${CAPI_MAJOR} ${CAPI_MINOR}
+                                ${CAPI_PATCH} ${EXTENSION_FILES})
+endif()

@@ -505,6 +505,81 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
 }
 
+TEST_CASE("Test table creations with on_create_conflict using the relation API", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	duckdb::unique_ptr<QueryResult> result;
+	duckdb::shared_ptr<Relation> values, values1, proj;
+
+	// create a table from a Values statement
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
+	REQUIRE_NOTHROW(values->Create("integers"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_NOTHROW(values1 = con.Values({{4, 14}, {5, 15}, {6, 16}}, {"i", "j"}));
+	REQUIRE_THROWS(values1->Create("integers"));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_THROWS(values1->Create("integers", false, OnCreateConflict::ERROR_ON_CONFLICT));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_NOTHROW(values1->Create("integers", false, OnCreateConflict::IGNORE_ON_CONFLICT));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_NOTHROW(values1->Create("integers", false, OnCreateConflict::REPLACE_ON_CONFLICT));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {14, 15, 16}));
+}
+
+TEST_CASE("Test table create from query with on_create_conflict using the relation API", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	duckdb::unique_ptr<QueryResult> result;
+	duckdb::shared_ptr<Relation> values, values1, proj;
+
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 20}, {3, 30}, {4, 40}}, {"i", "j"}));
+	REQUIRE_NOTHROW(values->Create("integers"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 20, 30, 40}));
+
+	REQUIRE_NOTHROW(con.Table("integers")
+	                    ->Filter("i BETWEEN 2 AND 3")
+	                    ->Project("i + 100 AS k, 'hello' AS l")
+	                    ->Create("new_values"));
+
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {102, 103}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+
+	REQUIRE_NOTHROW(proj = con.Table("integers")->Filter("i BETWEEN 1 AND 2")->Project("i + 200 AS k, 'hi' AS l"));
+	REQUIRE_THROWS(proj->Create("new_values"));
+	REQUIRE_THROWS(proj->Create("new_values", false, OnCreateConflict::ERROR_ON_CONFLICT));
+	REQUIRE_NOTHROW(proj->Create("new_values", false, OnCreateConflict::IGNORE_ON_CONFLICT));
+
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {102, 103}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+
+	REQUIRE_NOTHROW(proj->Create("new_values", false, OnCreateConflict::REPLACE_ON_CONFLICT));
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {201, 202}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hi", "hi"}));
+}
+
 TEST_CASE("Test table deletions and updates", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);

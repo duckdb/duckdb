@@ -179,7 +179,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	MainHeader main_header;
 	main_header.version_number = VERSION_NUMBER;
-	memset(main_header.flags, 0, sizeof(uint64_t) * 4);
+	memset(main_header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
