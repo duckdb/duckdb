@@ -125,6 +125,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 				new_row_ids_deleted[row_id] = i;
 			}
 		}
+		
 		D_ASSERT(new_row_ids_deleted.size() == deleted_count);
 		if (deleted_count < l_state.delete_chunk.size()) {
 			auto types = l_state.delete_chunk.GetTypes();
