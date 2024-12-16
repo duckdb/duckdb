@@ -65,8 +65,6 @@ public:
 	idx_t column_index;
 	//! The type of the column
 	LogicalType type;
-	//! The parent column (if any)
-	optional_ptr<ColumnData> parent;
 
 public:
 	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
@@ -87,6 +85,14 @@ public:
 	const CompressionFunction &GetCompressionFunction() const {
 		D_ASSERT(HasCompressionFunction());
 		return *compression;
+	}
+
+	bool HasParent() const {
+		return parent != nullptr;
+	}
+	const ColumnData &Parent() const {
+		D_ASSERT(HasParent());
+		return *parent;
 	}
 
 	bool DoesNotRequireValidity() const {
@@ -240,6 +246,12 @@ protected:
 	//!	The compression function used by the ColumnData
 	//! This is empty if the segments have mixed compression or the ColumnData is empty
 	optional_ptr<CompressionFunction> compression;
+
+private:
+	//! The parent column (if any)
+	optional_ptr<ColumnData> parent;
+	//! The validity data (if any)
+	optional_ptr<ColumnData> validity;
 };
 
 struct PersistentColumnData {
