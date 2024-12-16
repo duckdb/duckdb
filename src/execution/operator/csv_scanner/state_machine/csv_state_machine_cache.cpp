@@ -218,7 +218,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
-	if (state_machine_options.escape == '\0' && state_machine_options.rfc_4180 == false) {
+	if (state_machine_options.rfc_4180 == false) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
 	if (comment != '\0') {

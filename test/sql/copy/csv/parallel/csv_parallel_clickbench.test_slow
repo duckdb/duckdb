@@ -4,19 +4,13 @@
 
 mode skip
 
-require parquet
-
 require httpfs
-
-statement ok
-pragma threads=4
 
 statement ok
 PRAGMA enable_verification
 
-
 statement ok
-CREATE TABLE hits_og
+CREATE TABLE hits
 (
     WatchID BIGINT NOT NULL,
     JavaEnable SMALLINT NOT NULL,
@@ -126,24 +120,14 @@ CREATE TABLE hits_og
     PRIMARY KEY (CounterID, EventDate, UserID, EventTime, WatchID)
 );
 
-
 statement ok
-INSERT INTO hits_og SELECT * FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/hits.parquet');
-
-statement ok
-COPY hits_og TO '__TEST_DIR__/hits.csv';
-
-statement ok
-create table hits as select * from hits_og limit 0;
-
-statement ok
-insert into hits from read_csv('__TEST_DIR__/hits.csv', compression = 'none', nullstr = 'null');
+insert into hits from read_csv('/Users/holanda/Downloads/hits.csv');
 
 #Q 01
 query I
 SELECT COUNT(*) FROM hits;
 ----
-10000000
+99997497
 
 #Q 02
 query I

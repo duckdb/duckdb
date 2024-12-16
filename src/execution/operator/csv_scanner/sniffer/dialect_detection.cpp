@@ -51,7 +51,19 @@ string DialectCandidates::Print() {
 		auto escape_candidate = escape_candidates_map[i];
 		for (idx_t j = 0; j < quote_candidate.size(); j++) {
 			for (idx_t k = 0; k < escape_candidate.size(); k++) {
-				search_space << "[\'" << quote_candidate[j] << "\',\'" << escape_candidate[k] << "\']";
+				search_space << "[\'";
+				if (quote_candidate[j] == '\0') {
+					search_space << "(no quote)";
+				} else {
+					search_space << quote_candidate[j];
+				}
+				search_space << "\',\'";
+				if (escape_candidate[k] == '\0') {
+					search_space << "(no escape)";
+				} else {
+					search_space << escape_candidate[k];
+				}
+				search_space << "\']";
 				if (k < escape_candidate.size() - 1) {
 					search_space << ",";
 				}
