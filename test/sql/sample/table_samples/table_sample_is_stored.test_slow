@@ -122,8 +122,8 @@ select count(*) > 600 and count(*) < 750 from sample_view where a = -2 and b = -
 ----
 true
 
-query I nosort result_1
-select count(*) > 600 and count(*) < 750 from sample_view where a = -2 and b = -2;
+query I nosort result_2
+select count(*) from sample_view where a = -2 and b = -2;
 ----
 
 restart
@@ -131,10 +131,10 @@ restart
 query I
 select count(*) > 600 and count(*) < 750 from sample_view where a = -2 and b = -2;
 ----
-624
+true
 
-query I nosort result_1
-select count(*) > 600 and count(*) < 750 from sample_view where a = -2 and b = -2;
+query I nosort result_2
+select count(*) from sample_view where a = -2 and b = -2;
 ----
 
 # currently have 18_000_000 values in the table.
