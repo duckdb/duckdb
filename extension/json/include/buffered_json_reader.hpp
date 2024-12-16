@@ -136,6 +136,8 @@ public:
 	void ThrowParseError(idx_t buf_index, idx_t line_or_object_in_buf, yyjson_read_err &err, const string &extra = "");
 	//! Throws a transform error that mentions the file name and line number
 	void ThrowTransformError(idx_t buf_index, idx_t line_or_object_in_buf, const string &error_message);
+	//! Whether this reader has thrown if an error has occurred
+	bool HasThrown();
 
 	//! Scan progress
 	double GetProgress() const;

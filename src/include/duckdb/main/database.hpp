@@ -61,7 +61,7 @@ public:
 	DUCKDB_API LogManager &GetLogManager();
 	DUCKDB_API void SetExtensionLoaded(const string &extension_name, ExtensionInstallInfo &install_info);
 
-	DUCKDB_API const duckdb_ext_api_v0 GetExtensionAPIV0();
+	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
 
 	idx_t NumberOfThreads();
 
@@ -98,7 +98,7 @@ private:
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 	shared_ptr<LogManager> log_manager;
 
-	duckdb_ext_api_v0 (*create_api_v0)();
+	duckdb_ext_api_v1 (*create_api_v1)();
 };
 
 //! The database object. This object holds the catalog and all the

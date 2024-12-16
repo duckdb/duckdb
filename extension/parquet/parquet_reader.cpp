@@ -561,11 +561,13 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
 	}
 
-	// If object cached is disabled
+	// If metadata cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!metadata_p) {
-		if (!ObjectCache::ObjectCacheEnabled(context_p)) {
+		Value metadata_cache = false;
+		context_p.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
+		if (!metadata_cache.GetValue<bool>()) {
 			metadata =
 			    LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, *encryption_util);
 		} else {
@@ -750,14 +752,22 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 		// filters contain output chunk index, not file col idx!
 		auto global_id = reader_data.column_mapping[col_idx];
 		auto filter_entry = reader_data.filters->filters.find(global_id);
+
 		if (stats && filter_entry != reader_data.filters->filters.end()) {
-			bool skip_chunk = false;
 			auto &filter = *filter_entry->second;
 
 			FilterPropagateResult prune_result;
-			if (column_reader.Type().id() == LogicalTypeId::VARCHAR &&
-			    group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.min_value &&
-			    group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.max_value) {
+			// TODO we might not have stats but STILL a bloom filter so move this up
+			// check the bloom filter if present
+			if (!column_reader.Type().IsNested() &&
+			    ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
+			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[column_reader.FileIdx()].meta_data,
+			                                                *state.thrift_file_proto, allocator)) {
+				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR &&
+			           group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.min_value &&
+			           group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.max_value) {
+
 				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
 				// however, when reading remote Parquet files, skipping row groups is really important
 				// here, we implement a special case to check the full length for string filters
@@ -784,9 +794,6 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 			}
 
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				skip_chunk = true;
-			}
-			if (skip_chunk) {
 				// this effectively will skip this chunk
 				state.group_offset = group.num_rows;
 				return;
@@ -893,6 +900,8 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 			if (!OP::Operation(v_ptr[0], constant)) {
 				filter_mask.reset();
 			}
+		} else {
+			filter_mask.reset();
 		}
 		return;
 	}
@@ -903,8 +912,14 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 
 	if (!unified.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			if (filter_mask.test(i) && unified.validity.RowIsValid(unified.sel->get_index(i))) {
-				filter_mask.set(i, OP::Operation(data_ptr[unified.sel->get_index(i)], constant));
+			if (filter_mask.test(i)) {
+				auto idx = unified.sel->get_index(i);
+				bool is_valid = unified.validity.RowIsValid(idx);
+				if (is_valid) {
+					filter_mask.set(i, OP::Operation(data_ptr[idx], constant));
+				} else {
+					filter_mask.set(i, false);
+				}
 			}
 		}
 	} else {
@@ -1009,8 +1024,11 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			FilterOperationSwitch<GreaterThanEquals>(v, constant_filter.constant, filter_mask, count);
 			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+			FilterOperationSwitch<NotEquals>(v, constant_filter.constant, filter_mask, count);
+			break;
 		default:
-			D_ASSERT(0);
+			throw InternalException("Unsupported comparison for Parquet filter pushdown");
 		}
 		break;
 	}

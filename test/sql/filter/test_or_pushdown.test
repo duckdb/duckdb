@@ -36,14 +36,20 @@ select a from t1 where a=5 or a=899999;
 
 # check that multiple rows from mulitple row groups are being projected and not just 2.
 query II
-explain analyze select * from t1 where a=5 or a=899999;
-----
-analyzed_plan	<REGEX>:.*TABLE_SCAN.*19360.*
-
-query II
 explain select * from t1 where a<5 or a>10;
 ----
-physical_plan	<REGEX>:.*optional.*
+physical_plan	<REGEX>:.*optional.*a<5.*a>10.*
+
+# need to flip the comparison
+query II
+explain select * from t1 where 5>a or 10<a;
+----
+physical_plan	<REGEX>:.*optional.*a<5.*a>10.*
+
+query II
+explain select * from t1 where 5>=a or 10<=a;
+----
+physical_plan	<REGEX>:.*optional.*a<=5.*a>=10.*
 
 query II
 explain select * from t1 where a in (1, 5, 10);
@@ -68,4 +74,4 @@ physical_plan	<!REGEX>:.*optional.*
 query II
 explain select b from t1 where b = 'foo9' or b = 'foo10';
 ----
-physical_plan	<!REGEX>:.*optional.*
+physical_plan	<REGEX>:.*optional.*

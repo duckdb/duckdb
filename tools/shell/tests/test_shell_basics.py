@@ -296,6 +296,22 @@ def test_read(shell, generated_file):
     result = test.run()
     result.check_stdout("42")
 
+@pytest.mark.parametrize('generated_file', ["select 42"], indirect=True)
+def test_execute_file(shell, generated_file):
+    test = (
+        ShellTest(shell, ['-f', generated_file.as_posix()])
+    )
+    result = test.run()
+    result.check_stdout("42")
+
+@pytest.mark.parametrize('generated_file', ["insert into tbl values (42)"], indirect=True)
+def test_execute_files(shell, generated_file):
+    test = (
+        ShellTest(shell, ['-c', 'CREATE TABLE tbl(i INT)', '-f', generated_file.as_posix(), '-f', generated_file.as_posix(), '-c', 'SELECT SUM(i) FROM tbl'])
+    )
+    result = test.run()
+    result.check_stdout("84")
+
 def test_show_basic(shell):
     test = (
         ShellTest(shell)

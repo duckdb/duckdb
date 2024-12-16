@@ -21,23 +21,31 @@ public:
 	ArrowSchemaMetadata() {};
 	//! Adds an option to the metadata
 	void AddOption(const string &key, const string &value);
-	//! Gets an option from the metadata, returns an empty string if does not exist.
+	//! Gets an option from the metadata, returns an empty string if it does not exist.
 	string GetOption(const string &key) const;
 	//! Transforms metadata to a char*, used when creating an arrow object
 	unsafe_unique_array<char> SerializeMetadata() const;
 	//! If the arrow extension is set
-	bool HasExtension();
+	bool HasExtension() const;
+	//! If this extension type is an 'arrow.opaque', and the internal type and vendors match.
+	bool IsNonCanonicalType(const string &type, const string &vendor = "DuckDB") const;
 	//! Get the extension name if set, otherwise returns empty
 	string GetExtensionName() const;
 	//! Key for encode of the extension type name
 	static constexpr const char *ARROW_EXTENSION_NAME = "ARROW:extension:name";
 	//! Key for encode of the metadata key
 	static constexpr const char *ARROW_METADATA_KEY = "ARROW:extension:metadata";
+	//! Arrow Extension for non-canonical types.
+	static constexpr const char *ARROW_EXTENSION_NON_CANONICAL = "arrow.opaque";
 	//! Creates the metadata based on an extension name
-	static ArrowSchemaMetadata MetadataFromName(const string &extension_name);
+	static ArrowSchemaMetadata ArrowCanonicalType(const string &extension_name);
+	//! Creates the metadata based on an extension name
+	static ArrowSchemaMetadata DuckDBInternalType(const string &type_name);
 
 private:
 	//! The unordered map that holds the metadata
-	unordered_map<string, string> metadata_map;
+	unordered_map<string, string> schema_metadata_map;
+	//! The extension metadata map, currently only used for internal types in arrow.opaque
+	unordered_map<string, string> extension_metadata_map;
 };
 } // namespace duckdb

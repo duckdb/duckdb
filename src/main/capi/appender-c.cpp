@@ -145,6 +145,27 @@ duckdb_state duckdb_append_default(duckdb_appender appender) {
 	return DuckDBSuccess;
 }
 
+duckdb_state duckdb_append_default_to_chunk(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col, idx_t row) {
+	if (!appender || !chunk) {
+		return DuckDBError;
+	}
+
+	auto *appender_instance = reinterpret_cast<AppenderWrapper *>(appender);
+
+	auto data_chunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
+
+	try {
+		appender_instance->appender->AppendDefault(*data_chunk, col, row);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		appender_instance->error = error.RawMessage();
+		return DuckDBError;
+	} catch (...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
+}
+
 duckdb_state duckdb_append_bool(duckdb_appender appender, bool value) {
 	return duckdb_append_internal<bool>(appender, value);
 }
@@ -273,6 +294,10 @@ duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t 
 
 	auto &logical_type = wrapper->appender->GetActiveTypes()[col_idx];
 	return reinterpret_cast<duckdb_logical_type>(new duckdb::LogicalType(logical_type));
+}
+
+duckdb_state duckdb_append_value(duckdb_appender appender, duckdb_value value) {
+	return duckdb_append_internal<duckdb::Value>(appender, *(reinterpret_cast<duckdb::Value *>(value)));
 }
 
 duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk) {

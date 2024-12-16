@@ -739,16 +739,37 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return Value::STRUCT(LogicalType::STRUCT(child_types), std::move(struct_values));
 }
 
+void MapKeyCheck(unordered_set<hash_t> &unique_keys, const Value &key) {
+	// NULL key check.
+	if (key.IsNull()) {
+		MapVector::EvalMapInvalidReason(MapInvalidReason::NULL_KEY);
+	}
+
+	// Duplicate key check.
+	auto key_hash = key.Hash();
+	if (unique_keys.find(key_hash) != unique_keys.end()) {
+		MapVector::EvalMapInvalidReason(MapInvalidReason::DUPLICATE_KEY);
+	}
+	unique_keys.insert(key_hash);
+}
+
 Value Value::MAP(const LogicalType &child_type, vector<Value> values) { // NOLINT
 	vector<Value> map_keys;
 	vector<Value> map_values;
+	unordered_set<hash_t> unique_keys;
+
 	for (auto &val : values) {
 		D_ASSERT(val.type().InternalType() == PhysicalType::STRUCT);
 		auto &children = StructValue::GetChildren(val);
 		D_ASSERT(children.size() == 2);
-		map_keys.push_back(children[0]);
+
+		auto &key = children[0];
+		MapKeyCheck(unique_keys, key);
+
+		map_keys.push_back(key);
 		map_values.push_back(children[1]);
 	}
+
 	auto &key_type = StructType::GetChildType(child_type, 0);
 	auto &value_type = StructType::GetChildType(child_type, 1);
 	return Value::MAP(key_type, value_type, std::move(map_keys), std::move(map_values));
@@ -760,13 +781,26 @@ Value Value::MAP(const LogicalType &key_type, const LogicalType &value_type, vec
 
 	result.type_ = LogicalType::MAP(key_type, value_type);
 	result.is_null = false;
+	unordered_set<hash_t> unique_keys;
+
 	for (idx_t i = 0; i < keys.size(); i++) {
-		child_list_t<Value> new_children;
+		child_list_t<LogicalType> struct_types;
+		vector<Value> new_children;
+		struct_types.reserve(2);
 		new_children.reserve(2);
-		new_children.push_back(std::make_pair("key", keys[i].DefaultCastAs(key_type)));
-		new_children.push_back(std::make_pair("value", values[i].DefaultCastAs(value_type)));
-		values[i] = Value::STRUCT(std::move(new_children));
+
+		struct_types.push_back(make_pair("key", key_type));
+		struct_types.push_back(make_pair("value", value_type));
+
+		auto key = keys[i].DefaultCastAs(key_type);
+		MapKeyCheck(unique_keys, key);
+
+		new_children.push_back(key);
+		new_children.push_back(values[i]);
+		auto struct_type = LogicalType::STRUCT(std::move(struct_types));
+		values[i] = Value::STRUCT(struct_type, std::move(new_children));
 	}
+
 	result.value_info_ = make_shared_ptr<NestedValueInfo>(std::move(values));
 	return result;
 }
@@ -1514,7 +1548,7 @@ hash_t Value::Hash() const {
 		return 0;
 	}
 	Vector input(*this);
-	Vector result(LogicalType::HASH);
+	Vector result(LogicalType::HASH, 1);
 	VectorOperations::Hash(input, result, 1);
 
 	auto data = FlatVector::GetData<hash_t>(result);
@@ -1962,7 +1996,7 @@ void Value::SerializeChildren(Serializer &serializer, const vector<Value> &child
 	serializer.WriteObject(102, "value", [&](Serializer &child_serializer) {
 		child_serializer.WriteList(100, "children", children.size(), [&](Serializer::List &list, idx_t i) {
 			auto &value_type = GetChildType(parent_type, i);
-			bool serialize_type = value_type.id() == LogicalTypeId::ANY;
+			bool serialize_type = value_type.InternalType() == PhysicalType::INVALID;
 			if (!serialize_type && !SerializeTypeMatches(value_type, children[i].type())) {
 				throw InternalException("Error when serializing type - serializing a child of a nested value with type "
 				                        "%s, but expected type %s",
@@ -2059,7 +2093,7 @@ void Value::Serialize(Serializer &serializer) const {
 
 Value Value::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadPropertyWithExplicitDefault<LogicalType>(100, "type", LogicalTypeId::INVALID);
-	if (type.id() == LogicalTypeId::INVALID) {
+	if (type.InternalType() == PhysicalType::INVALID) {
 		type = deserializer.Get<const LogicalType &>();
 	}
 	auto is_null = deserializer.ReadProperty<bool>(101, "is_null");

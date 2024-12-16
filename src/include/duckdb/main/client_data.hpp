@@ -27,7 +27,7 @@ class QueryProfiler;
 class PreparedStatementData;
 class SchemaCatalogEntry;
 class HTTPLogger;
-struct RandomEngine;
+class RandomEngine;
 
 struct ClientData {
 	explicit ClientData(ClientContext &context);

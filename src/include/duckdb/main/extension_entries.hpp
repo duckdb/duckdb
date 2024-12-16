@@ -123,16 +123,18 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"cbrt", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ceil", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ceiling", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"check_peg_parser", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"chr", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"corr", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"cos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cosh", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cot", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"count_if", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"countif", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"covar_pop", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"covar_samp", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"create_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"current_database", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"current_date", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtime", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtimestamp", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_query", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -186,7 +188,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"gcd", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"gen_random_uuid", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"get_bit", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"get_current_time", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"get_current_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"get_substrait", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
     {"get_substrait_json", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -423,6 +424,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"make_date", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_time", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"make_timestamp_ns", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamptz", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_concat", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -444,8 +446,10 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"netmask", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"network", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"nextafter", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"normalized_interval", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"now", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ord", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"parquet_bloom_probe", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_file_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_kv_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
     {"parquet_metadata", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -483,6 +487,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"read_ndjson_auto", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_ndjson_objects", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_parquet", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"read_xlsx", "excel", CatalogType::TABLE_FUNCTION_ENTRY},
     {"reduce", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"reduce_sql_statement", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"regr_avgx", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
@@ -676,7 +681,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"to_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"to_weeks", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"to_years", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"today", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"tpcds", "tpcds", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"tpcds_answers", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"tpcds_queries", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -952,6 +956,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"mysql_debug_show_queries", "mysql_scanner"},
     {"mysql_experimental_filter_pushdown", "mysql_scanner"},
     {"mysql_tinyint1_as_boolean", "mysql_scanner"},
+    {"parquet_metadata_cache", "parquet"},
     {"pg_array_as_varchar", "postgres_scanner"},
     {"pg_connection_cache", "postgres_scanner"},
     {"pg_connection_limit", "postgres_scanner"},
@@ -1023,8 +1028,9 @@ static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
-    {".parquet", "parquet"}, {".json", "json"},    {".jsonl", "json"}, {".ndjson", "json"},
-    {".shp", "spatial"},     {".gpkg", "spatial"}, {".fgb", "spatial"}}; // END_OF_EXTENSION_FILE_POSTFIXES
+    {".parquet", "parquet"}, {".json", "json"},    {".jsonl", "json"},  {".ndjson", "json"},
+    {".shp", "spatial"},     {".gpkg", "spatial"}, {".fgb", "spatial"}, {".xlsx", "excel"},
+}; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb

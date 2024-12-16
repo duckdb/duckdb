@@ -179,7 +179,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	MainHeader main_header;
 	main_header.version_number = VERSION_NUMBER;
-	memset(main_header.flags, 0, sizeof(uint64_t) * 4);
+	memset(main_header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
@@ -672,11 +672,9 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		throw FatalException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}
 
-	if (!options.use_direct_io) {
-		// if we are not using Direct IO we need to fsync BEFORE we write the header to ensure that all the previous
-		// blocks are written as well
-		handle->Sync();
-	}
+	// We need to fsync BEFORE we write the header to ensure that all the previous blocks are written as well
+	handle->Sync();
+
 	// set the header inside the buffer
 	header_buffer.Clear();
 	MemoryStream serializer;

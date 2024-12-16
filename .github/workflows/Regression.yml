@@ -1,6 +1,13 @@
 name: Regression
 on:
+  workflow_call:
+    inputs:
+      base_hash:
+        type: string
   workflow_dispatch:
+    inputs:
+      base_hash:
+        type: string
   repository_dispatch:
   push:
     branches:
@@ -33,6 +40,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
+  BASE_HASH: ${{ inputs.base_hash }}
 
 jobs:
   regression-test-benchmark-runner:
@@ -44,7 +52,7 @@ jobs:
       GEN: ninja
       BUILD_BENCHMARK: 1
       BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "json;tpch;tpcds;httpfs;inet"
+      CORE_EXTENSIONS: "json;tpch;tpcds;httpfs;inet;icu"
 
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +73,18 @@ jobs:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-      - name: Build
+      - name: Checkout Private Regression
+        if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
+        uses: actions/checkout@v4
+        with:
+          repository: duckdblabs/fivetran_regression
+          ref: main
+          token: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+          path: benchmark/fivetran
+
+      # For PRs we compare against the base branch
+      - name: Build Current and Base Branch
+        if: ${{ !(github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
           make
@@ -74,10 +93,33 @@ jobs:
           make
           cd ..
 
+      # For NightlyTest we fetch the last commit hash that ran Regression on main
+      - name: Build Main and Previous Successful Regression Hash
+        if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
+        shell: bash
+        run: |
+          make
+          git clone https://github.com/duckdb/duckdb.git
+          cd duckdb
+          if [[ -z "${BASE_HASH}" ]]; then
+            export CHECKOUT_HASH=$(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --event=repository_dispatch --status=completed --json=headSha --limit=1 --jq '.[0].headSha')
+          else
+            export CHECKOUT_HASH="$BASE_HASH"
+          fi
+          git checkout $CHECKOUT_HASH
+          make
+          cd ..
+
       - name: Set up benchmarks
         shell: bash
         run: |
           cp -r benchmark duckdb/
+
+      - name: Regression Test Fivetran
+        if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
+        shell: bash
+        run: |
+          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2
 
       - name: Regression Test Micro
         if: always()
@@ -136,7 +178,7 @@ jobs:
           wget https://duckdb-blobs.s3.amazonaws.com/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
           cp duckdb_benchmark_data/real_nest.duckdb duckdb/duckdb_benchmark_data/real_nest.duckdb
           python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/realnest.csv --verbose --threads 2
-         
+
   regression-test-storage:
     name: Storage Size Regression Test
     runs-on: ubuntu-20.04

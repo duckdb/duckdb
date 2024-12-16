@@ -134,6 +134,9 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 			if (info->is_consecutive) {
 				properties.estimated_size += sizeof(row_t) * info->count;
 			}
+			if (info->table->HasIndexes()) {
+				properties.has_index_deletes = true;
+			}
 			properties.has_deletes = true;
 			break;
 		}

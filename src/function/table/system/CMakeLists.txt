@@ -28,6 +28,7 @@ add_library_unity(
   pragma_metadata_info.cpp
   pragma_storage_info.cpp
   pragma_table_info.cpp
+  pragma_table_sample.cpp
   pragma_user_agent.cpp
   test_all_types.cpp
   test_logging.cpp

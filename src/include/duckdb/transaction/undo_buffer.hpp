@@ -23,6 +23,7 @@ struct UndoBufferProperties {
 	idx_t estimated_size = 0;
 	bool has_updates = false;
 	bool has_deletes = false;
+	bool has_index_deletes = false;
 	bool has_catalog_changes = false;
 	bool has_dropped_entries = false;
 };

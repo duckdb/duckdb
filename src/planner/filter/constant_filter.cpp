@@ -14,6 +14,11 @@ ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_
 }
 
 FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
+	if (!stats.CanHaveNoNull()) {
+		// no non-null values are possible: always false
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	FilterPropagateResult result;
 	D_ASSERT(constant.type().id() == stats.GetType().id());
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:
@@ -28,12 +33,22 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		return NumericStats::CheckZonemap(stats, comparison_type, array_ptr<Value>(&constant, 1));
+		result = NumericStats::CheckZonemap(stats, comparison_type, array_ptr<Value>(&constant, 1));
+		break;
 	case PhysicalType::VARCHAR:
-		return StringStats::CheckZonemap(stats, comparison_type, array_ptr<Value>(&constant, 1));
+		result = StringStats::CheckZonemap(stats, comparison_type, array_ptr<Value>(&constant, 1));
+		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
+	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+		// the numeric filter is always true, but the column can have NULL values
+		// we can't prune the filter
+		if (stats.CanHaveNull()) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+	}
+	return result;
 }
 
 string ConstantFilter::ToString(const string &column_name) {

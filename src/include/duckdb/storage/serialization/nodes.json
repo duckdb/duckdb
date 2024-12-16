@@ -281,7 +281,7 @@
         "type": "unique_ptr<ReservoirChunk>"
       }
     ],
-    "constructor": ["sample_count"]
+    "constructor": ["sample_count", "reservoir_chunk"]
   },
   {
     "class": "ReservoirSamplePercentage",
@@ -331,7 +331,6 @@
     ],
     "pointer_type": "none"
   },
-
   {
     "class": "PivotColumnEntry",
     "members": [
@@ -736,35 +735,44 @@
         "deleted": true
       },
       {"id": 121,
-        "name": "dialect_options.state_machine_options.delimiter",
-        "type": "CSVOption<char>"
+        "name": "delimiter",
+        "property": "dialect_options.state_machine_options.delimiter",
+        "type": "CSVOption<char>",
+        "serialize_property": "GetSingleByteDelimiter()"
       },
       {"id": 122,
-        "name": "dialect_options.state_machine_options.quote",
+        "name": "quote",
+        "property": "dialect_options.state_machine_options.quote",
         "type": "CSVOption<char>"
       },
       {"id": 123,
-        "name": "dialect_options.state_machine_options.escape",
+        "name": "escape",
+        "property": "dialect_options.state_machine_options.escape",
         "type": "CSVOption<char>"
       },
       {"id": 124,
-        "name": "dialect_options.header",
+        "name": "header",
+        "property": "dialect_options.header",
         "type": "CSVOption<bool>"
       },
       {"id": 125,
-        "name": "dialect_options.num_cols",
+        "name": "num_cols",
+        "property": "dialect_options.num_cols",
         "type": "idx_t"
       },
       {"id": 126,
-        "name": "dialect_options.state_machine_options.new_line",
+        "name": "new_line",
+        "property": "dialect_options.state_machine_options.new_line",
         "type": "CSVOption<NewLineIdentifier>"
       },
       {"id": 127,
-        "name": "dialect_options.skip_rows",
+        "name": "skip_rows",
+        "property": "dialect_options.skip_rows",
         "type": "CSVOption<idx_t>"
       },
       {"id": 128,
-        "name": "dialect_options.date_format",
+        "name": "date_format",
+        "property": "dialect_options.date_format",
         "type": "map<LogicalTypeId, CSVOption<StrpTimeFormat>>"
       },
       {"id": 129,
@@ -802,24 +810,32 @@
         "default": "false"
       },
       {"id": 137,
-        "name": "dialect_options.state_machine_options.comment",
+        "name": "comment",
+        "property": "dialect_options.state_machine_options.comment",
         "type": "CSVOption<char>",
         "default": "CSVOption<char>('\\0')"
       },
       {"id": 138,
-        "name": "dialect_options.rows_until_header",
+        "name": "rows_until_header",
+        "property": "dialect_options.rows_until_header",
         "type": "idx_t"
       },
       {"id": 139,
         "name": "encoding",
         "type": "string"
-      }
-      ,
+      },
       {"id": 140,
-        "name": "dialect_options.state_machine_options.rfc_4180",
+        "name": "rfc_4180",
+        "property": "dialect_options.state_machine_options.rfc_4180",
         "type": "CSVOption<bool>"
+      },
+      {"id": 141,
+        "name": "multi_byte_delimiter",
+        "type": "CSVOption<string>",
+        "serialize_property": "GetMultiByteDelimiter()"
       }
     ],
+    "constructor": ["delimiter", "multi_byte_delimiter"],
     "pointer_type": "none"
   },
   {

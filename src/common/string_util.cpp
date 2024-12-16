@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/stack.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -16,6 +17,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <random>
+#include <stack>
 
 #include "yyjson.hpp"
 
@@ -45,6 +47,14 @@ optional_idx StringUtil::Find(const string &haystack, const string &needle) {
 		return optional_idx();
 	}
 	return optional_idx(index);
+}
+
+bool StringUtil::Contains(const string &haystack, const char &needle_char) {
+	return (haystack.find(needle_char) != string::npos);
+}
+
+idx_t StringUtil::ToUnsigned(const string &str) {
+	return std::stoull(str);
 }
 
 void StringUtil::LTrim(string &str) {
@@ -93,16 +103,6 @@ string StringUtil::Repeat(const string &str, idx_t n) {
 		os << str;
 	}
 	return (os.str());
-}
-
-vector<string> StringUtil::Split(const string &str, char delimiter) {
-	std::stringstream ss(str);
-	vector<string> lines;
-	string temp;
-	while (getline(ss, temp, delimiter)) {
-		lines.push_back(temp);
-	}
-	return (lines);
 }
 
 namespace string_util_internal {
@@ -162,6 +162,43 @@ vector<string> StringUtil::SplitWithQuote(const string &str, char delimiter, cha
 	}
 
 	return entries;
+}
+
+vector<string> StringUtil::SplitWithParentheses(const string &str, char delimiter, char par_open, char par_close) {
+	vector<string> result;
+	string current;
+	stack<char> parentheses;
+
+	for (size_t i = 0; i < str.size(); ++i) {
+		char ch = str[i];
+
+		// stack to keep track if we are within parentheses
+		if (ch == par_open) {
+			parentheses.push(ch);
+		}
+		if (ch == par_close) {
+			if (!parentheses.empty()) {
+				parentheses.pop();
+			} else {
+				throw InvalidInputException("Incongruent parentheses in string: '%s'", str);
+			}
+		}
+		// split if not within parentheses
+		if (parentheses.empty() && ch == delimiter) {
+			result.push_back(current);
+			current.clear();
+		} else {
+			current += ch;
+		}
+	}
+	// Add the last segment
+	if (!current.empty()) {
+		result.push_back(current);
+	}
+	if (!parentheses.empty()) {
+		throw InvalidInputException("Incongruent parentheses in string: '%s'", str);
+	}
+	return result;
 }
 
 string StringUtil::Join(const vector<string> &input, const string &separator) {
@@ -245,6 +282,10 @@ bool StringUtil::IsLower(const string &str) {
 	return str == Lower(str);
 }
 
+bool StringUtil::IsUpper(const string &str) {
+	return str == Upper(str);
+}
+
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
 uint64_t StringUtil::CIHash(const string &str) {
 	uint32_t hash = 0;
@@ -297,6 +338,16 @@ idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
 		}
 	}
 	return DConstants::INVALID_INDEX;
+}
+
+vector<string> StringUtil::Split(const string &str, char delimiter) {
+	std::stringstream ss(str);
+	vector<string> lines;
+	string temp;
+	while (getline(ss, temp, delimiter)) {
+		lines.push_back(temp);
+	}
+	return (lines);
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {
@@ -518,23 +569,12 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 	return result;
 }
 
-string StringUtil::ToJSONMap(ExceptionType type, const string &message, const unordered_map<string, string> &map) {
-	D_ASSERT(map.find("exception_type") == map.end());
-	D_ASSERT(map.find("exception_message") == map.end());
-
-	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
-	yyjson_mut_val *root = yyjson_mut_obj(doc);
-	yyjson_mut_doc_set_root(doc, root);
-
-	auto except_str = Exception::ExceptionTypeToString(type);
-	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
-	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
+string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
 	for (auto &entry : map) {
 		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
 		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
 		yyjson_mut_obj_add(root, key, value);
 	}
-
 	yyjson_write_err err;
 	size_t len;
 	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
@@ -552,6 +592,29 @@ string StringUtil::ToJSONMap(ExceptionType type, const string &message, const un
 
 	// Return the result
 	return result;
+}
+string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
+	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	yyjson_mut_val *root = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, root);
+
+	return ToJsonMapInternal(map, doc, root);
+}
+
+string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,
+                                      const unordered_map<string, string> &map) {
+	D_ASSERT(map.find("exception_type") == map.end());
+	D_ASSERT(map.find("exception_message") == map.end());
+
+	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+	yyjson_mut_val *root = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, root);
+
+	auto except_str = Exception::ExceptionTypeToString(type);
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_type", except_str.c_str(), except_str.size());
+	yyjson_mut_obj_add_strncpy(doc, root, "exception_message", message.c_str(), message.size());
+
+	return ToJsonMapInternal(map, doc, root);
 }
 
 string StringUtil::GetFileName(const string &file_path) {

@@ -380,7 +380,7 @@ public:
 
 	void CompressString(const string_t &string, bool end_of_vector) {
 		duckdb_zstd::ZSTD_inBuffer in_buffer = {/*data = */ string.GetData(),
-		                                        /*length = */ string.GetSize(),
+		                                        /*length = */ size_t(string.GetSize()),
 		                                        /*pos = */ 0};
 
 		if (!end_of_vector && string.GetSize() == 0) {
@@ -519,8 +519,8 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
+		                                                                info.GetBlockSize(), info.GetBlockSize());
 		segment = std::move(compressed_segment);
 		segment->function = function;
 

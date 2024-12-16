@@ -54,6 +54,20 @@ struct NumericStats {
 	//! Sets the max value of the statistics
 	DUCKDB_API static void SetMax(BaseStatistics &stats, const Value &val);
 
+	template <class T>
+	static void SetMax(BaseStatistics &stats, T val) {
+		auto &nstats = GetDataUnsafe(stats);
+		nstats.has_max = true;
+		nstats.max.GetReferenceUnsafe<T>() = val;
+	}
+
+	template <class T>
+	static void SetMin(BaseStatistics &stats, T val) {
+		auto &nstats = GetDataUnsafe(stats);
+		nstats.has_min = true;
+		nstats.min.GetReferenceUnsafe<T>() = val;
+	}
+
 	//! Check whether or not a given comparison with a constant could possibly be satisfied by rows given the statistics
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
 	                                                     array_ptr<Value> constants);

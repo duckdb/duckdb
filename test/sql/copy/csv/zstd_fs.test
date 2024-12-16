@@ -9,7 +9,7 @@ require parquet
 
 # Zstd comes with the parquet extension but we currently can not autoload parquet for zstd. Parquet is generally bundled
 # though, so thats probably a non-issue
-require no_extension_autoloading
+require no_extension_autoloading "FIXME: zstd requires the parquet extension, currently not autoloaded"
 
 # lineitem
 statement ok

@@ -24,7 +24,7 @@ struct DialectOptions {
 	CSVStateMachineOptions state_machine_options;
 	//! Expected number of columns
 	idx_t num_cols = 0;
-	//! Whether or not the file has a header line
+	//! Whether the file has a header line
 	CSVOption<bool> header = false;
 	//! The date format to use (if any is specified)
 	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
@@ -35,6 +35,8 @@ struct DialectOptions {
 };
 
 struct CSVReaderOptions {
+	CSVReaderOptions() {};
+	CSVReaderOptions(CSVOption<char> single_byte_delimiter, const CSVOption<string> &multi_byte_delimiter);
 	//===--------------------------------------------------------------------===//
 	// CommonCSVOptions
 	//===--------------------------------------------------------------------===//
@@ -59,7 +61,7 @@ struct CSVReaderOptions {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Option to convert quoted values to NULL values
 	bool allow_quoted_nulls = true;
-	char comment;
+	char comment = '\0';
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
@@ -72,7 +74,7 @@ struct CSVReaderOptions {
 	vector<string> name_list;
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
-	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
+	//! Types considered as candidates for auto-detection ordered by descending specificity (~ from high to low)
 	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR,   LogicalType::DOUBLE, LogicalType::BIGINT,
 	                                            LogicalType::TIMESTAMP, LogicalType::DATE,   LogicalType::TIME,
 	                                            LogicalType::BOOLEAN,   LogicalType::SQLNULL};
@@ -86,7 +88,7 @@ struct CSVReaderOptions {
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
 	idx_t maximum_line_size = 2097152;
-	//! Whether or not header names shall be normalized
+	//! Whether header names shall be normalized
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
 	unordered_set<string> force_not_null_names;
@@ -94,6 +96,7 @@ struct CSVReaderOptions {
 	vector<bool> force_not_null;
 	//! Result size of sniffing phases
 	static constexpr idx_t sniff_size = 2048;
+
 	//! Number of sample chunks used in auto-detection
 	idx_t sample_size_chunks = 20480 / sniff_size;
 	//! Consider all columns to be of type varchar
@@ -162,6 +165,9 @@ struct CSVReaderOptions {
 
 	bool GetRFC4180() const;
 	void SetRFC4180(bool rfc4180);
+
+	char GetSingleByteDelimiter() const;
+	string GetMultiByteDelimiter() const;
 
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods

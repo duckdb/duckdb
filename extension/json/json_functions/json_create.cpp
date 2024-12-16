@@ -40,25 +40,36 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	// These types can go directly into JSON
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::BOOLEAN:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::DOUBLE:
-		return type;
-	// We cast these types to a type that can go into JSON
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
-		return LogicalType::BIGINT;
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
-		return LogicalType::UBIGINT;
+	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::BIT:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::ENUM:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::VARINT:
 	case LogicalTypeId::DECIMAL:
-	case LogicalTypeId::UHUGEINT:
-	case LogicalTypeId::HUGEINT:
-		return LogicalType::DOUBLE;
-	// The nested types need to conform as well
+		return type;
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(GetJSONType(const_struct_names, ListType::GetChildType(type)));
 	case LogicalTypeId::ARRAY:
@@ -211,7 +222,7 @@ template <>
 struct CreateJSONValue<hugeint_t, string_t> {
 	static inline yyjson_mut_val *Operation(yyjson_mut_doc *doc, const hugeint_t &input) {
 		const auto input_string = input.ToString();
-		return yyjson_mut_strncpy(doc, input_string.c_str(), input_string.length());
+		return yyjson_mut_rawncpy(doc, input_string.c_str(), input_string.length());
 	}
 };
 
@@ -219,7 +230,7 @@ template <>
 struct CreateJSONValue<uhugeint_t, string_t> {
 	static inline yyjson_mut_val *Operation(yyjson_mut_doc *doc, const uhugeint_t &input) {
 		const auto input_string = input.ToString();
-		return yyjson_mut_strncpy(doc, input_string.c_str(), input_string.length());
+		return yyjson_mut_rawncpy(doc, input_string.c_str(), input_string.length());
 	}
 };
 
@@ -282,6 +293,22 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 			vals[i] = CreateJSONValueFromJSON(doc, values[val_idx]);
 		} else {
 			vals[i] = CreateJSONValue<INPUT_TYPE, TARGET_TYPE>::Operation(doc, values[val_idx]);
+		}
+		D_ASSERT(vals[i] != nullptr);
+	}
+}
+
+static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
+	UnifiedVectorFormat value_data;
+	value_v.ToUnifiedFormat(count, value_data);
+	auto values = UnifiedVectorFormat::GetData<string_t>(value_data);
+	for (idx_t i = 0; i < count; i++) {
+		idx_t val_idx = value_data.sel->get_index(i);
+		if (!value_data.validity.RowIsValid(val_idx)) {
+			vals[i] = yyjson_mut_null(doc);
+		} else {
+			const auto &str = values[val_idx];
+			vals[i] = yyjson_mut_rawncpy(doc, str.GetData(), str.GetSize());
 		}
 		D_ASSERT(vals[i] != nullptr);
 	}
@@ -476,7 +503,8 @@ static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyj
 
 static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                          idx_t count) {
-	switch (value_v.GetType().id()) {
+	const auto &type = value_v.GetType();
+	switch (type.id()) {
 	case LogicalTypeId::SQLNULL:
 		CreateValuesNull(doc, vals, count);
 		break;
@@ -550,17 +578,28 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::VARINT:
 	case LogicalTypeId::UUID: {
 		Vector string_vector(LogicalTypeId::VARCHAR, count);
 		VectorOperations::DefaultCast(value_v, string_vector, count);
 		TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 		break;
 	}
+	case LogicalTypeId::VARINT: {
+		Vector string_vector(LogicalTypeId::VARCHAR, count);
+		VectorOperations::DefaultCast(value_v, string_vector, count);
+		CreateRawValues(doc, vals, string_vector, count);
+		break;
+	}
 	case LogicalTypeId::DECIMAL: {
-		Vector double_vector(LogicalType::DOUBLE, count);
-		VectorOperations::DefaultCast(value_v, double_vector, count);
-		TemplatedCreateValues<double, double>(doc, vals, double_vector, count);
+		if (DecimalType::GetWidth(type) > 15) {
+			Vector string_vector(LogicalTypeId::VARCHAR, count);
+			VectorOperations::DefaultCast(value_v, string_vector, count);
+			CreateRawValues(doc, vals, string_vector, count);
+		} else {
+			Vector double_vector(LogicalType::DOUBLE, count);
+			VectorOperations::DefaultCast(value_v, double_vector, count);
+			TemplatedCreateValues<double, double>(doc, vals, double_vector, count);
+		}
 		break;
 	}
 	case LogicalTypeId::INVALID:
@@ -604,7 +643,6 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t i = 0; i < count; i++) {
 		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(objs[i], alc);
 	}
-
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
@@ -637,7 +675,6 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	for (idx_t i = 0; i < count; i++) {
 		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(arrs[i], alc);
 	}
-
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
