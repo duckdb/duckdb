@@ -12,39 +12,6 @@
 #include "fsst.h"
 #include "miniz_wrapper.hpp"
 
-/*
-Data layout per segment:
-+------------------------------------------------+
-|                  Header                        |
-|   +----------------------------------------+   |
-|   |   fsst_compression_header_t  header    |   |
-|   +----------------------------------------+   |
-|                                                |
-+------------------------------------------------+
-|               Index Buffer                 |
-|   +------------------------------------+   |
-|   |   uint16_t index_buffer_idx[]      |   |
-|   +------------------------------------+   |
-|      tuple index -> index buffer idx       |
-|                (bitpacked)                 |
-|                                            |
-+--------------------------------------------+
-|               Symbol Table                 |
-|   +------------------------------------+   |
-|   |   duckdb_fsst_decoder_t  table     |   |
-|   +------------------------------------+   |
-|  symbol table used to compress the strings |
-|                                            |
-+--------------------------------------------+
-|                Dictionary                  |
-|   +------------------------------------+   |
-|   |   uint8_t *raw_string_data         |   |
-|   +------------------------------------+   |
-|      the string data without lengths       |
-|                                            |
-+--------------------------------------------+
-*/
-
 namespace duckdb {
 struct FSSTScanState;
 
@@ -112,10 +79,12 @@ struct FSSTAnalyzeState : public AnalyzeState {
 	}
 
 	~FSSTAnalyzeState() override {
-		duckdb_fsst_destroy(fsst_encoder.get());
+		if (fsst_encoder) {
+			duckdb_fsst_destroy(fsst_encoder);
+		}
 	}
 
-	optional_ptr<duckdb_fsst_encoder_t> fsst_encoder;
+	duckdb_fsst_encoder_t *fsst_encoder = nullptr;
 	idx_t count;
 
 	StringHeap fsst_string_heap;
@@ -203,10 +172,10 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	// TODO: do we really need to encode to get a size estimate?
 	auto compressed_ptrs = vector<unsigned char *>(string_count, nullptr);
 	auto compressed_sizes = vector<size_t>(string_count, 0);
-	auto compressed_buffer = make_unsafe_uniq_array<uint8_t>(output_buffer_size);
+	unique_ptr<unsigned char[]> compressed_buffer(new unsigned char[output_buffer_size]);
 
 	auto res =
-	    duckdb_fsst_compress(state.fsst_encoder.get(), string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
+	    duckdb_fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
 	                         output_buffer_size, compressed_buffer.get(), &compressed_sizes[0], &compressed_ptrs[0]);
 
 	if (string_count != res) {
@@ -246,7 +215,9 @@ public:
 	}
 
 	~FSSTCompressionState() override {
-		duckdb_fsst_destroy(fsst_encoder.get());
+		if (fsst_encoder) {
+			duckdb_fsst_destroy(fsst_encoder);
+		}
 	}
 
 	void Reset() {
@@ -383,7 +354,11 @@ public:
 		                                               current_segment->count, current_width);
 
 		// Write the fsst symbol table or nothing
-		memcpy(base_ptr + symbol_table_offset, &fsst_serialized_symbol_table[0], fsst_serialized_symbol_table_size);
+		if (fsst_encoder != nullptr) {
+			memcpy(base_ptr + symbol_table_offset, &fsst_serialized_symbol_table[0], fsst_serialized_symbol_table_size);
+		} else {
+			memset(base_ptr + symbol_table_offset, 0, fsst_serialized_symbol_table_size);
+		}
 
 		Store<uint32_t>(NumericCast<uint32_t>(symbol_table_offset),
 		                data_ptr_cast(&header_ptr->fsst_symbol_table_offset));
@@ -424,7 +399,7 @@ public:
 	bitpacking_width_t current_width;
 	idx_t last_fitting_size;
 
-	optional_ptr<duckdb_fsst_encoder_t> fsst_encoder;
+	duckdb_fsst_encoder_t *fsst_encoder = nullptr;
 	unsigned char fsst_serialized_symbol_table[sizeof(duckdb_fsst_decoder_t)];
 	size_t fsst_serialized_symbol_table_size = sizeof(duckdb_fsst_decoder_t);
 };
@@ -438,10 +413,9 @@ unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer
 		throw InternalException("No encoder found during FSST compression");
 	}
 
-	compression_state->fsst_encoder = std::move(analyze_state.fsst_encoder);
+	compression_state->fsst_encoder = analyze_state.fsst_encoder;
 	compression_state->fsst_serialized_symbol_table_size =
-	    duckdb_fsst_export(compression_state->fsst_encoder.get(), &compression_state->fsst_serialized_symbol_table[0]);
-	// FIXME: move of 'optional_ptr' should already set to null, no???
+	    duckdb_fsst_export(compression_state->fsst_encoder, &compression_state->fsst_serialized_symbol_table[0]);
 	analyze_state.fsst_encoder = nullptr;
 
 	return std::move(compression_state);
@@ -496,14 +470,14 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	vector<unsigned char> compress_buffer(compress_buffer_size, 0);
 
 	auto res = duckdb_fsst_compress(
-	    state.fsst_encoder.get(), /* IN: encoder obtained from duckdb_fsst_create(). */
-	    total_count,              /* IN: number of strings in batch to compress. */
-	    sizes_in.data(),          /* IN: byte-lengths of the inputs */
-	    strings_in.data(),        /* IN: input string start pointers. */
-	    compress_buffer_size,     /* IN: byte-length of output buffer. */
-	    compress_buffer.data(),   /* OUT: memory buffer to put the compressed strings in (one after the other). */
-	    sizes_out.data(),         /* OUT: byte-lengths of the compressed strings. */
-	    strings_out.data()        /* OUT: output string start pointers. Will all point into [output,output+size). */
+	    state.fsst_encoder,   /* IN: encoder obtained from duckdb_fsst_create(). */
+	    total_count,          /* IN: number of strings in batch to compress. */
+	    &sizes_in[0],         /* IN: byte-lengths of the inputs */
+	    &strings_in[0],       /* IN: input string start pointers. */
+	    compress_buffer_size, /* IN: byte-length of output buffer. */
+	    &compress_buffer[0],  /* OUT: memory buffer to put the compressed strings in (one after the other). */
+	    &sizes_out[0],        /* OUT: byte-lengths of the compressed strings. */
+	    &strings_out[0]       /* OUT: output string start pointers. Will all point into [output,output+size). */
 	);
 
 	if (res != total_count) {
