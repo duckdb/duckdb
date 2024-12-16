@@ -16,12 +16,12 @@ namespace duckdb {
 class WindowTokenTree : public WindowMergeSortTree {
 public:
 	WindowTokenTree(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<column_t> &sort_idx,
-	                const idx_t count)
-	    : WindowMergeSortTree(context, orders, sort_idx, count) {
+	                const idx_t count, bool unique = false)
+	    : WindowMergeSortTree(context, orders, sort_idx, count, unique) {
 	}
 	WindowTokenTree(ClientContext &context, const BoundOrderModifier &order_bys, const vector<column_t> &sort_idx,
-	                const idx_t count)
-	    : WindowTokenTree(context, order_bys.orders, sort_idx, count) {
+	                const idx_t count, bool unique = false)
+	    : WindowTokenTree(context, order_bys.orders, sort_idx, count, unique) {
 	}
 
 	unique_ptr<WindowAggregatorState> GetLocalState() override;

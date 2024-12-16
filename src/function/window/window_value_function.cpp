@@ -144,10 +144,6 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientCon
 
 	offset_idx = shared.RegisterEvaluate(wexpr.offset_expr);
 	default_idx = shared.RegisterEvaluate(wexpr.default_expr);
-
-	for (const auto &order : wexpr.arg_orders) {
-		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
-	}
 }
 
 WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context,
