@@ -90,7 +90,8 @@ static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOp
 	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
 }
 
-// duckdb_logs is slightly wonky in that it bind_replace's itself with a join between the
+// duckdb_logs is slightly wonky in that it bind_replace's itself with a join between the duckdb_logs and
+// duckdb_log_contexts table functions.
 static unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	bool context_id_only = false;
 	auto context_id_only_settings = input.named_parameters.find("context_id_only");

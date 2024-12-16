@@ -73,7 +73,6 @@ bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	return true;
 }
 
-// TODO: is this desirable?
 bool ThreadSafeLogger::ShouldLog(LogLevel log_level) {
 	return ShouldLog(context.context.default_log_type, log_level);
 }

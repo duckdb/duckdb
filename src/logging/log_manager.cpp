@@ -1,16 +1,6 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/log_storage.hpp"
 
-//#include "duckdb/common/types/column/column_data_collection.hpp"
-//#include "duckdb/common/types/data_chunk.hpp"
-//#include "duckdb/main/client_context.hpp"
-//#include "duckdb/main/connection.hpp"
-//#include "duckdb/main/database.hpp"
-//#include "duckdb/main/table_description.hpp"
-//
-//#include <duckdb/common/file_opener.hpp>
-//#include <duckdb/parallel/thread_context.hpp>
-
 namespace duckdb {
 
 unique_ptr<Logger> LogManager::CreateLogger(LoggingContext context, bool thread_safe, bool mutable_settings) {

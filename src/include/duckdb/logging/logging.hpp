@@ -74,7 +74,6 @@ struct LoggingContext {
 
 	LogContextScope scope;
 
-	// TODO: potentially we might want to add stuff to identify which connection and thread the log came from
 	optional_idx thread;
 	optional_idx client_context;
 	optional_idx transaction_id;

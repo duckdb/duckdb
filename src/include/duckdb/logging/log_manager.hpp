@@ -16,7 +16,7 @@ namespace duckdb {
 // - Handles configuration changes
 // - Creates Loggers with cached configuration
 // - Main sink for logs (either by logging directly into this, or by syncing a pre-cached set of log entries)
-// - Holds the logs (in case of in-memory
+// - Holds the log storage
 class LogManager : public enable_shared_from_this<LogManager> {
 	friend class ThreadSafeLogger;
 	friend class ThreadLocalLogger;
