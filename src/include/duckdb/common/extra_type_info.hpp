@@ -36,7 +36,7 @@ struct ExtraTypeInfo {
 
 	ExtraTypeInfoType type;
 	string alias;
-	vector<Value> modifiers;
+	child_list_t<Value> modifiers;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) const;
@@ -148,13 +148,13 @@ private:
 
 struct UserTypeInfo : public ExtraTypeInfo {
 	explicit UserTypeInfo(string name_p);
-	UserTypeInfo(string name_p, vector<Value> modifiers_p);
-	UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p);
+	UserTypeInfo(string name_p, child_list_t<Value> modifiers_p);
+	UserTypeInfo(string catalog_p, string schema_p, string name_p, child_list_t<Value> modifiers_p);
 
 	string catalog;
 	string schema;
 	string user_type_name;
-	vector<Value> user_type_modifiers;
+	child_list_t<Value> user_type_modifiers;
 
 public:
 	void Serialize(Serializer &serializer) const override;

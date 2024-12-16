@@ -373,13 +373,18 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 			for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
 				auto &type_mod = type_mods[i];
 				auto user_type_mod = user_type_mods[i];
-				if (type_mod.type() == user_type_mod.type()) {
+				if (type_mod.first != user_type_mod.first) {
+					throw BinderException("Cannot apply type modifier '%s' to type '%s', expected type modifier '%s'",
+					                      user_type_mod.first, user_type_name, type_mod.first);
+				}
+				if (type_mod.second.type() == user_type_mod.second.type()) {
 					type_mod = std::move(user_type_mod);
-				} else if (user_type_mod.DefaultTryCastAs(type_mod.type())) {
+				} else if (user_type_mod.second.DefaultTryCastAs(type_mod.second.type())) {
 					type_mod = std::move(user_type_mod);
 				} else {
 					throw BinderException("Cannot apply type modifier '%s' to type '%s', expected value of type '%s'",
-					                      user_type_mod.ToString(), user_type_name, type_mod.type().ToString());
+					                      user_type_mod.second.ToString(), user_type_name,
+					                      type_mod.second.type().ToString());
 				}
 			}
 		} else if (!user_type_mods.empty()) {

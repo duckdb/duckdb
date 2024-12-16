@@ -365,21 +365,43 @@ bool TypeIsInteger(PhysicalType type) {
 	       type == PhysicalType::UINT128;
 }
 
+static string TypeModifierListToString(const child_list_t<Value> &mod_list) {
+	string result = "";
+	if (mod_list.empty()) {
+		return result;
+	}
+	for (idx_t i = 0; i < mod_list.size(); i++) {
+		auto &mod_label = mod_list[i].first;
+		auto &mod_value = mod_list[i].second;
+
+		if (StringUtil::StartsWith(mod_label, "__")) {
+			// Hidden modifier, dont print
+			continue;
+		}
+
+		if (!mod_label.empty()) {
+			result += mod_label + " ";
+		}
+
+		result += mod_value.ToString();
+		if (i < mod_list.size() - 1) {
+			result += ", ";
+		}
+	}
+	if (!result.empty()) {
+		// Only add parentheses if we actually wrote something
+		result = "(" + result + ")";
+	}
+	return result;
+}
+
 string LogicalType::ToString() const {
 	if (id_ != LogicalTypeId::USER) {
 		auto alias = GetAlias();
 		if (!alias.empty()) {
 			auto mods_ptr = GetModifiers();
 			if (mods_ptr && !mods_ptr->empty()) {
-				auto &mods = *mods_ptr;
-				alias += "(";
-				for (idx_t i = 0; i < mods.size(); i++) {
-					alias += mods[i].ToString();
-					if (i < mods.size() - 1) {
-						alias += ", ";
-					}
-				}
-				alias += ")";
+				alias += TypeModifierListToString(*mods_ptr);
 			}
 			return alias;
 		}
@@ -491,14 +513,7 @@ string LogicalType::ToString() const {
 		result += KeywordHelper::WriteOptionallyQuoted(type);
 
 		if (!mods.empty()) {
-			result += "(";
-			for (idx_t i = 0; i < mods.size(); i++) {
-				result += mods[i].ToString();
-				if (i < mods.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += ")";
+			result += TypeModifierListToString(mods);
 		}
 
 		return result;
@@ -1360,7 +1375,7 @@ bool LogicalType::HasAlias() const {
 	return false;
 }
 
-void LogicalType::SetModifiers(vector<Value> modifiers) {
+void LogicalType::SetModifiers(child_list_t<Value> modifiers) {
 	if (!type_info_ && !modifiers.empty()) {
 		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
 	}
@@ -1377,7 +1392,7 @@ bool LogicalType::HasModifiers() const {
 	return false;
 }
 
-vector<Value> LogicalType::GetModifiersCopy() const {
+child_list_t<Value> LogicalType::GetModifiersCopy() const {
 	if (id() == LogicalTypeId::USER) {
 		return UserType::GetTypeModifiers(*this);
 	}
@@ -1387,7 +1402,7 @@ vector<Value> LogicalType::GetModifiersCopy() const {
 	return {};
 }
 
-optional_ptr<vector<Value>> LogicalType::GetModifiers() {
+optional_ptr<child_list_t<Value>> LogicalType::GetModifiers() {
 	if (id() == LogicalTypeId::USER) {
 		return UserType::GetTypeModifiers(*this);
 	}
@@ -1397,7 +1412,7 @@ optional_ptr<vector<Value>> LogicalType::GetModifiers() {
 	return nullptr;
 }
 
-optional_ptr<const vector<Value>> LogicalType::GetModifiers() const {
+optional_ptr<const child_list_t<Value>> LogicalType::GetModifiers() const {
 	if (id() == LogicalTypeId::USER) {
 		return UserType::GetTypeModifiers(*this);
 	}
@@ -1647,13 +1662,13 @@ const string &UserType::GetTypeName(const LogicalType &type) {
 	return info->Cast<UserTypeInfo>().user_type_name;
 }
 
-const vector<Value> &UserType::GetTypeModifiers(const LogicalType &type) {
+const child_list_t<Value> &UserType::GetTypeModifiers(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
 	return info->Cast<UserTypeInfo>().user_type_modifiers;
 }
 
-vector<Value> &UserType::GetTypeModifiers(LogicalType &type) {
+child_list_t<Value> &UserType::GetTypeModifiers(LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.GetAuxInfoShrPtr();
 	return info->Cast<UserTypeInfo>().user_type_modifiers;
@@ -1664,12 +1679,12 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 	return LogicalType(LogicalTypeId::USER, std::move(info));
 }
 
-LogicalType LogicalType::USER(const string &user_type_name, const vector<Value> &user_type_mods) {
+LogicalType LogicalType::USER(const string &user_type_name, const child_list_t<Value> &user_type_mods) {
 	auto info = make_shared_ptr<UserTypeInfo>(user_type_name, user_type_mods);
 	return LogicalType(LogicalTypeId::USER, std::move(info));
 }
 
-LogicalType LogicalType::USER(string catalog, string schema, string name, vector<Value> user_type_mods) {
+LogicalType LogicalType::USER(string catalog, string schema, string name, child_list_t<Value> user_type_mods) {
 	auto info = make_shared_ptr<UserTypeInfo>(std::move(catalog), std::move(schema), std::move(name),
 	                                          std::move(user_type_mods));
 	return LogicalType(LogicalTypeId::USER, std::move(info));

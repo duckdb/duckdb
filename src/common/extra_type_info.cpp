@@ -22,19 +22,19 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
 	return make_shared_ptr<ExtraTypeInfo>(*this);
 }
 
-static bool CompareModifiers(const vector<Value> &left, const vector<Value> &right) {
+static bool CompareModifiers(const child_list_t<Value> &left, const child_list_t<Value> &right) {
 	// Check if the common prefix of the properties is the same for both types
 	auto common_props = MinValue(left.size(), right.size());
 	for (idx_t i = 0; i < common_props; i++) {
-		if (left[i].type() != right[i].type()) {
+		if (left[i].second.type() != right[i].second.type()) {
 			return false;
 		}
 		// Special case for nulls:
 		// For type modifiers, NULL is equivalent to ANY
-		if (left[i].IsNull() || right[i].IsNull()) {
+		if (left[i].second.IsNull() || right[i].second.IsNull()) {
 			continue;
 		}
-		if (left[i] != right[i]) {
+		if (left[i].second != right[i].second) {
 			return false;
 		}
 	}
@@ -187,12 +187,12 @@ UserTypeInfo::UserTypeInfo(string name_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
 }
 
-UserTypeInfo::UserTypeInfo(string name_p, vector<Value> modifiers_p)
+UserTypeInfo::UserTypeInfo(string name_p, child_list_t<Value> modifiers_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)),
       user_type_modifiers(std::move(modifiers_p)) {
 }
 
-UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p)
+UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p, child_list_t<Value> modifiers_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
       user_type_name(std::move(name_p)), user_type_modifiers(std::move(modifiers_p)) {
 }

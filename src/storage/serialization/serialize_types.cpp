@@ -12,13 +12,15 @@ namespace duckdb {
 void ExtraTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ExtraTypeInfoType>(100, "type", type);
 	serializer.WritePropertyWithDefault<string>(101, "alias", alias);
-	serializer.WritePropertyWithDefault<vector<Value>>(102, "modifiers", modifiers, vector<Value>());
+	/* [Deleted] (vector<Value>) "modifiers" */
+	serializer.WritePropertyWithDefault<child_list_t<Value>>(103, "type_modifiers", modifiers, child_list_t<Value>());
 }
 
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ExtraTypeInfoType>(100, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(101, "alias");
-	auto modifiers = deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(102, "modifiers", vector<Value>());
+	deserializer.ReadDeletedProperty<vector<Value>>(102, "modifiers");
+	auto modifiers = deserializer.ReadPropertyWithExplicitDefault<child_list_t<Value>>(103, "type_modifiers", child_list_t<Value>());
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
@@ -167,7 +169,8 @@ void UserTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "user_type_name", user_type_name);
 	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog, string());
 	serializer.WritePropertyWithDefault<string>(202, "schema", schema, string());
-	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_modifiers, vector<Value>());
+	/* [Deleted] (vector<Value>) "user_type_modifiers" */
+	serializer.WritePropertyWithDefault<child_list_t<Value>>(204, "user_modifiers", user_type_modifiers, child_list_t<Value>());
 }
 
 shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -175,7 +178,8 @@ shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<string>(200, "user_type_name", result->user_type_name);
 	deserializer.ReadPropertyWithExplicitDefault<string>(201, "catalog", result->catalog, string());
 	deserializer.ReadPropertyWithExplicitDefault<string>(202, "schema", result->schema, string());
-	deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(203, "user_type_modifiers", result->user_type_modifiers, vector<Value>());
+	deserializer.ReadDeletedProperty<vector<Value>>(203, "user_type_modifiers");
+	deserializer.ReadPropertyWithExplicitDefault<child_list_t<Value>>(204, "user_modifiers", result->user_type_modifiers, child_list_t<Value>());
 	return std::move(result);
 }
 

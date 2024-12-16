@@ -20,7 +20,14 @@
         "id": 102,
         "name": "modifiers",
         "type": "vector<Value>",
-        "default": "vector<Value>()"
+        "deleted": true
+      },
+      {
+        "id": 103,
+        "name": "type_modifiers",
+        "type": "child_list_t<Value>",
+        "default": "child_list_t<Value>()",
+        "property": "modifiers"
       }
     ],
     "pointer_type": "shared_ptr"
@@ -147,7 +154,14 @@
         "id": 203,
         "name": "user_type_modifiers",
         "type": "vector<Value>",
-        "default": "vector<Value>()"
+        "deleted": true
+      },
+      {
+        "id": 204,
+        "name": "user_modifiers",
+        "type": "child_list_t<Value>",
+        "default": "child_list_t<Value>()",
+        "property": "user_type_modifiers"
       }
     ]
   },
