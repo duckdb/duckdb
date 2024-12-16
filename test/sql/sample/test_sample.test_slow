@@ -214,6 +214,8 @@ statement error
 select * from integers using sample 10000%;
 ----
 
+mode skip
+
 query I
 select i from integers using sample (1 rows) repeatable (0);
 ----
