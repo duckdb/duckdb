@@ -644,7 +644,7 @@ void LoggingMode::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 // Logging Level
 //===----------------------------------------------------------------------===//
 Value LoggingLevel::GetSetting(const ClientContext &context) {
-	return EnumUtil::ToString(context.db->GetLogManager().GetConfig().mode);
+	return EnumUtil::ToString(context.db->GetLogManager().GetConfig().level);
 }
 void LoggingLevel::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
 	db->GetLogManager().SetLogLevel(EnumUtil::FromString<LogLevel>(parameter.GetValue<string>()));
