@@ -714,9 +714,6 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 		return;
 	}
 
-	if (chunk.size() == 10) {
-		auto break_here = 0;
-	}
 	idx_t tuples_consumed = FillReservoir(chunk);
 	base_reservoir_sample->num_entries_seen_total += tuples_consumed;
 	D_ASSERT(sample_count == 0 || reservoir_chunk->chunk.size() >= 1);
