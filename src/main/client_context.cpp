@@ -218,7 +218,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	context.client_context = reinterpret_cast<idx_t>(this);
 	context.transaction_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(context, true);
-	Logger::Info(*this, "Running query '%s'", query);
+	Logger::Info("duckdb.ClientContext.BeginQuery", *this, path_p);
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,

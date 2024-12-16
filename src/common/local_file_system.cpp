@@ -286,7 +286,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 
 	if (opener) {
-		Logger::Info(*opener, "Opening file '%s' with LocalFileSystem", path_p);
+		Logger::Info("duckdb.FileSystem.LocalFileSystem.OpenFile", *opener, path_p);
 	}
 
 	flags.Verify();
@@ -818,7 +818,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	flags.Verify();
 
 	if (opener) {
-		Logger::Info(*opener, "Opening file '%s' with LocalFileSystem", path_p);
+		Logger::Info("duckdb.LocalFileSystem.OpenFile", *opener, path_p);
 	}
 
 	DWORD desired_access;
