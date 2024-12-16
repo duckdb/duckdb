@@ -146,11 +146,10 @@ public:
 		Log(log_type, log_context_source, LogLevel::FATAL, params...);
 	}
 
-	//! TODO: implement log_type enum-ify interface?
-	// //! Log message using a specific log_type_id (FASTER)
-	// virtual void Log(idx_t log_type_id, LogLevel log_level, const char *log_message)  = 0;
-	// //! Get the logging type
-	// virtual idx_t GetLogType(const char *log_type) = 0;
+	template <class T>
+	static void Flush(T &log_context_source) {
+		Get(log_context_source).Flush();
+	}
 
 	virtual bool IsThreadSafe() = 0;
 	virtual bool IsMutable() {
@@ -254,7 +253,6 @@ class NopLogger : public Logger {
 public:
 	explicit NopLogger(LogManager &manager) : Logger(manager) {
 	}
-	// TODO: can we do better than a virtual method always returning false?
 	bool ShouldLog(const char *log_type, LogLevel log_level) override {
 		return false;
 	}
