@@ -1943,7 +1943,8 @@ LogContextScope EnumUtil::FromString<LogContextScope>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetLogLevelValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(LogLevel::DEBUGGING), "DEBUGGING" },
+		{ static_cast<uint32_t>(LogLevel::TRACE), "TRACE" },
+		{ static_cast<uint32_t>(LogLevel::DEBUGGING), "DEBUG" },
 		{ static_cast<uint32_t>(LogLevel::INFO), "INFO" },
 		{ static_cast<uint32_t>(LogLevel::WARN), "WARN" },
 		{ static_cast<uint32_t>(LogLevel::ERROR), "ERROR" },
@@ -1954,12 +1955,12 @@ const StringUtil::EnumStringLiteral *GetLogLevelValues() {
 
 template<>
 const char* EnumUtil::ToChars<LogLevel>(LogLevel value) {
-	return StringUtil::EnumToString(GetLogLevelValues(), 5, "LogLevel", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogLevelValues(), 6, "LogLevel", static_cast<uint32_t>(value));
 }
 
 template<>
 LogLevel EnumUtil::FromString<LogLevel>(const char *value) {
-	return static_cast<LogLevel>(StringUtil::StringToEnum(GetLogLevelValues(), 5, "LogLevel", value));
+	return static_cast<LogLevel>(StringUtil::StringToEnum(GetLogLevelValues(), 6, "LogLevel", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogModeValues() {

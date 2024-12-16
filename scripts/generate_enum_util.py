@@ -39,6 +39,7 @@ overrides = {
     },
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},
+    "LogLevel": {"DEBUGGING": "DEBUG"}
 }
 
 

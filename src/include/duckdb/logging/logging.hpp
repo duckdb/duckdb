@@ -20,11 +20,12 @@ namespace duckdb {
 
 // TODO: should we reconsider these logging levels?
 enum class LogLevel : uint8_t {
-	DEBUGGING = 10,
-	INFO = 20,
-	WARN = 30,
-	ERROR = 40,
-	FATAL = 50,
+	TRACE = 10,
+	DEBUGGING = 20, // ToString-ed as DEBUG, but named DEBUGGING due to conflict with DEBUG define
+	INFO = 30,
+	WARN = 40,
+	ERROR = 50,
+	FATAL = 60,
 };
 
 enum class LogContextScope : uint8_t {

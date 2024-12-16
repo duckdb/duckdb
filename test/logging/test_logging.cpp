@@ -53,7 +53,7 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 	Connection con(db);
 
 	duckdb::vector<Value> default_types = {"default", "default"};
-	duckdb::vector<string> log_levels = {"DEBUGGING", "INFO", "WARN", "ERROR", "FATAL"};
+	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
 	auto minimum_level_index = std::find(log_levels.begin(), log_levels.end(), minimum_level) - log_levels.begin();
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
@@ -78,6 +78,7 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 	bool disabled_mode = !disabled_loggers.empty();
 
 	// Log all to global logger
+	TEST_ALL_LOG_TEMPLATES(Logger::Trace, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_TEMPLATES(Logger::Debug, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_TEMPLATES(Logger::Info, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_TEMPLATES(Logger::Warn, *db.instance, DatabaseInstance);
@@ -85,6 +86,7 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 	TEST_ALL_LOG_TEMPLATES(Logger::Fatal, *db.instance, DatabaseInstance);
 
 	// Log all to client context logger
+	TEST_ALL_LOG_TEMPLATES(Logger::Trace, *con.context, ClientContext);
 	TEST_ALL_LOG_TEMPLATES(Logger::Debug, *con.context, ClientContext);
 	TEST_ALL_LOG_TEMPLATES(Logger::Info, *con.context, ClientContext);
 	TEST_ALL_LOG_TEMPLATES(Logger::Warn, *con.context, ClientContext);
@@ -96,7 +98,7 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 	duckdb::vector<Value> expected_messages;
 	duckdb::vector<Value> expected_log_levels;
 	idx_t num_runs = 2;
-	idx_t num_log_levels = 5;
+	idx_t num_log_levels = 6;
 
 	for (idx_t i = 0; i < num_runs; i++) {
 		for (idx_t j = minimum_level_index; j < num_log_levels; j++) {
@@ -139,7 +141,7 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 // - all log levels
 // - all combinations of log levels and having either enabled_loggers or disabled_loggers
 TEST_CASE("Test logging", "[logging][.]") {
-	duckdb::vector<string> log_levels = {"DEBUGGING", "INFO", "WARN", "ERROR", "FATAL"};
+	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
 	for (const auto &level : log_levels) {
 		// Test in regular mode without explicitly enabled or disabled loggers
 		test_logging(level, "", "");

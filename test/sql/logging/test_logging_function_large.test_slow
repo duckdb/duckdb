@@ -10,7 +10,7 @@ statement ok
 set enable_logging=true;
 
 statement ok
-set logging_level='debugging';
+set logging_level='debug';
 
 loop i 0 10000
 

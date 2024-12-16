@@ -7,7 +7,7 @@ from duckdb_logs
 ----
 
 statement ok
-set logging_level='debugging';
+set logging_level='debug';
 
 statement ok
 set enable_logging=true;

@@ -90,6 +90,14 @@ public:
 
 	//! Templates wrapping Logging::Log(..., LoggingLevel, ....)
 	template <class T, typename... ARGS>
+	static void Trace(T &log_context_source, ARGS... params) {
+		Log(log_context_source, LogLevel::TRACE, params...);
+	}
+	template <class T, typename... ARGS>
+	static void Trace(const char *log_type, T &log_context_source, ARGS... params) {
+		Log(log_type, log_context_source, LogLevel::TRACE, params...);
+	}
+	template <class T, typename... ARGS>
 	static void Debug(T &log_context_source, ARGS... params) {
 		Log(log_context_source, LogLevel::DEBUGGING, params...);
 	}

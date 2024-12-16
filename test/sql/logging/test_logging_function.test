@@ -10,19 +10,19 @@ statement ok
 set enable_logging=true;
 
 statement ok
-set logging_level='debugging';
+set logging_level='info';
 
 statement ok
-FROM test_logging(3, log_message='hello from the global_log', logger='global')
+FROM test_logging(3, log_message='hello from the global_log', logger='global', level='info')
 
 statement ok
-FROM test_logging(3, log_message='hello from the client_context', logger='client_context')
+FROM test_logging(3, log_message='hello from the client_context', logger='client_context', level='info')
 
 statement ok
-FROM test_logging(3, log_message='hello from the thread_context', logger='thread_local')
+FROM test_logging(3, log_message='hello from the thread_context', logger='thread_local', level='info')
 
 statement ok
-FROM test_logging(3, log_message='hello from the file_opener', logger='file_opener')
+FROM test_logging(3, log_message='hello from the file_opener', logger='file_opener', level='info')
 
 statement ok
 from duckdb_logs
