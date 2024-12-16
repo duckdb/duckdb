@@ -27,3 +27,25 @@ ORDER BY 2
 9	8	1	0.0
 6	9	3	0.2222222222222222
 3	10	7	0.6666666666666666
+
+# Test parallel token construction (uses 4 threads)
+query IIIII
+WITH ranked AS (
+	SELECT 
+		i,
+		i // 100 AS p,
+		i % 50 AS o,
+		100 - 2 * (i % 50) - 1 AS expected,
+		rank(ORDER BY i % 50 DESC) OVER w AS actual,
+	FROM range(100_000) tbl(i)
+	WINDOW w AS (
+		PARTITION BY i // 100
+		ORDER BY i
+	)
+)
+SELECT *
+FROM ranked
+WHERE expected <> actual
+ORDER BY p, o DESC
+LIMIT 20
+----
