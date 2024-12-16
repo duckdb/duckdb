@@ -77,7 +77,9 @@ public:
 		alias.clear();
 	}
 
-protected:
+	// TODO: Make the following protected
+	// protected:
+
 	//! Type of the expression
 	ExpressionType type;
 

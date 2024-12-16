@@ -203,6 +203,13 @@ OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFun
 	return OperatorPartitionData(0);
 }
 
+vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
+	vector<PartitionStatistics> result;
+	auto &storage = bind_data.table.GetStorage();
+	return storage.GetPartitionStats(context);
+}
+
 BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	return BindInfo(bind_data.table);
@@ -436,6 +443,7 @@ TableFunction TableScanFunction::GetIndexScanFunction() {
 	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
+	scan_function.get_partition_stats = nullptr;
 	return scan_function;
 }
 
@@ -450,6 +458,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_partition_data = TableScanGetPartitionData;
+	scan_function.get_partition_stats = TableScanGetPartitionStats;
 	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;

@@ -136,6 +136,10 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 	return storage->GetStatistics(context, column.StorageOid());
 }
 
+unique_ptr<BlockingSample> DuckTableEntry::GetSample() {
+	return storage->GetSample();
+}
+
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
 	if (transaction.HasContext()) {
 		return AlterEntry(transaction.GetContext(), info);

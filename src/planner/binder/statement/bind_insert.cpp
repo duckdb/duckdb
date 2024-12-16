@@ -167,6 +167,11 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		    insert.set_columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
+
+		if (!column.Type().SupportsRegularUpdate()) {
+			insert.update_is_del_and_insert = true;
+		}
+
 		insert.set_columns.push_back(column.Physical());
 		logical_column_ids.push_back(column.Oid());
 		insert.set_types.push_back(column.Type());
@@ -196,13 +201,13 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		}
 	}
 
-	// Verify that none of the columns that are targeted with a SET expression are indexed on
+	// If any column targeted by a SET expression has an index, then
+	// we need to rewrite this to an DELETE + INSERT.
 	for (idx_t i = 0; i < logical_column_ids.size(); i++) {
 		auto &column = logical_column_ids[i];
 		if (indexed_columns.count(column)) {
-			throw BinderException("Can not assign to column '%s' because it has a UNIQUE/PRIMARY KEY constraint or is "
-			                      "referenced by an INDEX",
-			                      column_names[i]);
+			insert.update_is_del_and_insert = true;
+			break;
 		}
 	}
 }

@@ -7,10 +7,11 @@ require json
 statement ok
 pragma enable_verification
 
-statement error
+# this used to error but the json pointer spec says we should be able to extract the root using the empty string
+query I
 select json_extract('{"my_field": "duck"}', '')
 ----
-Binder Error
+{"my_field":"duck"}
 
 query T
 select json_extract('{"my_field": "duck"}', '$.my_field')

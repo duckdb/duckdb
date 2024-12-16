@@ -1,0 +1,51 @@
+# name: test/sql/index/art/constraints/test_art_concurrent_loop.test_slow
+# description: Test repeated DELETE + INSERT in a concurrent loop.
+# group: [constraints]
+
+# We must never throw a constraint violation.
+
+statement ok
+CREATE TABLE tbl (i INT PRIMARY KEY);
+
+statement ok
+INSERT INTO tbl SELECT * FROM range(10000);
+
+concurrentloop threadid 0 20
+
+loop i 0 100
+
+statement ok
+BEGIN;
+
+statement maybe
+DELETE FROM tbl WHERE i = ${i} + ${threadid} * 10;
+----
+TransactionContext Error
+
+statement maybe
+INSERT INTO tbl VALUES (${i} + ${threadid} * 10);
+----
+TransactionContext Error
+
+statement maybe
+COMMIT;
+----
+TransactionContext Error
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM tbl;
+----
+10000	49995000
+
+loop i 0 10000
+
+query I
+SELECT i = ${i} FROM tbl WHERE i = ${i};
+----
+true
+
+endloop

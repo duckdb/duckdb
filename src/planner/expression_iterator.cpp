@@ -119,6 +119,9 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		if (window_expr.default_expr) {
 			callback(window_expr.default_expr);
 		}
+		for (auto &order : window_expr.arg_orders) {
+			callback(order.expression);
+		}
 		break;
 	}
 	case ExpressionClass::BOUND_UNNEST: {

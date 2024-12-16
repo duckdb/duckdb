@@ -337,6 +337,11 @@ void BufferedJSONReader::ThrowTransformError(idx_t buf_index, idx_t line_or_obje
 	                            error_message);
 }
 
+bool BufferedJSONReader::HasThrown() {
+	lock_guard<mutex> guard(lock);
+	return thrown;
+}
+
 double BufferedJSONReader::GetProgress() const {
 	lock_guard<mutex> guard(lock);
 	if (HasFileHandle()) {
