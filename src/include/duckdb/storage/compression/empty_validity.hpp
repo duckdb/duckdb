@@ -15,8 +15,11 @@ public:
 		idx_t count = 0;
 	};
 	struct EmptyValidityCompressionState : public CompressionState {
-		explicit EmptyValidityCompressionState(const CompressionInfo &info) : CompressionState(info) {
+		explicit EmptyValidityCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
+		    : CompressionState(info),
+		      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY)) {
 		}
+		optional_ptr<CompressionFunction> function;
 	};
 	struct EmptyValiditySegmentScanState : public SegmentScanState {
 		EmptyValiditySegmentScanState() {
@@ -45,16 +48,17 @@ public:
 	}
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer,
 	                                                    unique_ptr<AnalyzeState> state_p) {
-		auto res = make_uniq<EmptyValidityCompressionState>(state_p->info);
+		auto res = make_uniq<EmptyValidityCompressionState>(checkpointer, state_p->info);
 		auto &state = state_p->Cast<EmptyValidityAnalyzeState>();
 
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto function = CreateFunction();
+		auto row_start = checkpointer.GetRowGroup().start;
+
 		auto &info = state.info;
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, 0, info.GetBlockSize(), info.GetBlockSize());
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *res->function, type, row_start,
+		                                                                info.GetBlockSize(), info.GetBlockSize());
 		compressed_segment->count = state.count;
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
