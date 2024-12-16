@@ -27,7 +27,6 @@ public:
 	explicit LogManager(DatabaseInstance &db, LogConfig config = LogConfig());
 	~LogManager();
 	void Initialize();
-	void Shutdown();
 
 	static LogManager &Get(ClientContext &context);
 	unique_ptr<Logger> CreateLogger(LoggingContext context, bool thread_safe = true, bool mutable_settings = false);

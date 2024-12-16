@@ -154,16 +154,17 @@ bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 		return false;
 	}
 
-	if (config.mode == LogMode::LEVEL_ONLY) {
+	if (mode == LogMode::LEVEL_ONLY) {
 		return true;
 	}
 
-	// ENABLE_SELECTED and DISABLE_SELECTED are expensive and need full global lock TODO: can we do better here?
+	// FIXME: ENABLE_SELECTED and DISABLE_SELECTED are expensive and need full global lock
 	{
 		unique_lock<mutex> lck(lock);
 		if (config.mode == LogMode::ENABLE_SELECTED) {
 			return config.enabled_loggers.find(log_type) != config.enabled_loggers.end();
-		} else if (config.mode == LogMode::DISABLE_SELECTED) {
+		}
+		if (config.mode == LogMode::DISABLE_SELECTED) {
 			return config.disabled_loggers.find(log_type) == config.disabled_loggers.end();
 		}
 	}
@@ -171,16 +172,6 @@ bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 }
 
 bool MutableLogger::ShouldLog(LogLevel log_level) {
-	if (!enabled) {
-		return false;
-	}
-
-	// check atomic level to early out if level too low
-	if (level > log_level) {
-		return false;
-	}
-
-	// TODO: this checks things twice
 	return ShouldLog(context.context.default_log_type, log_level);
 }
 

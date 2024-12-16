@@ -1,4 +1,4 @@
-# name: test/sql/logging/test_logging_function_large.test
+# name: test/sql/logging/test_logging_function_large.test_slow
 # description: Use test_logging function with 1 million log entries
 # group: [logging]
 

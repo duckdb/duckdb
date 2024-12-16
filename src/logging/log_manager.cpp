@@ -57,7 +57,6 @@ void LogManager::Flush() {
 	log_storage->Flush();
 }
 
-
 shared_ptr<LogStorage> LogManager::GetLogStorage() {
 	unique_lock<mutex> lck(lock);
 	return log_storage;
@@ -78,13 +77,6 @@ LogManager::~LogManager() {
 void LogManager::Initialize() {
 	LoggingContext context(LogContextScope::DATABASE);
 	global_logger = CreateLogger(context, true, true);
-}
-
-void LogManager::Shutdown() {
-	// TODO: avoid re-enabling logging after this
-	SetEnableLogging(false);
-	global_logger = make_uniq<NopLogger>(*this);
-	log_storage = nullptr;
 }
 
 LogManager &LogManager::Get(ClientContext &context) {
