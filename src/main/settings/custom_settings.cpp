@@ -671,49 +671,49 @@ void LoggingStorage::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 //===----------------------------------------------------------------------===//
 // Enabled Loggers
 //===----------------------------------------------------------------------===//
-Value EnabledLoggers::GetSetting(const ClientContext &context) {
+Value EnabledLogTypes::GetSetting(const ClientContext &context) {
 	vector<string> loggers;
-	for (const auto &item : context.db->GetLogManager().GetConfig().enabled_loggers) {
+	for (const auto &item : context.db->GetLogManager().GetConfig().enabled_log_types) {
 		loggers.push_back(item);
 	}
 	return StringUtil::Join(loggers, ",");
 }
-void EnabledLoggers::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+void EnabledLogTypes::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
 	auto values = StringUtil::Split(parameter.GetValue<string>(), ",");
 	unordered_set<string> set;
 	for (const auto &value : values) {
 		set.insert(value);
 	}
-	db->GetLogManager().SetEnabledLoggers(set);
+	db->GetLogManager().SetEnabledLogTypes(set);
 }
 
-void EnabledLoggers::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void EnabledLogTypes::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	unordered_set<string> set;
-	db->GetLogManager().SetEnabledLoggers(set);
+	db->GetLogManager().SetEnabledLogTypes(set);
 }
 
 //===----------------------------------------------------------------------===//
 // Disabled Loggers
 //===----------------------------------------------------------------------===//
-Value DisabledLoggers::GetSetting(const ClientContext &context) {
+Value DisabledLogTypes::GetSetting(const ClientContext &context) {
 	vector<string> loggers;
-	for (const auto &item : context.db->GetLogManager().GetConfig().disabled_loggers) {
+	for (const auto &item : context.db->GetLogManager().GetConfig().disabled_log_types) {
 		loggers.push_back(item);
 	}
 	return StringUtil::Join(loggers, ",");
 }
-void DisabledLoggers::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+void DisabledLogTypes::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
 	auto values = StringUtil::Split(parameter.GetValue<string>(), ",");
 	unordered_set<string> set;
 	for (const auto &value : values) {
 		set.insert(value);
 	}
-	db->GetLogManager().SetDisabledLoggers(set);
+	db->GetLogManager().SetDisabledLogTypes(set);
 }
 
-void DisabledLoggers::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void DisabledLogTypes::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	unordered_set<string> set;
-	db->GetLogManager().SetDisabledLoggers(set);
+	db->GetLogManager().SetDisabledLogTypes(set);
 }
 
 //===----------------------------------------------------------------------===//

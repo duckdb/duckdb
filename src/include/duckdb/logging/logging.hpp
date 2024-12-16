@@ -51,8 +51,8 @@ struct LogConfig {
 	LogConfig();
 
 	static LogConfig Create(bool enabled, LogLevel level);
-	static LogConfig CreateFromEnabled(bool enabled, LogLevel level, unordered_set<string> &enabled_loggers);
-	static LogConfig CreateFromDisabled(bool enabled, LogLevel level, unordered_set<string> &disabled_loggers);
+	static LogConfig CreateFromEnabled(bool enabled, LogLevel level, unordered_set<string> &enabled_log_types);
+	static LogConfig CreateFromDisabled(bool enabled, LogLevel level, unordered_set<string> &disabled_log_types);
 
 	bool IsConsistent() const;
 
@@ -60,11 +60,11 @@ struct LogConfig {
 	LogMode mode;
 	LogLevel level;
 	string storage;
-	unordered_set<string> enabled_loggers;
-	unordered_set<string> disabled_loggers;
+	unordered_set<string> enabled_log_types;
+	unordered_set<string> disabled_log_types;
 
 protected:
-	LogConfig(bool enabled, LogLevel level, LogMode mode, optional_ptr<unordered_set<string>> enabled_loggers,
+	LogConfig(bool enabled, LogLevel level, LogMode mode, optional_ptr<unordered_set<string>> enabled_log_types,
 	          optional_ptr<unordered_set<string>> disable_loggers);
 };
 

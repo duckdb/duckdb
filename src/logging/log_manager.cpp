@@ -111,15 +111,15 @@ void LogManager::SetLogLevel(LogLevel level) {
 	global_logger->UpdateConfig(config);
 }
 
-void LogManager::SetEnabledLoggers(unordered_set<string> &enabled_loggers) {
+void LogManager::SetEnabledLogTypes(unordered_set<string> &enabled_log_types) {
 	unique_lock<mutex> lck(lock);
-	config.enabled_loggers = enabled_loggers;
+	config.enabled_log_types = enabled_log_types;
 	global_logger->UpdateConfig(config);
 }
 
-void LogManager::SetDisabledLoggers(unordered_set<string> &disabled_loggers) {
+void LogManager::SetDisabledLogTypes(unordered_set<string> &disabled_log_types) {
 	unique_lock<mutex> lck(lock);
-	config.disabled_loggers = disabled_loggers;
+	config.disabled_log_types = disabled_log_types;
 	global_logger->UpdateConfig(config);
 }
 

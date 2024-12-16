@@ -273,11 +273,11 @@
         "custom_implementation": true
     },
     {
-        "name": "disabled_loggers",
+        "name": "disabled_log_types",
         "description": "Sets the list of disabled loggers",
         "type": "VARCHAR",
         "scope": "global",
-        "struct": "DisabledLoggers",
+        "struct": "DisabledLogTypes",
         "custom_implementation": true
     },
     {
@@ -386,11 +386,11 @@
         "scope": "global"
     },
     {
-        "name": "enabled_loggers",
+        "name": "enabled_log_types",
         "description": "Sets the list of enabled loggers",
         "type": "VARCHAR",
         "scope": "global",
-        "struct": "EnabledLoggers",
+        "struct": "EnabledLogTypes",
         "custom_implementation": true
     },
     {

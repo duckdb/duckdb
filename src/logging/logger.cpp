@@ -65,10 +65,10 @@ bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 		return false;
 	}
 	if (config.mode == LogMode::ENABLE_SELECTED) {
-		return config.enabled_loggers.find(log_type) != config.enabled_loggers.end();
+		return config.enabled_log_types.find(log_type) != config.enabled_log_types.end();
 	}
 	if (config.mode == LogMode::DISABLE_SELECTED) {
-		return config.disabled_loggers.find(log_type) == config.disabled_loggers.end();
+		return config.disabled_log_types.find(log_type) == config.disabled_log_types.end();
 	}
 	return true;
 }
@@ -162,10 +162,10 @@ bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	{
 		unique_lock<mutex> lck(lock);
 		if (config.mode == LogMode::ENABLE_SELECTED) {
-			return config.enabled_loggers.find(log_type) != config.enabled_loggers.end();
+			return config.enabled_log_types.find(log_type) != config.enabled_log_types.end();
 		}
 		if (config.mode == LogMode::DISABLE_SELECTED) {
-			return config.disabled_loggers.find(log_type) == config.disabled_loggers.end();
+			return config.disabled_log_types.find(log_type) == config.disabled_log_types.end();
 		}
 	}
 	throw InternalException("Should be unreachable (MutableLogger::ShouldLog)");

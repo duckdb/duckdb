@@ -46,8 +46,8 @@ public:
 	void SetEnableLogging(bool enable);
 	void SetLogMode(LogMode mode);
 	void SetLogLevel(LogLevel level);
-	void SetEnabledLoggers(unordered_set<string> &enabled_loggers);
-	void SetDisabledLoggers(unordered_set<string> &disabled_loggers);
+	void SetEnabledLogTypes(unordered_set<string> &enabled_log_types);
+	void SetDisabledLogTypes(unordered_set<string> &disabled_log_types);
 	void SetLogStorage(DatabaseInstance &db, const string &storage_name);
 
 	LogConfig GetConfig();

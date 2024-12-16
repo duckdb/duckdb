@@ -48,7 +48,7 @@ void LogCallbackCustomType(SOURCE &src, FUN f) {
 	                                                                                                   &FUNCTION);
 
 // Tests all Logger function entrypoints at the specified log level with the specified enabled/disabled loggers
-void test_logging(const string &minimum_level, const string &enabled_loggers, const string &disabled_loggers) {
+void test_logging(const string &minimum_level, const string &enabled_log_types, const string &disabled_log_types) {
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -60,22 +60,22 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 	REQUIRE_NO_FAIL(con.Query("set logging_level='" + minimum_level +
 	                          ""
 	                          "';"));
-	if (!enabled_loggers.empty()) {
-		REQUIRE_NO_FAIL(con.Query("set enabled_loggers='" + enabled_loggers +
+	if (!enabled_log_types.empty()) {
+		REQUIRE_NO_FAIL(con.Query("set enabled_log_types='" + enabled_log_types +
 		                          ""
 		                          "';"));
 		REQUIRE_NO_FAIL(con.Query("set logging_mode='enable_selected';"));
 	}
-	if (!disabled_loggers.empty()) {
-		REQUIRE_NO_FAIL(con.Query("set disabled_loggers='" + disabled_loggers +
+	if (!disabled_log_types.empty()) {
+		REQUIRE_NO_FAIL(con.Query("set disabled_log_types='" + disabled_log_types +
 		                          ""
 		                          "';"));
 		REQUIRE_NO_FAIL(con.Query("set logging_mode='disable_selected';"));
 	}
 
-	bool level_only = (enabled_loggers.empty() && disabled_loggers.empty());
-	bool enabled_mode = !enabled_loggers.empty();
-	bool disabled_mode = !disabled_loggers.empty();
+	bool level_only = (enabled_log_types.empty() && disabled_log_types.empty());
+	bool enabled_mode = !enabled_log_types.empty();
+	bool disabled_mode = !disabled_log_types.empty();
 
 	// Log all to global logger
 	TEST_ALL_LOG_TEMPLATES(Logger::Trace, *db.instance, DatabaseInstance);
@@ -103,8 +103,8 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 	for (idx_t i = 0; i < num_runs; i++) {
 		for (idx_t j = minimum_level_index; j < num_log_levels; j++) {
 			if (level_only ||
-			    (enabled_mode && enabled_loggers.find(default_types[i].ToString()) != enabled_loggers.npos) ||
-			    (disabled_mode && disabled_loggers.find(default_types[i].ToString()) == enabled_loggers.npos)) {
+			    (enabled_mode && enabled_log_types.find(default_types[i].ToString()) != enabled_log_types.npos) ||
+			    (disabled_mode && disabled_log_types.find(default_types[i].ToString()) == enabled_log_types.npos)) {
 				expected_messages.push_back("log-a-lot: 'simple'");
 				expected_messages.push_back("log-a-lot: 'format'");
 				expected_messages.push_back("log-a-lot: 'callback'");
@@ -116,8 +116,8 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 				expected_log_levels.push_back(Value(log_levels[j]));
 			}
 
-			if (level_only || (enabled_mode && enabled_loggers.find("custom_type") != enabled_loggers.npos) ||
-			    (disabled_mode && disabled_loggers.find("custom_type") == enabled_loggers.npos)) {
+			if (level_only || (enabled_mode && enabled_log_types.find("custom_type") != enabled_log_types.npos) ||
+			    (disabled_mode && disabled_log_types.find("custom_type") == enabled_log_types.npos)) {
 				expected_messages.push_back("log-a-lot: 'simple with type'");
 				expected_messages.push_back("log-a-lot: 'format with type'");
 				expected_messages.push_back("log-a-lot: 'callback with type'");
@@ -139,7 +139,7 @@ void test_logging(const string &minimum_level, const string &enabled_loggers, co
 
 // This tests
 // - all log levels
-// - all combinations of log levels and having either enabled_loggers or disabled_loggers
+// - all combinations of log levels and having either enabled_log_types or disabled_log_types
 TEST_CASE("Test logging", "[logging][.]") {
 	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
 	for (const auto &level : log_levels) {

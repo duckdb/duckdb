@@ -429,9 +429,9 @@ struct DisabledFilesystemsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct DisabledLoggers {
+struct DisabledLogTypes {
 	using RETURN_TYPE = string;
-	static constexpr const char *Name = "disabled_loggers";
+	static constexpr const char *Name = "disabled_log_types";
 	static constexpr const char *Description = "Sets the list of disabled loggers";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
@@ -592,9 +592,9 @@ struct EnableViewDependenciesSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct EnabledLoggers {
+struct EnabledLogTypes {
 	using RETURN_TYPE = string;
-	static constexpr const char *Name = "enabled_loggers";
+	static constexpr const char *Name = "enabled_log_types";
 	static constexpr const char *Description = "Sets the list of enabled loggers";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
