@@ -88,6 +88,7 @@ void ThreadSafeLogger::WriteLog(LogLevel log_level, const char *log_message) {
 }
 
 void ThreadSafeLogger::Flush() {
+	manager.Flush();
 	// NOP
 }
 
@@ -114,7 +115,7 @@ void ThreadLocalLogger::WriteLog(LogLevel log_level, const char *log_message) {
 }
 
 void ThreadLocalLogger::Flush() {
-	throw NotImplementedException("");
+	manager.Flush();
 }
 
 MutableLogger::MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
@@ -184,7 +185,7 @@ bool MutableLogger::ShouldLog(LogLevel log_level) {
 }
 
 void MutableLogger::Flush() {
-	// NOP
+	manager.Flush();
 }
 
 } // namespace duckdb

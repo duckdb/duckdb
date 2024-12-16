@@ -19,7 +19,6 @@ query IIIII
 SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs
 ----
 default	INFO	Running query 'SELECT 1;'	CONNECTION	NULL
-default	INFO	Running query 'SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs'	CONNECTION	NULL
 
 statement ok
 set enable_logging=false;

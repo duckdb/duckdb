@@ -8,6 +8,7 @@ group logger
 load
 set enable_logging=true;
 set logging_storage='memory';
+set logging_level='debugging'
 
 run
 SELECT sum(value) FROM test_logging(1000000, enable_logging=true, log_message='hello world', logger='global');

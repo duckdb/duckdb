@@ -37,6 +37,9 @@ public:
 	//! The global logger can be used whe
 	Logger &GlobalLogger();
 
+	//! Flush everything
+	void Flush();
+
 	//! Get a shared_ptr to the log storage (For example, to scan it)
 	shared_ptr<LogStorage> GetLogStorage();
 	bool CanScan();

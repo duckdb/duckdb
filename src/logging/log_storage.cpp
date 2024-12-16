@@ -72,7 +72,7 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 	    LogicalType::UBIGINT, // thread
 	};
 
-	max_buffer_size = 1;
+	max_buffer_size = STANDARD_VECTOR_SIZE;
 	entry_buffer->Initialize(Allocator::DefaultAllocator(), log_entry_schema, max_buffer_size);
 	log_context_buffer->Initialize(Allocator::DefaultAllocator(), log_context_schema, max_buffer_size);
 	log_entries = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_entry_schema);
