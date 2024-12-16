@@ -100,12 +100,6 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		});
 	}
 
-	// Printer::Print("start deleting rowids");
-	// for (idx_t i = 0; i < chunk.size(); i++) {
-	// 	Printer::Print("deleting rowid " + to_string(row_ids.GetData()[i]));
-	// }
-	// Printer::Print("end deleting rowids");
-
 	idx_t deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
 	g_state.deleted_count += deleted_count;
 
@@ -125,7 +119,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 				new_row_ids_deleted[row_id] = i;
 			}
 		}
-		
+
 		D_ASSERT(new_row_ids_deleted.size() == deleted_count);
 		if (deleted_count < l_state.delete_chunk.size()) {
 			auto types = l_state.delete_chunk.GetTypes();
