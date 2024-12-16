@@ -35,7 +35,6 @@
 namespace duckdb {
 
 DBConfig::DBConfig() {
-	empty_validity = EmptyValidityCompression::CreateFunction();
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	encoding_functions = make_uniq<EncodingFunctionSet>();
 	encoding_functions->Initialize(*this);

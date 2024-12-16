@@ -24,10 +24,10 @@ public:
 	};
 
 public:
-	static unique_ptr<CompressionFunction> CreateFunction() {
-		return make_uniq<CompressionFunction>(CompressionType::COMPRESSION_AUTO, PhysicalType::BIT, InitAnalyze,
-		                                      Analyze, FinalAnalyze, InitCompression, Compress, FinalizeCompress,
-		                                      InitScan, Scan, ScanPartial, FetchRow, Skip, InitSegment);
+	static CompressionFunction CreateFunction() {
+		return CompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT, InitAnalyze, Analyze,
+		                           FinalAnalyze, InitCompression, Compress, FinalizeCompress, InitScan, Scan,
+		                           ScanPartial, FetchRow, Skip, InitSegment);
 	}
 
 public:
@@ -54,7 +54,7 @@ public:
 		auto function = CreateFunction();
 		auto &info = state.info;
 		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, *function, type, 0, info.GetBlockSize(), info.GetBlockSize());
+		    ColumnSegment::CreateTransientSegment(db, function, type, 0, info.GetBlockSize(), info.GetBlockSize());
 		compressed_segment->count = state.count;
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());

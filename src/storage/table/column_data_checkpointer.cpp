@@ -16,8 +16,10 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
       checkpoint_info(checkpoint_info_p) {
 
 	auto &config = DBConfig::GetConfig(GetDatabase());
-	if (is_validity && col_data_p.IsEmptyValidity()) {
-		compression_functions.push_back(config.GetEmptyValidity());
+	if (is_validity && col_data_p.DoesNotRequireValidity()) {
+		auto empty_validity =
+		    config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, GetType().InternalType());
+		compression_functions.push_back(empty_validity);
 	} else {
 		auto functions = config.GetCompressionFunctions(GetType().InternalType());
 		for (auto &func : functions) {

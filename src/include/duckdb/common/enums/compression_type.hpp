@@ -16,7 +16,7 @@ namespace duckdb {
 enum class CompressionType : uint8_t {
 	COMPRESSION_AUTO = 0,
 	COMPRESSION_UNCOMPRESSED = 1,
-	COMPRESSION_CONSTANT = 2,
+	COMPRESSION_CONSTANT = 2, // internal only
 	COMPRESSION_RLE = 3,
 	COMPRESSION_DICTIONARY = 4,
 	COMPRESSION_PFOR_DELTA = 5,
@@ -28,7 +28,8 @@ enum class CompressionType : uint8_t {
 	COMPRESSION_ALPRD = 11,
 	COMPRESSION_ZSTD = 12,
 	COMPRESSION_ROARING = 13,
-	COMPRESSION_COUNT // This has to stay the last entry of the type!
+	COMPRESSION_EMPTY = 14, // internal only
+	COMPRESSION_COUNT       // This has to stay the last entry of the type!
 };
 
 bool CompressionTypeIsDeprecated(CompressionType compression_type);

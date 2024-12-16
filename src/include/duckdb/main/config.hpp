@@ -33,7 +33,6 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
-#include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/encoding_function.hpp"
 
 namespace duckdb {
@@ -363,7 +362,6 @@ public:
 	//! Returns the compression function matching the compression and physical type.
 	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
 	                                                                    const PhysicalType physical_type);
-	DUCKDB_API CompressionFunction &GetEmptyValidity();
 
 	//! Returns the encode function matching the encoding name.
 	DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(const string &name) const;
@@ -405,7 +403,6 @@ public:
 	string SanitizeAllowedPath(const string &path) const;
 
 private:
-	unique_ptr<CompressionFunction> empty_validity;
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<CastFunctionSet> cast_functions;

@@ -89,7 +89,7 @@ public:
 		return *compression;
 	}
 
-	bool IsEmptyValidity() const {
+	bool DoesNotRequireValidity() const {
 		if (type.id() != LogicalTypeId::VALIDITY) {
 			return false;
 		}

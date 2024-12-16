@@ -18,7 +18,8 @@ add_library_unity(
   patas.cpp
   zstd.cpp
   alprd.cpp
-  fsst.cpp)
+  fsst.cpp
+  empty_validity.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_compression>
     PARENT_SCOPE)
