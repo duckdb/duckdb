@@ -60,6 +60,8 @@ public:
 	vector<column_t> columns_to_fetch;
 	// The columns to fetch from the 'source' table
 	vector<column_t> source_columns;
+	//! True, if the INSERT OR REPLACE requires delete + insert.
+	bool update_is_del_and_insert;
 
 public:
 	void Serialize(Serializer &serializer) const override;

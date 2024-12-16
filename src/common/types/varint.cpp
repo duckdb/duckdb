@@ -168,6 +168,22 @@ void Varint::GetByteArray(vector<uint8_t> &byte_array, bool &is_negative, const 
 	}
 }
 
+string Varint::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
+	string result(VARINT_HEADER_SIZE + size, '0');
+	SetHeader(&result[0], size, is_negative);
+	uint8_t *result_data = reinterpret_cast<uint8_t *>(&result[VARINT_HEADER_SIZE]);
+	if (is_negative) {
+		for (idx_t i = 0; i < size; i++) {
+			result_data[i] = ~data[i];
+		}
+	} else {
+		for (idx_t i = 0; i < size; i++) {
+			result_data[i] = data[i];
+		}
+	}
+	return result;
+}
+
 string Varint::VarIntToVarchar(const string_t &blob) {
 	string decimal_string;
 	vector<uint8_t> byte_array;

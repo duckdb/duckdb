@@ -355,7 +355,8 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 		// most likely we are running on parquet files. Therefore we divide by 2.
 		new_card = (double)child_stats.cardinality / 2;
 	}
-	stats.cardinality = LossyNumericCast<idx_t>(new_card);
+	// an ungrouped aggregate has 1 row
+	stats.cardinality = aggr.groups.empty() ? 1 : LossyNumericCast<idx_t>(new_card);
 	stats.column_names = child_stats.column_names;
 	stats.stats_initialized = true;
 	auto num_child_columns = aggr.GetColumnBindings().size();

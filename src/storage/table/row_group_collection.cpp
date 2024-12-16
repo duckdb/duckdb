@@ -1,5 +1,4 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
-
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -397,11 +396,20 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		}
 	}
 	state.current_row += row_t(total_append_count);
+
 	auto local_stats_lock = state.stats.GetLock();
+
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &column_stats = state.stats.GetStats(*local_stats_lock, col_idx);
 		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
+
+	auto &table_sample = state.stats.GetTableSampleRef(*local_stats_lock);
+	if (!table_sample.destroyed) {
+		D_ASSERT(table_sample.type == SampleType::RESERVOIR_SAMPLE);
+		table_sample.AddToReservoir(chunk);
+	}
+
 	return new_row_group;
 }
 
@@ -421,8 +429,8 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	state.total_append_count = 0;
 	state.start_row_group = nullptr;
 
-	auto global_stats_lock = stats.GetLock();
 	auto local_stats_lock = state.stats.GetLock();
+	auto global_stats_lock = stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &global_stats = stats.GetStats(*global_stats_lock, col_idx);
 		if (!global_stats.HasDistinctStats()) {
@@ -433,6 +441,22 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 			continue;
 		}
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
+	}
+
+	auto local_sample = state.stats.GetTableSample(*local_stats_lock);
+	auto global_sample = stats.GetTableSample(*global_stats_lock);
+
+	if (local_sample && global_sample) {
+		D_ASSERT(global_sample->type == SampleType::RESERVOIR_SAMPLE);
+		auto &reservoir_sample = global_sample->Cast<ReservoirSample>();
+		reservoir_sample.Merge(std::move(local_sample));
+		// initialize the thread local sample again
+		auto new_local_sample = make_uniq<ReservoirSample>(reservoir_sample.GetSampleCount());
+		state.stats.SetTableSample(*local_stats_lock, std::move(new_local_sample));
+		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
+	} else {
+		state.stats.SetTableSample(*local_stats_lock, std::move(local_sample));
+		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
 	}
 
 	Verify();
@@ -582,6 +606,11 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		}
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
+
+	// When deleting destroy the sample.
+	auto stats_guard = stats.GetLock();
+	stats.DestroyTableSample(*stats_guard);
+
 	return delete_count;
 }
 
@@ -619,6 +648,9 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 			stats.MergeStats(*l, column_id.index, *row_group->GetStatistics(column_id.index));
 		}
 	} while (pos < updates.size());
+	// on update destroy the sample
+	auto stats_guard = stats.GetLock();
+	stats.DestroyTableSample(*stats_guard);
 }
 
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
@@ -1054,6 +1086,17 @@ void RowGroupCollection::CommitDropTable() {
 }
 
 //===--------------------------------------------------------------------===//
+// GetPartitionStats
+//===--------------------------------------------------------------------===//
+vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
+	vector<PartitionStatistics> result;
+	for (auto &row_group : row_groups->Segments()) {
+		result.push_back(row_group.GetPartitionStats());
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
@@ -1091,6 +1134,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
+	// When adding a column destroy the sample
+	stats.DestroyTableSample(*lock);
+
 	return result;
 }
 
@@ -1102,6 +1148,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
 	                                                  total_rows.load(), row_group_size);
 	result->stats.InitializeRemoveColumn(stats, col_idx);
+
+	auto result_lock = result->stats.GetLock();
+	result->stats.DestroyTableSample(*result_lock);
 
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.RemoveColumn(*result, col_idx);
@@ -1149,7 +1198,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-
 	return result;
 }
 
@@ -1196,13 +1244,25 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 
 //===--------------------------------------------------------------------===//
 // Statistics
-//===--------------------------------------------------------------------===//
+//===---------------------------------------------------------------r-----===//
 void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 	stats.CopyStats(other_stats);
 }
 
 unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
+}
+
+unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
+	auto lock = stats.GetLock();
+	auto &sample = stats.GetTableSampleRef(*lock);
+	if (!sample.destroyed) {
+		D_ASSERT(sample.type == SampleType::RESERVOIR_SAMPLE);
+		auto ret = sample.Copy();
+		ret->Cast<ReservoirSample>().EvictOverBudgetSamples();
+		return ret;
+	}
+	return nullptr;
 }
 
 void RowGroupCollection::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {

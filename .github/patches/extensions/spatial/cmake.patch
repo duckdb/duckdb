@@ -1,0 +1,13 @@
+diff --git a/deps/CMakeLists.txt b/deps/CMakeLists.txt
+index d6bb4b9..9135b41 100644
+--- a/deps/CMakeLists.txt
++++ b/deps/CMakeLists.txt
+@@ -11,7 +11,7 @@ if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.24.0")
+     cmake_policy(SET CMP0135 NEW)
+ endif()
+ 
+-if(${VCPKG_TARGET_TRIPLET} STREQUAL "wasm32-emscripten")
++if("${VCPKG_TARGET_TRIPLET}" STREQUAL "wasm32-emscripten")
+     set(EMSCRIPTEN ON)
+ endif()
+ 
