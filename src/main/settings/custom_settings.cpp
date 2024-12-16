@@ -729,7 +729,6 @@ Value EnableObjectCacheSetting::GetSetting(const ClientContext &context) {
 	return Value();
 }
 
-
 //===----------------------------------------------------------------------===//
 // Enable Profiling
 //===----------------------------------------------------------------------===//
