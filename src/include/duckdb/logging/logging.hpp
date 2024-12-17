@@ -14,8 +14,6 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
-#include <duckdb/parallel/thread_context.hpp>
-
 namespace duckdb {
 
 // TODO: should we reconsider these logging levels?

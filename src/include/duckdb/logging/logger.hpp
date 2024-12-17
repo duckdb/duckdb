@@ -9,12 +9,7 @@
 #pragma once
 
 #include "duckdb/logging/logging.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
-
-#include <duckdb/parallel/thread_context.hpp>
 
 namespace duckdb {
 class TableDescription;
