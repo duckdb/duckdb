@@ -1654,12 +1654,10 @@ void ProbeSpill::PrepareNextProbe() {
 				continue;
 			}
 			auto &partition = partitions[partition_idx];
-			if (partition->Count() != 0) {
-				if (!global_spill_collection) {
-					global_spill_collection = std::move(partition);
-				} else {
-					global_spill_collection->Combine(*partition);
-				}
+			if (!global_spill_collection) {
+				global_spill_collection = std::move(partition);
+			} else if (partition->Count() != 0) {
+				global_spill_collection->Combine(*partition);
 			}
 			partition.reset();
 		}
