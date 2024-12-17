@@ -12,6 +12,8 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include <functional>
+
 namespace duckdb {
 class TableDescription;
 class DatabaseInstance;
