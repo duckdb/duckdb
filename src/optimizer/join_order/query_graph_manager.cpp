@@ -36,7 +36,7 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 }
 
 void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		// Here you have a filter on a single column in a table. Return a binding for the column
 		// being filtered on so the filter estimator knows what HLL count to pull
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
@@ -114,8 +114,8 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			}
 		} else if (filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conjunction = filter->Cast<BoundConjunctionExpression>();
-			if (conjunction.type == ExpressionType::CONJUNCTION_OR || filter_info->join_type == JoinType::INNER ||
-			    filter_info->join_type == JoinType::INVALID) {
+			if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_OR ||
+			    filter_info->join_type == JoinType::INNER || filter_info->join_type == JoinType::INVALID) {
 				// Currently we do not interpret Conjunction expressions as INNER joins
 				// for hyper graph edges. These are most likely OR conjunctions, and
 				// will be pushed down into a join later in the optimizer.
@@ -127,7 +127,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			D_ASSERT(filter_info->right_set);
 			D_ASSERT(filter_info->join_type == JoinType::SEMI || filter_info->join_type == JoinType::ANTI);
 			for (auto &child_comp : conjunction.children) {
-				if (child_comp->expression_class != ExpressionClass::BOUND_COMPARISON) {
+				if (child_comp->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
 					continue;
 				}
 				auto &comparison = child_comp->Cast<BoundComparisonExpression>();
@@ -226,7 +226,7 @@ static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, boo
 	JoinCondition cond;
 	cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
 	cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
-	cond.comparison = condition->type;
+	cond.comparison = condition->GetExpressionType();
 	if (invert) {
 		// reverse comparison expression if we reverse the order of the children
 		cond.comparison = FlipComparisonExpression(cond.comparison);
@@ -368,10 +368,10 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				// we need to figure out which side is which by looking at the relations available to us
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
 				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
-				cond.comparison = comparison.type;
+				cond.comparison = comparison.GetExpressionType();
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
-					cond.comparison = FlipComparisonExpression(comparison.type);
+					cond.comparison = FlipComparisonExpression(comparison.GetExpressionType());
 				}
 				// now find the join to push it into
 				auto node = result_operator.get();

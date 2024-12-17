@@ -47,7 +47,7 @@ void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 
 void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplacementState &state) {
 	// we only consider expressions with children for CSE elimination
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
@@ -58,7 +58,7 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	default:
 		break;
 	}
-	if (expr.expression_class != ExpressionClass::BOUND_AGGREGATE && !expr.IsVolatile()) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE && !expr.IsVolatile()) {
 		// we can't move aggregates to a projection, so we only consider the children of the aggregate
 		auto node = state.expression_count.find(expr);
 		if (node == state.expression_count.end()) {
@@ -75,7 +75,7 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 
 void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> &expr_ptr, CSEReplacementState &state) {
 	Expression &expr = *expr_ptr;
-	if (expr.expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref, check if this one has already been recorded in the expression list
 		auto column_entry = state.column_map.find(bound_column_ref.binding);
@@ -84,7 +84,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			idx_t new_column_index = state.expressions.size();
 			state.column_map[bound_column_ref.binding] = new_column_index;
 			state.expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    bound_column_ref.alias, bound_column_ref.return_type, bound_column_ref.binding));
+			    bound_column_ref.GetAlias(), bound_column_ref.return_type, bound_column_ref.binding));
 			bound_column_ref.binding = ColumnBinding(state.projection_index, new_column_index);
 		} else {
 			// else: just update the column binding!
@@ -93,14 +93,14 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 		return;
 	}
 	// check if this child is eligible for CSE elimination
-	bool can_cse = expr.expression_class != ExpressionClass::BOUND_CONJUNCTION &&
-	               expr.expression_class != ExpressionClass::BOUND_CASE;
+	bool can_cse = expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION &&
+	               expr.GetExpressionClass() != ExpressionClass::BOUND_CASE;
 	if (can_cse && state.expression_count.find(expr) != state.expression_count.end()) {
 		auto &node = state.expression_count[expr];
 		if (node.count > 1) {
 			// this expression occurs more than once! push it into the projection
 			// check if it has already been pushed into the projection
-			auto alias = expr.alias;
+			auto alias = expr.GetAlias();
 			auto type = expr.return_type;
 			if (!node.column_index.IsValid()) {
 				// has not been pushed yet: push it
