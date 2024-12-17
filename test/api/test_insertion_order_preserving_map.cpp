@@ -19,7 +19,7 @@ TEST_CASE("Test Insertion Order Preserving Map: duplicate insert", "[api][.]") {
 	map.erase(it);
 
 	int count = 0;
-	for (auto &x : map) {
+	for (auto it = map.begin(); it != map.end(); it++) {
 		count++;
 	}
 	REQUIRE(count == 2);
@@ -34,7 +34,7 @@ TEST_CASE("Test Insertion Order Preserving Map: double erase", "[api][.]") {
 	map.erase(map.find("c"));
 
 	int count = 0;
-	for (auto &x : map) {
+	for (auto it = map.begin(); it != map.end(); it++) {
 		count++;
 	}
 
@@ -48,7 +48,7 @@ TEST_CASE("Test Insertion Order Preserving Map: double erase", "[api][.]") {
 	map.erase(map.find("b"));
 
 	count = 0;
-	for (auto &x : map) {
+	for (auto it = map.begin(); it != map.end(); it++) {
 		count++;
 	}
 
