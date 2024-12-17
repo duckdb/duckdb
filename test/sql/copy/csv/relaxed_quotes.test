@@ -89,3 +89,23 @@ FROM read_csv('data/csv/end_quote.csv', columns = {'a':'varchar'}, header = fals
 ----
 Pedro "the" legend
 Pedro "the
+
+query I
+FROM read_csv('data/csv/end_quote.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false, auto_detect = false)
+----
+Pedro "the" legend
+Pedro "the
+
+query I
+FROM read_csv('data/csv/end_quote_2.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false, auto_detect = false)
+----
+Pedro "the" legend
+Pedro "the
+Pedro "the
+
+query I
+FROM read_csv('data/csv/end_quote_3.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false, auto_detect = false)
+----
+Pedro "the
+Pedro "the" legend
+Pedro "the
