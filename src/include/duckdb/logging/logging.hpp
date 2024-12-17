@@ -26,17 +26,9 @@ enum class LogLevel : uint8_t {
 	FATAL = 60
 };
 
-enum class LogContextScope : uint8_t {
-	DATABASE = 10,
-	CONNECTION = 20,
-	THREAD = 30
-};
+enum class LogContextScope : uint8_t { DATABASE = 10, CONNECTION = 20, THREAD = 30 };
 
-enum class LogMode : uint8_t {
-	LEVEL_ONLY = 0,
-	DISABLE_SELECTED = 1,
-	ENABLE_SELECTED = 2
-};
+enum class LogMode : uint8_t { LEVEL_ONLY = 0, DISABLE_SELECTED = 1, ENABLE_SELECTED = 2 };
 
 struct LogConfig {
 	constexpr static const char *IN_MEMORY_STORAGE_NAME = "memory";

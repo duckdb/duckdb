@@ -7,7 +7,6 @@
 #include "duckdb/logging/log_storage.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
-
 namespace duckdb {
 
 struct DuckDBLogData : public GlobalTableFunctionState {
