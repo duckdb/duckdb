@@ -4,6 +4,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
@@ -1227,6 +1228,10 @@ uhugeint_t Value::GetValue() const {
 }
 template <>
 string Value::GetValue() const {
+	if (type_.id() == LogicalTypeId::BLOB) {
+		return GetValueUnsafe<string>();
+	}
+
 	return ToString();
 }
 template <>
