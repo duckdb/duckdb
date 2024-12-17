@@ -24,9 +24,11 @@ namespace duckdb {
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, optional_ptr<ColumnData> parent)
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
-      type(std::move(type_p)), parent(parent), allocation_size(0) {
+      type(std::move(type_p)), allocation_size(0), parent(parent) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
+	} else if (type.id() == LogicalTypeId::VALIDITY) {
+		parent->validity = this;
 	}
 }
 
@@ -307,6 +309,14 @@ idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vect
 idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 	idx_t current_row = vector_index * STANDARD_VECTOR_SIZE;
 	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
+}
+
+SegmentLock ColumnData::GetSegmentLock() {
+	return data.Lock();
+}
+
+vector<SegmentNode<ColumnSegment>> ColumnData::MoveSegments(const SegmentLock &lock) {
+	return data.MoveSegments();
 }
 
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
@@ -621,14 +631,15 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto l = data.Lock();
-	auto nodes = data.MoveSegments(l);
-	if (nodes.empty()) {
+	if (data.GetSegmentCount(l) == 0) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
 
 	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	checkpointer.Checkpoint(std::move(nodes));
+	auto &nodes = data.ReferenceSegments(l);
+	checkpointer.Checkpoint(nodes);
+	checkpointer.FinalizeCheckpoint(data.MoveSegments(l));
 
 	// reset the compression function
 	compression = nullptr;

@@ -34,6 +34,8 @@ struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
 
+using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
+
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
 	}
@@ -65,8 +67,6 @@ public:
 	idx_t column_index;
 	//! The type of the column
 	LogicalType type;
-	//! The parent column (if any)
-	optional_ptr<ColumnData> parent;
 
 public:
 	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
@@ -80,6 +80,21 @@ public:
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
+	}
+	bool HasCompressionFunction() const {
+		return compression != nullptr;
+	}
+	const CompressionFunction &GetCompressionFunction() const {
+		D_ASSERT(HasCompressionFunction());
+		return *compression;
+	}
+
+	bool HasParent() const {
+		return parent != nullptr;
+	}
+	const ColumnData &Parent() const {
+		D_ASSERT(HasParent());
+		return *parent;
 	}
 
 	virtual void SetStart(idx_t new_start);
@@ -200,6 +215,8 @@ protected:
 	                    idx_t update_count, Vector &base_vector);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
+	SegmentLock GetSegmentLock();
+	vector<SegmentNode<ColumnSegment>> MoveSegments(const SegmentLock &lock);
 
 private:
 	void UpdateCompressionFunction(SegmentLock &l, CompressionFunction &function);
@@ -220,6 +237,12 @@ protected:
 	//!	The compression function used by the ColumnData
 	//! This is empty if the segments have mixed compression or the ColumnData is empty
 	optional_ptr<CompressionFunction> compression;
+
+private:
+	//! The parent column (if any)
+	optional_ptr<ColumnData> parent;
+	//! The validity data (if any)
+	optional_ptr<ColumnData> validity;
 };
 
 struct PersistentColumnData {
