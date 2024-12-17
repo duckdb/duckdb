@@ -215,8 +215,6 @@ protected:
 	                    idx_t update_count, Vector &base_vector);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
-	SegmentLock GetSegmentLock();
-	vector<SegmentNode<ColumnSegment>> MoveSegments(const SegmentLock &lock);
 
 private:
 	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);
