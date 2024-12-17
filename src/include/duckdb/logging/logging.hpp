@@ -16,26 +16,25 @@
 
 namespace duckdb {
 
-// TODO: should we reconsider these logging levels?
 enum class LogLevel : uint8_t {
 	TRACE = 10,
 	DEBUGGING = 20, // ToString-ed as DEBUG, but named DEBUGGING due to conflict with DEBUG define
 	INFO = 30,
 	WARN = 40,
 	ERROR = 50,
-	FATAL = 60,
+	FATAL = 60
 };
 
 enum class LogContextScope : uint8_t {
 	DATABASE = 10,
 	CONNECTION = 20,
-	THREAD = 30,
+	THREAD = 30
 };
 
 enum class LogMode : uint8_t {
 	LEVEL_ONLY = 0,
 	DISABLE_SELECTED = 1,
-	ENABLE_SELECTED = 2,
+	ENABLE_SELECTED = 2
 };
 
 struct LogConfig {
