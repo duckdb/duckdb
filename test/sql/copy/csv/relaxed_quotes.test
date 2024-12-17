@@ -84,3 +84,8 @@ create table t as from read_csv('data/csv/unescaped_quote_new_line.csv', rfc_418
 statement ok
 create table t as from read_csv('data/csv/unescaped_quote_new_line.csv', rfc_4180=false, buffer_size = 30, header = 0, parallel = false)
 
+query I
+FROM read_csv('data/csv/end_quote.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false, auto_detect = false)
+----
+Pedro "the" legend
+Pedro "the
