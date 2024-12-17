@@ -82,7 +82,8 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 	log_contexts = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_context_schema);
 }
 
-InMemoryLogStorage::~InMemoryLogStorage() {};
+InMemoryLogStorage::~InMemoryLogStorage() {
+}
 
 void InMemoryLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
                                        const string &log_message, const RegisteredLoggingContext &context) {

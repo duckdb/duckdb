@@ -24,6 +24,8 @@ struct ColumnDataScanState;
 
 class LogStorageScanState {
 public:
+	virtual ~LogStorageScanState() = default;
+
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);
@@ -76,7 +78,7 @@ public:
 class InMemoryLogStorageScanState : public LogStorageScanState {
 public:
 	InMemoryLogStorageScanState();
-	~InMemoryLogStorageScanState();
+	~InMemoryLogStorageScanState() override;
 
 	ColumnDataScanState scan_state;
 };
