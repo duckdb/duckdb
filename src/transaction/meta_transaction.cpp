@@ -5,8 +5,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
-#include <duckdb/main/database.hpp>
-
 namespace duckdb {
 
 MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p)
