@@ -631,13 +631,13 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto l = data.Lock();
-	if (data.GetSegmentCount(l) == 0) {
+	auto &nodes = data.ReferenceSegments(l);
+	if (nodes.empty()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
 
 	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	auto &nodes = data.ReferenceSegments(l);
 	checkpointer.Checkpoint(nodes);
 	checkpointer.FinalizeCheckpoint(data.MoveSegments(l));
 
