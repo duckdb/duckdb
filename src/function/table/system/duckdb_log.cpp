@@ -78,16 +78,6 @@ void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 	}
 }
 
-static unique_ptr<SubqueryRef> ParseSubquery(const string &query, const ParserOptions &options, const string &err_msg) {
-	Parser parser(options);
-	parser.ParseQuery(query);
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw ParserException(err_msg);
-	}
-	auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
-	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
-}
-
 // duckdb_logs is slightly wonky in that it bind_replace's itself with a join between the duckdb_logs and
 // duckdb_log_contexts table functions.
 static unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
@@ -99,10 +89,16 @@ static unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFu
 
 	if (!context_id_only) {
 		if (LogManager::Get(context).CanScan()) {
-			return std::move(ParseSubquery(
+			string query =
 			    "SELECT * exclude (l.context_id, c.context_id) FROM duckdb_logs(context_id_only=true) as l JOIN "
-			    "duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp;",
-			    context.GetParserOptions(), "Expected a single SELECT statement"));
+			    "duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp;";
+			Parser parser(context.GetParserOptions());
+			parser.ParseQuery(query);
+			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+				throw ParserException("Expected a single SELECT statement");
+			}
+			auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
+			return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
 		}
 	}
 
