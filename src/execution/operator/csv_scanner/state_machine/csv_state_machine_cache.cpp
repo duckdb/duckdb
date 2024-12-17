@@ -218,7 +218,8 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
-	} else if (state_machine_options.rfc_4180 == false) {
+	}
+	if (state_machine_options.rfc_4180 == false) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::MAYBE_QUOTED;
 	}
 	if (comment != '\0') {
@@ -320,8 +321,12 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 
 	// 14) Maybe quoted
-	transition_array[quote][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] = CSVState::MAYBE_QUOTED;
-
+	if (state_machine_options.quote == state_machine_options.escape) {
+		// this value has been escaped
+		transition_array[quote][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] = CSVState::UNQUOTED;
+	} else {
+		transition_array[quote][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] = CSVState::MAYBE_QUOTED;
+	}
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] =
 	    CSVState::RECORD_SEPARATOR;
 	if (new_line_id == NewLineIdentifier::CARRY_ON) {

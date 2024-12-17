@@ -90,7 +90,7 @@ struct CSVStates {
 		case CSVState::ESCAPED_RETURN:
 			return true;
 		case CSVState::QUOTED:
-			return states[0] == CSVState::UNQUOTED;
+			return states[0] == CSVState::UNQUOTED || states[0] == CSVState::MAYBE_QUOTED;
 		default:
 			return false;
 		}
