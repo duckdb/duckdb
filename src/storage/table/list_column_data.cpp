@@ -325,8 +325,9 @@ void ListColumnData::CommitDropColumn() {
 }
 
 struct ListColumnCheckpointState : public ColumnCheckpointState {
-	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager,
+	                          SegmentLock &&lock)
+	    : ColumnCheckpointState(row_group, column_data, partial_block_manager, std::move(lock)) {
 		global_stats = ListStats::CreateEmpty(column_data.type).ToUnique();
 	}
 
@@ -349,12 +350,14 @@ public:
 };
 
 unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group,
-                                                                        PartialBlockManager &partial_block_manager) {
-	return make_uniq<ListColumnCheckpointState>(row_group, *this, partial_block_manager);
+                                                                        PartialBlockManager &partial_block_manager,
+                                                                        SegmentLock &&lock) {
+	return make_uniq<ListColumnCheckpointState>(row_group, *this, partial_block_manager, std::move(lock));
 }
 
 unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group,
                                                              ColumnCheckpointInfo &checkpoint_info) {
+
 	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
 	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	auto child_state = child_column->Checkpoint(row_group, checkpoint_info);

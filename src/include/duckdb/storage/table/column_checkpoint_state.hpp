@@ -25,7 +25,8 @@ class PartialBlockManager;
 class TableDataWriter;
 
 struct ColumnCheckpointState {
-	ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager);
+	ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager,
+	                      SegmentLock &&lock);
 	virtual ~ColumnCheckpointState();
 
 	RowGroup &row_group;
@@ -33,6 +34,7 @@ struct ColumnCheckpointState {
 	ColumnSegmentTree new_tree;
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
+	SegmentLock lock;
 
 protected:
 	PartialBlockManager &partial_block_manager;

@@ -1056,6 +1056,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		persistent_data.Serialize(serializer);
 		serializer.End();
 	}
+	write_data.states.clear();
 	row_group_pointer.deletes_pointers = CheckpointDeletes(writer.GetPayloadWriter().GetManager());
 	Verify();
 	return row_group_pointer;

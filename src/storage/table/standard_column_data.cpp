@@ -197,8 +197,8 @@ void StandardColumnData::CommitDropColumn() {
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
-	                              PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	                              PartialBlockManager &partial_block_manager, SegmentLock &&lock)
+	    : ColumnCheckpointState(row_group, column_data, partial_block_manager, std::move(lock)) {
 	}
 
 	unique_ptr<ColumnCheckpointState> validity_state;
@@ -216,9 +216,10 @@ public:
 	}
 };
 
-unique_ptr<ColumnCheckpointState>
-StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager) {
-	return make_uniq<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
+unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowGroup &row_group,
+                                                                            PartialBlockManager &partial_block_manager,
+                                                                            SegmentLock &&lock) {
+	return make_uniq<StandardColumnCheckpointState>(row_group, *this, partial_block_manager, std::move(lock));
 }
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,

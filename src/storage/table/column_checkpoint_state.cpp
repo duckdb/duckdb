@@ -10,8 +10,9 @@
 namespace duckdb {
 
 ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
-                                             PartialBlockManager &partial_block_manager)
-    : row_group(row_group), column_data(column_data), partial_block_manager(partial_block_manager) {
+                                             PartialBlockManager &partial_block_manager, SegmentLock &&lock)
+    : row_group(row_group), column_data(column_data), lock(std::move(lock)),
+      partial_block_manager(partial_block_manager) {
 }
 
 ColumnCheckpointState::~ColumnCheckpointState() {

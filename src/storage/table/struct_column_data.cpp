@@ -274,8 +274,8 @@ void StructColumnData::CommitDropColumn() {
 
 struct StructColumnCheckpointState : public ColumnCheckpointState {
 	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
-	                            PartialBlockManager &partial_block_manager)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {
+	                            PartialBlockManager &partial_block_manager, SegmentLock &&lock)
+	    : ColumnCheckpointState(row_group, column_data, partial_block_manager, std::move(lock)) {
 		global_stats = StructStats::CreateEmpty(column_data.type).ToUnique();
 	}
 
@@ -302,13 +302,16 @@ public:
 };
 
 unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group,
-                                                                          PartialBlockManager &partial_block_manager) {
-	return make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
+                                                                          PartialBlockManager &partial_block_manager,
+                                                                          SegmentLock &&lock) {
+	return make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager, std::move(lock));
 }
 
 unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group,
                                                                ColumnCheckpointInfo &checkpoint_info) {
-	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager);
+	auto lock = data.Lock();
+	auto checkpoint_state =
+	    make_uniq<StructColumnCheckpointState>(row_group, *this, checkpoint_info.info.manager, std::move(lock));
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, checkpoint_info);
 	for (auto &sub_column : sub_columns) {
 		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, checkpoint_info));

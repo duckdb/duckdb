@@ -55,8 +55,8 @@ public:
 
 	void CommitDropColumn() override;
 
-	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
-	                                                        PartialBlockManager &partial_block_manager) override;
+	unique_ptr<ColumnCheckpointState>
+	CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager, SegmentLock &&lock) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info) override;
 	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                    Vector &scan_vector) override;

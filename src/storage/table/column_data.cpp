@@ -592,9 +592,9 @@ void ColumnData::CommitDropColumn() {
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &row_group,
-                                                                    PartialBlockManager &partial_block_manager) {
-	return make_uniq<ColumnCheckpointState>(row_group, *this, partial_block_manager);
+unique_ptr<ColumnCheckpointState>
+ColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager, SegmentLock &&lock) {
+	return make_uniq<ColumnCheckpointState>(row_group, *this, partial_block_manager, std::move(lock));
 }
 
 void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
@@ -617,10 +617,12 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+
+	auto lock = data.Lock();
+	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager, std::move(lock));
+	auto &l = checkpoint_state->lock;
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
-	auto l = data.Lock();
 	auto &nodes = data.ReferenceSegments(l);
 	if (nodes.empty()) {
 		// empty table: flush the empty list
