@@ -114,9 +114,9 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
                            vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
-                           bool add_row_id, LogicalType rowid_type)
+                           bool add_row_id)
     : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index,
-              std::move(rowid_type)),
+              (add_row_id && entry) ? entry->Cast<TableCatalogEntry>().GetRowIdType() : LogicalType::ROW_TYPE),
       bound_column_ids(bound_column_ids), entry(entry) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {

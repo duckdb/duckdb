@@ -54,8 +54,7 @@ public:
 
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
-	DUCKDB_API TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
-	                             LogicalType rowid_type = LogicalType(LogicalType::ROW_TYPE));
+	DUCKDB_API TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info);
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> GetInfo() const override;
@@ -119,8 +118,8 @@ public:
 	bool HasPrimaryKey() const;
 
 	//! Returns the rowid type of this table
-	LogicalType GetRowIdType() {
-		return rowid_type;
+	virtual LogicalType GetRowIdType() const {
+		return LogicalType::ROW_TYPE;
 	}
 
 protected:
@@ -128,8 +127,5 @@ protected:
 	ColumnList columns;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<Constraint>> constraints;
-
-	//! A logical type for the rowid of this table.
-	LogicalType rowid_type = LogicalType(LogicalType::ROW_TYPE);
 };
 } // namespace duckdb

@@ -104,7 +104,7 @@ public:
 public:
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
 	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
-	             bool add_row_id = false, LogicalType rowid_type = LogicalType(LogicalType::ROW_TYPE));
+	             bool add_row_id = false);
 
 	//! A reference to the set of bound column ids
 	vector<ColumnIndex> &bound_column_ids;
