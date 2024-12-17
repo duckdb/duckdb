@@ -53,8 +53,8 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto &segment = *nodes[segment_idx].node;
+	for (auto &node : nodes) {
+		auto &segment = *node.node;
 		ColumnScanState scan_state;
 		scan_state.current = &segment;
 		segment.InitializeScan(scan_state);
@@ -187,16 +187,12 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// there were changes or transient segments
 	// we need to rewrite the column segments to disk
 
-	{
-		// TODO: delay this
-
-		// first we check the current segments
-		// if there are any persistent segments, we will mark their old block ids as modified
-		// since the segments will be rewritten their old on disk data is no longer required
-		for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-			auto segment = nodes[segment_idx].node.get();
-			segment->CommitDropSegment();
-		}
+	// first we check the current segments
+	// if there are any persistent segments, we will mark their old block ids as modified
+	// since the segments will be rewritten their old on disk data is no longer required
+	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+		auto segment = nodes[segment_idx].node.get();
+		segment->CommitDropSegment();
 	}
 
 	// now we need to write our segment
