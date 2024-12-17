@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/logging/logger.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 

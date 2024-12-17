@@ -11,7 +11,7 @@
 namespace duckdb {
 
 struct DuckDBLogContextData : public GlobalTableFunctionState {
-	DuckDBLogContextData(shared_ptr<LogStorage> log_storage_p) : log_storage(log_storage_p) {
+	explicit DuckDBLogContextData(shared_ptr<LogStorage> log_storage_p) : log_storage(std::move(log_storage_p)) {
 		scan_state = log_storage->CreateScanContextsState();
 		log_storage->InitializeScanContexts(*scan_state);
 	}

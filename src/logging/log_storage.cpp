@@ -1,4 +1,7 @@
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/logging.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include <iostream>
 

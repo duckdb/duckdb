@@ -41,13 +41,14 @@ void Logger::Log(LogLevel log_level, const char *log_message) {
 	}
 }
 
-void Logger::Log(const char *log_type, LogLevel log_level, std::function<string()> callback) {
+void Logger::Log(const char *log_type, LogLevel log_level, std::function<string()> callback) { // NOLINT
 	if (ShouldLog(log_type, log_level)) {
 		auto string = callback();
 		WriteLog(log_type, log_level, string.c_str());
 	}
 }
-void Logger::Log(LogLevel log_level, std::function<string()> callback) {
+
+void Logger::Log(LogLevel log_level, std::function<string()> callback) { // NOLINT
 	if (ShouldLog(log_level)) {
 		auto string = callback();
 		WriteLog(log_level, string.c_str());

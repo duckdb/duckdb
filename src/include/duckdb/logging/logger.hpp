@@ -10,6 +10,7 @@
 
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 class TableDescription;
@@ -20,6 +21,7 @@ class ColumnDataCollection;
 class ThreadContext;
 class FileOpener;
 class LogStorage;
+class ExecutionContext;
 
 //! Main logging interface
 class Logger {
@@ -32,8 +34,8 @@ public:
 	//! Main logger functions
 	void Log(const char *log_type, LogLevel log_level, const char *log_message);
 	void Log(LogLevel log_level, const char *log_message);
-	void Log(const char *log_type, LogLevel log_level, std::function<string()>);
-	void Log(LogLevel log_level, std::function<string()>);
+	void Log(const char *log_type, LogLevel log_level, std::function<string()> callback);
+	void Log(LogLevel log_level, std::function<string()> callback);
 
 	// Main interface for subclasses
 	virtual bool ShouldLog(const char *log_type, LogLevel log_level) = 0;
@@ -72,11 +74,11 @@ public:
 	//! Logger::Log with callback
 	template <class T>
 	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, std::function<string()> callback) {
-		Logger::Get(log_context_source).Log(log_type, log_level, callback);
+		Logger::Get(log_context_source).Log(log_type, log_level, std::move(callback));
 	}
 	template <class T>
 	static void Log(T &log_context_source, LogLevel log_level, std::function<string()> callback) {
-		Logger::Get(log_context_source).Log(log_level, callback);
+		Logger::Get(log_context_source).Log(log_level, std::move(callback));
 	}
 	//! Logger::Log with StringUtil::Format
 	template <class T, typename... ARGS>

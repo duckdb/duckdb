@@ -1,18 +1,17 @@
 #include "duckdb/function/table/system_functions.hpp"
 
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_data.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/parser_options.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
+
 namespace duckdb {
 
 struct DuckDBLogData : public GlobalTableFunctionState {
-	DuckDBLogData(shared_ptr<LogStorage> log_storage_p) : log_storage(log_storage_p) {
+	explicit DuckDBLogData(shared_ptr<LogStorage> log_storage_p) : log_storage(std::move(log_storage_p)) {
 		scan_state = log_storage->CreateScanEntriesState();
 		log_storage->InitializeScanEntries(*scan_state);
 	}

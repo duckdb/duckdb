@@ -1,5 +1,8 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -57,7 +60,7 @@ bool LogManager::CanScan() {
 	return log_storage->CanScan();
 }
 
-LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(config_p) {
+LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(std::move(config_p)) {
 	log_storage = make_uniq<InMemoryLogStorage>(db);
 }
 

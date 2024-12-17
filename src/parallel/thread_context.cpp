@@ -1,7 +1,7 @@
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/execution/execution_context.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/logging/logger.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
