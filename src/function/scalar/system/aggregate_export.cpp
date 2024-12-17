@@ -267,7 +267,7 @@ static void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_inpu
 }
 
 ExportAggregateFunctionBindData::ExportAggregateFunctionBindData(unique_ptr<Expression> aggregate_p) {
-	D_ASSERT(aggregate_p->type == ExpressionType::BOUND_AGGREGATE);
+	D_ASSERT(aggregate_p->GetExpressionType() == ExpressionType::BOUND_AGGREGATE);
 	aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(aggregate_p));
 }
 

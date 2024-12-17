@@ -39,19 +39,19 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(duckdb_libpgquery::PG
 		if (!expr->IsScalar()) {
 			throw InvalidInputException(NotAcceptedExpressionException());
 		}
-		if (!expr->alias.empty() && param_idx != 0) {
+		if (!expr->GetAlias().empty() && param_idx != 0) {
 			// Found unnamed parameters mixed with named parameters
 			throw NotImplementedException("Mixing named parameters and positional parameters is not supported yet");
 		}
-		auto param_name = expr->alias;
-		if (expr->alias.empty()) {
+		auto param_name = expr->GetAlias();
+		if (expr->GetAlias().empty()) {
 			param_name = std::to_string(param_idx + 1);
 			if (param_idx != i) {
 				throw NotImplementedException("Mixing named parameters and positional parameters is not supported yet");
 			}
 			param_idx++;
 		}
-		expr->alias.clear();
+		expr->ClearAlias();
 		result->named_values[param_name] = std::move(expr);
 	}
 	intermediate_values.clear();

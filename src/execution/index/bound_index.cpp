@@ -110,7 +110,7 @@ void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 }
 
 unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> expr) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 		return make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}

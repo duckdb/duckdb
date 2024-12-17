@@ -43,7 +43,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 			break;
 		}
 		auto &expr = projection.expressions[binding.column_index];
-		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+		if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			// if the projection at this index only has a column reference we can directly trace it to the base table
 			auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 			return FindBaseTableColumn(*projection.children[0], bound_colref.binding);
