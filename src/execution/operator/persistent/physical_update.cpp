@@ -174,6 +174,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto &delete_chunk = index_update ? l_state.delete_chunk : l_state.mock_chunk;
+	delete_chunk.Reset();
 	delete_chunk.SetCardinality(update_count);
 
 	if (index_update) {
