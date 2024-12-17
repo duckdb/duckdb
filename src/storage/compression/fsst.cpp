@@ -240,7 +240,6 @@ public:
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
-		current_segment->function = function;
 		Reset();
 	}
 
