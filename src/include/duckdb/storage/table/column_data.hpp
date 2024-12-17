@@ -219,7 +219,7 @@ protected:
 	vector<SegmentNode<ColumnSegment>> MoveSegments(const SegmentLock &lock);
 
 private:
-	void UpdateCompressionFunction(SegmentLock &l, CompressionFunction &function);
+	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);
 
 protected:
 	//! The segments holding the data of this column segment
@@ -236,7 +236,7 @@ protected:
 	idx_t allocation_size;
 	//!	The compression function used by the ColumnData
 	//! This is empty if the segments have mixed compression or the ColumnData is empty
-	optional_ptr<CompressionFunction> compression;
+	optional_ptr<const CompressionFunction> compression;
 
 private:
 	//! The parent column (if any)

@@ -11,7 +11,7 @@ LateralBinder::LateralBinder(Binder &binder, ClientContext &context) : Expressio
 }
 
 void LateralBinder::ExtractCorrelatedColumns(Expression &expr) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth > 0) {
 			// add the correlated column info
@@ -88,9 +88,9 @@ public:
 	}
 
 	void VisitExpression(unique_ptr<Expression> &expression) override {
-		if (expression->type == ExpressionType::BOUND_COLUMN_REF) {
+		if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			ReduceColumnRefDepth(expression->Cast<BoundColumnRefExpression>(), correlated_columns);
-		} else if (expression->type == ExpressionType::SUBQUERY) {
+		} else if (expression->GetExpressionType() == ExpressionType::SUBQUERY) {
 			ReduceExpressionSubquery(expression->Cast<BoundSubqueryExpression>(), correlated_columns);
 		}
 		BoundNodeVisitor::VisitExpression(expression);

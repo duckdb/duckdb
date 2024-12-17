@@ -90,7 +90,7 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 }
 
 bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
-	if (expr.expression_class != ExpressionClass::STAR) {
+	if (expr.GetExpressionClass() != ExpressionClass::STAR) {
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
