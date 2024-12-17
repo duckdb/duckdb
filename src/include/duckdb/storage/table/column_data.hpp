@@ -234,13 +234,13 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
-	//!	The compression function used by the ColumnData
-	//! This is empty if the segments have mixed compression or the ColumnData is empty
-	optional_ptr<const CompressionFunction> compression;
 
 private:
 	//! The parent column (if any)
 	optional_ptr<ColumnData> parent;
+	//!	The compression function used by the ColumnData
+	//! This is empty if the segments have mixed compression or the ColumnData is empty
+	optional_ptr<const CompressionFunction> compression;
 };
 
 struct PersistentColumnData {
