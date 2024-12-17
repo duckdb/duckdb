@@ -4,8 +4,6 @@
 
 require parquet
 
-load __TEST_DIR__/parquet_write_strings
-
 statement ok
 PRAGMA enable_verification
 
@@ -21,6 +19,52 @@ INSERT INTO strings VALUES
     ('happy'), ('happy'), ('joy'), ('joy'),
     ('happy'), ('happy'), ('joy'), ('joy'),
     ('happy'), ('happy'), ('joy'), ('joy'), ('surprise');
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+----
+RLE_DICTIONARY
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+surprise
+
+query I
+SELECT stats_distinct_count FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+----
+3
 
 # strings with null values
 statement ok

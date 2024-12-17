@@ -17,6 +17,9 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
 
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	if (is_validity && col_data_p.DoesNotRequireValidity()) {
+		// The latest checkpointed base data, that this validity belongs to, was checkpointed with a compression
+		// function that also encodes the validity mask. Therefore the validity mask does not have to be separately
+		// compressed.
 		auto empty_validity =
 		    config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, GetType().InternalType());
 		compression_functions.push_back(empty_validity);
@@ -184,12 +187,16 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// there were changes or transient segments
 	// we need to rewrite the column segments to disk
 
-	// first we check the current segments
-	// if there are any persistent segments, we will mark their old block ids as modified
-	// since the segments will be rewritten their old on disk data is no longer required
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto segment = nodes[segment_idx].node.get();
-		segment->CommitDropSegment();
+	{
+		// TODO: delay this
+
+		// first we check the current segments
+		// if there are any persistent segments, we will mark their old block ids as modified
+		// since the segments will be rewritten their old on disk data is no longer required
+		for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
+			auto segment = nodes[segment_idx].node.get();
+			segment->CommitDropSegment();
+		}
 	}
 
 	// now we need to write our segment

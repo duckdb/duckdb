@@ -311,6 +311,14 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 }
 
+SegmentLock ColumnData::GetSegmentLock() {
+	return data.Lock();
+}
+
+vector<SegmentNode<ColumnSegment>> ColumnData::MoveSegments(const SegmentLock &lock) {
+	return data.MoveSegments();
+}
+
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
 	ColumnScanState child_state;
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
@@ -616,14 +624,15 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info) {
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info,
+                                                         ColumnCheckpointData &checkpoint_data) {
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
-	auto l = data.Lock();
-	auto nodes = data.MoveSegments(l);
+	auto &nodes = type.id() == LogicalTypeId::VALIDITY ? checkpoint_data.validity_data : checkpoint_data.base_data;
+	auto &lock = type.id() == LogicalTypeId::VALIDITY ? checkpoint_data.validity_lock : checkpoint_data.base_lock;
 	if (nodes.empty()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
@@ -637,7 +646,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	// replace the old tree with the new one
 	auto new_segments = checkpoint_state->new_tree.MoveSegments();
 	for (auto &new_segment : new_segments) {
-		AppendSegment(l, std::move(new_segment.node));
+		AppendSegment(lock, std::move(new_segment.node));
 	}
 	ClearUpdates();
 

@@ -13,6 +13,7 @@ public:
 		explicit EmptyValidityAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
 		}
 		idx_t count = 0;
+		idx_t non_nulls = 0;
 	};
 	struct EmptyValidityCompressionState : public CompressionState {
 		explicit EmptyValidityCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
@@ -40,6 +41,9 @@ public:
 	}
 	static bool Analyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 		auto &state = state_p.Cast<EmptyValidityAnalyzeState>();
+		UnifiedVectorFormat format;
+		input.ToUnifiedFormat(count, format);
+		state.non_nulls += format.validity.CountValid(count);
 		state.count += count;
 		return true;
 	}
@@ -60,6 +64,12 @@ public:
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *res->function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
 		compressed_segment->count = state.count;
+		if (state.non_nulls != state.count) {
+			compressed_segment->stats.statistics.SetHasNullFast();
+		}
+		if (state.non_nulls == 0) {
+			compressed_segment->stats.statistics.SetHasNoNullFast();
+		}
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		auto handle = buffer_manager.Pin(compressed_segment->block);

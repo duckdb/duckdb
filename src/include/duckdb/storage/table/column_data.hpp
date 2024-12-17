@@ -34,6 +34,8 @@ struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
 
+using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
+
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
 	}
@@ -43,6 +45,24 @@ struct ColumnCheckpointInfo {
 
 public:
 	CompressionType GetCompressionType();
+};
+
+struct ColumnCheckpointData {
+	ColumnCheckpointData(SegmentLock &base_lock, SegmentLock &validity_lock, column_segment_vector_t &&base,
+	                     column_segment_vector_t &&validity)
+	    : base_lock(base_lock), validity_lock(validity_lock), base_data(std::move(base)),
+	      validity_data(std::move(validity)) {
+	}
+
+public:
+	//! The lock for the column data
+	SegmentLock &base_lock;
+	//! The lock for the validity data
+	SegmentLock &validity_lock;
+	//! The actual column data
+	column_segment_vector_t base_data;
+	//! The accompanying validity data
+	column_segment_vector_t validity_data;
 };
 
 class ColumnData {
@@ -170,7 +190,8 @@ public:
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
 	                                                                PartialBlockManager &partial_block_manager);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info,
+	                                                     ColumnCheckpointData &checkpoint_data);
 
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
@@ -226,6 +247,8 @@ protected:
 	                    idx_t update_count, Vector &base_vector);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
+	SegmentLock GetSegmentLock();
+	vector<SegmentNode<ColumnSegment>> MoveSegments(const SegmentLock &lock);
 
 private:
 	void UpdateCompressionFunction(SegmentLock &l, CompressionFunction &function);

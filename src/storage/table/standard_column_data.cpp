@@ -227,8 +227,19 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
-	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
-	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
+
+	// Always grab the base lock first
+	auto base_lock = GetSegmentLock();
+	auto validity_lock = validity.GetSegmentLock();
+
+	auto base_data = MoveSegments(base_lock);
+	auto validity_data = validity.MoveSegments(validity_lock);
+
+	ColumnCheckpointData checkpoint_data(base_lock, validity_lock, std::move(base_data), std::move(validity_data));
+
+	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info, checkpoint_data);
+	auto validity_state = validity.Checkpoint(row_group, checkpoint_info, checkpoint_data);
+
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);
 	return base_state;
