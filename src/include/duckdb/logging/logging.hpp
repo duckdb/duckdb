@@ -13,6 +13,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 
