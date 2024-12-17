@@ -41,7 +41,7 @@ idx_t Blob::GetStringSize(string_t blob) {
 	return str_len;
 }
 
-void Blob::ToString(string_t blob, char *output) {
+void Blob::ToHexEscapedString(string_t blob, char *output) {
 	auto data = const_data_ptr_cast(blob.GetData());
 	auto len = blob.GetSize();
 	idx_t str_idx = 0;
@@ -64,10 +64,10 @@ void Blob::ToString(string_t blob, char *output) {
 	D_ASSERT(str_idx == GetStringSize(blob));
 }
 
-string Blob::ToString(string_t blob) {
+string Blob::ToHexEscapedString(string_t blob) {
 	auto str_len = GetStringSize(blob);
 	auto buffer = make_unsafe_uniq_array_uninitialized<char>(str_len);
-	Blob::ToString(blob, buffer.get());
+	Blob::ToHexEscapedString(blob, buffer.get());
 	return string(buffer.get(), str_len);
 }
 

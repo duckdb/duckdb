@@ -65,7 +65,7 @@ duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(d
 				result_data[row_idx] = StringVector::AddString(result, context.result.str);
 				break;
 			case SQLiteTypeValue::BLOB:
-				result_data[row_idx] = StringVector::AddString(result, Blob::ToString(context.result.str));
+				result_data[row_idx] = StringVector::AddString(result, Blob::ToHexEscapedString(context.result.str));
 				break;
 			case SQLiteTypeValue::NULL_VALUE:
 				// NULL value set by the UDF by calling sqlite3_result_null()

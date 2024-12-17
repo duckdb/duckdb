@@ -2071,7 +2071,7 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 		break;
 	case PhysicalType::VARCHAR: {
 		if (type_.id() == LogicalTypeId::BLOB) {
-			auto blob_str = Blob::ToString(StringValue::Get(*this));
+			auto blob_str = Blob::ToHexEscapedString(StringValue::Get(*this));
 			serializer.WriteProperty(102, "value", blob_str);
 		} else {
 			serializer.WriteProperty(102, "value", StringValue::Get(*this));
