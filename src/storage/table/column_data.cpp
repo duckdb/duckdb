@@ -27,8 +27,6 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
       type(std::move(type_p)), allocation_size(0), parent(parent) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
-	} else if (type.id() == LogicalTypeId::VALIDITY) {
-		parent->validity = this;
 	}
 }
 

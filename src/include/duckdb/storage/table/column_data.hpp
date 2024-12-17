@@ -241,8 +241,6 @@ protected:
 private:
 	//! The parent column (if any)
 	optional_ptr<ColumnData> parent;
-	//! The validity data (if any)
-	optional_ptr<ColumnData> validity;
 };
 
 struct PersistentColumnData {
