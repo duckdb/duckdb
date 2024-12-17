@@ -277,7 +277,7 @@ void JsonDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
 	auto len = yyjson_get_len(val);
 	D_ASSERT(len == count);
 	auto blob = string_t(str, len);
-	Blob::ToString(blob, char_ptr_cast(ptr));
+	Blob::ToHexEscapedString(blob, char_ptr_cast(ptr));
 }
 
 } // namespace duckdb
