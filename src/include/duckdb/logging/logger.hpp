@@ -130,11 +130,11 @@ public:
 	}
 	template <class T, typename... ARGS>
 	static void Error(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::ERROR, params...);
+		Log(log_context_source, LogLevel::RECOVERABLE_ERROR, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Error(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::ERROR, params...);
+		Log(log_type, log_context_source, LogLevel::RECOVERABLE_ERROR, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Fatal(T &log_context_source, ARGS... params) {

@@ -2028,7 +2028,7 @@ const StringUtil::EnumStringLiteral *GetLogLevelValues() {
 		{ static_cast<uint32_t>(LogLevel::DEBUGGING), "DEBUG" },
 		{ static_cast<uint32_t>(LogLevel::INFO), "INFO" },
 		{ static_cast<uint32_t>(LogLevel::WARN), "WARN" },
-		{ static_cast<uint32_t>(LogLevel::ERROR), "ERROR" },
+		{ static_cast<uint32_t>(LogLevel::RECOVERABLE_ERROR), "ERROR" },
 		{ static_cast<uint32_t>(LogLevel::FATAL), "FATAL" }
 	};
 	return values;

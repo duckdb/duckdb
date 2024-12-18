@@ -22,7 +22,8 @@ enum class LogLevel : uint8_t {
 	DEBUGGING = 20, // ToString-ed as DEBUG, but named DEBUGGING due to conflict with DEBUG define
 	INFO = 30,
 	WARN = 40,
-	ERROR = 50,
+	RECOVERABLE_ERROR =
+	    50, // ToString-ed as ERROR, but named RECOVERABLE_ERROR due to conflict with ERROR define in windows
 	FATAL = 60
 };
 
