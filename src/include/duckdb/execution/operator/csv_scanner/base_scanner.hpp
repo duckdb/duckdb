@@ -263,6 +263,9 @@ protected:
 				}
 			} break;
 			case CSVState::UNQUOTED: {
+				if (states.states[0] == CSVState::MAYBE_QUOTED) {
+					T::SetEscaped(result);
+				}
 				T::SetUnquoted(result);
 				iterator.pos.buffer_pos++;
 				break;
