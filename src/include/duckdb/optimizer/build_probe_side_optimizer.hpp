@@ -11,7 +11,6 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
