@@ -36,7 +36,7 @@ private:
 	unique_ptr<AnalyzeState> DetectBestCompressionMethod(const column_segment_vector_t &nodes, idx_t &compression_idx);
 	void WriteToDisk(const column_segment_vector_t &nodes);
 	bool HasChanges(const column_segment_vector_t &nodes);
-	void WritePersistentSegments(column_segment_vector_t &&nodes);
+	void WritePersistentSegments(column_segment_vector_t nodes);
 
 private:
 	ColumnData &col_data;
