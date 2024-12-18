@@ -102,19 +102,19 @@ select count(*) from duckdb_table_sample('integers_1') where a = -1 and b = -1;
 
 
 ## about half of the samples should have the pair '-1', 1.
-#query I
-#select count(*) > 1000 and count(*) < 1150 from duckdb_table_sample('integers_1') where a = -1 and b = -1;
-#----
-#true
-#
-#
-#restart
-#
-## updated sample is also newly serialized
-#query I
-#select count(*) > 1000 and count(*) < 1150 from duckdb_table_sample('integers_1') where a = -1 and b = -1;
-#----
-#true
+query I
+select count(*) > 924 and count(*) < 1124 from duckdb_table_sample('integers_1') where a = -1 and b = -1;
+----
+true
+
+
+restart
+
+# updated sample is also newly serialized
+query I
+select count(*) > 924 and count(*) < 1124 from duckdb_table_sample('integers_1') where a = -1 and b = -1;
+----
+true
 
 # create a view on top of the sample
 statement ok
