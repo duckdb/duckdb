@@ -138,8 +138,10 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 
 	// Try to find a matching index for any of the filter expressions.
 	ComparisonExpressionMatcher matcher;
+
 	// Match on a comparison type.
 	matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
+
 	// Match on a constant comparison with the indexed expression.
 	matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(expr));
 	matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
