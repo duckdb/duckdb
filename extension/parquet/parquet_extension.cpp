@@ -797,15 +797,18 @@ public:
 		auto &gstate = data_p.global_state->Cast<ParquetReadGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<ParquetReadBindData>();
 
+	    bool rowgroup_finished;
 		do {
 			if (gstate.CanRemoveColumns()) {
 				data.all_columns.Reset();
-				data.reader->Scan(data.scan_state, data.all_columns);
-				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           data.all_columns, gstate.multi_file_reader_state);
+                data.reader->Scan(data.scan_state, data.all_columns);
+                rowgroup_finished = data.all_columns.size() == 0;
+                bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
+                                                           data.all_columns, gstate.multi_file_reader_state);
 				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 			} else {
 				data.reader->Scan(data.scan_state, output);
+			    rowgroup_finished = output.size() == 0;
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
 				                                           output, gstate.multi_file_reader_state);
 			}
@@ -814,7 +817,7 @@ public:
 			if (output.size() > 0) {
 				return;
 			}
-			if (!ParquetParallelStateNext(context, bind_data, data, gstate)) {
+			if (rowgroup_finished && !ParquetParallelStateNext(context, bind_data, data, gstate)) {
 				return;
 			}
 		} while (true);
