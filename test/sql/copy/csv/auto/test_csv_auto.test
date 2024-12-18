@@ -17,7 +17,7 @@ one|two|three|four
 query I
 FROM read_csv('data/csv/nullterm.csv')
 ----
-world
+\0world\0
 
 query I
 FROM read_csv('data/csv/nullterm.csv', quote = '"', escape = '"')
