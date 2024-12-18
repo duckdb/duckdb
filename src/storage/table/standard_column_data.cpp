@@ -9,6 +9,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/validity_checkpoint_state.hpp"
+#include "duckdb/storage/table/standard_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -196,26 +197,16 @@ void StandardColumnData::CommitDropColumn() {
 	validity.CommitDropColumn();
 }
 
-struct StandardColumnCheckpointState : public ColumnCheckpointState {
-	StandardColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
-	                              PartialBlockManager &partial_block_manager, SegmentLock &&lock)
-	    : ColumnCheckpointState(row_group, column_data, partial_block_manager, std::move(lock)) {
-	}
+unique_ptr<BaseStatistics> StandardColumnCheckpointState::GetStatistics() {
+	D_ASSERT(global_stats);
+	return std::move(global_stats);
+}
 
-	unique_ptr<ColumnCheckpointState> validity_state;
-
-public:
-	unique_ptr<BaseStatistics> GetStatistics() override {
-		D_ASSERT(global_stats);
-		return std::move(global_stats);
-	}
-
-	PersistentColumnData ToPersistentData() override {
-		auto data = ColumnCheckpointState::ToPersistentData();
-		data.child_columns.push_back(validity_state->ToPersistentData());
-		return data;
-	}
-};
+PersistentColumnData StandardColumnCheckpointState::ToPersistentData() {
+	auto data = ColumnCheckpointState::ToPersistentData();
+	data.child_columns.push_back(validity_state->ToPersistentData());
+	return data;
+}
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowGroup &row_group,
                                                                             PartialBlockManager &partial_block_manager,

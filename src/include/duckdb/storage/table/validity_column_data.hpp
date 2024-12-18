@@ -25,6 +25,8 @@ public:
 	CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager, SegmentLock &&lock) override;
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
+	void CheckpointScan(ColumnSegment &segment, ColumnCheckpointState &checkpoint_state, ColumnScanState &state,
+	                    idx_t row_group_start, idx_t count, Vector &scan_vector) override;
 };
 
 } // namespace duckdb
