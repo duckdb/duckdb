@@ -701,7 +701,7 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 	auto utf_type = Utf8Proc::Analyze(str_data, str_len, &reason, &pos);
 	if (utf_type == UnicodeType::INVALID) {
 		throw InvalidInputException("Invalid string encoding found in Parquet file: value \"" +
-		                            Blob::ToHexEscapedString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
+		                            Blob::ToString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
 	}
 	return str_len;
 }

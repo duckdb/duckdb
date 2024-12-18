@@ -31,9 +31,9 @@ public:
 	DUCKDB_API static idx_t GetStringSize(string_t blob);
 	//! Converts a blob to a string, writing the output to the designated output string.
 	//! The string needs to have space for at least GetStringSize(blob) bytes.
-	DUCKDB_API static void ToHexEscapedString(string_t blob, char *output);
+	DUCKDB_API static void ToString(string_t blob, char *output);
 	//! Convert a blob object to a string
-	DUCKDB_API static string ToHexEscapedString(string_t blob);
+	DUCKDB_API static string ToString(string_t blob);
 
 	//! Returns the blob size of a string -> blob conversion
 	DUCKDB_API static bool TryGetBlobSize(string_t str, idx_t &result_size, CastParameters &parameters);

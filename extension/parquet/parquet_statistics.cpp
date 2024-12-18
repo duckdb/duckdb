@@ -163,7 +163,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type,
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		if (type.id() == LogicalTypeId::BLOB || !Value::StringIsValid(stats)) {
-			return Value(Blob::ToHexEscapedString(string_t(stats)));
+			return Value(Blob::ToString(string_t(stats)));
 		}
 		return Value(stats);
 	case LogicalTypeId::DATE:

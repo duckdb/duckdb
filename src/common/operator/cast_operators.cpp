@@ -1342,7 +1342,7 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 	idx_t result_size = Blob::GetStringSize(input);
 
 	string_t result = StringVector::EmptyString(vector, result_size);
-	Blob::ToHexEscapedString(input, result.GetDataWriteable());
+	Blob::ToString(input, result.GetDataWriteable());
 	result.Finalize();
 
 	return result;
