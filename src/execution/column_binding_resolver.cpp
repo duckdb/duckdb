@@ -192,11 +192,11 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 }
 
 void ColumnBindingResolver::Verify(LogicalOperator &op) {
-#ifdef DEBUG
+// #ifdef DEBUG
 	ColumnBindingResolver resolver(true);
 	resolver.VisitOperator(op);
 	VerifyInternal(op);
-#endif
+// #endif
 }
 
 } // namespace duckdb

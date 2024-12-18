@@ -2,6 +2,22 @@
 # description: Test reodering set operators
 # group: [join]
 
+#
+#statement ok
+#create table big as select range%50 a from range(100000);
+#
+#statement ok
+#create table small as select range b from range(55);
+#
+#statement ok
+#select a, count(a) from small, big where a=b group by a;
+#
+#
+#
+#mode skip
+#
+#statement ok
+#pragma disabled_optimizers='column_lifetime';
 
 statement ok
 attach 'tpch_sf1.db' as tpch

@@ -52,6 +52,10 @@ BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, Logical
 
 
 static void FlipChildren(LogicalOperator &op) {
+	Printer::Print("bindings before switch");
+	for (auto &binding : op.GetColumnBindings()) {
+		Printer::Print(binding.ToString());
+	}
 	std::swap(op.children[0], op.children[1]);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
@@ -64,6 +68,12 @@ static void FlipChildren(LogicalOperator &op) {
 			cond.comparison = FlipComparisonExpression(cond.comparison);
 		}
 		std::swap(join.left_projection_map, join.right_projection_map);
+		auto bindings = join.GetColumnBindings();
+		Printer::Print("bindings after switch");
+		for (auto &binding : bindings) {
+			Printer::Print(binding.ToString());
+		}
+		auto b = 0;
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
@@ -207,12 +217,19 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	}
 
 	if (swap) {
+		Printer::Print("swapping children");
 		FlipChildren(op);
 	}
 	return swap;
 }
 
 unique_ptr<LogicalOperator> BuildProbeSideOptimizer::Optimize(unique_ptr<LogicalOperator> op, bool is_root) {
+	// First visit the children
+	for (idx_t i = 0; i < op->children.size(); i++) {
+		op->children[i] = Optimize(std::move(op->children[i]));
+	}
+
+	// then the currentoperator
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op->Cast<LogicalComparisonJoin>();
@@ -281,6 +298,7 @@ unique_ptr<LogicalOperator> BuildProbeSideOptimizer::Optimize(unique_ptr<Logical
 				expressions.push_back(make_uniq<BoundColumnRefExpression>(original_types[col_idx], old_binding));
 				replacer.replacement_bindings.emplace_back(old_binding, ColumnBinding(proj_index, col_idx));
 			}
+			Printer::Print("adding projection");
 			auto proj = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
 			proj->children.push_back(std::move(op));
 			op = std::move(proj);
@@ -290,19 +308,27 @@ unique_ptr<LogicalOperator> BuildProbeSideOptimizer::Optimize(unique_ptr<Logical
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto break_here = 0;
+		auto bindings = op->GetColumnBindings();
+		for (auto &binding : bindings) {
+			Printer::Print(binding.ToString());
+		}
+		auto wat = break_here;
+		break;
+	}
 	default:
 		break;
 	}
 
-	for (idx_t i = 0; i < op->children.size(); i++) {
-		auto child = std::move(op->children[i]);
-		op->children[i] = Optimize(std::move(child));
-	}
 	// after swapping sides, replace bindings if needed.
 	if (is_root) {
 		for (auto &replacer : binding_replacers) {
+			Printer::Print("replaced column bindings");
 			replacer.VisitOperator(*op);
 		}
+		Printer::Print("finishing optimizing probe side build sidee");
+		op->Print();
 	}
 	return op;
 }
