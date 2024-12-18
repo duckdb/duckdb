@@ -455,7 +455,16 @@ public:
 		auto &ht = *sink.hash_table;
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
 		const auto num_threads = NumericCast<idx_t>(sink.num_threads);
-		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && !context.config.verify_parallelism)) {
+
+		// If the data is very skewed (many of the exact same key), our finalize will become slow,
+		// due to completely slamming the same atomic using compare-and-swaps.
+		// We can detect this because we partition the data, and go for a single-threaded finalize instead.
+		const auto max_partition_ht_size =
+		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
+
+		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && skew > SKEW_SINGLE_THREADED_THRESHOLD &&
+		                         !context.config.verify_parallelism)) {
 			// Single-threaded finalize
 			finalize_tasks.push_back(
 			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op));
@@ -478,6 +487,7 @@ public:
 
 	static constexpr idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
+	static constexpr double SKEW_SINGLE_THREADED_THRESHOLD = 0.33;
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
@@ -1074,7 +1084,20 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	build_chunk_count = data_collection.ChunkCount();
 	build_chunk_done = 0;
 
-	build_chunks_per_thread = MaxValue<idx_t>((build_chunk_count + sink.num_threads - 1) / sink.num_threads, 1);
+	if (sink.context.config.verify_parallelism) {
+		build_chunks_per_thread = 1;
+	} else {
+		const auto max_partition_ht_size =
+		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
+
+		if (skew > HashJoinFinalizeEvent::SKEW_SINGLE_THREADED_THRESHOLD) {
+			build_chunks_per_thread = build_chunk_count; // This forces single-threaded building
+		} else {
+			build_chunks_per_thread = // Same task size as in HashJoinFinalizeEvent
+			    MaxValue<idx_t>(MinValue(build_chunk_count, HashJoinFinalizeEvent::CHUNKS_PER_TASK), 1);
+		}
+	}
 
 	ht.InitializePointerTable();
 
