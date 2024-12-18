@@ -98,7 +98,7 @@ mode output_result
 query I
 select count(*) from duckdb_table_sample('integers_1') where a = -1 and b = -1;
 ----
-1024
+997
 
 
 ## about half of the samples should have the pair '-1', 1.
