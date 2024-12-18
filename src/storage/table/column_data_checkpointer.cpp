@@ -223,7 +223,7 @@ bool ColumnDataCheckpointer::HasChanges(const column_segment_vector_t &nodes) {
 	return false;
 }
 
-void ColumnDataCheckpointer::WritePersistentSegments(column_segment_vector_t &&nodes) {
+void ColumnDataCheckpointer::WritePersistentSegments(column_segment_vector_t nodes) {
 	// all segments are persistent and there are no updates
 	// we only need to write the metadata
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
