@@ -87,11 +87,14 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 		                 previous_scanner->GetValidationLine());
 	}
 	if (single_threaded) {
-		if (previous_scanner) {
-			// Cleanup previous scanner.
-			previous_scanner->buffer_tracker.reset();
-			current_buffer_in_use.reset();
-			previous_scanner->csv_file_scan->Finish();
+		{
+			lock_guard<mutex> parallel_lock(main_mutex);
+			if (previous_scanner) {
+				// Cleanup previous scanner.
+				previous_scanner->buffer_tracker.reset();
+				current_buffer_in_use.reset();
+				previous_scanner->csv_file_scan->Finish();
+			}
 		}
 		idx_t cur_idx;
 		bool empty_file = false;
