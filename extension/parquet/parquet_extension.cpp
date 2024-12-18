@@ -343,10 +343,7 @@ public:
 		table_function.named_parameters["debug_use_openssl"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 		table_function.named_parameters["explicit_cardinality"] = LogicalType::UBIGINT;
-		table_function.named_parameters["schema"] =
-		    LogicalType::MAP(LogicalType::INTEGER, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
-		                                                                 {"type", LogicalType::VARCHAR},
-		                                                                 {"default_value", LogicalType::VARCHAR}}}));
+		table_function.named_parameters["schema"] = LogicalTypeId::ANY;
 		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
 		table_function.get_partition_data = ParquetScanGetPartitionData;
 		table_function.serialize = ParquetScanSerialize;
@@ -500,6 +497,52 @@ public:
 		return std::move(result);
 	}
 
+	static void VerifyParquetSchemaParameter(const Value &schema) {
+		LogicalType::MAP(LogicalType::BLOB, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
+		                                                          {"type", LogicalType::VARCHAR},
+		                                                          {"default_value", LogicalType::VARCHAR}}}));
+		auto &map_type = schema.type();
+		if (map_type.id() != LogicalTypeId::MAP) {
+			throw InvalidInputException("'schema' expects a value of type MAP, not %s",
+			                            LogicalTypeIdToString(map_type.id()));
+		}
+		auto &key_type = MapType::KeyType(map_type);
+		auto &value_type = MapType::ValueType(map_type);
+
+		if (value_type.id() != LogicalTypeId::STRUCT) {
+			throw InvalidInputException("'schema' expects a STRUCT as the value type of the map");
+		}
+		auto &children = StructType::GetChildTypes(value_type);
+		if (children.size() < 3) {
+			throw InvalidInputException(
+			    "'schema' expects the STRUCT to have 3 children, 'name', 'type' and 'default_value");
+		}
+		if (!StringUtil::CIEquals(children[0].first, "name")) {
+			throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
+		}
+		if (children[0].second.id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException("'schema' expects the 'name' field to be of type VARCHAR, not %s",
+			                            LogicalTypeIdToString(children[0].second.id()));
+		}
+		if (!StringUtil::CIEquals(children[1].first, "type")) {
+			throw InvalidInputException("'schema' expects the second field of the struct to be called 'type'");
+		}
+		if (children[1].second.id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException("'schema' expects the 'type' field to be of type VARCHAR, not %s",
+			                            LogicalTypeIdToString(children[1].second.id()));
+		}
+		if (!StringUtil::CIEquals(children[2].first, "default_value")) {
+			throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
+		}
+		//! NOTE: default_value can be any type
+
+		if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException(
+			    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
+			    LogicalTypeIdToString(key_type.id()));
+		}
+	}
+
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
@@ -522,6 +565,7 @@ public:
 			} else if (loption == "schema") {
 				// Argument is a map that defines the schema
 				const auto &schema_value = kv.second;
+				VerifyParquetSchemaParameter(schema_value);
 				const auto column_values = ListValue::GetChildren(schema_value);
 				if (column_values.empty()) {
 					throw BinderException("Parquet schema cannot be empty");
