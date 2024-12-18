@@ -1,6 +1,8 @@
 #include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/validity_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -11,6 +13,18 @@ ValidityColumnData::ValidityColumnData(BlockManager &block_manager, DataTableInf
 
 FilterPropagateResult ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+ValidityColumnCheckpointState::ValidityColumnCheckpointState(RowGroup &row_group, ColumnData &column_data,
+                                                             PartialBlockManager &partial_block_manager,
+                                                             SegmentLock &&lock)
+    : ColumnCheckpointState(row_group, column_data, partial_block_manager, std::move(lock)) {
+}
+
+unique_ptr<ColumnCheckpointState> ValidityColumnData::CreateCheckpointState(RowGroup &row_group,
+                                                                            PartialBlockManager &partial_block_manager,
+                                                                            SegmentLock &&lock) {
+	return make_uniq<ValidityColumnCheckpointState>(row_group, *this, partial_block_manager, std::move(lock));
 }
 
 void ValidityColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,

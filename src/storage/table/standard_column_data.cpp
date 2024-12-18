@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/table/validity_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -238,9 +239,11 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	validity_checkpoint_state->global_stats = BaseStatistics::CreateEmpty(validity.type).ToUnique();
 
 	// Move the validity state into the base state
-	auto &validity_state = *validity_checkpoint_state;
+	auto &validity_state = validity_checkpoint_state->Cast<ValidityColumnCheckpointState>();
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_checkpoint_state);
+	//! Set the parent state so this can be referenced during checkpointing
+	validity_state.parent_state = base_state.get();
 
 	// Reference the segments to compress
 	auto &base_nodes = data.ReferenceSegments(base_lock);

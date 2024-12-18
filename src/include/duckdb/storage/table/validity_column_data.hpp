@@ -21,6 +21,8 @@ public:
 	                   ColumnData &parent);
 
 public:
+	unique_ptr<ColumnCheckpointState>
+	CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager, SegmentLock &&lock) override;
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
 };
