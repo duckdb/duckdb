@@ -93,20 +93,12 @@ select count(*) from integers_1;
 ----
 12000000
 
-mode output_result
-
-query I
-select count(*) from duckdb_table_sample('integers_1') where a = -1 and b = -1;
-----
-997
-
 
 ## about half of the samples should have the pair '-1', 1.
 query I
 select count(*) > 924 and count(*) < 1124 from duckdb_table_sample('integers_1') where a = -1 and b = -1;
 ----
 true
-
 
 restart
 
@@ -129,11 +121,11 @@ select count(*) from sample_view where a = -2 and b = -2;
 ----
 700
 
-## 2048 / 3 = 682 (706 is good)
-#query I
-#select count(*) > 600 and count(*) < 750 from sample_view where a = -2 and b = -2;
-#----
-#true
+# 2048 / 3 = 682 (706 is good)
+query I
+select count(*) > 600 and count(*) < 750 from sample_view where a = -2 and b = -2;
+----
+true
 
 #query I nosort result_2
 #select count(*) from sample_view where a = -2 and b = -2;
@@ -141,14 +133,14 @@ select count(*) from sample_view where a = -2 and b = -2;
 
 restart
 
-#query I
-#select count(*) > 600 and count(*) < 750 from sample_view where a = -2 and b = -2;
-#----
-#true
+query I
+select count(*) > 600 and count(*) < 750 from sample_view where a = -2 and b = -2;
+----
+true
 
-#query I nosort result_2
-#select count(*) from sample_view where a = -2 and b = -2;
-#----
+query I nosort result_2
+select count(*) from sample_view where a = -2 and b = -2;
+----
 
 # currently have 18_000_000 values in the table.
 # to try and get 1 value in the sample, we should add
