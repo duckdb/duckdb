@@ -10,7 +10,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2);
-	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
+	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
 

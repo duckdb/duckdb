@@ -52,7 +52,7 @@ unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PG
 	D_ASSERT(stmt.args->head && stmt.args->head->data.ptr_value);
 	auto const_val = PGPointerCast<duckdb_libpgquery::PGNode>(stmt.args->head->data.ptr_value);
 	auto expr = TransformExpression(const_val);
-	if (expr->type == ExpressionType::COLUMN_REF) {
+	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		Value val;
 		if (!colref.IsQualified()) {
@@ -62,7 +62,7 @@ unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PG
 		}
 		expr = make_uniq<ConstantExpression>(std::move(val));
 	}
-	if (expr->type == ExpressionType::VALUE_DEFAULT) {
+	if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 		// set to default = reset
 		return make_uniq<ResetVariableStatement>(std::move(name), scope);
 	}

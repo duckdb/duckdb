@@ -13,7 +13,7 @@ using Filter = FilterPushdown::Filter;
 
 static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr,
                                  LogicalSetOperation &setop) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == setop.table_index);
 		D_ASSERT(colref.depth == 0);

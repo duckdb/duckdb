@@ -156,10 +156,10 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 				auto error =
 				    StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
 				                       child_type.ToString(), arg_type.ToString());
-				throw BinderException(arguments[i]->query_location,
+				throw BinderException(arguments[i]->GetQueryLocation(),
 				                      QueryErrorContext::Format(list_arguments, error, error_index, false));
 			} else {
-				throw BinderException(arguments[i]->query_location,
+				throw BinderException(arguments[i]->GetQueryLocation(),
 				                      "Cannot create a list of types %s and %s - an explicit cast is required",
 				                      child_type.ToString(), arg_type.ToString());
 			}

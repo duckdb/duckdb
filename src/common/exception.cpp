@@ -169,11 +169,11 @@ ExceptionType Exception::StringToExceptionType(const string &type) {
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const Expression &expr) {
-	return InitializeExtraInfo(expr.query_location);
+	return InitializeExtraInfo(expr.GetQueryLocation());
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const ParsedExpression &expr) {
-	return InitializeExtraInfo(expr.query_location);
+	return InitializeExtraInfo(expr.GetQueryLocation());
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const QueryErrorContext &error_context) {

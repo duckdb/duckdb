@@ -13,7 +13,7 @@ namespace duckdb {
 
 static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	auto ret = ExpressionBinding();
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		// TODO: Other expression classes that can have 0 children?
 		auto &func = expr.Cast<BoundFunctionExpression>();
@@ -332,7 +332,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	double new_card = -1;
 	for (auto &g_set : aggr.grouping_sets) {
 		for (auto &ind : g_set) {
-			if (aggr.groups[ind]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+			if (aggr.groups[ind]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
 			auto bound_col = &aggr.groups[ind]->Cast<BoundColumnRefExpression>();
