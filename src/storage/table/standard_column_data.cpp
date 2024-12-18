@@ -224,21 +224,23 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowG
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,
                                                                  ColumnCheckpointInfo &checkpoint_info) {
+
+	// Grab both of the locks
+	auto base_lock = data.Lock();
+	auto validity_lock = validity.data.Lock();
+
 	// scan the segments of the column data
 	// set up the checkpoint state
-	auto base_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto base_state = CreateCheckpointState(row_group, checkpoint_info.info.manager, std::move(base_lock));
 	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
-	auto validity_checkpoint_state = validity.CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	auto validity_checkpoint_state =
+	    validity.CreateCheckpointState(row_group, checkpoint_info.info.manager, std::move(validity_lock));
 	validity_checkpoint_state->global_stats = BaseStatistics::CreateEmpty(validity.type).ToUnique();
 
 	// Move the validity state into the base state
 	auto &validity_state = *validity_checkpoint_state;
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_checkpoint_state);
-
-	// Grab both of the locks
-	auto base_lock = data.Lock();
-	auto validity_lock = validity.data.Lock();
 
 	// Reference the segments to compress
 	auto &base_nodes = data.ReferenceSegments(base_lock);
