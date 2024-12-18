@@ -152,8 +152,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			exit_projection = true;
 		} else {
 			auto cross_product = LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
-			// add a projection on top of the cross product. If the children of the cross product are switch in the
-			// optimizer And the parent of the cross product is a
 			return cross_product;
 		}
 	}

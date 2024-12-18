@@ -38,8 +38,8 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 	}
 }
 
-BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op, Optimizer &optimizer)
-    : context(context), optimizer(optimizer), root(op) {
+BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op)
+    : context(context) {
 	vector<ColumnBinding> updating_columns, current_op_bindings;
 	auto bindings = op.GetColumnBindings();
 	vector<ColumnBinding> row_id_bindings;
@@ -73,7 +73,7 @@ static void FlipChildren(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		// don't need to do anything
+		// don't need to do anything here
 		return;
 	}
 	default:
@@ -157,7 +157,7 @@ idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
 	return ChildHasJoins(*op.children[0]);
 }
 
-bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
+void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	auto &left_child = *op.children[0];
 	auto &right_child = *op.children[1];
 	const auto lhs_cardinality = left_child.has_estimated_cardinality ? left_child.estimated_cardinality
@@ -209,7 +209,6 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	if (swap) {
 		FlipChildren(op);
 	}
-	return swap;
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {

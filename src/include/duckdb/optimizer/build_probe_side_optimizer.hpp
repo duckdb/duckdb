@@ -12,8 +12,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/optimizer/column_binding_replacer.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
 
@@ -33,11 +31,12 @@ private:
 	static constexpr double PREFER_RIGHT_DEEP_PENALTY = 0.15;
 
 public:
-	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op, Optimizer &optimizer);
+	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op);
 	void VisitOperator(LogicalOperator &op) override;
+	void VisitExpression(unique_ptr<Expression> *expression) override {};
 
 private:
-	bool TryFlipJoinChildren(LogicalOperator &op) const;
+	void TryFlipJoinChildren(LogicalOperator &op) const;
 	static idx_t ChildHasJoins(LogicalOperator &op);
 
 	static BuildSize GetBuildSizes(const LogicalOperator &op, idx_t lhs_cardinality, idx_t rhs_cardinality);
@@ -46,9 +45,6 @@ private:
 private:
 	ClientContext &context;
 	vector<ColumnBinding> preferred_on_probe_side;
-	Optimizer &optimizer;
-	vector<ColumnBindingReplacer> binding_replacers;
-	LogicalOperator &root;
 };
 
 } // namespace duckdb

@@ -162,108 +162,108 @@ create table tag (
 
 # run the queries
 
-##  Q1. Posting summary
-#statement ok
-#WITH
-#  message_count AS (
-#    SELECT 0.0 + count(*) AS cnt
-#      FROM message
-#     WHERE 1=1
-#       AND m_creationdate < DATE '2011-07-21'
-#)
-#, message_prep AS (
-#    SELECT extract(year from m_creationdate) AS messageYear
-#         , m_c_replyof IS NOT NULL AS isComment
-#         , CASE
-#             WHEN m_length <  40 THEN 0 -- short
-#             WHEN m_length <  80 THEN 1 -- one liner
-#             WHEN m_length < 160 THEN 2 -- tweet
-#             ELSE                     3 -- long
-#           END AS lengthCategory
-#         , m_length
-#      FROM message
-#     WHERE 1=1
-#       AND m_creationdate < DATE '2011-07-21'
-#       --AND m_content IS NOT NULL
-#       AND m_ps_imagefile IS NULL -- FIXME CHECKME: posts w/ m_ps_imagefile IS NOT NULL should have m_content IS NULL
-#)
-#SELECT messageYear, isComment, lengthCategory
-#     , count(*) AS messageCount
-#     , avg(m_length) AS averageMessageLength
-#     , sum(m_length) AS sumMessageLength
-#     , count(*) / mc.cnt AS percentageOfMessages
-#  FROM message_prep
-#     , message_count mc
-# GROUP BY messageYear, isComment, lengthCategory, mc.cnt
-# ORDER BY messageYear DESC, isComment ASC, lengthCategory ASC
-#;
-#
-## Q2. Top tags for country, age, gender, time
-## FIXME: date_part from interval
-#mode skip
-#
-#statement ok
-#SELECT co.pl_name AS "country.name"
-#     , extract(MONTH FROM p.m_creationdate) as messageMonth
-#     , cr.p_gender AS "person.gender"
-#     , floor(extract(YEARS FROM age('2013-01-01'::date, cr.p_birthday))/5) AS ageGroup
-#     , t.t_name AS "tag.name"
-#     , count(*) AS messageCount
-#  FROM message p
-#     , message_tag pt
-#     , tag t
-#     , person cr -- creator
-#     , place  ci  -- city
-#     , place  co  -- country
-# WHERE 1=1
-#    -- join
-#   AND p.m_messageid = pt.mt_messageid
-#   AND pt.mt_tagid = t.t_tagid
-#   AND p.m_creatorid = cr.p_personid
-#   AND cr.p_placeid = ci.pl_placeid
-#   AND ci.pl_containerplaceid = co.pl_placeid
-#    -- filter
-#   AND co.pl_name in ('Ethiopia', 'Belarus')
-#   AND p.m_creationdate BETWEEN DATE '2010-01-01' AND DATE '2010-11-08'
-# GROUP BY co.pl_name, messageMonth, cr.p_gender, t.t_name, ageGroup
-#HAVING count(*) > 100
-# LIMIT 100
-#;
-#
-#
-## Q3. Tag evolution
-## make_date -> year,month,day
-## make_interval
-#statement ok
-#WITH detail AS (
-#SELECT t.t_name
-#     , count(DISTINCT CASE WHEN extract(MONTH FROM m.m_creationdate)  = 11 THEN m.m_messageid ELSE NULL END) AS countMonth1
-#     , count(DISTINCT CASE WHEN extract(MONTH FROM m.m_creationdate) != 11 THEN m.m_messageid ELSE NULL END) AS countMonth2
-#  FROM message m
-#     , message_tag mt
-#     , tag t
-# WHERE 1=1
-#    -- join
-#   AND m.m_messageid = mt.mt_messageid
-#   AND mt.mt_tagid = t.t_tagid
-#    -- filter
-#   AND m.m_creationdate >= make_date(2011, 11, 1)
-#   AND m.m_creationdate <  make_date(2011, 11, 1) + make_interval(months => 2)
-# GROUP BY t.t_name
-#)
-#SELECT t_name as "tag.name"
-#     , countMonth1
-#     , countMonth2
-#     , abs(countMonth1-countMonth2) AS diff
-#  FROM detail d
-# ORDER BY diff desc, t_name
-# LIMIT 100
-#;
-#
-#mode unskip
+#  Q1. Posting summary
+statement ok
+WITH
+  message_count AS (
+    SELECT 0.0 + count(*) AS cnt
+      FROM message
+     WHERE 1=1
+       AND m_creationdate < DATE '2011-07-21'
+)
+, message_prep AS (
+    SELECT extract(year from m_creationdate) AS messageYear
+         , m_c_replyof IS NOT NULL AS isComment
+         , CASE
+             WHEN m_length <  40 THEN 0 -- short
+             WHEN m_length <  80 THEN 1 -- one liner
+             WHEN m_length < 160 THEN 2 -- tweet
+             ELSE                     3 -- long
+           END AS lengthCategory
+         , m_length
+      FROM message
+     WHERE 1=1
+       AND m_creationdate < DATE '2011-07-21'
+       --AND m_content IS NOT NULL
+       AND m_ps_imagefile IS NULL -- FIXME CHECKME: posts w/ m_ps_imagefile IS NOT NULL should have m_content IS NULL
+)
+SELECT messageYear, isComment, lengthCategory
+     , count(*) AS messageCount
+     , avg(m_length) AS averageMessageLength
+     , sum(m_length) AS sumMessageLength
+     , count(*) / mc.cnt AS percentageOfMessages
+  FROM message_prep
+     , message_count mc
+ GROUP BY messageYear, isComment, lengthCategory, mc.cnt
+ ORDER BY messageYear DESC, isComment ASC, lengthCategory ASC
+;
 
-#statement ok
-#pragma disabled_optimizers='build_side_probe_side';
+# Q2. Top tags for country, age, gender, time
+# FIXME: date_part from interval
+mode skip
+
+statement ok
+SELECT co.pl_name AS "country.name"
+     , extract(MONTH FROM p.m_creationdate) as messageMonth
+     , cr.p_gender AS "person.gender"
+     , floor(extract(YEARS FROM age('2013-01-01'::date, cr.p_birthday))/5) AS ageGroup
+     , t.t_name AS "tag.name"
+     , count(*) AS messageCount
+  FROM message p
+     , message_tag pt
+     , tag t
+     , person cr -- creator
+     , place  ci  -- city
+     , place  co  -- country
+ WHERE 1=1
+    -- join
+   AND p.m_messageid = pt.mt_messageid
+   AND pt.mt_tagid = t.t_tagid
+   AND p.m_creatorid = cr.p_personid
+   AND cr.p_placeid = ci.pl_placeid
+   AND ci.pl_containerplaceid = co.pl_placeid
+    -- filter
+   AND co.pl_name in ('Ethiopia', 'Belarus')
+   AND p.m_creationdate BETWEEN DATE '2010-01-01' AND DATE '2010-11-08'
+ GROUP BY co.pl_name, messageMonth, cr.p_gender, t.t_name, ageGroup
+HAVING count(*) > 100
+ LIMIT 100
+;
+
+
+# Q3. Tag evolution
+# make_date -> year,month,day
+# make_interval
+statement ok
+WITH detail AS (
+SELECT t.t_name
+     , count(DISTINCT CASE WHEN extract(MONTH FROM m.m_creationdate)  = 11 THEN m.m_messageid ELSE NULL END) AS countMonth1
+     , count(DISTINCT CASE WHEN extract(MONTH FROM m.m_creationdate) != 11 THEN m.m_messageid ELSE NULL END) AS countMonth2
+  FROM message m
+     , message_tag mt
+     , tag t
+ WHERE 1=1
+    -- join
+   AND m.m_messageid = mt.mt_messageid
+   AND mt.mt_tagid = t.t_tagid
+    -- filter
+   AND m.m_creationdate >= make_date(2011, 11, 1)
+   AND m.m_creationdate <  make_date(2011, 11, 1) + make_interval(months => 2)
+ GROUP BY t.t_name
+)
+SELECT t_name as "tag.name"
+     , countMonth1
+     , countMonth2
+     , abs(countMonth1-countMonth2) AS diff
+  FROM detail d
+ ORDER BY diff desc, t_name
+ LIMIT 100
+;
+
+mode unskip
+
+statement ok
+pragma disabled_optimizers='build_side_probe_side';
 
 # Q4. Popular topics in a country
 statement ok
@@ -296,8 +296,6 @@ SELECT f.f_forumid      AS "forum.id"
  ORDER BY postCount DESC, f.f_forumid
  LIMIT 20
 ;
-
-mode skip
 
 # Q5. Top posters in a country
 statement ok

@@ -164,7 +164,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
-#ifdef false
+#ifdef DEBUG
 	if (everything_referenced) {
 		return;
 	}

@@ -205,7 +205,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	// Once we know the column lifetime, we have more information regarding
 	// what relations should be the build side/probe side.
 	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
-		BuildProbeSideOptimizer build_probe_side_optimizer(context, *plan, *this);
+		BuildProbeSideOptimizer build_probe_side_optimizer(context, *plan);
 		build_probe_side_optimizer.VisitOperator(*plan);
 	});
 
