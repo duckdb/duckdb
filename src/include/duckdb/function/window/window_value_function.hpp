@@ -32,8 +32,8 @@ public:
 	column_t offset_idx = DConstants::INVALID_INDEX;
 	//! The column index of the default value column
 	column_t default_idx = DConstants::INVALID_INDEX;
-	//! Thee column indices of the inner sort expressions
-	vector<column_t> sort_idx;
+	//! The column indices of the argument ORDER BY expressions
+	vector<column_t> arg_order_idx;
 };
 
 //

@@ -3,7 +3,7 @@
 # group: [view]
 
 statement ok
-set storage_compatibility_version='latest'
+set storage_compatibility_version='v1.0.0'
 
 statement ok
 set enable_view_dependencies=true

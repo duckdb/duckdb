@@ -58,7 +58,7 @@ void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &
 }
 
 void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<idx_t> &bindings) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 		bindings.insert(colref.binding.table_index);

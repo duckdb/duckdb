@@ -54,7 +54,7 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 	auto bound_expr = make_uniq<BoundParameterExpression>(identifier);
 
 	bound_expr->parameter_data = param_data;
-	bound_expr->alias = expr.alias;
+	bound_expr->SetAlias(expr.GetAlias());
 
 	auto param_type = param_data->return_type;
 	auto identifier_type = GetReturnType(identifier);

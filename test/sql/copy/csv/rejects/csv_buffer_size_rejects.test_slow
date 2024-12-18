@@ -2,6 +2,9 @@
 # description: Force CSV Lines from errors to fall mid-buffers
 # group: [rejects]
 
+statement maybe
+FROM read_csv('${path}/bad_date.csv')
+
 require skip_reload
 
 # Test fails on windows because byte_position is slightly different due to \r\n instead of \n.
@@ -31,8 +34,6 @@ DROP TABLE reject_scans;
 
 endloop
 
-mode skip
-
 loop buffer_size 5 10
 
 # Ensure that we can get the schema if we reduce the sample size and ignore errors
@@ -46,10 +47,10 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), M
 BIGINT	VARCHAR	11044	11044	2
 
 query IIIIIIIIII rowsort
-SELECT * EXCLUDE (file_id, scan_id, user_arguments) FROM reject_scans order by #2;
+SELECT * EXCLUDE (file_id, scan_id, user_arguments) FROM reject_scans order by #1;
 ----
-data/csv/error/mismatch/big_bad.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
-data/csv/error/mismatch/big_bad2.csv	,	"	"	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
+data/csv/error/mismatch/big_bad.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
+data/csv/error/mismatch/big_bad2.csv	,	\0	\0	\n	0	0	{'column0': 'BIGINT','column1': 'VARCHAR'}	NULL	NULL
 
 query IIIIIIII rowsort
 SELECT * EXCLUDE (file_id, scan_id) FROM reject_errors order by all;
