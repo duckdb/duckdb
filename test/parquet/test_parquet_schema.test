@@ -306,3 +306,11 @@ select * FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
 });
 ----
 Invalid Input Error: 'schema' expects the value type of the map to be either INTEGER or VARCHAR, not BOOLEAN
+
+query II
+SELECT alias(COLUMNS(*)) FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    'i': {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    'j': {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  }) limit 1;
+----
+renamed_i	new_column

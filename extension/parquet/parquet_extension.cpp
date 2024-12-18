@@ -266,17 +266,37 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 	vector<string> schema_col_names;
 	vector<LogicalType> schema_col_types;
 	MultiFileReaderBindData bind_data;
-	bind_data.mapping = MultiFileReaderColumnMappingMode::BY_FIELD_ID;
 	schema_col_names.reserve(options.schema.size());
 	schema_col_types.reserve(options.schema.size());
-	for (const auto &column : options.schema) {
+	bool match_by_field_id = false;
+	for (idx_t i = 0; i < options.schema.size(); i++) {
+		const auto &column = options.schema[i];
 		schema_col_names.push_back(column.name);
 		schema_col_types.push_back(column.type);
 
 		auto res = MultiFileReaderColumnDefinition(column.name, column.type);
-		res.identifier = Value::INTEGER(column.field_id);
+		res.identifier = column.identifier;
+		if (!i) {
+			if (res.identifier.type().id() == LogicalTypeId::INTEGER) {
+				match_by_field_id = true;
+			}
+		}
+#ifdef DEBUG
+		if (match_by_field_id) {
+			D_ASSERT(res.identifier.type().id() == LogicalTypeId::INTEGER);
+		} else {
+			D_ASSERT(res.identifier.type().id() == LogicalTypeId::VARCHAR);
+		}
+#endif
+
 		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
 		bind_data.schema.emplace_back(std::move(res));
+	}
+
+	if (match_by_field_id) {
+		bind_data.mapping = MultiFileReaderColumnMappingMode::BY_FIELD_ID;
+	} else {
+		bind_data.mapping = MultiFileReaderColumnMappingMode::BY_NAME;
 	}
 
 	// perform the binding on the obtained set of names + types

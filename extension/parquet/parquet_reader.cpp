@@ -533,7 +533,8 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 
 ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &context, const Value &column_value) {
 	ParquetColumnDefinition result;
-	result.field_id = IntegerValue::Get(StructValue::GetChildren(column_value)[0]);
+	auto &identifier = StructValue::GetChildren(column_value)[0];
+	result.identifier = identifier;
 
 	const auto &column_def = StructValue::GetChildren(column_value)[1];
 	D_ASSERT(column_def.type().id() == LogicalTypeId::STRUCT);

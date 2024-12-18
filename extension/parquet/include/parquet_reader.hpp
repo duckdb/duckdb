@@ -71,7 +71,7 @@ public:
 	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
 
 public:
-	int32_t field_id;
+	Value identifier;
 	string name;
 	LogicalType type;
 	Value default_value;
