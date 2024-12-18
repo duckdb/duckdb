@@ -9,7 +9,7 @@
 namespace duckdb {
 
 static bool IsVolatile(LogicalProjection &proj, const unique_ptr<Expression> &expr) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr->Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == proj.table_index);
 		D_ASSERT(colref.binding.column_index < proj.expressions.size());
@@ -26,7 +26,7 @@ static bool IsVolatile(LogicalProjection &proj, const unique_ptr<Expression> &ex
 }
 
 static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj, unique_ptr<Expression> expr) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr->Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == proj.table_index);
 		D_ASSERT(colref.binding.column_index < proj.expressions.size());

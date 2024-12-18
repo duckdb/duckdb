@@ -45,8 +45,8 @@ public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 public:
-	static idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &filter,
-	                                   BaseStatistics &base_stats);
+	static idx_t InspectTableFilter(idx_t cardinality, idx_t column_index, TableFilter &filter,
+	                                BaseStatistics &base_stats);
 	//	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
 	//	                                  BaseStatistics &base_stats);
 	//! Extract Statistics from a LogicalGet.
