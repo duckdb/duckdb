@@ -224,15 +224,60 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowG
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,
                                                                  ColumnCheckpointInfo &checkpoint_info) {
-	// we need to checkpoint the main column data first
-	// that is because the checkpointing of the main column data ALSO scans the validity data
-	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
-	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
-	// flushed to disk by a different thread than the one that wrote it, causing a data race
-	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
-	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
+	// scan the segments of the column data
+	// set up the checkpoint state
+	auto base_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
+	auto validity_checkpoint_state = validity.CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	validity_checkpoint_state->global_stats = BaseStatistics::CreateEmpty(validity.type).ToUnique();
+
+	// Move the validity state into the base state
+	auto &validity_state = *validity_checkpoint_state;
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
-	checkpoint_state.validity_state = std::move(validity_state);
+	checkpoint_state.validity_state = std::move(validity_checkpoint_state);
+
+	// Grab both of the locks
+	auto base_lock = data.Lock();
+	auto validity_lock = validity.data.Lock();
+
+	// Reference the segments to compress
+	auto &base_nodes = data.ReferenceSegments(base_lock);
+	auto &validity_nodes = validity.data.ReferenceSegments(validity_lock);
+	if (base_nodes.empty()) {
+		D_ASSERT(validity_nodes.empty());
+		// empty table: flush the empty list
+		return base_state;
+	}
+	D_ASSERT(!validity_nodes.empty());
+
+	ColumnDataCheckpointer base_checkpointer(*this, row_group, checkpoint_state, checkpoint_info);
+	ColumnDataCheckpointer validity_checkpointer(validity, row_group, validity_state, checkpoint_info);
+
+	base_checkpointer.Checkpoint(base_nodes);
+	validity_checkpointer.Checkpoint(validity_nodes);
+
+	base_checkpointer.FinalizeCheckpoint(data.MoveSegments(base_lock));
+	validity_checkpointer.FinalizeCheckpoint(validity.data.MoveSegments(validity_lock));
+
+	// reset the compression function
+	compression = nullptr;
+	validity.compression = nullptr;
+
+	// replace the old tree of the base with the new one
+	auto new_base_segments = checkpoint_state.new_tree.MoveSegments();
+	for (auto &new_base_segment : new_base_segments) {
+		AppendSegment(base_lock, std::move(new_base_segment.node));
+	}
+
+	// replace the old tree of the validity with the new one
+	auto new_validity_segments = validity_state.new_tree.MoveSegments();
+	for (auto &new_validity_segment : new_validity_segments) {
+		validity.AppendSegment(validity_lock, std::move(new_validity_segment.node));
+	}
+
+	ClearUpdates();
+	validity.ClearUpdates();
+
 	return base_state;
 }
 
