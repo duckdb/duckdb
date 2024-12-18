@@ -72,8 +72,8 @@ idx_t ColumnData::GetMaxEntry() {
 	return count;
 }
 
-void ColumnData::InitializeScan(ColumnScanState &state) {
-	state.current = data.GetRootSegment();
+void ColumnData::InitializeScan(ColumnScanState &state, SegmentLock &lock) {
+	state.current = data.GetRootSegment(lock);
 	state.segment_tree = &data;
 	state.row_index = state.current ? state.current->start : 0;
 	state.internal_index = state.row_index;
@@ -82,14 +82,24 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.last_offset = 0;
 }
 
-void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
-	state.current = data.GetSegment(row_idx);
+void ColumnData::InitializeScan(ColumnScanState &state) {
+	auto lock = data.Lock();
+	InitializeScan(state, lock);
+}
+
+void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx, SegmentLock &lock) {
+	state.current = data.GetSegment(lock, row_idx);
 	state.segment_tree = &data;
 	state.row_index = row_idx;
 	state.internal_index = state.current->start;
 	state.initialized = false;
 	state.scan_state.reset();
 	state.last_offset = 0;
+}
+
+void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+	auto lock = data.Lock();
+	InitializeScanWithOffset(state, row_idx, lock);
 }
 
 ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
@@ -309,9 +319,10 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 }
 
-void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
+void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result,
+                                    SegmentLock &lock) {
 	ColumnScanState child_state;
-	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
+	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group, lock);
 	bool has_updates = HasUpdates();
 	auto scan_count = ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
 	if (has_updates) {
@@ -597,8 +608,8 @@ ColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManager &part
 	return make_uniq<ColumnCheckpointState>(row_group, *this, partial_block_manager, std::move(lock));
 }
 
-void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
-                                Vector &scan_vector) {
+void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnCheckpointState &checkpoint_state, ColumnScanState &state,
+                                idx_t row_group_start, idx_t count, Vector &scan_vector) {
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;

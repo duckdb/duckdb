@@ -56,7 +56,7 @@ void ColumnDataCheckpointer::ScanSegments(const column_segment_vector_t &nodes,
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
 			scan_state.row_index = segment.start + base_row_index;
 
-			col_data.CheckpointScan(segment, scan_state, row_group.start, count, scan_vector);
+			col_data.CheckpointScan(segment, state, scan_state, row_group.start, count, scan_vector);
 
 			callback(scan_vector, count);
 		}
