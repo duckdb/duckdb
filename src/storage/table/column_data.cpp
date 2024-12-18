@@ -21,7 +21,7 @@
 
 namespace duckdb {
 
-ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+ColumnData::ColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, optional_ptr<ColumnData> parent)
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
       type(std::move(type_p)), allocation_size(0), parent(parent) {
@@ -47,7 +47,7 @@ DatabaseInstance &ColumnData::GetDatabase() const {
 	return info.GetDB().GetDatabase();
 }
 
-DataTableInfo &ColumnData::GetTableInfo() const {
+const DataTableInfo &ColumnData::GetTableInfo() const {
 	return info;
 }
 
@@ -72,7 +72,7 @@ idx_t ColumnData::GetMaxEntry() {
 	return count;
 }
 
-void ColumnData::InitializeScan(ColumnScanState &state) {
+void ColumnData::InitializeScan(ColumnScanState &state) const {
 	state.current = data.GetRootSegment();
 	state.segment_tree = &data;
 	state.row_index = state.current ? state.current->start : 0;
@@ -82,7 +82,7 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.last_offset = 0;
 }
 
-void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) const {
 	state.current = data.GetSegment(row_idx);
 	state.segment_tree = &data;
 	state.row_index = row_idx;
@@ -92,7 +92,7 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.last_offset = 0;
 }
 
-ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
+ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) const {
 	if (result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		return ScanVectorType::SCAN_ENTIRE_VECTOR;
 	}
@@ -111,7 +111,7 @@ ScanVectorType ColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_
 	return ScanVectorType::SCAN_ENTIRE_VECTOR;
 }
 
-void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t remaining) {
+void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t remaining) const {
 	auto current_segment = scan_state.current;
 	if (!current_segment) {
 		return;
@@ -126,7 +126,7 @@ void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanSta
 		remaining -= scan_count;
 		row_index += scan_count;
 		if (remaining > 0) {
-			auto next = data.GetNextSegment(current_segment);
+			auto next = data.GetNextSegment(current_segment.get());
 			if (!next) {
 				break;
 			}
@@ -136,7 +136,7 @@ void ColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanSta
 	}
 }
 
-void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
+void ColumnData::BeginScanVectorInternal(ColumnScanState &state) const {
 	state.previous_states.clear();
 	if (!state.initialized) {
 		D_ASSERT(state.current);
@@ -144,7 +144,7 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 		state.internal_index = state.current->start;
 		state.initialized = true;
 	}
-	D_ASSERT(data.HasSegment(state.current));
+	D_ASSERT(data.HasSegment(state.current.get()));
 	D_ASSERT(state.internal_index <= state.row_index);
 	if (state.internal_index < state.row_index) {
 		state.current->Skip(state);
@@ -152,7 +152,7 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 	D_ASSERT(state.current->type == type);
 }
 
-idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
+idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) const {
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
 	}
@@ -179,7 +179,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		}
 
 		if (remaining > 0) {
-			auto next = data.GetNextSegment(state.current);
+			auto next = data.GetNextSegment(state.current.get());
 			if (!next) {
 				break;
 			}
@@ -196,7 +196,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 }
 
 void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
-                              idx_t sel_count) {
+                              idx_t sel_count) const {
 	BeginScanVectorInternal(state);
 	if (state.current->start + state.current->count - state.row_index < target_count) {
 		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
@@ -215,7 +215,7 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 }
 
 void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
-                              idx_t &sel_count, const TableFilter &filter) {
+                              idx_t &sel_count, const TableFilter &filter) const {
 	BeginScanVectorInternal(state);
 	if (state.current->start + state.current->count - state.row_index < target_count) {
 		throw InternalException("ColumnData::Filter should be able to fetch everything from one segment");
@@ -231,7 +231,7 @@ unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 }
 
 void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
-                              bool allow_updates, bool scan_committed) {
+                              bool allow_updates, bool scan_committed) const {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		return;
@@ -265,7 +265,7 @@ void ColumnData::UpdateInternal(TransactionData transaction, idx_t column_index,
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode) {
+                             idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode) const {
 	auto scan_count = ScanVector(state, result, target_scan, scan_type);
 	if (scan_type != ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		// if we are scanning an entire vector we cannot have updates
@@ -277,28 +277,28 @@ idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, Co
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             idx_t target_scan, ScanVectorMode mode) {
+                             idx_t target_scan, ScanVectorMode mode) const {
 	auto scan_type = GetVectorScanType(state, target_scan, result);
 	return ScanVector(transaction, vector_index, state, result, target_scan, scan_type, mode);
 }
 
-idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) const {
 	auto target_count = GetVectorCount(vector_index);
 	return Scan(transaction, vector_index, state, result, target_count);
 }
 
-idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
+idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) const {
 	auto target_count = GetVectorCount(vector_index);
 	return ScanCommitted(vector_index, state, result, allow_updates, target_count);
 }
 
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                       idx_t scan_count) {
+                       idx_t scan_count) const {
 	return ScanVector(transaction, vector_index, state, result, scan_count, ScanVectorMode::REGULAR_SCAN);
 }
 
 idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                idx_t scan_count) {
+                                idx_t scan_count) const {
 	auto mode = allow_updates ? ScanVectorMode::SCAN_COMMITTED : ScanVectorMode::SCAN_COMMITTED_NO_UPDATES;
 	TransactionData commit_transaction(0, 0);
 	return ScanVector(commit_transaction, vector_index, state, result, scan_count, mode);
@@ -309,7 +309,8 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 }
 
-void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
+void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count,
+                                    Vector &result) const {
 	ColumnScanState child_state;
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
 	bool has_updates = HasUpdates();
@@ -321,7 +322,7 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	}
 }
 
-idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_count) {
+idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_count) const {
 	if (scan_count == 0) {
 		return 0;
 	}
@@ -331,7 +332,7 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_c
 }
 
 void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &s_count, const TableFilter &filter) {
+                        SelectionVector &sel, idx_t &s_count, const TableFilter &filter) const {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 
 	UnifiedVectorFormat vdata;
@@ -340,18 +341,18 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t s_count) {
+                        SelectionVector &sel, idx_t s_count) const {
 	Scan(transaction, vector_index, state, result);
 	result.Slice(sel, s_count);
 }
 
 void ColumnData::SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                                 idx_t s_count, bool allow_updates) {
+                                 idx_t s_count, bool allow_updates) const {
 	ScanCommitted(vector_index, state, result, allow_updates);
 	result.Slice(sel, s_count);
 }
 
-void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
+void ColumnData::Skip(ColumnScanState &state, idx_t s_count) const {
 	state.Next(s_count);
 }
 
@@ -369,7 +370,7 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_c
 	Append(stats->statistics, state, vector, append_count);
 }
 
-FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) const {
 	if (state.segment_checked) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -399,7 +400,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-FilterPropagateResult ColumnData::CheckZonemap(TableFilter &filter) {
+FilterPropagateResult ColumnData::CheckZonemap(TableFilter &filter) const {
 	if (!stats) {
 		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
 	}
@@ -671,6 +672,16 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 	}
 }
 
+bool ColumnData::HasUpdates(idx_t start, idx_t end) {
+	if (!updates) {
+		return false;
+	}
+	if (!updates->HasUpdates(start, end)) {
+		return false;
+	}
+	return true;
+}
+
 bool ColumnData::IsPersistent() {
 	for (auto &segment : data.Segments()) {
 		if (segment.segment_type != ColumnSegmentType::PERSISTENT) {
@@ -827,8 +838,9 @@ PersistentColumnData ColumnData::Serialize() {
 	return result;
 }
 
-shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                               idx_t start_row, ReadStream &source, const LogicalType &type) {
+shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, const DataTableInfo &info,
+                                               idx_t column_index, idx_t start_row, ReadStream &source,
+                                               const LogicalType &type) {
 	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, nullptr);
 
 	// deserialize the persistent column data
@@ -865,7 +877,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 
 	// iterate over the segments
 	idx_t segment_idx = 0;
-	auto segment = data.GetRootSegment();
+	optional_ptr<const ColumnSegment> segment = data.GetRootSegment();
 	while (segment) {
 		ColumnSegmentInfo column_info;
 		column_info.row_group_index = row_group_index;
@@ -899,7 +911,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 		result.emplace_back(column_info);
 
 		segment_idx++;
-		segment = data.GetNextSegment(segment);
+		segment = data.GetNextSegment(segment.get());
 	}
 }
 
@@ -927,8 +939,8 @@ void ColumnData::Verify(RowGroup &parent) {
 }
 
 template <class RET, class OP>
-static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                const LogicalType &type, optional_ptr<ColumnData> parent) {
+static RET CreateColumnInternal(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index,
+                                idx_t start_row, const LogicalType &type, optional_ptr<ColumnData> parent) {
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		return OP::template Create<StructColumnData>(block_manager, info, column_index, start_row, type, parent);
 	} else if (type.InternalType() == PhysicalType::LIST) {
@@ -941,14 +953,14 @@ static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info
 	return OP::template Create<StandardColumnData>(block_manager, info, column_index, start_row, type, parent);
 }
 
-shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                                idx_t start_row, const LogicalType &type,
+shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, const DataTableInfo &info,
+                                                idx_t column_index, idx_t start_row, const LogicalType &type,
                                                 optional_ptr<ColumnData> parent) {
 	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(block_manager, info, column_index, start_row,
 	                                                                       type, parent);
 }
 
-unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
+unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manager, const DataTableInfo &info,
                                                       idx_t column_index, idx_t start_row, const LogicalType &type,
                                                       optional_ptr<ColumnData> parent) {
 	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(block_manager, info, column_index, start_row,

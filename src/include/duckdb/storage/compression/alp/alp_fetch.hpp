@@ -24,7 +24,8 @@
 namespace duckdb {
 
 template <class T>
-void AlpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void AlpFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                 idx_t result_idx) {
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpScanState<T> scan_state(segment);

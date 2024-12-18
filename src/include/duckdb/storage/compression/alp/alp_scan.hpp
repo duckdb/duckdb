@@ -68,7 +68,7 @@ struct AlpScanState : public SegmentScanState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit AlpScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
+	explicit AlpScanState(const ColumnSegment &segment) : segment(segment), count(segment.count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 		// ScanStates never exceed the boundaries of a Segment,
@@ -84,7 +84,7 @@ public:
 	idx_t total_value_count = 0;
 	AlpVectorState<T> vector_state;
 
-	ColumnSegment &segment;
+	const ColumnSegment &segment;
 	idx_t count;
 
 	idx_t LeftInVector() const {
@@ -176,7 +176,7 @@ public:
 
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
-	void Skip(ColumnSegment &col_segment, idx_t skip_count) {
+	void Skip(const ColumnSegment &col_segment, idx_t skip_count) {
 		if (total_value_count != 0 && !VectorFinished()) {
 			// Finish skipping the current vector
 			idx_t to_skip = MinValue<idx_t>(skip_count, LeftInVector());
@@ -201,7 +201,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> AlpInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> AlpInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, AlpScanState<T>>(segment);
 	return result;
 }
@@ -210,7 +210,7 @@ unique_ptr<SegmentScanState> AlpInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template <class T>
-void AlpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void AlpScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                     idx_t result_offset) {
 	auto &scan_state = (AlpScanState<T> &)*state.scan_state;
 
@@ -230,13 +230,13 @@ void AlpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 }
 
 template <class T>
-void AlpSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+void AlpSkip(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	auto &scan_state = (AlpScanState<T> &)*state.scan_state;
 	scan_state.Skip(segment, skip_count);
 }
 
 template <class T>
-void AlpScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void AlpScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	AlpScanPartial<T>(segment, state, scan_count, result, 0);
 }
 

@@ -65,7 +65,7 @@ public:
 	void InitializeScanWithOffset(CollectionScanState &state, const vector<StorageIndex> &column_ids, idx_t start_row,
 	                              idx_t end_row);
 	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroupCollection &collection,
-	                                     RowGroup &row_group, idx_t vector_index, idx_t max_row);
+	                                     const RowGroup &row_group, idx_t vector_index, idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
@@ -127,12 +127,15 @@ public:
 	unique_ptr<BlockingSample> GetSample();
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
-	AttachedDatabase &GetAttached();
-	BlockManager &GetBlockManager() {
+	AttachedDatabase &GetAttached() const;
+	BlockManager &GetBlockManager() const {
 		return block_manager;
 	}
-	MetadataManager &GetMetadataManager();
+	MetadataManager &GetMetadataManager() const;
 	DataTableInfo &GetTableInfo() {
+		return *info;
+	}
+	const DataTableInfo &GetTableInfo() const {
 		return *info;
 	}
 

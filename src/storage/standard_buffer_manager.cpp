@@ -303,7 +303,7 @@ void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
 	BatchRead(handles, to_be_loaded, first_block, previous_block_id);
 }
 
-BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
+BufferHandle StandardBufferManager::Pin(const shared_ptr<BlockHandle> &handle) {
 	// we need to be careful not to return the BufferHandle to this block while holding the BlockHandle's lock
 	// as exiting this function's scope may cause the destructor of the BufferHandle to be called while holding the lock
 	// the destructor calls Unpin, which grabs the BlockHandle's lock again, causing a deadlock

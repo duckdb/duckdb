@@ -35,7 +35,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer);
 }
 
-unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
+unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() const {
 	if (current_row_group >= max_row_group) {
 		reader.reset();
 		finished_loading = true;
@@ -78,11 +78,11 @@ Allocator &RowGroupCollection::GetAllocator() const {
 	return Allocator::Get(info->GetDB());
 }
 
-AttachedDatabase &RowGroupCollection::GetAttached() {
+AttachedDatabase &RowGroupCollection::GetAttached() const {
 	return GetTableInfo().GetDB();
 }
 
-MetadataManager &RowGroupCollection::GetMetadataManager() {
+MetadataManager &RowGroupCollection::GetMetadataManager() const {
 	return GetBlockManager().GetMetadataManager();
 }
 
@@ -170,7 +170,7 @@ void RowGroupCollection::InitializeScanWithOffset(CollectionScanState &state, co
 }
 
 bool RowGroupCollection::InitializeScanInRowGroup(CollectionScanState &state, RowGroupCollection &collection,
-                                                  RowGroup &row_group, idx_t vector_index, idx_t max_row) {
+                                                  const RowGroup &row_group, idx_t vector_index, idx_t max_row) {
 	state.max_row = max_row;
 	state.row_groups = collection.row_groups.get();
 	if (!state.column_scans) {
@@ -195,7 +195,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 		idx_t vector_index;
 		idx_t max_row;
 		RowGroupCollection *collection;
-		RowGroup *row_group;
+		optional_ptr<const RowGroup> row_group;
 		{
 			// select the next row group to scan from the parallel state
 			lock_guard<mutex> l(state.lock);
@@ -213,14 +213,14 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				D_ASSERT(vector_index * STANDARD_VECTOR_SIZE < state.current_row_group->count);
 				state.vector_index++;
 				if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
-					state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
+					state.current_row_group = row_groups->GetNextSegment(state.current_row_group.get());
 					state.vector_index = 0;
 				}
 			} else {
 				state.processed_rows += state.current_row_group->count;
 				vector_index = 0;
 				max_row = state.current_row_group->start + state.current_row_group->count;
-				state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
+				state.current_row_group = row_groups->GetNextSegment(state.current_row_group.get());
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;

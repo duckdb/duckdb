@@ -21,7 +21,7 @@ InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FIL
 	}
 }
 
-FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult InFilter::CheckStatistics(const BaseStatistics &stats) {
 	switch (values[0].type().InternalType()) {
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:

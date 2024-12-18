@@ -207,7 +207,7 @@ struct ValidityScanState : public SegmentScanState {
 	block_id_t block_id;
 };
 
-unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ValidityInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq<ValidityScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
@@ -388,7 +388,7 @@ void ValidityUncompressed::AlignedScan(data_ptr_t input, idx_t input_start, Vect
 	}
 }
 
-void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void ValidityScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                          idx_t result_offset) {
 	auto start = segment.GetRelativeIndex(state.row_index);
 
@@ -400,7 +400,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result, result_offset, scan_count);
 }
 
-void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void ValidityScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	result.Flatten(scan_count);
 
 	auto start = segment.GetRelativeIndex(state.row_index);
@@ -419,8 +419,8 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 //===--------------------------------------------------------------------===//
 // Select
 //===--------------------------------------------------------------------===//
-void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vector &result, const SelectionVector &sel,
-                    idx_t sel_count) {
+void ValiditySelect(const ColumnSegment &segment, ColumnScanState &state, idx_t, Vector &result,
+                    const SelectionVector &sel, idx_t sel_count) {
 	result.Flatten(sel_count);
 
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
@@ -441,7 +441,8 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vecto
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void ValidityFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                      idx_t result_idx) {
 	D_ASSERT(row_id >= 0 && row_id < row_t(segment.count));
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);

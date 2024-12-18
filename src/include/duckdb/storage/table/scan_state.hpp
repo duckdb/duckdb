@@ -77,9 +77,9 @@ typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 
 struct ColumnScanState {
 	//! The column segment that is currently being scanned
-	ColumnSegment *current = nullptr;
+	optional_ptr<const ColumnSegment> current;
 	//! Column segment tree
-	ColumnSegmentTree *segment_tree = nullptr;
+	optional_ptr<const ColumnSegmentTree> segment_tree;
 	//! The current row index of the scan
 	idx_t row_index = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
@@ -118,7 +118,7 @@ struct ColumnFetchState {
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
 
-	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
+	BufferHandle &GetOrInsertHandle(const ColumnSegment &segment);
 };
 
 struct ScanFilter {
@@ -180,7 +180,7 @@ public:
 	explicit CollectionScanState(TableScanState &parent_p);
 
 	//! The current row_group we are scanning
-	RowGroup *row_group;
+	optional_ptr<const RowGroup> row_group;
 	//! The vector index within the row_group
 	idx_t vector_index;
 	//! The maximum row within the row group
@@ -271,7 +271,7 @@ struct ParallelCollectionScanState {
 
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;
-	RowGroup *current_row_group;
+	optional_ptr<const RowGroup> current_row_group;
 	idx_t vector_index;
 	idx_t max_row;
 	idx_t batch_index;

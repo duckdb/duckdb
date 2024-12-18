@@ -68,14 +68,14 @@ public:
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
-	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-	                              idx_t result_offset);
-	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
-	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+	static unique_ptr<SegmentScanState> StringInitScan(const ColumnSegment &segment);
+	static void StringScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+	                              Vector &result, idx_t result_offset);
+	static void StringScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
+	static void Select(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
 	                   const SelectionVector &sel, idx_t sel_count);
 
-	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+	static void StringFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
 	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id,
 	                                                            optional_ptr<ColumnSegmentState> segment_state);
@@ -206,19 +206,20 @@ public:
 	}
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);
-	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
+	static StringDictionaryContainer GetDictionary(const ColumnSegment &segment, BufferHandle &handle);
 	static idx_t RemainingSpace(ColumnSegment &segment, BufferHandle &handle);
 	static void WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
 	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
 	                              int32_t &result_offset);
-	static string_t ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
+	static string_t ReadOverflowString(const ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
 	static string_t ReadString(data_ptr_t target, int32_t offset, uint32_t string_length);
 	static string_t ReadStringWithLength(data_ptr_t target, int32_t offset);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
-	inline static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
+	inline static string_t FetchStringFromDict(const ColumnSegment &segment, StringDictionaryContainer dict,
+	                                           Vector &result, data_ptr_t base_ptr, int32_t dict_offset,
+	                                           uint32_t string_length) {
 		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
 		if (DUCKDB_LIKELY(dict_offset >= 0)) {
 			// regular string - fetch from dictionary

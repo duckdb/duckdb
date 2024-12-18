@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-ArrayColumnData::ArrayColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                                 LogicalType type_p, optional_ptr<ColumnData> parent)
+ArrayColumnData::ArrayColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index,
+                                 idx_t start_row, LogicalType type_p, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
       validity(block_manager, info, 0, start_row, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
@@ -24,20 +24,20 @@ void ArrayColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) const {
 	// FIXME: There is nothing preventing us from supporting this, but it's not implemented yet.
 	// table filters are not supported yet for fixed size list columns
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+void ArrayColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) const {
 	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
 	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 	auto array_size = ArrayType::GetSize(type);
 	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * array_size);
 }
 
-void ArrayColumnData::InitializeScan(ColumnScanState &state) {
+void ArrayColumnData::InitializeScan(ColumnScanState &state) const {
 	// initialize the validity segment
 	D_ASSERT(state.child_states.size() == 2);
 
@@ -50,7 +50,7 @@ void ArrayColumnData::InitializeScan(ColumnScanState &state) {
 	child_column->InitializeScan(state.child_states[1]);
 }
 
-void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) const {
 	D_ASSERT(state.child_states.size() == 2);
 
 	if (row_idx == 0) {
@@ -76,16 +76,16 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 }
 
 idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                            idx_t scan_count) {
+                            idx_t scan_count) const {
 	return ScanCount(state, result, scan_count);
 }
 
 idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                     idx_t scan_count) {
+                                     idx_t scan_count) const {
 	return ScanCount(state, result, scan_count);
 }
 
-idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) const {
 	// Scan validity
 	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
 	auto array_size = ArrayType::GetSize(type);
@@ -95,7 +95,7 @@ idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 	return scan_count;
 }
 
-void ArrayColumnData::Skip(ColumnScanState &state, idx_t count) {
+void ArrayColumnData::Skip(ColumnScanState &state, idx_t count) const {
 	// Skip validity
 	validity.Skip(state.child_states[0], count);
 	// Skip child column

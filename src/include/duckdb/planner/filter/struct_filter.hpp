@@ -31,7 +31,7 @@ public:
 	unique_ptr<TableFilter> child_filter;
 
 public:
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
+	FilterPropagateResult CheckStatistics(const BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;

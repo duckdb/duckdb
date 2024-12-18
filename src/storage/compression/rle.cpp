@@ -249,7 +249,7 @@ void RLEFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 template <class T>
 struct RLEScanState : public SegmentScanState {
-	explicit RLEScanState(ColumnSegment &segment) {
+	explicit RLEScanState(const ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 		entry_pos = 0;
@@ -271,7 +271,7 @@ struct RLEScanState : public SegmentScanState {
 		}
 	}
 
-	void Skip(ColumnSegment &segment, idx_t skip_count) {
+	void Skip(const ColumnSegment &segment, idx_t skip_count) {
 		auto data = handle.Ptr() + segment.GetBlockOffset();
 		auto index_pointer = reinterpret_cast<rle_count_t *>(data + rle_count_offset);
 		SkipInternal(index_pointer, skip_count);
@@ -298,7 +298,7 @@ struct RLEScanState : public SegmentScanState {
 };
 
 template <class T>
-unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> RLEInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq<RLEScanState<T>>(segment);
 	return std::move(result);
 }
@@ -307,7 +307,7 @@ unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template <class T>
-void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+void RLESkip(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 	scan_state.Skip(segment, skip_count);
 }
@@ -342,7 +342,7 @@ static void RLEScanConstant(RLEScanState<T> &scan_state, rle_count_t *index_poin
 }
 
 template <class T, bool ENTIRE_VECTOR>
-void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void RLEScanPartialInternal(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                             idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
@@ -384,13 +384,13 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 }
 
 template <class T>
-void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void RLEScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                     idx_t result_offset) {
 	return RLEScanPartialInternal<T, false>(segment, state, scan_count, result, result_offset);
 }
 
 template <class T>
-void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void RLEScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	RLEScanPartialInternal<T, true>(segment, state, scan_count, result, 0);
 }
 
@@ -398,7 +398,7 @@ void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, V
 // Select
 //===--------------------------------------------------------------------===//
 template <class T>
-void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+void RLESelect(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                const SelectionVector &sel, idx_t sel_count) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
@@ -436,8 +436,8 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 // Filter
 //===--------------------------------------------------------------------===//
 template <class T>
-void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result, SelectionVector &sel,
-               idx_t &sel_count, const TableFilter &filter) {
+void RLEFilter(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+               SelectionVector &sel, idx_t &sel_count, const TableFilter &filter) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -548,7 +548,8 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 // Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void RLEFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                 idx_t result_idx) {
 	RLEScanState<T> scan_state(segment);
 	scan_state.Skip(segment, NumericCast<idx_t>(row_id));
 

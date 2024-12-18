@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+StandardColumnData::StandardColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index,
                                        idx_t start_row, LogicalType type, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type), parent),
       validity(block_manager, info, 0, start_row, *this) {
@@ -22,7 +22,7 @@ void StandardColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
+ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) const {
 	// if either the current column data, or the validity column data requires flat vectors, we scan flat vectors
 	auto scan_type = ColumnData::GetVectorScanType(state, scan_count, result);
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR) {
@@ -34,12 +34,13 @@ ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx
 	return validity.GetVectorScanType(state.child_states[0], scan_count, result);
 }
 
-void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state,
+                                            idx_t rows) const {
 	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
 	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 }
 
-void StandardColumnData::InitializeScan(ColumnScanState &state) {
+void StandardColumnData::InitializeScan(ColumnScanState &state) const {
 	ColumnData::InitializeScan(state);
 
 	// initialize the validity segment
@@ -47,7 +48,7 @@ void StandardColumnData::InitializeScan(ColumnScanState &state) {
 	validity.InitializeScan(state.child_states[0]);
 }
 
-void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) const {
 	ColumnData::InitializeScanWithOffset(state, row_idx);
 
 	// initialize the validity segment
@@ -56,7 +57,7 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 }
 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                               idx_t target_count) {
+                               idx_t target_count) const {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	auto mode = ScanVectorMode::REGULAR_SCAN;
@@ -66,21 +67,21 @@ idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, 
 }
 
 idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                        idx_t target_count) {
+                                        idx_t target_count) const {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates, target_count);
 	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
 	return scan_count;
 }
 
-idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) const {
 	auto scan_count = ColumnData::ScanCount(state, result, count);
 	validity.ScanCount(state.child_states[0], result, count);
 	return scan_count;
 }
 
 void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                                SelectionVector &sel, idx_t &count, const TableFilter &filter) {
+                                SelectionVector &sel, idx_t &count, const TableFilter &filter) const {
 	// check if we can do a specialized select
 	// the compression functions need to support this
 	bool has_filter = HasCompressionFunction() && GetCompressionFunction().filter;
@@ -99,7 +100,7 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 }
 
 void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                                SelectionVector &sel, idx_t sel_count) {
+                                SelectionVector &sel, idx_t sel_count) const {
 	// check if we can do a specialized select
 	// the compression functions need to support this
 	bool has_select = HasCompressionFunction() && GetCompressionFunction().select;

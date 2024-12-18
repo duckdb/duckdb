@@ -25,7 +25,8 @@
 namespace duckdb {
 
 template <class T>
-void PatasFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void PatasFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                   idx_t result_idx) {
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	PatasScanState<T> scan_state(segment);

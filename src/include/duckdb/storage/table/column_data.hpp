@@ -51,8 +51,8 @@ class ColumnData {
 	friend class ColumnDataCheckpointer;
 
 public:
-	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	           optional_ptr<ColumnData> parent);
+	ColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index, idx_t start_row,
+	           LogicalType type, optional_ptr<ColumnData> parent);
 	virtual ~ColumnData();
 
 	//! The start row
@@ -62,20 +62,20 @@ public:
 	//! The block manager
 	BlockManager &block_manager;
 	//! Table info for the column
-	DataTableInfo &info;
+	const DataTableInfo &info;
 	//! The column index of the column, either within the parent table or within the parent
 	idx_t column_index;
 	//! The type of the column
 	LogicalType type;
 
 public:
-	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
+	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) const;
 
 	BlockManager &GetBlockManager() {
 		return block_manager;
 	}
 	DatabaseInstance &GetDatabase() const;
-	DataTableInfo &GetTableInfo() const;
+	const DataTableInfo &GetTableInfo() const;
 	virtual idx_t GetMaxEntry();
 
 	idx_t GetAllocationSize() const {
@@ -103,35 +103,36 @@ public:
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
 	//! Whether or not we can scan an entire vector
-	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
+	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) const;
 
 	//! Initialize prefetch state with required I/O data for the next N rows
-	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows);
+	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) const;
 	//! Initialize a scan of the column
-	virtual void InitializeScan(ColumnScanState &state);
+	virtual void InitializeScan(ColumnScanState &state) const;
 	//! Initialize a scan starting at the specified offset
-	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx);
+	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) const;
 	//! Scan the next vector from the column
-	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
-	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
+	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) const;
+	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) const;
 	virtual idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                   idx_t scan_count);
+	                   idx_t scan_count) const;
 	virtual idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-	                            idx_t scan_count);
+	                            idx_t scan_count) const;
 
-	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
-	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count);
+	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count,
+	                                Vector &result) const;
+	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) const;
 
 	//! Select
 	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t &count, const TableFilter &filter);
+	                    SelectionVector &sel, idx_t &count, const TableFilter &filter) const;
 	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t count);
+	                    SelectionVector &sel, idx_t count) const;
 	virtual void SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                             idx_t count, bool allow_updates);
+	                             idx_t count, bool allow_updates) const;
 
 	//! Skip the scan forward by "count" rows
-	virtual void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE);
+	virtual void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) const;
 
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
@@ -164,24 +165,26 @@ public:
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
+	virtual bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
 
 	virtual PersistentColumnData Serialize();
 	void InitializeColumn(PersistentColumnData &column_data);
 	virtual void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats);
-	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                          idx_t start_row, ReadStream &source, const LogicalType &type);
+	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, const DataTableInfo &info,
+	                                          idx_t column_index, idx_t start_row, ReadStream &source,
+	                                          const LogicalType &type);
 
 	virtual void GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path, vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
-	FilterPropagateResult CheckZonemap(TableFilter &filter);
+	FilterPropagateResult CheckZonemap(TableFilter &filter) const;
 
-	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                           idx_t start_row, const LogicalType &type,
+	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, const DataTableInfo &info,
+	                                           idx_t column_index, idx_t start_row, const LogicalType &type,
 	                                           optional_ptr<ColumnData> parent = nullptr);
-	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
+	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, const DataTableInfo &info,
 	                                                 idx_t column_index, idx_t start_row, const LogicalType &type,
 	                                                 optional_ptr<ColumnData> parent = nullptr);
 
@@ -194,22 +197,22 @@ protected:
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
 	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
-	void BeginScanVectorInternal(ColumnScanState &state);
+	void BeginScanVectorInternal(ColumnScanState &state) const;
 	//! Scans a base vector from the column
-	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) const;
 	//! Scans a vector from the column merged with any potential updates
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode);
+	                 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode) const;
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                 idx_t target_scan, ScanVectorMode mode);
+	                 idx_t target_scan, ScanVectorMode mode) const;
 	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
-	                  idx_t sel_count);
+	                  idx_t sel_count) const;
 	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
-	                  idx_t &sel_count, const TableFilter &filter);
+	                  idx_t &sel_count, const TableFilter &filter) const;
 
 	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
-	                  bool allow_updates, bool scan_committed);
+	                  bool allow_updates, bool scan_committed) const;
 	void FetchUpdateRow(TransactionData transaction, row_t row_id, Vector &result, idx_t result_idx);
 	void UpdateInternal(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
 	                    idx_t update_count, Vector &base_vector);
@@ -232,13 +235,13 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
+	//!	The compression function used by the ColumnData
+	//! This is empty if the segments have mixed compression or the ColumnData is empty
+	optional_ptr<const CompressionFunction> compression;
 
 private:
 	//! The parent column (if any)
 	optional_ptr<ColumnData> parent;
-	//!	The compression function used by the ColumnData
-	//! This is empty if the segments have mixed compression or the ColumnData is empty
-	optional_ptr<const CompressionFunction> compression;
 };
 
 struct PersistentColumnData {

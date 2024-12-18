@@ -136,7 +136,7 @@ struct FixedSizeScanState : public SegmentScanState {
 	BufferHandle handle;
 };
 
-unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> FixedSizeInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq<FixedSizeScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
@@ -147,7 +147,7 @@ unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template <class T>
-void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void FixedSizeScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                           idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<FixedSizeScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
@@ -161,7 +161,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 }
 
 template <class T>
-void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void FixedSizeScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &scan_state = state.scan_state->template Cast<FixedSizeScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
@@ -176,7 +176,7 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 // Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+void FixedSizeFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                        idx_t result_idx) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);

@@ -27,7 +27,7 @@ WALWriteState::WALWriteState(DuckTransaction &transaction_p, WriteAheadLog &log,
     : transaction(transaction_p), log(log), commit_state(commit_state), current_table_info(nullptr) {
 }
 
-void WALWriteState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
+void WALWriteState::SwitchTable(const DataTableInfo *table_info, UndoFlags new_op) {
 	if (current_table_info != table_info) {
 		// write the current table to the log
 		log.WriteSetTable(table_info->GetSchemaName(), table_info->GetTableName());

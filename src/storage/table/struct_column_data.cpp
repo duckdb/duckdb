@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+StructColumnData::StructColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index,
                                    idx_t start_row, LogicalType type_p, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
       validity(block_manager, info, 0, start_row, *this) {
@@ -40,7 +40,8 @@ idx_t StructColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
 }
 
-void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state,
+                                          idx_t rows) const {
 	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		if (!scan_state.scan_child_column[i]) {
@@ -50,7 +51,7 @@ void StructColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnS
 	}
 }
 
-void StructColumnData::InitializeScan(ColumnScanState &state) {
+void StructColumnData::InitializeScan(ColumnScanState &state) const {
 	D_ASSERT(state.child_states.size() == sub_columns.size() + 1);
 	state.row_index = 0;
 	state.current = nullptr;
@@ -67,7 +68,7 @@ void StructColumnData::InitializeScan(ColumnScanState &state) {
 	}
 }
 
-void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) const {
 	D_ASSERT(state.child_states.size() == sub_columns.size() + 1);
 	state.row_index = row_idx;
 	state.current = nullptr;
@@ -85,7 +86,7 @@ void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t ro
 }
 
 idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             idx_t target_count) {
+                             idx_t target_count) const {
 	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -102,7 +103,7 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 }
 
 idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                      idx_t target_count) {
+                                      idx_t target_count) const {
 	auto scan_count = validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates, target_count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -119,7 +120,7 @@ idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state
 	return scan_count;
 }
 
-idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) const {
 	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -135,7 +136,7 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 	return scan_count;
 }
 
-void StructColumnData::Skip(ColumnScanState &state, idx_t count) {
+void StructColumnData::Skip(ColumnScanState &state, idx_t count) const {
 	validity.Skip(state.child_states[0], count);
 
 	// skip inside the sub-columns

@@ -160,27 +160,27 @@ typedef void (*compression_compress_finalize_t)(CompressionState &state);
 //===--------------------------------------------------------------------===//
 // Uncompress / Scan
 //===--------------------------------------------------------------------===//
-typedef void (*compression_init_prefetch_t)(ColumnSegment &segment, PrefetchState &prefetch_state);
-typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(ColumnSegment &segment);
+typedef void (*compression_init_prefetch_t)(const ColumnSegment &segment, PrefetchState &prefetch_state);
+typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(const ColumnSegment &segment);
 
 //! Function prototype used for reading an entire vector (STANDARD_VECTOR_SIZE)
-typedef void (*compression_scan_vector_t)(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+typedef void (*compression_scan_vector_t)(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                           Vector &result);
 //! Function prototype used for reading an arbitrary ('scan_count') number of values
-typedef void (*compression_scan_partial_t)(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+typedef void (*compression_scan_partial_t)(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                            Vector &result, idx_t result_offset);
 //! Function prototype used for reading a subset of the values of a vector indicated by a selection vector
-typedef void (*compression_select_t)(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                                     const SelectionVector &sel, idx_t sel_count);
+typedef void (*compression_select_t)(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count,
+                                     Vector &result, const SelectionVector &sel, idx_t sel_count);
 //! Function prototype used for applying a filter to a vector while scanning that vector
-typedef void (*compression_filter_t)(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                                     SelectionVector &sel, idx_t &sel_count, const TableFilter &filter);
+typedef void (*compression_filter_t)(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count,
+                                     Vector &result, SelectionVector &sel, idx_t &sel_count, const TableFilter &filter);
 //! Function prototype used for reading a single value
-typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
-                                        idx_t result_idx);
+typedef void (*compression_fetch_row_t)(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
+                                        Vector &result, idx_t result_idx);
 //! Function prototype used for skipping 'skip_count' values, non-trivial if random-access is not supported for the
 //! compressed data.
-typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count);
+typedef void (*compression_skip_t)(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count);
 
 //===--------------------------------------------------------------------===//
 // Append (optional)

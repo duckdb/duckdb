@@ -203,7 +203,7 @@ void RoaringFinalizeCompress(CompressionState &state_p) {
 	state.Finalize();
 }
 
-unique_ptr<SegmentScanState> RoaringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> RoaringInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq<RoaringScanState>(segment);
 	return std::move(result);
 }
@@ -211,7 +211,7 @@ unique_ptr<SegmentScanState> RoaringInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void RoaringScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                         idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RoaringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
@@ -219,14 +219,15 @@ void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
 
-void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void RoaringScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	RoaringScanPartial(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void RoaringFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                     idx_t result_idx) {
 	RoaringScanState scan_state(segment);
 
 	idx_t internal_offset;
@@ -236,7 +237,7 @@ void RoaringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_
 	scan_state.ScanInternal(container_state, 1, result, result_idx);
 }
 
-void RoaringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+void RoaringSkip(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	// NO OP
 	// We skip inside scan instead, if the container boundary gets crossed we can avoid a bunch of work anyways
 	return;

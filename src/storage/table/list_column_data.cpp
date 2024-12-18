@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                               LogicalType type_p, optional_ptr<ColumnData> parent)
+ListColumnData::ListColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index,
+                               idx_t start_row, LogicalType type_p, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
       validity(block_manager, info, 0, start_row, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
@@ -24,12 +24,12 @@ void ListColumnData::SetStart(idx_t new_start) {
 	validity.SetStart(new_start);
 }
 
-FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) const {
 	// table filters are not supported yet for list columns
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) const {
 	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
 	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 
@@ -43,7 +43,7 @@ void ListColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnSca
 	child_column->InitializePrefetch(prefetch_state, scan_state.child_states[1], rows * rows_per_list);
 }
 
-void ListColumnData::InitializeScan(ColumnScanState &state) {
+void ListColumnData::InitializeScan(ColumnScanState &state) const {
 	ColumnData::InitializeScan(state);
 
 	// initialize the validity segment
@@ -54,7 +54,7 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 	child_column->InitializeScan(state.child_states[1]);
 }
 
-uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
+uint64_t ListColumnData::FetchListOffset(idx_t row_idx) const {
 	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(type, 1);
@@ -64,7 +64,7 @@ uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	return FlatVector::GetData<uint64_t>(result)[0];
 }
 
-void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) const {
 	if (row_idx == 0) {
 		InitializeScan(state);
 		return;
@@ -85,16 +85,16 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 }
 
 idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                           idx_t scan_count) {
+                           idx_t scan_count) const {
 	return ScanCount(state, result, scan_count);
 }
 
 idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                    idx_t scan_count) {
+                                    idx_t scan_count) const {
 	return ScanCount(state, result, scan_count);
 }
 
-idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) const {
 	if (count == 0) {
 		return 0;
 	}
@@ -141,7 +141,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	return scan_count;
 }
 
-void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
+void ListColumnData::Skip(ColumnScanState &state, idx_t count) const {
 	// skip inside the validity segment
 	validity.Skip(state.child_states[0], count);
 

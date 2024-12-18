@@ -6,7 +6,7 @@ namespace duckdb {
 ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_OR) {
 }
 
-FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult ConjunctionOrFilter::CheckStatistics(const BaseStatistics &stats) {
 	// the OR filter is true if ANY of the children is true
 	D_ASSERT(!child_filters.empty());
 	for (auto &filter : child_filters) {
@@ -66,7 +66,7 @@ unique_ptr<Expression> ConjunctionOrFilter::ToExpression(const Expression &colum
 ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_AND) {
 }
 
-FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult ConjunctionAndFilter::CheckStatistics(const BaseStatistics &stats) {
 	// the AND filter is true if ALL of the children is true
 	D_ASSERT(!child_filters.empty());
 	auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;

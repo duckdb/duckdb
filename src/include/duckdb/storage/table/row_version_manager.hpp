@@ -31,7 +31,7 @@ public:
 
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
-	                            SelectionVector &sel_vector, idx_t max_count);
+	                            SelectionVector &sel_vector, idx_t max_count) const;
 	bool Fetch(TransactionData transaction, idx_t row);
 
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);
@@ -47,14 +47,14 @@ public:
 	                                                 idx_t start);
 
 private:
-	mutex version_lock;
+	mutable mutex version_lock;
 	idx_t start;
 	vector<unique_ptr<ChunkInfo>> vector_info;
 	bool has_changes;
 	vector<MetaBlockPointer> storage_pointers;
 
 private:
-	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
+	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx) const;
 	ChunkVectorInfo &GetVectorInfo(idx_t vector_idx);
 	void FillVectorInfo(idx_t vector_idx);
 };

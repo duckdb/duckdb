@@ -211,13 +211,12 @@ bool ColumnDataCheckpointer::HasChanges(const column_segment_vector_t &nodes) {
 		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
-		} else {
-			// persistent segment; check if there were any updates or deletions in this segment
-			idx_t start_row_idx = segment->start - row_group.start;
-			idx_t end_row_idx = start_row_idx + segment->count;
-			if (col_data.updates && col_data.updates->HasUpdates(start_row_idx, end_row_idx)) {
-				return true;
-			}
+		}
+		// persistent segment; check if there were any updates or deletions in this segment
+		idx_t start_row_idx = segment->start - row_group.start;
+		idx_t end_row_idx = start_row_idx + segment->count;
+		if (col_data.HasUpdates(start_row_idx, end_row_idx)) {
+			return true;
 		}
 	}
 	return false;

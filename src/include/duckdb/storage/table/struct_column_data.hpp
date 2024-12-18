@@ -16,7 +16,7 @@ namespace duckdb {
 //! Struct column data represents a struct
 class StructColumnData : public ColumnData {
 public:
-	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+	StructColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                 LogicalType type, optional_ptr<ColumnData> parent = nullptr);
 
 	//! The sub-columns of the struct
@@ -28,17 +28,17 @@ public:
 	void SetStart(idx_t new_start) override;
 	idx_t GetMaxEntry() override;
 
-	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
-	void InitializeScan(ColumnScanState &state) override;
-	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) const override;
+	void InitializeScan(ColumnScanState &state) const override;
+	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) const override;
 
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	           idx_t scan_count) override;
+	           idx_t scan_count) const override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-	                    idx_t scan_count) override;
-	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	                    idx_t scan_count) const override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) const override;
 
-	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
+	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) const override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;

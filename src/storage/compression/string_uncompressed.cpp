@@ -64,7 +64,7 @@ idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefetch_state) {
+void UncompressedStringInitPrefetch(const ColumnSegment &segment, PrefetchState &prefetch_state) {
 	prefetch_state.AddBlock(segment.block);
 	auto segment_state = segment.GetSegmentState();
 	if (segment_state) {
@@ -77,7 +77,7 @@ void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefe
 	}
 }
 
-unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
@@ -87,8 +87,8 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSeg
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
-                                                  Vector &result, idx_t result_offset) {
+void UncompressedStringStorage::StringScanPartial(const ColumnSegment &segment, ColumnScanState &state,
+                                                  idx_t scan_count, Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
@@ -110,7 +110,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	}
 }
 
-void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+void UncompressedStringStorage::StringScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                            Vector &result) {
 	StringScanPartial(segment, state, scan_count, result, 0);
 }
@@ -118,7 +118,7 @@ void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanSta
 //===--------------------------------------------------------------------===//
 // Select
 //===--------------------------------------------------------------------===//
-void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count,
+void UncompressedStringStorage::Select(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count,
                                        Vector &result, const SelectionVector &sel, idx_t sel_count) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
@@ -141,7 +141,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
+BufferHandle &ColumnFetchState::GetOrInsertHandle(const ColumnSegment &segment) {
 	auto primary_id = segment.block->BlockId();
 
 	auto entry = handles.find(primary_id);
@@ -157,7 +157,7 @@ BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
 	}
 }
 
-void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
+void UncompressedStringStorage::StringFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
                                                Vector &result, idx_t result_idx) {
 	// fetch a single row from the string segment
 	// first pin the main buffer if it is not already pinned
@@ -293,7 +293,7 @@ void UncompressedStringStorage::SetDictionary(ColumnSegment &segment, BufferHand
 	Store<uint32_t>(container.end, startptr + sizeof(uint32_t));
 }
 
-StringDictionaryContainer UncompressedStringStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
+StringDictionaryContainer UncompressedStringStorage::GetDictionary(const ColumnSegment &segment, BufferHandle &handle) {
 	auto startptr = handle.Ptr() + segment.GetBlockOffset();
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>(startptr);
@@ -360,7 +360,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	state.head->offset += total_length;
 }
 
-string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block,
+string_t UncompressedStringStorage::ReadOverflowString(const ColumnSegment &segment, Vector &result, block_id_t block,
                                                        int32_t offset) {
 	auto &block_manager = segment.GetBlockManager();
 	auto &buffer_manager = block_manager.buffer_manager;

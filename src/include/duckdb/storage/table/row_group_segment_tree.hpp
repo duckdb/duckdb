@@ -24,12 +24,12 @@ public:
 	void Initialize(PersistentTableData &data);
 
 protected:
-	unique_ptr<RowGroup> LoadSegment() override;
+	unique_ptr<RowGroup> LoadSegment() const override;
 
 	RowGroupCollection &collection;
-	idx_t current_row_group;
+	mutable idx_t current_row_group;
 	idx_t max_row_group;
-	unique_ptr<MetadataReader> reader;
+	mutable unique_ptr<MetadataReader> reader;
 };
 
 } // namespace duckdb

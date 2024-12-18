@@ -30,7 +30,7 @@ public:
 	//! Whether or not the table is temporary
 	bool IsTemporary() const;
 
-	AttachedDatabase &GetDB() {
+	AttachedDatabase &GetDB() const {
 		return db;
 	}
 
@@ -48,8 +48,8 @@ public:
 		return checkpoint_lock.GetSharedLock();
 	}
 
-	string GetSchemaName();
-	string GetTableName();
+	string GetSchemaName() const;
+	string GetTableName() const;
 	void SetTableName(string name);
 
 private:
@@ -58,7 +58,7 @@ private:
 	//! The table IO manager
 	shared_ptr<TableIOManager> table_io_manager;
 	//! Lock for modifying the name
-	mutex name_lock;
+	mutable mutex name_lock;
 	//! The schema of the table
 	string schema;
 	//! The name of the table

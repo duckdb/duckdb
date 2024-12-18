@@ -24,7 +24,7 @@ string_t CompressedStringScanState::FetchStringFromDict(int32_t dict_offset, uin
 	return string_t(str_ptr, string_len);
 }
 
-void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initialize_dictionary) {
+void CompressedStringScanState::Initialize(const ColumnSegment &segment, bool initialize_dictionary) {
 	baseptr = handle->Ptr() + segment.GetBlockOffset();
 
 	// Load header values
@@ -88,8 +88,8 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 	}
 }
 
-void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
-                                                       idx_t start, idx_t scan_count) {
+void CompressedStringScanState::ScanToDictionaryVector(const ColumnSegment &segment, Vector &result,
+                                                       idx_t result_offset, idx_t start, idx_t scan_count) {
 	D_ASSERT(start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
 	D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
 	D_ASSERT(result_offset == 0);

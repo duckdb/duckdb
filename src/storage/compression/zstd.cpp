@@ -81,13 +81,13 @@ struct ZSTDStorage {
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
-	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-	                              idx_t result_offset);
-	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
-	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+	static unique_ptr<SegmentScanState> StringInitScan(const ColumnSegment &segment);
+	static void StringScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+	                              Vector &result, idx_t result_offset);
+	static void StringScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
+	static void StringFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
-	static void StringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	static void StringSkip(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 		// NO OP
 	}
 
@@ -683,7 +683,7 @@ public:
 //===--------------------------------------------------------------------===//
 struct ZSTDScanState : public SegmentScanState {
 public:
-	explicit ZSTDScanState(ColumnSegment &segment)
+	explicit ZSTDScanState(const ColumnSegment &segment)
 	    : state(segment.GetSegmentState()->Cast<UncompressedStringSegmentState>()),
 	      block_manager(segment.GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
 	      segment_block_offset(segment.GetBlockOffset()) {
@@ -928,7 +928,7 @@ public:
 	}
 
 public:
-	UncompressedStringSegmentState &state;
+	const UncompressedStringSegmentState &state;
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;
 
@@ -957,7 +957,7 @@ public:
 	AllocatedData skip_buffer;
 };
 
-unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq<ZSTDScanState>(segment);
 	return std::move(result);
 }
@@ -965,22 +965,22 @@ unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(ColumnSegment &segment)
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void ZSTDStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                                    idx_t result_offset) {
+void ZSTDStorage::StringScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+                                    Vector &result, idx_t result_offset) {
 	auto &scan_state = state.scan_state->template Cast<ZSTDScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	scan_state.ScanPartial(start, result, result_offset, scan_count);
 }
 
-void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void ZSTDStorage::StringScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	StringScanPartial(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void ZSTDStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+void ZSTDStorage::StringFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
 	ZSTDScanState scan_state(segment);
 	scan_state.ScanPartial(UnsafeNumericCast<idx_t>(row_id), result, result_idx, 1);

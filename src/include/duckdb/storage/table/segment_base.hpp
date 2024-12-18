@@ -18,6 +18,13 @@ class SegmentBase {
 public:
 	SegmentBase(idx_t start, idx_t count) : start(start), count(count), next(nullptr) {
 	}
+	const T *Next() const {
+#ifndef DUCKDB_R_BUILD
+		return next.load();
+#else
+		return next;
+#endif
+	}
 	T *Next() {
 #ifndef DUCKDB_R_BUILD
 		return next.load();

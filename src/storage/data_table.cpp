@@ -363,11 +363,11 @@ bool DataTable::IndexNameIsUnique(const string &name) {
 	return info->indexes.NameIsUnique(name);
 }
 
-string DataTableInfo::GetSchemaName() {
+string DataTableInfo::GetSchemaName() const {
 	return schema;
 }
 
-string DataTableInfo::GetTableName() {
+string DataTableInfo::GetTableName() const {
 	lock_guard<mutex> l(name_lock);
 	return table;
 }

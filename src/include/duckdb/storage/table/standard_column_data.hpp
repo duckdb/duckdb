@@ -16,7 +16,7 @@ namespace duckdb {
 //! Standard column data represents a regular flat column (e.g. a column of type INTEGER or STRING)
 class StandardColumnData : public ColumnData {
 public:
-	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+	StandardColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                   LogicalType type, optional_ptr<ColumnData> parent = nullptr);
 
 	//! The validity column data
@@ -25,21 +25,21 @@ public:
 public:
 	void SetStart(idx_t new_start) override;
 
-	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
-	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
-	void InitializeScan(ColumnScanState &state) override;
-	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
+	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) const override;
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) const override;
+	void InitializeScan(ColumnScanState &state) const override;
+	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) const override;
 
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	           idx_t target_count) override;
+	           idx_t target_count) const override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-	                    idx_t target_count) override;
-	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	                    idx_t target_count) const override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) const override;
 
 	void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	            SelectionVector &sel, idx_t &count, const TableFilter &filter) override;
+	            SelectionVector &sel, idx_t &count, const TableFilter &filter) const override;
 	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	            SelectionVector &sel, idx_t sel_count) override;
+	            SelectionVector &sel, idx_t sel_count) const override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;

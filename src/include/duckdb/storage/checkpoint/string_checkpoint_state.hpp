@@ -47,7 +47,7 @@ struct UncompressedStringSegmentState : public CompressedSegmentState {
 	vector<block_id_t> on_disk_blocks;
 
 public:
-	shared_ptr<BlockHandle> GetHandle(BlockManager &manager, block_id_t block_id);
+	shared_ptr<BlockHandle> GetHandle(BlockManager &manager, block_id_t block_id) const;
 
 	void RegisterBlock(BlockManager &manager, block_id_t block_id);
 
@@ -65,8 +65,8 @@ public:
 	}
 
 private:
-	mutex block_lock;
-	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;
+	mutable mutex block_lock;
+	mutable unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;
 };
 
 } // namespace duckdb

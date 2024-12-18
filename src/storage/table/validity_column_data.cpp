@@ -4,12 +4,12 @@
 
 namespace duckdb {
 
-ValidityColumnData::ValidityColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
+ValidityColumnData::ValidityColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index,
                                        idx_t start_row, ColumnData &parent)
     : ColumnData(block_manager, info, column_index, start_row, LogicalType(LogicalTypeId::VALIDITY), &parent) {
 }
 
-FilterPropagateResult ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+FilterPropagateResult ValidityColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) const {
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
