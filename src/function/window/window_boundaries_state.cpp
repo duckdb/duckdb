@@ -306,12 +306,18 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_RANK:
 		result.insert(PARTITION_BEGIN);
-		result.insert(PEER_BEGIN);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PEER_BEGIN);
+		} else {
+			result.insert(PARTITION_END);
+		}
 		break;
 	case ExpressionType::WINDOW_PERCENT_RANK:
 		result.insert(PARTITION_BEGIN);
 		result.insert(PARTITION_END);
-		result.insert(PEER_BEGIN);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PEER_BEGIN);
+		}
 		break;
 	case ExpressionType::WINDOW_CUME_DIST:
 		result.insert(PARTITION_BEGIN);

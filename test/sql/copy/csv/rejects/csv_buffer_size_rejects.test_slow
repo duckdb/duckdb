@@ -2,6 +2,10 @@
 # description: Force CSV Lines from errors to fall mid-buffers
 # group: [rejects]
 
+statement maybe
+FROM read_csv('${path}/bad_date.csv')
+----
+
 require skip_reload
 
 # Test fails on windows because byte_position is slightly different due to \r\n instead of \n.
