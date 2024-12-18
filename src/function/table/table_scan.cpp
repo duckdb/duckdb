@@ -71,7 +71,7 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	vector<LogicalType> scanned_types;
 
 	// Probe the table (index scan).
-	vector<row_t> row_ids;
+	unsafe_vector<row_t> row_ids;
 	unique_ptr<Vector> row_id_vector;
 	idx_t row_ids_offset;
 	ColumnFetchState fetch_state;
@@ -160,7 +160,8 @@ void ScanIndex(ClientContext &context, const TableScanBindData &bind_data, Table
 			return false;
 		}
 
-		auto bound_ref = make_uniq<BoundReferenceExpression>(col.GetType(), storage_index);
+		ColumnBinding binding(0, storage_index);
+		auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 		auto filter_expr = filter->second->ToExpression(*bound_ref);
 
 		auto scan_state = art.TryInitializeScan(*index_expr, *filter_expr);
@@ -169,8 +170,7 @@ void ScanIndex(ClientContext &context, const TableScanBindData &bind_data, Table
 		}
 
 		// Check if we can use an index scan, and already retrieve the matching row ids.
-		unsafe_vector<row_t> row_ids;
-		if (art.Scan(*scan_state, max_count, row_ids)) {
+		if (art.Scan(*scan_state, max_count, g_state.row_ids)) {
 			g_state.index_scan = true;
 			if (!g_state.row_ids.empty()) {
 				auto row_id_data = (data_ptr_t)&g_state.row_ids[0]; // NOLINT - this is not pretty
