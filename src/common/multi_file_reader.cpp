@@ -310,6 +310,7 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
                                                 MultiFileReaderData &reader_data,
                                                 const MultiFileReaderBindData &bind_data, const string &initial_file,
                                                 optional_ptr<MultiFileReaderGlobalState> global_state) {
+
 	// we have expected types: create a map of name -> column index
 	case_insensitive_map_t<idx_t> name_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
@@ -336,8 +337,9 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 			throw InternalException(
 			    "MultiFileReader::CreateColumnMappingByName - global_id is out of range in global_types for this file");
 		}
-		auto &global_name = global_columns[global_id].name;
-		auto entry = name_map.find(global_name);
+		auto &global_column = global_columns[global_id];
+		auto identifier = global_column.GetIdentifierName();
+		auto entry = name_map.find(identifier);
 		if (entry == name_map.end()) {
 			string candidate_names;
 			for (auto &column : local_columns) {
@@ -351,7 +353,7 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 			                       "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: "
 			                       "%s\nIf you are trying to "
 			                       "read files with different schemas, try setting union_by_name=True",
-			                       file_name, global_name, initial_file, file_name, candidate_names));
+			                       file_name, identifier, initial_file, file_name, candidate_names));
 		}
 		// we found the column in the local file - check if the types are the same
 		auto local_id = entry->second;
@@ -398,7 +400,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 			// Extra columns at the end will not have a field_id
 			break;
 		}
-		auto field_id = column.identifier.GetValue<int32_t>();
+		auto field_id = column.GetIdentifierFieldId();
 		field_id_map[field_id] = col_idx;
 	}
 
@@ -434,7 +436,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 
 		const auto &global_column = global_columns[global_id];
 		D_ASSERT(!global_column.identifier.IsNull());
-		auto it = field_id_map.find(global_column.identifier.GetValue<int32_t>());
+		auto it = field_id_map.find(global_column.GetIdentifierFieldId());
 		if (it == field_id_map.end()) {
 			// field id not present in file, use default value
 			auto &default_val = global_column.default_expression;

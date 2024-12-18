@@ -82,6 +82,21 @@ public:
 		}
 	}
 
+	int32_t GetIdentifierFieldId() const {
+		D_ASSERT(!identifier.IsNull());
+		D_ASSERT(identifier.type().id() == LogicalTypeId::INTEGER);
+		return identifier.GetValue<int32_t>();
+	}
+
+	string GetIdentifierName() const {
+		if (identifier.IsNull()) {
+			// No identifier was provided, assume the name as the identifier
+			return name;
+		}
+		D_ASSERT(identifier.type().id() == LogicalTypeId::VARCHAR);
+		return identifier.GetValue<string>();
+	}
+
 public:
 	string name;
 	LogicalType type;
