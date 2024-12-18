@@ -187,7 +187,7 @@ vector<reference<Binding>> BindContext::GetMatchingBindings(const string &column
 unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(TableBinding &table_binding,
                                                                 const string &column_name) {
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
-	result->alias = column_name;
+	result->SetAlias(column_name);
 	return result;
 }
 
@@ -246,7 +246,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
 		// because of case insensitivity in the binder we rename the column to the original name
 		// as it appears in the binding itself
-		result->alias = binding->names[column_index];
+		result->SetAlias(binding->names[column_index]);
 	}
 	return std::move(result);
 }
@@ -455,7 +455,7 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 	auto entry = expr.replace_list.find(qualified_name.column);
 	if (entry != expr.replace_list.end()) {
 		auto new_entry = entry->second->Copy();
-		new_entry->alias = entry->first;
+		new_entry->SetAlias(entry->first);
 		info.excluded_columns.insert(entry->first);
 		info.new_select_list.push_back(std::move(new_entry));
 		return true;
@@ -466,7 +466,7 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 void HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_name, ParsedExpression &new_expr) {
 	auto rename_entry = expr.rename_list.find(qualified_name);
 	if (rename_entry != expr.rename_list.end()) {
-		new_expr.alias = rename_entry->second;
+		new_expr.SetAlias(rename_entry->second);
 	}
 }
 
@@ -504,7 +504,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 						for (auto &child_binding : using_binding.bindings) {
 							coalesce->children.push_back(make_uniq<ColumnRefExpression>(column_name, child_binding));
 						}
-						coalesce->alias = column_name;
+						coalesce->SetAlias(column_name);
 						HandleRename(expr, qualified_column, *coalesce);
 						new_select_list.push_back(std::move(coalesce));
 					} else {

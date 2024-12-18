@@ -97,7 +97,7 @@ unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::P
 
 bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, Value &value) {
 	// We have to construct it like this because we don't have the ClientContext for binding/executing the expr here
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
 		if (function.function_name == "struct_pack") {
@@ -105,14 +105,14 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 			child_list_t<Value> values;
 			values.reserve(function.children.size());
 			for (const auto &child : function.children) {
-				if (!unique_names.insert(child->alias).second) {
-					throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
+				if (!unique_names.insert(child->GetAlias()).second) {
+					throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
 				}
 				Value child_value;
 				if (!ConstructConstantFromExpression(*child, child_value)) {
 					return false;
 				}
-				values.emplace_back(child->alias, std::move(child_value));
+				values.emplace_back(child->GetAlias(), std::move(child_value));
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;

@@ -48,10 +48,10 @@ void PreparedStatementVerifier::Extract() {
 }
 
 void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &child) {
-	if (child->type == ExpressionType::VALUE_CONSTANT) {
+	if (child->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		// constant: extract the constant value
-		auto alias = child->alias;
-		child->alias = string();
+		auto alias = child->GetAlias();
+		child->ClearAlias();
 		// check if the value already exists
 		idx_t index = values.size();
 		auto identifier = std::to_string(index + 1);
@@ -69,7 +69,7 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 		// replace it with an expression
 		auto parameter = make_uniq<ParameterExpression>();
 		parameter->identifier = identifier;
-		parameter->alias = alias;
+		parameter->SetAlias(alias);
 		child = std::move(parameter);
 		return;
 	}
