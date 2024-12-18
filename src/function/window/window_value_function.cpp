@@ -21,8 +21,8 @@ public:
 	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask), ignore_nulls(&all_valid),
 	      child_idx(executor.child_idx) {
 
-		if (!executor.sort_idx.empty()) {
-			inner_sort = make_uniq<WindowIndexTree>(executor.context, executor.wexpr.arg_orders, executor.sort_idx,
+		if (!executor.arg_order_idx.empty()) {
+			inner_sort = make_uniq<WindowIndexTree>(executor.context, executor.wexpr.arg_orders, executor.arg_order_idx,
 			                                        payload_count);
 		}
 	}
@@ -146,7 +146,7 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientCon
 	default_idx = shared.RegisterEvaluate(wexpr.default_expr);
 
 	for (const auto &order : wexpr.arg_orders) {
-		sort_idx.emplace_back(shared.RegisterSink(order.expression));
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
 

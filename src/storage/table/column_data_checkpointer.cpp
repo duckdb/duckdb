@@ -41,7 +41,8 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 	return state;
 }
 
-void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
+void ColumnDataCheckpointer::ScanSegments(const column_segment_vector_t &nodes,
+                                          const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto &segment = *nodes[segment_idx].node;
@@ -96,7 +97,8 @@ CompressionType ForceCompression(vector<optional_ptr<CompressionFunction>> &comp
 	return found ? compression_type : CompressionType::COMPRESSION_AUTO;
 }
 
-unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
+unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(const column_segment_vector_t &nodes,
+                                                                             idx_t &compression_idx) {
 	D_ASSERT(!compression_functions.empty());
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	CompressionType forced_method = CompressionType::COMPRESSION_AUTO;
@@ -121,7 +123,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	}
 
 	// scan over all the segments and run the analyze step
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
+	ScanSegments(nodes, [&](Vector &scan_vector, idx_t count) {
 		for (idx_t i = 0; i < compression_functions.size(); i++) {
 			if (!compression_functions[i]) {
 				continue;
@@ -173,7 +175,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	return state;
 }
 
-void ColumnDataCheckpointer::WriteToDisk() {
+void ColumnDataCheckpointer::WriteToDisk(const column_segment_vector_t &nodes) {
 	// there were changes or transient segments
 	// we need to rewrite the column segments to disk
 
@@ -188,7 +190,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// now we need to write our segment
 	// we will first run an analyze step that determines which compression function to use
 	idx_t compression_idx;
-	auto analyze_state = DetectBestCompressionMethod(compression_idx);
+	auto analyze_state = DetectBestCompressionMethod(nodes, compression_idx);
 
 	if (!analyze_state) {
 		throw FatalException("No suitable compression/storage method found to store column");
@@ -199,13 +201,11 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	auto compress_state = best_function->init_compression(*this, std::move(analyze_state));
 
 	ScanSegments(
-	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
+	    nodes, [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
 	best_function->compress_finalize(*compress_state);
-
-	nodes.clear();
 }
 
-bool ColumnDataCheckpointer::HasChanges() {
+bool ColumnDataCheckpointer::HasChanges(const column_segment_vector_t &nodes) {
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto segment = nodes[segment_idx].node.get();
 		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
@@ -223,7 +223,7 @@ bool ColumnDataCheckpointer::HasChanges() {
 	return false;
 }
 
-void ColumnDataCheckpointer::WritePersistentSegments() {
+void ColumnDataCheckpointer::WritePersistentSegments(column_segment_vector_t nodes) {
 	// all segments are persistent and there are no updates
 	// we only need to write the metadata
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
@@ -240,16 +240,20 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 	}
 }
 
-void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode<ColumnSegment>> nodes_p) {
-	D_ASSERT(!nodes_p.empty());
-	this->nodes = std::move(nodes_p);
+void ColumnDataCheckpointer::Checkpoint(const column_segment_vector_t &nodes) {
+	D_ASSERT(!nodes.empty());
+	has_changes = HasChanges(nodes);
 	// first check if any of the segments have changes
-	if (!HasChanges()) {
-		// no changes: only need to write the metadata for this column
-		WritePersistentSegments();
+	if (has_changes) {
+		WriteToDisk(nodes);
+	}
+}
+
+void ColumnDataCheckpointer::FinalizeCheckpoint(column_segment_vector_t &&nodes) {
+	if (has_changes) {
+		nodes.clear();
 	} else {
-		// there are changes: rewrite the set of columns);
-		WriteToDisk();
+		WritePersistentSegments(std::move(nodes));
 	}
 }
 

@@ -24,7 +24,7 @@ namespace duckdb {
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, optional_ptr<ColumnData> parent)
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
-      type(std::move(type_p)), parent(parent), allocation_size(0) {
+      type(std::move(type_p)), allocation_size(0), parent(parent) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -621,14 +621,15 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto l = data.Lock();
-	auto nodes = data.MoveSegments(l);
+	auto &nodes = data.ReferenceSegments(l);
 	if (nodes.empty()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
 
 	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	checkpointer.Checkpoint(std::move(nodes));
+	checkpointer.Checkpoint(nodes);
+	checkpointer.FinalizeCheckpoint(data.MoveSegments(l));
 
 	// reset the compression function
 	compression = nullptr;
