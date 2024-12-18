@@ -21,8 +21,8 @@ public:
 	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask), ignore_nulls(&all_valid),
 	      child_idx(executor.child_idx) {
 
-		if (!executor.sort_idx.empty()) {
-			inner_sort = make_uniq<WindowIndexTree>(executor.context, executor.wexpr.arg_orders, executor.sort_idx,
+		if (!executor.arg_order_idx.empty()) {
+			inner_sort = make_uniq<WindowIndexTree>(executor.context, executor.wexpr.arg_orders, executor.arg_order_idx,
 			                                        payload_count);
 		}
 	}
@@ -146,7 +146,7 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientCon
 	default_idx = shared.RegisterEvaluate(wexpr.default_expr);
 
 	for (const auto &order : wexpr.arg_orders) {
-		sort_idx.emplace_back(shared.RegisterSink(order.expression));
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
 
@@ -266,7 +266,7 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
 		int64_t val_idx = (int64_t)row_idx;
-		if (wexpr.type == ExpressionType::WINDOW_LEAD) {
+		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		} else {
 			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);

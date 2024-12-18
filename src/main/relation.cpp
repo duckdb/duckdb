@@ -136,11 +136,11 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const str
 shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other,
                                     vector<unique_ptr<ParsedExpression>> expression_list, JoinType type,
                                     JoinRefType ref_type) {
-	if (expression_list.size() > 1 || expression_list[0]->type == ExpressionType::COLUMN_REF) {
+	if (expression_list.size() > 1 || expression_list[0]->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		// multiple columns or single column ref: the condition is a USING list
 		vector<string> using_columns;
 		for (auto &expr : expression_list) {
-			if (expr->type != ExpressionType::COLUMN_REF) {
+			if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 				throw ParserException("Expected a single expression as join condition");
 			}
 			auto &colref = expr->Cast<ColumnRefExpression>();

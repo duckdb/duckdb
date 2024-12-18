@@ -10,7 +10,7 @@ unique_ptr<ParsedExpression> Transformer::TransformResTarget(duckdb_libpgquery::
 		return nullptr;
 	}
 	if (root.name) {
-		expr->alias = string(root.name);
+		expr->SetAlias(root.name);
 	}
 	return expr;
 }
@@ -19,7 +19,7 @@ unique_ptr<ParsedExpression> Transformer::TransformNamedArg(duckdb_libpgquery::P
 
 	auto expr = TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(root.arg));
 	if (root.name) {
-		expr->alias = string(root.name);
+		expr->SetAlias(root.name);
 	}
 	return expr;
 }

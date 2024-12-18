@@ -365,7 +365,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	for (auto &group_idx : grouping_set) {
 		// Retrieve the expression containing the index in the input chunk
 		auto &group = op.groups[group_idx];
-		D_ASSERT(group->type == ExpressionType::BOUND_REF);
+		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
 		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.index]);
