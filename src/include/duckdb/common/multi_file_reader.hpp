@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/union_by_name.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 class TableFunction;
@@ -95,6 +96,15 @@ public:
 		}
 		D_ASSERT(identifier.type().id() == LogicalTypeId::VARCHAR);
 		return identifier.GetValue<string>();
+	}
+
+	Value GetDefaultValue() const {
+		D_ASSERT(default_expression);
+		if (default_expression->type != ExpressionType::VALUE_CONSTANT) {
+			throw NotImplementedException("Default expression that isn't constant is not supported yet");
+		}
+		auto &constant_expr = default_expression->Cast<ConstantExpression>();
+		return constant_expr.value;
 	}
 
 public:

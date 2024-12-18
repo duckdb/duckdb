@@ -342,14 +342,24 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		auto entry = name_map.find(identifier);
 		if (entry == name_map.end()) {
 			// identiier not present in file, use default value
-			auto &default_val = global_column.default_expression;
-			D_ASSERT(default_val);
-			if (default_val->type != ExpressionType::VALUE_CONSTANT) {
-				throw NotImplementedException("Default expression that isn't constant is not supported yet");
+			if (global_column.default_expression) {
+				reader_data.constant_map.emplace_back(i, global_column.GetDefaultValue());
+				continue;
+			} else {
+				string candidate_names;
+				for (auto &column : local_columns) {
+					if (!candidate_names.empty()) {
+						candidate_names += ", ";
+					}
+					candidate_names += column.name;
+				}
+				throw IOException(StringUtil::Format(
+				    "Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from "
+				    "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: "
+				    "%s\nIf you are trying to "
+				    "read files with different schemas, try setting union_by_name=True",
+				    file_name, identifier, initial_file, file_name, candidate_names));
 			}
-			auto &constant_expr = default_val->Cast<ConstantExpression>();
-			reader_data.constant_map.emplace_back(i, constant_expr.value);
-			continue;
 		}
 		// we found the column in the local file - check if the types are the same
 		auto local_id = entry->second;
