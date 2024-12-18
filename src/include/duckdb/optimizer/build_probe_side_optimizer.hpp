@@ -34,8 +34,7 @@ private:
 
 public:
 	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op, Optimizer &optimizer);
-
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op, bool is_root = false);
+	void VisitOperator(LogicalOperator &op) override;
 
 private:
 	bool TryFlipJoinChildren(LogicalOperator &op) const;
@@ -49,6 +48,7 @@ private:
 	vector<ColumnBinding> preferred_on_probe_side;
 	Optimizer &optimizer;
 	vector<ColumnBindingReplacer> binding_replacers;
+	LogicalOperator &root;
 };
 
 } // namespace duckdb

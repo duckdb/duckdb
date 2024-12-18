@@ -38,7 +38,8 @@ static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &binding
 	}
 }
 
-BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op, Optimizer &optimizer) : context(context), optimizer(optimizer) {
+BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op, Optimizer &optimizer)
+    : context(context), optimizer(optimizer), root(op) {
 	vector<ColumnBinding> updating_columns, current_op_bindings;
 	auto bindings = op.GetColumnBindings();
 	vector<ColumnBinding> row_id_bindings;
@@ -50,12 +51,7 @@ BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, Logical
 	op.ResolveOperatorTypes();
 }
 
-
 static void FlipChildren(LogicalOperator &op) {
-	Printer::Print("bindings before switch");
-	for (auto &binding : op.GetColumnBindings()) {
-		Printer::Print(binding.ToString());
-	}
 	std::swap(op.children[0], op.children[1]);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
@@ -68,12 +64,6 @@ static void FlipChildren(LogicalOperator &op) {
 			cond.comparison = FlipComparisonExpression(cond.comparison);
 		}
 		std::swap(join.left_projection_map, join.right_projection_map);
-		auto bindings = join.GetColumnBindings();
-		Printer::Print("bindings after switch");
-		for (auto &binding : bindings) {
-			Printer::Print(binding.ToString());
-		}
-		auto b = 0;
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
@@ -217,22 +207,16 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	}
 
 	if (swap) {
-		Printer::Print("swapping children");
 		FlipChildren(op);
 	}
 	return swap;
 }
 
-unique_ptr<LogicalOperator> BuildProbeSideOptimizer::Optimize(unique_ptr<LogicalOperator> op, bool is_root) {
-	// First visit the children
-	for (idx_t i = 0; i < op->children.size(); i++) {
-		op->children[i] = Optimize(std::move(op->children[i]));
-	}
-
+void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	// then the currentoperator
-	switch (op->type) {
+	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-		auto &join = op->Cast<LogicalComparisonJoin>();
+		auto &join = op.Cast<LogicalComparisonJoin>();
 		if (HasInverseJoinType(join.join_type)) {
 			FlipChildren(join);
 			join.delim_flipped = true;
@@ -240,29 +224,29 @@ unique_ptr<LogicalOperator> BuildProbeSideOptimizer::Optimize(unique_ptr<Logical
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op->Cast<LogicalComparisonJoin>();
+		auto &join = op.Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
 		case JoinType::SEMI:
 		case JoinType::ANTI: {
 			// if the conditions have no equality, do not flip the children.
 			// There is no physical join operator (yet) that can do an inequality right_semi/anti join.
 			idx_t has_range = 0;
-			if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
-			    (op->Cast<LogicalComparisonJoin>().HasEquality(has_range) && !context.config.prefer_range_joins)) {
+			if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
+			    (op.Cast<LogicalComparisonJoin>().HasEquality(has_range) && !context.config.prefer_range_joins)) {
 				TryFlipJoinChildren(join);
 			}
 			break;
 		}
 		default:
 			if (HasInverseJoinType(join.join_type)) {
-				TryFlipJoinChildren(*op);
+				TryFlipJoinChildren(op);
 			}
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
-		auto &join = op->Cast<LogicalJoin>();
+		auto &join = op.Cast<LogicalJoin>();
 		// We do not yet support the RIGHT_SEMI or RIGHT_ANTI join types for these, so don't try to flip
 		switch (join.join_type) {
 		case JoinType::SEMI:
@@ -273,64 +257,19 @@ unique_ptr<LogicalOperator> BuildProbeSideOptimizer::Optimize(unique_ptr<Logical
 			// They will be set in the 2nd round of ColumnLifetimeAnalyzer
 			join.left_projection_map.clear();
 			join.right_projection_map.clear();
-			TryFlipJoinChildren(*op);
+			TryFlipJoinChildren(op);
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		auto &cross = op->Cast<LogicalCrossProduct>();
-		auto original_bindings = cross.GetColumnBindings();
-		auto original_types = cross.types;
-		D_ASSERT(original_bindings.size() == original_types.size());
-		if (original_bindings.empty()) {
-			break;
-		}
-		auto flipped = TryFlipJoinChildren(cross);
-		if (flipped) {
-			// the cross product children have flipped, create a projection on top of the flipping to flip the columns back
-			const auto proj_index = optimizer.binder.GenerateTableIndex();
-			vector<unique_ptr<Expression>> expressions;
-			expressions.reserve(original_bindings.size());
-
-			ColumnBindingReplacer replacer;
-			for (idx_t col_idx = 0; col_idx < original_bindings.size(); col_idx++) {
-				const auto &old_binding = original_bindings[col_idx];
-				expressions.push_back(make_uniq<BoundColumnRefExpression>(original_types[col_idx], old_binding));
-				replacer.replacement_bindings.emplace_back(old_binding, ColumnBinding(proj_index, col_idx));
-			}
-			Printer::Print("adding projection");
-			auto proj = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
-			proj->children.push_back(std::move(op));
-			op = std::move(proj);
-
-			replacer.stop_operator = op.get();
-			binding_replacers.push_back(replacer);
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto break_here = 0;
-		auto bindings = op->GetColumnBindings();
-		for (auto &binding : bindings) {
-			Printer::Print(binding.ToString());
-		}
-		auto wat = break_here;
+		TryFlipJoinChildren(op);
 		break;
 	}
 	default:
 		break;
 	}
 
-	// after swapping sides, replace bindings if needed.
-	if (is_root) {
-		for (auto &replacer : binding_replacers) {
-			Printer::Print("replaced column bindings");
-			replacer.VisitOperator(*op);
-		}
-		Printer::Print("finishing optimizing probe side build sidee");
-		op->Print();
-	}
-	return op;
+	VisitOperatorChildren(op);
 }
 
 } // namespace duckdb

@@ -1,6 +1,6 @@
 # name: test/sql/join/set_operators/test_set_operator_reordering.test
 # description: Test reodering set operators
-# group: [join]
+# group: [set_operators]
 
 #
 #statement ok
@@ -19,39 +19,39 @@
 #statement ok
 #pragma disabled_optimizers='column_lifetime';
 
-statement ok
-attach 'tpch_sf1.db' as tpch
-
-statement ok
-use tpch;
-
-statement ok
-SELECT
-    l_orderkey,
-    sum(l_extendedprice * (1 - l_discount)) AS revenue,
-    o_orderdate,
-    o_shippriority
-FROM
-    customer,
-    orders,
-    lineitem
-WHERE
-    c_mktsegment = 'BUILDING'
-    AND c_custkey = o_custkey
-    AND l_orderkey = o_orderkey
-    AND o_orderdate < CAST('1995-03-15' AS date)
-    AND l_shipdate > CAST('1995-03-15' AS date)
-GROUP BY
-    l_orderkey,
-    o_orderdate,
-    o_shippriority
-ORDER BY
-    revenue DESC,
-    o_orderdate
-LIMIT 10;
-
-
-mode skip
+#statement ok
+#attach 'tpch_sf1.db' as tpch
+#
+#statement ok
+#use tpch;
+#
+#statement ok
+#SELECT
+#    l_orderkey,
+#    sum(l_extendedprice * (1 - l_discount)) AS revenue,
+#    o_orderdate,
+#    o_shippriority
+#FROM
+#    customer,
+#    orders,
+#    lineitem
+#WHERE
+#    c_mktsegment = 'BUILDING'
+#    AND c_custkey = o_custkey
+#    AND l_orderkey = o_orderkey
+#    AND o_orderdate < CAST('1995-03-15' AS date)
+#    AND l_shipdate > CAST('1995-03-15' AS date)
+#GROUP BY
+#    l_orderkey,
+#    o_orderdate,
+#    o_shippriority
+#ORDER BY
+#    revenue DESC,
+#    o_orderdate
+#LIMIT 10;
+#
+#
+#mode skip
 
 statement ok
 create or replace table xx as select w from (values ('a'),('b'),('c'),('d'),('e')) t(w);

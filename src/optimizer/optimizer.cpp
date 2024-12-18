@@ -202,17 +202,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		column_lifetime.VisitOperator(*plan);
 	});
 
-	Printer::Print("before build side probe side");
-	plan->Print();
-
 	// Once we know the column lifetime, we have more information regarding
 	// what relations should be the build side/probe side.
 	RunOptimizer(OptimizerType::BUILD_SIDE_PROBE_SIDE, [&]() {
 		BuildProbeSideOptimizer build_probe_side_optimizer(context, *plan, *this);
-		plan = build_probe_side_optimizer.Optimize(std::move(plan), true);
+		build_probe_side_optimizer.VisitOperator(*plan);
 	});
-	Printer::Print("after build side probe side");
-	plan->Print();
 
 	// pushes LIMIT below PROJECTION
 	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
@@ -263,8 +258,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
 		join_filter_pushdown.VisitOperator(*plan);
 	});
-	Printer::Print("after all optimizers");
-	plan->Print();
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
