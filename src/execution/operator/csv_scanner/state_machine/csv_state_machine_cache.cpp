@@ -30,9 +30,6 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		case CSVState::ESCAPE:
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
-		case CSVState::MAYBE_ESCAPED:
-			InitializeTransitionArray(transition_array, cur_state, CSVState::MAYBE_QUOTED);
-			break;
 		case CSVState::UNQUOTED:
 			if (state_machine_options.rfc_4180.GetValue()) {
 				// If we have an unquoted state, following rfc 4180, our base state is invalid
