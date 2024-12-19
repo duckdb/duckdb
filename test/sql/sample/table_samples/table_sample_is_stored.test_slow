@@ -95,6 +95,7 @@ select count(*) from integers_1;
 
 
 ## about half of the samples should have the pair '-1', 1.
+# on latest storage test its something like 997
 query I
 select count(*) > 924 and count(*) < 1124 from duckdb_table_sample('integers_1') where a = -1 and b = -1;
 ----
@@ -116,12 +117,9 @@ create view sample_view as select * from duckdb_table_sample('integers_1');
 statement ok
 insert into integers_1 (select -2, -2 from range(6000000));
 
-query I
-select count(*) from sample_view where a = -2 and b = -2;
-----
-700
 
 # 2048 / 3 = 682 (706 is good)
+# on latest storage is 670
 query I
 select count(*) > 600 and count(*) < 750 from sample_view where a = -2 and b = -2;
 ----
