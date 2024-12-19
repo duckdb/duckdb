@@ -57,7 +57,7 @@ for dep in dependencies_str:
 data = {
     "description": f"Auto-generated vcpkg.json for combined DuckDB extension build",
     "builtin-baseline": "5e5d0e1cd7785623065e77eff011afdeec1a3574",
-    "dependencies": final_deduplicated_deps
+    "dependencies": final_deduplicated_deps,
 }
 
 if merged_overlay_ports:
