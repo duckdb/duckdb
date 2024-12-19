@@ -124,8 +124,7 @@ void ScanIndex(ClientContext &context, const TableScanBindData &bind_data, Table
 		return;
 	}
 
-	// TODO: do we still need this lock?
-	// TODO: we probably need a way to allow multiple reads (and no writes) to an index.
+	// The checkpoint lock ensures that we do not checkpoint while scanning this table.
 	auto checkpoint_lock = storage.GetSharedCheckpointLock();
 	auto &info = storage.GetDataTableInfo();
 	auto &indexes = info->GetIndexes();
@@ -427,19 +426,19 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
-	scan_function.init_local = TableScanInitLocal; // TODO: nullptr for index scans, or maybe no?
+	scan_function.init_local = TableScanInitLocal; // TODO: nullptr for index scans, can we use it?
 	scan_function.init_global = TableScanInitGlobal;
 	scan_function.statistics = TableScanStatistics;
 	scan_function.dependency = TableScanDependency;
 	scan_function.cardinality = TableScanCardinality;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
-	scan_function.table_scan_progress = TableScanProgress;          // TODO: nullptr for index scans
-	scan_function.get_partition_data = TableScanGetPartitionData;   // TODO: nullptr for index scans
-	scan_function.get_partition_stats = TableScanGetPartitionStats; // TODO: nullptr for index scans
+	scan_function.table_scan_progress = TableScanProgress;          // TODO: nullptr for index scans - how to report?
+	scan_function.get_partition_data = TableScanGetPartitionData;   // TODO: nullptr for index scans - FIX!
+	scan_function.get_partition_stats = TableScanGetPartitionStats; // TODO: nullptr for index scans - FIX!
 	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.projection_pushdown = true;
-	scan_function.filter_pushdown = true; // TODO: false for index scans, although? why?
+	scan_function.filter_pushdown = true; // TODO: false for index scans, shouldn't matter
 	scan_function.filter_prune = true;
 	scan_function.sampling_pushdown = true;
 	scan_function.serialize = TableScanSerialize;
