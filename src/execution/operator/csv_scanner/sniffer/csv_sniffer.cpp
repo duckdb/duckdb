@@ -6,7 +6,7 @@ namespace duckdb {
 CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
                        CSVStateMachineCache &state_machine_cache_p, bool default_null_to_varchar_p)
     : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)),
-      default_null_to_varchar(default_null_to_varchar_p) {
+      lines_sniffed(0), default_null_to_varchar(default_null_to_varchar_p) {
 	// Initialize Format Candidates
 	for (const auto &format_template : format_template_candidates) {
 		auto &logical_type = format_template.first;
