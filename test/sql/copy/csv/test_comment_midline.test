@@ -5,6 +5,18 @@
 statement ok
 PRAGMA enable_verification
 
+# Not a comment
+# query III
+# FROM 'data/csv/comments/14635.csv'
+# ----
+# a	#b	c
+
+# Ignore errors will have,
+query III
+FROM read_csv('data/csv/comments/14635.csv', ignore_errors = true, columns = {'header1': 'VARCHAR', 'header2': 'VARCHAR', 'header3': 'VARCHAR'}, quote = '', escape = '', delim =',');
+----
+a	#b	c
+
 # If we only have midline comments, the comment must be explicitly given by the user
 query I
 FROM 'data/csv/comments/only_midline.csv';
