@@ -48,7 +48,7 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 }
 
 void ExtractColumnBindings(Expression &expr, vector<ColumnBinding> &bindings) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_ref = expr.Cast<BoundColumnRefExpression>();
 		bindings.push_back(bound_ref.binding);
 	}

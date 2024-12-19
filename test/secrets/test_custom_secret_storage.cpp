@@ -43,7 +43,7 @@ struct DemoSecretType {
 class TestSecretStorage : public CatalogSetSecretStorage {
 public:
 	TestSecretStorage(const string &name_p, DatabaseInstance &db, TestSecretLog &logger_p, int64_t tie_break_offset_p)
-	    : CatalogSetSecretStorage(db, name_p), tie_break_offset(tie_break_offset_p), logger(logger_p) {
+	    : CatalogSetSecretStorage(db, name_p, tie_break_offset_p), logger(logger_p) {
 		secrets = make_uniq<CatalogSet>(Catalog::GetSystemCatalog(db));
 		persistent = true;
 		include_in_lookups = true;
@@ -52,11 +52,6 @@ public:
 		return include_in_lookups;
 	}
 
-	int64_t GetTieBreakOffset() override {
-		return tie_break_offset;
-	}
-
-	int64_t tie_break_offset;
 	bool include_in_lookups;
 
 protected:

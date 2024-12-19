@@ -43,7 +43,7 @@ public:
 	static string ToString(const T &entry) {
 		string result = "(" + entry.children[0]->ToString();
 		for (idx_t i = 1; i < entry.children.size(); i++) {
-			result += " " + ExpressionTypeToOperator(entry.type) + " " + entry.children[i]->ToString();
+			result += " " + ExpressionTypeToOperator(entry.GetExpressionType()) + " " + entry.children[i]->ToString();
 		}
 		return result + ")";
 	}

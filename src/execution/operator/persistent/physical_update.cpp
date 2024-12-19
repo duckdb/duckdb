@@ -117,12 +117,12 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		// Default expression, set to the default value of the column.
-		if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
+		if (expressions[i]->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 			l_state.default_executor.ExecuteExpression(columns[i].index, update_chunk.data[i]);
 			continue;
 		}
 
-		D_ASSERT(expressions[i]->type == ExpressionType::BOUND_REF);
+		D_ASSERT(expressions[i]->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &binding = expressions[i]->Cast<BoundReferenceExpression>();
 		update_chunk.data[i].Reference(chunk.data[binding.index]);
 	}
@@ -174,6 +174,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto &delete_chunk = index_update ? l_state.delete_chunk : l_state.mock_chunk;
+	delete_chunk.Reset();
 	delete_chunk.SetCardinality(update_count);
 
 	if (index_update) {

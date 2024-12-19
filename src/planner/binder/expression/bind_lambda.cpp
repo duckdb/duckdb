@@ -126,10 +126,10 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
                                                      const LogicalType &list_child_type) {
 
 	// check if the original expression is a lambda parameter
-	if (original->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
+	if (original->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
 
 		auto &bound_lambda_ref = original->Cast<BoundLambdaRefExpression>();
-		auto alias = bound_lambda_ref.alias;
+		auto alias = bound_lambda_ref.GetAlias();
 
 		// refers to a lambda parameter outside the current lambda function
 		// so the lambda parameter will be inside the lambda_bindings
@@ -169,7 +169,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 	offset += bound_lambda_expr.parameter_count;
 	offset += bound_lambda_expr.captures.size();
 
-	replacement = make_uniq<BoundReferenceExpression>(original->alias, original->return_type, offset);
+	replacement = make_uniq<BoundReferenceExpression>(original->GetAlias(), original->return_type, offset);
 	bound_lambda_expr.captures.push_back(std::move(original));
 }
 
@@ -177,25 +177,25 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
                                             const optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                             const LogicalType &list_child_type) {
 
-	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
 		throw BinderException("subqueries in lambda expressions are not supported");
 	}
 
 	// these are bound depth-first
-	D_ASSERT(expr->expression_class != ExpressionClass::BOUND_LAMBDA);
+	D_ASSERT(expr->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA);
 
 	// we do not need to replace anything, as these will be constant in the lambda expression
 	// when executed by the expression executor
-	if (expr->expression_class == ExpressionClass::BOUND_CONSTANT) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		return;
 	}
 
 	// these expression classes do not have children, transform them
-	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
-	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
-	    expr->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF ||
+	    expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER ||
+	    expr->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
 
-		if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			// Search for UNNEST.
 			auto &column_binding = expr->Cast<BoundColumnRefExpression>().binding;
 			ThrowIfUnnestInLambda(column_binding);

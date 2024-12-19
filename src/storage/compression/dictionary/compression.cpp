@@ -18,7 +18,6 @@ void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
 	auto compressed_segment =
 	    ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(), info.GetBlockSize());
 	current_segment = std::move(compressed_segment);
-	current_segment->function = function;
 
 	// Reset the buffers and the string map.
 	current_string_map.clear();
