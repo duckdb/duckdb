@@ -96,6 +96,7 @@ FROM read_csv('data/csv/unescaped_quotes/end_quote.csv', columns = {'a':'varchar
 Pedro "the" legend
 Pedro "the
 
+
 query I
 FROM read_csv('data/csv/unescaped_quotes/end_quote_2.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false)
 ----
@@ -117,11 +118,12 @@ FROM read_csv('data/csv/unescaped_quotes/some_escaped_some_not.csv', columns = {
 Pedro "the" legend
 Pedro the legend
 Pedro "the
-Pedro "the
+Pedro the
 
+# It is not possible to read this with escape set.
 query I
-FROM read_csv('data/csv/unescaped_quotes/end_quote_mixed.csv', columns = {'a':'varchar'}, header = false, quote = '"', escape = '"', rfc_4180 = false)
+FROM read_csv('data/csv/unescaped_quotes/end_quote_mixed.csv', columns = {'a':'varchar'}, header = false, quote = '"', escape = '', rfc_4180 = false)
 ----
 Pedro "the
-Pedro "the" legend
+Pedro ""the"" legend
 Pedro "the

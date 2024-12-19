@@ -273,6 +273,7 @@ protected:
 			case CSVState::ESCAPE:
 			case CSVState::UNQUOTED_ESCAPE:
 			case CSVState::ESCAPED_RETURN:
+			case CSVState::MAYBE_ESCAPED:
 				T::SetEscaped(result);
 				ever_escaped = true;
 				iterator.pos.buffer_pos++;

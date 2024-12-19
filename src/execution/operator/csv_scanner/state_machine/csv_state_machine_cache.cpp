@@ -27,16 +27,12 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		case CSVState::MAYBE_QUOTED:
 		case CSVState::QUOTED:
 		case CSVState::QUOTED_NEW_LINE:
-			case CSVState::ESCAPE:
+		case CSVState::ESCAPE:
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
-			// case CSVState::ESCAPE:
-			// 	if (state_machine_options.rfc_4180.GetValue()) {
-			// 		InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
-			// 	} else {
-			// 		InitializeTransitionArray(transition_array, cur_state, CSVState::MAYBE_QUOTED);
-			// 	}
-			// break;
+		case CSVState::MAYBE_ESCAPED:
+			InitializeTransitionArray(transition_array, cur_state, CSVState::MAYBE_QUOTED);
+			break;
 		case CSVState::UNQUOTED:
 			if (state_machine_options.rfc_4180.GetValue()) {
 				// If we have an unquoted state, following rfc 4180, our base state is invalid
@@ -227,7 +223,12 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
 	if (state_machine_options.rfc_4180 == false) {
-		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::MAYBE_QUOTED;
+		if (escape == '\0') {
+			// If escape is defined, it limits a bit how relaxed quotes can be in a reliable way.
+			transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::MAYBE_QUOTED;
+		} else {
+			transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
+		}
 	}
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::COMMENT;
@@ -310,7 +311,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 
 	// 13) Escaped Return State
-	if (enable_unquoted_escape && new_line_id == NewLineIdentifier::CARRY_ON) {
+	if (enable_unquoted_escape) {
 		// The new state is STANDARD for \r + \n and \r + ordinary character.
 		// Other special characters need to be handled.
 		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::DELIMITER;
@@ -326,13 +327,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 		}
 		transition_array[escape][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::UNQUOTED_ESCAPE;
 	}
+
 	// 14) Maybe quoted
-	if (state_machine_options.quote == state_machine_options.escape) {
-		// this value has been escaped
-		transition_array[quote][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] = CSVState::ESCAPE;
-	} else {
-		transition_array[quote][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] = CSVState::MAYBE_QUOTED;
-	}
+	transition_array[quote][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] = CSVState::MAYBE_QUOTED;
+
 	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] =
 	    CSVState::RECORD_SEPARATOR;
 	if (new_line_id == NewLineIdentifier::CARRY_ON) {

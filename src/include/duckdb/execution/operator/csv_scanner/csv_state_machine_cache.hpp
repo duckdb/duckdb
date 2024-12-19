@@ -19,7 +19,7 @@ namespace duckdb {
 //! Class to wrap the state machine matrix
 class StateMachine {
 public:
-	static constexpr uint32_t NUM_STATES = 19;
+	static constexpr uint32_t NUM_STATES = 20;
 	static constexpr uint32_t NUM_TRANSITIONS = 256;
 	CSVState state_machine[NUM_TRANSITIONS][NUM_STATES];
 	//! Transitions where we might skip processing
