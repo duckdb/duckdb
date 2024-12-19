@@ -504,8 +504,8 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	auto types = reservoir_chunk->chunk.GetTypes();
 	D_ASSERT(num_samples_to_keep <= sample_count);
 	D_ASSERT(stats_sample);
-	D_ASSERT(sample_count == STANDARD_VECTOR_SIZE);
-	auto new_reservoir_chunk = CreateNewSampleChunk(types, STANDARD_VECTOR_SIZE);
+	D_ASSERT(sample_count == FIXED_SAMPLE_SIZE);
+	auto new_reservoir_chunk = CreateNewSampleChunk(types, FIXED_SAMPLE_SIZE);
 
 	// The current selection vector can potentially have 2048 valid mappings.
 	// If we need to save a sample with less rows than that, we need to do the following
@@ -716,7 +716,7 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 
 	idx_t tuples_consumed = FillReservoir(chunk);
 	base_reservoir_sample->num_entries_seen_total += tuples_consumed;
-	D_ASSERT(reservoir_chunk->chunk.size() >= 1);
+	D_ASSERT(sample_count == 0 || reservoir_chunk->chunk.size() >= 1);
 
 	if (tuples_consumed == chunk.size()) {
 		return;
