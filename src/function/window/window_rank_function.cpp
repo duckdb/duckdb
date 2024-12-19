@@ -262,7 +262,8 @@ void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
 			const auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i]));
 			const auto peer_end = gpeer.token_tree->PeerEnd(partition_begin[i], partition_end[i], row_idx);
-			rdata[i] = denom > 0 ? ((double)(peer_end - partition_begin[i])) / denom : 0;
+			const auto num = static_cast<double>(peer_end - partition_begin[i]);
+			rdata[i] = denom > 0 ? (num / denom) : 0;
 		}
 		return;
 	}
@@ -270,7 +271,8 @@ void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 	auto peer_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		const auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i]));
-		rdata[i] = denom > 0 ? ((double)(peer_end[i] - partition_begin[i])) / denom : 0;
+		const auto num = static_cast<double>(peer_end[i] - partition_begin[i]);
+		rdata[i] = denom > 0 ? (num / denom) : 0;
 	}
 }
 
