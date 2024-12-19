@@ -80,11 +80,11 @@ string DialectCandidates::Print() {
 
 DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 	// assert that quotes escapes and rules have equal size
-	auto default_quote = GetDefaultQuote();
-	auto default_escape = GetDefaultEscape();
-	auto default_quote_rule = GetDefaultQuoteRule();
-	auto default_delimiter = GetDefaultDelimiter();
-	auto default_comment = GetDefaultComment();
+	const auto default_quote = GetDefaultQuote();
+	const auto default_escape = GetDefaultEscape();
+	const auto default_quote_rule = GetDefaultQuoteRule();
+	const auto default_delimiter = GetDefaultDelimiter();
+	const auto default_comment = GetDefaultComment();
 
 	D_ASSERT(default_quote.size() == default_quote_rule.size() && default_quote_rule.size() == default_escape.size());
 	// fill the escapes
@@ -187,6 +187,9 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 
 // Returns true if a comment is acceptable
 bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, bool comment_set_by_user) {
+	if (comment_set_by_user) {
+		return true;
+	}
 	// For a comment to be acceptable, we want 3/5th's the majority of unmatched in the columns
 	constexpr double min_majority = 0.6;
 	// detected comments, are all lines that started with a comment character.
@@ -208,7 +211,7 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, bool
 		}
 	}
 	// If we do not encounter at least one full line comment, we do not consider this comment option.
-	if (valid_comments == 0 || (!has_full_line_comment && !comment_set_by_user)) {
+	if (valid_comments == 0 || !has_full_line_comment) {
 		// this is only valid if our comment character is \0
 		if (result.state_machine.state_machine_options.comment.GetValue() == '\0') {
 			return true;
