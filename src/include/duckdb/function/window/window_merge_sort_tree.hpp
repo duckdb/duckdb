@@ -53,7 +53,7 @@ public:
 	using LocalSortStatePtr = unique_ptr<LocalSortState>;
 
 	WindowMergeSortTree(ClientContext &context, const vector<BoundOrderByNode> &orders,
-	                    const vector<column_t> &sort_idx, const idx_t count);
+	                    const vector<column_t> &sort_idx, const idx_t count, bool unique = false);
 	virtual ~WindowMergeSortTree() = default;
 
 	virtual unique_ptr<WindowAggregatorState> GetLocalState() = 0;
