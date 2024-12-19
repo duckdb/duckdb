@@ -302,6 +302,10 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_ROW_NUMBER:
 		result.insert(PARTITION_BEGIN);
+		if (!wexpr.arg_orders.empty()) {
+			// Secondary orders need to know how wide the partition is
+			result.insert(PARTITION_END);
+		}
 		break;
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_RANK:
@@ -309,6 +313,7 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 		if (wexpr.arg_orders.empty()) {
 			result.insert(PEER_BEGIN);
 		} else {
+			// Secondary orders need to know how wide the partition is
 			result.insert(PARTITION_END);
 		}
 		break;
@@ -316,6 +321,7 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 		result.insert(PARTITION_BEGIN);
 		result.insert(PARTITION_END);
 		if (wexpr.arg_orders.empty()) {
+			// Secondary orders need to know where the first peer is
 			result.insert(PEER_BEGIN);
 		}
 		break;
