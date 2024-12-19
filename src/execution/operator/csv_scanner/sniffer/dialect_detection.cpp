@@ -237,7 +237,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[0].number_of_columns;
 	const bool ignore_errors = options.ignore_errors.GetValue();
 	// If we are ignoring errors and not null_padding , we pick the most frequent number of columns as the right one
-	bool use_most_frequent_columns = ignore_errors && !options.null_padding;
+	const bool use_most_frequent_columns = ignore_errors && !options.null_padding;
 	if (use_most_frequent_columns) {
 		num_cols = sniffed_column_counts.GetMostFrequentColumnCount();
 	}
@@ -358,7 +358,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	// - There's a single column before.
 	// - There are more values and no additional padding is required.
 	// - There's more than one column and less padding is required.
-	if (columns_match_set && rows_consistent &&
+	if (columns_match_set && (rows_consistent || (set_columns.IsSet() && ignore_errors)) &&
 	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding) || quoted) &&
 	    !invalid_padding && comments_are_acceptable) {
