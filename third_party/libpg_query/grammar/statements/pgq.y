@@ -114,7 +114,19 @@ CreatePropertyGraphStmt:
         				$$ = (PGNode *)n;
         			}
         		;
-
+		|
+		CREATE_P PROPERTY GRAPH IF_P NOT EXISTS qualified_name
+        		VertexOrNode TABLES '(' VertexTableDefinition VertexTableDefinitionList ')'
+        		EdgeTablesClauseOptional
+        			{
+        				PGCreatePropertyGraphStmt *n = makeNode(PGCreatePropertyGraphStmt);
+        				n->name = $7;
+        				n->vertex_tables = $12?lappend($12,$11):list_make1($11);
+        				n->edge_tables = $14;
+        				n->onconflict = PG_IGNORE_ON_CONFLICT;
+        				$$ = (PGNode *)n;
+        			}
+        		;
 
 VertexTableDefinitionList:
 		',' VertexTableDefinition 
