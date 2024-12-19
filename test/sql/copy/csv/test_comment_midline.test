@@ -39,10 +39,10 @@ from read_csv('data/csv/comments/14648.csv',
 Error when sniffing file "data/csv/comments/14648.csv".
 
 # Not a comment
-# query III
-# FROM 'data/csv/comments/14635.csv'
-# ----
-# a	#b	c
+query III
+FROM 'data/csv/comments/14635.csv'
+----
+a	#b	c
 
 # Ignore errors will have,
 query III
