@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/extension_type_info.hpp"
 
 namespace duckdb {
 
@@ -30,13 +31,18 @@ enum class ExtraTypeInfoType : uint8_t {
 };
 
 struct ExtraTypeInfo {
+	ExtraTypeInfoType type;
+	string alias;
+	unique_ptr<ExtensionTypeInfo> extension_info;
+
 	explicit ExtraTypeInfo(ExtraTypeInfoType type);
 	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias);
 	virtual ~ExtraTypeInfo();
 
-	ExtraTypeInfoType type;
-	string alias;
-	child_list_t<Value> modifiers;
+protected:
+	// copy	constructor (protected)
+	ExtraTypeInfo(const ExtraTypeInfo &other);
+	ExtraTypeInfo &operator=(const ExtraTypeInfo &other);
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) const;
@@ -148,13 +154,13 @@ private:
 
 struct UserTypeInfo : public ExtraTypeInfo {
 	explicit UserTypeInfo(string name_p);
-	UserTypeInfo(string name_p, child_list_t<Value> modifiers_p);
-	UserTypeInfo(string catalog_p, string schema_p, string name_p, child_list_t<Value> modifiers_p);
+	UserTypeInfo(string name_p, vector<Value> modifiers_p);
+	UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p);
 
 	string catalog;
 	string schema;
 	string user_type_name;
-	child_list_t<Value> user_type_modifiers;
+	vector<Value> user_type_modifiers;
 
 public:
 	void Serialize(Serializer &serializer) const override;

@@ -18,7 +18,7 @@ namespace duckdb {
 struct BindTypeModifiersInput {
 	ClientContext &context;
 	const LogicalType &type;
-	const child_list_t<Value> &modifiers;
+	const vector<Value> &modifiers;
 };
 
 //! The type to bind type modifiers to a type

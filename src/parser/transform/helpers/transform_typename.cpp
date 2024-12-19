@@ -52,8 +52,8 @@ static SizeModifiers GetSizeModifiers(duckdb_libpgquery::PGTypeName &type_name, 
 	return result;
 }
 
-child_list_t<Value> Transformer::TransformTypeModifiers(duckdb_libpgquery::PGTypeName &type_name) {
-	child_list_t<Value> type_mods;
+vector<Value> Transformer::TransformTypeModifiers(duckdb_libpgquery::PGTypeName &type_name) {
+	vector<Value> type_mods;
 	if (type_name.typmods) {
 		for (auto node = type_name.typmods->head; node; node = node->next) {
 			if (type_mods.size() > 9) {
@@ -66,7 +66,7 @@ child_list_t<Value> Transformer::TransformTypeModifiers(duckdb_libpgquery::PGTyp
 				throw ParserException("Expected a constant as type modifier");
 			}
 			const auto const_expr = TransformValue(const_val.val);
-			type_mods.emplace_back("", std::move(const_expr->value));
+			type_mods.push_back(std::move(const_expr->value));
 		}
 	}
 	return type_mods;
@@ -79,7 +79,7 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 		for (auto cell = type_name.names->head; cell; cell = cell->next) {
 			names.push_back(PGPointerCast<duckdb_libpgquery::PGValue>(cell->data.ptr_value)->val.str);
 		}
-		child_list_t<Value> type_mods = TransformTypeModifiers(type_name);
+		vector<Value> type_mods = TransformTypeModifiers(type_name);
 		switch (type_name.names->length) {
 		case 2: {
 			return LogicalType::USER(INVALID_CATALOG, std::move(names[0]), std::move(names[1]), std::move(type_mods));
@@ -200,7 +200,7 @@ LogicalType Transformer::TransformTypeNameInternal(duckdb_libpgquery::PGTypeName
 	}
 	if (base_type == LogicalTypeId::USER) {
 		string user_type_name {name};
-		child_list_t<Value> type_mods = TransformTypeModifiers(type_name);
+		vector<Value> type_mods = TransformTypeModifiers(type_name);
 		return LogicalType::USER(user_type_name, type_mods);
 	}
 

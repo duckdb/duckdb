@@ -10,6 +10,52 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
+// Extension Type Info
+//===--------------------------------------------------------------------===//
+
+static bool CompareModifiers(const vector<Value> &left, const vector<Value> &right) {
+	// Check if the common prefix of the properties is the same for both types
+	const auto common_props = MinValue(left.size(), right.size());
+	for (idx_t i = 0; i < common_props; i++) {
+		if (left[i].type() != right[i].type()) {
+			return false;
+		}
+		// Special case for nulls:
+		// For type modifiers, NULL is equivalent to ANY
+		if (left[i].IsNull() || right[i].IsNull()) {
+			continue;
+		}
+
+		if (left[i] != right[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> other_p) const {
+	if (other_p == nullptr) {
+		return false;
+	}
+	if (!CompareModifiers(modifiers, other_p->modifiers)) {
+		return false;
+	}
+
+	// Properties are optional, so only compare those present in both
+	for (auto &kv : properties) {
+		auto it = other_p->properties.find(kv.first);
+		if (it == other_p->properties.end()) {
+			continue;
+		}
+		if (kv.second != it->second) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
 ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
@@ -18,27 +64,24 @@ ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type),
 }
 ExtraTypeInfo::~ExtraTypeInfo() {
 }
-shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
-	return make_shared_ptr<ExtraTypeInfo>(*this);
+
+ExtraTypeInfo::ExtraTypeInfo(const ExtraTypeInfo &other) : type(other.type), alias(other.alias) {
+	if (other.extension_info) {
+		extension_info = make_uniq<ExtensionTypeInfo>(*other.extension_info);
+	}
 }
 
-static bool CompareModifiers(const child_list_t<Value> &left, const child_list_t<Value> &right) {
-	// Check if the common prefix of the properties is the same for both types
-	auto common_props = MinValue(left.size(), right.size());
-	for (idx_t i = 0; i < common_props; i++) {
-		if (left[i].second.type() != right[i].second.type()) {
-			return false;
-		}
-		// Special case for nulls:
-		// For type modifiers, NULL is equivalent to ANY
-		if (left[i].second.IsNull() || right[i].second.IsNull()) {
-			continue;
-		}
-		if (left[i].second != right[i].second) {
-			return false;
-		}
+ExtraTypeInfo &ExtraTypeInfo::operator=(const ExtraTypeInfo &other) {
+	type = other.type;
+	alias = other.alias;
+	if (other.extension_info) {
+		extension_info = make_uniq<ExtensionTypeInfo>(*other.extension_info);
 	}
-	return true;
+	return *this;
+}
+
+shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
+	return shared_ptr<ExtraTypeInfo>(new ExtraTypeInfo(*this));
 }
 
 bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
@@ -54,7 +97,7 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 		if (alias != other_p->alias) {
 			return false;
 		}
-		if (!CompareModifiers(modifiers, other_p->modifiers)) {
+		if (extension_info && !extension_info->Equals(other_p->extension_info.get())) {
 			return false;
 		}
 		return true;
@@ -68,7 +111,7 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (alias != other_p->alias) {
 		return false;
 	}
-	if (!CompareModifiers(modifiers, other_p->modifiers)) {
+	if (extension_info && !extension_info->Equals(other_p->extension_info.get())) {
 		return false;
 	}
 	return EqualsInternal(other_p);
@@ -187,12 +230,12 @@ UserTypeInfo::UserTypeInfo(string name_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
 }
 
-UserTypeInfo::UserTypeInfo(string name_p, child_list_t<Value> modifiers_p)
+UserTypeInfo::UserTypeInfo(string name_p, vector<Value> modifiers_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)),
       user_type_modifiers(std::move(modifiers_p)) {
 }
 
-UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p, child_list_t<Value> modifiers_p)
+UserTypeInfo::UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p)
     : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
       user_type_name(std::move(name_p)), user_type_modifiers(std::move(modifiers_p)) {
 }

@@ -234,6 +234,7 @@ enum class LogicalTypeId : uint8_t {
 };
 
 struct ExtraTypeInfo;
+struct ExtensionTypeInfo;
 
 struct aggregate_state_t; // NOLINT: mimic std casing
 
@@ -323,11 +324,11 @@ struct LogicalType {
 	DUCKDB_API void SetAlias(string alias);
 	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
-	DUCKDB_API void SetModifiers(child_list_t<Value> modifiers);
-	DUCKDB_API bool HasModifiers() const;
-	DUCKDB_API child_list_t<Value> GetModifiersCopy() const;
-	DUCKDB_API optional_ptr<child_list_t<Value>> GetModifiers();
-	DUCKDB_API optional_ptr<const child_list_t<Value>> GetModifiers() const;
+
+	DUCKDB_API bool HasExtensionInfo() const;
+	DUCKDB_API optional_ptr<const ExtensionTypeInfo> GetExtensionInfo() const;
+	DUCKDB_API optional_ptr<ExtensionTypeInfo> GetExtensionInfo();
+	DUCKDB_API void SetExtensionInfo(unique_ptr<ExtensionTypeInfo> info);
 
 	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not possible
 	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right);
@@ -415,8 +416,8 @@ public:
 	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name);                              // NOLINT
-	DUCKDB_API static LogicalType USER(const string &user_type_name, const child_list_t<Value> &user_type_mods); // NOLINT
-	DUCKDB_API static LogicalType USER(string catalog, string schema, string name, child_list_t<Value> user_type_mods); // NOLINT
+	DUCKDB_API static LogicalType USER(const string &user_type_name, const vector<Value> &user_type_mods); // NOLINT
+	DUCKDB_API static LogicalType USER(string catalog, string schema, string name, vector<Value> user_type_mods); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
 	//! A list of all INTEGRAL types
@@ -451,8 +452,8 @@ struct UserType {
 	DUCKDB_API static const string &GetCatalog(const LogicalType &type);
 	DUCKDB_API static const string &GetSchema(const LogicalType &type);
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
-	DUCKDB_API static const child_list_t<Value> &GetTypeModifiers(const LogicalType &type);
-	DUCKDB_API static child_list_t<Value> &GetTypeModifiers(LogicalType &type);
+	DUCKDB_API static const vector<Value> &GetTypeModifiers(const LogicalType &type);
+	DUCKDB_API static vector<Value> &GetTypeModifiers(LogicalType &type);
 };
 
 struct EnumType {

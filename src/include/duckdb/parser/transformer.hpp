@@ -329,7 +329,7 @@ private:
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName &name);
 
 	//! Transform a list of type modifiers into a list of values
-	child_list_t<Value> TransformTypeModifiers(duckdb_libpgquery::PGTypeName &name);
+	vector<Value> TransformTypeModifiers(duckdb_libpgquery::PGTypeName &name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(optional_ptr<duckdb_libpgquery::PGList> group, SelectNode &result);
