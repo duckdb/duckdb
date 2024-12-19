@@ -1330,17 +1330,21 @@ void StringValueScanner::ProcessOverBufferValue() {
 			value = string_t(over_buffer_string.c_str() + result.quoted_position,
 			                 UnsafeNumericCast<uint32_t>(over_buffer_string.size() - 1 - result.quoted_position));
 			if (result.escaped) {
-				const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
-				value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
-				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-				                     result.parse_chunk.data[result.chunk_col_id]);
+				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
+					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
+					value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
+					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     result.parse_chunk.data[result.chunk_col_id]);
+				}
 			}
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
-				value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-				                     result.parse_chunk.data[result.chunk_col_id]);
+				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
+					value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
+					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     result.parse_chunk.data[result.chunk_col_id]);
+				}
 			}
 		}
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {

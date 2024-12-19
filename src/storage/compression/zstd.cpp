@@ -522,7 +522,6 @@ public:
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
 		segment = std::move(compressed_segment);
-		segment->function = function;
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		segment_handle = buffer_manager.Pin(segment->block);
@@ -889,7 +888,7 @@ public:
 
 	void ScanInternal(ZSTDVectorScanState &scan_state, idx_t count, Vector &result, idx_t result_offset) {
 		D_ASSERT(scan_state.scanned_count + count <= scan_state.metadata.count);
-		D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
+		D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 
 		string_length_t *string_lengths = &scan_state.string_lengths[scan_state.scanned_count];
 		idx_t uncompressed_length = 0;
