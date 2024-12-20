@@ -301,7 +301,7 @@ end
     df_numbers =
         DataFrame(a = rand(1:100, 30), b = rand(1:100, 30), c = rand(30), d = rand(Bool, 30), e = rand(Bool, 30))
     df_strings = DataFrame(a = ["hello", "world", "julia", "duckdb", "🦆DB"])
-    t = Date(2020, 1, 1):Date(2020, 12, 31)
+    t = Date(2020, 1, 1):Day(1):Date(2020, 12, 31)
     df_dates = DataFrame(t = t, k = 1:length(t), is_weekend = fun_is_weekend.(t))
 
 
