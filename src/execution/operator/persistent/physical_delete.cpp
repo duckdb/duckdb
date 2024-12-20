@@ -136,8 +136,8 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		for (auto &row_id_2_chunk_index : new_row_ids_deleted) {
 			g_state.deleted_row_ids.insert(row_id_2_chunk_index.first);
 		}
+		g_state.return_collection.Append(l_state.delete_chunk);
 	}
-	g_state.return_collection.Append(l_state.delete_chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
