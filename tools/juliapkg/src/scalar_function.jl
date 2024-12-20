@@ -279,7 +279,7 @@ HACK: This is a workaround to dynamically generate a function pointer on ALL arc
 const _UDF_WRAPPER_CACHE = Dict{UInt64, Function}()
 
 function _udf_register_wrapper(id, wrapper)
-    # HACK: This is a workaround to dynamically generate a function pointer on ALL architectures
+    
 
     if id in keys(_UDF_WRAPPER_CACHE)
         throw(
@@ -290,8 +290,10 @@ function _udf_register_wrapper(id, wrapper)
     end
 
     _UDF_WRAPPER_CACHE[id] = wrapper
+    
+    # HACK: This is a workaround to dynamically generate a function pointer on ALL architectures
+    # We need to delay the cfunction call until the moment wrapper function is generated
     fptr = QuoteNode(:(_UDF_WRAPPER_CACHE[$id]))
-
     cfunction_type = Ptr{Cvoid}
     rt = :Cvoid
     at = :(duckdb_function_info, duckdb_data_chunk, duckdb_vector)
