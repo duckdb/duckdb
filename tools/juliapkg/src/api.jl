@@ -3155,4 +3155,3 @@ Returns true if execution of the current query is finished.
 function duckdb_execution_is_finished(con)
     return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
 end
-

@@ -238,7 +238,7 @@ function _udf_generate_wrapper(func_expr, func_esc)
                 N = Int64(get_size(chunk))
 
                 # initialize the result container, to avoid calling get_array() in the loop
-                result_container = _udf_assign_result_init($return_type, vec) 
+                result_container = _udf_assign_result_init($return_type, vec)
 
                 # Check data validity
                 validity = $validity_expr
@@ -261,7 +261,10 @@ function _udf_generate_wrapper(func_expr, func_esc)
                 end
                 return nothing
             catch e
-                duckdb_scalar_function_set_error(info, "Exception in " * signature(scalar_func) * ": " * get_exception_info())
+                duckdb_scalar_function_set_error(
+                    info,
+                    "Exception in " * signature(scalar_func) * ": " * get_exception_info()
+                )
             end
         end
     end
@@ -357,7 +360,7 @@ end
 
 
 function _udf_assign_result_init(::Type{T}, vec::Vec) where {T}
-    T_internal = julia_to_duck_type(T) 
+    T_internal = julia_to_duck_type(T)
     arr = get_array(vec, T_internal)  # this call is quite slow, so we only call it once
     return arr
 end
@@ -366,7 +369,7 @@ function _udf_assign_result_init(::Type{T}, vec::Vec) where {T <: AbstractString
     return nothing
 end
 
-function _udf_assign_result!(container, ::Type{T}, vec::Vec, result::T, index) where {T}    
+function _udf_assign_result!(container, ::Type{T}, vec::Vec, result::T, index) where {T}
     container[index] = value_to_duckdb(result) # convert the value to duckdb and assign it to the array
     return nothing
 end
