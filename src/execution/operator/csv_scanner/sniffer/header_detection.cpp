@@ -182,7 +182,19 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 		}
 		// If the user provided names, we must replace our header with the user provided names
 		if (!options.columns_set) {
-			for (idx_t i = 0; i < MinValue<idx_t>(best_header_row.size(), options.name_list.size()); i++) {
+			if (options.name_list.size() > best_header_row.size()) {
+				if (options.null_padding) {
+					// we increase our types
+					D_ASSERT(0);
+				} else {
+					// we throw an error
+					auto error = CSVError::HeaderSniffingError(
+					    options, best_header_row, options.name_list.size(),
+					    state_machine.dialect_options.state_machine_options.delimiter.GetValue());
+					error_handler.Error(error);
+				}
+			}
+			for (idx_t i = 0; i < options.name_list.size(); i++) {
 				detected_names[i] = options.name_list[i];
 			}
 		}
@@ -200,7 +212,19 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 			}
 			dialect_options.rows_until_header += 1;
 			if (!options.columns_set) {
-				for (idx_t i = 0; i < MinValue<idx_t>(detected_names.size(), options.name_list.size()); i++) {
+				if (options.name_list.size() > best_header_row.size()) {
+					if (options.null_padding) {
+						// we increase our types
+						D_ASSERT(0);
+					} else {
+						// we throw an error
+						auto error = CSVError::HeaderSniffingError(
+						    options, best_header_row, options.name_list.size(),
+						    state_machine.dialect_options.state_machine_options.delimiter.GetValue());
+						error_handler.Error(error);
+					}
+				}
+				for (idx_t i = 0; i < options.name_list.size(); i++) {
 					detected_names[i] = options.name_list[i];
 				}
 			}
@@ -296,7 +320,26 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 
 	// If the user provided names, we must replace our header with the user provided names
 	if (!options.columns_set) {
-		for (idx_t i = 0; i < MinValue<idx_t>(detected_names.size(), options.name_list.size()); i++) {
+		if (options.name_list.size() > dialect_options.num_cols) {
+			if (options.null_padding) {
+				// we increase our types
+				idx_t col = 0;
+				for (idx_t i = dialect_options.num_cols; i < options.name_list.size(); i++) {
+					detected_names.push_back(GenerateColumnName(options.name_list.size(), col++));
+					best_sql_types_candidates_per_column_idx[i] = {LogicalType::VARCHAR};
+				}
+
+				dialect_options.num_cols = options.name_list.size();
+
+			} else {
+				// we throw an error
+				auto error = CSVError::HeaderSniffingError(
+				    options, best_header_row, options.name_list.size(),
+				    state_machine.dialect_options.state_machine_options.delimiter.GetValue());
+				error_handler.Error(error);
+			}
+		}
+		for (idx_t i = 0; i < options.name_list.size(); i++) {
 			detected_names[i] = options.name_list[i];
 		}
 	}
@@ -306,5 +349,9 @@ void CSVSniffer::DetectHeader() {
 	auto &sniffer_state_machine = best_candidate->GetStateMachine();
 	names = DetectHeaderInternal(buffer_manager->context, best_header_row, sniffer_state_machine, set_columns,
 	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
+	for (idx_t i=max_columns_found; i < names.size(); i++) {
+		detected_types.push_back(LogicalType::VARCHAR);
+	}
+	max_columns_found = names.size();
 }
 } // namespace duckdb
