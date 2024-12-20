@@ -207,10 +207,12 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	}
 
 	vector<LogicalType> dummy_types(input.column_ids.size(), LogicalType::ANY);
+	auto local_columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(gstate.names, dummy_types);
+	auto global_columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, dummy_types);
 	for (auto &reader : gstate.json_readers) {
 		MultiFileReader().FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
-		                               reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
-		                               input.column_indexes, reader->reader_data, context, nullptr);
+		                               reader->GetFileName(), local_columns, global_columns, input.column_indexes,
+		                               reader->reader_data, context, nullptr);
 	}
 
 	return std::move(result);
