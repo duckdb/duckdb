@@ -71,10 +71,12 @@ public:
 	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
 
 public:
-	Value identifier;
+	// DEPRECATED, use 'identifier' instead
+	int32_t field_id;
 	string name;
 	LogicalType type;
 	Value default_value;
+	Value identifier;
 
 public:
 	void Serialize(Serializer &serializer) const;

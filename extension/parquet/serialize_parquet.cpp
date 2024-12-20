@@ -36,18 +36,20 @@ FieldID FieldID::Deserialize(Deserializer &deserializer) {
 }
 
 void ParquetColumnDefinition::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<Value>(100, "identifier", identifier);
+	serializer.WritePropertyWithDefault<int32_t>(100, "field_id", field_id);
 	serializer.WritePropertyWithDefault<string>(101, "name", name);
 	serializer.WriteProperty<LogicalType>(103, "type", type);
 	serializer.WriteProperty<Value>(104, "default_value", default_value);
+	serializer.WriteProperty<Value>(105, "identifier", identifier);
 }
 
 ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deserializer) {
 	ParquetColumnDefinition result;
-	deserializer.ReadProperty<Value>(100, "identifier", result.identifier);
+	deserializer.ReadPropertyWithDefault<int32_t>(100, "field_id", result.field_id);
 	deserializer.ReadPropertyWithDefault<string>(101, "name", result.name);
 	deserializer.ReadProperty<LogicalType>(103, "type", result.type);
 	deserializer.ReadProperty<Value>(104, "default_value", result.default_value);
+	deserializer.ReadProperty<Value>(105, "identifier", result.identifier);
 	return result;
 }
 

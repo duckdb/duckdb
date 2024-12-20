@@ -7,8 +7,8 @@
 		"members": [
 			{
 				"id": 100,
-				"name": "identifier",
-				"type": "Value"
+				"name": "field_id",
+				"type": "int32_t"
 			},
 			{
 				"id": 101,
@@ -23,6 +23,11 @@
 			{
 				"id": 104,
 				"name": "default_value",
+				"type": "Value"
+			},
+			{
+				"id": 105,
+				"name": "identifier",
 				"type": "Value"
 			}
 		],
