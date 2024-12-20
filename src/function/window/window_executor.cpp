@@ -41,6 +41,10 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &cont
 
 	boundary_start_idx = shared.RegisterEvaluate(wexpr.start_expr);
 	boundary_end_idx = shared.RegisterEvaluate(wexpr.end_expr);
+
+	for (const auto &order : wexpr.arg_orders) {
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
+	}
 }
 
 WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &executor, const idx_t payload_count,
