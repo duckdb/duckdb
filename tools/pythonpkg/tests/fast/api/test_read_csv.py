@@ -631,3 +631,11 @@ class TestReadCSV(object):
         else:
             rel = duckdb_cursor.read_csv(file, **options)
             res = rel.fetchall()
+
+    def test_read_comment(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one|two|three|four\n1|2|3|4#|5|6\n#bla\n1|2|3|4\n')
+
+        con = duckdb.connect()
+        rel = con.read_csv(str(file1), columns={'a': 'VARCHAR'}, auto_detect=False, header=False, comment='#')
+        assert rel.fetchall() == [('one|two|three|four',), ('1|2|3|4',), ('1|2|3|4',)]
