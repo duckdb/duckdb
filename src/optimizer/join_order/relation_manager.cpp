@@ -65,6 +65,13 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
 			relation_mapping[reference] = relation_id;
 		}
+	} else if (op.type == LogicalOperatorType::LOGICAL_UNNEST) {
+		// logical unnest has a logical_unnest index, but other bindings can refer to
+		// columns that are not unnested.
+		auto bindings = op.GetColumnBindings();
+		for (auto &binding : bindings) {
+			relation_mapping[binding.table_index] = relation_id;
+		}
 	} else {
 		// Relations should never return more than 1 table index
 		D_ASSERT(table_indexes.size() == 1);
@@ -277,9 +284,6 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		RelationStats child_stats;
 		auto child_optimizer = optimizer.CreateChildOptimizer();
 		op->children[0] = child_optimizer.Optimize(std::move(op->children[0]), &child_stats);
-		if (op->children[0]->type == LogicalOperatorType::LOGICAL_WINDOW) {
-			return true;
-		}
 		// the extracted cardinality should be set for window
 		if (!datasource_filters.empty()) {
 			child_stats.cardinality = LossyNumericCast<idx_t>(static_cast<double>(child_stats.cardinality) *
@@ -323,8 +327,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
 		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
+		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
