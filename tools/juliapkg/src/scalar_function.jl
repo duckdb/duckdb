@@ -122,63 +122,17 @@ register_scalar_function(db::DB, fun::ScalarFunction) = register_scalar_function
 function register_scalar_function(con::Connection, fun::ScalarFunction)
 
     if fun.name in keys(con.db.scalar_functions)
-        throw(QueryException(string("Scalar function \"", fun.name, "\" already registered")))
+        throw(ArgumentError(string("Scalar function \"", fun.name, "\" already registered")))
     end
 
     result = duckdb_register_scalar_function(con.handle, fun.handle)
     if result != DuckDBSuccess
-        throw(QueryException(string("Failed to register scalar function \"", fun.name, "\"")))
+        throw(ArgumentError(string("Failed to register scalar function \"", fun.name, "\"")))
     end
 
     con.db.scalar_functions[fun.name] = fun
     return
 end
-
-
-
-"""
-    unregister_scalar_function(con::Connection, fun::ScalarFunction)
-
-Unregister a scalar function from the database.
-"""
-function unregister_scalar_function(con::Connection, fun::ScalarFunction)
-
-    if fun.name ∉ keys(con.db.scalar_functions)
-        throw(QueryException(string("Scalar function \"", fun.name, "\" not found")))
-    end
-
-    result = duckdb_destroy_scalar_function(fun.handle)
-    if result != DuckDBSuccess
-        throw(QueryException(string("Failed to unregister scalar function \"", fun.name, "\"")))
-    end
-
-    delete!(con.db.scalar_functions, fun.name)
-    return nothing
-end
-
-"""
-    unregister_scalar_function(con::Connection, name::AbstractString)
-
-Unregister a scalar function from the database by name. If the function is not found an 
-exception is thrown.
-"""
-function unregister_scalar_function(con::Connection, name::AbstractString)
-    if name ∉ con.db.scalar_functions
-        throw(QueryException(string("Scalar function \"", name, "\" not found")))
-    end
-
-    fun = con.db.scalar_functions[name]
-    result = duckdb_destroy_scalar_function(fun.handle)
-    if result != DuckDBSuccess
-        throw(QueryException(string("Failed to unregister scalar function \"", fun.name, "\"")))
-    end
-
-    delete!(con.db.scalar_functions, fun.name)
-    return nothing
-end
-
-unregister_scalar_function(db::DB, fun::ScalarFunction) = unregister_scalar_function(db.main_connection, fun)
-unregister_scalar_function(db::DB, name::AbstractString) = unregister_scalar_function(db.main_connection, name)
 
 
 # %% --- Scalar Function Macro ------------------------------------------ #
