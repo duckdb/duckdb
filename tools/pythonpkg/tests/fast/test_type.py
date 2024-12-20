@@ -210,6 +210,10 @@ class TestType(object):
         res = duckdb.execute("select typeof($1)", [val]).fetchone()
         assert res == ('JSON',)
 
+    def test_struct_from_dict(self):
+        res = duckdb.list_type({'a': VARCHAR, 'b': VARCHAR})
+        assert res == 'STRUCT(a VARCHAR, b VARCHAR)[]'
+
     # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")
     def test_optional(self):

@@ -8,7 +8,7 @@ bool ExpressionMatcher::Match(Expression &expr, vector<reference<Expression>> &b
 	if (type && !type->Match(expr.return_type)) {
 		return false;
 	}
-	if (expr_type && !expr_type->Match(expr.type)) {
+	if (expr_type && !expr_type->Match(expr.GetExpressionType())) {
 		return false;
 	}
 	if (expr_class != ExpressionClass::INVALID && expr_class != expr.GetExpressionClass()) {
@@ -60,7 +60,8 @@ bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expre
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundOperatorExpression>();
-	if (expr.type != ExpressionType::COMPARE_IN || expr.type == ExpressionType::COMPARE_NOT_IN) {
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN ||
+	    expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) {
 		return false;
 	}
 	return SetMatcher::Match(matchers, expr.children, bindings, policy);

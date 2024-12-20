@@ -10,7 +10,7 @@ namespace duckdb {
 using Filter = FilterPushdown::Filter;
 
 static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, unique_ptr<Expression> expr) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr->Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == proj.group_index);
 		D_ASSERT(colref.binding.column_index < proj.groups.size());
@@ -24,7 +24,7 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 }
 
 void FilterPushdown::ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindings) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		bindings.push_back(colref.binding);
 	}

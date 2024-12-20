@@ -155,9 +155,9 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		// 		bindings[2] = the constant
 		auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
 		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
-		auto comparison_type = comparison.type;
+		auto comparison_type = comparison.GetExpressionType();
 
-		if (comparison.left->type == ExpressionType::VALUE_CONSTANT) {
+		if (comparison.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 			// The expression is on the right side, we flip the comparison expression.
 			comparison_type = FlipComparisonExpression(comparison_type);
 		}
@@ -176,15 +176,15 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			high_comparison_type = comparison_type;
 		}
 
-	} else if (filter_expr.type == ExpressionType::COMPARE_BETWEEN) {
+	} else if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
 		auto &between = filter_expr.Cast<BoundBetweenExpression>();
 		if (!between.input->Equals(expr)) {
 			// The expression does not match the index expression.
 			return nullptr;
 		}
 
-		if (between.lower->type != ExpressionType::VALUE_CONSTANT ||
-		    between.upper->type != ExpressionType::VALUE_CONSTANT) {
+		if (between.lower->GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+		    between.upper->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			// Not a constant expression.
 			return nullptr;
 		}

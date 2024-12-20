@@ -497,7 +497,7 @@ void ExpressionContainsGeneratedColumn(const ParsedExpression &expr, const unord
 	if (contains_gcol) {
 		return;
 	}
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &column_ref = expr.Cast<ColumnRefExpression>();
 		auto &name = column_ref.GetColumnName();
 		if (gcols.count(name)) {

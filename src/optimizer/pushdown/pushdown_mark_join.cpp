@@ -36,7 +36,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 #endif
 			// this filter references the marker
 			// we can turn this into a SEMI join if the filter is on only the marker
-			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF && convert_mark_joins &&
+			if (filters[i]->filter->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF && convert_mark_joins &&
 			    comp_join.convert_mark_to_semi) {
 				// filter just references the marker: turn into semi join
 #ifdef DEBUG
@@ -51,9 +51,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// turn this into an ANTI join if all join conditions have null_values_are_equal=true, then the result of
 			// the MARK join is always TRUE or FALSE, and never NULL this happens in the case of a correlated EXISTS
 			// clause
-			if (filters[i]->filter->type == ExpressionType::OPERATOR_NOT) {
+			if (filters[i]->filter->GetExpressionType() == ExpressionType::OPERATOR_NOT) {
 				auto &op_expr = filters[i]->filter->Cast<BoundOperatorExpression>();
-				if (op_expr.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
+				if (op_expr.children[0]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 					// the filter is NOT(marker), check the join conditions
 					bool all_null_values_are_equal = true;
 					for (auto &cond : comp_join.conditions) {

@@ -21,8 +21,8 @@ public:
 	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask), ignore_nulls(&all_valid),
 	      child_idx(executor.child_idx) {
 
-		if (!executor.sort_idx.empty()) {
-			inner_sort = make_uniq<WindowIndexTree>(executor.context, executor.wexpr.arg_orders, executor.sort_idx,
+		if (!executor.arg_order_idx.empty()) {
+			inner_sort = make_uniq<WindowIndexTree>(executor.context, executor.wexpr.arg_orders, executor.arg_order_idx,
 			                                        payload_count);
 		}
 	}
@@ -144,15 +144,6 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientCon
 
 	offset_idx = shared.RegisterEvaluate(wexpr.offset_expr);
 	default_idx = shared.RegisterEvaluate(wexpr.default_expr);
-
-	for (const auto &order : wexpr.arg_orders) {
-		sort_idx.emplace_back(shared.RegisterSink(order.expression));
-	}
-}
-
-WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                         WindowSharedExpressions &shared)
-    : WindowValueExecutor(wexpr, context, shared) {
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const idx_t payload_count,
@@ -172,51 +163,6 @@ void WindowValueExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExec
 unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
 	const auto &gvstate = gstate.Cast<WindowValueGlobalState>();
 	return make_uniq<WindowValueLocalState>(gvstate);
-}
-
-void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
-                                           DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx) const {
-	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	auto &cursor = *lvstate.cursor;
-	auto partition_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_END]);
-	auto rdata = FlatVector::GetData<int64_t>(result);
-	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		if (cursor.CellIsNull(0, row_idx)) {
-			FlatVector::SetNull(result, i, true);
-		} else {
-			auto n_param = cursor.GetCell<int64_t>(0, row_idx);
-			if (n_param < 1) {
-				throw InvalidInputException("Argument for ntile must be greater than zero");
-			}
-			// With thanks from SQLite's ntileValueFunc()
-			auto n_total = NumericCast<int64_t>(partition_end[i] - partition_begin[i]);
-			if (n_param > n_total) {
-				// more groups allowed than we have values
-				// map every entry to a unique group
-				n_param = n_total;
-			}
-			int64_t n_size = (n_total / n_param);
-			// find the row idx within the group
-			D_ASSERT(row_idx >= partition_begin[i]);
-			auto adjusted_row_idx = NumericCast<int64_t>(row_idx - partition_begin[i]);
-			// now compute the ntile
-			int64_t n_large = n_total - n_param * n_size;
-			int64_t i_small = n_large * (n_size + 1);
-			int64_t result_ntile;
-
-			D_ASSERT((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
-
-			if (adjusted_row_idx < i_small) {
-				result_ntile = 1 + adjusted_row_idx / (n_size + 1);
-			} else {
-				result_ntile = 1 + n_large + (adjusted_row_idx - i_small) / n_size;
-			}
-			// result has to be between [1, NTILE]
-			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
-			rdata[i] = result_ntile;
-		}
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -266,7 +212,7 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
 		int64_t val_idx = (int64_t)row_idx;
-		if (wexpr.type == ExpressionType::WINDOW_LEAD) {
+		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		} else {
 			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
