@@ -28,7 +28,7 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 	auto new_filter = make_uniq<LogicalFilter>();
 
 	for (auto &expr : op->expressions) {
-		if (expr->type == ExpressionType::BOUND_FUNCTION) {
+		if (expr->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 			auto &func = expr->Cast<BoundFunctionExpression>();
 			if (func.function.name != "regexp_full_match" || func.children.size() != 2) {
 				continue;

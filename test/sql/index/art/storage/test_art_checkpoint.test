@@ -19,7 +19,7 @@ restart
 statement error
 INSERT INTO integers VALUES (1);
 ----
-<REGEX>:Constraint Error.*violates primary key constraint.*If this is an unexpected constraint violation.*
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 # Ensure partial blocks for serializing small ARTs.
 

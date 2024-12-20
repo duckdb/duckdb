@@ -119,7 +119,7 @@ void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanSta
 // Select
 //===--------------------------------------------------------------------===//
 void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count,
-                                       Vector &result, SelectionVector &sel, idx_t sel_count) {
+                                       Vector &result, const SelectionVector &sel, idx_t sel_count) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);

@@ -24,7 +24,6 @@ void WindowExecutorBoundsState::UpdateBounds(WindowExecutorGlobalState &gstate, 
 	WindowInputExpression boundary_end(eval_chunk, gstate.executor.boundary_end_idx);
 
 	const auto count = eval_chunk.size();
-	bounds.Reset();
 	state.Bounds(bounds, row_idx, range, count, boundary_start, boundary_end, partition_mask, order_mask);
 }
 
@@ -42,6 +41,10 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &cont
 
 	boundary_start_idx = shared.RegisterEvaluate(wexpr.start_expr);
 	boundary_end_idx = shared.RegisterEvaluate(wexpr.end_expr);
+
+	for (const auto &order : wexpr.arg_orders) {
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
+	}
 }
 
 WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &executor, const idx_t payload_count,

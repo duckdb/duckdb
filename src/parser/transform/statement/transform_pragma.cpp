@@ -21,14 +21,14 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGPragm
 			auto node = PGPointerCast<duckdb_libpgquery::PGNode>(cell->data.ptr_value);
 			auto expr = TransformExpression(node);
 
-			if (expr->type == ExpressionType::COMPARE_EQUAL) {
+			if (expr->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
 				auto &comp = expr->Cast<ComparisonExpression>();
-				if (comp.left->type != ExpressionType::COLUMN_REF) {
+				if (comp.left->GetExpressionType() != ExpressionType::COLUMN_REF) {
 					throw ParserException("Named parameter requires a column reference on the LHS");
 				}
 				auto &columnref = comp.left->Cast<ColumnRefExpression>();
 				info.named_parameters.insert(make_pair(columnref.GetName(), std::move(comp.right)));
-			} else if (expr->type == ExpressionType::COLUMN_REF) {
+			} else if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 				auto &colref = expr->Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
 					info.parameters.emplace_back(make_uniq<ConstantExpression>(Value(colref.GetColumnName())));

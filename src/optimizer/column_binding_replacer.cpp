@@ -25,7 +25,7 @@ void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 
 void ColumnBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = *expression;
-	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
 		for (const auto &replace_binding : replacement_bindings) {
 			if (bound_column_ref.binding == replace_binding.old_binding) {

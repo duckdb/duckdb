@@ -1,0 +1,29 @@
+# name: test/sql/window/test_rownumber_orderby.test
+# description: Test argument ordering for ROW_NUMBER and NTILE
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+SELECT 
+	i,
+	(i * 29) % 11 AS outside,
+	row_number(ORDER BY (i // 2) DESC) OVER w,
+	ntile(4 ORDER BY (i // 2) DESC) OVER w,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY (i * 29) % 11
+)
+ORDER BY 2
+----
+0	0	9	4
+8	1	1	1
+5	2	5	2
+2	3	7	3
+7	5	3	1
+4	6	6	2
+1	7	10	4
+9	8	2	1
+6	9	4	2
+3	10	8	3

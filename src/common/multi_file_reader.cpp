@@ -216,7 +216,9 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 
 		for (auto &part : partitions) {
 			idx_t hive_partitioning_index;
-			auto lookup = std::find(names.begin(), names.end(), part.first);
+			auto lookup = std::find_if(names.begin(), names.end(), [&](const string &col_name) {
+				return StringUtil::CIEquals(col_name, part.first);
+			});
 			if (lookup != names.end()) {
 				// hive partitioning column also exists in file - override
 				auto idx = NumericCast<idx_t>(lookup - names.begin());

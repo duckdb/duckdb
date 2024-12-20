@@ -232,7 +232,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		}
 
 		const auto &quantile = bind_data.quantiles[0];
-		if (gstate && gstate->HasTrees()) {
+		if (gstate && gstate->HasTree()) {
 			rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result,
 			                                                                                    quantile);
 		} else {
@@ -333,7 +333,7 @@ struct QuantileListOperation : QuantileOperation {
 			return;
 		}
 
-		if (gstate && gstate->HasTrees()) {
+		if (gstate && gstate->HasTree()) {
 			gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
 		} else {
 			auto &window_state = state.GetOrCreateWindowState();

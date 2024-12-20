@@ -337,11 +337,10 @@ jobs:
          cd tools/pythonpkg
          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install .
 
-     # explicitly skip the TestMemoryLeaks tests, as the address sanitizer will increase the memory usage, causing the test to fail
      - name: Run Python Tests
        shell: bash
        run: |
-         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tools/pythonpkg/tests/fast --skiplist TestMemoryLeaks
+         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tools/pythonpkg/tests/fast
 
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
@@ -528,7 +527,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      CORE_EXTENSIONS: "parquet;json;tpch;tpcds"
+      CORE_EXTENSIONS: "parquet;json;tpch;tpcds;httpfs"
       DEBUG_STACKTRACE: 1
       LATEST_STORAGE: 1
       BLOCK_VERIFICATION: 1
@@ -842,6 +841,7 @@ jobs:
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
+    if: false
     runs-on: ubuntu-22.04
     steps:
     - uses: mymindstorm/setup-emsdk@v12
@@ -907,7 +907,7 @@ jobs:
       run: |
         zip -r duckdb-wasm32.zip duckdb-wasm/packages/duckdb-wasm/src/bindings
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: duckdb-wasm32
         path: |
@@ -950,7 +950,7 @@ jobs:
         run: |
           zip -r coverage.zip coverage_html
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage

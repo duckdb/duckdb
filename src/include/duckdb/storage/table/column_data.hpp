@@ -34,6 +34,8 @@ struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
 
+using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
+
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
 	}
@@ -65,8 +67,6 @@ public:
 	idx_t column_index;
 	//! The type of the column
 	LogicalType type;
-	//! The parent column (if any)
-	optional_ptr<ColumnData> parent;
 
 public:
 	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
@@ -80,6 +80,21 @@ public:
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
+	}
+	bool HasCompressionFunction() const {
+		return compression != nullptr;
+	}
+	const CompressionFunction &GetCompressionFunction() const {
+		D_ASSERT(HasCompressionFunction());
+		return *compression;
+	}
+
+	bool HasParent() const {
+		return parent != nullptr;
+	}
+	const ColumnData &Parent() const {
+		D_ASSERT(HasParent());
+		return *parent;
 	}
 
 	virtual void SetStart(idx_t new_start);
@@ -187,8 +202,10 @@ protected:
 	                 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode);
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                 idx_t target_scan, ScanVectorMode mode);
-	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
+	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
 	                  idx_t sel_count);
+	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
+	                  idx_t &sel_count, const TableFilter &filter);
 
 	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
@@ -200,7 +217,7 @@ protected:
 	idx_t GetVectorCount(idx_t vector_index) const;
 
 private:
-	void UpdateCompressionFunction(SegmentLock &l, CompressionFunction &function);
+	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);
 
 protected:
 	//! The segments holding the data of this column segment
@@ -215,9 +232,13 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
+
+private:
+	//! The parent column (if any)
+	optional_ptr<ColumnData> parent;
 	//!	The compression function used by the ColumnData
 	//! This is empty if the segments have mixed compression or the ColumnData is empty
-	optional_ptr<CompressionFunction> compression;
+	optional_ptr<const CompressionFunction> compression;
 };
 
 struct PersistentColumnData {

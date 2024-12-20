@@ -329,12 +329,13 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	}
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns + 1;
+	idx_t byte_pos = byte_position.GetIndex() == 0 ? 0 : byte_position.GetIndex() - 1;
 	if (actual_columns >= options.dialect_options.num_cols) {
-		return CSVError(error.str(), TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
-		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, row_byte_position, byte_pos,
+		                options, how_to_fix_it.str(), current_path);
 	} else {
-		return CSVError(error.str(), TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
-		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, row_byte_position, byte_pos,
+		                options, how_to_fix_it.str(), current_path);
 	}
 }
 

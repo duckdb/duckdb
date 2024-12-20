@@ -208,8 +208,6 @@ jobs:
             run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
 
     env:
-      DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-      AWS_DEFAULT_REGION: us-east-1
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       GEN: ninja
       DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
@@ -256,34 +254,11 @@ jobs:
         run: |
           python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest
 
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-          DUCKDB_DEPLOY_SCRIPT_MODE: for_real
-        run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            pip install awscli
-            ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}
-          elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            pip install awscli
-            ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} `git log -1 --format=%h`
-          else
-            echo "would do: ./scripts/extension-upload-all.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}"
-          fi
-
-      - name: Test loadable extensions
-        if: ${{ matrix.osx_arch == 'arm64' &&  inputs.skip_tests != 'true' }}
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-          AWS_DEFAULT_REGION: us-east-1
-        run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            ./scripts/extension-upload-test.sh
-          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duckdb-extensions-${{ matrix.duckdb_arch }}
+          path: |
+            build/release/extension/*/*.duckdb_extension
 
       - name: Rebuild DuckDB without any extensions linked, but with same extension config
         if: ${{ matrix.osx_arch == 'arm64' }}
@@ -306,3 +281,43 @@ jobs:
           python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
           python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
           python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'
+
+  upload-osx-extensions:
+    name: Upload OSX Extensions
+    needs: xcode-extensions
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    strategy:
+      matrix:
+        duckdb_arch: [ 'osx_amd64', 'osx_arm64' ]
+    with:
+      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
+      duckdb_arch: ${{ matrix.duckdb_arch }}
+      duckdb_sha: ${{ github.sha }}
+
+  test-uploaded-extensions:
+    name: Test uploaded OSX Extensions
+    needs: upload-osx-extensions
+    ### This needs to be reworked, currently some info are missing
+    if: false
+    runs-on: macos-14
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Execute test
+      shell: bash
+      env:
+          AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+          AWS_DEFAULT_REGION: us-east-1
+      run: |
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+            ./scripts/extension-upload-test.sh
+          fi

@@ -811,15 +811,18 @@ public:
 		auto &gstate = data_p.global_state->Cast<ParquetReadGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<ParquetReadBindData>();
 
+		bool rowgroup_finished;
 		do {
 			if (gstate.CanRemoveColumns()) {
 				data.all_columns.Reset();
 				data.reader->Scan(data.scan_state, data.all_columns);
+				rowgroup_finished = data.all_columns.size() == 0;
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
 				                                           data.all_columns, gstate.multi_file_reader_state);
 				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 			} else {
 				data.reader->Scan(data.scan_state, output);
+				rowgroup_finished = output.size() == 0;
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
 				                                           output, gstate.multi_file_reader_state);
 			}
@@ -828,7 +831,7 @@ public:
 			if (output.size() > 0) {
 				return;
 			}
-			if (!ParquetParallelStateNext(context, bind_data, data, gstate)) {
+			if (rowgroup_finished && !ParquetParallelStateNext(context, bind_data, data, gstate)) {
 				return;
 			}
 		} while (true);
@@ -1600,7 +1603,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	for (auto &expr : input.select_list) {
 
 		const auto &type = expr->return_type;
-		const auto &name = expr->alias;
+		const auto &name = expr->GetAlias();
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
 		// But dont perform this conversion if this is a EXPORT DATABASE statement
@@ -1611,7 +1614,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			wkb_blob_type.SetAlias("WKB_BLOB");
 
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), wkb_blob_type, false);
-			cast_expr->alias = name;
+			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
@@ -1623,7 +1626,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 
 			// Cast the column to the new type
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
-			cast_expr->alias = name;
+			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}
@@ -1636,7 +1639,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			});
 
 			auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(expr), new_type, false);
-			cast_expr->alias = name;
+			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
 			any_change = true;
 		}

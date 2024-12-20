@@ -34,7 +34,7 @@ JoinHashTable::JoinHashTable(ClientContext &context, const vector<JoinCondition>
     : buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      radix_bits(INITIAL_RADIX_BITS), partition_start(0), partition_end(0) {
+      radix_bits(INITIAL_RADIX_BITS) {
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
@@ -108,6 +108,8 @@ JoinHashTable::JoinHashTable(ClientContext &context, const vector<JoinCondition>
 		auto &config = ClientConfig::GetConfig(context);
 		single_join_error_on_multiple_rows = config.scalar_subquery_error_on_multiple_rows;
 	}
+
+	InitializePartitionMasks();
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -421,6 +423,10 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 	}
 
 	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
+		// see internal issue 3717.
+		if (join_type == JoinType::MARK && !correlated_mark_join_info.correlated_types.empty()) {
+			continue;
+		}
 		if (null_values_are_equal[col_idx]) {
 			continue;
 		}
@@ -1426,7 +1432,10 @@ idx_t JoinHashTable::GetRemainingSize() const {
 
 	idx_t count = 0;
 	idx_t data_size = 0;
-	for (idx_t partition_idx = partition_end; partition_idx < num_partitions; partition_idx++) {
+	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+		if (completed_partitions.RowIsValidUnsafe(partition_idx)) {
+			continue;
+		}
 		count += partitions[partition_idx]->Count();
 		data_size += partitions[partition_idx]->SizeInBytes();
 	}
@@ -1460,6 +1469,32 @@ void JoinHashTable::SetRepartitionRadixBits(const idx_t max_ht_size, const idx_t
 	radix_bits += added_bits;
 	sink_collection =
 	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+
+	// Need to initialize again after changing the number of bits
+	InitializePartitionMasks();
+}
+
+void JoinHashTable::InitializePartitionMasks() {
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+
+	current_partitions.Initialize(num_partitions);
+	current_partitions.SetAllInvalid(num_partitions);
+
+	completed_partitions.Initialize(num_partitions);
+	completed_partitions.SetAllInvalid(num_partitions);
+}
+
+idx_t JoinHashTable::CurrentPartitionCount() const {
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	D_ASSERT(current_partitions.Capacity() == num_partitions);
+	return current_partitions.CountValid(num_partitions);
+}
+
+idx_t JoinHashTable::FinishedPartitionCount() const {
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	D_ASSERT(completed_partitions.Capacity() == num_partitions);
+	// We already marked the active partitions as done, so we have to subtract them here
+	return completed_partitions.CountValid(num_partitions) - CurrentPartitionCount();
 }
 
 void JoinHashTable::Repartition(JoinHashTable &global_ht) {
@@ -1473,6 +1508,7 @@ void JoinHashTable::Repartition(JoinHashTable &global_ht) {
 void JoinHashTable::Reset() {
 	data_collection->Reset();
 	hash_map.Reset();
+	current_partitions.SetAllInvalid(RadixPartitioning::NumberOfPartitions(radix_bits));
 	finalized = false;
 }
 
@@ -1482,33 +1518,46 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 	}
 
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-	if (partition_end == num_partitions) {
-		return false;
+	D_ASSERT(current_partitions.Capacity() == num_partitions);
+	D_ASSERT(completed_partitions.Capacity() == num_partitions);
+	D_ASSERT(current_partitions.CheckAllInvalid(num_partitions));
+
+	if (completed_partitions.CheckAllValid(num_partitions)) {
+		return false; // All partitions are done
 	}
 
-	// Start where we left off
+	// Create vector with unfinished partition indices
 	auto &partitions = sink_collection->GetPartitions();
-	partition_start = partition_end;
+	vector<idx_t> partition_indices;
+	partition_indices.reserve(num_partitions);
+	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+		if (!completed_partitions.RowIsValidUnsafe(partition_idx)) {
+			partition_indices.push_back(partition_idx);
+		}
+	}
+	// Sort partitions by size, from small to large
+	std::sort(partition_indices.begin(), partition_indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
+		const auto lhs_size = partitions[lhs]->SizeInBytes() + PointerTableSize(partitions[lhs]->Count());
+		const auto rhs_size = partitions[rhs]->SizeInBytes() + PointerTableSize(partitions[rhs]->Count());
+		return lhs_size < rhs_size;
+	});
 
-	// Determine how many partitions we can do next (at least one)
+	// Determine which partitions should go next
 	idx_t count = 0;
 	idx_t data_size = 0;
-	idx_t partition_idx;
-	for (partition_idx = partition_start; partition_idx < num_partitions; partition_idx++) {
-		auto incl_count = count + partitions[partition_idx]->Count();
-		auto incl_data_size = data_size + partitions[partition_idx]->SizeInBytes();
-		auto incl_ht_size = incl_data_size + PointerTableSize(incl_count);
+	for (const auto &partition_idx : partition_indices) {
+		D_ASSERT(!completed_partitions.RowIsValidUnsafe(partition_idx));
+		const auto incl_count = count + partitions[partition_idx]->Count();
+		const auto incl_data_size = data_size + partitions[partition_idx]->SizeInBytes();
+		const auto incl_ht_size = incl_data_size + PointerTableSize(incl_count);
 		if (count > 0 && incl_ht_size > max_ht_size) {
-			break;
+			break; // Always add at least one partition
 		}
 		count = incl_count;
 		data_size = incl_data_size;
-	}
-	partition_end = partition_idx;
-
-	// Move the partitions to the main data collection
-	for (partition_idx = partition_start; partition_idx < partition_end; partition_idx++) {
-		data_collection->Combine(*partitions[partition_idx]);
+		current_partitions.SetValidUnsafe(partition_idx);     // Mark as currently active
+		data_collection->Combine(*partitions[partition_idx]); // Move partition to the main data collection
+		completed_partitions.SetValidUnsafe(partition_idx);   // Also already mark as done
 	}
 	D_ASSERT(Count() == count);
 
@@ -1527,7 +1576,7 @@ void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &prob
 	SelectionVector false_sel(STANDARD_VECTOR_SIZE);
 	const auto true_count =
 	    RadixPartitioning::Select(hashes, FlatVector::IncrementalSelectionVector(), probe_keys.size(), radix_bits,
-	                              partition_end, &true_sel, &false_sel);
+	                              current_partitions, &true_sel, &false_sel);
 	const auto false_count = probe_keys.size() - true_count;
 
 	// can't probe these values right now, append to spill
@@ -1592,21 +1641,25 @@ void ProbeSpill::Finalize() {
 }
 
 void ProbeSpill::PrepareNextProbe() {
+	global_spill_collection.reset();
 	auto &partitions = global_partitions->GetPartitions();
-	if (partitions.empty() || ht.partition_start == partitions.size()) {
+	if (partitions.empty() || ht.current_partitions.CheckAllInvalid(partitions.size())) {
 		// Can't probe, just make an empty one
 		global_spill_collection =
 		    make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 	} else {
-		// Move specific partitions to the global spill collection
-		global_spill_collection = std::move(partitions[ht.partition_start]);
-		for (idx_t i = ht.partition_start + 1; i < ht.partition_end; i++) {
-			auto &partition = partitions[i];
-			if (global_spill_collection->Count() == 0) {
+		// Move current partitions to the global spill collection
+		for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
+			if (!ht.current_partitions.RowIsValidUnsafe(partition_idx)) {
+				continue;
+			}
+			auto &partition = partitions[partition_idx];
+			if (!global_spill_collection) {
 				global_spill_collection = std::move(partition);
-			} else {
+			} else if (partition->Count() != 0) {
 				global_spill_collection->Combine(*partition);
 			}
+			partition.reset();
 		}
 	}
 	consumer = make_uniq<ColumnDataConsumer>(*global_spill_collection, column_ids);

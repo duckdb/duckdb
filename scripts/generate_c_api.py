@@ -26,13 +26,13 @@ DUCKDB_HEADER_EXT_INTERNAL_OUT_FILE = 'src/include/duckdb/main/capi/extension_ap
 ALLOW_UNCOMMENTED_PARAMS = True
 
 DUCKDB_EXT_API_VAR_NAME = 'duckdb_ext_api'
-DUCKDB_EXT_API_STRUCT_TYPENAME = 'duckdb_ext_api_v0'
+DUCKDB_EXT_API_STRUCT_TYPENAME = 'duckdb_ext_api_v1'
 
-DEV_VERSION_TAG = 'dev'
+DEV_VERSION_TAG = 'unstable'
 
 # Define the extension struct
-EXT_API_DEFINITION_PATTERN = 'src/include/duckdb/main/capi/header_generation/apis/v0/*/*.json'
-EXT_API_EXCLUSION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/v0/exclusion_list.json'
+EXT_API_DEFINITION_PATTERN = 'src/include/duckdb/main/capi/header_generation/apis/v1/*/*.json'
+EXT_API_EXCLUSION_FILE = 'src/include/duckdb/main/capi/header_generation/apis/v1/exclusion_list.json'
 
 # The JSON files that define all available CAPI functions
 CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation/functions/**/*.json'
@@ -207,13 +207,14 @@ def parse_ext_api_definitions(ext_api_definition):
             try:
                 obj = json.loads(f.read())
                 api_definitions[obj['version']] = obj
-
-                if Path(file).stem != obj['version']:
-                    print(f"\nMismatch between filename and version in file for {file}")
-                    exit(1)
-                if obj['version'] == DEV_VERSION_TAG:
+                if obj['version'].startswith("unstable_"):
                     dev_versions.append(obj['version'])
                 else:
+                    if Path(file).stem != obj['version']:
+                        print(
+                            f"\nMismatch between filename and version in file for {file}. Note that unstable versions should have a version starting with 'unstable_' and that stable versions should have the version as their filename"
+                        )
+                        exit(1)
                     versions.append(obj['version'])
 
             except json.decoder.JSONDecodeError as err:
@@ -335,8 +336,7 @@ def to_camel_case(snake_str):
 
 def parse_semver(version):
     if version[0] != 'v':
-        print(f"\nVersion string {version} does not start with a v")
-        exit(1)
+        raise Exception(f"\nVersion string {version} does not start with a v")
 
     versions = version[1:].split(".")
 
@@ -444,7 +444,7 @@ def create_struct_version_defines(api_definition):
         if prev_version:
             prev_major, prev_minor, prev_patch = parse_semver(prev_version)
             if current_version == DEV_VERSION_TAG:
-                result += "#ifdef  DUCKDB_EXTENSION_API_VERSION_DEV\n"
+                result += "#ifdef  DUCKDB_EXTENSION_API_VERSION_UNSTABLE\n"
                 result += f"#define  DUCKDB_EXTENSION_API_VERSION_{prev_major}_{prev_minor}_{prev_patch}\n"
                 result += "#endif\n"
             else:
@@ -485,17 +485,18 @@ def create_extension_api_struct(
         if len(api_version_entry['entries']) == 0:
             continue
         version = api_version_entry['version']
-        if version == DEV_VERSION_TAG:
+        if version.startswith("unstable_"):
+            if 'description' in api_version_entry:
+                extension_struct_finished += f"// {api_version_entry['description']}\n"
             if add_version_defines:
-                extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_DEV // {version}\n"
+                extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_UNSTABLE\n"
             else:
-                extension_struct_finished += f"// {version}\n"
-            extension_struct_finished += f'    // WARNING! the functions below are not (yet) stable \n\n'
+                extension_struct_finished += f"\n"
         else:
             if add_version_defines:
                 major, minor, patch = parse_semver(version)
                 version_define = f" DUCKDB_EXTENSION_API_VERSION_{major}_{minor}_{patch}"
-                extension_struct_finished += f"#if  DUCKDB_EXTENSION_API_VERSION_MINOR >= {minor} &&  DUCKDB_EXTENSION_API_VERSION_PATCH >= {patch} // {version}\n"
+                extension_struct_finished += f"#if  DUCKDB_EXTENSION_API_VERSION_MINOR > {minor} || (DUCKDB_EXTENSION_API_VERSION_MINOR == {minor} &&  DUCKDB_EXTENSION_API_VERSION_PATCH >= {patch}) // {version}\n"
             else:
                 extension_struct_finished += f"// {version}\n"
         for function_name in api_version_entry['entries']:
@@ -587,6 +588,7 @@ def create_duckdb_ext_h(
     # Create the versioning defines
     major, minor, patch = parse_semver(ext_api_version)
     versioning_defines = f"""//! Set version to latest if no explicit version is defined
+
 #if !defined(DUCKDB_EXTENSION_API_VERSION_MAJOR) && !defined(DUCKDB_EXTENSION_API_VERSION_MINOR) && !defined(DUCKDB_EXTENSION_API_VERSION_PATCH)
 #define DUCKDB_EXTENSION_API_VERSION_MAJOR {major}
 #define DUCKDB_EXTENSION_API_VERSION_MINOR {minor}
@@ -596,8 +598,8 @@ def create_duckdb_ext_h(
 #endif
 
 //! Set the DUCKDB_EXTENSION_API_VERSION_STRING which is passed to DuckDB on extension load
-#if DUCKDB_EXTENSION_API_VERSION_DEV
-#define DUCKDB_EXTENSION_API_VERSION_STRING "dev"
+#ifdef DUCKDB_EXTENSION_API_UNSTABLE_VERSION
+#define DUCKDB_EXTENSION_API_VERSION_STRING DUCKDB_EXTENSION_API_UNSTABLE_VERSION
 #else
 #define DUCKDB_EXTENSION_API_VERSION_STRING DUCKDB_EXTENSION_SEMVER_STRING(DUCKDB_EXTENSION_API_VERSION_MAJOR, DUCKDB_EXTENSION_API_VERSION_MINOR, DUCKDB_EXTENSION_API_VERSION_PATCH)
 #endif
@@ -690,7 +692,7 @@ def create_duckdb_ext_internal_h(ext_api_version, function_groups, function_map,
         ext_api_definitions,
         exclusion_set,
         with_create_method=True,
-        create_method_name='CreateAPIv0',
+        create_method_name='CreateAPIv1',
     )
     duckdb_ext_h += create_version_defines(ext_api_version)
 
@@ -699,21 +701,23 @@ def create_duckdb_ext_internal_h(ext_api_version, function_groups, function_map,
 
 
 def get_extension_api_version(ext_api_definitions):
-    versions = []
+    latest_version = ""
 
     for version_entry in ext_api_definitions:
-        versions.append(version_entry['version'])
+        if version_entry['version'].startswith('v'):
+            latest_version = version_entry['version']
+        if version_entry['version'].startswith("unstable_"):
+            break
 
-    if versions[-1] == DEV_VERSION_TAG:
-        return versions[-2]
-    else:
-        return versions[-1]
+    return latest_version
 
 
 def create_struct_function_set(api_definitions):
     result = set()
     for api in api_definitions:
         for entry in api['entries']:
+            if entry in result:
+                raise Exception(f"Duplicate entry found for function '{entry}'!")
             result.add(entry)
     return result
 
