@@ -102,6 +102,13 @@ static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_
                          CSVErrorHandler &error_handler) {
 	auto &dialect_options = state_machine.dialect_options;
 	if (!options.columns_set) {
+		if (options.file_options.hive_partitioning || options.file_options.union_by_name || options.multi_file_reader) {
+			// Just do the replacement
+			for (idx_t i = 0; i < MinValue<idx_t>(detected_names.size(), options.name_list.size()); i++) {
+				detected_names[i] = options.name_list[i];
+			}
+			return;
+		}
 		if (options.name_list.size() > dialect_options.num_cols) {
 			if (options.null_padding) {
 				// we increase our types
