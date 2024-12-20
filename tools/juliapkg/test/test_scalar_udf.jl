@@ -275,12 +275,14 @@ my_reverse(s) = string(reverse(s))
     #DuckDB.duckdb_scalar_function_set_function(mysum_udf.handle, ptr)
     DuckDB.register_scalar_function(con, fun) # Register UDF
 
+    @test_throws ArgumentError DuckDB.register_scalar_function(con, fun) # Register UDF twice
 
 
     DuckDB.execute(con, "CREATE TABLE test1 (a INT, b INT);")
     DuckDB.execute(con, "INSERT INTO test1 VALUES ('1', '2'), ('3','4'), ('5', '6')")
     result = DuckDB.execute(con, "SELECT mysum(a, b) as result FROM test1") |> DataFrame
     @test result.result == [3, 7, 11]
+
 end
 
 @testset "UDF Macro Various Types" begin
