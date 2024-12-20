@@ -17,8 +17,8 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 // Helper function for UTF-8 aware space trimming
 static string TrimWhitespace(const string &col_name) {
 	utf8proc_int32_t codepoint;
-	auto str = reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str());
-	idx_t size = col_name.size();
+	const auto str = reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str());
+	const idx_t size = col_name.size();
 	// Find the first character that is not left trimmed
 	idx_t begin = 0;
 	while (begin < size) {
@@ -94,6 +94,37 @@ static string NormalizeColumnName(const string &col_name) {
 		col_name_cleaned = "_" + col_name_cleaned;
 	}
 	return col_name_cleaned;
+}
+
+static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_machine,
+                         unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
+                         CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
+                         CSVErrorHandler &error_handler) {
+	auto &dialect_options = state_machine.dialect_options;
+	if (!options.columns_set) {
+		if (options.name_list.size() > dialect_options.num_cols) {
+			if (options.null_padding) {
+				// we increase our types
+				idx_t col = 0;
+				for (idx_t i = dialect_options.num_cols; i < options.name_list.size(); i++) {
+					detected_names.push_back(GenerateColumnName(options.name_list.size(), col++));
+					best_sql_types_candidates_per_column_idx[i] = {LogicalType::VARCHAR};
+				}
+
+				dialect_options.num_cols = options.name_list.size();
+
+			} else {
+				// we throw an error
+				const auto error = CSVError::HeaderSniffingError(
+				    options, best_header_row, options.name_list.size(),
+				    state_machine.dialect_options.state_machine_options.delimiter.GetValue());
+				error_handler.Error(error);
+			}
+		}
+		for (idx_t i = 0; i < options.name_list.size(); i++) {
+			detected_names[i] = options.name_list[i];
+		}
+	}
 }
 
 // If our columns were set by the user, we verify if their names match with the first row
@@ -181,23 +212,8 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 			detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
 		}
 		// If the user provided names, we must replace our header with the user provided names
-		if (!options.columns_set) {
-			if (options.name_list.size() > best_header_row.size()) {
-				if (options.null_padding) {
-					// we increase our types
-					D_ASSERT(0);
-				} else {
-					// we throw an error
-					auto error = CSVError::HeaderSniffingError(
-					    options, best_header_row, options.name_list.size(),
-					    state_machine.dialect_options.state_machine_options.delimiter.GetValue());
-					error_handler.Error(error);
-				}
-			}
-			for (idx_t i = 0; i < options.name_list.size(); i++) {
-				detected_names[i] = options.name_list[i];
-			}
-		}
+		ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, best_header_row,
+		             error_handler);
 		return detected_names;
 	}
 	// information for header detection
@@ -211,23 +227,8 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 				detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
 			}
 			dialect_options.rows_until_header += 1;
-			if (!options.columns_set) {
-				if (options.name_list.size() > best_header_row.size()) {
-					if (options.null_padding) {
-						// we increase our types
-						D_ASSERT(0);
-					} else {
-						// we throw an error
-						auto error = CSVError::HeaderSniffingError(
-						    options, best_header_row, options.name_list.size(),
-						    state_machine.dialect_options.state_machine_options.delimiter.GetValue());
-						error_handler.Error(error);
-					}
-				}
-				for (idx_t i = 0; i < options.name_list.size(); i++) {
-					detected_names[i] = options.name_list[i];
-				}
-			}
+			ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options,
+			             best_header_row, error_handler);
 			return detected_names;
 		}
 		auto error =
@@ -319,37 +320,15 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 	}
 
 	// If the user provided names, we must replace our header with the user provided names
-	if (!options.columns_set) {
-		if (options.name_list.size() > dialect_options.num_cols) {
-			if (options.null_padding) {
-				// we increase our types
-				idx_t col = 0;
-				for (idx_t i = dialect_options.num_cols; i < options.name_list.size(); i++) {
-					detected_names.push_back(GenerateColumnName(options.name_list.size(), col++));
-					best_sql_types_candidates_per_column_idx[i] = {LogicalType::VARCHAR};
-				}
-
-				dialect_options.num_cols = options.name_list.size();
-
-			} else {
-				// we throw an error
-				auto error = CSVError::HeaderSniffingError(
-				    options, best_header_row, options.name_list.size(),
-				    state_machine.dialect_options.state_machine_options.delimiter.GetValue());
-				error_handler.Error(error);
-			}
-		}
-		for (idx_t i = 0; i < options.name_list.size(); i++) {
-			detected_names[i] = options.name_list[i];
-		}
-	}
+	ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, best_header_row,
+	             error_handler);
 	return detected_names;
 }
 void CSVSniffer::DetectHeader() {
 	auto &sniffer_state_machine = best_candidate->GetStateMachine();
 	names = DetectHeaderInternal(buffer_manager->context, best_header_row, sniffer_state_machine, set_columns,
 	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
-	for (idx_t i=max_columns_found; i < names.size(); i++) {
+	for (idx_t i = max_columns_found; i < names.size(); i++) {
 		detected_types.push_back(LogicalType::VARCHAR);
 	}
 	max_columns_found = names.size();
