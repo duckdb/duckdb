@@ -12,30 +12,18 @@
         wrapper = nothing
     )
 
-Creates a new scalar function object. 
-The function object is must be registered in the database before use.
+Creates a new scalar function object. It is recommended to use the `@create_scalar_function` 
+macro to create a new scalar function instead of calling this constructor directly.
 
 # Arguments
 - `name::AbstractString`: The name of the function.
 - `parameters::Vector{DataType}`: The data types of the parameters.
 - `return_type::DataType`: The return type of the function.
 - `func`: The function to be called.
+- `wrapper`: The wrapper function that is used to call the function from DuckDB.
+- `wrapper_id`: A unique id for the wrapper function.
 
-# Example
-
-```jldoctest
-using DuckDB
-
-my_add = (a, b) -> a+b
-add_func = ScalarFunction("my_add", [Int64, Int64], Int64, my_add)
-
-db = DB()
-register_scalar_function(db, add_func)
-
-DuckDB.query(db, "SELECT my_add(1, 2);")
-```
-
-See also [`register_scalar_function`](@ref), [`unregister_scalar_function`](@ref)
+See also [`register_scalar_function`](@ref), [`@create_scalar_function`](@ref)
 """
 mutable struct ScalarFunction
     handle::duckdb_scalar_function
@@ -279,7 +267,7 @@ HACK: This is a workaround to dynamically generate a function pointer on ALL arc
 const _UDF_WRAPPER_CACHE = Dict{UInt64, Function}()
 
 function _udf_register_wrapper(id, wrapper)
-    
+
 
     if id in keys(_UDF_WRAPPER_CACHE)
         throw(
@@ -290,7 +278,7 @@ function _udf_register_wrapper(id, wrapper)
     end
 
     _UDF_WRAPPER_CACHE[id] = wrapper
-    
+
     # HACK: This is a workaround to dynamically generate a function pointer on ALL architectures
     # We need to delay the cfunction call until the moment wrapper function is generated
     fptr = QuoteNode(:(_UDF_WRAPPER_CACHE[$id]))
@@ -313,7 +301,7 @@ Creates a new Scalar Function object that can be registered in a DuckDB database
 
 # Arguments
 - `func_expr`: An expression that defines the function signature.
-- `func_def`: An optional definition of the function or a closure. If ommited, it is assumed that a function with same name given in `func_expr` is defined in the global scope.
+- `func_def`: An optional definition of the function or a closure. If omitted, it is assumed that a function with same name given in `func_expr` is defined in the global scope.
  
 
 # Example
