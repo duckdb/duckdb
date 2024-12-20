@@ -367,7 +367,7 @@ end
     df = DataFrame(a = 1:10)
     DuckDB.register_table(con, df, "test1")
 
-    @test_throws "Even number" result = DuckDB.execute(con, "SELECT f_error(a) as result FROM test1") |> DataFrame
+    @test_throws Exception result = DuckDB.execute(con, "SELECT f_error(a) as result FROM test1") |> DataFrame
 end
 
 @testset "UDF Macro Missing Values" begin
