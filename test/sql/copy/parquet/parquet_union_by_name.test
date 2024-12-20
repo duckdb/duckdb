@@ -58,6 +58,19 @@ ORDER BY a;
 102	NULL	103
 9223372036854775807	NULL	NULL
 
+# Not caching union readers should produce same result
+query III
+SELECT a,b,c 
+FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE, CACHE_UNION_READERS=FALSE) 
+ORDER BY a;
+----
+1	NULL	NULL
+2	NULL	NULL
+3	4	NULL
+5	6	NULL
+100	NULL	101
+102	NULL	103
+9223372036854775807	NULL	NULL
 
 # without union by name, parquet reader will use the first parquet files's type
 statement error
@@ -80,6 +93,18 @@ ORDER BY a;
 102
 9223372036854775807
 
+query I
+SELECT a 
+FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE, CACHE_UNION_READERS=FALSE) 
+ORDER BY a;
+----
+1
+2
+3
+5
+100
+102
+9223372036854775807
 
 statement error
 SELECT b
@@ -100,9 +125,29 @@ NULL
 4
 6
 
+query I
+SELECT b
+FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE, CACHE_UNION_READERS=FALSE) 
+ORDER BY b;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+4
+6
+
 query TTT
 SELECT typeof(a), typeof(b), typeof(c)
 FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE)
+LIMIT 1;
+----
+BIGINT	INTEGER	INTEGER
+
+query TTT
+SELECT typeof(a), typeof(b), typeof(c)
+FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE, CACHE_UNION_READERS=FALSE)
 LIMIT 1;
 ----
 BIGINT	INTEGER	INTEGER
@@ -121,10 +166,24 @@ ORDER BY a;
 NULL	[44]	[45]
 [42]	[43]	NULL
 
+query III
+SELECT a,b,c 
+FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true, cache_union_readers=false)
+ORDER BY a;
+----
+NULL	[44]	[45]
+[42]	[43]	NULL
 
 query TTT
 SELECT typeof(a),typeof(b),typeof(c)
 FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true)
+LIMIT 1;
+----
+INTEGER[]	BIGINT[]	INTEGER[]
+
+query TTT
+SELECT typeof(a),typeof(b),typeof(c)
+FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true, cache_union_readers=false)
 LIMIT 1;
 ----
 INTEGER[]	BIGINT[]	INTEGER[]
