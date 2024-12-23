@@ -6,6 +6,7 @@ import duckdb
 from io import StringIO, BytesIO
 from duckdb import CSVLineTerminator
 
+
 def TestFile(name):
     import os
 
@@ -613,7 +614,7 @@ class TestReadCSV(object):
             {'filename': 'test'},
             {'hive_partitioning': True},
             {'hive_partitioning': False},
-            # {'union_by_name': True},
+            {'union_by_name': True},
             {'union_by_name': False},
             {'hive_types_autocast': False},
             {'hive_types_autocast': True},
@@ -640,9 +641,7 @@ class TestReadCSV(object):
 
         con = duckdb.connect()
 
-        file_path = tmp_path/ "file*.csv"
+        file_path = tmp_path / "file*.csv"
         rel = con.read_csv(file_path, union_by_name=True)
-        print (rel.columns)
-        assert rel.columns == []
-        assert rel.fetchall() == [(1, 2, 3, 4), (2, 3, 4, 5)] 
-
+        assert rel.columns == ['one', 'two', 'three', 'four', 'five']
+        assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]
