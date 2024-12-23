@@ -357,8 +357,14 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 		break;
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
