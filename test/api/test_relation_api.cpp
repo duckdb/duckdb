@@ -931,6 +931,7 @@ TEST_CASE("Test CSV Relation with union by name", "[relation_api]") {
 	auto csv_scan = con.ReadCSV(paths, std::move(options));
 	auto result = csv_scan->Execute();
 	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(2024,1,2), Value::DATE(2024,1,2), Value::DATE(2024,1,2)}));
 }
 
 TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {

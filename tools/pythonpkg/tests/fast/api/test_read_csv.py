@@ -6,7 +6,6 @@ import duckdb
 from io import StringIO, BytesIO
 from duckdb import CSVLineTerminator
 
-
 def TestFile(name):
     import os
 
@@ -631,3 +630,19 @@ class TestReadCSV(object):
         else:
             rel = duckdb_cursor.read_csv(file, **options)
             res = rel.fetchall()
+
+    def test_union_by_name(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one|two|three|four\n1|2|3|4')
+
+        file1 = tmp_path / "file2.csv"
+        file1.write_text('two|three|four|five\n2|3|4|5')
+
+        con = duckdb.connect()
+
+        file_path = tmp_path/ "file*.csv"
+        rel = con.read_csv(file_path, union_by_name=True)
+        print (rel.columns)
+        assert rel.columns == []
+        assert rel.fetchall() == [(1, 2, 3, 4), (2, 3, 4, 5)] 
+
