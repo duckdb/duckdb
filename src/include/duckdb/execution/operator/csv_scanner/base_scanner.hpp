@@ -30,6 +30,10 @@ public:
 	}
 
 	static inline void SetUnquoted(ScannerResult &result) {
+		if (result.states.states[0] == CSVState::UNQUOTED && result.states.states[1] == CSVState::UNQUOTED) {
+			// This means we touched an unescaped quote, we must go through the remove escape code to remove it.
+			result.escaped = true;
+		}
 		result.quoted = true;
 	}
 

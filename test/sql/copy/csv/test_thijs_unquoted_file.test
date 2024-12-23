@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/test_thijs_unquoted_file.test
+# description: Test on Thijs' unquoted file
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+from read_csv('data/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false);
+----
+HYDRONIC GESELLSCHAFT FÂ¿R WASSERTECHNIK MBH                                                     	 	2011
+ANTON SONNENSCHUTZSYSTEME GESELLSCHAFT MIT BESCHRÂ¿NKTER HAFTUN	 	2012
+ENERGYS MAINTENANCE S	 	2015
+SYSTEMAT BELGIUM  S	 	2013
