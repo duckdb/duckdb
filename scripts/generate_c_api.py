@@ -534,7 +534,6 @@ def generate_basic_extension_struct(function_map, api_definition, add_version_de
         else:
             if add_version_defines:
                 major, minor, patch = parse_semver(version)
-                version_define = f" DUCKDB_EXTENSION_API_VERSION_{major}_{minor}_{patch}"
                 extension_struct_finished += f"#if  DUCKDB_EXTENSION_API_VERSION_MINOR > {minor} || (DUCKDB_EXTENSION_API_VERSION_MINOR == {minor} &&  DUCKDB_EXTENSION_API_VERSION_PATCH >= {patch}) // {version}\n"
             else:
                 extension_struct_finished += f"// {version}\n"
@@ -611,7 +610,6 @@ def create_extension_api_struct(
         extension_struct_finished += "    return result;\n"
         extension_struct_finished += "}\n\n"
 
-    # TODO! align with changes
     if with_member_invoker:
         extension_struct_finished += f'extern {DUCKDB_EXT_API_STRUCT_TYPENAME} *{DUCKDB_EXT_API_VAR_NAME};\n\n'
         extension_struct_finished += COMMENT_HEADER("Invoker Functions")
@@ -622,24 +620,24 @@ def create_extension_api_struct(
 
             extension_struct_finished += '\n'
             version = api_version_entry['version']
-            if version == DEV_VERSION_TAG:
+            if version.startswith("unstable_"):
                 if add_version_defines:
-                    extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_DEV // {version}\n"
+                    extension_struct_finished += f"#ifdef  DUCKDB_EXTENSION_API_VERSION_UNSTABLE\n"
                 else:
-                    extension_struct_finished += f"// {version}\n"
+                    extension_struct_finished += f"\n"
             else:
                 if add_version_defines:
                     major, minor, patch = parse_semver(version)
-                    extension_struct_finished += f"#if  DUCKDB_EXTENSION_API_VERSION_MINOR >= {minor} &&  DUCKDB_EXTENSION_API_VERSION_PATCH >= {patch} // {version}\n"
+                    extension_struct_finished += f"#if  DUCKDB_EXTENSION_API_VERSION_MINOR > {minor} || (DUCKDB_EXTENSION_API_VERSION_MINOR == {minor} &&  DUCKDB_EXTENSION_API_VERSION_PATCH >= {patch}) // {version}\n"
                 else:
                     extension_struct_finished += f"// {version}\n"
             extension_struct_finished += '\n'
 
             for function_name in api_version_entry['entries']:
                 function_lookup = function_map[function_name]
+                functions_in_struct.add(function_lookup['name'])
                 extension_struct_finished += create_struct_member_invoker(function_lookup)
                 extension_struct_finished += '\n\n'
-
             if add_version_defines:
                 extension_struct_finished += "#endif\n\n"
 
