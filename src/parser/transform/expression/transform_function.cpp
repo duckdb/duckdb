@@ -120,9 +120,9 @@ static bool IsOrderableWindowFunction(ExpressionType type) {
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_NTILE:
 	case ExpressionType::WINDOW_CUME_DIST:
-		return true;
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
+		return true;
 	case ExpressionType::WINDOW_AGGREGATE:
 	case ExpressionType::WINDOW_RANK_DENSE:
 		return false;
