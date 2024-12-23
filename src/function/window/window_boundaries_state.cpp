@@ -301,10 +301,22 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 	WindowBoundsSet result;
 	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		result.insert(PARTITION_BEGIN);
-		if (!wexpr.arg_orders.empty()) {
-			// Secondary orders need to know how wide the partition is
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
+		break;
+	case ExpressionType::WINDOW_NTILE:
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
 			result.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
 		}
 		break;
 	case ExpressionType::WINDOW_RANK:
@@ -343,7 +355,6 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			result.insert(FRAME_END);
 		}
 		break;
-	case ExpressionType::WINDOW_NTILE:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
 		result.insert(PARTITION_BEGIN);
