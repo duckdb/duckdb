@@ -28,7 +28,7 @@ void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
 
 void ParsedExpressionIterator::EnumerateChildren(
     ParsedExpression &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BETWEEN: {
 		auto &cast_expr = expr.Cast<BetweenExpression>();
 		callback(cast_expr.input);
@@ -139,6 +139,9 @@ void ParsedExpressionIterator::EnumerateChildren(
 		}
 		if (window_expr.default_expr) {
 			callback(window_expr.default_expr);
+		}
+		for (auto &order : window_expr.arg_orders) {
+			callback(order.expression);
 		}
 		break;
 	}

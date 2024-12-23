@@ -216,7 +216,6 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		auto &child_vector = ListVector::GetEntry(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		ListVector::SetListSize(result, child_count);
-
 	} else if (internal_type == PhysicalType::ARRAY) {
 		auto &child_vector = ArrayVector::GetEntry(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
@@ -256,6 +255,7 @@ void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementSt
                                             const vector<column_t> &column_ids) {
 	D_ASSERT(chunk.ColumnCount() == column_ids.size());
 	D_ASSERT(state.properties != ColumnDataScanProperties::INVALID);
+	chunk.Reset();
 	InitializeChunkState(chunk_index, state);
 	auto &chunk_meta = chunk_data[chunk_index];
 	for (idx_t i = 0; i < column_ids.size(); i++) {

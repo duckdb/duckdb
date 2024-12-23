@@ -75,7 +75,7 @@ static vector<LogicalType> CreateGroupChunkTypes(vector<unique_ptr<Expression>> 
 	}
 
 	for (auto &group : groups) {
-		D_ASSERT(group->type == ExpressionType::BOUND_REF);
+		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref = group->Cast<BoundReferenceExpression>();
 		group_indices.insert(bound_ref.index);
 	}
@@ -366,7 +366,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	for (auto &aggregate : aggregates) {
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		for (auto &child_expr : aggr.children) {
-			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
+			D_ASSERT(child_expr->GetExpressionType() == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
 			D_ASSERT(bound_ref_expr.index < chunk.data.size());
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.index]);
@@ -885,15 +885,15 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-double PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+ProgressData PhysicalHashAggregate::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalSinkState>();
 	auto &gstate = gstate_p.Cast<HashAggregateGlobalSourceState>();
-	double total_progress = 0;
+	ProgressData progress;
 	for (idx_t radix_idx = 0; radix_idx < groupings.size(); radix_idx++) {
-		total_progress += groupings[radix_idx].table_data.GetProgress(
-		    context, *sink_gstate.grouping_states[radix_idx].table_state, *gstate.radix_states[radix_idx]);
+		progress.Add(groupings[radix_idx].table_data.GetProgress(
+		    context, *sink_gstate.grouping_states[radix_idx].table_state, *gstate.radix_states[radix_idx]));
 	}
-	return total_progress / double(groupings.size());
+	return progress;
 }
 
 InsertionOrderPreservingMap<string> PhysicalHashAggregate::ParamsToString() const {

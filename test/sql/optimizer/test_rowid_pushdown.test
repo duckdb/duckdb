@@ -1,0 +1,42 @@
+# name: test/sql/optimizer/test_rowid_pushdown.test
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1 AS SELECT i + 100 as x FROM range(250000) AS t(i);
+
+query I
+SELECT * FROM t1 where rowid = 6;
+----
+106
+
+query II
+EXPLAIN SELECT * FROM t1 where rowid = 6;
+----
+physical_plan	<REGEX>:.*Filters: rowid=6.*
+
+query I
+SELECT * FROM t1 where rowid = 200000;
+----
+200100
+
+query II
+EXPLAIN SELECT * FROM t1 where rowid = 200000;
+----
+physical_plan	<REGEX>:.*Filters: rowid=200000.*
+
+query I
+SELECT * FROM t1 where rowid IN (SELECT rowid FROM t1 ORDER BY rowid DESC LIMIT 10) ORDER BY rowid;
+----
+250090
+250091
+250092
+250093
+250094
+250095
+250096
+250097
+250098
+250099

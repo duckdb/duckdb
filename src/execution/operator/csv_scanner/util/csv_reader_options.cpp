@@ -7,6 +7,17 @@
 #include "duckdb/common/set.hpp"
 
 namespace duckdb {
+
+CSVReaderOptions::CSVReaderOptions(CSVOption<char> single_byte_delimiter,
+                                   const CSVOption<string> &multi_byte_delimiter) {
+	if (multi_byte_delimiter.GetValue().empty()) {
+		char single_byte_value = single_byte_delimiter.GetValue();
+		string value(1, single_byte_value);
+		dialect_options.state_machine_options.delimiter = value;
+	} else {
+		dialect_options.state_machine_options.delimiter = multi_byte_delimiter;
+	}
+}
 static bool ParseBoolean(const Value &value, const string &loption);
 
 static bool ParseBoolean(const vector<Value> &set, const string &loption) {
@@ -101,18 +112,18 @@ void CSVReaderOptions::SetSkipRows(int64_t skip_rows) {
 }
 
 string CSVReaderOptions::GetDelimiter() const {
-	return std::string(1, this->dialect_options.state_machine_options.delimiter.GetValue());
+	return this->dialect_options.state_machine_options.delimiter.GetValue();
 }
 
 void CSVReaderOptions::SetDelimiter(const string &input) {
 	auto delim_str = StringUtil::Replace(input, "\\t", "\t");
-	if (delim_str.size() > 1) {
-		throw InvalidInputException("The delimiter option cannot exceed a size of 1 byte.");
+	if (delim_str.size() > 4) {
+		throw InvalidInputException("The delimiter option cannot exceed a size of 4 bytes.");
 	}
 	if (input.empty()) {
 		delim_str = string("\0", 1);
 	}
-	this->dialect_options.state_machine_options.delimiter.Set(delim_str[0]);
+	this->dialect_options.state_machine_options.delimiter.Set(delim_str);
 }
 
 string CSVReaderOptions::GetQuote() const {
@@ -184,6 +195,14 @@ bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
 
+char CSVReaderOptions::GetSingleByteDelimiter() const {
+	return dialect_options.state_machine_options.delimiter.GetValue()[0];
+}
+
+string CSVReaderOptions::GetMultiByteDelimiter() const {
+	return dialect_options.state_machine_options.delimiter.GetValue();
+}
+
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
@@ -222,7 +241,11 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	} else if (loption == "skip") {
 		SetSkipRows(ParseInteger(value, loption));
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
-		maximum_line_size = NumericCast<idx_t>(ParseInteger(value, loption));
+		auto line_size = ParseInteger(value, loption);
+		if (line_size < 0) {
+			throw BinderException("Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0");
+		}
+		maximum_line_size = NumericCast<idx_t>(line_size);
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, true);
@@ -253,6 +276,9 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		if (!expected_names.empty()) {
 			force_not_null = ParseColumnList(value, expected_names, loption);
 		} else {
+			if (value.IsNull()) {
+				throw BinderException("Invalid value for 'force_not_null' paramenter");
+			}
 			// Get the list of columns to use as a recovery key
 			auto &children = ListValue::GetChildren(value);
 			for (auto &child : children) {
@@ -392,9 +418,10 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, 
 }
 
 template <class T>
-string FormatOptionLine(const string &name, const CSVOption<T> option) {
+string FormatOptionLine(const string &name, const CSVOption<T> &option) {
 	return name + " = " + option.FormatValue() + " " + option.FormatSet() + "\n  ";
 }
+
 bool CSVReaderOptions::WasTypeManuallySet(idx_t i) const {
 	if (i >= was_type_manually_set.size()) {
 		return false;

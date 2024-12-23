@@ -76,6 +76,9 @@ private:
 #ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
 	~DebugClientContextState() override {
+		if (Exception::UncaughtException()) {
+			return;
+		}
 		D_ASSERT(!active_transaction);
 		D_ASSERT(!active_query);
 	}
@@ -167,9 +170,10 @@ void ClientContext::Destroy() {
 }
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
+	error.FinalizeError();
 	if (config.errors_as_json) {
 		error.ConvertErrorToJSON();
-	} else if (!query.empty()) {
+	} else {
 		error.AddErrorLocation(query);
 	}
 }
@@ -936,7 +940,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	}
 
 	unique_ptr<QueryResult> result;
-	QueryResult *last_result = nullptr;
+	optional_ptr<QueryResult> last_result;
 	bool last_had_result = false;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto &statement = statements[i];
@@ -971,6 +975,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 			// Reset the interrupted flag, this was set by the task that found the error
 			// Next statements should not be bothered by that interruption
 			interrupted = false;
+			break;
 		}
 	}
 	return result;

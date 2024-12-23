@@ -16,6 +16,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/function/partition_stats.hpp"
 
 #include <functional>
 
@@ -193,6 +194,15 @@ public:
 	const OperatorPartitionInfo &partition_info;
 };
 
+struct GetPartitionStatsInput {
+	GetPartitionStatsInput(const TableFunction &table_function_p, optional_ptr<const FunctionData> bind_data_p)
+	    : table_function(table_function_p), bind_data(bind_data_p) {
+	}
+
+	const TableFunction &table_function;
+	optional_ptr<const FunctionData> bind_data;
+};
+
 enum class ScanType : uint8_t { TABLE, PARQUET, EXTERNAL };
 
 struct BindInfo {
@@ -235,14 +245,6 @@ public:
 	}
 };
 
-//! How a table is partitioned by a given set of columns
-enum class TablePartitionInfo : uint8_t {
-	NOT_PARTITIONED,         // the table is not partitioned by the given set of columns
-	SINGLE_VALUE_PARTITIONS, // each partition has exactly one unique value (e.g. bounds = [1,1][2,2][3,3])
-	OVERLAPPING_PARTITIONS,  // the partitions overlap **only** at the boundaries (e.g. bounds = [1,2][2,3][3,4]
-	DISJOINT_PARTITIONS      // the partitions are disjoint (e.g. bounds = [1,2][3,4][5,6])
-};
-
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
@@ -283,9 +285,11 @@ typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &d
 
 typedef void (*table_function_type_pushdown_t)(ClientContext &context, optional_ptr<FunctionData> bind_data,
                                                const unordered_map<idx_t, LogicalType> &new_column_types);
-
 typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext &context,
                                                                   TableFunctionPartitionInput &input);
+
+typedef vector<PartitionStatistics> (*table_function_get_partition_stats_t)(ClientContext &context,
+                                                                            GetPartitionStatsInput &input);
 
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
@@ -353,6 +357,8 @@ public:
 	table_function_supports_pushdown_type_t supports_pushdown_type;
 	//! Get partition info of the table
 	table_function_get_partition_info_t get_partition_info;
+	//! (Optional) get a list of all the partition stats of the table
+	table_function_get_partition_stats_t get_partition_stats;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

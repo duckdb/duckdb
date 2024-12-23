@@ -170,7 +170,7 @@ REFERENCE_LIST = ['ClientContext', 'bound_parameter_map_t']
 
 
 def is_container(type):
-    return '<' in type
+    return '<' in type and 'CSVOption' not in type
 
 
 def is_pointer(type):
@@ -266,7 +266,7 @@ def get_deserialize_element_template(
         template = template.replace('ReadProperty', 'ReadPropertyWithDefault')
     elif has_default and default_value is not None:
         template = template.replace('ReadProperty', 'ReadPropertyWithExplicitDefault')
-    return template.format(
+    template = template.format(
         property_name=property_name,
         property_key=property_key,
         property_id=str(property_id),
@@ -274,11 +274,15 @@ def get_deserialize_element_template(
         property_type=property_type,
         assignment=assignment,
     )
+    if is_deleted:
+        template = template.replace(f'auto {property_name} = ', '')
+    return template
 
 
 def get_deserialize_element(
     property_name, property_key, property_id, property_type, has_default, default_value, is_deleted, base, pointer_type
 ):
+    property_name = property_name.replace('.', '_')
     template = DESERIALIZE_ELEMENT_FORMAT
     if base:
         template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace('{base_property}', base.replace('*', ''))
@@ -298,7 +302,7 @@ def get_deserialize_element(
 
 def get_deserialize_assignment(property_name, property_type, pointer_type):
     assignment = '.' if pointer_type == 'none' else '->'
-    property = property_name
+    property = property_name.replace('.', '_')
     if requires_move(property_type):
         property = f'std::move({property})'
     return f'\tresult{assignment}{property_name} = {property};\n'
@@ -608,6 +612,7 @@ def generate_class_code(class_entry):
                     if len(constructor_parameters) > 0:
                         constructor_parameters += ", "
                     type_name = replace_pointer(entry.type)
+                    entry.deserialize_property = entry.deserialize_property.replace('.', '_')
                     if requires_move(type_name) and not is_reference:
                         constructor_parameters += 'std::move(' + entry.deserialize_property + ')'
                     else:
@@ -691,11 +696,11 @@ def generate_class_code(class_entry):
                 entry.deleted,
                 class_entry.pointer_type,
             )
-        elif entry.name not in constructor_entries:
+        elif entry.name not in constructor_entries and not entry.deleted:
             class_deserialize += get_deserialize_assignment(
                 entry.deserialize_property, entry.type, class_entry.pointer_type
             )
-        if entry.name in class_entry.set_parameter_names:
+        if entry.name in class_entry.set_parameter_names and not entry.deleted:
             class_deserialize += SET_DESERIALIZE_PARAMETER_FORMAT.format(
                 property_type=entry.type, property_name=entry.name
             )

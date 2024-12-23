@@ -59,7 +59,7 @@ DBConfig::~DBConfig() {
 
 DatabaseInstance::DatabaseInstance() {
 	config.is_user_config = false;
-	create_api_v0 = nullptr;
+	create_api_v1 = nullptr;
 }
 
 DatabaseInstance::~DatabaseInstance() {
@@ -262,8 +262,8 @@ void DatabaseInstance::LoadExtensionSettings() {
 	}
 }
 
-static duckdb_ext_api_v0 CreateAPIv0Wrapper() {
-	return CreateAPIv0();
+static duckdb_ext_api_v1 CreateAPIv1Wrapper() {
+	return CreateAPIv1();
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
@@ -275,7 +275,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	Configure(*config_ptr, database_path);
 
-	create_api_v0 = CreateAPIv0Wrapper;
+	create_api_v1 = CreateAPIv1Wrapper;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
@@ -516,9 +516,9 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
 }
 
-const duckdb_ext_api_v0 DatabaseInstance::GetExtensionAPIV0() {
-	D_ASSERT(create_api_v0);
-	return create_api_v0();
+const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
+	D_ASSERT(create_api_v1);
+	return create_api_v1();
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {

@@ -8,6 +8,7 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/main/config.hpp"
 #endif
 
@@ -19,7 +20,18 @@ struct ParquetMetaDataBindData : public TableFunctionData {
 	unique_ptr<MultiFileReader> multi_file_reader;
 };
 
-enum class ParquetMetadataOperatorType : uint8_t { META_DATA, SCHEMA, KEY_VALUE_META_DATA, FILE_META_DATA };
+struct ParquetBloomProbeBindData : public ParquetMetaDataBindData {
+	string probe_column_name;
+	Value probe_constant;
+};
+
+enum class ParquetMetadataOperatorType : uint8_t {
+	META_DATA,
+	SCHEMA,
+	KEY_VALUE_META_DATA,
+	FILE_META_DATA,
+	BLOOM_PROBE
+};
 
 struct ParquetMetaDataOperatorData : public GlobalTableFunctionState {
 	explicit ParquetMetaDataOperatorData(ClientContext &context, const vector<LogicalType> &types)
@@ -37,11 +49,14 @@ public:
 	static void BindSchema(vector<LogicalType> &return_types, vector<string> &names);
 	static void BindKeyValueMetaData(vector<LogicalType> &return_types, vector<string> &names);
 	static void BindFileMetaData(vector<LogicalType> &return_types, vector<string> &names);
+	static void BindBloomProbe(vector<LogicalType> &return_types, vector<string> &names);
 
 	void LoadRowGroupMetadata(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path);
 	void LoadSchemaData(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path);
 	void LoadKeyValueMetaData(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path);
 	void LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path);
+	void ExecuteBloomProbe(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path,
+	                       const string &column_name, const Value &probe);
 };
 
 template <class T>
@@ -164,6 +179,12 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 
 	names.emplace_back("key_value_metadata");
 	return_types.emplace_back(LogicalType::MAP(LogicalType::BLOB, LogicalType::BLOB));
+
+	names.emplace_back("bloom_filter_offset");
+	return_types.emplace_back(LogicalType::BIGINT);
+
+	names.emplace_back("bloom_filter_length");
+	return_types.emplace_back(LogicalType::BIGINT);
 }
 
 Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele, bool stats_is_set,
@@ -297,6 +318,14 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 			current_chunk.SetValue(
 			    23, count,
 			    Value::MAP(LogicalType::BLOB, LogicalType::BLOB, std::move(map_keys), std::move(map_values)));
+
+			// bloom_filter_offset, LogicalType::BIGINT
+			current_chunk.SetValue(
+			    24, count, ParquetElementBigint(col_meta.bloom_filter_offset, col_meta.__isset.bloom_filter_offset));
+
+			// bloom_filter_length, LogicalType::BIGINT
+			current_chunk.SetValue(
+			    25, count, ParquetElementBigint(col_meta.bloom_filter_length, col_meta.__isset.bloom_filter_length));
 
 			count++;
 			if (count >= STANDARD_VECTOR_SIZE) {
@@ -561,11 +590,83 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 }
 
 //===--------------------------------------------------------------------===//
+// Bloom Probe
+//===--------------------------------------------------------------------===//
+void ParquetMetaDataOperatorData::BindBloomProbe(vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("file_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("row_group_id");
+	return_types.emplace_back(LogicalType::BIGINT);
+
+	names.emplace_back("bloom_filter_excludes");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+}
+
+void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, const vector<LogicalType> &return_types,
+                                                    const string &file_path, const string &column_name,
+                                                    const Value &probe) {
+	collection.Reset();
+	ParquetOptions parquet_options(context);
+	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
+	idx_t count = 0;
+	DataChunk current_chunk;
+	current_chunk.Initialize(context, return_types);
+	auto meta_data = reader->GetFileMetadata();
+
+	optional_idx probe_column_idx;
+	for (idx_t column_idx = 0; column_idx < reader->names.size(); column_idx++) {
+		if (reader->names[column_idx] == column_name) {
+			probe_column_idx = column_idx;
+		}
+	}
+
+	if (!probe_column_idx.IsValid()) {
+		throw InvalidInputException("Column %s not found in %s", column_name, file_path);
+	}
+
+	auto &allocator = Allocator::DefaultAllocator();
+	auto transport = std::make_shared<ThriftFileTransport>(allocator, reader->GetHandle(), false);
+	auto protocol =
+	    make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
+
+	D_ASSERT(!probe.IsNull());
+	ConstantFilter filter(ExpressionType::COMPARE_EQUAL,
+	                      probe.CastAs(context, reader->GetTypes()[probe_column_idx.GetIndex()]));
+
+	for (idx_t row_group_idx = 0; row_group_idx < meta_data->row_groups.size(); row_group_idx++) {
+		auto &row_group = meta_data->row_groups[row_group_idx];
+		auto &column = row_group.columns[probe_column_idx.GetIndex()];
+
+		auto bloom_excludes =
+		    ParquetStatisticsUtils::BloomFilterExcludes(filter, column.meta_data, *protocol, allocator);
+		current_chunk.SetValue(0, count, Value(file_path));
+		current_chunk.SetValue(1, count, Value::BIGINT(NumericCast<int64_t>(row_group_idx)));
+		current_chunk.SetValue(2, count, Value::BOOLEAN(bloom_excludes));
+
+		count++;
+		if (count >= STANDARD_VECTOR_SIZE) {
+			current_chunk.SetCardinality(count);
+			collection.Append(current_chunk);
+
+			count = 0;
+			current_chunk.Reset();
+		}
+	}
+
+	current_chunk.SetCardinality(count);
+	collection.Append(current_chunk);
+	collection.InitializeScan(scan_state);
+}
+
+//===--------------------------------------------------------------------===//
 // Bind
 //===--------------------------------------------------------------------===//
 template <ParquetMetadataOperatorType TYPE>
 unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_uniq<ParquetMetaDataBindData>();
+
 	switch (TYPE) {
 	case ParquetMetadataOperatorType::SCHEMA:
 		ParquetMetaDataOperatorData::BindSchema(return_types, names);
@@ -579,14 +680,26 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 	case ParquetMetadataOperatorType::FILE_META_DATA:
 		ParquetMetaDataOperatorData::BindFileMetaData(return_types, names);
 		break;
+	case ParquetMetadataOperatorType::BLOOM_PROBE: {
+		auto probe_bind_data = make_uniq<ParquetBloomProbeBindData>();
+		D_ASSERT(input.inputs.size() == 3);
+		if (input.inputs[1].IsNull() || input.inputs[2].IsNull()) {
+			throw InvalidInputException("Can't have NULL parameters for parquet_bloom_probe");
+		}
+		probe_bind_data->probe_column_name = input.inputs[1].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+		probe_bind_data->probe_constant = input.inputs[2];
+		result = std::move(probe_bind_data);
+		ParquetMetaDataOperatorData::BindBloomProbe(return_types, names);
+		break;
+	}
 	default:
 		throw InternalException("Unsupported ParquetMetadataOperatorType");
 	}
 
-	auto result = make_uniq<ParquetMetaDataBindData>();
 	result->return_types = return_types;
 	result->multi_file_reader = MultiFileReader::Create(input.table_function);
 	result->file_list = result->multi_file_reader->CreateFileList(context, input.inputs[0]);
+
 	return std::move(result);
 }
 
@@ -614,6 +727,12 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 	case ParquetMetadataOperatorType::FILE_META_DATA:
 		result->LoadFileMetaData(context, bind_data.return_types, bind_data.file_list->GetFirstFile());
 		break;
+	case ParquetMetadataOperatorType::BLOOM_PROBE: {
+		auto &bloom_probe_bind_data = input.bind_data->Cast<ParquetBloomProbeBindData>();
+		result->ExecuteBloomProbe(context, bind_data.return_types, bind_data.file_list->GetFirstFile(),
+		                          bloom_probe_bind_data.probe_column_name, bloom_probe_bind_data.probe_constant);
+		break;
+	}
 	default:
 		throw InternalException("Unsupported ParquetMetadataOperatorType");
 	}
@@ -647,6 +766,12 @@ void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &d
 			case ParquetMetadataOperatorType::FILE_META_DATA:
 				data.LoadFileMetaData(context, bind_data.return_types, data.current_file);
 				break;
+			case ParquetMetadataOperatorType::BLOOM_PROBE: {
+				auto &bloom_probe_bind_data = data_p.bind_data->Cast<ParquetBloomProbeBindData>();
+				data.ExecuteBloomProbe(context, bind_data.return_types, bind_data.file_list->GetFirstFile(),
+				                       bloom_probe_bind_data.probe_column_name, bloom_probe_bind_data.probe_constant);
+				break;
+			}
 			default:
 				throw InternalException("Unsupported ParquetMetadataOperatorType");
 			}
@@ -684,6 +809,13 @@ ParquetFileMetadataFunction::ParquetFileMetadataFunction()
                     ParquetMetaDataImplementation<ParquetMetadataOperatorType::FILE_META_DATA>,
                     ParquetMetaDataBind<ParquetMetadataOperatorType::FILE_META_DATA>,
                     ParquetMetaDataInit<ParquetMetadataOperatorType::FILE_META_DATA>) {
+}
+
+ParquetBloomProbeFunction::ParquetBloomProbeFunction()
+    : TableFunction("parquet_bloom_probe", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
+                    ParquetMetaDataImplementation<ParquetMetadataOperatorType::BLOOM_PROBE>,
+                    ParquetMetaDataBind<ParquetMetadataOperatorType::BLOOM_PROBE>,
+                    ParquetMetaDataInit<ParquetMetadataOperatorType::BLOOM_PROBE>) {
 }
 
 } // namespace duckdb

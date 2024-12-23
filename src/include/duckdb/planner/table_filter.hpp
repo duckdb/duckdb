@@ -31,7 +31,8 @@ enum class TableFilterType : uint8_t {
 	CONJUNCTION_AND = 4,     // AND of different filters
 	STRUCT_EXTRACT = 5,      // filter applies to child-column of struct
 	OPTIONAL_FILTER = 6,     // executing filter is not required for query correctness
-	IN_FILTER = 7            // col IN (C1, C2, C3, ...)
+	IN_FILTER = 7,           // col IN (C1, C2, C3, ...)
+	DYNAMIC_FILTER = 8       // dynamic filters can be updated at run-time
 };
 
 //! TableFilter represents a filter pushed down into the table scan.
@@ -62,7 +63,7 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (filter_type != TARGET::TYPE) {
-			throw InternalException("Failed to cast table to type - table filter type mismatch");
+			throw InternalException("Failed to cast to type - table filter type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
 	}
@@ -70,7 +71,7 @@ public:
 	template <class TARGET>
 	const TARGET &Cast() const {
 		if (filter_type != TARGET::TYPE) {
-			throw InternalException("Failed to cast table to type - table filter type mismatch");
+			throw InternalException("Failed to cast to type - table filter type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}

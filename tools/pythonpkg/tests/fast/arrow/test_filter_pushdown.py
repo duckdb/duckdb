@@ -7,9 +7,6 @@ from conftest import pandas_supports_arrow_backend
 import sys
 from packaging.version import Version
 
-from arrow_canonical_extensions import HugeIntType, UHugeIntType
-
-
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 ds = pytest.importorskip("pyarrow.dataset")
@@ -30,6 +27,27 @@ def create_pyarrow_table(rel):
 def create_pyarrow_dataset(rel):
     table = create_pyarrow_table(rel)
     return ds.dataset(table)
+
+
+def test_decimal_filter_pushdown(duckdb_cursor):
+    pl = pytest.importorskip("polars")
+    np = pytest.importorskip("numpy")
+    np.random.seed(10)
+
+    df = pl.DataFrame({'x': pl.Series(np.random.uniform(-10, 10, 1000)).cast(pl.Decimal(precision=18, scale=4))})
+
+    query = """
+        SELECT
+            x,
+            x > 0.05 AS is_x_good,
+            x::FLOAT > 0.05 AS is_float_x_good
+        FROM {}
+        WHERE
+            is_x_good
+        ORDER BY x ASC
+    """
+
+    assert len(duckdb_cursor.sql(query.format("df")).fetchall()) == 495
 
 
 def numeric_operators(connection, data_type, tbl_name, create_table):
@@ -161,13 +179,6 @@ def string_check_or_pushdown(connection, tbl_name, create_table):
 
 
 class TestArrowFilterPushdown(object):
-    @classmethod
-    def setup_class(cls):
-        pa.register_extension_type(HugeIntType())
-
-    @classmethod
-    def teardown_class(cls):
-        pa.unregister_extension_type("duckdb.hugeint")
 
     @pytest.mark.parametrize(
         'data_type',
@@ -759,7 +770,7 @@ class TestArrowFilterPushdown(object):
         input = query_res[0][1]
         if 'PANDAS_SCAN' in input:
             pytest.skip(reason="This version of pandas does not produce an Arrow object")
-        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a<2 AND s\.a IS NOT NULL.*", input, flags=re.DOTALL)
+        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a<2.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
@@ -773,7 +784,7 @@ class TestArrowFilterPushdown(object):
 
         # the explain-output is pretty cramped, so just make sure we see both struct references.
         match = re.search(
-            r".*ARROW_SCAN.*Filters:.*s\.a<3 AND s\.a IS NOT NULL.*AND s\.b=true AND s\.b IS.*NOT NULL.*",
+            r".*ARROW_SCAN.*Filters:.*s\.a<3.*AND s\.b=true.*",
             query_res[0][1],
             flags=re.DOTALL,
         )
@@ -829,7 +840,7 @@ class TestArrowFilterPushdown(object):
         input = query_res[0][1]
         if 'PANDAS_SCAN' in input:
             pytest.skip(reason="This version of pandas does not produce an Arrow object")
-        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a\.b<2 AND s\.a\.b IS NOT.*NULL.*", input, flags=re.DOTALL)
+        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a\.b<2.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
@@ -846,7 +857,7 @@ class TestArrowFilterPushdown(object):
 
         # the explain-output is pretty cramped, so just make sure we see both struct references.
         match = re.search(
-            r".*ARROW_SCAN.*Filters:.*s\.a\.c=true AND s\.a\.c IS.*NOT NULL AND s\.d\.e=5 AND.*s\.d\.e IS NOT NULL.*",
+            r".*ARROW_SCAN.*Filters:.*s\.a\.c=true.*AND s\.d\.e=5.*",
             query_res[0][1],
             flags=re.DOTALL,
         )
@@ -867,7 +878,7 @@ class TestArrowFilterPushdown(object):
 
         res = query_res.fetchone()[1]
         match = re.search(
-            r".*ARROW_SCAN.*Filters:.*s\.d\.f='bar' AND s\.d\.f IS.*NOT NULL.*",
+            r".*ARROW_SCAN.*Filters:.*s\.d\.f='bar'.*",
             res,
             flags=re.DOTALL,
         )
@@ -881,8 +892,6 @@ class TestArrowFilterPushdown(object):
         }
 
     def test_filter_pushdown_not_supported(self):
-        pa.register_extension_type(UHugeIntType())
-
         con = duckdb.connect()
         con.execute(
             "CREATE TABLE T as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d FROM range(5) tbl(i)"
@@ -917,12 +926,10 @@ class TestArrowFilterPushdown(object):
             "select a, b from arrow_tbl where a > 2 and c < 40 and b == '28' and g > 15 and e < 30"
         ).fetchall() == [(28, '28')]
 
-        pa.unregister_extension_type("duckdb.uhugeint")
-
     def test_join_filter_pushdown(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE probe as select range a from range(10000);")
-        duckdb_conn.execute("CREATE TABLE build as select (random()*10000)::INT b from range(20);")
+        duckdb_conn.execute("CREATE TABLE build as select (random()*9999)::INT b from range(20);")
         duck_probe = duckdb_conn.table("probe")
         duck_build = duckdb_conn.table("build")
         duck_probe_arrow = duck_probe.arrow()

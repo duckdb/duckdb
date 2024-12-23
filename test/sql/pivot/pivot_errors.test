@@ -17,7 +17,7 @@ statement ok
 SET pivot_filter_threshold=0
 
 statement error
-PIVOT test ON j IN ('a', 'b') USING current_date();
+PIVOT test ON j IN ('a', 'b') USING get_current_timestamp();
 ----
 no aggregates were found
 
@@ -25,7 +25,7 @@ statement ok
 SET pivot_filter_threshold=100
 
 statement error
-PIVOT test ON j IN ('a', 'b') USING current_date();
+PIVOT test ON j IN ('a', 'b') USING get_current_timestamp();
 ----
 no aggregates were found
 

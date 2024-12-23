@@ -172,6 +172,7 @@ string LogicalTypeIdToString(LogicalTypeId type) {
 
 constexpr const LogicalTypeId LogicalType::INVALID;
 constexpr const LogicalTypeId LogicalType::SQLNULL;
+constexpr const LogicalTypeId LogicalType::UNKNOWN;
 constexpr const LogicalTypeId LogicalType::BOOLEAN;
 constexpr const LogicalTypeId LogicalType::TINYINT;
 constexpr const LogicalTypeId LogicalType::UTINYINT;
@@ -710,6 +711,11 @@ bool LogicalType::IsComplete() const {
 				return true; // Missing or incorrect type info
 			}
 			break;
+		case LogicalTypeId::ENUM:
+			if (!type.AuxInfo() || type.AuxInfo()->type != ExtraTypeInfoType::ENUM_TYPE_INFO) {
+				return true; // Missing or incorrect type info
+			}
+			break;
 		default:
 			return false;
 		}
@@ -726,6 +732,27 @@ bool LogicalType::IsComplete() const {
 			return false; // Nested types are checked by TypeVisitor recursion
 		}
 	});
+}
+
+bool LogicalType::SupportsRegularUpdate() const {
+	switch (id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto &child_types = StructType::GetChildTypes(*this);
+		for (auto &entry : child_types) {
+			if (!entry.second.SupportsRegularUpdate()) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
 }
 
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
@@ -886,14 +913,8 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 template <class OP>
 static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// left and right are not equal
-	// for enums, match the varchar rules
-	if (left.id() == LogicalTypeId::ENUM) {
-		return OP::Operation(LogicalType::VARCHAR, right, result);
-	} else if (right.id() == LogicalTypeId::ENUM) {
-		return OP::Operation(left, LogicalType::VARCHAR, result);
-	}
-	// NULL/string literals/unknown (parameter) types always take the other type
-	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN, LogicalTypeId::STRING_LITERAL};
+	// NULL/unknown (parameter) types always take the other type
+	LogicalTypeId other_types[] = {LogicalTypeId::SQLNULL, LogicalTypeId::UNKNOWN};
 	for (auto &other_type : other_types) {
 		if (left.id() == other_type) {
 			result = LogicalType::NormalizeType(right);
@@ -902,6 +923,22 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 			result = LogicalType::NormalizeType(left);
 			return true;
 		}
+	}
+
+	// for enums, match the varchar rules
+	if (left.id() == LogicalTypeId::ENUM) {
+		return OP::Operation(LogicalType::VARCHAR, right, result);
+	} else if (right.id() == LogicalTypeId::ENUM) {
+		return OP::Operation(left, LogicalType::VARCHAR, result);
+	}
+
+	// for everything but enums - string literals also take the other type
+	if (left.id() == LogicalTypeId::STRING_LITERAL) {
+		result = LogicalType::NormalizeType(right);
+		return true;
+	} else if (right.id() == LogicalTypeId::STRING_LITERAL) {
+		result = LogicalType::NormalizeType(left);
+		return true;
 	}
 
 	// for other types - use implicit cast rules to check if we can combine the types
@@ -1595,35 +1632,30 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 const string &UserType::GetCatalog(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().catalog;
 }
 
 const string &UserType::GetSchema(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().schema;
 }
 
 const string &UserType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().user_type_name;
 }
 
 const vector<Value> &UserType::GetTypeModifiers(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().user_type_modifiers;
 }
 
 vector<Value> &UserType::GetTypeModifiers(LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.GetAuxInfoShrPtr();
-	D_ASSERT(info);
 	return info->Cast<UserTypeInfo>().user_type_modifiers;
 }
 
@@ -1663,21 +1695,18 @@ const string EnumType::GetValue(const Value &val) {
 const Vector &EnumType::GetValuesInsertOrder(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<EnumTypeInfo>().GetValuesInsertOrder();
 }
 
 idx_t EnumType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<EnumTypeInfo>().GetDictSize();
 }
 
 PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto aux_info = type.AuxInfo();
-	D_ASSERT(aux_info);
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
 	return EnumTypeInfo::DictType(info.GetDictSize());
@@ -1703,21 +1732,18 @@ bool LogicalType::IsJSONType() const {
 const LogicalType &ArrayType::GetChildType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<ArrayTypeInfo>().child_type;
 }
 
 idx_t ArrayType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<ArrayTypeInfo>().size;
 }
 
 bool ArrayType::IsAnySize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
 	return info->Cast<ArrayTypeInfo>().size == 0;
 }
 
@@ -1798,7 +1824,7 @@ idx_t AnyType::GetCastScore(const LogicalType &type) {
 LogicalType IntegerLiteral::GetType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::INTEGER_LITERAL);
 	auto info = type.AuxInfo();
-	D_ASSERT(info && info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
+	D_ASSERT(info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
 	return info->Cast<IntegerLiteralTypeInfo>().constant_value.type();
 }
 
@@ -1813,7 +1839,7 @@ bool IntegerLiteral::FitsInType(const LogicalType &type, const LogicalType &targ
 	}
 	// we can cast to integral types if the constant value fits within that type
 	auto info = type.AuxInfo();
-	D_ASSERT(info && info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
+	D_ASSERT(info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
 	auto &literal_info = info->Cast<IntegerLiteralTypeInfo>();
 	Value copy = literal_info.constant_value;
 	return copy.DefaultTryCastAs(target);

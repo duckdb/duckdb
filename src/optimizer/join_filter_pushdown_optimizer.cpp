@@ -20,7 +20,7 @@ JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) :
 }
 
 bool PushdownJoinFilterExpression(Expression &expr, JoinFilterPushdownColumn &filter) {
-	if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		// not a simple column ref - bail-out
 		return false;
 	}
@@ -30,8 +30,9 @@ bool PushdownJoinFilterExpression(Expression &expr, JoinFilterPushdownColumn &fi
 	return true;
 }
 
-void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdownColumn> columns,
-                                  JoinFilterPushdownInfo &pushdown_info) {
+void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
+                                                           vector<JoinFilterPushdownColumn> columns,
+                                                           vector<PushdownFilterTarget> &targets) {
 	auto &probe_child = op;
 	switch (probe_child.type) {
 	case LogicalOperatorType::LOGICAL_LIMIT:
@@ -43,7 +44,7 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		// does not affect probe side - recurse into left child
 		// FIXME: we can probably recurse into more operators here (e.g. window, unnest)
-		GenerateJoinFiltersRecursive(*probe_child.children[0], std::move(columns), pushdown_info);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		auto &unnest = probe_child.Cast<LogicalUnnest>();
@@ -54,7 +55,7 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 				return;
 			}
 		}
-		GenerateJoinFiltersRecursive(*probe_child.children[0], std::move(columns), pushdown_info);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_EXCEPT:
@@ -80,7 +81,7 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 				child_columns.push_back(new_col);
 			}
 			// then recurse into the child
-			GenerateJoinFiltersRecursive(*child, std::move(child_columns), pushdown_info);
+			GetPushdownFilterTargets(*child, std::move(child_columns), targets);
 
 			// for EXCEPT we can only recurse into the first (left) child
 			if (probe_child.type == LogicalOperatorType::LOGICAL_EXCEPT) {
@@ -102,15 +103,7 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 				return;
 			}
 		}
-		// pushdown info can be applied to this LogicalGet - push the dynamic table filter set
-		if (!get.dynamic_filters) {
-			get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
-		}
-
-		JoinFilterPushdownFilter get_filter;
-		get_filter.dynamic_filters = get.dynamic_filters;
-		get_filter.columns = std::move(columns);
-		pushdown_info.probe_info.push_back(std::move(get_filter));
+		targets.emplace_back(get, std::move(columns));
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
@@ -127,7 +120,7 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 				return;
 			}
 		}
-		GenerateJoinFiltersRecursive(*probe_child.children[0], std::move(columns), pushdown_info);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -144,7 +137,7 @@ void GenerateJoinFiltersRecursive(LogicalOperator &op, vector<JoinFilterPushdown
 				return;
 			}
 		}
-		GenerateJoinFiltersRecursive(*probe_child.children[0], std::move(columns), pushdown_info);
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	}
 	default:
@@ -181,7 +174,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 			// only equality supported for now
 			continue;
 		}
-		if (cond.left->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (cond.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			// only bound column ref supported for now
 			continue;
 		}
@@ -205,12 +198,31 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		return;
 	}
 	// recurse the query tree to find the LogicalGets in which we can push the filter info
-	GenerateJoinFiltersRecursive(*join.children[0], pushdown_columns, *pushdown_info);
+	vector<PushdownFilterTarget> pushdown_filter_targets;
+	GetPushdownFilterTargets(*join.children[0], pushdown_columns, pushdown_filter_targets);
+	for (auto &target : pushdown_filter_targets) {
+		auto &get = target.get;
+		// pushdown info can be applied to this LogicalGet - push the dynamic table filter set
+		if (!get.dynamic_filters) {
+			get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
+		}
 
-	if (pushdown_info->probe_info.empty()) {
+		JoinFilterPushdownFilter get_filter;
+		get_filter.dynamic_filters = get.dynamic_filters;
+		get_filter.columns = std::move(target.columns);
+		pushdown_info->probe_info.push_back(std::move(get_filter));
+	}
+
+	// Even if we cannot find any table sources in which we can push down filters,
+	// we still initialize the aggregate states so that we have the possibility of doing a perfect hash join
+	const auto compute_aggregates_anyway = join.join_type == JoinType::INNER && join.conditions.size() == 1 &&
+	                                       pushdown_info->join_condition.size() == 1 &&
+	                                       TypeIsIntegral(join.conditions[0].right->return_type.InternalType());
+	if (pushdown_info->probe_info.empty() && !compute_aggregates_anyway) {
 		// no table sources found in which we can push down filters
 		return;
 	}
+
 	// set up the min/max aggregates for each of the filters
 	vector<AggregateFunction> aggr_functions;
 	aggr_functions.push_back(MinFunction::GetFunction());

@@ -961,3 +961,9 @@ statement error
 WITH parts(p) AS (VALUES (['year', 'month', 'day']), (['hour', 'minute', 'microsecond']))
 SELECT DATE_PART(p, ts) FROM parts, timestamps;
 ----
+
+# epoch_ns has nanosecond precision on TIMESTAMP_NS
+query I
+select epoch_ns(make_timestamp_ns(1732118940123456789))
+----
+1732118940123456789

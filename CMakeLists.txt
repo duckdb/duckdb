@@ -100,6 +100,11 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
+option (WASM_ENABLED "Are DuckDB-Wasm extensions build enabled" FALSE)
+if (DEFINED ENV{WASM_EXTENSIONS})
+     set(WASM_ENABLED "$ENV{WASM_EXTENSIONS}")
+endif()
+
 set(M32_FLAG "")
 if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
@@ -382,6 +387,7 @@ option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
+option(DISABLE_POINTER_SALT "Debug setting: verify correct results without pointer salt" FALSE)
 option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
@@ -458,6 +464,10 @@ endif()
 
 if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
+endif()
+
+if(DISABLE_POINTER_SALT)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_POINTER_SALT")
 endif()
 
 if(LATEST_STORAGE)
@@ -846,7 +856,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
   #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
   if(WASM_LOADABLE_EXTENSIONS)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sSIDE_MODULE=1 -DWASM_LOADABLE_EXTENSIONS")
-  elseif(${ABI_TYPE} STREQUAL "C_STRUCT")
+  elseif(${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
     # TODO strip all symbols except the capi init
   elseif (EXTENSION_STATIC_BUILD)
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
@@ -897,7 +907,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     string(REPLACE ";" " " TO_BE_LINKED "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS}")
     if (${ABI_TYPE} STREQUAL "CPP")
       set(EXPORTED_FUNCTIONS "_${NAME}_init,_${NAME}_version")
-    elseif (${ABI_TYPE} STREQUAL "C_STRUCT")
+    elseif (${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
       set(EXPORTED_FUNCTIONS "_${NAME}_init_c_api")
     endif()
     add_custom_command(
@@ -908,6 +918,8 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
   endif()
 
   if (${ABI_TYPE} STREQUAL "CPP")
+    set(FOOTER_VERSION_VALUE ${DUCKDB_NORMALIZED_VERSION})
+  elseif (${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
     set(FOOTER_VERSION_VALUE ${DUCKDB_NORMALIZED_VERSION})
   elseif (${ABI_TYPE} STREQUAL "C_STRUCT")
     set(FOOTER_VERSION_VALUE ${CAPI_VERSION})
@@ -934,13 +946,32 @@ function(build_loadable_extension NAME PARAMETERS)
   build_loadable_extension_directory(${NAME} "CPP" "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "" "${PARAMETERS}" ${FILES})
 endfunction()
 
-function(build_loadable_extension_capi NAME CAPI_VERSION PARAMETERS)
+function(build_loadable_extension_capi NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR CAPI_VERSION_PATCH PARAMETERS)
+  set(FILES "${ARGV}")
+  list(REMOVE_AT FILES 0 1 2 3)
+  set(CAPI_VERSION v${CAPI_VERSION_MAJOR}.${CAPI_VERSION_MINOR}.${CAPI_VERSION_PATCH})
+  build_loadable_extension_capi_internal(${NAME} ${CAPI_VERSION} "C_STRUCT" ${FILES})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MAJOR=${CAPI_VERSION_MAJOR})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MINOR=${CAPI_VERSION_MINOR})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_PATCH=${CAPI_VERSION_PATCH})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
+endfunction()
+
+function(build_loadable_extension_capi_unstable NAME PARAMETERS)
+  set(FILES "${ARGV}")
+  list(REMOVE_AT FILES 0)
+  build_loadable_extension_capi_internal(${NAME} "" "C_STRUCT_UNSTABLE" ${FILES})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_UNSTABLE=${DUCKDB_NORMALIZED_VERSION})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
+endfunction()
+
+function(build_loadable_extension_capi_internal NAME VERSION ABI_TYPE PARAMETERS)
   # all parameters after name
   set(FILES "${ARGV}")
-  list(REMOVE_AT FILES 0 1)
+  list(REMOVE_AT FILES 0 1 2)
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
-  build_loadable_extension_directory(${NAME} "C_STRUCT" "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "${CAPI_VERSION}" "${PARAMETERS}" ${FILES})
+  build_loadable_extension_directory(${NAME} ${ABI_TYPE} "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "${VERSION}" "${PARAMETERS}" ${FILES})
 endfunction()
 
 function(build_static_extension NAME PARAMETERS)

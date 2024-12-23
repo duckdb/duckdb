@@ -1,6 +1,8 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
+
+from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 
@@ -30,6 +32,18 @@ class TestsSparkFunctionsNull(object):
         assert res == [
             Row(nvl_value=2),
             Row(nvl_value=4),
+        ]
+
+    @pytest.mark.skipif(
+        USE_ACTUAL_SPARK and not hasattr(F, "zeroifnull"),
+        reason="zeroifnull is only introduced in PySpark 4.0.0",
+    )
+    def test_zeroifnull(self, spark):
+        df = spark.createDataFrame([(None,), (1,)], ["a"])
+        res = df.select(F.zeroifnull(df.a).alias("result")).collect()
+        assert res == [
+            Row(result=0),
+            Row(result=1),
         ]
 
     def test_nvl2(self, spark):

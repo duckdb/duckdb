@@ -276,25 +276,14 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 	case LogicalTypeId::BLOB:
 		return dataset_scalar(py::bytes(constant.GetValueUnsafe<string>()));
 	case LogicalTypeId::DECIMAL: {
-		py::object date_type = py::module_::import("pyarrow").attr("decimal128");
+		py::object decimal_type = py::module_::import("pyarrow").attr("decimal128");
 		uint8_t width;
 		uint8_t scale;
 		constant.type().GetDecimalProperties(width, scale);
-		switch (constant.type().InternalType()) {
-		case PhysicalType::INT16:
-			return dataset_scalar(scalar(constant.GetValue<int16_t>(), date_type(width, scale)));
-		case PhysicalType::INT32:
-			return dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type(width, scale)));
-		case PhysicalType::INT64:
-			return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type(width, scale)));
-		default: {
-			auto hugeint_value = constant.GetValue<hugeint_t>();
-			auto hugeint_value_py = py::cast(hugeint_value.upper);
-			hugeint_value_py = hugeint_value_py.attr("__mul__")(NumericLimits<uint64_t>::Maximum());
-			hugeint_value_py = hugeint_value_py.attr("__add__")(hugeint_value.lower);
-			return dataset_scalar(scalar(hugeint_value_py, date_type(width, scale)));
-		}
-		}
+		// pyarrow only allows 'decimal.Decimal' to be used to construct decimal scalars such as 0.05
+		auto val = import_cache.decimal.Decimal()(constant.ToString());
+		return dataset_scalar(
+		    scalar(std::move(val), decimal_type(py::arg("precision") = width, py::arg("scale") = scale)));
 	}
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for Arrow Filter Pushdown",

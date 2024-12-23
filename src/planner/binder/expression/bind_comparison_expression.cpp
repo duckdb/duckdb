@@ -139,7 +139,7 @@ LogicalType BoundComparisonExpression::BindComparison(ClientContext &context, co
 }
 
 LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
-	if (expr.expression_class == ExpressionClass::BOUND_CONSTANT) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		if (expr.return_type == LogicalTypeId::VARCHAR && StringType::GetCollation(expr.return_type).empty()) {
 			return LogicalTypeId::STRING_LITERAL;
 		}
@@ -170,7 +170,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	LogicalType input_type;
-	if (!BoundComparisonExpression::TryBindComparison(context, left_sql_type, right_sql_type, input_type, expr.type)) {
+	if (!BoundComparisonExpression::TryBindComparison(context, left_sql_type, right_sql_type, input_type,
+	                                                  expr.GetExpressionType())) {
 		return BindResult(BinderException(expr,
 		                                  "Cannot compare values of type %s and type %s - an explicit cast is required",
 		                                  left_sql_type.ToString(), right_sql_type.ToString()));
@@ -185,7 +186,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	PushCollation(context, right, input_type);
 
 	// now create the bound comparison expression
-	return BindResult(make_uniq<BoundComparisonExpression>(expr.type, std::move(left), std::move(right)));
+	return BindResult(
+	    make_uniq<BoundComparisonExpression>(expr.GetExpressionType(), std::move(left), std::move(right)));
 }
 
 } // namespace duckdb

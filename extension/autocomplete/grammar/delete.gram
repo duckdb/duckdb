@@ -1,0 +1,4 @@
+DeleteStatement <- WithClause? 'DELETE'i 'FROM'i InsertTarget DeleteUsingClause? WhereClause? ReturningClause?
+TruncateStatement <- 'TRUNCATE'i 'TABLE'i? BaseTableName
+
+DeleteUsingClause <- 'USING'i List(TableRef)

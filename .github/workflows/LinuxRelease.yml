@@ -55,6 +55,8 @@ jobs:
     name: Linux (x64)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
+    needs: linux-extensions-64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
@@ -124,7 +126,7 @@ jobs:
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: duckdb-binaries-linux
         path: |
@@ -134,10 +136,10 @@ jobs:
  linux-release-aarch64:
    # Builds binaries for linux_arm64
    name: Linux (aarch64)
-   if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
    runs-on: ubuntu-latest
-   needs: linux-release-64
+   needs: linux-extensions-64
    container: ubuntu:18.04
+   if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
    env:
      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
      ENABLE_EXTENSION_AUTOLOADING: 1
@@ -176,7 +178,7 @@ jobs:
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip
 
-     - uses: actions/upload-artifact@v3
+     - uses: actions/upload-artifact@v4
        with:
          name: duckdb-binaries-linux-aarch64
          path: |
@@ -189,104 +191,68 @@ jobs:
     # Builds extensions for linux_amd64
     name: Linux Extensions (x64)
     runs-on: ubuntu-latest
-    container: ubuntu:18.04
-    needs: linux-release-64
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+    strategy:
+      matrix:
+        duckdb_arch: [linux_amd64]
+        vcpkg_triplet: [x64-linux]
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+      - uses: actions/checkout@v4
+        with:
+          path: 'duckdb'
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
 
-    - uses: ./.github/actions/ubuntu_18_setup
-      with:
-        vcpkg: 1
-        openssl: 1
-        ccache: 1
-        git_ref: ${{ inputs.git_ref }}
+      - uses: ./duckdb/.github/actions/build_extensions_dockerized
+        with:
+          vcpkg_target_triplet: x64-linux
+          duckdb_arch: linux_amd64
 
-    - name: Setup Rust
-      uses: dtolnay/rust-toolchain@stable
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-extensions-64
+          path: |
+            build/release/extension/*/*.duckdb_extension
 
-    - name: Configure OpenSSL for Rust
-      run: |
-        echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
-        echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/x64-linux" >> $GITHUB_ENV
-        echo "OPENSSL_INCLUDE_DIR=`pwd`/build/release/vcpkg_installed/x64-linux/include" >> $GITHUB_ENV
-        echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
+ upload-linux-extensions-64:
+    name: Upload Linux Extensions (x64)
+    needs: linux-extensions-64
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: linux-extensions-64
+      duckdb_arch: linux_amd64
+      duckdb_sha: ${{ github.sha }}
 
-    - uses: ./.github/actions/build_extensions
-      with:
-        vcpkg_target_triplet: x64-linux
-        post_install: rm build/release/src/libduckdb*
-        deploy_as: linux_amd64
-        treat_warn_as_error: 0
-        run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-        run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-        s3_id: ${{ secrets.S3_ID }}
-        s3_key: ${{ secrets.S3_KEY }}
-        signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        ninja: 1
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: linux-extensions-64
-        path: |
-          build/release/extension/*/*.duckdb_extension
+ upload-linux-extensions-64-aarch64:
+    name: Upload Linux Extensions (aarch64)
+    needs: linux-extensions-64-aarch64
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: linux-extensions-64-aarch64
+      duckdb_arch: linux_arm64
+      duckdb_sha: ${{ github.sha }}
 
  linux-extensions-64-aarch64:
     # Builds extensions for linux_arm64
     name: Linux Extensions (aarch64)
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    container: ubuntu:18.04
-    needs: linux-release-64
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+    needs: linux-extensions-64
 
     steps:
       - uses: actions/checkout@v3
         with:
+          path: 'duckdb'
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: ./.github/actions/ubuntu_18_setup
-        with:
-          vcpkg: 1
-          openssl: 1
-          aarch64_cross_compile: 1
-          ccache: 1
-          git_ref: ${{ inputs.git_ref }}
-
-      - name: Setup Rust for cross compilation
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-unknown-linux-gnu
-
-      - name: Configure OpenSSL for Rust
-        run: |
-          echo "OPENSSL_ROOT_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux" >> $GITHUB_ENV
-          echo "OPENSSL_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux" >> $GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=`pwd`/build/release/vcpkg_installed/arm64-linux/include" >> $GITHUB_ENV
-          echo "OPENSSL_USE_STATIC_LIBS=true" >> $GITHUB_ENV
-
-      - uses: ./.github/actions/build_extensions
+      - uses: ./duckdb/.github/actions/build_extensions_dockerized
         with:
           vcpkg_target_triplet: arm64-linux
-          deploy_as: linux_arm64
           duckdb_arch: linux_arm64
-          treat_warn_as_error: 0
-          s3_id: ${{ secrets.S3_ID }}
-          s3_key: ${{ secrets.S3_KEY }}
-          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-          aarch64_cross_compile: 1
-          run_tests: 0 # Cannot run tests here due to cross-compiling
-          run_autoload_tests: 0
-          ninja: 1
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: linux-extensions-64-aarch64
           path: |
@@ -330,7 +296,7 @@ jobs:
       run: |
         make
 
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
         name: linux-extensions-64
         path: build/release/repository
@@ -346,7 +312,7 @@ jobs:
         pip install cmake-format
         make format-fix
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: extension_entries.hpp
         path: |
@@ -366,7 +332,7 @@ jobs:
     name: Symbol Leakage
     if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-20.04
-    needs: linux-release-64
+    needs: linux-extensions-64
 
     steps:
     - uses: actions/checkout@v3
@@ -395,7 +361,7 @@ jobs:
  amalgamation-tests:
     name: Amalgamation Tests
     if: ${{ inputs.skip_tests != 'true' }}
-    needs: linux-release-64
+    needs: linux-extensions-64
     runs-on: ubuntu-20.04
     env:
       CC: clang
@@ -426,7 +392,8 @@ jobs:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-release-64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+    needs: linux-extensions-64
     env:
       CC: /usr/bin/gcc
       CXX: /usr/bin/g++

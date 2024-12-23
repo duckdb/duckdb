@@ -130,6 +130,22 @@ select struct_extract({'a': 42}, 42)
 ----
 can only be used on unnamed structs
 
+query I
+select struct_extract_at({'a': 42}, 1)
+----
+42
+
+statement error
+select struct_extract_at({'a': 42}, 0)
+----
+out of range
+
+statement error
+select struct_extract_at({'a': 42}, 42)
+----
+out of range
+
+
 # test string to struct within struct casting
 query I
 SELECT {a:{b:'{a:3, b: "Hello World"}'}}::STRUCT(a STRUCT(b STRUCT(a INT, b VARCHAR)));

@@ -35,7 +35,8 @@ using namespace std;
 
 extern "C" {
 void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value, int columnar,
-                           char thousands, char decimal_sep, duckdb::BaseResultRenderer *renderer);
+                           char thousands, char decimal_sep, int large_number_rendering,
+                           duckdb::BaseResultRenderer *renderer);
 }
 
 static char *sqlite3_strdup(const char *str);
@@ -253,7 +254,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 }
 
 void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, const char *null_value, int columnar,
-                           char thousand_separator, char decimal_separator,
+                           char thousand_separator, char decimal_separator, int large_number_rendering,
                            duckdb::BaseResultRenderer *result_renderer) {
 	try {
 		if (!pStmt) {
@@ -308,6 +309,7 @@ void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_widt
 		config.decimal_separator = decimal_separator;
 		config.thousand_separator = thousand_separator;
 		config.max_width = max_width;
+		config.large_number_rendering = static_cast<LargeNumberRendering>(large_number_rendering);
 		BoxRenderer renderer(config);
 		renderer.Render(*pStmt->db->con->context, pStmt->result->names, materialized.Collection(), *result_renderer);
 	} catch (std::exception &ex) {

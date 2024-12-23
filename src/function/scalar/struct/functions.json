@@ -7,8 +7,15 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "struct_extract_at",
+        "parameters": "struct,'entry'",
+        "description": "Extract the entry from the STRUCT by position (starts at 1!).",
+        "example": "struct_extract_at({'i': 3, 'v2': 3, 'v3': 0}, 2)",
+        "type": "scalar_function_set"
+    },
+    {
         "name": "struct_pack",
-        "parameters": "name:=any,...)",
+        "parameters": "name:=any,...",
         "description": "Create a STRUCT containing the argument values. The entry name will be the bound variable name.",
         "example": "struct_pack(i := 4, s := 'string')",
         "type": "scalar_function"

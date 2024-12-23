@@ -979,6 +979,7 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_p, py::kwargs &kwargs) {
 	py::object header = py::none();
+	py::object auto_detect = py::none();
 	py::object compression = py::none();
 	py::object sep = py::none();
 	py::object delimiter = py::none();
@@ -1016,7 +1017,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	py::object hive_types_autocast = py::none();
 	for (auto &arg : kwargs) {
 		const auto &arg_name = py::str(arg.first).cast<std::string>();
-
 		if (arg_name == "header") {
 			header = kwargs[arg_name.c_str()];
 		} else if (arg_name == "compression") {
@@ -1045,6 +1045,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			timestamp_format = kwargs[arg_name.c_str()];
 		} else if (arg_name == "sample_size") {
 			sample_size = kwargs[arg_name.c_str()];
+		} else if (arg_name == "auto_detect") {
+			auto_detect = kwargs[arg_name.c_str()];
 		} else if (arg_name == "all_varchar") {
 			all_varchar = kwargs[arg_name.c_str()];
 		} else if (arg_name == "normalize_names") {
@@ -1248,6 +1250,23 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			throw InvalidInputException("read_csv only accepts 'date_format' as a string");
 		}
 		bind_parameters["dateformat"] = Value(py::str(date_format));
+	}
+
+	if (!py::none().is(auto_detect)) {
+		bool auto_detect_as_int = py::isinstance<py::int_>(auto_detect);
+		bool auto_detect_as_bool = py::isinstance<py::bool_>(auto_detect);
+		bool auto_detect_value;
+		if (auto_detect_as_bool) {
+			auto_detect_value = py::bool_(auto_detect);
+		} else if (auto_detect_as_int) {
+			if ((int)py::int_(auto_detect) != 0) {
+				throw InvalidInputException("read_csv only accepts 0 if 'auto_detect' is given as an integer");
+			}
+			auto_detect_value = true;
+		} else {
+			throw InvalidInputException("read_csv only accepts 'auto_detect' as an integer, or a boolean");
+		}
+		bind_parameters["auto_detect"] = Value::BOOLEAN(auto_detect_value);
 	}
 
 	if (!py::none().is(timestamp_format)) {

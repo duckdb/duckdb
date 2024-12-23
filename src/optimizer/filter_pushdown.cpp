@@ -14,6 +14,7 @@ using Filter = FilterPushdown::Filter;
 
 void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings) {
 	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		if (join.join_type != JoinType::MARK) {
@@ -31,7 +32,6 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// when we encounter a projection, replace the table_bindings with
 		// the tables in the projection
-		auto plan_bindings = op.GetColumnBindings();
 		auto &proj = op.Cast<LogicalProjection>();
 		auto proj_bindings = proj.GetColumnBindings();
 		unordered_set<idx_t> new_table_bindings;
@@ -40,8 +40,8 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &
 			auto &expr = proj.expressions.at(col_index);
 			vector<ColumnBinding> bindings_to_keep;
 			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
-				if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &col_ref = expr->Cast<BoundColumnRefExpression>();
+				if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+					auto &col_ref = child.Cast<BoundColumnRefExpression>();
 					bindings_to_keep.push_back(col_ref.binding);
 				}
 			});

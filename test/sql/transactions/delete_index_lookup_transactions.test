@@ -1,0 +1,53 @@
+# name: test/sql/transactions/delete_index_lookup_transactions.test
+# description: Verify indexes still correctly refer to the old state when data is deleted
+# group: [transactions]
+
+statement ok
+CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'first payload');
+
+statement ok old
+BEGIN;
+
+statement ok old
+INSERT INTO tbl VALUES (5, 'con2 payload');
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+DELETE FROM tbl;
+
+statement ok con1
+COMMIT;
+
+# old should still see first_payload
+query II old
+SELECT id, payload FROM tbl WHERE id = 1 ORDER BY ALL;
+----
+1	first payload
+
+query II old
+SELECT id, payload FROM tbl WHERE id = 5 ORDER BY ALL;
+----
+5	con2 payload
+
+# new should see nothing (everything is deleted)
+query III con1
+SELECT id, payload, rowid FROM tbl WHERE id = 1 ORDER BY ALL;
+----
+
+statement ok old
+COMMIT
+
+# after commit the first payload is gone, but the new payload is not
+query II
+SELECT id, payload FROM tbl WHERE id = 1 ORDER BY ALL;
+----
+
+query II
+SELECT id, payload FROM tbl WHERE id = 5 ORDER BY ALL;
+----
+5	con2 payload

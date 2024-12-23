@@ -119,46 +119,46 @@ jobs:
    manylinux-extensions-x64:
     name: Linux Extensions (linux_amd64_gcc4)
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
+    strategy:
+      matrix:
+        duckdb_arch: [linux_amd64_gcc4]
+        vcpkg_triplet: [x64-linux]
     needs: linux-python3-9
+
     env:
+      VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
+      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       GEN: ninja
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+      - uses: actions/checkout@v4
+        with:
+          path: 'duckdb'
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
 
-    - uses: ./.github/actions/manylinux_2014_setup
-      with:
-        aws-cli: 1
-        ninja-build: 1
-        ccache: 1
-        nodejs: 1
-        ssh: 1
-        python_alias: 1
-        openssl: 1
+      - uses: ./duckdb/.github/actions/build_extensions_dockerized
+        with:
+          vcpkg_target_triplet: x64-linux
+          duckdb_arch: linux_amd64_gcc4
 
-    - uses: ./.github/actions/build_extensions
-      with:
-        vcpkg_target_triplet: x64-linux
-        post_install: rm build/release/src/libduckdb*
-        deploy_as: linux_amd64_gcc4
-        s3_id: ${{ secrets.S3_ID }}
-        s3_key: ${{ secrets.S3_KEY }}
-        signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-        run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
-        treat_warn_as_error: 0
-        ninja: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manylinux-extensions-x64
+          path: |
+            build/release/extension/*/*.duckdb_extension
 
-    - uses: actions/upload-artifact@v3
-      with:
-        name: manylinux-extensions-x64
-        path: |
-          build/release/extension/*/*.duckdb_extension
+   upload-linux-extensions-gcc4:
+    ## TODO: Add a if: github.ref == main, for now this is explicitly missing to be able to test on PR, expected is this should fail due to missing secrets
+    name: Upload Linux Extensions (gcc4)
+    needs: manylinux-extensions-x64
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: manylinux-extensions-x64
+      duckdb_arch: linux_amd64_gcc4
+      duckdb_sha: ${{ github.sha }}
 
    linux-python3:
     name: Python 3 Linux
@@ -234,7 +234,7 @@ jobs:
         pip install 'cibuildwheel>=2.16.2' build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       if: ${{ matrix.arch == 'x86_64' }}
       with:
         name: manylinux-extensions-x64
@@ -351,14 +351,10 @@ jobs:
       runs-on: windows-2019
       strategy:
        matrix:
-        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
+        python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
         exclude:
-          - isRelease: false
-            python_build: 'cp37-*'
-          - isRelease: false
-            python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
           - isRelease: false
@@ -433,7 +429,7 @@ jobs:
      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
      runs-on: ubuntu-20.04
-     needs: linux-python3-9
+     needs: twine-upload
      env:
        PYPI_CLEANUP_USERNAME: 'mytherin'
        PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}

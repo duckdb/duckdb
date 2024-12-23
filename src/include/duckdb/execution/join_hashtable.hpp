@@ -137,22 +137,20 @@ public:
 
 public:
 	struct SharedState {
-
 		SharedState();
 
 		// The ptrs to the row to which a key should be inserted into during building
 		// or matched against during probing
 		Vector rhs_row_locations;
+		Vector salt_v;
 
 		SelectionVector salt_match_sel;
 		SelectionVector key_no_match_sel;
 	};
 
 	struct ProbeState : SharedState {
-
 		ProbeState();
 
-		Vector salt_v;
 		Vector ht_offsets_v;
 		Vector ht_offsets_dense_v;
 
@@ -383,14 +381,6 @@ public:
 		return radix_bits;
 	}
 
-	idx_t GetPartitionStart() const {
-		return partition_start;
-	}
-
-	idx_t GetPartitionEnd() const {
-		return partition_end;
-	}
-
 	//! Capacity of the pointer table given the ht count
 	//! (minimum of 1024 to prevent collision chance for small HT's)
 	static idx_t PointerTableCapacity(idx_t count) {
@@ -411,6 +401,12 @@ public:
 	//! Sets number of radix bits according to the max ht size
 	void SetRepartitionRadixBits(const idx_t max_ht_size, const idx_t max_partition_size,
 	                             const idx_t max_partition_count);
+	//! Initialized "current_partitions" and "completed_partitions"
+	void InitializePartitionMasks();
+	//! How many partitions are currently active
+	idx_t CurrentPartitionCount() const;
+	//! How many partitions are fully done
+	idx_t FinishedPartitionCount() const;
 	//! Partition this HT
 	void Repartition(JoinHashTable &global_ht);
 
@@ -419,17 +415,18 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize(const idx_t max_ht_size);
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-	                   ProbeState &probe_state, DataChunk &payload, ProbeSpill &probe_spill,
+	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &probe_keys, TupleDataChunkState &key_state,
+	                   ProbeState &probe_state, DataChunk &probe_chunk, ProbeSpill &probe_spill,
 	                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
 
 private:
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
 
-	//! First and last partition of the current probe round
-	idx_t partition_start;
-	idx_t partition_end;
+	//! Bits set to 1 for currently active partitions
+	ValidityMask current_partitions;
+	//! Bits set to 1 for completed partitions
+	ValidityMask completed_partitions;
 };
 
 } // namespace duckdb

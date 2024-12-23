@@ -1,5 +1,6 @@
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
@@ -368,25 +369,36 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 
 	// now iterate over the
 	bool in_quotes = false;
+	char quote_char = '\0';
 	for (idx_t i = error_start; i < error_end; i++) {
-		if (error_msg[i] == '"' || error_msg[i] == '\'') {
+		if (in_quotes) {
+			// in a quote - look for the quote character
+			if (error_msg[i] == quote_char) {
+				SimplifiedToken token;
+				token.start = i;
+				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+				tokens.push_back(token);
+				in_quotes = false;
+			}
+			if (StringUtil::CharacterIsNewline(error_msg[i])) {
+				// found a newline in a quote, abort the quoted state entirely
+				tokens.pop_back();
+				in_quotes = false;
+			}
+		} else if (error_msg[i] == '"' || error_msg[i] == '\'') {
+			// not quoted and found a quote - enter the quoted state
 			SimplifiedToken token;
 			token.start = i;
-			if (!in_quotes) {
-				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT;
-				token.start++;
-			} else {
-				token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
-			}
+			token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT;
+			token.start++;
 			tokens.push_back(token);
-			in_quotes = !in_quotes;
+			quote_char = error_msg[i];
+			in_quotes = true;
 		}
 	}
-	if (in_quotes && error_end < error_msg.size()) {
-		SimplifiedToken token;
-		token.start = error_end;
-		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
-		tokens.push_back(token);
+	if (in_quotes) {
+		// unterminated quotes at the end of the error - pop back the quoted state
+		tokens.pop_back();
 	}
 	if (line_pos.IsValid()) {
 		SimplifiedToken token;

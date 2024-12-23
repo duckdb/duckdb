@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle)
-    : FileHandle(file_system, path), handle(handle) {
+PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle,
+                                   FileOpenFlags flags)
+    : FileHandle(file_system, path, flags), handle(handle) {
 }
 PythonFileHandle::~PythonFileHandle() {
 	try {
@@ -84,7 +85,7 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, FileOpenFl
 	string flags_s = DecodeFlags(flags);
 
 	const auto &handle = filesystem.attr("open")(path, py::str(flags_s));
-	return make_uniq<PythonFileHandle>(*this, path, handle);
+	return make_uniq<PythonFileHandle>(*this, path, handle, flags);
 }
 
 int64_t PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
