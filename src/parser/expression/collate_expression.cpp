@@ -33,7 +33,7 @@ bool CollateExpression::Equal(const CollateExpression &a, const CollateExpressio
 unique_ptr<ParsedExpression> CollateExpression::Copy() const {
 	auto copy = make_uniq<CollateExpression>(collation, child->Copy());
 	copy->CopyProperties(*this);
-	return std::move(copy);
+	return copy;
 }
 
 } // namespace duckdb
