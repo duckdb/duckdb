@@ -21,6 +21,8 @@
 )
 // clang-format on
 
+//! On most builds, NDEBUG is defined, turning the assert call into a NO-OP
+//! Only the 'else' condition is supposed to check the assertions
 #include <assert.h>
 #define D_ASSERT assert
 namespace duckdb {
