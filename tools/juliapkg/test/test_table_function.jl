@@ -11,7 +11,7 @@ end
 function my_bind_function(info::DuckDB.BindInfo)
     DuckDB.add_result_column(info, "forty_two", Int64)
 
-    parameter = DuckDB.get_parameter(info, 0)
+    parameter = DuckDB.get_parameter(info, 1)
     number = DuckDB.getvalue(parameter, Int64)
     return MyBindStruct(number)
 end
