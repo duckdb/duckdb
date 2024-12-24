@@ -1,0 +1,23 @@
+# name: benchmark/micro/join/external_join_partition_order.benchmark
+# description: Test that the external hash join partition selection selects even partitions sequentially
+# group: [join]
+
+name External Join Partition Order
+group join
+
+cache external_join_partition_order.duckdb
+
+load
+create table build as select range c from range(2000e5::bigint);
+create table probe as select range c from range(2000e5::bigint);
+
+init
+set threads=4;
+set temp_directory='${BENCHMARK_DIR}/external_join_partition_order.duckdb.tmp';
+set memory_limit='2000mb';
+
+run
+select sum(c) from probe join build using (c)
+
+result I
+19999999900000000
