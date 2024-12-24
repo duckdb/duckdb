@@ -50,9 +50,10 @@ struct ArrowScanFunctionData : public TableFunctionData {
 public:
 	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p,
 	                      shared_ptr<DependencyItem> dependency = nullptr)
-	    : lines_read(0), stream_factory_ptr(stream_factory_ptr_p), scanner_producer(scanner_producer_p),
-	      dependency(std::move(dependency)) {
+	    : lines_read(0), rows_per_thread(0), stream_factory_ptr(stream_factory_ptr_p),
+	      scanner_producer(scanner_producer_p), dependency(std::move(dependency)) {
 	}
+
 	vector<LogicalType> all_types;
 	atomic<idx_t> lines_read;
 	ArrowSchemaWrapper schema_root;

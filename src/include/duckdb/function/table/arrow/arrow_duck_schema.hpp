@@ -97,6 +97,8 @@ public:
 
 	LogicalType GetInternalType() const;
 
+	ArrowType GetInternalArrowType() const;
+
 private:
 	//! Internal type is a type that refers to the actual arrow format
 	LogicalType internal_type;

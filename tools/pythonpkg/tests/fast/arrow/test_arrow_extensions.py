@@ -255,3 +255,20 @@ class TestCanonicalExtensionTypes(object):
             (340282366920938463463374607431768211200,),
             (340282366920938463463374607431768211455,),
         ]
+
+    def test_boolean(self):
+        con = duckdb.connect()
+        storage_array = pa.array([-1, 0, 1, 2, None], pa.int8())
+        bool8_array = pa.ExtensionArray.from_storage(pa.bool8(), storage_array)
+        arrow_table = pa.Table.from_arrays([bool8_array], names=['bool8'])
+        print(arrow_table)
+        print(con.execute('FROM arrow_table').fetchall())
+        assert con.execute('FROM arrow_table').fetchall() == [(True,), (False,), (True,), (True,), (None,)]
+
+        # assert con.execute('FROM arrow_table').arrow().equals(arrow_table)
+
+        # con.execute("SET arrow_lossless_conversion = false")
+
+        # assert not con.execute('FROM arrow_table').arrow().equals(arrow_table)
+        # duckdb_cursor = duckdb.connect()
+        # duckdb_cursor.execute("SET arrow_lossless_conversion = true")

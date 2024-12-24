@@ -371,5 +371,8 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema
 LogicalType ArrowExtensionType::GetInternalType() const {
 	return internal_type;
 }
+ArrowType ArrowExtensionType::GetInternalArrowType() const {
+	return ArrowType(internal_type);
+}
 
 } // namespace duckdb

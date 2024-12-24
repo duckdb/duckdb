@@ -5,6 +5,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -309,9 +310,23 @@ struct ArrowVarint {
 	}
 };
 
+struct ArrowBool8 {
+	static void ArrowToDuck(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+		auto source_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(source));
+		auto result_ptr = reinterpret_cast<bool *>(FlatVector::GetData(result));
+		for (idx_t i = 0; i < count; i++) {
+			result_ptr[i] = source_ptr[i];
+		}
+	}
+};
+
 void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 	// Types that are 1:1
 	config.RegisterArrowExtension({"arrow.uuid", "w:16", make_shared_ptr<ArrowExtensionType>(LogicalType::UUID)});
+	config.RegisterArrowExtension({"arrow.bool8", "c",
+	                               make_shared_ptr<ArrowExtensionType>(LogicalType::BOOLEAN, LogicalType::TINYINT,
+	                                                                   ArrowBool8::ArrowToDuck, nullptr)});
+
 	config.RegisterArrowExtension(
 	    {"DuckDB", "hugeint", "w:16", make_shared_ptr<ArrowExtensionType>(LogicalType::HUGEINT)});
 	config.RegisterArrowExtension(

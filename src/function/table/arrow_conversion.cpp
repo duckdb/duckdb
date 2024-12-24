@@ -770,8 +770,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 		if (arrow_extension_type.arrow_to_duckdb) {
 			// We allocate with the internal type, and cast to the end result
 			Vector input_data(arrow_extension_type.GetInternalType());
-			ColumnArrowToDuckDB(input_data, array, array_state, size, arrow_type, nested_offset, parent_mask,
-			                    parent_offset);
+			ColumnArrowToDuckDB(input_data, array, array_state, size, arrow_extension_type.GetInternalArrowType(),
+			                    nested_offset, parent_mask, parent_offset);
 			arrow_extension_type.arrow_to_duckdb(array_state.context, input_data, vector, size);
 			return;
 		}
