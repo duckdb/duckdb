@@ -341,6 +341,12 @@ class JuliaApiTarget(AbstractApiTarget):
         description = description.replace('"', '\\"')  # escape double quotes
         arg_names, arg_types = self.get_argument_names_and_types(function_obj)
         arg_names_s = ", ".join(arg_names)
+        arg_comments = [
+            function_obj.get("comment", {})
+            .get("param_comments", {})
+            .get(param["name"], "")
+            for param in function_obj["params"]
+        ]
 
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
         self.file.write(
@@ -351,7 +357,9 @@ class JuliaApiTarget(AbstractApiTarget):
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(f"{'    ' * self.indent}# Arguments\n")
         for i, arg_name in enumerate(arg_names):
-            self.file.write(f"{'    ' * self.indent}- `{arg_name}`: {arg_types[i]}\n")
+            self.file.write(
+                f"{'    ' * self.indent}- `{arg_name}`: {arg_comments[i]}\n"
+            )
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(
             f"{'    ' * self.indent}Returns: {function_obj['comment'].get('return_value', '')}\n"
@@ -362,7 +370,7 @@ class JuliaApiTarget(AbstractApiTarget):
         description = function_obj.get("comment", {}).get("description", "")
         if not description.startswith("**DEPRECATION NOTICE**:"):
             description = f"**DEPRECATION NOTICE**: {description}"
-        
+
         # Only use the first line of the description
         notice = description.split("\n")[0]
         notice = notice.replace("\n", " ").replace('"', '\\"').strip()
