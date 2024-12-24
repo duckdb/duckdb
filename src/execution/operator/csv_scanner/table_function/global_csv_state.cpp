@@ -178,7 +178,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 
 idx_t CSVGlobalState::MaxThreads() const {
 	// We initialize max one thread per our set bytes per thread limit
-	if (single_threaded) {
+	if (single_threaded || !file_scans.front()->on_disk_file) {
 		return system_threads;
 	}
 	idx_t total_threads = file_scans.front()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
