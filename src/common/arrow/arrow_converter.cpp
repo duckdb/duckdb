@@ -98,7 +98,11 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		child.format = "b";
+		if (options.arrow_lossless_conversion) {
+			SetArrowExtension(root_holder, child, type, context);
+		} else {
+			child.format = "b";
+		}
 		break;
 	case LogicalTypeId::TINYINT:
 		child.format = "c";
