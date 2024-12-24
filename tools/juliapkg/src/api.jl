@@ -383,7 +383,7 @@ Returns: The number of rows present in the result object.
 """
 function duckdb_row_count(result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Returns the number of rows present in the result object.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_row_count,
     )
     return ccall((:duckdb_row_count, libduckdb), idx_t, (Ref{duckdb_result},), result)
@@ -429,7 +429,7 @@ Returns: The column data of the specified column.
 """
 function duckdb_column_data(result, col)
     Base.depwarn(
-      "**DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.  Returns the data of a specific column of a result in columnar format.  The function returns a dense array which contains the result data. The exact type stored in the array depends on the corresponding duckdb_type (as provided by `duckdb_column_type`). For the exact type by which the data should be accessed, see the comments in [the types section](types) or the `DUCKDB_TYPE` enum.  For example, for a column of type `DUCKDB_TYPE_INTEGER`, rows can be accessed in the following manner: ```c int32_t *data = (int32_t *) duckdb_column_data(&result, 0); printf(\"Data for row %d: %d\n\", row, data[row]); ```",
+      "**DEPRECATION NOTICE**: **DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.",
         :duckdb_column_data,
     )
     return ccall((:duckdb_column_data, libduckdb), Ptr{Cvoid}, (Ref{duckdb_result}, idx_t), result, col - 1)
@@ -462,7 +462,7 @@ Returns: The nullmask of the specified column.
 """
 function duckdb_nullmask_data(result, col)
     Base.depwarn(
-      "**DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.  Returns the nullmask of a specific column of a result in columnar format. The nullmask indicates for every row whether or not the corresponding row is `NULL`. If a row is `NULL`, the values present in the array provided by `duckdb_column_data` are undefined.  ```c int32_t *data = (int32_t *) duckdb_column_data(&result, 0); bool *nullmask = duckdb_nullmask_data(&result, 0); if (nullmask[row]) {     printf(\"Data for row %d: NULL\n\", row); } else {     printf(\"Data for row %d: %d\n\", row, data[row]); } ```",
+      "**DEPRECATION NOTICE**: **DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.",
         :duckdb_nullmask_data,
     )
     return ccall((:duckdb_nullmask_data, libduckdb), Ptr{Bool}, (Ref{duckdb_result}, idx_t), result, col - 1)
@@ -530,7 +530,7 @@ Returns: The resulting data chunk. Returns `NULL` if the chunk index is out of b
 """
 function duckdb_result_get_chunk(result, chunk_index)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Fetches a data chunk from the duckdb_result. This function should be called repeatedly until the result is exhausted.  The result must be destroyed with `duckdb_destroy_data_chunk`.  This function supersedes all `duckdb_value` functions, as well as the `duckdb_column_data` and `duckdb_nullmask_data` functions. It results in significantly better performance, and should be preferred in newer code-bases.  If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be mixed with the legacy result functions).  Use `duckdb_result_chunk_count` to figure out how many chunks there are in the result.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_result_get_chunk,
     )
     return ccall((:duckdb_result_get_chunk, libduckdb), duckdb_data_chunk, (duckdb_result, idx_t), result, chunk_index - 1)
@@ -550,7 +550,7 @@ Returns: Whether or not the result object is of the type StreamQueryResult
 """
 function duckdb_result_is_streaming(result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Checks if the type of the internal result is StreamQueryResult.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_result_is_streaming,
     )
     return ccall((:duckdb_result_is_streaming, libduckdb), Bool, (duckdb_result,), result)
@@ -570,7 +570,7 @@ Returns: Number of data chunks present in the result.
 """
 function duckdb_result_chunk_count(result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Returns the number of data chunks present in the result.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_result_chunk_count,
     )
     return ccall((:duckdb_result_chunk_count, libduckdb), idx_t, (duckdb_result,), result)
@@ -971,7 +971,7 @@ converted. The result must be freed with `duckdb_free`.
 """
 function duckdb_value_varchar(result, col, row)
     Base.depwarn(
-      "**DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.",
+      "**DEPRECATION NOTICE**: **DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.",
         :duckdb_value_varchar,
     )
     return ccall((:duckdb_value_varchar, libduckdb), Ptr{UInt8}, (Ref{duckdb_result}, idx_t, idx_t), result, col - 1, row - 1)
@@ -994,7 +994,7 @@ Returns: The string value at the specified location. Attempts to cast the result
 """
 function duckdb_value_string(result, col, row)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  No support for nested types, and for other complex types. The resulting field \"string.data\" must be freed with `duckdb_free.`",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_value_string,
     )
     return ccall((:duckdb_value_string, libduckdb), duckdb_string, (Ref{duckdb_result}, idx_t, idx_t), result, col - 1, row - 1)
@@ -1018,7 +1018,7 @@ The result must NOT be freed.
 """
 function duckdb_value_varchar_internal(result, col, row)
     Base.depwarn(
-      "**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains null bytes.",
+      "**DEPRECATION NOTICE**: **DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains",
         :duckdb_value_varchar_internal,
     )
     return ccall((:duckdb_value_varchar_internal, libduckdb), Ptr{UInt8}, (Ref{duckdb_result}, idx_t, idx_t), result, col - 1, row - 1)
@@ -1042,7 +1042,7 @@ The result must NOT be freed.
 """
 function duckdb_value_string_internal(result, col, row)
     Base.depwarn(
-      "**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains null bytes.",
+      "**DEPRECATION NOTICE**: **DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains",
         :duckdb_value_string_internal,
     )
     return ccall((:duckdb_value_string_internal, libduckdb), duckdb_string, (Ref{duckdb_result}, idx_t, idx_t), result, col - 1, row - 1)
@@ -2093,7 +2093,7 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_execute_prepared_streaming(prepared_statement, out_result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Executes the prepared statement with the given bound parameters, and returns an optionally-streaming query result. To determine if the resulting query was in fact streamed, use `duckdb_result_is_streaming`  This method can be called multiple times for each prepared statement, and the parameters can be modified between calls to this function.  Note that the result must be freed with `duckdb_destroy_result`.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_execute_prepared_streaming,
     )
     return ccall((:duckdb_execute_prepared_streaming, libduckdb), duckdb_state, (duckdb_prepared_statement, Ref{duckdb_result}), prepared_statement, out_result)
@@ -2221,7 +2221,7 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_pending_prepared_streaming(prepared_statement, out_result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Executes the prepared statement with the given bound parameters, and returns a pending result. This pending result will create a streaming duckdb_result when executed. The pending result represents an intermediate structure for a query that is not yet fully executed.  Note that after calling `duckdb_pending_prepared_streaming`, the pending result should always be destroyed using `duckdb_destroy_pending`, even if this function returns DuckDBError.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_pending_prepared_streaming,
     )
     return ccall((:duckdb_pending_prepared_streaming, libduckdb), duckdb_state, (duckdb_prepared_statement, Ref{duckdb_pending_result}), prepared_statement, out_result)
@@ -6150,7 +6150,7 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_query_arrow(connection, query, out_result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Executes a SQL query within a connection and stores the full (materialized) result in an arrow structure. If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling `duckdb_query_arrow_error`.  Note that after running `duckdb_query_arrow`, `duckdb_destroy_arrow` must be called on the result object even if the query fails, otherwise the error stored within the result will not be freed correctly.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_query_arrow,
     )
     return ccall((:duckdb_query_arrow, libduckdb), duckdb_state, (duckdb_connection, Cstring, Ref{duckdb_arrow}), connection, query, out_result)
@@ -6172,7 +6172,7 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_query_arrow_schema(result, out_schema)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Fetch the internal arrow schema from the arrow result. Remember to call release on the respective ArrowSchema object.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_query_arrow_schema,
     )
     return ccall((:duckdb_query_arrow_schema, libduckdb), duckdb_state, (duckdb_arrow, Ref{duckdb_arrow_schema}), result, out_schema)
@@ -6194,7 +6194,7 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_prepared_arrow_schema(prepared, out_schema)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Fetch the internal arrow schema from the prepared statement. Remember to call release on the respective ArrowSchema object.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_prepared_arrow_schema,
     )
     return ccall((:duckdb_prepared_arrow_schema, libduckdb), duckdb_state, (duckdb_prepared_statement, Ref{duckdb_arrow_schema}), prepared, out_schema)
@@ -6217,7 +6217,7 @@ Returns:
 """
 function duckdb_result_arrow_array(result, chunk, out_array)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Convert a data chunk into an arrow struct array. Remember to call release on the respective ArrowArray object.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_result_arrow_array,
     )
     return ccall((:duckdb_result_arrow_array, libduckdb), Cvoid, (duckdb_result, duckdb_data_chunk, Ref{duckdb_arrow_array}), result, chunk, out_array)
@@ -6242,7 +6242,7 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_query_arrow_array(result, out_array)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Fetch an internal arrow struct array from the arrow result. Remember to call release on the respective ArrowArray object.  This function can be called multiple time to get next chunks, which will free the previous out_array. So consume the out_array before calling this function again.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_query_arrow_array,
     )
     return ccall((:duckdb_query_arrow_array, libduckdb), duckdb_state, (duckdb_arrow, Ref{duckdb_arrow_array}), result, out_array)
@@ -6262,7 +6262,7 @@ Returns: The number of columns present in the result object.
 """
 function duckdb_arrow_column_count(result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Returns the number of columns present in the arrow result object.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_arrow_column_count,
     )
     return ccall((:duckdb_arrow_column_count, libduckdb), idx_t, (duckdb_arrow,), result)
@@ -6282,7 +6282,7 @@ Returns: The number of rows present in the result object.
 """
 function duckdb_arrow_row_count(result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Returns the number of rows present in the arrow result object.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_arrow_row_count,
     )
     return ccall((:duckdb_arrow_row_count, libduckdb), idx_t, (duckdb_arrow,), result)
@@ -6303,7 +6303,7 @@ Returns: The number of rows changed.
 """
 function duckdb_arrow_rows_changed(result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Returns the number of rows changed by the query stored in the arrow result. This is relevant only for INSERT/UPDATE/DELETE queries. For other queries the rows_changed will be 0.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_arrow_rows_changed,
     )
     return ccall((:duckdb_arrow_rows_changed, libduckdb), idx_t, (duckdb_arrow,), result)
@@ -6326,7 +6326,7 @@ Returns: The error of the result.
 """
 function duckdb_query_arrow_error(result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.   Returns the error message contained within the result. The error is only set if `duckdb_query_arrow` returns `DuckDBError`.  The error message should not be freed. It will be de-allocated when `duckdb_destroy_arrow` is called.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_query_arrow_error,
     )
     return ccall((:duckdb_query_arrow_error, libduckdb), Ptr{UInt8}, (duckdb_arrow,), result)
@@ -6346,7 +6346,7 @@ Returns:
 """
 function duckdb_destroy_arrow(result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Closes the result and de-allocates all memory allocated for the arrow result.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_destroy_arrow,
     )
     return ccall((:duckdb_destroy_arrow, libduckdb), Cvoid, (Ref{duckdb_arrow},), result)
@@ -6366,7 +6366,7 @@ Returns:
 """
 function duckdb_destroy_arrow_stream(stream_p)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Releases the arrow array stream and de-allocates its memory.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_destroy_arrow_stream,
     )
     return ccall((:duckdb_destroy_arrow_stream, libduckdb), Cvoid, (Ref{duckdb_arrow_stream},), stream_p)
@@ -6388,7 +6388,7 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_execute_prepared_arrow(prepared_statement, out_result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Executes the prepared statement with the given bound parameters, and returns an arrow query result. Note that after running `duckdb_execute_prepared_arrow`, `duckdb_destroy_arrow` must be called on the result object.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_execute_prepared_arrow,
     )
     return ccall((:duckdb_execute_prepared_arrow, libduckdb), duckdb_state, (duckdb_prepared_statement, Ref{duckdb_arrow}), prepared_statement, out_result)
@@ -6410,7 +6410,7 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_arrow_scan(connection, table_name, arrow)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Scans the Arrow stream and creates a view with the given name.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_arrow_scan,
     )
     return ccall((:duckdb_arrow_scan, libduckdb), duckdb_state, (duckdb_connection, Cstring, duckdb_arrow_stream), connection, table_name, arrow)
@@ -6435,7 +6435,7 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_arrow_array_scan(connection, table_name, arrow_schema, arrow_array, out_stream)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Scans the Arrow array and creates a view with the given name. Note that after running `duckdb_arrow_array_scan`, `duckdb_destroy_arrow_stream` must be called on the out stream.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_arrow_array_scan,
     )
     return ccall((:duckdb_arrow_array_scan, libduckdb), duckdb_state, (duckdb_connection, Cstring, duckdb_arrow_schema, duckdb_arrow_array, Ref{duckdb_arrow_stream}), connection, table_name, arrow_schema, arrow_array, out_stream)
@@ -6607,7 +6607,7 @@ Returns: The resulting data chunk. Returns `NULL` if the result has an error.
 """
 function duckdb_stream_fetch_chunk(result)
     Base.depwarn(
-      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.  Fetches a data chunk from the (streaming) duckdb_result. This function should be called repeatedly until the result is exhausted.  The result must be destroyed with `duckdb_destroy_data_chunk`.  This function can only be used on duckdb_results created with 'duckdb_pending_prepared_streaming'  If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be mixed with the legacy result functions or the materialized result functions).  It is not known beforehand how many chunks will be returned by this result.",
+      "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_stream_fetch_chunk,
     )
     return ccall((:duckdb_stream_fetch_chunk, libduckdb), duckdb_data_chunk, (duckdb_result,), result)

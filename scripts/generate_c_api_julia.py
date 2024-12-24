@@ -358,6 +358,16 @@ class JuliaApiTarget(AbstractApiTarget):
         )
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
 
+    def _get_depwarning_message(self, function_obj: FunctionDef):
+        description = function_obj.get("comment", {}).get("description", "")
+        if not description.startswith("**DEPRECATION NOTICE**:"):
+            description = f"**DEPRECATION NOTICE**: {description}"
+        
+        # Only use the first line of the description
+        notice = description.split("\n")[0]
+        notice = notice.replace("\n", " ").replace('"', '\\"').strip()
+        return notice
+
     def _write_function_depwarn(self, function_obj: FunctionDef, indent: int = 0):
         """
         Writes a deprecation warning for a function.
@@ -373,10 +383,7 @@ class JuliaApiTarget(AbstractApiTarget):
         """
         indent = self.indent + indent  # total indent
 
-        notice = function_obj.get("comment", {}).get("description", "")
-        notice = (
-            notice.replace("\n", " ").replace('"', '\\"').strip()
-        )  # escape double quotes
+        notice = self._get_depwarning_message(function_obj)
 
         self.file.write(f"{'    ' * indent}Base.depwarn(\n")
         self.file.write(f"{'    ' * indent}  \"{notice}\",\n")
