@@ -80,7 +80,7 @@ void SecretManager::LoadSecretStorageInternal(unique_ptr<SecretStorage> storage)
 
 	// Check for tie-break offset collisions to ensure we can always tie-break cleanly
 	for (const auto &storage_ptr : secret_storages) {
-		if (storage_ptr.second->GetTieBreakOffset() == storage->GetTieBreakOffset()) {
+		if (storage_ptr.second->tie_break_offset == storage->tie_break_offset) {
 			throw InternalException("Failed to load secret storage '%s', tie break score collides with '%s'",
 			                        storage->GetName(), storage_ptr.second->GetName());
 		}

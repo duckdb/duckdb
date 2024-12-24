@@ -457,6 +457,11 @@ int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
 	return result;
 }
 
+int64_t Timestamp::GetEpochNanoSeconds(timestamp_ns_t timestamp) {
+	D_ASSERT(Timestamp::IsFinite(timestamp));
+	return timestamp.value;
+}
+
 int64_t Timestamp::GetEpochRounded(timestamp_t input, int64_t power_of_ten) {
 	D_ASSERT(Timestamp::IsFinite(input));
 	//	Round away from the epoch.

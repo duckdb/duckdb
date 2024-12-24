@@ -114,6 +114,9 @@ public:
 	optional_ptr<Expression> range_expr;
 	column_t range_idx = DConstants::INVALID_INDEX;
 
+	//! The column indices of any ORDER BY argument expressions
+	vector<column_t> arg_order_idx;
+
 protected:
 	virtual void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
 	                              DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx) const = 0;

@@ -21,7 +21,9 @@ struct HashOp {
 };
 
 static inline hash_t CombineHashScalar(hash_t a, hash_t b) {
-	return (a * UINT64_C(0xbf58476d1ce4e5b9)) ^ b;
+	a ^= a >> 32;
+	a *= 0xd6e8feb86659fd93U;
+	return a ^ b;
 }
 
 template <bool HAS_RSEL, class T>
