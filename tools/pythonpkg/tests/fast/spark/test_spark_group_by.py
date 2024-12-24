@@ -1,5 +1,7 @@
 import pytest
 
+from tools.pythonpkg.duckdb.experimental.spark.sql.functions import count_if
+
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
@@ -21,6 +23,7 @@ from spark_namespace.sql.functions import (
     avg,
     max,
     min,
+    every,
     stddev_samp,
     stddev,
     std,
@@ -297,3 +300,35 @@ class TestDataFrameGroupBy(object):
             assert pytest.approx(res[0].v) == 0.7071067811865475
         else:
             assert pytest.approx(res[0].v) == 1.7320508075688699
+
+    def test_group_by_count_if(self, spark):
+        df = spark.createDataFrame(
+            [
+                ("Alice", 2),
+                ("Bob", 5),
+                ("Alice", None),
+                ("Alice", 3),
+                ("Bob", 6),
+                ("Alice", 4),
+            ],
+            ("name", "age"),
+        )
+
+        res = df.groupBy("name").agg(count_if(col("age") > 3)).collect()
+        assert sorted(res, key=lambda x: x.name) == [Row(name='Alice', count=2), Row(name='Bob', count=2)]
+
+    def test_group_by_every(self, spark):
+        df = spark.createDataFrame(
+            [
+                (True, False, False),
+                (True, True, False),
+                (True, True, False),
+            ],
+            ("f1", "f2", "f3"),
+        )
+
+        res = df.select(
+            every(col("f1")).alias("f1"), every(col("f2")).alias("f2"), every(col("f3")).alias("f3")
+        ).collect()
+
+        assert res == [Row(f1=True, f2=False, f3=False)]
