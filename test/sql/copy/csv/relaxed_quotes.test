@@ -78,11 +78,23 @@ statement ok
 drop table t;
 
 statement error
-create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line.csv', rfc_4180=false, buffer_size = 30, header = 0)
+create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', rfc_4180=false, buffer_size = 20, header = 0)
+----
+
+
+statement error
+create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', rfc_4180=false, buffer_size = 20, header = 0)
 ----
 
 statement ok
 create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line.csv', rfc_4180=false, buffer_size = 30, header = 0, parallel = false)
+
+statement ok
+drop table t
+
+statement ok
+create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', rfc_4180=false, buffer_size = 30, header = 0, parallel = false)
+
 
 query I
 FROM read_csv('data/csv/unescaped_quotes/end_quote.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false)
