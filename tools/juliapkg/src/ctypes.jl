@@ -1,20 +1,56 @@
+const idx_t = UInt64 # DuckDB index type
 
-const duckdb_database = Ptr{Cvoid}
+
+const duckdb_aggregate_combine = Ptr{Cvoid}
+const duckdb_aggregate_destroy = Ptr{Cvoid}
+const duckdb_aggregate_finalize = Ptr{Cvoid}
+const duckdb_aggregate_function = Ptr{Cvoid}
+const duckdb_aggregate_function_set = Ptr{Cvoid}
+const duckdb_aggregate_init = Ptr{Cvoid}
+const duckdb_aggregate_state_size = Ptr{Cvoid}
+const duckdb_aggregate_update = Ptr{Cvoid}
+const duckdb_appender = Ptr{Cvoid}
+const duckdb_arrow = Ptr{Cvoid}
+const duckdb_arrow_array = Ptr{Cvoid}
+const duckdb_arrow_schema = Ptr{Cvoid}
+const duckdb_arrow_stream = Ptr{Cvoid}
+const duckdb_bind_info = Ptr{Cvoid}
+const duckdb_bit = Ptr{Cvoid}
+const duckdb_blob = Ptr{Cvoid}
+const duckdb_cast_function = Ptr{Cvoid}
+const duckdb_cast_mode = Ptr{Cvoid}
 const duckdb_config = Ptr{Cvoid}
 const duckdb_connection = Ptr{Cvoid}
-const duckdb_prepared_statement = Ptr{Cvoid}
-const duckdb_pending_result = Ptr{Cvoid}
+const duckdb_create_type_info = Ptr{Cvoid}
 const duckdb_data_chunk = Ptr{Cvoid}
-const duckdb_vector = Ptr{Cvoid}
-const duckdb_appender = Ptr{Cvoid}
-const duckdb_logical_type = Ptr{Cvoid}
-const duckdb_value = Ptr{Cvoid}
-const duckdb_table_function = Ptr{Cvoid}
-const duckdb_bind_info = Ptr{Cvoid}
-const duckdb_init_info = Ptr{Cvoid}
+const duckdb_database = Ptr{Cvoid}
+const duckdb_decimal = Ptr{Cvoid}
+const duckdb_delete_callback = Ptr{Cvoid}
+const duckdb_error_type = Ptr{Cvoid}
+const duckdb_extracted_statements = Ptr{Cvoid}
 const duckdb_function_info = Ptr{Cvoid}
+const duckdb_init_info = Ptr{Cvoid}
+const duckdb_logical_type = Ptr{Cvoid}
+const duckdb_pending_result = Ptr{Cvoid}
+const duckdb_prepared_statement = Ptr{Cvoid}
+const duckdb_profiling_info = Ptr{Cvoid}
+const duckdb_query_progress_type = Ptr{Cvoid}
+const duckdb_replacement_callback = Ptr{Cvoid}
 const duckdb_replacement_scan_info = Ptr{Cvoid}
+const duckdb_result_type = Ptr{Cvoid}
+const duckdb_scalar_function = Ptr{Cvoid}
+const duckdb_scalar_function_set = Ptr{Cvoid}
+const duckdb_statement_type = Ptr{Cvoid}
+const duckdb_table_description = Ptr{Cvoid}
+const duckdb_table_function = Ptr{Cvoid}
+const duckdb_table_function_bind = Ptr{Cvoid}
+const duckdb_table_function_init = Ptr{Cvoid}
 const duckdb_task_state = Ptr{Cvoid}
+const duckdb_value = Ptr{Cvoid}
+const duckdb_varint = Ptr{Cvoid}
+const duckdb_vector = Ptr{Cvoid}
+
+
 
 const duckdb_state = Int32;
 const DuckDBSuccess = 0;
@@ -26,7 +62,7 @@ const DUCKDB_PENDING_RESULT_NOT_READY = 1;
 const DUCKDB_PENDING_ERROR = 2;
 const DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3;
 
-@enum DUCKDB_TYPE_::UInt32 begin
+@enum DUCKDB_TYPE_::Cint begin
     DUCKDB_TYPE_INVALID = 0
     DUCKDB_TYPE_BOOLEAN = 1
     DUCKDB_TYPE_TINYINT = 2
@@ -60,6 +96,9 @@ const DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3;
     DUCKDB_TYPE_BIT = 29
     DUCKDB_TYPE_TIME_TZ = 30
     DUCKDB_TYPE_TIMESTAMP_TZ = 31
+    DUCKDB_TYPE_ARRAY = 33
+    DUCKDB_TYPE_ANY = 34
+    DUCKDB_TYPE_VARINT = 35
 end
 
 const DUCKDB_TYPE = DUCKDB_TYPE_
@@ -72,6 +111,8 @@ Use the duckdb_from_date/duckdb_to_date function to extract individual informati
 struct duckdb_date
     days::Int32
 end
+
+
 
 struct duckdb_date_struct
     year::Int32
@@ -95,7 +136,9 @@ struct duckdb_time_struct
     micros::Int32
 end
 
-struct duckdb_time_tz
+
+const duckdb_time_tz = UInt64
+struct duckdb_time_tz_struct
     time::duckdb_time_struct
     offset::Int32
 end
@@ -109,9 +152,22 @@ struct duckdb_timestamp
     micros::Int64
 end
 
+struct duckdb_timestamp_s
+    seconds::Int64
+end
+
+struct duckdb_timestamp_ms
+    millis::Int64
+end
+
+struct duckdb_timestamp_ns
+    nanos::Int64
+end
+
+
 struct duckdb_timestamp_struct
-    date::Ref{duckdb_date_struct}
-    time::Ref{duckdb_time_struct}
+    date::duckdb_date_struct
+    time::duckdb_time_struct
 end
 
 struct duckdb_interval
@@ -285,3 +341,63 @@ const ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS = 719528
 const ROUNDING_EPOCH_TO_UNIX_EPOCH_MS = 62167219200000
 
 sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)
+sym(ptr::Cstring) = ccall(:jl_symbol, Ref{Symbol}, (Cstring,), ptr)
+
+
+# %% --- Older Types ------------------------------------------ #
+
+struct duckdb_string
+    data::Ptr{UInt8}
+    length::idx_t
+
+    function duckdb_string(data, length)
+        Base.depwarn("duckdb_string is deprecated, use duckdb_string_t instead", :deprecated)
+        return new(data, length)
+    end
+end
+
+
+# %% ----- Conversions ------------------------------
+
+# HUGEINT / INT128
+# Fast Conversion without typechecking
+Base.convert(::Type{Int128}, val::duckdb_hugeint) = Int128(val.lower) + Int128(val.upper) << 64
+Base.convert(::Type{UInt128}, val::duckdb_uhugeint) = UInt128(val.lower) + UInt128(val.upper) << 64
+Base.convert(::Type{duckdb_hugeint}, x::Int128) =
+    duckdb_hugeint((x & 0xFFFF_FFFF_FFFF_FFFF) % UInt64, (x >> 64) % Int64)
+Base.convert(::Type{duckdb_uhugeint}, v::UInt128) = duckdb_uhugeint(v % UInt64, (v >> 64) % UInt64)
+
+# DATE & TIME Raw
+Base.convert(::Type{duckdb_date}, val::Integer) = duckdb_date(val)
+Base.convert(::Type{duckdb_time}, val::Integer) = duckdb_time(val)
+Base.convert(::Type{duckdb_timestamp}, val::Integer) = duckdb_timestamp(val)
+Base.convert(::Type{duckdb_timestamp_s}, val::Integer) = duckdb_timestamp_s(val)
+Base.convert(::Type{duckdb_timestamp_ms}, val::Integer) = duckdb_timestamp_ms(val)
+Base.convert(::Type{duckdb_timestamp_ns}, val::Integer) = duckdb_timestamp_ns(val)
+
+Base.convert(::Type{<:Integer}, val::duckdb_date) = val.days
+Base.convert(::Type{<:Integer}, val::duckdb_time) = val.micros
+Base.convert(::Type{<:Integer}, val::duckdb_timestamp) = val.micros
+Base.convert(::Type{<:Integer}, val::duckdb_timestamp_s) = val.seconds
+Base.convert(::Type{<:Integer}, val::duckdb_timestamp_ms) = val.millis
+Base.convert(::Type{<:Integer}, val::duckdb_timestamp_ns) = val.nanos
+
+Base.convert(::Type{duckdb_time_struct}, val::Union{Time, DateTime}) =
+    duckdb_time_struct(Dates.hour(val), Dates.minute(val), Dates.second(val), Dates.microsecond(val))
+Base.convert(::Type{duckdb_date_struct}, val::Union{Date, DateTime}) =
+    duckdb_date_struct(Dates.year(val), Dates.month(val), Dates.day(val))
+Base.convert(::Type{Time}, val::duckdb_time_struct) = Dates.Time(val.hour, val.min, val.sec, val.micros)
+Base.convert(::Type{Date}, val::duckdb_date_struct) = Dates.Date(val.year, val.month, val.day)
+
+Base.convert(::Type{DateTime}, val::duckdb_timestamp_struct) =
+    Dates.DateTime(convert(Date, val.date), convert(Time, val.time))
+Base.convert(::Type{duckdb_timestamp_s}, val::DateTime) = duckdb_timestamp_s(floor(Int64, Dates.time2unix(val)))
+Base.convert(::Type{duckdb_timestamp_ms}, val::DateTime) =
+    duckdb_timestamp_ms(floor(Int64, Dates.time2unix(val) * 1_000))
+Base.convert(::Type{duckdb_timestamp}, val::DateTime) = duckdb_timestamp(floor(Int64, Dates.time2unix(val) * 1_000_000))
+Base.convert(::Type{duckdb_timestamp_ns}, val::DateTime) =
+    duckdb_timestamp_ns(floor(Int64, Dates.time2unix(val) * 1_000_000_000))
+Base.convert(::Type{DateTime}, val::duckdb_timestamp_s) = Dates.unix2datetime(val.seconds)
+Base.convert(::Type{DateTime}, val::duckdb_timestamp_ms) = Dates.unix2datetime(val.millis / 1_000)
+Base.convert(::Type{DateTime}, val::duckdb_timestamp) = Dates.unix2datetime(val.micros / 1_000_000)
+Base.convert(::Type{DateTime}, val::duckdb_timestamp_ns) = Dates.unix2datetime(val.nanos / 1_000_000_000)
