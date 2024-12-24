@@ -1,6 +1,5 @@
 import pytest
 
-from tools.pythonpkg.duckdb.experimental.spark.sql.functions import count_if
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
@@ -11,6 +10,7 @@ from spark_namespace.sql.types import (
     BooleanType,
     StructField,
     StringType,
+    count_if,
     IntegerType,
     LongType,
     Row,
