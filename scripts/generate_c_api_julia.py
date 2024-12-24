@@ -192,13 +192,9 @@ class JuliaApiTarget(AbstractApiTarget):
     ):
         # check if file is a string or a file object
         if isinstance(file, str) or isinstance(file, pathlib.Path):
-            self.file = open(file, "w+")
-            self.filename = file
-        elif hasattr(file, "write"):
-            self.file = file
-            self.filename = ""
+            self.filename = pathlib.Path(file)
         else:
-            raise ValueError("file must be a string or a file object")
+            raise ValueError("file must be a string or a path object")
         self.indent = indent
         self.auto_1base_index = auto_1base_index
         self.auto_1base_index_return_functions = auto_1base_index_return_functions
@@ -207,6 +203,13 @@ class JuliaApiTarget(AbstractApiTarget):
         self.skipped_functions = skipped_functions
         self.overwrite_function_signatures = overwrite_function_signatures
         super().__init__()
+
+    def __enter__(self):
+        self.file = open(self.filename, "w")
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.file.close()
 
     def write_empty_line(self):
         self.file.write(self.linesep)
@@ -256,7 +259,7 @@ class JuliaApiTarget(AbstractApiTarget):
 
     def _get_argument_name(self, name: str):
         if name in JULIA_RESERVED_KEYWORDS:
-            return f"{name}_"
+            return f"_{name}"
         return name
 
     def _is_index_argument(self, name: str, function_obj: FunctionDef):
@@ -493,9 +496,6 @@ end
         self.file.write(f'DUCKDB_API_VERSION = v"{version}"\n')
         self.file.write("\n")
 
-    def write_footer(self):
-        pass
-
     def write_functions(
         self,
         version,
@@ -526,9 +526,34 @@ end
 
     def write_group_start(self, group):
         group = group.replace("_", " ").strip()
+        # make group title uppercase
+        group = " ".join([x.capitalize() for x in group.split(" ")])
         self.file.write(f"# {'-' * 80}\n")
         self.file.write(f"# {group}\n")
         self.file.write(f"# {'-' * 80}\n")
+
+    @staticmethod
+    def get_function_order(filepath):
+        # scan the file and get the order of the functions
+        path = pathlib.Path(filepath)
+        if not path.exists():
+            raise FileNotFoundError(f"File {path} does not exist")
+
+        with open(path, "r") as f:
+            lines = f.readlines()
+
+        # find the function definitions
+        function_regex = r"^function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\("
+        function_order = []
+        for line in lines:
+            line = line.strip()
+            if line.startswith("#"):
+                continue
+
+            m = re.match(function_regex, line)
+            if m is not None:
+                function_order.append(m.group(1))
+        return function_order
 
 
 def main():
@@ -539,32 +564,71 @@ def main():
     print("Creating Julia API")
     ROOT = pathlib.Path(__file__).parent.parent
     julia_path = ROOT / "tools" / "juliapkg" / "src" / "api.jl"
-    printer = JuliaApiTarget(
-        julia_path,
-        indent=0,
-        auto_1base_index=True,  # WARNING: every arg named "col/row/index" or similar will be 1-based indexed, so the argument is subtracted by 1
-        auto_1base_index_return_functions={"duckdb_init_get_column_index"},
-        skipped_functions={},
-        type_map=JULIA_BASE_TYPE_MAP,
-        overwrite_function_signatures={
-            "duckdb_free": ("Cvoid", ("Ptr{Cvoid}",)),  # Must be Ptr{Cvoid} and not Ref
-            "duckdb_bind_blob": (
-                "duckdb_state",
-                ("duckdb_prepared_statement", "idx_t", "Ptr{Cvoid}", "idx_t"),
-            ),
-        },
-    )
-    printer.write_functions(ext_api_version, function_groups, function_map)
+    julia_path_old = ROOT / "tools" / "juliapkg" / "src" / "api_old.jl"
 
-    print("Type maps:")
-    K = list(printer.inverse_type_maps.keys())
-    K.sort()
-    for k in K:
-        v = ", ".join(printer.inverse_type_maps[k])
-        print(f"    {k} -> {v}")
-    print("Julia API generated successfully!")
-    print("Please review the mapped types and check the generated file:")
-    print(f"Output: {julia_path}")
+    with (
+        JuliaApiTarget(
+            julia_path,
+            indent=0,
+            auto_1base_index=True,  # WARNING: every arg named "col/row/index" or similar will be 1-based indexed, so the argument is subtracted by 1
+            auto_1base_index_return_functions={"duckdb_init_get_column_index"},
+            skipped_functions={},
+            type_map=JULIA_BASE_TYPE_MAP,
+            overwrite_function_signatures={
+                "duckdb_free": (
+                    "Cvoid",
+                    ("Ptr{Cvoid}",),
+                ),  # Must be Ptr{Cvoid} and not Ref
+                "duckdb_bind_blob": (
+                    "duckdb_state",
+                    ("duckdb_prepared_statement", "idx_t", "Ptr{Cvoid}", "idx_t"),
+                ),
+            },
+        ) as printer
+    ):
+        #order = printer._get_function_order()
+        order = printer.get_function_order(julia_path_old)
+
+        # TODO: Simplify this after review
+        printer.write_header(ext_api_version)
+        printer.write_empty_line()
+        current_group = None
+        for fname in order:
+            if fname not in function_map:
+                #raise ValueError(f"Function {fname} not found in function_map")
+                print(f"Function {fname} not found in function_map")
+                continue
+            
+            if current_group != function_map[fname]["group"]:
+                current_group = function_map[fname]["group"]
+                printer.write_group_start(current_group)
+                printer.write_empty_line()
+            
+            printer.write_function(function_map[fname])
+            printer.write_empty_line()
+
+        printer.write_group_start("New Functions")
+        printer.write_empty_line()
+        for fname, f in function_map.items():
+            if fname in order:
+                continue
+            printer.write_function(f)
+            printer.write_empty_line()
+
+        printer.write_empty_line()
+        printer.write_footer()
+
+        #printer.write_functions(ext_api_version, function_groups, function_map)
+
+        print("Type maps:")
+        K = list(printer.inverse_type_maps.keys())
+        K.sort()
+        for k in K:
+            v = ", ".join(printer.inverse_type_maps[k])
+            print(f"    {k} -> {v}")
+        print("Julia API generated successfully!")
+        print("Please review the mapped types and check the generated file:")
+        print(f"Output: {julia_path}")
 
 
 if __name__ == "__main__":
