@@ -1546,10 +1546,10 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 	std::stable_sort(partition_indices.begin(), partition_indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
 		const auto lhs_size = partitions[lhs]->SizeInBytes() + PointerTableSize(partitions[lhs]->Count());
 		const auto rhs_size = partitions[rhs]->SizeInBytes() + PointerTableSize(partitions[rhs]->Count());
-		// We divide by min_partition_size so that minor differences in partition sizes don't mess up the original order
-		// This "rounds" everything to a multiple of min_partition_size
-		return lhs_size < rhs_size;
-		// return lhs_size / min_partition_size < rhs_size / min_partition_size;
+		// We divide by min_partition_size, effectively rouding everything down to a multiple of min_partition_size
+		// Makes it so minor differences in partition sizes don't mess up the original order
+		// Retaining as much of the original order as possible reduces I/O (partition idx determines eviction queue idx)
+		return lhs_size / min_partition_size < rhs_size / min_partition_size;
 	});
 
 	// Determine which partitions should go next

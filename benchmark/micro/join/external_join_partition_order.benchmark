@@ -8,16 +8,16 @@ group join
 cache external_join_partition_order.duckdb
 
 load
-create table build as select range c from range(2000e5::bigint);
-create table probe as select range c from range(2000e5::bigint);
+create table build as select range c from range(1000e5::bigint);
+create table probe as select range c from range(1000e5::bigint);
 
 init
-set threads=4;
+set threads=1;
 set temp_directory='${BENCHMARK_DIR}/external_join_partition_order.duckdb.tmp';
-set memory_limit='2000mb';
+set memory_limit='1000mb';
 
 run
 select sum(c) from probe join build using (c)
 
 result I
-19999999900000000
+4999999950000000
