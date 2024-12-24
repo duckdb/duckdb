@@ -995,7 +995,7 @@
 		"args": [
 			{
 				"name": "proto",
-				"type": "str"
+				"type": "bytes"
 			}
 		],
 		"return": "DuckDBPyRelation"

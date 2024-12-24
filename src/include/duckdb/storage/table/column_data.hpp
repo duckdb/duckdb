@@ -34,6 +34,8 @@ struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
 
+using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
+
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
 	}
@@ -65,8 +67,6 @@ public:
 	idx_t column_index;
 	//! The type of the column
 	LogicalType type;
-	//! The parent column (if any)
-	optional_ptr<ColumnData> parent;
 
 public:
 	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
@@ -80,6 +80,21 @@ public:
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
+	}
+	bool HasCompressionFunction() const {
+		return compression != nullptr;
+	}
+	const CompressionFunction &GetCompressionFunction() const {
+		D_ASSERT(HasCompressionFunction());
+		return *compression;
+	}
+
+	bool HasParent() const {
+		return parent != nullptr;
+	}
+	const ColumnData &Parent() const {
+		D_ASSERT(HasParent());
+		return *parent;
 	}
 
 	virtual void SetStart(idx_t new_start);
@@ -108,12 +123,12 @@ public:
 	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count);
 
 	//! Select
-	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                    SelectionVector &sel, idx_t &count, const TableFilter &filter);
-	virtual void FilterScan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                        SelectionVector &sel, idx_t count);
-	virtual void FilterScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                                 idx_t count, bool allow_updates);
+	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                    SelectionVector &sel, idx_t count);
+	virtual void SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	                             idx_t count, bool allow_updates);
 
 	//! Skip the scan forward by "count" rows
 	virtual void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE);
@@ -177,14 +192,20 @@ public:
 protected:
 	//! Append a transient segment
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
+	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
+	void BeginScanVectorInternal(ColumnScanState &state);
 	//! Scans a base vector from the column
 	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type);
 	//! Scans a vector from the column merged with any potential updates
-	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
-	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                 idx_t target_scan);
+	                 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode);
+	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                 idx_t target_scan, ScanVectorMode mode);
+	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
+	                  idx_t sel_count);
+	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
+	                  idx_t &sel_count, const TableFilter &filter);
 
 	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
@@ -194,6 +215,9 @@ protected:
 	                    idx_t update_count, Vector &base_vector);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
+
+private:
+	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);
 
 protected:
 	//! The segments holding the data of this column segment
@@ -208,6 +232,13 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
+
+private:
+	//! The parent column (if any)
+	optional_ptr<ColumnData> parent;
+	//!	The compression function used by the ColumnData
+	//! This is empty if the segments have mixed compression or the ColumnData is empty
+	optional_ptr<const CompressionFunction> compression;
 };
 
 struct PersistentColumnData {

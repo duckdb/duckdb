@@ -34,15 +34,6 @@ public:
 	column_t default_idx = DConstants::INVALID_INDEX;
 };
 
-//
-class WindowNtileExecutor : public WindowValueExecutor {
-public:
-	WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
-
-protected:
-	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
-	                      Vector &result, idx_t count, idx_t row_idx) const override;
-};
 class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
 	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);

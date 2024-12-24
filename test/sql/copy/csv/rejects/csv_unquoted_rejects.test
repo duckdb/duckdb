@@ -11,7 +11,7 @@ query II
 SELECT * FROM read_csv(
     'data/csv/rejects/unquoted/basic.csv',
     columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
-    store_rejects=true, auto_detect=false, header = 1, quote = '"', escape = '"');
+    store_rejects=true, auto_detect=false, header = 1, quote = '"', escape = '"', rfc_4180=true);
 ----
 bla	1
 bla	2
@@ -36,7 +36,7 @@ query II
 SELECT * FROM read_csv(
     'data/csv/rejects/unquoted/unquoted_new_line.csv',
     columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
-    store_rejects=true, auto_detect=false, header = 1, quote = '"', escape = '"');
+    store_rejects=true, auto_detect=false, header = 1, quote = '"', escape = '"', rfc_4180=true);
 ----
 bla	1
 bla	2
@@ -87,7 +87,7 @@ SELECT * FROM read_csv(
     'data/csv/rejects/unquoted/basic.csv',
     columns = {'a': 'VARCHAR', 'b': 'INTEGER'},
     buffer_size=${buffer_size},
-    store_rejects=true, auto_detect=false, header = 1, quote = '"', escape = '"');
+    store_rejects=true, auto_detect=false, header = 1, quote = '"', escape = '"', rfc_4180=true);
 ----
 bla	1
 bla	2

@@ -63,3 +63,33 @@ def test_long_error(shell):
     result = test.run()
     result.check_stderr('\x1b[33m+(DATE, TIMESTAMP)\x1b[0m')
     result.check_stderr('\x1b[32mCAST\x1b[0m')
+
+@pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
+def test_single_quotes_in_error(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".highlight_errors on")
+        .statement("select \"I'm an error\"")
+    )
+    result = test.run()
+    result.check_stderr('"\x1b[33mI\'m an error\x1b[0m')
+
+@pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
+def test_double_quotes_in_error(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".highlight_errors on")
+        .statement("select error('''I\"m an error''')")
+    )
+    result = test.run()
+    result.check_stderr('\x1b[33mI"m an error\x1b[0m')
+
+@pytest.mark.skipif(os.name == 'nt', reason="Windows highlighting does not use shell escapes")
+def test_unterminated_quote(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".highlight_errors on")
+        .statement("select error('I''m an error')")
+    )
+    result = test.run()
+    result.check_stderr('I\'m an error')

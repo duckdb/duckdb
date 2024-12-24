@@ -89,8 +89,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// this reduces the amount of columns we need to extract from the join hash table
 			for (auto &cond : comp_join.conditions) {
 				if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
-					if (cond.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-					    cond.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+					if (cond.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
 						auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
@@ -239,9 +239,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				if (!index.IsValid()) {
 					throw InternalException("Could not find column index for table filter");
 				}
-				auto &column_type = get.returned_types[filter.first];
+
+				auto column_type =
+				    filter.first == COLUMN_IDENTIFIER_ROW_ID ? LogicalType::ROW_TYPE : get.returned_types[filter.first];
+
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
-				auto column_ref = make_uniq<BoundColumnRefExpression>(column_type, filter_binding);
+				auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 				auto filter_expr = filter.second->ToExpression(*column_ref);
 				VisitExpression(&filter_expr);
 				filter_expressions.push_back(std::move(filter_expr));
@@ -287,15 +290,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto &filter = op.Cast<LogicalFilter>();
-		if (filter.HasProjectionMap()) {
-			// if we have any entries in the filter projection map don't prune any columns
-			// FIXME: we can do something more clever here
-			everything_referenced = true;
-		}
-		break;
-	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		auto &distinct = op.Cast<LogicalDistinct>();
 		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
@@ -359,7 +353,8 @@ bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optiona
 		return false;
 	}
 	auto &function = expr.Cast<BoundFunctionExpression>();
-	if (function.function.name != "struct_extract" && function.function.name != "array_extract") {
+	if (function.function.name != "struct_extract_at" && function.function.name != "struct_extract" &&
+	    function.function.name != "array_extract") {
 		return false;
 	}
 	if (!function.bind_info) {

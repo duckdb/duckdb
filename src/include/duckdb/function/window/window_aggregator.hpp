@@ -77,21 +77,27 @@ public:
 				//	and some are empty.
 
 				//	WindowExcludePart::LEFT
-				auto begin = begins[i];
+				const auto frame_begin = begins[i];
+				const auto frame_end = ends[i];
+				auto begin = frame_begin;
 				auto end = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? cur_row : peer_begin[i];
-				end = MaxValue(begin, end);
+				end = MinValue(end, frame_end);
+				end = MaxValue(end, frame_begin);
 				frames[nframes++] = FrameBounds(begin, end);
 
 				// with EXCLUDE TIES, in addition to the frame part right of the peer group's end,
 				// we also need to consider the current row
 				if (exclude_mode == WindowExcludeMode::TIES) {
-					frames[nframes++] = FrameBounds(cur_row, cur_row + 1);
+					begin = MinValue(MaxValue(cur_row, frame_begin), frame_end);
+					end = MaxValue(MinValue(cur_row + 1, frame_end), frame_begin);
+					frames[nframes++] = FrameBounds(begin, end);
 				}
 
 				//	WindowExcludePart::RIGHT
-				end = ends[i];
+				end = frame_end;
 				begin = (exclude_mode == WindowExcludeMode::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
-				begin = MinValue(begin, end);
+				begin = MaxValue(begin, frame_begin);
+				begin = MinValue(begin, frame_end);
 				frames[nframes++] = FrameBounds(begin, end);
 			}
 

@@ -106,7 +106,6 @@ static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, {{nullptr, nullptr}}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, {{nullptr, nullptr}}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, {{nullptr, nullptr}}, "(x-y*floor(x/y))"},
-	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, {{nullptr, nullptr}}, "sum(if(l, 1, 0))"},
 	{DEFAULT_SCHEMA, "split_part", {"string", "delimiter", "position", nullptr}, {{nullptr, nullptr}}, "if(string IS NOT NULL AND delimiter IS NOT NULL AND position IS NOT NULL, coalesce(string_split(string, delimiter)[position],''), NULL)"},
 	{DEFAULT_SCHEMA, "geomean", {"x", nullptr}, {{nullptr, nullptr}}, "exp(avg(ln(x)))"},
 	{DEFAULT_SCHEMA, "geometric_mean", {"x", nullptr}, {{nullptr, nullptr}}, "geomean(x)"},
@@ -161,6 +160,9 @@ static const DefaultMacro internal_macros[] = {
 
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, {{nullptr, nullptr}}, "date + interval"},
+	{DEFAULT_SCHEMA, "current_date", {nullptr}, {{nullptr, nullptr}}, "current_timestamp::DATE"},
+	{DEFAULT_SCHEMA, "today", {nullptr}, {{nullptr, nullptr}}, "current_timestamp::DATE"},
+	{DEFAULT_SCHEMA, "get_current_time", {nullptr}, {{nullptr, nullptr}}, "current_timestamp::TIMETZ"},
 
 	// regexp functions
 	{DEFAULT_SCHEMA, "regexp_split_to_table", {"text", "pattern", nullptr}, {{nullptr, nullptr}}, "unnest(string_split_regex(text, pattern))"},

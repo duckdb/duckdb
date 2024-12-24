@@ -261,8 +261,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 					if (parse_types[chunk_col_id].type_id != LogicalTypeId::VARCHAR) {
 						// If it is not a varchar, empty values are not accepted, we must error.
 						current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
+					} else {
+						static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 					}
-					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 				} else {
 					if (chunk_col_id == number_of_columns) {
 						// We check for a weird case, where we ignore an extra value, if it is a null value
@@ -422,7 +423,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			if (force_error) {
 				HandleUnicodeError(cur_col_id, last_position);
 			}
-			// If we got here, we are ingoring errors, hence we must ignore this line.
+			// If we got here, we are ignoring errors, hence we must ignore this line.
 			current_errors.Insert(INVALID_UNICODE, cur_col_id, chunk_col_id, last_position);
 			break;
 		}
@@ -1329,17 +1330,21 @@ void StringValueScanner::ProcessOverBufferValue() {
 			value = string_t(over_buffer_string.c_str() + result.quoted_position,
 			                 UnsafeNumericCast<uint32_t>(over_buffer_string.size() - 1 - result.quoted_position));
 			if (result.escaped) {
-				const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
-				value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
-				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-				                     result.parse_chunk.data[result.chunk_col_id]);
+				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
+					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
+					value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
+					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     result.parse_chunk.data[result.chunk_col_id]);
+				}
 			}
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
-				value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-				                     result.parse_chunk.data[result.chunk_col_id]);
+				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
+					value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
+					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     result.parse_chunk.data[result.chunk_col_id]);
+				}
 			}
 		}
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {
@@ -1495,20 +1500,20 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 	bool first_column = true;
 	const idx_t to_pos = current_iterator.GetEndPos();
 	while (current_iterator.pos.buffer_pos < to_pos) {
-		state_machine->Transition(current_state, buffer_handle_ptr[current_iterator.pos.buffer_pos++]);
+		state_machine_strict->Transition(current_state, buffer_handle_ptr[current_iterator.pos.buffer_pos++]);
 		if (current_state.IsState(CSVState::STANDARD) || current_state.IsState(CSVState::STANDARD_NEWLINE)) {
 			while (current_iterator.pos.buffer_pos + 8 < to_pos) {
 				uint64_t value = Load<uint64_t>(
 				    reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[current_iterator.pos.buffer_pos]));
-				if (ContainsZeroByte((value ^ state_machine->transition_array.delimiter) &
-				                     (value ^ state_machine->transition_array.new_line) &
-				                     (value ^ state_machine->transition_array.carriage_return) &
-				                     (value ^ state_machine->transition_array.comment))) {
+				if (ContainsZeroByte((value ^ state_machine_strict->transition_array.delimiter) &
+				                     (value ^ state_machine_strict->transition_array.new_line) &
+				                     (value ^ state_machine_strict->transition_array.carriage_return) &
+				                     (value ^ state_machine_strict->transition_array.comment))) {
 					break;
 				}
 				current_iterator.pos.buffer_pos += 8;
 			}
-			while (state_machine->transition_array
+			while (state_machine_strict->transition_array
 			           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[current_iterator.pos.buffer_pos])] &&
 			       current_iterator.pos.buffer_pos < to_pos - 1) {
 				current_iterator.pos.buffer_pos++;
@@ -1518,14 +1523,14 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 			while (current_iterator.pos.buffer_pos + 8 < to_pos) {
 				uint64_t value = Load<uint64_t>(
 				    reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[current_iterator.pos.buffer_pos]));
-				if (ContainsZeroByte((value ^ state_machine->transition_array.quote) &
-				                     (value ^ state_machine->transition_array.escape))) {
+				if (ContainsZeroByte((value ^ state_machine_strict->transition_array.quote) &
+				                     (value ^ state_machine_strict->transition_array.escape))) {
 					break;
 				}
 				current_iterator.pos.buffer_pos += 8;
 			}
 
-			while (state_machine->transition_array
+			while (state_machine_strict->transition_array
 			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[current_iterator.pos.buffer_pos])] &&
 			       current_iterator.pos.buffer_pos < to_pos - 1) {
 				current_iterator.pos.buffer_pos++;
@@ -1535,7 +1540,7 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 		     current_state.IsState(CSVState::RECORD_SEPARATOR)) &&
 		    first_column) {
 			if (buffer_handle_ptr[current_iterator.pos.buffer_pos - 1] ==
-			    state_machine->dialect_options.state_machine_options.quote.GetValue()) {
+			    state_machine_strict->dialect_options.state_machine_options.quote.GetValue()) {
 				quoted = true;
 			}
 		}
@@ -1586,7 +1591,7 @@ bool StringValueScanner::IsRowValid(CSVIterator &current_iterator) const {
 	}
 	constexpr idx_t result_size = 1;
 	auto scan_finder =
-	    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(),
+	    make_uniq<StringValueScanner>(0U, buffer_manager, state_machine_strict, make_shared_ptr<CSVErrorHandler>(),
 	                                  csv_file_scan, false, current_iterator, result_size);
 	auto &tuples = scan_finder->ParseChunk();
 	current_iterator.pos = scan_finder->GetIteratorPosition();
@@ -1628,6 +1633,17 @@ void StringValueScanner::SetStart() {
 	}
 	if (iterator.GetEndPos() > cur_buffer_handle->actual_size) {
 		iterator.SetEnd(cur_buffer_handle->actual_size);
+	}
+	if (!state_machine_strict) {
+		// We need to initialize our strict state machine
+		auto &state_machine_cache = CSVStateMachineCache::Get(buffer_manager->context);
+		auto state_options = state_machine->state_machine_options;
+		// To set the state machine to be strict we ensure that rfc_4180 is set to true
+		if (!state_options.rfc_4180.IsSetByUser()) {
+			state_options.rfc_4180 = true;
+		}
+		state_machine_strict =
+		    make_shared_ptr<CSVStateMachine>(state_machine_cache.Get(state_options), state_machine->options);
 	}
 	// At this point we have 3 options:
 	// 1. We are at the start of a valid line

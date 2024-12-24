@@ -102,8 +102,6 @@ select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', 
 ----
 a	b
 
-
-
 # same tests with parquet
 require parquet
 

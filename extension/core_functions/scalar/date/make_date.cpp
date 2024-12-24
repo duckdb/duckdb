@@ -11,6 +11,11 @@
 
 namespace duckdb {
 
+static void MakeDateFromEpoch(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.ColumnCount() == 1);
+	result.Reinterpret(input.data[0]);
+}
+
 struct MakeDateOperator {
 	template <typename YYYY, typename MM, typename DD, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(YYYY yyyy, MM mm, DD dd) {
@@ -97,8 +102,8 @@ struct MakeTimestampOperator {
 	}
 
 	template <typename T, typename RESULT_TYPE>
-	static RESULT_TYPE Operation(T micros) {
-		return timestamp_t(micros);
+	static RESULT_TYPE Operation(T value) {
+		return RESULT_TYPE(value);
 	}
 };
 
@@ -116,8 +121,18 @@ static void ExecuteMakeTimestamp(DataChunk &input, ExpressionState &state, Vecto
 	SenaryExecutor::Execute<T, T, T, T, T, double, timestamp_t>(input, result, func);
 }
 
+template <typename T>
+static void ExecuteMakeTimestampNs(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.ColumnCount() == 1);
+
+	auto func = MakeTimestampOperator::Operation<T, timestamp_ns_t>;
+	UnaryExecutor::Execute<T, timestamp_ns_t>(input.data[0], result, input.size(), func);
+	return;
+}
+
 ScalarFunctionSet MakeDateFun::GetFunctions() {
 	ScalarFunctionSet make_date("make_date");
+	make_date.AddFunction(ScalarFunction({LogicalType::INTEGER}, LogicalType::DATE, MakeDateFromEpoch));
 	make_date.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                     LogicalType::DATE, ExecuteMakeDate<int64_t>));
 
@@ -140,6 +155,13 @@ ScalarFunctionSet MakeTimestampFun::GetFunctions() {
 	                                        LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
+	return operator_set;
+}
+
+ScalarFunctionSet MakeTimestampNsFun::GetFunctions() {
+	ScalarFunctionSet operator_set("make_timestamp_ns");
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_NS, ExecuteMakeTimestampNs<int64_t>));
 	return operator_set;
 }
 

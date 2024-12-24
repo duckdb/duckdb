@@ -7,6 +7,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -210,7 +211,7 @@ void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
 static void GetTableRefCountsNode(case_insensitive_map_t<idx_t> &cte_ref_counts, QueryNode &node);
 
 static void GetTableRefCountsExpr(case_insensitive_map_t<idx_t> &cte_ref_counts, ParsedExpression &expr) {
-	if (expr.type == ExpressionType::SUBQUERY) {
+	if (expr.GetExpressionType() == ExpressionType::SUBQUERY) {
 		auto &subquery = expr.Cast<SubqueryExpression>();
 		GetTableRefCountsNode(cte_ref_counts, *subquery.subquery->node);
 	} else {
@@ -343,9 +344,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
 	if (node.type != QueryNodeType::CTE_NODE && // Issue #13850 - Don't auto-materialize if users materialize (for now)
-	    context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
-	        context.db->config.options.disabled_optimizers.end() &&
-	    context.config.enable_optimizer && OptimizeCTEs(node)) {
+	    !Optimizer::OptimizerDisabled(context, OptimizerType::MATERIALIZED_CTE) && context.config.enable_optimizer &&
+	    OptimizeCTEs(node)) {
 		switch (node.type) {
 		case QueryNodeType::SELECT_NODE:
 			result = BindWithCTE(node.Cast<SelectNode>());
@@ -658,7 +658,7 @@ case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
 
 // FIXME: this is extremely naive
 void VerifyNotExcluded(ParsedExpression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &column_ref = expr.Cast<ColumnRefExpression>();
 		if (!column_ref.IsQualified()) {
 			return;

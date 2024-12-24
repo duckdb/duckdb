@@ -5,7 +5,7 @@ namespace duckdb {
 
 BoundExpression::BoundExpression(unique_ptr<Expression> expr_p)
     : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(std::move(expr_p)) {
-	this->alias = expr->alias;
+	this->alias = expr->GetAlias();
 }
 
 unique_ptr<Expression> &BoundExpression::GetExpression(ParsedExpression &expr) {

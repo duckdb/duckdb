@@ -8,10 +8,34 @@ PRAGMA enable_verification
 statement ok 
 PRAGMA verify_parallelism
 
+query II
+FROM read_csv('data/csv/repromarket.csv',
+   columns={
+      'email': 'varchar',
+      'password': 'varchar'
+   },
+   all_varchar=true,
+   delim=':',
+   header=false,
+   skip=0,
+   null_padding=true,
+   ignore_errors=true
+);
+----
+nemanja.krpovic@gmail.com	krlleta
+vega@example.combogus	NULL
+mirkofoto@gmail.com	mirko
+
+query I
+FROM read_csv('data/csv/pipe_delim.csv', columns={'a': 'VARCHAR'}, auto_detect=False)
+----
+one|two|three|four
+1|2|3|4
+
 query I
 FROM read_csv('data/csv/nullterm.csv')
 ----
-world
+\0world\0
 
 query I
 FROM read_csv('data/csv/nullterm.csv', quote = '"', escape = '"')

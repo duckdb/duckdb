@@ -299,6 +299,10 @@ public:
 	                                                unique_ptr<PhysicalOperator> plan) = 0;
 	virtual unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
 	                                                    unique_ptr<LogicalOperator> plan) = 0;
+	virtual unique_ptr<LogicalOperator> BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
+	                                                      unique_ptr<LogicalOperator> plan,
+	                                                      unique_ptr<CreateIndexInfo> create_info,
+	                                                      unique_ptr<AlterTableInfo> alter_info);
 
 	virtual DatabaseSize GetDatabaseSize(ClientContext &context) = 0;
 	virtual vector<MetadataBlockInfo> GetMetadataInfo(ClientContext &context);
@@ -316,6 +320,9 @@ public:
 	DUCKDB_API void SetDefaultTable(const string &schema, const string &name);
 	DUCKDB_API string GetDefaultTable() const;
 	DUCKDB_API string GetDefaultTableSchema() const;
+
+	//! Returns the dependency manager of this catalog - if the catalog has anye
+	virtual optional_ptr<DependencyManager> GetDependencyManager();
 
 public:
 	template <class T>

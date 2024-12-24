@@ -187,7 +187,7 @@ COPY (SELECT * FROM t1) TO '__TEST_DIR__/hive_filters_2' (FORMAT PARQUET, PARTIT
 query II
 EXPLAIN select a from parquet_scan('__TEST_DIR__/hive_filters/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c::INT=500 and a::INT < 4;
 ----
-physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4 AND a IS NOT.*NULL.*File Filters:.*\(CAST\(c AS.*INTEGER\) = 500\).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4.*File Filters:.*\(CAST\(c AS.*INTEGER\) = 500\).*
 
 # unsatisfiable file filters also show up
 query II

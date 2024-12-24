@@ -354,6 +354,9 @@ TEST_CASE("Test duckdb_result_return_type", "[capi]") {
 }
 
 TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
+	if (duckdb_vector_size() < 3) {
+		return;
+	}
 	REQUIRE(duckdb_list_vector_reserve(nullptr, 100) == duckdb_state::DuckDBError);
 	REQUIRE(duckdb_list_vector_set_size(nullptr, 200) == duckdb_state::DuckDBError);
 
@@ -373,7 +376,6 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	REQUIRE(duckdb_list_vector_set_size(list_vector, 123) == duckdb_state::DuckDBSuccess);
 	REQUIRE(duckdb_list_vector_get_size(list_vector) == 123);
 
-#if STANDARD_VECTOR_SIZE > 2
 	auto entries = (duckdb_list_entry *)duckdb_vector_get_data(list_vector);
 	entries[0].offset = 0;
 	entries[0].length = 20;
@@ -394,7 +396,6 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	for (int i = 0; i < 123; i++) {
 		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
 	}
-#endif
 
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&list_type);
@@ -461,7 +462,7 @@ TEST_CASE("Test PK violation in the C API appender", "[capi]") {
 	auto state = duckdb_appender_close(appender);
 	REQUIRE(state == DuckDBError);
 	auto error = duckdb_appender_error(appender);
-	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violated"));
+	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violation"));
 
 	// Destroy the appender despite the error to avoid leaks.
 	state = duckdb_appender_destroy(&appender);
@@ -490,7 +491,7 @@ TEST_CASE("Test PK violation in the C API appender", "[capi]") {
 	state = duckdb_appender_flush(appender);
 	REQUIRE(state == DuckDBError);
 	error = duckdb_appender_error(appender);
-	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violated"));
+	REQUIRE(duckdb::StringUtil::Contains(error, "PRIMARY KEY or UNIQUE constraint violation"));
 	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBError);
 
 	// Ensure that only the last row was appended.

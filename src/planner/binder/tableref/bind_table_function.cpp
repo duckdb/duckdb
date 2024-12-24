@@ -108,21 +108,22 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		string parameter_name;
 
 		// hack to make named parameters work
-		if (child->type == ExpressionType::COMPARE_EQUAL) {
+		if (child->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
 			// comparison, check if the LHS is a columnref
 			auto &comp = child->Cast<ComparisonExpression>();
-			if (comp.left->type == ExpressionType::COLUMN_REF) {
+			if (comp.left->GetExpressionType() == ExpressionType::COLUMN_REF) {
 				auto &colref = comp.left->Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
 					parameter_name = colref.GetColumnName();
 					child = std::move(comp.right);
 				}
 			}
-		} else if (!child->alias.empty()) {
+		} else if (!child->GetAlias().empty()) {
 			// <name> => <expression> will set the alias of <expression> to <name>
-			parameter_name = child->alias;
+			parameter_name = child->GetAlias();
 		}
-		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION && child->type == ExpressionType::SUBQUERY) {
+		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION &&
+		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
 			auto fun = table_function.functions.GetFunctionByOffset(0);
 			if (table_function.functions.Size() != 1 || fun.arguments.empty() ||
@@ -177,7 +178,7 @@ static string GetAlias(const TableFunctionRef &ref) {
 	if (!ref.alias.empty()) {
 		return ref.alias;
 	}
-	if (ref.function && ref.function->type == ExpressionType::FUNCTION) {
+	if (ref.function && ref.function->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function_expr = ref.function->Cast<FunctionExpression>();
 		return function_expr.function_name;
 	}
@@ -262,7 +263,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, v
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 
-	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
+	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
 	string catalog = fexpr.catalog;

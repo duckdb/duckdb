@@ -135,6 +135,8 @@ public:
 		print_line = false;
 	}
 
+	void SetIgnoreErrors(bool ignore_errors);
+
 private:
 	//! Private methods should always be locked by parent method.
 	//! If we should print the line of an error

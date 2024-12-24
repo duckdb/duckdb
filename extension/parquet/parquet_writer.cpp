@@ -4,6 +4,7 @@
 #include "mbedtls_wrapper.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_timestamp.hpp"
+#include "resizable_buffer.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
@@ -318,13 +319,15 @@ void VerifyUniqueNames(const vector<string> &names) {
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
-                             shared_ptr<ParquetEncryptionConfig> encryption_config_p,
-                             double dictionary_compression_ratio_threshold_p, int64_t compression_level_p,
+                             shared_ptr<ParquetEncryptionConfig> encryption_config_p, idx_t dictionary_size_limit_p,
+                             double bloom_filter_false_positive_ratio_p, int64_t compression_level_p,
                              bool debug_use_openssl_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
       field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)),
-      dictionary_compression_ratio_threshold(dictionary_compression_ratio_threshold_p),
-      compression_level(compression_level_p), debug_use_openssl(debug_use_openssl_p) {
+      dictionary_size_limit(dictionary_size_limit_p),
+      bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
+      debug_use_openssl(debug_use_openssl_p) {
+
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -523,7 +526,36 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 }
 
 void ParquetWriter::Finalize() {
-	const auto start_offset = writer->GetTotalWritten();
+
+	// dump the bloom filters right before footer, not if stuff is encrypted
+
+	for (auto &bloom_filter_entry : bloom_filters) {
+		D_ASSERT(!encryption_config);
+		// write nonsense bloom filter header
+		duckdb_parquet::BloomFilterHeader filter_header;
+		auto bloom_filter_bytes = bloom_filter_entry.bloom_filter->Get();
+		filter_header.numBytes = NumericCast<int32_t>(bloom_filter_bytes->len);
+		filter_header.algorithm.__set_BLOCK(duckdb_parquet::SplitBlockAlgorithm());
+		filter_header.compression.__set_UNCOMPRESSED(duckdb_parquet::Uncompressed());
+		filter_header.hash.__set_XXHASH(duckdb_parquet::XxHash());
+
+		// set metadata flags
+		auto &column_chunk =
+		    file_meta_data.row_groups[bloom_filter_entry.row_group_idx].columns[bloom_filter_entry.column_idx];
+
+		column_chunk.meta_data.__isset.bloom_filter_offset = true;
+		column_chunk.meta_data.bloom_filter_offset = NumericCast<int64_t>(writer->GetTotalWritten());
+
+		auto bloom_filter_header_size = Write(filter_header);
+		// write actual data
+		WriteData(bloom_filter_bytes->ptr, bloom_filter_bytes->len);
+
+		column_chunk.meta_data.__isset.bloom_filter_length = true;
+		column_chunk.meta_data.bloom_filter_length =
+		    NumericCast<int32_t>(bloom_filter_header_size + bloom_filter_bytes->len);
+	}
+
+	const auto metadata_start_offset = writer->GetTotalWritten();
 	if (encryption_config) {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
@@ -541,7 +573,7 @@ void ParquetWriter::Finalize() {
 
 	Write(file_meta_data);
 
-	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
+	writer->Write<uint32_t>(writer->GetTotalWritten() - metadata_start_offset);
 
 	if (encryption_config) {
 		// encrypted parquet files also end with the string "PARE"
@@ -561,6 +593,17 @@ GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 		geoparquet_data = make_uniq<GeoParquetFileMetadata>();
 	}
 	return *geoparquet_data;
+}
+
+void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter) {
+	if (encryption_config) {
+		return;
+	}
+	ParquetBloomFilterEntry new_entry;
+	new_entry.bloom_filter = std::move(bloom_filter);
+	new_entry.column_idx = col_idx;
+	new_entry.row_group_idx = file_meta_data.row_groups.size();
+	bloom_filters.push_back(std::move(new_entry));
 }
 
 } // namespace duckdb

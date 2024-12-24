@@ -35,8 +35,8 @@ struct BaseCSVData : public TableFunctionData {
 	//! The CSV reader options
 	CSVReaderOptions options;
 	//! Offsets for generated columns
-	idx_t filename_col_idx;
-	idx_t hive_partition_col_idx;
+	idx_t filename_col_idx {};
+	idx_t hive_partition_col_idx {};
 
 	void Finalize();
 };
@@ -46,6 +46,9 @@ struct WriteCSVData : public BaseCSVData {
 	    : sql_types(std::move(sql_types)) {
 		files.push_back(std::move(file_path));
 		options.name_list = std::move(names);
+		if (options.dialect_options.state_machine_options.escape == '\0') {
+			options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
+		}
 	}
 
 	//! The SQL types to write
@@ -54,7 +57,7 @@ struct WriteCSVData : public BaseCSVData {
 	string newline = "\n";
 	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
 	idx_t flush_size = 4096ULL * 8ULL;
-	//! For each byte whether or not the CSV file requires quotes when containing the byte
+	//! For each byte whether the CSV file requires quotes when containing the byte
 	unsafe_unique_array<bool> requires_quotes;
 	//! Expressions used to convert the input into strings
 	vector<unique_ptr<Expression>> cast_expressions;

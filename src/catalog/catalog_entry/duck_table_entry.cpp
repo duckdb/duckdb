@@ -136,6 +136,10 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 	return storage->GetStatistics(context, column.StorageOid());
 }
 
+unique_ptr<BlockingSample> DuckTableEntry::GetSample() {
+	return storage->GetSample();
+}
+
 unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
 	if (transaction.HasContext()) {
 		return AlterEntry(transaction.GetContext(), info);
@@ -239,7 +243,7 @@ void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 }
 
 static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (colref.column_names.back() == info.old_name) {
 			colref.column_names.back() = info.new_name;

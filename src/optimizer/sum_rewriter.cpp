@@ -14,9 +14,17 @@
 
 namespace duckdb {
 
+unique_ptr<SetTypesMatcher> GetSmallIntegerTypesMatcher() {
+	vector<LogicalType> types {LogicalTypeId::TINYINT,  LogicalTypeId::SMALLINT, LogicalTypeId::INTEGER,
+	                           LogicalTypeId::BIGINT,   LogicalTypeId::UTINYINT, LogicalTypeId::USMALLINT,
+	                           LogicalTypeId::UINTEGER, LogicalTypeId::UBIGINT};
+	return make_uniq<SetTypesMatcher>(std::move(types));
+}
+
 SumRewriterOptimizer::SumRewriterOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 	// set up an expression matcher that detects SUM(x + C) or SUM(C + x)
 	auto op = make_uniq<AggregateExpressionMatcher>();
+	op->function = make_uniq<SpecificFunctionMatcher>("sum");
 	op->policy = SetMatcher::Policy::UNORDERED;
 
 	auto arithmetic = make_uniq<FunctionExpressionMatcher>();
@@ -26,8 +34,8 @@ SumRewriterOptimizer::SumRewriterOptimizer(Optimizer &optimizer) : optimizer(opt
 	arithmetic->type = make_uniq<IntegerTypeMatcher>();
 	auto child_constant_matcher = make_uniq<ConstantExpressionMatcher>();
 	auto child_expression_matcher = make_uniq<StableExpressionMatcher>();
-	child_constant_matcher->type = make_uniq<IntegerTypeMatcher>();
-	child_expression_matcher->type = make_uniq<IntegerTypeMatcher>();
+	child_constant_matcher->type = GetSmallIntegerTypesMatcher();
+	child_expression_matcher->type = GetSmallIntegerTypesMatcher();
 	arithmetic->matchers.push_back(std::move(child_constant_matcher));
 	arithmetic->matchers.push_back(std::move(child_expression_matcher));
 	arithmetic->policy = SetMatcher::Policy::SOME;
@@ -101,7 +109,7 @@ void SumRewriterOptimizer::RewriteSums(unique_ptr<LogicalOperator> &op) {
 		// found SUM(x + C)
 		auto &sum = bindings[0].get().Cast<BoundAggregateExpression>();
 		auto &addition = bindings[1].get().Cast<BoundFunctionExpression>();
-		idx_t const_idx = addition.children[0]->type == ExpressionType::VALUE_CONSTANT ? 0 : 1;
+		idx_t const_idx = addition.children[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT ? 0 : 1;
 		auto const_expr = std::move(addition.children[const_idx]);
 		auto main_expr = std::move(addition.children[1 - const_idx]);
 

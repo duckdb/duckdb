@@ -149,7 +149,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"id", "j"}, "v1"));
 	REQUIRE_NOTHROW(v2 = con.Values({{1, 27}, {2, 8}, {3, 20}}, {"id", "k"}, "v2"));
 	REQUIRE_NOTHROW(v3 = con.Values({{1, 2}, {2, 6}, {3, 10}}, {"id", "k"}, "v3"));
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3}));
@@ -158,7 +158,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	// asof join
 	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {6, 5}, {8, 4}, {10, 23}, {12, 12}, {15, 14}}, {"id", "j"}, "v1"));
 	REQUIRE_NOTHROW(v2 = con.Values({{4, 27}, {8, 8}, {14, 20}}, {"id", "k"}, "v2"));
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id>=v2.id", JoinType::INNER, JoinRefType::ASOF)->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id>=v2.id", JoinType::INNER, JoinRefType::ASOF)->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 8, 10, 12, 15}));
 	REQUIRE(CHECK_COLUMN(result, 1, {5, 4, 23, 12, 14}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 8, 8, 8, 14}));
@@ -169,23 +169,24 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(v3 = con.Values({{1, 2}, {2, 6}, {3, 10}}, {"id", "k"}, "v3"));
 
 	// projection after a join
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Project("v1.id+v2.id, j+k")->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Project("v1.id+v2.id, j+k")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {37, 13, 24}));
 
 	// chain multiple joins
 	auto multi_join = v1->Join(v2, "v1.id=v2.id")->Join(v3, "v1.id=v3.id");
-	REQUIRE_NOTHROW(result = multi_join->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE_NOTHROW(result = multi_join->Project("v1.id+v2.id+v3.id")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 6, 9}));
 
 	// multiple joins followed by a filter and a projection
-	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id=1")->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id=1")->Project("v1.id+v2.id+v3.id")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// multiple joins followed by multiple filters
 	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id>0")
 	                             ->Filter("v2.id < 3")
 	                             ->Filter("v3.id=2")
 	                             ->Project("v1.id+v2.id+v3.id")
+	                             ->Order("1")
 	                             ->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 
@@ -502,6 +503,81 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+}
+
+TEST_CASE("Test table creations with on_create_conflict using the relation API", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	duckdb::unique_ptr<QueryResult> result;
+	duckdb::shared_ptr<Relation> values, values1, proj;
+
+	// create a table from a Values statement
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
+	REQUIRE_NOTHROW(values->Create("integers"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_NOTHROW(values1 = con.Values({{4, 14}, {5, 15}, {6, 16}}, {"i", "j"}));
+	REQUIRE_THROWS(values1->Create("integers"));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_THROWS(values1->Create("integers", false, OnCreateConflict::ERROR_ON_CONFLICT));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_NOTHROW(values1->Create("integers", false, OnCreateConflict::IGNORE_ON_CONFLICT));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	REQUIRE_NOTHROW(values1->Create("integers", false, OnCreateConflict::REPLACE_ON_CONFLICT));
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {14, 15, 16}));
+}
+
+TEST_CASE("Test table create from query with on_create_conflict using the relation API", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	duckdb::unique_ptr<QueryResult> result;
+	duckdb::shared_ptr<Relation> values, values1, proj;
+
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 20}, {3, 30}, {4, 40}}, {"i", "j"}));
+	REQUIRE_NOTHROW(values->Create("integers"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 20, 30, 40}));
+
+	REQUIRE_NOTHROW(con.Table("integers")
+	                    ->Filter("i BETWEEN 2 AND 3")
+	                    ->Project("i + 100 AS k, 'hello' AS l")
+	                    ->Create("new_values"));
+
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {102, 103}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+
+	REQUIRE_NOTHROW(proj = con.Table("integers")->Filter("i BETWEEN 1 AND 2")->Project("i + 200 AS k, 'hi' AS l"));
+	REQUIRE_THROWS(proj->Create("new_values"));
+	REQUIRE_THROWS(proj->Create("new_values", false, OnCreateConflict::ERROR_ON_CONFLICT));
+	REQUIRE_NOTHROW(proj->Create("new_values", false, OnCreateConflict::IGNORE_ON_CONFLICT));
+
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {102, 103}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+
+	REQUIRE_NOTHROW(proj->Create("new_values", false, OnCreateConflict::REPLACE_ON_CONFLICT));
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {201, 202}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hi", "hi"}));
 }
 
 TEST_CASE("Test table deletions and updates", "[relation_api]") {

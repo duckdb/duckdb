@@ -187,7 +187,7 @@ vector<reference<Binding>> BindContext::GetMatchingBindings(const string &column
 unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(TableBinding &table_binding,
                                                                 const string &column_name) {
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
-	result->alias = column_name;
+	result->SetAlias(column_name);
 	return result;
 }
 
@@ -246,7 +246,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
 		// because of case insensitivity in the binder we rename the column to the original name
 		// as it appears in the binding itself
-		result->alias = binding->names[column_index];
+		result->SetAlias(binding->names[column_index]);
 	}
 	return std::move(result);
 }
@@ -455,7 +455,7 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 	auto entry = expr.replace_list.find(qualified_name.column);
 	if (entry != expr.replace_list.end()) {
 		auto new_entry = entry->second->Copy();
-		new_entry->alias = entry->first;
+		new_entry->SetAlias(entry->first);
 		info.excluded_columns.insert(entry->first);
 		info.new_select_list.push_back(std::move(new_entry));
 		return true;
@@ -466,7 +466,7 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 void HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_name, ParsedExpression &new_expr) {
 	auto rename_entry = expr.rename_list.find(qualified_name);
 	if (rename_entry != expr.rename_list.end()) {
-		new_expr.alias = rename_entry->second;
+		new_expr.SetAlias(rename_entry->second);
 	}
 }
 
@@ -504,7 +504,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 						for (auto &child_binding : using_binding.bindings) {
 							coalesce->children.push_back(make_uniq<ColumnRefExpression>(column_name, child_binding));
 						}
-						coalesce->alias = column_name;
+						coalesce->SetAlias(column_name);
 						HandleRename(expr, qualified_column, *coalesce);
 						new_select_list.push_back(std::move(coalesce));
 					} else {
@@ -718,6 +718,25 @@ vector<BindingAlias> BindContext::GetBindingAliases() {
 
 void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
 	for (auto &alias : aliases) {
+		// remove the binding from any USING columns
+		for (auto &using_sets : using_columns) {
+			for (auto &using_set_ref : using_sets.second) {
+				auto &using_set = using_set_ref.get();
+				auto it = std::remove_if(using_set.bindings.begin(), using_set.bindings.end(),
+				                         [&](const BindingAlias &using_alias) { return using_alias == alias; });
+				using_set.bindings.erase(it, using_set.bindings.end());
+				if (using_set.bindings.empty()) {
+					throw InternalException(
+					    "BindContext::RemoveContext - no more tables that refer to this using binding");
+				}
+				if (using_set.primary_binding == alias) {
+					throw InternalException(
+					    "BindContext::RemoveContext - cannot remove primary binding from using binding");
+				}
+			}
+		}
+
+		// remove the binding from the list of bindings
 		auto it = std::remove_if(bindings_list.begin(), bindings_list.end(),
 		                         [&](unique_ptr<Binding> &x) { return x->alias == alias; });
 		bindings_list.erase(it, bindings_list.end());

@@ -498,9 +498,8 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
-		compressed_segment->function = function;
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
+		                                                                info.GetBlockSize(), info.GetBlockSize());
 		current_segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);

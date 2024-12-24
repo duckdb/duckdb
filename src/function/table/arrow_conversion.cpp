@@ -27,6 +27,7 @@ ArrowArrayPhysicalType GetArrowArrayPhysicalType(const ArrowType &type) {
 
 } // namespace
 
+#if STANDARD_VECTOR_SIZE > 64
 static void ShiftRight(unsigned char *ar, int size, int shift) {
 	int carry = 0;
 	while (shift--) {
@@ -37,6 +38,7 @@ static void ShiftRight(unsigned char *ar, int size, int shift) {
 		}
 	}
 }
+#endif
 
 idx_t GetEffectiveOffset(const ArrowArray &array, int64_t parent_offset, const ArrowScanLocalState &state,
                          int64_t nested_offset = -1) {

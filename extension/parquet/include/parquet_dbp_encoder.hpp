@@ -23,7 +23,7 @@ public:
 	}
 
 public:
-	void BeginWrite(WriteStream &writer, const int64_t first_value) {
+	void BeginWrite(WriteStream &writer, const int64_t &first_value) {
 		// <block size in values> <number of miniblocks in a block> <total value count> <first value>
 
 		// the block size is a multiple of 128; it is stored as a ULEB128 int

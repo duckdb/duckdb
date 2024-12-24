@@ -119,7 +119,7 @@ public:
 		return source.ColumnCount();
 	}
 
-	double GetProgress(ClientContext &context) {
+	ProgressData GetProgress(ClientContext &context) {
 		return table.GetProgress(context, global_state);
 	}
 
@@ -179,15 +179,16 @@ SourceResultType PhysicalPositionalScan::GetData(ExecutionContext &context, Data
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-double PhysicalPositionalScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+ProgressData PhysicalPositionalScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<PositionalScanGlobalSourceState>();
 
-	double result = child_tables[0]->GetProgress(context, *gstate.global_states[0]);
-	for (size_t t = 1; t < child_tables.size(); ++t) {
-		result = MinValue(result, child_tables[t]->GetProgress(context, *gstate.global_states[t]));
+	ProgressData res;
+
+	for (size_t t = 0; t < child_tables.size(); ++t) {
+		res.Add(child_tables[t]->GetProgress(context, *gstate.global_states[t]));
 	}
 
-	return result;
+	return res;
 }
 
 bool PhysicalPositionalScan::Equals(const PhysicalOperator &other_p) const {

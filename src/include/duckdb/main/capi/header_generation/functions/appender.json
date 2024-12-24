@@ -262,6 +262,38 @@
             }
         },
         {
+            "name": "duckdb_append_default_to_chunk",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                },
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "row"
+                }
+            ],
+          "comment": {
+            "description": "Append a DEFAULT value, at the specified row and column, (NULL if DEFAULT not available for column) to the chunk created from the specified appender.\nThe default value of the column must be a constant value. Non-deterministic expressions like nextval('seq') or random() are not supported.\n\n",
+            "param_comments": {
+              "appender": "The appender to get the default value from.",
+              "chunk": "The data chunk to append the default value to.",
+              "col": "The chunk column index to append the default value to.",
+              "row": "The chunk row index to append the default value to."
+            },
+            "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+          }
+        },
+        {
             "name": "duckdb_append_bool",
             "return_type": "duckdb_state",
             "params": [
@@ -620,6 +652,23 @@
             ],
             "comment": {
                 "description": "Append a NULL value to the appender (of any type).\n"
+            }
+        },
+        {
+            "name": "duckdb_append_value",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_appender",
+                    "name": "appender"
+                },
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Append a duckdb_value to the appender.\n"
             }
         },
         {

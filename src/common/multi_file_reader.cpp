@@ -215,7 +215,9 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 
 		for (auto &part : partitions) {
 			idx_t hive_partitioning_index;
-			auto lookup = std::find(names.begin(), names.end(), part.first);
+			auto lookup = std::find_if(names.begin(), names.end(), [&](const string &col_name) {
+				return StringUtil::CIEquals(col_name, part.first);
+			});
 			if (lookup != names.end()) {
 				// hive partitioning column also exists in file - override
 				auto idx = NumericCast<idx_t>(lookup - names.begin());
@@ -460,7 +462,7 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
 	TableFunctionSet function_set(table_function.name);
 	function_set.AddFunction(table_function);
-	D_ASSERT(table_function.arguments.size() == 1 && table_function.arguments[0] == LogicalType::VARCHAR);
+	D_ASSERT(table_function.arguments.size() >= 1 && table_function.arguments[0] == LogicalType::VARCHAR);
 	table_function.arguments[0] = LogicalType::LIST(LogicalType::VARCHAR);
 	function_set.AddFunction(std::move(table_function));
 	return function_set;

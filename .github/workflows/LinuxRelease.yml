@@ -126,7 +126,7 @@ jobs:
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: duckdb-binaries-linux
         path: |
@@ -178,7 +178,7 @@ jobs:
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip
 
-     - uses: actions/upload-artifact@v3
+     - uses: actions/upload-artifact@v4
        with:
          name: duckdb-binaries-linux-aarch64
          path: |
@@ -206,29 +206,39 @@ jobs:
       - uses: ./duckdb/.github/actions/build_extensions_dockerized
         with:
           vcpkg_target_triplet: x64-linux
-          deploy_as: linux_amd64
           duckdb_arch: linux_amd64
-          treat_warn_as_error: 0
-          s3_id: ${{ secrets.S3_ID }}
-          s3_key: ${{ secrets.S3_KEY }}
-          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-          aarch64_cross_compile: 1
-          run_tests: 0 # Cannot run tests here due to cross-compiling
-          run_autoload_tests: 0
-          ninja: 1
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: linux-extensions-64
           path: |
             build/release/extension/*/*.duckdb_extension
+
+ upload-linux-extensions-64:
+    name: Upload Linux Extensions (x64)
+    needs: linux-extensions-64
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: linux-extensions-64
+      duckdb_arch: linux_amd64
+      duckdb_sha: ${{ github.sha }}
+
+ upload-linux-extensions-64-aarch64:
+    name: Upload Linux Extensions (aarch64)
+    needs: linux-extensions-64-aarch64
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: linux-extensions-64-aarch64
+      duckdb_arch: linux_arm64
+      duckdb_sha: ${{ github.sha }}
 
  linux-extensions-64-aarch64:
     # Builds extensions for linux_arm64
     name: Linux Extensions (aarch64)
     runs-on: ubuntu-latest
     needs: linux-extensions-64
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
 
     steps:
       - uses: actions/checkout@v3
@@ -240,18 +250,9 @@ jobs:
       - uses: ./duckdb/.github/actions/build_extensions_dockerized
         with:
           vcpkg_target_triplet: arm64-linux
-          deploy_as: linux_arm64
           duckdb_arch: linux_arm64
-          treat_warn_as_error: 0
-          s3_id: ${{ secrets.S3_ID }}
-          s3_key: ${{ secrets.S3_KEY }}
-          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-          aarch64_cross_compile: 1
-          run_tests: 0 # Cannot run tests here due to cross-compiling
-          run_autoload_tests: 0
-          ninja: 1
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: linux-extensions-64-aarch64
           path: |
@@ -295,7 +296,7 @@ jobs:
       run: |
         make
 
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
         name: linux-extensions-64
         path: build/release/repository
@@ -311,7 +312,7 @@ jobs:
         pip install cmake-format
         make format-fix
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: extension_entries.hpp
         path: |

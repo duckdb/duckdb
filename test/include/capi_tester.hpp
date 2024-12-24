@@ -40,6 +40,24 @@ public:
 	uint64_t *GetValidity(idx_t col) {
 		return duckdb_vector_get_validity(GetVector(col));
 	}
+	duckdb_vector GetListChildVector(idx_t col) {
+		return duckdb_list_vector_get_child(GetVector(col));
+	}
+	void *GetListChildData(idx_t col) {
+		return duckdb_vector_get_data(GetListChildVector(col));
+	}
+	duckdb_vector GetStructChildVector(idx_t col, idx_t idx) {
+		return duckdb_struct_vector_get_child(GetVector(col), idx);
+	}
+	void *GetStructChildData(idx_t col, idx_t idx) {
+		return duckdb_vector_get_data(GetStructChildVector(col, idx));
+	}
+	duckdb_vector GetArrayChildVector(idx_t col) {
+		return duckdb_array_vector_get_child(GetVector(col));
+	}
+	void *GetArrayChildData(idx_t col) {
+		return duckdb_vector_get_data(GetArrayChildVector(col));
+	}
 	duckdb_data_chunk GetChunk() {
 		return chunk;
 	}
@@ -99,6 +117,14 @@ public:
 
 	unique_ptr<CAPIDataChunk> FetchChunk(idx_t chunk_idx) {
 		auto chunk = duckdb_result_get_chunk(result, chunk_idx);
+		if (!chunk) {
+			return nullptr;
+		}
+		return make_uniq<CAPIDataChunk>(chunk);
+	}
+
+	unique_ptr<CAPIDataChunk> NextChunk() {
+		auto chunk = duckdb_fetch_chunk(result);
 		if (!chunk) {
 			return nullptr;
 		}

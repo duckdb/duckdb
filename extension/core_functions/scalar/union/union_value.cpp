@@ -44,13 +44,13 @@ static unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFun
 	}
 	auto &child = arguments[0];
 
-	if (child->alias.empty()) {
+	if (child->GetAlias().empty()) {
 		throw BinderException("Need named argument for union tag, e.g. UNION_VALUE(a := b)");
 	}
 
 	child_list_t<LogicalType> union_members;
 
-	union_members.push_back(make_pair(child->alias, child->return_type));
+	union_members.push_back(make_pair(child->GetAlias(), child->return_type));
 
 	bound_function.return_type = LogicalType::UNION(std::move(union_members));
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);

@@ -72,6 +72,9 @@ public:
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
+	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+	                   const SelectionVector &sel, idx_t sel_count);
+
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
 	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id,
@@ -214,12 +217,25 @@ public:
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
-	static string_location_t FetchStringLocation(StringDictionaryContainer dict, data_ptr_t base_ptr,
-	                                             int32_t dict_offset, const idx_t block_size);
-	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                                    data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length);
-	static string_t FetchString(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                            data_ptr_t baseptr, string_location_t location, uint32_t string_length);
+	inline static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
+	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
+		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
+		if (DUCKDB_LIKELY(dict_offset >= 0)) {
+			// regular string - fetch from dictionary
+			auto dict_end = base_ptr + dict.end;
+			auto dict_pos = dict_end - dict_offset;
+
+			auto str_ptr = char_ptr_cast(dict_pos);
+			return string_t(str_ptr, string_length);
+		} else {
+			// read overflow string
+			block_id_t block_id;
+			int32_t offset;
+			ReadStringMarker(base_ptr + dict.end - AbsValue<int32_t>(dict_offset), block_id, offset);
+
+			return ReadOverflowString(segment, result, block_id, offset);
+		}
+	}
 
 	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
 	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);

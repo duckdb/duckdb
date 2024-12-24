@@ -5,11 +5,14 @@
 #include "parquet_timestamp.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
+#include "zstd/common/xxhash.hpp"
+
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
 #endif
 
 namespace duckdb {
@@ -27,16 +30,16 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 	Value min;
 	Value max;
 	if (parquet_stats.__isset.min_value) {
-		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value).DefaultCastAs(type);
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value);
 	} else if (parquet_stats.__isset.min) {
-		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min).DefaultCastAs(type);
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min);
 	} else {
 		min = Value(type);
 	}
 	if (parquet_stats.__isset.max_value) {
-		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value).DefaultCastAs(type);
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max_value);
 	} else if (parquet_stats.__isset.max) {
-		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max).DefaultCastAs(type);
+		max = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.max);
 	} else {
 		max = Value(type);
 	}
@@ -47,11 +50,22 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
 
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
                                            const std::string &stats) {
+	Value result;
+	string error;
+	auto stats_val = ConvertValueInternal(type, schema_ele, stats);
+	if (!stats_val.DefaultTryCastAs(type, result, &error)) {
+		return Value(type);
+	}
+	return result;
+}
+Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type,
+                                                   const duckdb_parquet::SchemaElement &schema_ele,
+                                                   const std::string &stats) {
 	auto stats_data = const_data_ptr_cast(stats.c_str());
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN: {
 		if (stats.size() != sizeof(bool)) {
-			throw InternalException("Incorrect stats size for type BOOLEAN");
+			throw InvalidInputException("Incorrect stats size for type BOOLEAN");
 		}
 		return Value::BOOLEAN(Load<bool>(stats_data));
 	}
@@ -59,29 +73,29 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 		if (stats.size() != sizeof(uint32_t)) {
-			throw InternalException("Incorrect stats size for type UINTEGER");
+			throw InvalidInputException("Incorrect stats size for type UINTEGER");
 		}
 		return Value::UINTEGER(Load<uint32_t>(stats_data));
 	case LogicalTypeId::UBIGINT:
 		if (stats.size() != sizeof(uint64_t)) {
-			throw InternalException("Incorrect stats size for type UBIGINT");
+			throw InvalidInputException("Incorrect stats size for type UBIGINT");
 		}
 		return Value::UBIGINT(Load<uint64_t>(stats_data));
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 		if (stats.size() != sizeof(int32_t)) {
-			throw InternalException("Incorrect stats size for type INTEGER");
+			throw InvalidInputException("Incorrect stats size for type INTEGER");
 		}
 		return Value::INTEGER(Load<int32_t>(stats_data));
 	case LogicalTypeId::BIGINT:
 		if (stats.size() != sizeof(int64_t)) {
-			throw InternalException("Incorrect stats size for type BIGINT");
+			throw InvalidInputException("Incorrect stats size for type BIGINT");
 		}
 		return Value::BIGINT(Load<int64_t>(stats_data));
 	case LogicalTypeId::FLOAT: {
 		if (stats.size() != sizeof(float)) {
-			throw InternalException("Incorrect stats size for type FLOAT");
+			throw InvalidInputException("Incorrect stats size for type FLOAT");
 		}
 		auto val = Load<float>(stats_data);
 		if (!Value::FloatIsFinite(val)) {
@@ -99,7 +113,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 			break;
 		}
 		if (stats.size() != sizeof(double)) {
-			throw InternalException("Incorrect stats size for type DOUBLE");
+			throw InvalidInputException("Incorrect stats size for type DOUBLE");
 		}
 		auto val = Load<double>(stats_data);
 		if (!Value::DoubleIsFinite(val)) {
@@ -113,13 +127,13 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		switch (schema_ele.type) {
 		case Type::INT32: {
 			if (stats.size() != sizeof(int32_t)) {
-				throw InternalException("Incorrect stats size for type %s", type.ToString());
+				throw InvalidInputException("Incorrect stats size for type %s", type.ToString());
 			}
 			return Value::DECIMAL(Load<int32_t>(stats_data), width, scale);
 		}
 		case Type::INT64: {
 			if (stats.size() != sizeof(int64_t)) {
-				throw InternalException("Incorrect stats size for type %s", type.ToString());
+				throw InvalidInputException("Incorrect stats size for type %s", type.ToString());
 			}
 			return Value::DECIMAL(Load<int64_t>(stats_data), width, scale);
 		}
@@ -140,22 +154,21 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele), width,
 				    scale);
 			default:
-				throw InternalException("Unsupported internal type for decimal");
+				throw InvalidInputException("Unsupported internal type for decimal");
 			}
 		default:
 			throw InternalException("Unsupported internal type for decimal?..");
 		}
 	}
-	case LogicalType::VARCHAR:
-	case LogicalType::BLOB:
-		if (Value::StringIsValid(stats)) {
-			return Value(stats);
-		} else {
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		if (type.id() == LogicalTypeId::BLOB || !Value::StringIsValid(stats)) {
 			return Value(Blob::ToString(string_t(stats)));
 		}
+		return Value(stats);
 	case LogicalTypeId::DATE:
 		if (stats.size() != sizeof(int32_t)) {
-			throw InternalException("Incorrect stats size for type DATE");
+			throw InvalidInputException("Incorrect stats size for type DATE");
 		}
 		return Value::DATE(date_t(Load<int32_t>(stats_data)));
 	case LogicalTypeId::TIME: {
@@ -165,7 +178,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		} else if (stats.size() == sizeof(int64_t)) {
 			val = Load<int64_t>(stats_data);
 		} else {
-			throw InternalException("Incorrect stats size for type TIME");
+			throw InvalidInputException("Incorrect stats size for type TIME");
 		}
 		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
 			// logical type
@@ -192,7 +205,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		} else if (stats.size() == sizeof(int64_t)) {
 			val = Load<int64_t>(stats_data);
 		} else {
-			throw InternalException("Incorrect stats size for type TIMETZ");
+			throw InvalidInputException("Incorrect stats size for type TIMETZ");
 		}
 		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
 			// logical type
@@ -213,13 +226,13 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		timestamp_t timestamp_value;
 		if (schema_ele.type == Type::INT96) {
 			if (stats.size() != sizeof(Int96)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP");
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP");
 			}
 			timestamp_value = ImpalaTimestampToTimestamp(Load<Int96>(stats_data));
 		} else {
 			D_ASSERT(schema_ele.type == Type::INT64);
 			if (stats.size() != sizeof(int64_t)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP");
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP");
 			}
 			auto val = Load<int64_t>(stats_data);
 			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
@@ -248,13 +261,13 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const duckdb
 		timestamp_ns_t timestamp_value;
 		if (schema_ele.type == Type::INT96) {
 			if (stats.size() != sizeof(Int96)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP_NS");
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
 			}
 			timestamp_value = ImpalaTimestampToTimestampNS(Load<Int96>(stats_data));
 		} else {
 			D_ASSERT(schema_ele.type == Type::INT64);
 			if (stats.size() != sizeof(int64_t)) {
-				throw InternalException("Incorrect stats size for type TIMESTAMP_NS");
+				throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
 			}
 			auto val = Load<int64_t>(stats_data);
 			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
@@ -386,6 +399,212 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 	}
 	return row_group_stats;
+}
+
+static bool HasFilterConstants(const TableFilter &duckdb_filter) {
+	switch (duckdb_filter.filter_type) {
+	case TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = duckdb_filter.Cast<ConstantFilter>();
+		return (constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL && !constant_filter.constant.IsNull());
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
+		bool child_has_constant = false;
+		for (auto &child_filter : conjunction_and_filter.child_filters) {
+			child_has_constant |= HasFilterConstants(*child_filter);
+		}
+		return child_has_constant;
+	}
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
+		bool child_has_constant = false;
+		for (auto &child_filter : conjunction_or_filter.child_filters) {
+			child_has_constant |= HasFilterConstants(*child_filter);
+		}
+		return child_has_constant;
+	}
+	default:
+		return false;
+	}
+}
+
+template <class T>
+uint64_t ValueXH64FixedWidth(const Value &constant) {
+	T val = constant.GetValue<T>();
+	return duckdb_zstd::XXH64(&val, sizeof(val), 0);
+}
+
+// TODO we can only this if the parquet representation of the type exactly matches the duckdb rep!
+// TODO TEST THIS!
+// TODO perhaps we can re-use some writer infra here
+static uint64_t ValueXXH64(const Value &constant) {
+	switch (constant.type().InternalType()) {
+	case PhysicalType::UINT8:
+		return ValueXH64FixedWidth<int32_t>(constant);
+	case PhysicalType::INT8:
+		return ValueXH64FixedWidth<int32_t>(constant);
+	case PhysicalType::UINT16:
+		return ValueXH64FixedWidth<int32_t>(constant);
+	case PhysicalType::INT16:
+		return ValueXH64FixedWidth<int32_t>(constant);
+	case PhysicalType::UINT32:
+		return ValueXH64FixedWidth<uint32_t>(constant);
+	case PhysicalType::INT32:
+		return ValueXH64FixedWidth<int32_t>(constant);
+	case PhysicalType::UINT64:
+		return ValueXH64FixedWidth<uint64_t>(constant);
+	case PhysicalType::INT64:
+		return ValueXH64FixedWidth<int64_t>(constant);
+	case PhysicalType::FLOAT:
+		return ValueXH64FixedWidth<float>(constant);
+	case PhysicalType::DOUBLE:
+		return ValueXH64FixedWidth<double>(constant);
+	case PhysicalType::VARCHAR: {
+		auto val = constant.GetValue<string>();
+		return duckdb_zstd::XXH64(val.c_str(), val.length(), 0);
+	}
+	default:
+		return 0;
+	}
+}
+
+static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilter &bloom_filter) {
+	switch (duckdb_filter.filter_type) {
+	case TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = duckdb_filter.Cast<ConstantFilter>();
+		auto is_compare_equal = constant_filter.comparison_type == ExpressionType::COMPARE_EQUAL;
+		D_ASSERT(!constant_filter.constant.IsNull());
+		auto hash = ValueXXH64(constant_filter.constant);
+		return hash > 0 && !bloom_filter.FilterCheck(hash) && is_compare_equal;
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
+		bool any_children_true = false;
+		for (auto &child_filter : conjunction_and_filter.child_filters) {
+			any_children_true |= ApplyBloomFilter(*child_filter, bloom_filter);
+		}
+		return any_children_true;
+	}
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
+		bool all_children_true = true;
+		for (auto &child_filter : conjunction_or_filter.child_filters) {
+			all_children_true &= ApplyBloomFilter(*child_filter, bloom_filter);
+		}
+		return all_children_true;
+	}
+	default:
+		return false;
+	}
+}
+
+bool ParquetStatisticsUtils::BloomFilterSupported(const LogicalTypeId &type_id) {
+	switch (type_id) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool ParquetStatisticsUtils::BloomFilterExcludes(const TableFilter &duckdb_filter,
+                                                 const duckdb_parquet::ColumnMetaData &column_meta_data,
+                                                 TProtocol &file_proto, Allocator &allocator) {
+	if (!HasFilterConstants(duckdb_filter) || !column_meta_data.__isset.bloom_filter_offset ||
+	    column_meta_data.bloom_filter_offset <= 0) {
+		return false;
+	}
+	// TODO check length against file length!
+
+	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto.getTransport());
+	transport.SetLocation(column_meta_data.bloom_filter_offset);
+	if (column_meta_data.__isset.bloom_filter_length && column_meta_data.bloom_filter_length > 0) {
+		transport.Prefetch(column_meta_data.bloom_filter_offset, column_meta_data.bloom_filter_length);
+	}
+
+	duckdb_parquet::BloomFilterHeader filter_header;
+	// TODO the bloom filter could be encrypted, too, so need to double check that this is NOT the case
+	filter_header.read(&file_proto);
+	if (!filter_header.algorithm.__isset.BLOCK || !filter_header.compression.__isset.UNCOMPRESSED ||
+	    !filter_header.hash.__isset.XXHASH) {
+		return false;
+	}
+
+	auto new_buffer = make_uniq<ResizeableBuffer>(allocator, filter_header.numBytes);
+	transport.read(new_buffer->ptr, filter_header.numBytes);
+	ParquetBloomFilter bloom_filter(std::move(new_buffer));
+	return ApplyBloomFilter(duckdb_filter, bloom_filter);
+}
+
+ParquetBloomFilter::ParquetBloomFilter(idx_t num_entries, double bloom_filter_false_positive_ratio) {
+
+	// aim for hit ratio of 0.01%
+	// see http://tfk.mit.edu/pdf/bloom.pdf
+	double f = bloom_filter_false_positive_ratio;
+	double k = 8.0;
+	double n = LossyNumericCast<double>(num_entries);
+	double m = -k * n / std::log(1 - std::pow(f, 1 / k));
+	auto b = MaxValue<idx_t>(NextPowerOfTwo(LossyNumericCast<idx_t>(m / k)) / 32, 1);
+
+	D_ASSERT(b > 0 && IsPowerOfTwo(b));
+
+	data = make_uniq<ResizeableBuffer>(Allocator::DefaultAllocator(), sizeof(ParquetBloomBlock) * b);
+	data->zero();
+	block_count = data->len / sizeof(ParquetBloomBlock);
+	D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
+}
+
+ParquetBloomFilter::ParquetBloomFilter(unique_ptr<ResizeableBuffer> data_p) {
+	D_ASSERT(data_p->len % sizeof(ParquetBloomBlock) == 0);
+	data = std::move(data_p);
+	block_count = data->len / sizeof(ParquetBloomBlock);
+	D_ASSERT(data->len % sizeof(ParquetBloomBlock) == 0);
+}
+
+void ParquetBloomFilter::FilterInsert(uint64_t x) {
+	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->ptr);
+	uint64_t i = ((x >> 32) * block_count) >> 32;
+	auto &b = blocks[i];
+	ParquetBloomBlock::BlockInsert(b, x);
+}
+
+bool ParquetBloomFilter::FilterCheck(uint64_t x) {
+	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->ptr);
+	auto i = ((x >> 32) * block_count) >> 32;
+	return ParquetBloomBlock::BlockCheck(blocks[i], x);
+}
+
+// compiler optimizes this into a single instruction (popcnt)
+static uint8_t PopCnt64(uint64_t n) {
+	uint8_t c = 0;
+	for (; n; ++c) {
+		n &= n - 1;
+	}
+	return c;
+}
+
+double ParquetBloomFilter::OneRatio() {
+	auto bloom_ptr = reinterpret_cast<uint64_t *>(data->ptr);
+	idx_t one_count = 0;
+	for (idx_t b_idx = 0; b_idx < data->len / sizeof(uint64_t); ++b_idx) {
+		one_count += PopCnt64(bloom_ptr[b_idx]);
+	}
+	return LossyNumericCast<double>(one_count) / (LossyNumericCast<double>(data->len) * 8.0);
+}
+
+ResizeableBuffer *ParquetBloomFilter::Get() {
+	return data.get();
 }
 
 } // namespace duckdb

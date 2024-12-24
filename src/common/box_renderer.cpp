@@ -210,6 +210,74 @@ ValueRenderAlignment BoxRenderer::TypeAlignment(const LogicalType &type) {
 	}
 }
 
+string BoxRenderer::TryFormatLargeNumber(const string &numeric) {
+	// we only return a readable rendering if the number is > 1 million
+	if (numeric.size() <= 5) {
+		// number too small for sure
+		return string();
+	}
+	// get the number to summarize
+	idx_t number = 0;
+	bool negative = false;
+	idx_t i = 0;
+	if (numeric[0] == '-') {
+		negative = true;
+		i++;
+	}
+	for (; i < numeric.size(); i++) {
+		char c = numeric[i];
+		if (c == '.') {
+			break;
+		}
+		if (c < '0' || c > '9') {
+			// not a number or something funky (e.g. 1.23e7)
+			// we could theoretically summarize numbers with exponents
+			return string();
+		}
+		if (number >= 1000000000000000000ULL) {
+			// number too big
+			return string();
+		}
+		number = number * 10 + static_cast<idx_t>(c - '0');
+	}
+	struct UnitBase {
+		idx_t base;
+		const char *name;
+	};
+	static constexpr idx_t BASE_COUNT = 5;
+	UnitBase bases[] = {{1000000ULL, "million"},
+	                    {1000000000ULL, "billion"},
+	                    {1000000000000ULL, "trillion"},
+	                    {1000000000000000ULL, "quadrillion"},
+	                    {1000000000000000000ULL, "quintillion"}};
+	idx_t base = 0;
+	string unit;
+	for (idx_t i = 0; i < BASE_COUNT; i++) {
+		// round the number according to this base
+		idx_t rounded_number = number + ((bases[i].base / 100ULL) / 2);
+		if (rounded_number >= bases[i].base) {
+			base = bases[i].base;
+			unit = bases[i].name;
+		}
+	}
+	if (unit.empty()) {
+		return string();
+	}
+	number += (base / 100ULL) / 2;
+	idx_t decimal_unit = number / (base / 100ULL);
+	string decimal_str = to_string(decimal_unit);
+	string result;
+	if (negative) {
+		result += "-";
+	}
+	result += decimal_str.substr(0, decimal_str.size() - 2);
+	result += config.decimal_separator == '\0' ? '.' : config.decimal_separator;
+	result += decimal_str.substr(decimal_str.size() - 2, 2);
+	result += " ";
+	result += unit;
+	return result;
+}
+
 list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &context,
                                                                const ColumnDataCollection &result, idx_t top_rows,
                                                                idx_t bottom_rows) {
@@ -231,6 +299,13 @@ list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &co
 	DataChunk insert_result;
 	insert_result.Initialize(context, varchar_types);
 
+	if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
+		if (config.render_mode != RenderMode::ROWS || result.Count() != 1) {
+			// large number footer can only be constructed (1) if we have a single row, and (2) in ROWS mode
+			config.large_number_rendering = LargeNumberRendering::NONE;
+		}
+	}
+
 	// fetch the top rows from the ColumnDataCollection
 	idx_t chunk_idx = 0;
 	idx_t row_idx = 0;
@@ -249,6 +324,38 @@ list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &co
 
 		// construct the render collection
 		top_collection.Append(insert_result);
+
+		// if we have are constructing a footer
+		if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
+			D_ASSERT(insert_count == 1);
+			vector<string> readable_numbers;
+			readable_numbers.resize(column_count);
+			bool all_readable = true;
+			for (idx_t c = 0; c < column_count; c++) {
+				if (!result.Types()[c].IsNumeric()) {
+					// not a numeric type - cannot summarize
+					all_readable = false;
+					break;
+				}
+				// add a readable rendering of the value (i.e. "1234567" becomes "1.23 million")
+				// we only add the rendering if the string is big
+				auto numeric_val = insert_result.data[c].GetValue(0).ToString();
+				readable_numbers[c] = TryFormatLargeNumber(numeric_val);
+				if (readable_numbers[c].empty()) {
+					all_readable = false;
+					break;
+				}
+				readable_numbers[c] = "(" + readable_numbers[c] + ")";
+			}
+			insert_result.Reset();
+			if (all_readable) {
+				for (idx_t c = 0; c < column_count; c++) {
+					insert_result.data[c].SetValue(0, Value(readable_numbers[c]));
+				}
+				insert_result.SetCardinality(1);
+				top_collection.Append(insert_result);
+			}
+		}
 
 		chunk_idx++;
 		row_idx += fetch_result.size();
@@ -391,6 +498,13 @@ string BoxRenderer::ConvertRenderValue(const string &input) {
 }
 
 string BoxRenderer::FormatNumber(const string &input) {
+	if (config.large_number_rendering == LargeNumberRendering::ALL) {
+		// when large number rendering is set to ALL, we try to format all numbers as large numbers
+		auto number = TryFormatLargeNumber(input);
+		if (!number.empty()) {
+			return number;
+		}
+	}
 	if (config.decimal_separator == '\0' && config.thousand_separator == '\0') {
 		// no thousand separator
 		return input;
@@ -650,11 +764,14 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 	auto bottom_rows = bottom_collection.Count();
 	auto column_count = column_map.size();
 
+	bool large_number_footer = config.large_number_rendering == LargeNumberRendering::FOOTER;
 	vector<ValueRenderAlignment> alignments;
 	if (config.render_mode == RenderMode::ROWS) {
 		for (idx_t c = 0; c < column_count; c++) {
 			auto column_idx = column_map[c];
 			if (column_idx == SPLIT_COLUMN) {
+				alignments.push_back(ValueRenderAlignment::MIDDLE);
+			} else if (large_number_footer && result_types[column_idx].IsNumeric()) {
 				alignments.push_back(ValueRenderAlignment::MIDDLE);
 			} else {
 				alignments.push_back(TypeAlignment(result_types[column_idx]));
@@ -677,6 +794,10 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 			ValueRenderAlignment alignment;
 			if (config.render_mode == RenderMode::ROWS) {
 				alignment = alignments[c];
+				if (large_number_footer && r == 1) {
+					// render readable numbers with highlighting of a NULL value
+					render_mode = ResultRenderType::NULL_VALUE;
+				}
 			} else {
 				switch (c) {
 				case 0:

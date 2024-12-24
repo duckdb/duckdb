@@ -9,7 +9,7 @@ PRAGMA enable_verification
 statement error
 VALUES((0, 0) = ALL(SELECT 2));
 ----
-explicit cast is required
+Subquery returns 1 columns - expected 2
 
 # use ALL with complex types
 statement error

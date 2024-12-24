@@ -53,6 +53,10 @@ bool StringUtil::Contains(const string &haystack, const char &needle_char) {
 	return (haystack.find(needle_char) != string::npos);
 }
 
+idx_t StringUtil::ToUnsigned(const string &str) {
+	return std::stoull(str);
+}
+
 void StringUtil::LTrim(string &str) {
 	auto it = str.begin();
 	while (it != str.end() && CharacterIsSpace(*it)) {
@@ -176,7 +180,7 @@ vector<string> StringUtil::SplitWithParentheses(const string &str, char delimite
 			if (!parentheses.empty()) {
 				parentheses.pop();
 			} else {
-				throw InternalException("Incongruent parentheses in string: '%s'", str);
+				throw InvalidInputException("Incongruent parentheses in string: '%s'", str);
 			}
 		}
 		// split if not within parentheses
@@ -192,7 +196,7 @@ vector<string> StringUtil::SplitWithParentheses(const string &str, char delimite
 		result.push_back(current);
 	}
 	if (!parentheses.empty()) {
-		throw InternalException("Incongruent parentheses in string: '%s'", str);
+		throw InvalidInputException("Incongruent parentheses in string: '%s'", str);
 	}
 	return result;
 }

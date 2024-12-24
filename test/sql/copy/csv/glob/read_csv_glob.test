@@ -5,6 +5,21 @@
 statement ok
 PRAGMA enable_verification
 
+query IIIII
+select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv('data/csv/per_thread/*.csv') limit 1
+----
+VARCHAR	BOOLEAN	DOUBLE	DOUBLE	VARCHAR
+
+query IIIII
+select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv(['data/csv/per_thread/c1.csv', 'data/csv/per_thread/c2.csv']) limit 1
+----
+VARCHAR	BOOLEAN	DOUBLE	DOUBLE	VARCHAR
+
+query IIIII
+select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv(['data/csv/per_thread/c2.csv', 'data/csv/per_thread/c1.csv', 'data/csv/per_thread/c3.csv']) limit 1
+----
+VARCHAR	BOOLEAN	DOUBLE	DOUBLE	VARCHAR
+
 # simple globbing
 query I
 SELECT * FROM read_csv('data/csv/glob/a?/*.csv') ORDER BY 1

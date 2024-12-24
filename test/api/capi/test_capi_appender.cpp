@@ -677,11 +677,362 @@ TEST_CASE("Test append timestamp in C API", "[capi]") {
 	tester.Cleanup();
 }
 
+TEST_CASE("Test append duckdb_value values in C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE test ("
+	             "lt1 boolean,"
+	             "lt2 tinyint,"
+	             "lt3 smallint,"
+	             "lt4 integer,"
+	             "lt5 bigint,"
+	             "lt6 utinyint,"
+	             "lt7 usmallint,"
+	             "lt8 uinteger,"
+	             "lt9 ubigint,"
+	             "lt10 float,"
+	             "lt11 double,"
+	             "lt12 timestamp,"
+	             "lt13 date,"
+	             "lt14 time,"
+	             "lt15 interval,"
+	             "lt16 hugeint,"
+	             "lt32 uhugeint,"
+	             "lt17 varchar,"
+	             "lt18 blob,"
+	             "lt19 decimal," // no duckdb_create_decimal (yet)
+	             "lt20 timestamp_s,"
+	             "lt21 timestamp_ms,"
+	             "lt22 timestamp_ns,"
+	             "lt23 enum('fly', 'swim', 'walk'),"
+	             "lt24 integer[],"
+	             "lt25 struct(a integer, b float),"
+	             "lt26 map(integer, float)," // no duckdb_create_map_value (yet)
+	             "lt33 integer[3],"
+	             "lt27 uuid,"                      // no duckdb_create_uuid (yet)
+	             "lt28 union(a integer, b float)," // no duckdb_create_union_value (yet)
+	             "lt29 bit,"                       // no duckdb_create_bit (yet)
+	             "lt30 timetz,"
+	             "lt31 timestamptz,"
+	             // lt34 any - not a valid type in SQL
+	             "lt35 varint," // no duckdb_create_varint (yet)
+	             "lt36 integer" // for sqlnull
+	             ")");
+	duckdb_appender appender;
+
+	auto status = duckdb_appender_create_ext(tester.connection, nullptr, nullptr, "test", &appender);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+	REQUIRE(status == DuckDBSuccess);
+
+	REQUIRE(duckdb_appender_begin_row(appender) == DuckDBSuccess);
+
+	bool boolean = true;
+	auto bool_value = duckdb_create_bool(boolean);
+	REQUIRE(duckdb_append_value(appender, bool_value) == DuckDBSuccess);
+	duckdb_destroy_value(&bool_value);
+
+	int8_t tinyint = 127;
+	auto tinyint_value = duckdb_create_int8(tinyint);
+	REQUIRE(duckdb_append_value(appender, tinyint_value) == DuckDBSuccess);
+	duckdb_destroy_value(&tinyint_value);
+
+	int16_t smallint = 32767;
+	auto smallint_value = duckdb_create_int16(smallint);
+	REQUIRE(duckdb_append_value(appender, smallint_value) == DuckDBSuccess);
+	duckdb_destroy_value(&smallint_value);
+
+	int32_t integer = 2147483647;
+	auto integer_value = duckdb_create_int32(integer);
+	REQUIRE(duckdb_append_value(appender, integer_value) == DuckDBSuccess);
+	duckdb_destroy_value(&integer_value);
+
+	int64_t bigint = 9223372036854775807;
+	auto bigint_value = duckdb_create_int64(bigint);
+	REQUIRE(duckdb_append_value(appender, bigint_value) == DuckDBSuccess);
+	duckdb_destroy_value(&bigint_value);
+
+	uint8_t utinyint = 255;
+	auto utinyint_value = duckdb_create_uint8(utinyint);
+	REQUIRE(duckdb_append_value(appender, utinyint_value) == DuckDBSuccess);
+	duckdb_destroy_value(&utinyint_value);
+
+	uint16_t usmallint = 65535;
+	auto usmallint_value = duckdb_create_uint16(usmallint);
+	REQUIRE(duckdb_append_value(appender, usmallint_value) == DuckDBSuccess);
+	duckdb_destroy_value(&usmallint_value);
+
+	uint32_t uinteger = 4294967295;
+	auto uinteger_value = duckdb_create_uint32(uinteger);
+	REQUIRE(duckdb_append_value(appender, uinteger_value) == DuckDBSuccess);
+	duckdb_destroy_value(&uinteger_value);
+
+	uint64_t ubigint = 18446744073709551615ull; // unsigned long long literal
+	auto ubigint_value = duckdb_create_uint64(ubigint);
+	REQUIRE(duckdb_append_value(appender, ubigint_value) == DuckDBSuccess);
+	duckdb_destroy_value(&ubigint_value);
+
+	float float_ = 3.4028235e+38;
+	auto float_value = duckdb_create_float(float_);
+	REQUIRE(duckdb_append_value(appender, float_value) == DuckDBSuccess);
+	duckdb_destroy_value(&float_value);
+
+	double double_ = 1.7976931348623157e+308;
+	auto double_value = duckdb_create_double(double_);
+	REQUIRE(duckdb_append_value(appender, double_value) == DuckDBSuccess);
+	duckdb_destroy_value(&double_value);
+
+	duckdb_timestamp timestamp {9223372036854775806};
+	auto timestamp_value = duckdb_create_timestamp(timestamp);
+	REQUIRE(duckdb_append_value(appender, timestamp_value) == DuckDBSuccess);
+	duckdb_destroy_value(&timestamp_value);
+
+	duckdb_date date {2147483646};
+	auto date_value = duckdb_create_date(date);
+	REQUIRE(duckdb_append_value(appender, date_value) == DuckDBSuccess);
+	duckdb_destroy_value(&date_value);
+
+	duckdb_time time {86400000000};
+	auto time_value = duckdb_create_time(time);
+	REQUIRE(duckdb_append_value(appender, time_value) == DuckDBSuccess);
+	duckdb_destroy_value(&time_value);
+
+	duckdb_interval interval {999, 999, 999999999};
+	auto interval_value = duckdb_create_interval(interval);
+	REQUIRE(duckdb_append_value(appender, interval_value) == DuckDBSuccess);
+	duckdb_destroy_value(&interval_value);
+
+	duckdb_hugeint hugeint {18446744073709551615ull, 9223372036854775807};
+	auto hugeint_value = duckdb_create_hugeint(hugeint);
+	REQUIRE(duckdb_append_value(appender, hugeint_value) == DuckDBSuccess);
+	duckdb_destroy_value(&hugeint_value);
+
+	duckdb_uhugeint uhugeint {18446744073709551615ull, 18446744073709551615ull};
+	auto uhugeint_value = duckdb_create_uhugeint(uhugeint);
+	REQUIRE(duckdb_append_value(appender, uhugeint_value) == DuckDBSuccess);
+	duckdb_destroy_value(&uhugeint_value);
+
+	const char *varchar = "🦆🦆🦆🦆🦆🦆";
+	auto varchar_value = duckdb_create_varchar(varchar);
+	REQUIRE(duckdb_append_value(appender, varchar_value) == DuckDBSuccess);
+	duckdb_destroy_value(&varchar_value);
+
+	const uint8_t blob_data[] {0, 1, 2};
+	idx_t blob_size = 3;
+	auto blob_value = duckdb_create_blob(blob_data, blob_size);
+	REQUIRE(duckdb_append_value(appender, blob_value) == DuckDBSuccess);
+	duckdb_destroy_value(&blob_value);
+
+	// no duckdb_create_decimal (yet)
+	auto null_decimal_value = duckdb_create_null_value();
+	REQUIRE(duckdb_append_value(appender, null_decimal_value) == DuckDBSuccess);
+	duckdb_destroy_value(&null_decimal_value);
+
+	duckdb_timestamp_s timestamp_s {9223372036854};
+	auto timestamp_s_value = duckdb_create_timestamp_s(timestamp_s);
+	REQUIRE(duckdb_append_value(appender, timestamp_s_value) == DuckDBSuccess);
+	duckdb_destroy_value(&timestamp_s_value);
+
+	duckdb_timestamp_ms timestamp_ms {9223372036854775};
+	auto timestamp_ms_value = duckdb_create_timestamp_ms(timestamp_ms);
+	REQUIRE(duckdb_append_value(appender, timestamp_ms_value) == DuckDBSuccess);
+	duckdb_destroy_value(&timestamp_ms_value);
+
+	duckdb_timestamp_ns timestamp_ns {9223372036854775806};
+	auto timestamp_ns_value = duckdb_create_timestamp_ns(timestamp_ns);
+	REQUIRE(duckdb_append_value(appender, timestamp_ns_value) == DuckDBSuccess);
+	duckdb_destroy_value(&timestamp_ns_value);
+
+	const char *enum_members[] {"fly", "swim", "walk"};
+	auto enum_member_count = 3;
+	auto enum_logical_type = duckdb_create_enum_type(enum_members, enum_member_count);
+	uint64_t enum_numerical_value = 2;
+	auto enum_value = duckdb_create_enum_value(enum_logical_type, enum_numerical_value);
+	REQUIRE(duckdb_append_value(appender, enum_value) == DuckDBSuccess);
+	duckdb_destroy_value(&enum_value);
+	duckdb_destroy_logical_type(&enum_logical_type);
+
+	auto list_item_logical_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	idx_t list_item_count = 3;
+	int32_t list_integers[3] {101, 102, 103};
+	duckdb_value list_values[3];
+	for (idx_t i = 0; i < list_item_count; i++) {
+		list_values[i] = duckdb_create_int32(list_integers[i]);
+	}
+	auto list_value = duckdb_create_list_value(list_item_logical_type, list_values, list_item_count);
+	REQUIRE(duckdb_append_value(appender, list_value) == DuckDBSuccess);
+	duckdb_destroy_value(&list_value);
+	for (idx_t i = 0; i < list_item_count; i++) {
+		duckdb_destroy_value(&list_values[i]);
+	}
+	duckdb_destroy_logical_type(&list_item_logical_type);
+
+	auto struct_member_count = 2;
+	duckdb_logical_type struct_member_types[2];
+	struct_member_types[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	struct_member_types[1] = duckdb_create_logical_type(DUCKDB_TYPE_FLOAT);
+	const char *struct_member_names[] {"a", "b"};
+	int32_t struct_integer = 42;
+	float struct_float = 3.14159;
+	duckdb_value struct_values[2];
+	struct_values[0] = duckdb_create_int32(struct_integer);
+	struct_values[1] = duckdb_create_float(struct_float);
+	auto struct_logical_type = duckdb_create_struct_type(struct_member_types, struct_member_names, struct_member_count);
+	auto struct_value = duckdb_create_struct_value(struct_logical_type, struct_values);
+	REQUIRE(duckdb_append_value(appender, struct_value) == DuckDBSuccess);
+	duckdb_destroy_value(&struct_value);
+	duckdb_destroy_value(&struct_values[0]);
+	duckdb_destroy_value(&struct_values[1]);
+	duckdb_destroy_logical_type(&struct_logical_type);
+	duckdb_destroy_logical_type(&struct_member_types[0]);
+	duckdb_destroy_logical_type(&struct_member_types[1]);
+
+	// no duckdb_create_map_value (yet)
+	auto null_map_value = duckdb_create_null_value();
+	REQUIRE(duckdb_append_value(appender, null_map_value) == DuckDBSuccess);
+	duckdb_destroy_value(&null_map_value);
+
+	auto array_item_logical_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	idx_t array_item_count = 3;
+	int32_t array_integers[3] {201, 202, 203};
+	duckdb_value array_values[3];
+	for (idx_t i = 0; i < array_item_count; i++) {
+		array_values[i] = duckdb_create_int32(array_integers[i]);
+	}
+	auto array_value = duckdb_create_array_value(array_item_logical_type, array_values, array_item_count);
+	REQUIRE(duckdb_append_value(appender, array_value) == DuckDBSuccess);
+	duckdb_destroy_value(&array_value);
+	for (idx_t i = 0; i < array_item_count; i++) {
+		duckdb_destroy_value(&array_values[i]);
+	}
+	duckdb_destroy_logical_type(&array_item_logical_type);
+
+	// no duckdb_create_uuid (yet)
+	auto null_uuid_value = duckdb_create_null_value();
+	REQUIRE(duckdb_append_value(appender, null_uuid_value) == DuckDBSuccess);
+	duckdb_destroy_value(&null_uuid_value);
+
+	// no duckdb_create_union_value (yet)
+	auto null_union_value = duckdb_create_null_value();
+	REQUIRE(duckdb_append_value(appender, null_union_value) == DuckDBSuccess);
+	duckdb_destroy_value(&null_union_value);
+
+	// no duckdb_create_bit (yet)
+	auto null_bit_value = duckdb_create_null_value();
+	REQUIRE(duckdb_append_value(appender, null_bit_value) == DuckDBSuccess);
+	duckdb_destroy_value(&null_bit_value);
+
+	duckdb_time_tz time_tz = duckdb_create_time_tz(86400000000, -57599);
+	auto time_tz_value = duckdb_create_time_tz_value(time_tz);
+	REQUIRE(duckdb_append_value(appender, time_tz_value) == DuckDBSuccess);
+	duckdb_destroy_value(&time_tz_value);
+
+	duckdb_timestamp timestamp_tz {9223372036854775806};
+	auto timestamp_tz_value = duckdb_create_timestamp_tz(timestamp_tz);
+	REQUIRE(duckdb_append_value(appender, timestamp_tz_value) == DuckDBSuccess);
+	duckdb_destroy_value(&timestamp_tz_value);
+
+	// no duckdb_create_varint (yet)
+	auto null_varint_value = duckdb_create_null_value();
+	REQUIRE(duckdb_append_value(appender, null_varint_value) == DuckDBSuccess);
+	duckdb_destroy_value(&null_varint_value);
+
+	auto null_value = duckdb_create_null_value();
+	REQUIRE(duckdb_append_value(appender, null_value) == DuckDBSuccess);
+	duckdb_destroy_value(&null_value);
+
+	REQUIRE(duckdb_appender_end_row(appender) == DuckDBSuccess);
+
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	result = tester.Query("SELECT * FROM test");
+	REQUIRE_NO_FAIL(*result);
+
+	auto chunk = result->NextChunk();
+	REQUIRE(reinterpret_cast<bool *>(chunk->GetData(0))[0] == boolean);
+	REQUIRE(reinterpret_cast<int8_t *>(chunk->GetData(1))[0] == tinyint);
+	REQUIRE(reinterpret_cast<int16_t *>(chunk->GetData(2))[0] == smallint);
+	REQUIRE(reinterpret_cast<int32_t *>(chunk->GetData(3))[0] == integer);
+	REQUIRE(reinterpret_cast<int64_t *>(chunk->GetData(4))[0] == bigint);
+	REQUIRE(reinterpret_cast<uint8_t *>(chunk->GetData(5))[0] == utinyint);
+	REQUIRE(reinterpret_cast<uint16_t *>(chunk->GetData(6))[0] == usmallint);
+	REQUIRE(reinterpret_cast<uint32_t *>(chunk->GetData(7))[0] == uinteger);
+	REQUIRE(reinterpret_cast<uint64_t *>(chunk->GetData(8))[0] == ubigint);
+	REQUIRE(reinterpret_cast<float *>(chunk->GetData(9))[0] == float_);
+	REQUIRE(reinterpret_cast<double *>(chunk->GetData(10))[0] == double_);
+	REQUIRE(reinterpret_cast<duckdb_timestamp *>(chunk->GetData(11))[0].micros == timestamp.micros);
+	REQUIRE(reinterpret_cast<duckdb_date *>(chunk->GetData(12))[0].days == date.days);
+	REQUIRE(reinterpret_cast<duckdb_time *>(chunk->GetData(13))[0].micros == time.micros);
+
+	REQUIRE_THAT(reinterpret_cast<duckdb_interval *>(chunk->GetData(14))[0],
+	             Catch::Predicate<duckdb_interval>([&](const duckdb_interval &input) {
+		             return input.months == interval.months && input.days == interval.days &&
+		                    input.micros == interval.micros;
+	             }));
+	REQUIRE_THAT(reinterpret_cast<duckdb_hugeint *>(chunk->GetData(15))[0],
+	             Catch::Predicate<duckdb_hugeint>([&](const duckdb_hugeint &input) {
+		             return input.upper == hugeint.upper && input.lower == hugeint.lower;
+	             }));
+	REQUIRE_THAT(reinterpret_cast<duckdb_uhugeint *>(chunk->GetData(16))[0],
+	             Catch::Predicate<duckdb_uhugeint>([&](const duckdb_uhugeint &input) {
+		             return input.upper == uhugeint.upper && input.lower == uhugeint.lower;
+	             }));
+	REQUIRE_THAT(reinterpret_cast<duckdb_string_t *>(chunk->GetData(17))[0],
+	             Catch::Predicate<duckdb_string_t>([&](const duckdb_string_t &input) {
+		             return !strncmp(duckdb_string_t_data(const_cast<duckdb_string_t *>(&input)), varchar,
+		                             strlen(varchar)) &&
+		                    duckdb_string_t_length(input) == strlen(varchar);
+	             }));
+	REQUIRE_THAT(reinterpret_cast<duckdb_string_t *>(chunk->GetData(18))[0],
+	             Catch::Predicate<duckdb_string_t>([&](const duckdb_string_t &input) {
+		             return !memcmp(duckdb_string_t_data(const_cast<duckdb_string_t *>(&input)), blob_data,
+		                            blob_size) &&
+		                    duckdb_string_t_length(input) == blob_size;
+	             }));
+
+	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(19), 0) == false); // no duckdb_create_decimal (yet)
+
+	REQUIRE(reinterpret_cast<duckdb_timestamp_s *>(chunk->GetData(20))[0].seconds == timestamp_s.seconds);
+	REQUIRE(reinterpret_cast<duckdb_timestamp_ms *>(chunk->GetData(21))[0].millis == timestamp_ms.millis);
+	REQUIRE(reinterpret_cast<duckdb_timestamp_ns *>(chunk->GetData(22))[0].nanos == timestamp_ns.nanos);
+	REQUIRE(reinterpret_cast<uint8_t *>(chunk->GetData(23))[0] == enum_numerical_value);
+
+	REQUIRE(reinterpret_cast<uint64_t *>(chunk->GetData(24))[0] == 0);               // list 0 offset
+	REQUIRE(reinterpret_cast<uint64_t *>(chunk->GetData(24))[1] == list_item_count); // list 0 length
+	for (idx_t i = 0; i < list_item_count; i++) {
+		REQUIRE(reinterpret_cast<int32_t *>(chunk->GetListChildData(24))[i] == list_integers[i]);
+	}
+
+	REQUIRE(reinterpret_cast<int32_t *>(chunk->GetStructChildData(25, 0))[0] == struct_integer);
+	REQUIRE(reinterpret_cast<float *>(chunk->GetStructChildData(25, 1))[0] == struct_float);
+
+	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(26), 0) == false); // no duckdb_create_map_value (yet)
+
+	for (idx_t i = 0; i < array_item_count; i++) {
+		REQUIRE(reinterpret_cast<int32_t *>(chunk->GetArrayChildData(27))[i] == array_integers[i]);
+	}
+
+	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(28), 0) == false); // no duckdb_create_union (yet)
+	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(29), 0) == false); // no duckdb_create_union_value (yet)
+	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(30), 0) == false); // no duckdb_create_bit (yet)
+
+	REQUIRE(reinterpret_cast<duckdb_time_tz *>(chunk->GetData(31))[0].bits == time_tz.bits);
+	REQUIRE(reinterpret_cast<duckdb_timestamp *>(chunk->GetData(32))[0].micros == timestamp_tz.micros);
+
+	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(33), 0) == false); // no duckdb_create_varint (yet)
+
+	REQUIRE(duckdb_validity_row_is_valid(chunk->GetValidity(34), 0) == false); // sqlnull
+	tester.Cleanup();
+}
+
 TEST_CASE("Test append to different catalog in C API") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));
 
-	auto test_dir = GetTestDirectory();
+	auto test_dir = TestDirectoryPath();
 	auto attach_query = "ATTACH '" + test_dir + "/append_to_other.db'";
 	REQUIRE(tester.Query(attach_query)->success);
 
@@ -770,6 +1121,66 @@ TEST_CASE("Test appending with an active column list in the C API") {
 	REQUIRE(result->Fetch<int32_t>(0, 1) == 42);
 	REQUIRE(result->Fetch<int32_t>(1, 1) == 42);
 	REQUIRE(result->Fetch<int32_t>(2, 1) == 42);
+	REQUIRE(result->Fetch<bool>(3, 1) == true);
+
+	tester.Cleanup();
+}
+
+TEST_CASE("Test appending default value to data chunk in the C API") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (random()))");
+	duckdb_appender appender;
+
+	auto status = duckdb_appender_create_ext(tester.connection, nullptr, nullptr, "tbl", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	duckdb_logical_type types[3];
+	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	types[2] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto data_chunk = duckdb_create_data_chunk(types, 3);
+
+	auto col1 = duckdb_data_chunk_get_vector(data_chunk, 0);
+	auto col_data1 = reinterpret_cast<int32_t *>(duckdb_vector_get_data(col1));
+	col_data1[0] = 15;
+	col_data1[1] = 17;
+
+	auto col2 = duckdb_data_chunk_get_vector(data_chunk, 1);
+	auto col_data2 = reinterpret_cast<int32_t *>(duckdb_vector_get_data(col2));
+	col_data2[0] = 16;
+	col_data2[1] = 18;
+
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 2, 0) == DuckDBSuccess);
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 2, 1) == DuckDBSuccess);
+
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 3, 1) == DuckDBError);
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 2, duckdb_vector_size() + 1) == DuckDBError);
+
+	duckdb_data_chunk_set_size(data_chunk, 2);
+
+	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBSuccess);
+	duckdb_destroy_data_chunk(&data_chunk);
+	duckdb_destroy_logical_type(&types[0]);
+	duckdb_destroy_logical_type(&types[1]);
+	duckdb_destroy_logical_type(&types[2]);
+
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	result = tester.Query("SELECT i, j, k, l IS NOT NULL FROM tbl");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int32_t>(0, 0) == 15);
+	REQUIRE(result->Fetch<int32_t>(1, 0) == 16);
+	REQUIRE(result->Fetch<int32_t>(2, 0) == 30);
+	REQUIRE(result->Fetch<bool>(3, 0) == true);
+	REQUIRE(result->Fetch<int32_t>(0, 1) == 17);
+	REQUIRE(result->Fetch<int32_t>(1, 1) == 18);
+	REQUIRE(result->Fetch<int32_t>(2, 1) == 30);
 	REQUIRE(result->Fetch<bool>(3, 1) == true);
 
 	tester.Cleanup();

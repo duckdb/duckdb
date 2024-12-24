@@ -1,22 +1,23 @@
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
-#include "duckdb/planner/tableref/bound_joinref.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/tableref/bound_joinref.hpp"
 
 namespace duckdb {
 
@@ -50,13 +51,13 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &le
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		JoinCondition condition;
-		condition.comparison = expr.type;
+		condition.comparison = expr.GetExpressionType();
 		auto left = std::move(comparison.left);
 		auto right = std::move(comparison.right);
 		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);
-			condition.comparison = FlipComparisonExpression(expr.type);
+			condition.comparison = FlipComparisonExpression(expr.GetExpressionType());
 		}
 		condition.left = std::move(left);
 		condition.right = std::move(right);
@@ -98,19 +99,20 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 					continue;
 				}
 			}
-		} else if (expr->type == ExpressionType::COMPARE_EQUAL || expr->type == ExpressionType::COMPARE_NOTEQUAL ||
-		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
-		           expr->type == ExpressionType::COMPARE_LESSTHAN ||
-		           expr->type == ExpressionType::COMPARE_GREATERTHAN ||
-		           expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-		           expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
-		           expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
-		           expr->type == ExpressionType::COMPARE_DISTINCT_FROM)
+		} else if (expr->GetExpressionType() == ExpressionType::COMPARE_EQUAL ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_NOTEQUAL ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_LESSTHAN ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_GREATERTHAN ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM)
 
 		{
 			// comparison, check if we can create a comparison JoinCondition
-			if (IsJoinTypeCondition(ref_type, expr->type) &&
+			if (IsJoinTypeCondition(ref_type, expr->GetExpressionType()) &&
 			    CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 				// successfully created the join condition
 				continue;
@@ -245,7 +247,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 }
 
 static bool HasCorrelatedColumns(Expression &expression) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		if (colref.depth > 0) {
 			return true;
@@ -292,7 +294,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	if (ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
-	    ClientConfig::GetConfig(context).enable_optimizer) {
+	    ClientConfig::GetConfig(context).enable_optimizer &&
+	    !Optimizer::OptimizerDisabled(context, OptimizerType::BUILD_SIDE_PROBE_SIDE)) {
 		// we turn any right outer joins into left outer joins for optimization purposes
 		// they are the same but with sides flipped, so treating them the same simplifies life
 		ref.type = JoinType::LEFT;

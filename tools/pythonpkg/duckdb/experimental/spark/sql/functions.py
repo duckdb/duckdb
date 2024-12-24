@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, Callable, Union, overload, Optional, List, Tuple
+from typing import Any, Callable, Union, overload, Optional, List, Tuple, TYPE_CHECKING
 
 from duckdb import (
     CaseExpression,
@@ -10,6 +10,8 @@ from duckdb import (
     FunctionExpression,
     LambdaExpression
 )
+if TYPE_CHECKING:
+    from .dataframe import DataFrame
 
 from ..errors import PySparkTypeError
 from ..exception import ContributionsAcceptedError
@@ -6124,3 +6126,13 @@ def explode(col: "ColumnOrName") -> Column:
     +---+-----+
     """
     return _invoke_function_over_columns("unnest", col)
+
+
+def broadcast(df: "DataFrame") -> "DataFrame":
+    """
+    The broadcast function in Spark is used to optimize joins by broadcasting a smaller
+    dataset to all the worker nodes. However, DuckDB operates on a single-node architecture .
+    As a result, the function simply returns the input DataFrame without applying any modifications
+    or optimizations, since broadcasting is not applicable in the DuckDB context.
+    """
+    return df

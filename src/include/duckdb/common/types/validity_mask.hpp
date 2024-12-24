@@ -85,6 +85,9 @@ public:
 	inline bool CheckAllValid(idx_t count) const {
 		return CountValid(count) == count;
 	}
+	inline bool CheckAllInvalid(idx_t count) const {
+		return CountValid(count) == 0;
+	}
 
 	inline bool CheckAllValid(idx_t to, idx_t from) const {
 		if (AllValid()) {
@@ -364,6 +367,7 @@ public:
 	                        idx_t target_offset, idx_t count);
 	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
 	DUCKDB_API string ToString(idx_t count) const;
+	DUCKDB_API string ToString() const;
 
 	DUCKDB_API static bool IsAligned(idx_t count);
 
