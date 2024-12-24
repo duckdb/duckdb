@@ -88,7 +88,7 @@ end
 
 function tbl_bind_function(info::DuckDB.BindInfo)
     # fetch the tbl name from the function parameters
-    parameter = DuckDB.get_parameter(info, 0)
+    parameter = DuckDB.get_parameter(info, 1) # the first parameter is the table name
     name = DuckDB.getvalue(parameter, String)
     # fetch the actual tbl using the function name
     extra_data = DuckDB.get_extra_data(info)

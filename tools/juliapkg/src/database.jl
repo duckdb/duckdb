@@ -10,10 +10,10 @@ mutable struct DuckDBHandle
     function DuckDBHandle(f::AbstractString, config::Config)
         f = String(isempty(f) ? f : expanduser(f))
         handle = Ref{duckdb_database}()
-        error = Ref{Ptr{UInt8}}()
+        error = Ref{Cstring}()
         if duckdb_open_ext(f, handle, config.handle, error) != DuckDBSuccess
             error_message = unsafe_string(error[])
-            duckdb_free(error[])
+            duckdb_free(pointer(error[]))
             throw(ConnectionException(error_message))
         end
 
