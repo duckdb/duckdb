@@ -16,9 +16,7 @@ const duckdb_arrow_schema = Ptr{Cvoid}
 const duckdb_arrow_stream = Ptr{Cvoid}
 const duckdb_bind_info = Ptr{Cvoid}
 const duckdb_bit = Ptr{Cvoid}
-const duckdb_blob = Ptr{Cvoid}
 const duckdb_cast_function = Ptr{Cvoid}
-const duckdb_cast_mode = Ptr{Cvoid}
 const duckdb_config = Ptr{Cvoid}
 const duckdb_connection = Ptr{Cvoid}
 const duckdb_create_type_info = Ptr{Cvoid}
@@ -26,7 +24,6 @@ const duckdb_data_chunk = Ptr{Cvoid}
 const duckdb_database = Ptr{Cvoid}
 const duckdb_decimal = Ptr{Cvoid}
 const duckdb_delete_callback = Ptr{Cvoid}
-const duckdb_error_type = Ptr{Cvoid}
 const duckdb_extracted_statements = Ptr{Cvoid}
 const duckdb_function_info = Ptr{Cvoid}
 const duckdb_init_info = Ptr{Cvoid}
@@ -37,10 +34,8 @@ const duckdb_profiling_info = Ptr{Cvoid}
 const duckdb_query_progress_type = Ptr{Cvoid}
 const duckdb_replacement_callback = Ptr{Cvoid}
 const duckdb_replacement_scan_info = Ptr{Cvoid}
-const duckdb_result_type = Ptr{Cvoid}
 const duckdb_scalar_function = Ptr{Cvoid}
 const duckdb_scalar_function_set = Ptr{Cvoid}
-const duckdb_statement_type = Ptr{Cvoid}
 const duckdb_table_description = Ptr{Cvoid}
 const duckdb_table_function = Ptr{Cvoid}
 const duckdb_table_function_bind = Ptr{Cvoid}
@@ -52,15 +47,109 @@ const duckdb_vector = Ptr{Cvoid}
 
 
 
-const duckdb_state = Int32;
+const duckdb_state = Cint;
 const DuckDBSuccess = 0;
 const DuckDBError = 1;
 
-const duckdb_pending_state = Int32;
+const duckdb_pending_state = Cint;
 const DUCKDB_PENDING_RESULT_READY = 0;
 const DUCKDB_PENDING_RESULT_NOT_READY = 1;
 const DUCKDB_PENDING_ERROR = 2;
 const DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3;
+
+@enum DUCKDB_RESULT_TYPE_::Cint begin
+    DUCKDB_RESULT_TYPE_INVALID = 0
+    DUCKDB_RESULT_TYPE_CHANGED_ROWS = 1
+    DUCKDB_RESULT_TYPE_NOTHING = 2
+    DUCKDB_RESULT_TYPE_QUERY_RESULT = 3
+end
+const duckdb_result_type = DUCKDB_RESULT_TYPE_;
+
+
+@enum DUCKDB_STATEMENT_TYPE_::Cint begin
+    DUCKDB_STATEMENT_TYPE_INVALID = 0
+    DUCKDB_STATEMENT_TYPE_SELECT = 1
+    DUCKDB_STATEMENT_TYPE_INSERT = 2
+    DUCKDB_STATEMENT_TYPE_UPDATE = 3
+    DUCKDB_STATEMENT_TYPE_EXPLAIN = 4
+    DUCKDB_STATEMENT_TYPE_DELETE = 5
+    DUCKDB_STATEMENT_TYPE_PREPARE = 6
+    DUCKDB_STATEMENT_TYPE_CREATE = 7
+    DUCKDB_STATEMENT_TYPE_EXECUTE = 8
+    DUCKDB_STATEMENT_TYPE_ALTER = 9
+    DUCKDB_STATEMENT_TYPE_TRANSACTION = 10
+    DUCKDB_STATEMENT_TYPE_COPY = 11
+    DUCKDB_STATEMENT_TYPE_ANALYZE = 12
+    DUCKDB_STATEMENT_TYPE_VARIABLE_SET = 13
+    DUCKDB_STATEMENT_TYPE_CREATE_FUNC = 14
+    DUCKDB_STATEMENT_TYPE_DROP = 15
+    DUCKDB_STATEMENT_TYPE_EXPORT = 16
+    DUCKDB_STATEMENT_TYPE_PRAGMA = 17
+    DUCKDB_STATEMENT_TYPE_VACUUM = 18
+    DUCKDB_STATEMENT_TYPE_CALL = 19
+    DUCKDB_STATEMENT_TYPE_SET = 20
+    DUCKDB_STATEMENT_TYPE_LOAD = 21
+    DUCKDB_STATEMENT_TYPE_RELATION = 22
+    DUCKDB_STATEMENT_TYPE_EXTENSION = 23
+    DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN = 24
+    DUCKDB_STATEMENT_TYPE_ATTACH = 25
+    DUCKDB_STATEMENT_TYPE_DETACH = 26
+    DUCKDB_STATEMENT_TYPE_MULTI = 27
+end
+const duckdb_statement_type = DUCKDB_STATEMENT_TYPE_
+
+@enum DUCKDB_ERROR_TYPE_::Cint begin
+    DUCKDB_ERROR_INVALID = 0
+    DUCKDB_ERROR_OUT_OF_RANGE = 1
+    DUCKDB_ERROR_CONVERSION = 2
+    DUCKDB_ERROR_UNKNOWN_TYPE = 3
+    DUCKDB_ERROR_DECIMAL = 4
+    DUCKDB_ERROR_MISMATCH_TYPE = 5
+    DUCKDB_ERROR_DIVIDE_BY_ZERO = 6
+    DUCKDB_ERROR_OBJECT_SIZE = 7
+    DUCKDB_ERROR_INVALID_TYPE = 8
+    DUCKDB_ERROR_SERIALIZATION = 9
+    DUCKDB_ERROR_TRANSACTION = 10
+    DUCKDB_ERROR_NOT_IMPLEMENTED = 11
+    DUCKDB_ERROR_EXPRESSION = 12
+    DUCKDB_ERROR_CATALOG = 13
+    DUCKDB_ERROR_PARSER = 14
+    DUCKDB_ERROR_PLANNER = 15
+    DUCKDB_ERROR_SCHEDULER = 16
+    DUCKDB_ERROR_EXECUTOR = 17
+    DUCKDB_ERROR_CONSTRAINT = 18
+    DUCKDB_ERROR_INDEX = 19
+    DUCKDB_ERROR_STAT = 20
+    DUCKDB_ERROR_CONNECTION = 21
+    DUCKDB_ERROR_SYNTAX = 22
+    DUCKDB_ERROR_SETTINGS = 23
+    DUCKDB_ERROR_BINDER = 24
+    DUCKDB_ERROR_NETWORK = 25
+    DUCKDB_ERROR_OPTIMIZER = 26
+    DUCKDB_ERROR_NULL_POINTER = 27
+    DUCKDB_ERROR_IO = 28
+    DUCKDB_ERROR_INTERRUPT = 29
+    DUCKDB_ERROR_FATAL = 30
+    DUCKDB_ERROR_INTERNAL = 31
+    DUCKDB_ERROR_INVALID_INPUT = 32
+    DUCKDB_ERROR_OUT_OF_MEMORY = 33
+    DUCKDB_ERROR_PERMISSION = 34
+    DUCKDB_ERROR_PARAMETER_NOT_RESOLVED = 35
+    DUCKDB_ERROR_PARAMETER_NOT_ALLOWED = 36
+    DUCKDB_ERROR_DEPENDENCY = 37
+    DUCKDB_ERROR_HTTP = 38
+    DUCKDB_ERROR_MISSING_EXTENSION = 39
+    DUCKDB_ERROR_AUTOLOAD = 40
+    DUCKDB_ERROR_SEQUENCE = 41
+    DUCKDB_INVALID_CONFIGURATION = 42
+end
+const duckdb_error_type = DUCKDB_ERROR_TYPE_
+
+@enum DUCKDB_CAST_MODE_::Cint begin
+    DUCKDB_CAST_NORMAL = 0
+    DUCKDB_CAST_TRY = 1
+end
+const duckdb_cast_mode = DUCKDB_CAST_MODE_
 
 @enum DUCKDB_TYPE_::Cint begin
     DUCKDB_TYPE_INVALID = 0
@@ -100,8 +189,8 @@ const DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3;
     DUCKDB_TYPE_ANY = 34
     DUCKDB_TYPE_VARINT = 35
 end
-
 const DUCKDB_TYPE = DUCKDB_TYPE_
+
 
 """
 Days are stored as days since 1970-01-01\n
@@ -194,7 +283,13 @@ end
 
 struct duckdb_string_t
     length::UInt32
-    data::NTuple{12, UInt8}
+    data::NTuple{STRING_INLINE_LENGTH, UInt8}
+end
+
+struct duckdb_string_t_ptr
+    length::UInt32
+    prefix::NTuple{4, UInt8} # 4 bytes prefix
+    data::Cstring
 end
 
 struct duckdb_list_entry_t
@@ -202,7 +297,6 @@ struct duckdb_list_entry_t
     length::UInt64
 end
 
-STRING_INLINE_LENGTH = 12
 
 struct duckdb_column
     __deprecated_data::Ptr{Cvoid}
@@ -356,7 +450,17 @@ struct duckdb_string
     end
 end
 
+"""
+BLOBs are composed of a byte pointer and a size. You must free blob.data
+with `duckdb_free`.
+"""
+struct duckdb_blob
+    data::Ref{UInt8}
+    length::idx_t
+end
 
+Base.convert(::Type{duckdb_blob}, val::AbstractArray{UInt8}) = duckdb_blob(val, length(val))
+Base.convert(::Type{duckdb_blob}, val::AbstractString) = duckdb_blob(codeunits(val))
 # %% ----- Conversions ------------------------------
 
 # HUGEINT / INT128
