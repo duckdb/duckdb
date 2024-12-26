@@ -1,6 +1,7 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -626,6 +627,25 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[1]->ResolveOperatorTypes();
 		D_ASSERT(plan->children[0]->types == plan->children[1]->types);
 #endif
+		// optimizer BUILD_SIDE_PROBE_SIDE may occur error because union doesn't add projection to join
+		for (idx_t i = 0; i < 2; i++) {
+			if (plan->children[i]->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+			    plan->children[i]->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT &&
+			    plan->children[i]->type != LogicalOperatorType::LOGICAL_ANY_JOIN &&
+			    plan->children[i]->type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+				continue;
+			}
+			auto &join = plan->children[i];
+			vector<unique_ptr<Expression>> select_list;
+			select_list.reserve(join->GetColumnBindings().size());
+			for (idx_t i = 0; i < join->GetColumnBindings().size(); i++) {
+				auto colref = make_uniq<BoundColumnRefExpression>(join->types[i], join->GetColumnBindings()[i]);
+				select_list.push_back(std::move(colref));
+			}
+			auto proj = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(select_list));
+			proj->AddChild(std::move(join));
+			join = std::move(proj);
+		}
 		// we have to refer to the setop index now
 		base_binding.table_index = setop.table_index;
 		base_binding.column_index = setop.column_count;

@@ -1,0 +1,28 @@
+# name: test/issues/general/test_15110.test
+# description: Issue 15110 - Invalid Input Error Type mismatch for SET OPERATION in UNION statement
+# group: [general]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+create or replace table xx as select w from (values ('a'),('b'),('c'),('d'),('e')) t(w);
+
+query I rowsort
+select w from (from xx limit 4) -- with 'limit 3' it works!!
+CROSS JOIN (select 1 as f1) p
+WHERE
+     w IN (
+        SELECT 'a'
+        UNION -- with 'UNION ALL' it works also using 'limit 4'
+        SELECT 'b'
+        UNION
+        SELECT 'c' WHERE p.f1 = 1
+        UNION
+        SELECT 'd' WHERE p.f1 = 1
+);
+----
+a
+b
+c
+d
