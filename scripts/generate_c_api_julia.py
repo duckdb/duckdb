@@ -247,14 +247,13 @@ class JuliaApiTarget(AbstractApiTarget):
                 "char",
                 "const char",
             ):
-                if is_return_arg:
-                    return "Ptr{UInt8}"  # TODO try to always use Cstring, but it breaks too many things
-                else:
-                    return "Cstring"
+                return "Cstring"
             else:
                 if is_return_arg:
+                    # Use Ptr for return types, because they are not tracked by the Julia GC
                     return "Ptr{" + reduce_type(type_list[1:]) + "}"
                 else:
+                    # Prefer Ref over Ptr for arguments
                     return "Ref{" + reduce_type(type_list[1:]) + "}"
 
         return reduce_type(type_definition)

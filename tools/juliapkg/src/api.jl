@@ -284,7 +284,7 @@ Returns `NULL` if the column is out of range.
 Returns: The column name of the specified column.
 """
 function duckdb_column_name(result, col)
-    return ccall((:duckdb_column_name, libduckdb), Ptr{UInt8}, (Ref{duckdb_result}, idx_t), result, col - 1)
+    return ccall((:duckdb_column_name, libduckdb), Cstring, (Ref{duckdb_result}, idx_t), result, col - 1)
 end
 
 """
@@ -452,7 +452,7 @@ The result of this function must not be freed. It will be cleaned up when `duckd
 Returns: The error of the result.
 """
 function duckdb_result_error(result)
-    return ccall((:duckdb_result_error, libduckdb), Ptr{UInt8}, (Ref{duckdb_result},), result)
+    return ccall((:duckdb_result_error, libduckdb), Cstring, (Ref{duckdb_result},), result)
 end
 
 # --------------------------------------------------------------------------------
@@ -1015,7 +1015,7 @@ function duckdb_value_varchar(result, col, row)
     )
     return ccall(
         (:duckdb_value_varchar, libduckdb),
-        Ptr{UInt8},
+        Cstring,
         (Ref{duckdb_result}, idx_t, idx_t),
         result,
         col - 1,
@@ -1046,7 +1046,7 @@ function duckdb_value_varchar_internal(result, col, row)
     )
     return ccall(
         (:duckdb_value_varchar_internal, libduckdb),
-        Ptr{UInt8},
+        Cstring,
         (Ref{duckdb_result}, idx_t, idx_t),
         result,
         col - 1,
@@ -1202,7 +1202,7 @@ The error message should not be freed. It will be de-allocated when `duckdb_dest
 Returns: The error message, or `nullptr` if there is none.
 """
 function duckdb_prepare_error(prepared_statement)
-    return ccall((:duckdb_prepare_error, libduckdb), Ptr{UInt8}, (duckdb_prepared_statement,), prepared_statement)
+    return ccall((:duckdb_prepare_error, libduckdb), Cstring, (duckdb_prepared_statement,), prepared_statement)
 end
 
 """
@@ -1875,7 +1875,7 @@ The result of this function must not be freed. It will be cleaned up when `duckd
 Returns: The error of the pending result.
 """
 function duckdb_pending_error(pending_result)
-    return ccall((:duckdb_pending_error, libduckdb), Ptr{UInt8}, (duckdb_pending_result,), pending_result)
+    return ccall((:duckdb_pending_error, libduckdb), Cstring, (duckdb_pending_result,), pending_result)
 end
 
 """
@@ -2017,7 +2017,7 @@ The result must be destroyed with `duckdb_free`.
 Returns: The string value. This must be destroyed with `duckdb_free`.
 """
 function duckdb_get_varchar(value)
-    return ccall((:duckdb_get_varchar, libduckdb), Ptr{UInt8}, (duckdb_value,), value)
+    return ccall((:duckdb_get_varchar, libduckdb), Cstring, (duckdb_value,), value)
 end
 
 """
@@ -2170,7 +2170,7 @@ The result must be freed with `duckdb_free`.
 Returns: The string value of the enum type. Must be freed with `duckdb_free`.
 """
 function duckdb_enum_dictionary_value(_type, index)
-    return ccall((:duckdb_enum_dictionary_value, libduckdb), Ptr{UInt8}, (duckdb_logical_type, idx_t), _type, index - 1)
+    return ccall((:duckdb_enum_dictionary_value, libduckdb), Cstring, (duckdb_logical_type, idx_t), _type, index - 1)
 end
 
 """
@@ -2230,13 +2230,7 @@ The result must be freed with `duckdb_free`.
 Returns: The name of the struct type. Must be freed with `duckdb_free`.
 """
 function duckdb_struct_type_child_name(_type, index)
-    return ccall(
-        (:duckdb_struct_type_child_name, libduckdb),
-        Ptr{UInt8},
-        (duckdb_logical_type, idx_t),
-        _type,
-        index - 1
-    )
+    return ccall((:duckdb_struct_type_child_name, libduckdb), Cstring, (duckdb_logical_type, idx_t), _type, index - 1)
 end
 
 """
@@ -2253,13 +2247,7 @@ The result must be freed with `duckdb_free`.
 Returns: The name of the union member. Must be freed with `duckdb_free`.
 """
 function duckdb_union_type_member_name(_type, index)
-    return ccall(
-        (:duckdb_union_type_member_name, libduckdb),
-        Ptr{UInt8},
-        (duckdb_logical_type, idx_t),
-        _type,
-        index - 1
-    )
+    return ccall((:duckdb_union_type_member_name, libduckdb), Cstring, (duckdb_logical_type, idx_t), _type, index - 1)
 end
 
 """
@@ -3325,7 +3313,7 @@ The error message should not be freed. It will be de-allocated when `duckdb_appe
 Returns: The error message, or `nullptr` if there is none.
 """
 function duckdb_appender_error(appender)
-    return ccall((:duckdb_appender_error, libduckdb), Ptr{UInt8}, (duckdb_appender,), appender)
+    return ccall((:duckdb_appender_error, libduckdb), Cstring, (duckdb_appender,), appender)
 end
 
 """
@@ -4076,7 +4064,7 @@ Returns:
 function duckdb_parameter_name(prepared_statement, index)
     return ccall(
         (:duckdb_parameter_name, libduckdb),
-        Ptr{UInt8},
+        Cstring,
         (duckdb_prepared_statement, idx_t),
         prepared_statement,
         index
@@ -4341,12 +4329,7 @@ The error message should not be freed. It will be de-allocated when `duckdb_tabl
 Returns: The error message, or `nullptr` if there is none.
 """
 function duckdb_table_description_error(table_description)
-    return ccall(
-        (:duckdb_table_description_error, libduckdb),
-        Ptr{UInt8},
-        (duckdb_table_description,),
-        table_description
-    )
+    return ccall((:duckdb_table_description_error, libduckdb), Cstring, (duckdb_table_description,), table_description)
 end
 
 """
@@ -4387,7 +4370,7 @@ Returns: The column name.
 function duckdb_table_description_get_column_name(table_description, index)
     return ccall(
         (:duckdb_table_description_get_column_name, libduckdb),
-        Ptr{UInt8},
+        Cstring,
         (duckdb_table_description, idx_t),
         table_description,
         index - 1
@@ -5907,7 +5890,7 @@ function duckdb_query_arrow_error(result)
         "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
         :duckdb_query_arrow_error
     )
-    return ccall((:duckdb_query_arrow_error, libduckdb), Ptr{UInt8}, (duckdb_arrow,), result)
+    return ccall((:duckdb_query_arrow_error, libduckdb), Cstring, (duckdb_arrow,), result)
 end
 
 """
@@ -6070,7 +6053,7 @@ The result must be destroyed with `duckdb_free`.
 Returns: The alias or `nullptr`
 """
 function duckdb_logical_type_get_alias(_type)
-    return ccall((:duckdb_logical_type_get_alias, libduckdb), Ptr{UInt8}, (duckdb_logical_type,), _type)
+    return ccall((:duckdb_logical_type_get_alias, libduckdb), Cstring, (duckdb_logical_type,), _type)
 end
 
 """
@@ -7136,7 +7119,7 @@ Returns: The error of the extracted statements.
 function duckdb_extract_statements_error(extracted_statements)
     return ccall(
         (:duckdb_extract_statements_error, libduckdb),
-        Ptr{UInt8},
+        Cstring,
         (duckdb_extracted_statements,),
         extracted_statements
     )
@@ -7438,7 +7421,7 @@ Usually used for developing C extensions that must return this for a compatibili
 Returns: 
 """
 function duckdb_library_version()
-    return ccall((:duckdb_library_version, libduckdb), Ptr{UInt8}, ())
+    return ccall((:duckdb_library_version, libduckdb), Cstring, ())
 end
 
 """
@@ -7481,7 +7464,7 @@ Get a pointer to the string data of a string_t
 Returns: The pointer.
 """
 function duckdb_string_t_data(string)
-    return ccall((:duckdb_string_t_data, libduckdb), Ptr{UInt8}, (Ref{duckdb_string},), string)
+    return ccall((:duckdb_string_t_data, libduckdb), Cstring, (Ref{duckdb_string},), string)
 end
 
 """

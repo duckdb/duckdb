@@ -1,5 +1,5 @@
+const STRING_INLINE_LENGTH = 12 # length of the inline string in duckdb_string_t
 const idx_t = UInt64 # DuckDB index type
-
 
 const duckdb_aggregate_combine = Ptr{Cvoid}
 const duckdb_aggregate_destroy = Ptr{Cvoid}
@@ -459,17 +459,17 @@ struct duckdb_blob
     length::idx_t
 end
 
-Base.convert(::Type{duckdb_blob}, val::AbstractArray{UInt8}) = duckdb_blob(val, length(val))
-Base.convert(::Type{duckdb_blob}, val::AbstractString) = duckdb_blob(codeunits(val))
+Base.cconvert(::Type{duckdb_blob}, val::AbstractArray{UInt8}) = duckdb_blob(val, length(val))
+Base.cconvert(::Type{duckdb_blob}, val::AbstractString) = duckdb_blob(codeunits(val))
 # %% ----- Conversions ------------------------------
 
 # HUGEINT / INT128
 # Fast Conversion without typechecking
 Base.convert(::Type{Int128}, val::duckdb_hugeint) = Int128(val.lower) + Int128(val.upper) << 64
 Base.convert(::Type{UInt128}, val::duckdb_uhugeint) = UInt128(val.lower) + UInt128(val.upper) << 64
-Base.convert(::Type{duckdb_hugeint}, x::Int128) =
+Base.cconvert(::Type{duckdb_hugeint}, x::Int128) =
     duckdb_hugeint((x & 0xFFFF_FFFF_FFFF_FFFF) % UInt64, (x >> 64) % Int64)
-Base.convert(::Type{duckdb_uhugeint}, v::UInt128) = duckdb_uhugeint(v % UInt64, (v >> 64) % UInt64)
+Base.cconvert(::Type{duckdb_uhugeint}, v::UInt128) = duckdb_uhugeint(v % UInt64, (v >> 64) % UInt64)
 
 # DATE & TIME Raw
 Base.convert(::Type{duckdb_date}, val::Integer) = duckdb_date(val)
