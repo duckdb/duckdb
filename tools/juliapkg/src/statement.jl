@@ -60,12 +60,56 @@ function duckdb_bind_internal(stmt::Stmt, i::Integer, val::Any)
     throw(NotImplementedException("unsupported type for bind"))
 end
 
-function bind_parameters(stmt::Stmt, params::DBInterface.StatementParams)
-    i = 1
+function bind_parameters(stmt::Stmt, params::DBInterface.PositionalStatementParams)
+    i = 1 # Note: Parameters in PrepStatements start at 1
     for param in params
         if duckdb_bind_internal(stmt, i, param) != DuckDBSuccess
             throw(QueryException("Failed to bind parameter"))
         end
         i += 1
     end
+end
+
+function bind_parameters(stmt::Stmt, params::DBInterface.NamedStatementParams)
+    for (name, val) in pairs(params)
+        idx = index_for_param(stmt, name)
+        if duckdb_bind_internal(stmt, idx, val) != DuckDBSuccess
+            throw(QueryException("Failed to bind parameter"))
+        end
+    end
+end
+
+function nparams(stmt::Stmt)
+    return duckdb_nparams(stmt.handle)
+end
+
+function parameter_names(stmt::Stmt)
+    n = nparams(stmt)
+    names = Vector{String}(undef, n)
+    for i in 1:n
+        name_ptr = duckdb_parameter_name(stmt.handle, i)
+        names[i] = name_ptr != C_NULL ? unsafe_string(name_ptr) : ""
+    end
+    return names
+end
+
+function parameter_types(stmt::Stmt)
+    n = nparams(stmt)
+    types = Vector{DUCKDB_TYPE}(undef, n)
+    for i in 1:n
+        types[i] = duckdb_param_type(stmt.handle, i)
+    end
+    return types
+end
+
+function index_for_param(stmt::Stmt, name::AbstractString)
+    idx_out = Ref{idx_t}()
+    if duckdb_bind_parameter_index(stmt.handle, idx_out, name) != DuckDBSuccess
+        throw(QueryException("Failed to find parameter '$name'"))
+    end
+    return idx_out[]
+end
+
+function index_for_param(stmt::Stmt, name::Symbol)
+    return index_for_param(stmt, string(name))
 end
