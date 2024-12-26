@@ -186,6 +186,7 @@ class JuliaApiTarget(AbstractApiTarget):
         indent=0,
         auto_1base_index=True,
         auto_1base_index_return_functions=set(),
+        auto_1base_index_ignore_functions=set(),
         skipped_functions=set(),
         type_map={},
         overwrite_function_signatures={},
@@ -198,6 +199,7 @@ class JuliaApiTarget(AbstractApiTarget):
         self.indent = indent
         self.auto_1base_index = auto_1base_index
         self.auto_1base_index_return_functions = auto_1base_index_return_functions
+        self.auto_1base_index_ignore_functions = auto_1base_index_ignore_functions
         self.linesep = os.linesep
         self.type_map = type_map
         self.skipped_functions = skipped_functions
@@ -277,7 +279,7 @@ class JuliaApiTarget(AbstractApiTarget):
             "row_idx",
             "row_index",
             "chunk_index",
-            # "param_idx",
+            # "param_idx", # TODO creates errors in bind_param
         ):
             return False
 
@@ -430,7 +432,7 @@ class JuliaApiTarget(AbstractApiTarget):
         arg_names_call = ", ".join(
             [
                 f"{arg_name} - 1"  # 1-based index
-                if self.auto_1base_index
+                if self.auto_1base_index and fname not in self.auto_1base_index_ignore_functions
                 and self._is_index_argument(arg_name, function_obj)
                 else arg_name
                 for arg_name in arg_names
@@ -442,7 +444,9 @@ class JuliaApiTarget(AbstractApiTarget):
         )
 
         is_index1_function = (
-            self.auto_1base_index and fname in self.auto_1base_index_return_functions
+            fname not in self.auto_1base_index_ignore_functions
+            and self.auto_1base_index
+            and fname in self.auto_1base_index_return_functions
         )
 
         self.file.write(f"{'    ' * self.indent}function {fname}({arg_names_s})\n")
@@ -451,6 +455,9 @@ class JuliaApiTarget(AbstractApiTarget):
             "deprecated", False
         ):
             self._write_function_depwarn(function_obj, indent=1)
+
+        # !!!!!!!! REMOVE !!!!!
+        # self.file.write(f"{'    ' * self.indent}    println(\"{fname}()\")\n")
 
         self.file.write(
             f"{'    ' * self.indent}    return ccall((:{fname}, libduckdb), {return_type}, ({arg_types_s}), {arg_names_call}){' + 1' if is_index1_function else ''}\n"
@@ -572,6 +579,7 @@ def main():
             indent=0,
             auto_1base_index=True,  # WARNING: every arg named "col/row/index" or similar will be 1-based indexed, so the argument is subtracted by 1
             auto_1base_index_return_functions={"duckdb_init_get_column_index"},
+            auto_1base_index_ignore_functions={"duckdb_parameter_name", "duckdb_param_type", "duckdb_param_logical_type"},
             skipped_functions={},
             type_map=JULIA_BASE_TYPE_MAP,
             overwrite_function_signatures={
@@ -586,39 +594,39 @@ def main():
             },
         ) as printer
     ):
-        #order = printer._get_function_order()
-        order = printer.get_function_order(julia_path_old)
+        keep_old_order = True
+        if keep_old_order:
+            # TODO: Simplify this after review
+            order = printer.get_function_order(julia_path_old)
+            printer.write_header(ext_api_version)
+            printer.write_empty_line()
+            current_group = None
+            for fname in order:
+                if fname not in function_map:
+                    # raise ValueError(f"Function {fname} not found in function_map")
+                    print(f"Function {fname} not found in function_map")
+                    continue
 
-        # TODO: Simplify this after review
-        printer.write_header(ext_api_version)
-        printer.write_empty_line()
-        current_group = None
-        for fname in order:
-            if fname not in function_map:
-                #raise ValueError(f"Function {fname} not found in function_map")
-                print(f"Function {fname} not found in function_map")
-                continue
-            
-            if current_group != function_map[fname]["group"]:
-                current_group = function_map[fname]["group"]
-                printer.write_group_start(current_group)
+                if current_group != function_map[fname]["group"]:
+                    current_group = function_map[fname]["group"]
+                    printer.write_group_start(current_group)
+                    printer.write_empty_line()
+
+                printer.write_function(function_map[fname])
                 printer.write_empty_line()
-            
-            printer.write_function(function_map[fname])
+
+            printer.write_group_start("New Functions")
             printer.write_empty_line()
+            for fname, f in function_map.items():
+                if fname in order:
+                    continue
+                printer.write_function(f)
+                printer.write_empty_line()
 
-        printer.write_group_start("New Functions")
-        printer.write_empty_line()
-        for fname, f in function_map.items():
-            if fname in order:
-                continue
-            printer.write_function(f)
             printer.write_empty_line()
-
-        printer.write_empty_line()
-        printer.write_footer()
-
-        #printer.write_functions(ext_api_version, function_groups, function_map)
+            printer.write_footer()
+        else:
+            printer.write_functions(ext_api_version, function_groups, function_map)
 
         print("Type maps:")
         K = list(printer.inverse_type_maps.keys())
