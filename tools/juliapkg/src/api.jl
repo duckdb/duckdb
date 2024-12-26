@@ -4079,7 +4079,7 @@ function duckdb_parameter_name(prepared_statement, index)
         Ptr{UInt8},
         (duckdb_prepared_statement, idx_t),
         prepared_statement,
-        index - 1
+        index
     )
 end
 
