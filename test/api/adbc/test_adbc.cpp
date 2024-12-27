@@ -19,7 +19,8 @@ bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 
-const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
+const char *duckdb_lib = "/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib";
+
 class ADBCTestDatabase {
 public:
 	explicit ADBCTestDatabase(const string &path_parameter = ":memory:") {
@@ -242,6 +243,72 @@ TEST_CASE("Test Invalid Path", "[adbc]") {
 	adbc_error.release(&adbc_error);
 }
 
+TEST_CASE("ADBC - Statement reuse", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+	AdbcStatement adbc_statement;
+	ArrowArrayStream arrow_stream;
+
+	int64_t rows_affected;
+
+	// Create connection - database and whatnot
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	// Insert some data
+	// Create Arrow Result
+	ADBCTestDatabase db;
+	auto &input_data = db.QueryArrow("SELECT 42");
+	string table_name = "my_table";
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+
+	REQUIRE(
+	    SUCCESS(StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
+
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+
+	string query = "DELETE FROM my_table";
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
+
+	if (arrow_stream.release) {
+		arrow_stream.release(&arrow_stream);
+	}
+
+	input_data = db.QueryArrow("SELECT 42");
+
+	StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error);
+
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
+
+	if (arrow_stream.release) {
+		arrow_stream.release(&arrow_stream);
+	}
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+}
+
 TEST_CASE("Error Release", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -289,7 +356,7 @@ TEST_CASE("Error Release", "[adbc]") {
 	REQUIRE((AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error) ==
 	         ADBC_STATUS_INVALID_STATE));
 
-	// We can release a statement and consume the stream afterwards if we have called GetStream beforehand
+	// We can release a statement and consume the stream afterward if we have called GetStream beforehand
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT 42", &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
