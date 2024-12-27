@@ -1,8 +1,10 @@
 from abc import abstractmethod
+import logging
 import os
 import pathlib
 import re
-from typing import Dict, List, NotRequired, TypedDict
+from types import NoneType
+from typing import Dict, List, NotRequired, TypedDict, Union
 
 from generate_c_api import (
     EXT_API_DEFINITION_PATTERN,
@@ -142,6 +144,7 @@ JULIA_RESERVED_KEYWORDS = {
 }
 
 JULIA_BASE_TYPE_MAP = {
+    # Julia Standard Types
     "char": "Char",
     "int": "Int",
     "int8_t": "Int8",
@@ -157,9 +160,12 @@ JULIA_BASE_TYPE_MAP = {
     "bool": "Bool",
     "void": "Cvoid",
     "size_t": "Csize_t",
-    # User defined types
+
+    # DuckDB specific types
     "idx_t": "idx_t",
     "duckdb_type": "DUCKDB_TYPE",
+    "duckdb_table_function": "duckdb_table_function", # actually struct pointer
+    "duckdb_table_function_t": "duckdb_table_function_ptr", # function pointer type
 }
 
 
@@ -173,12 +179,17 @@ class JuliaApiTarget(AbstractApiTarget):
 
     # Functions to skip
     skipped_functions = set()
+    skip_deprecated_functions = False
+
+    # Explicit function order
+    manual_order: Union[List[str], NoneType] = None
 
     overwrite_function_signatures = {}
 
-    # Functions that return an index
+    # Functions that use indices either as ARG or RETURN and should be converted to 1-based indexing
     auto_1base_index: bool
     auto_1base_index_return_functions = set()
+    auto_1base_index_ignore_functions = set()
 
     def __init__(
         self,
@@ -188,6 +199,7 @@ class JuliaApiTarget(AbstractApiTarget):
         auto_1base_index_return_functions=set(),
         auto_1base_index_ignore_functions=set(),
         skipped_functions=set(),
+        skip_deprecated_functions=False,
         type_map={},
         overwrite_function_signatures={},
     ):
@@ -203,6 +215,7 @@ class JuliaApiTarget(AbstractApiTarget):
         self.linesep = os.linesep
         self.type_map = type_map
         self.skipped_functions = skipped_functions
+        self.skip_deprecated_functions = skip_deprecated_functions
         self.overwrite_function_signatures = overwrite_function_signatures
         super().__init__()
 
@@ -213,10 +226,13 @@ class JuliaApiTarget(AbstractApiTarget):
     def __exit__(self, exc_type, exc_value, traceback):
         self.file.close()
 
-    def write_empty_line(self):
+    def write_empty_line(self) -> None:
+        """Writes an empty line to the output file."""
         self.file.write(self.linesep)
 
-    def _get_casted_type(self, type_str: str, is_return_arg=False):
+    def _get_casted_type(
+        self, type_str: str, is_return_arg=False, auto_remove_t_suffix=True
+    ):
         type_str = type_str.strip()
         type_definition = parse_c_type(type_str, [])
 
@@ -226,22 +242,22 @@ class JuliaApiTarget(AbstractApiTarget):
 
             t = type_list[0]
             if len(type_list) == 1:
+                is_const = False #  Track that the type is const, even though we cannot use it in Julia
                 if t.startswith("const "):
-                    t = t.removeprefix("const ")
+                    t, is_const = t.removeprefix("const "), True
+
                 if t in self.type_map:
                     return self.type_map[t]
                 else:
+                    if auto_remove_t_suffix and t.endswith("_t"):
+                        t = t.removesuffix("_t")
                     if " " in t:
                         raise (ValueError(f"Unknown type: {t}"))
-
-                    # Remove _t suffix
-                    if t.endswith("_t"):
-                        t = t.removesuffix("_t")
                     return t
 
             # Handle Pointer types
             if t not in ("Ptr", "Const Ptr"):
-                raise ValueError(f"Unknown type: {t}")
+                raise ValueError(f"Unexpected non-pointer type: {t}")
 
             if len(type_list) >= 2 and type_list[1].strip() in (
                 "char",
@@ -257,11 +273,6 @@ class JuliaApiTarget(AbstractApiTarget):
                     return "Ref{" + reduce_type(type_list[1:]) + "}"
 
         return reduce_type(type_definition)
-
-    def _get_argument_name(self, name: str):
-        if name in JULIA_RESERVED_KEYWORDS:
-            return f"_{name}"
-        return name
 
     def _is_index_argument(self, name: str, function_obj: FunctionDef):
         # Check if the argument is (likely) an index
@@ -304,9 +315,12 @@ class JuliaApiTarget(AbstractApiTarget):
         return True
 
     def get_argument_names_and_types(self, function_obj: FunctionDef):
-        arg_names = [
-            self._get_argument_name(param["name"]) for param in function_obj["params"]
-        ]
+        def _get_arg_name(name: str):
+            if name in JULIA_RESERVED_KEYWORDS:
+                return f"_{name}"
+            return name
+
+        arg_names = [_get_arg_name(param["name"]) for param in function_obj["params"]]
 
         if function_obj["name"] in self.overwrite_function_signatures:
             return_type, arg_types = self.overwrite_function_signatures[
@@ -431,7 +445,8 @@ class JuliaApiTarget(AbstractApiTarget):
         arg_names_call = ", ".join(
             [
                 f"{arg_name} - 1"  # 1-based index
-                if self.auto_1base_index and fname not in self.auto_1base_index_ignore_functions
+                if self.auto_1base_index
+                and fname not in self.auto_1base_index_ignore_functions
                 and self._is_index_argument(arg_name, function_obj)
                 else arg_name
                 for arg_name in arg_names
@@ -509,7 +524,36 @@ end
         function_map: Dict[str, FunctionDef],
     ):
         self._analyze_types(function_groups)
-        super().write_functions(version, function_groups, function_map)
+
+        self.write_header(version)
+        self.write_empty_line()
+
+        if self.manual_order is not None:
+            current_group = None
+            for f in self.manual_order:
+                if f not in function_map:
+                    # raise ValueError(f"Function {f} not found in function_map")
+                    logging.warning(f"Function {f} not found in function_map")
+                    continue
+
+                if current_group != function_map[f]["group"]:
+                    current_group = function_map[f]["group"]
+                    self.write_group_start(current_group)
+                    self.write_empty_line()
+
+                self.write_function(function_map[f])
+                self.write_empty_line()
+        else:
+            for group in function_groups:
+                self.write_group_start(group["group"])
+                self.write_empty_line()
+                for fn in group["entries"]:
+                    self.write_function(fn)
+                    self.write_empty_line()
+                self.write_empty_line()
+                self.write_empty_line()
+
+        self.write_footer()
 
     def _analyze_types(self, groups: List[FunctionGroup]):
         for group in groups:
@@ -563,6 +607,8 @@ end
 
 
 def main():
+    """Main function to generate the Julia API."""
+
     ext_api_definitions = parse_ext_api_definitions(EXT_API_DEFINITION_PATTERN)
     ext_api_version = get_extension_api_version(ext_api_definitions)
     function_groups, function_map = parse_capi_function_definitions()
@@ -572,13 +618,22 @@ def main():
     julia_path = ROOT / "tools" / "juliapkg" / "src" / "api.jl"
     julia_path_old = ROOT / "tools" / "juliapkg" / "src" / "api_old.jl"
 
+    if not julia_path_old.exists():
+        raise FileNotFoundError(
+            f"File {julia_path_old} does not exist. Ideally rename the current file 'api.jl' to 'api_old.jl'"
+        )
+
     with (
         JuliaApiTarget(
             julia_path,
             indent=0,
             auto_1base_index=True,  # WARNING: every arg named "col/row/index" or similar will be 1-based indexed, so the argument is subtracted by 1
             auto_1base_index_return_functions={"duckdb_init_get_column_index"},
-            auto_1base_index_ignore_functions={"duckdb_parameter_name", "duckdb_param_type", "duckdb_param_logical_type"},
+            auto_1base_index_ignore_functions={
+                "duckdb_parameter_name",
+                "duckdb_param_type",
+                "duckdb_param_logical_type",
+            },
             skipped_functions={},
             type_map=JULIA_BASE_TYPE_MAP,
             overwrite_function_signatures={
@@ -594,47 +649,24 @@ def main():
         ) as printer
     ):
         keep_old_order = True
+
         if keep_old_order:
-            # TODO: Simplify this after review
-            order = printer.get_function_order(julia_path_old)
-            printer.write_header(ext_api_version)
-            printer.write_empty_line()
-            current_group = None
-            for fname in order:
-                if fname not in function_map:
-                    # raise ValueError(f"Function {fname} not found in function_map")
-                    print(f"Function {fname} not found in function_map")
-                    continue
+            manual_order = printer.get_function_order(julia_path_old)
+            printer.manual_order = manual_order
 
-                if current_group != function_map[fname]["group"]:
-                    current_group = function_map[fname]["group"]
-                    printer.write_group_start(current_group)
-                    printer.write_empty_line()
-
-                printer.write_function(function_map[fname])
-                printer.write_empty_line()
-
-            printer.write_group_start("New Functions")
-            printer.write_empty_line()
-            for fname, f in function_map.items():
-                if fname in order:
-                    continue
-                printer.write_function(f)
-                printer.write_empty_line()
-
-            printer.write_empty_line()
-            printer.write_footer()
-        else:
-            printer.write_functions(ext_api_version, function_groups, function_map)
+        printer.write_functions(ext_api_version, function_groups, function_map)
 
         print("Type maps:")
         K = list(printer.inverse_type_maps.keys())
         K.sort()
         for k in K:
+            if k.startswith("Ptr") or k.startswith("Ref"):
+                continue
             v = ", ".join(printer.inverse_type_maps[k])
             print(f"    {k} -> {v}")
         print("Julia API generated successfully!")
         print("Please review the mapped types and check the generated file:")
+        print("Hint: also run './format.sh' to format the file and reduce the diff.")
         print(f"Output: {julia_path}")
 
 
