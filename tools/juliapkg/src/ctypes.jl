@@ -31,7 +31,6 @@ const duckdb_logical_type = Ptr{Cvoid}
 const duckdb_pending_result = Ptr{Cvoid}
 const duckdb_prepared_statement = Ptr{Cvoid}
 const duckdb_profiling_info = Ptr{Cvoid}
-const duckdb_query_progress_type = Ptr{Cvoid}
 const duckdb_replacement_callback = Ptr{Cvoid}
 const duckdb_replacement_scan_info = Ptr{Cvoid}
 const duckdb_scalar_function = Ptr{Cvoid}
@@ -301,6 +300,11 @@ struct duckdb_list_entry_t
     length::UInt64
 end
 
+struct duckdb_query_progress_type
+    percentage::Float64
+    rows_processed::UInt64
+    total_rows_to_process::UInt64
+end
 
 struct duckdb_column
     __deprecated_data::Ptr{Cvoid}
