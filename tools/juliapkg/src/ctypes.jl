@@ -226,7 +226,10 @@ struct duckdb_time_struct
 end
 
 
-const duckdb_time_tz = UInt64
+struct duckdb_time_tz
+    bits::UInt64
+end
+
 struct duckdb_time_tz_struct
     time::duckdb_time_struct
     offset::Int32
@@ -327,14 +330,14 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_UBIGINT => UInt64,
     DUCKDB_TYPE_FLOAT => Float32,
     DUCKDB_TYPE_DOUBLE => Float64,
-    DUCKDB_TYPE_TIMESTAMP => Int64,
-    DUCKDB_TYPE_TIMESTAMP_S => Int64,
-    DUCKDB_TYPE_TIMESTAMP_MS => Int64,
-    DUCKDB_TYPE_TIMESTAMP_NS => Int64,
-    DUCKDB_TYPE_TIMESTAMP_TZ => Int64,
-    DUCKDB_TYPE_DATE => Int32,
-    DUCKDB_TYPE_TIME => Int64,
-    DUCKDB_TYPE_TIME_TZ => UInt64,
+    DUCKDB_TYPE_TIMESTAMP => duckdb_timestamp,
+    DUCKDB_TYPE_TIMESTAMP_S => duckdb_timestamp_s,
+    DUCKDB_TYPE_TIMESTAMP_MS => duckdb_timestamp_ms,
+    DUCKDB_TYPE_TIMESTAMP_NS => duckdb_timestamp_ns,
+    DUCKDB_TYPE_TIMESTAMP_TZ => duckdb_timestamp,
+    DUCKDB_TYPE_DATE => duckdb_date,
+    DUCKDB_TYPE_TIME => duckdb_time,
+    DUCKDB_TYPE_TIME_TZ => duckdb_time_tz,
     DUCKDB_TYPE_INTERVAL => duckdb_interval,
     DUCKDB_TYPE_HUGEINT => duckdb_hugeint,
     DUCKDB_TYPE_UHUGEINT => duckdb_uhugeint,
@@ -459,8 +462,8 @@ struct duckdb_blob
     length::idx_t
 end
 
-Base.cconvert(::Type{duckdb_blob}, val::AbstractArray{UInt8}) = duckdb_blob(val, length(val))
-Base.cconvert(::Type{duckdb_blob}, val::AbstractString) = duckdb_blob(codeunits(val))
+Base.convert(::Type{duckdb_blob}, val::AbstractArray{UInt8}) = duckdb_blob(val, length(val))
+Base.convert(::Type{duckdb_blob}, val::AbstractString) = duckdb_blob(codeunits(val))
 # %% ----- Conversions ------------------------------
 
 # HUGEINT / INT128
@@ -478,6 +481,7 @@ Base.convert(::Type{duckdb_timestamp}, val::Integer) = duckdb_timestamp(val)
 Base.convert(::Type{duckdb_timestamp_s}, val::Integer) = duckdb_timestamp_s(val)
 Base.convert(::Type{duckdb_timestamp_ms}, val::Integer) = duckdb_timestamp_ms(val)
 Base.convert(::Type{duckdb_timestamp_ns}, val::Integer) = duckdb_timestamp_ns(val)
+Base.convert(::Type{duckdb_time_tz}, val::Integer) = duckdb_time_tz(val)
 
 Base.convert(::Type{<:Integer}, val::duckdb_date) = val.days
 Base.convert(::Type{<:Integer}, val::duckdb_time) = val.micros
@@ -486,22 +490,79 @@ Base.convert(::Type{<:Integer}, val::duckdb_timestamp_s) = val.seconds
 Base.convert(::Type{<:Integer}, val::duckdb_timestamp_ms) = val.millis
 Base.convert(::Type{<:Integer}, val::duckdb_timestamp_ns) = val.nanos
 
-Base.convert(::Type{duckdb_time_struct}, val::Union{Time, DateTime}) =
-    duckdb_time_struct(Dates.hour(val), Dates.minute(val), Dates.second(val), Dates.microsecond(val))
-Base.convert(::Type{duckdb_date_struct}, val::Union{Date, DateTime}) =
-    duckdb_date_struct(Dates.year(val), Dates.month(val), Dates.day(val))
-Base.convert(::Type{Time}, val::duckdb_time_struct) = Dates.Time(val.hour, val.min, val.sec, val.micros)
-Base.convert(::Type{Date}, val::duckdb_date_struct) = Dates.Date(val.year, val.month, val.day)
+function Base.convert(::Type{Date}, val::duckdb_date)
+    return Dates.epochdays2date(val.days + ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
+end
+function Base.convert(::Type{duckdb_date}, val::Date)
+    return duckdb_date(Dates.date2epochdays(val - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS))
+end
 
-Base.convert(::Type{DateTime}, val::duckdb_timestamp_struct) =
-    Dates.DateTime(convert(Date, val.date), convert(Time, val.time))
-Base.convert(::Type{duckdb_timestamp_s}, val::DateTime) = duckdb_timestamp_s(floor(Int64, Dates.time2unix(val)))
-Base.convert(::Type{duckdb_timestamp_ms}, val::DateTime) =
-    duckdb_timestamp_ms(floor(Int64, Dates.time2unix(val) * 1_000))
-Base.convert(::Type{duckdb_timestamp}, val::DateTime) = duckdb_timestamp(floor(Int64, Dates.time2unix(val) * 1_000_000))
-Base.convert(::Type{duckdb_timestamp_ns}, val::DateTime) =
-    duckdb_timestamp_ns(floor(Int64, Dates.time2unix(val) * 1_000_000_000))
-Base.convert(::Type{DateTime}, val::duckdb_timestamp_s) = Dates.unix2datetime(val.seconds)
-Base.convert(::Type{DateTime}, val::duckdb_timestamp_ms) = Dates.unix2datetime(val.millis / 1_000)
-Base.convert(::Type{DateTime}, val::duckdb_timestamp) = Dates.unix2datetime(val.micros / 1_000_000)
-Base.convert(::Type{DateTime}, val::duckdb_timestamp_ns) = Dates.unix2datetime(val.nanos / 1_000_000_000)
+function Base.convert(::Type{Time}, val::duckdb_time)
+    return Dates.Time(
+        val.micros ÷ 3_600_000_000,
+        val.micros ÷ 60_000_000 % 60,
+        val.micros ÷ 1_000_000 % 60,
+        val.micros ÷ 1_000 % 1_000,
+        val.micros % 1_000
+    )
+end
+function Base.convert(::Type{Time}, val::duckdb_time_tz)
+    time_tz = duckdb_from_time_tz(val)
+    # TODO: how to preserve the offset?
+    return Dates.Time(
+        time_tz.time.hour,
+        time_tz.time.min,
+        time_tz.time.sec,
+        time_tz.time.micros ÷ 1000,
+        time_tz.time.micros % 1000
+    )
+end
+
+Base.convert(::Type{Dates.DateTime}, val::duckdb_timestamp_s) =
+    Dates.epochms2datetime((val.seconds * 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
+Base.convert(::Type{Dates.DateTime}, val::duckdb_timestamp_ms) =
+    Dates.epochms2datetime((val.millis) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
+Base.convert(::Type{Dates.DateTime}, val::duckdb_timestamp) =
+    Dates.epochms2datetime((val.micros ÷ 1_000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
+Base.convert(::Type{Dates.DateTime}, val::duckdb_timestamp_ns) =
+    Dates.epochms2datetime((val.nanos ÷ 1_000_000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
+
+Base.convert(::Type{Dates.CompoundPeriod}, val::duckdb_interval) =
+    Dates.CompoundPeriod(Dates.Month(val.months), Dates.Day(val.days), Dates.Microsecond(val.micros))
+
+function Base.convert(::Type{UUID}, val::duckdb_hugeint)
+    hugeint = convert(Int128, val)
+    base_value = Int128(170141183460469231731687303715884105727)
+    if hugeint < 0
+        return UUID(UInt128(hugeint + base_value + 1))
+    else
+        return UUID(UInt128(hugeint) + base_value + 1)
+    end
+end
+
+
+# %% --- Helper ------------------------------------------ #
+
+Base.convert(::Type{String}, val::duckdb_string_t) = _convert_string(val)
+function _convert_string(val::Ptr{duckdb_string_t})
+    #base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
+    #length_ptr = Base.unsafe_convert(Ptr{Int32}, base_ptr)
+
+    s::duckdb_string_t = unsafe_pointer_to_objref(val)
+    if s.length <= STRING_INLINE_LENGTH
+        return string(s.data) # inline string
+    else
+        s_ext::duckdb_string_t_ptr = unsafe_pointer_to_objref(val)
+        #ptr_ptr = Base.unsafe_convert(Ptr{Ptr{UInt8}}, val + sizeof(Int32) * 2)
+        #data_ptr = Base.unsafe_load(ptr_ptr)
+        # return unsafe_string(data_ptr, length)
+
+        prefix = string(s_ext.prefix)
+        data = unsafe_string(s_ext.data, s_ext.length)
+        return prefix * data
+    end
+end
+
+function _convert_blob(val::Ptr{Cvoid})::Base.CodeUnits{UInt8, String}
+    return Base.codeunits(_convert_string(val))
+end
