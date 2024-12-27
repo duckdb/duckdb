@@ -369,6 +369,8 @@ class JuliaApiTarget(AbstractApiTarget):
             for param in function_obj["params"]
         ]
 
+        return_value_comment = function_obj.get("comment", {}).get("return_value", "nothing")
+
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
         self.file.write(
             f"{'    ' * self.indent}    {function_obj['name']}({arg_names_s})\n"
@@ -383,7 +385,7 @@ class JuliaApiTarget(AbstractApiTarget):
             )
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(
-            f"{'    ' * self.indent}Returns: {function_obj['comment'].get('return_value', '')}\n"
+            f"{'    ' * self.indent}Returns: {return_value_comment}\n"
         )
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
 
