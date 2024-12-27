@@ -177,6 +177,10 @@ AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *statement, const 
 		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
 		wrapper->ingestion_stream.release = nullptr;
 	}
+	if (wrapper->statement) {
+		duckdb_destroy_prepare(&wrapper->statement);
+		wrapper->statement = nullptr;
+	}
 	wrapper->substrait_plan = static_cast<uint8_t *>(malloc(sizeof(uint8_t) * length));
 	wrapper->plan_length = length;
 	memcpy(wrapper->substrait_plan, plan, length);
@@ -921,6 +925,10 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		// Release any resources currently held by the ingestion stream before we overwrite it
 		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
 		wrapper->ingestion_stream.release = nullptr;
+	}
+	if (wrapper->statement) {
+		duckdb_destroy_prepare(&wrapper->statement);
+		wrapper->statement = nullptr;
 	}
 	auto res = duckdb_prepare(wrapper->connection, query, &wrapper->statement);
 	auto error_msg = duckdb_prepare_error(wrapper->statement);
