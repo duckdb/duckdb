@@ -38,6 +38,7 @@ const duckdb_scalar_function = Ptr{Cvoid}
 const duckdb_scalar_function_set = Ptr{Cvoid}
 const duckdb_table_description = Ptr{Cvoid}
 const duckdb_table_function = Ptr{Cvoid}
+const duckdb_table_function_ptr = Ptr{Cvoid}
 const duckdb_table_function_bind = Ptr{Cvoid}
 const duckdb_table_function_init = Ptr{Cvoid}
 const duckdb_task_state = Ptr{Cvoid}
