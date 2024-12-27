@@ -24,10 +24,21 @@ statement error
 select row_number() over (range between unbounded preceding and unbounded preceding);
 ----
 
-# ORDER BY is not implemented for window functions
-statement error
+# ORDER BY is now implemented for window functions!
+query I
 select LIST(salary ORDER BY enroll_date) OVER (PARTITION BY depname) FROM empsalary
+ORDER BY ALL DESC
 ----
+[6000, 5200, 5200, 4200, 4500]
+[6000, 5200, 5200, 4200, 4500]
+[6000, 5200, 5200, 4200, 4500]
+[6000, 5200, 5200, 4200, 4500]
+[6000, 5200, 5200, 4200, 4500]
+[5000, 4800, 4800]
+[5000, 4800, 4800]
+[5000, 4800, 4800]
+[3900, 3500]
+[3900, 3500]
 
 # GROUPS frame spec is not implemented yet for window functions
 statement error

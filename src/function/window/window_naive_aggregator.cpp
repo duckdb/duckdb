@@ -245,10 +245,11 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 						continue;
 					}
 
-					if (!arg_orderer->RowIsVisible(f)) {
+					if (!arg_orderer->RowIsVisible(f) || orderby_count >= STANDARD_VECTOR_SIZE) {
 						if (orderby_count) {
 							orderby_sort.Reference(arg_orderer->chunk);
 							orderby_sort.Slice(orderby_sel, orderby_count);
+							orderby_payload.SetCardinality(orderby_count);
 							local_sort.SinkChunk(orderby_sort, orderby_payload);
 						}
 						orderby_count = 0;
@@ -261,6 +262,7 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 			if (orderby_count) {
 				orderby_sort.Reference(arg_orderer->chunk);
 				orderby_sort.Slice(orderby_sel, orderby_count);
+				orderby_payload.SetCardinality(orderby_count);
 				local_sort.SinkChunk(orderby_sort, orderby_payload);
 			}
 
@@ -278,7 +280,8 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 				orderby_payload.Reset();
 				scanner.Scan(orderby_payload);
 				orderby_row = FlatVector::GetData<idx_t>(orderby_payload.data[0]);
-				for (idx_t f = 0; f < orderby_payload.size(); ++f) {
+				for (idx_t i = 0; i < orderby_payload.size(); ++i) {
+					const auto f = orderby_row[i];
 					//	Seek to the current position
 					if (!cursor->RowIsVisible(f)) {
 						//	We need to flush when we cross a chunk boundary
