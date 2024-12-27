@@ -172,6 +172,11 @@ AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *statement, const 
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
+	if (wrapper->ingestion_stream.release) {
+		// Release any resources currently held by the ingestion stream before we overwrite it
+		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
+		wrapper->ingestion_stream.release = nullptr;
+	}
 	wrapper->substrait_plan = static_cast<uint8_t *>(malloc(sizeof(uint8_t) * length));
 	wrapper->plan_length = length;
 	memcpy(wrapper->substrait_plan, plan, length);
@@ -912,6 +917,11 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 	}
 
 	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
+	if (wrapper->ingestion_stream.release) {
+		// Release any resources currently held by the ingestion stream before we overwrite it
+		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
+		wrapper->ingestion_stream.release = nullptr;
+	}
 	auto res = duckdb_prepare(wrapper->connection, query, &wrapper->statement);
 	auto error_msg = duckdb_prepare_error(wrapper->statement);
 	return CheckResult(res, error, error_msg);
