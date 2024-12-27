@@ -233,9 +233,7 @@ class JuliaApiTarget(AbstractApiTarget):
         """Writes an empty line to the output file."""
         self.file.write(self.linesep)
 
-    def _get_casted_type(
-        self, type_str: str, is_return_arg=False, auto_remove_t_suffix=True
-    ):
+    def _get_casted_type(self, type_str: str, is_return_arg=False, auto_remove_t_suffix=True):
         type_str = type_str.strip()
         type_definition = parse_c_type(type_str, [])
 
@@ -326,14 +324,10 @@ class JuliaApiTarget(AbstractApiTarget):
         arg_names = [_get_arg_name(param["name"]) for param in function_obj["params"]]
 
         if function_obj["name"] in self.overwrite_function_signatures:
-            return_type, arg_types = self.overwrite_function_signatures[
-                function_obj["name"]
-            ]
+            return_type, arg_types = self.overwrite_function_signatures[function_obj["name"]]
             return arg_names, arg_types
 
-        arg_types = [
-            self._get_casted_type(param["type"]) for param in function_obj["params"]
-        ]
+        arg_types = [self._get_casted_type(param["type"]) for param in function_obj["params"]]
         return arg_names, arg_types
 
     def _write_function_docstring(self, function_obj: FunctionDef):
@@ -363,30 +357,22 @@ class JuliaApiTarget(AbstractApiTarget):
         arg_names, arg_types = self.get_argument_names_and_types(function_obj)
         arg_names_s = ", ".join(arg_names)
         arg_comments = [
-            function_obj.get("comment", {})
-            .get("param_comments", {})
-            .get(param["name"], "")
+            function_obj.get("comment", {}).get("param_comments", {}).get(param["name"], "")
             for param in function_obj["params"]
         ]
 
         return_value_comment = function_obj.get("comment", {}).get("return_value", "nothing")
 
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
-        self.file.write(
-            f"{'    ' * self.indent}    {function_obj['name']}({arg_names_s})\n"
-        )
+        self.file.write(f"{'    ' * self.indent}    {function_obj['name']}({arg_names_s})\n")
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(f"{'    ' * self.indent}{description}\n")
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(f"{'    ' * self.indent}# Arguments\n")
         for i, arg_name in enumerate(arg_names):
-            self.file.write(
-                f"{'    ' * self.indent}- `{arg_name}`: {arg_comments[i]}\n"
-            )
+            self.file.write(f"{'    ' * self.indent}- `{arg_name}`: {arg_comments[i]}\n")
         self.file.write(f"{'    ' * self.indent}\n")
-        self.file.write(
-            f"{'    ' * self.indent}Returns: {return_value_comment}\n"
-        )
+        self.file.write(f"{'    ' * self.indent}Returns: {return_value_comment}\n")
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
 
     def _get_depwarning_message(self, function_obj: FunctionDef):
@@ -449,18 +435,18 @@ class JuliaApiTarget(AbstractApiTarget):
         # for function call
         arg_names_call = ", ".join(
             [
-                f"{arg_name} - 1"  # 1-based index
-                if self.auto_1base_index
-                and fname not in self.auto_1base_index_ignore_functions
-                and self._is_index_argument(arg_name, function_obj)
-                else arg_name
+                (
+                    f"{arg_name} - 1"  # 1-based index
+                    if self.auto_1base_index
+                    and fname not in self.auto_1base_index_ignore_functions
+                    and self._is_index_argument(arg_name, function_obj)
+                    else arg_name
+                )
                 for arg_name in arg_names
             ]
         )
 
-        return_type = self._get_casted_type(
-            function_obj["return_type"], is_return_arg=True
-        )
+        return_type = self._get_casted_type(function_obj["return_type"], is_return_arg=True)
 
         is_index1_function = (
             fname not in self.auto_1base_index_ignore_functions
@@ -470,9 +456,7 @@ class JuliaApiTarget(AbstractApiTarget):
 
         self.file.write(f"{'    ' * self.indent}function {fname}({arg_names_s})\n")
 
-        if function_obj.get("group_deprecated", False) or function_obj.get(
-            "deprecated", False
-        ):
+        if function_obj.get("group_deprecated", False) or function_obj.get("deprecated", False):
             self._write_function_depwarn(function_obj, indent=1)
 
         # !!!!!!!! REMOVE !!!!!
@@ -583,13 +567,9 @@ end
             for fn in group["entries"]:
                 for param in fn["params"]:
                     if param["type"] not in self.type_maps:
-                        self.type_maps[param["type"]] = self._get_casted_type(
-                            param["type"]
-                        )
+                        self.type_maps[param["type"]] = self._get_casted_type(param["type"])
                 if fn["return_type"] not in self.type_maps:
-                    self.type_maps[fn["return_type"]] = self._get_casted_type(
-                        fn["return_type"]
-                    )
+                    self.type_maps[fn["return_type"]] = self._get_casted_type(fn["return_type"])
 
         for k, v in self.type_maps.items():
             if v not in self.inverse_type_maps:
@@ -646,31 +626,32 @@ def main():
             f"File {julia_path_old} does not exist. Ideally rename the current file 'api.jl' to 'api_old.jl'"
         )
 
-    with (
-        JuliaApiTarget(
-            julia_path,
-            indent=0,
-            auto_1base_index=True,  # WARNING: every arg named "col/row/index" or similar will be 1-based indexed, so the argument is subtracted by 1
-            auto_1base_index_return_functions={"duckdb_init_get_column_index"},
-            auto_1base_index_ignore_functions={
-                "duckdb_parameter_name",
-                "duckdb_param_type",
-                "duckdb_param_logical_type",
-            },
-            skipped_functions={},
-            type_map=JULIA_BASE_TYPE_MAP,
-            overwrite_function_signatures={
-                "duckdb_free": (
-                    "Cvoid",
-                    ("Ptr{Cvoid}",),
-                ),  # Must be Ptr{Cvoid} and not Ref
-                "duckdb_bind_blob": (
-                    "duckdb_state",
-                    ("duckdb_prepared_statement", "idx_t", "Ptr{Cvoid}", "idx_t"),
-                ),
-            },
-        ) as printer
-    ):
+    overwrite_function_signatures = {
+        # Must be Ptr{Cvoid} and not Ref
+        "duckdb_free": (
+            "Cvoid",
+            ("Ptr{Cvoid}",),
+        ),
+        "duckdb_bind_blob": (
+            "duckdb_state",
+            ("duckdb_prepared_statement", "idx_t", "Ptr{Cvoid}", "idx_t"),
+        ),
+    }
+
+    with JuliaApiTarget(
+        julia_path,
+        indent=0,
+        auto_1base_index=True,  # WARNING: every arg named "col/row/index" or similar will be 1-based indexed, so the argument is subtracted by 1
+        auto_1base_index_return_functions={"duckdb_init_get_column_index"},
+        auto_1base_index_ignore_functions={
+            "duckdb_parameter_name",
+            "duckdb_param_type",
+            "duckdb_param_logical_type",
+        },
+        skipped_functions={},
+        type_map=JULIA_BASE_TYPE_MAP,
+        overwrite_function_signatures=overwrite_function_signatures,
+    ) as printer:
         keep_old_order = True
 
         if keep_old_order:
