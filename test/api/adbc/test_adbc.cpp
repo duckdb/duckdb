@@ -1167,11 +1167,11 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	REQUIRE((res->GetValue(0, 0).ToString() == "BASE TABLE"));
 }
 
-TEST_CASE("Test AdbcConnectionGetObjects", "[adbc][.]") {
+TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	// Lets first try what works
+	// Let's first try what works
 	// 1. Test ADBC_OBJECT_DEPTH_CATALOGS
 	{
 		ADBCTestDatabase db("test_catalog_depth");
@@ -1241,12 +1241,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc][.]") {
 		        'db_schema_tables': []
 		    }
 		])";
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "") ==
-		         StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", "")));
+		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]");
 		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "") ==
 		         StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", "")));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "") ==
-		         StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", "")));
+		REQUIRE(res->GetValue(1, 2).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]");
 		db.Query("Drop table result;");
 
 		// Test Filters
@@ -1345,15 +1343,11 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc][.]") {
 		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
 		               "'test_table_depth' order by unnest_a asc");
 		REQUIRE((res->ColumnCount() == 1));
-		REQUIRE((res->RowCount() == 3));
-		string expected[3];
-		expected[0] = "{'db_schema_name': information_schema, 'db_schema_tables': NULL}";
-		expected[1] = "{'db_schema_name': main, 'db_schema_tables': NULL}";
-		expected[2] = "{'db_schema_name': pg_catalog, 'db_schema_tables': NULL}";
+		REQUIRE((res->RowCount() == 1));
+		string expected = "{'db_schema_name': main, 'db_schema_tables': NULL}";
 
-		for (idx_t i = 0; i < res->RowCount(); i++) {
-			REQUIRE((res->GetValue(0, i).ToString() == expected[i]));
-		}
+		REQUIRE((res->GetValue(0, 0).ToString() == expected));
+
 		db.Query("Drop table result;");
 	}
 	// 4.Test ADBC_OBJECT_DEPTH_COLUMNS
@@ -1459,7 +1453,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc][.]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 2).ToString() ==
+		REQUIRE((res->GetValue(1, 0).ToString() ==
 		         "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
 		         "'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]"));
 		db.Query("Drop table result;");
@@ -1469,15 +1463,12 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc][.]") {
 		db.CreateTable("result", arrow_stream);
 		res = db.Query("Select unnest(catalog_db_schemas) unnest_a from result where catalog_name == "
 		               "'test_column_depth' order by unnest_a asc");
-		expected[0] = "{'db_schema_name': information_schema, 'db_schema_tables': NULL}";
-		expected[1] = "{'db_schema_name': main, "
-		              "'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
-		              "'table_columns': NULL, 'table_constraints': NULL}]}";
-		expected[2] = "{'db_schema_name': pg_catalog, 'db_schema_tables': NULL}";
+		auto expected_value = "{'db_schema_name': main, "
+		                      "'db_schema_tables': [{'table_name': my_table, 'table_type': BASE TABLE, "
+		                      "'table_columns': NULL, 'table_constraints': NULL}]}";
 
-		for (idx_t i = 0; i < res->RowCount(); i++) {
-			REQUIRE((res->GetValue(0, i).ToString() == expected[i]));
-		}
+		REQUIRE((res->GetValue(0, 0).ToString() == expected_value));
+
 		db.Query("Drop table result;");
 	}
 	// 5.Test ADBC_OBJECT_DEPTH_ALL
