@@ -7710,7 +7710,7 @@ function duckdb_cast_function_set_function(cast_function, _function)
     return ccall(
         (:duckdb_cast_function_set_function, libduckdb),
         Cvoid,
-        (duckdb_cast_function, duckdb_cast_function),
+        (duckdb_cast_function, duckdb_cast_function_ptr),
         cast_function,
         _function
     )

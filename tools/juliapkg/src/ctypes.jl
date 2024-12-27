@@ -17,6 +17,7 @@ const duckdb_arrow_stream = Ptr{Cvoid}
 const duckdb_bind_info = Ptr{Cvoid}
 const duckdb_bit = Ptr{Cvoid}
 const duckdb_cast_function = Ptr{Cvoid}
+const duckdb_cast_function_ptr = Ptr{Cvoid}
 const duckdb_config = Ptr{Cvoid}
 const duckdb_connection = Ptr{Cvoid}
 const duckdb_create_type_info = Ptr{Cvoid}
@@ -42,7 +43,6 @@ const duckdb_table_function_bind = Ptr{Cvoid}
 const duckdb_table_function_init = Ptr{Cvoid}
 const duckdb_task_state = Ptr{Cvoid}
 const duckdb_value = Ptr{Cvoid}
-const duckdb_varint = Ptr{Cvoid}
 const duckdb_vector = Ptr{Cvoid}
 
 
@@ -304,6 +304,15 @@ struct duckdb_query_progress_type
     percentage::Float64
     rows_processed::UInt64
     total_rows_to_process::UInt64
+end
+
+struct duckdb_varint
+    # uint8_t *data;
+    # idx_t size;
+    # bool is_negative;
+    data::Ptr{UInt8}
+    size::idx_t
+    is_negative::Bool
 end
 
 struct duckdb_column

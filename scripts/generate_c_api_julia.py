@@ -167,6 +167,8 @@ JULIA_BASE_TYPE_MAP = {
     "duckdb_string": "duckdb_string",  # Pointer + size type
     "duckdb_table_function": "duckdb_table_function",  # actually struct pointer
     "duckdb_table_function_t": "duckdb_table_function_ptr",  # function pointer type
+    "duckdb_cast_function": "duckdb_cast_function",  # actually struct pointer
+    "duckdb_cast_function_t": "duckdb_cast_function_ptr",  # function pointer type
 }
 
 
