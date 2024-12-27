@@ -5,106 +5,108 @@
 statement ok
 PRAGMA enable_verification
 
-# struct to struct casts with different names doesn't work
-statement error
-select struct_extract(struct_pack(b=>42)::struct(a integer), 'a');
+query I
+SELECT struct_pack(b => 42)::STRUCT(a INT);
 ----
-element "b" in source struct was not found in target struct
+{'a': NULL}
 
 query I
-select struct_extract(struct_pack(a=>42)::struct(a string), 'a');
+SELECT struct_extract(struct_pack(b => 42)::STRUCT(a INT), 'a');
+----
+NULL
+
+query I
+SELECT struct_extract(struct_pack(a => 42)::STRUCT(a STRING), 'a');
 ----
 42
 
-# this all also doesn't works with the row type
-statement error
-select struct_extract(struct_pack(b=>42)::row(a integer), 'a');
+query I
+SELECT struct_extract(struct_pack(b => 42)::ROW(a INT), 'a');
 ----
-element "b" in source struct was not found in target struct
+NULL
 
 query I
-select struct_extract(struct_pack(a=>42)::row(a integer), 'a');
+SELECT struct_extract(struct_pack(a => 42)::ROW(a INT), 'a');
 ----
 42
 
-# struct to struct casts with different names AND different types
-statement error
-select struct_extract(struct_pack(b=>42::double)::struct(a integer), 'a');
+query I
+SELECT struct_extract(struct_pack(b => 42::DOUBLE)::STRUCT(a INT), 'a');
 ----
-element "b" in source struct was not found in target struct
+NULL
 
 query I
-select struct_extract(struct_pack(a=>42::double)::struct(a integer), 'a');
+SELECT struct_extract(struct_pack(a => 42::DOUBLE)::STRUCT(a INT), 'a');
 ----
 42
 
-statement error
-select struct_extract(struct_pack(b=>'42'::double)::struct(a integer), 'a');
+query I
+SELECT struct_extract(struct_pack(b => '42'::DOUBLE)::STRUCT(a INT), 'a');
 ----
-element "b" in source struct was not found in target struct
+NULL
 
 query I
-select struct_extract(struct_pack(a=>'42'::double)::struct(a integer), 'a');
+SELECT struct_extract(struct_pack(a => '42'::DOUBLE)::STRUCT(a INT), 'a');
 ----
 42
 
-statement error
-select struct_pack(b=>'42'::double)::struct(a integer, c string)
+query I
+SELECT struct_pack(b => '42'::DOUBLE)::STRUCT(a INT, c STRING)
 ----
-Type STRUCT(b DOUBLE) does not match with STRUCT(a INTEGER, c VARCHAR). Cannot cast STRUCTs of different size
+{'a': NULL, 'c': NULL}
 
 statement error
-select struct_pack(b=>'hello'::string)::struct(b integer)
+SELECT struct_pack(b => 'hello'::STRING)::STRUCT(b INT)
 ----
 Could not convert string 'hello' to INT32
 
 statement error
-select struct_pack(a=>'hello'::string, b=>'world'::string)::struct(a string, b integer)
+SELECT struct_pack(a => 'hello'::STRING, b => 'world'::STRING)::STRUCT(a STRING, b INT)
 ----
 Could not convert string 'world' to INT32
 
 statement error
-select struct_pack(a=>[1,2,3])::struct(a integer)
+SELECT struct_pack(a => [1, 2, 3])::STRUCT(a INT)
 ----
 Unimplemented type for cast (INTEGER[] -> INTEGER)
 
 statement error
-select struct_pack(a=>struct_pack(b=>42)::struct(b integer))::struct(a integer)
+SELECT struct_pack(a => struct_pack(b => 42)::STRUCT(b INT))::STRUCT(a INT)
 ----
 Unimplemented type for cast (STRUCT(b INTEGER) -> INTEGER)
 
-statement error
-select struct_pack(b=>'hello'::string)::struct(a integer)
+query I
+SELECT struct_pack(b => 'hello'::STRING)::STRUCT(a INT)
 ----
-element "b" in source struct was not found in target struct
-
-statement error
-select struct_pack(b=>'42'::double, c => 'asdf'::string)::struct(a1 integer, a2 string);
-----
-element "b" in source struct was not found in target struct
+{'a': NULL}
 
 query I
-select struct_pack(a1 =>'42'::double, a2 => 'asdf'::string)::struct(a1 integer, a2 string);
+SELECT struct_pack(b => '42'::DOUBLE, c => 'asdf'::STRING)::STRUCT(a1 INT, a2 STRING);
+----
+{'a1': NULL, 'a2': NULL}
+
+query I
+SELECT struct_pack(a1 => '42'::DOUBLE, a2 => 'asdf'::STRING)::STRUCT(a1 INT, a2 STRING);
 ----
 {'a1': 42, 'a2': asdf}
 
 query I
-select ROW(42, 'asdf');
+SELECT ROW(42, 'asdf');
 ----
 (42, asdf)
 
 statement error
-select ROW();
+SELECT ROW();
 ----
-Can't pack nothing into a struct
+pack nothing into a struct
 
 query I
-select ROW(NULL);
+SELECT ROW(NULL);
 ----
 (NULL)
 
 query I
-select ROW(NULL, NULL);
+SELECT ROW(NULL, NULL);
 ----
 (NULL, NULL)
 
@@ -115,51 +117,52 @@ SELECT CAST(ROW(1, 2) AS ROW(a INTEGER, b INTEGER))
 {'a': 1, 'b': 2}
 
 query I
-select a::row(a integer, b string) r from (VALUES (ROW(1, 'asdf')), (ROW(4, 'fdsa'))) s(a);
+SELECT a::ROW(a INT, b STRING) r FROM (VALUES (ROW(1, 'asdf')), (ROW(4, 'fdsa'))) s(a);
 ----
 {'a': 1, 'b': asdf}
 {'a': 4, 'b': fdsa}
 
 statement error
-select struct_extract({'a': a}, a) from (select a::varchar as a from range(10) tbl(a));
+SELECT struct_extract({'a': a}, a) FROM (SELECT a::VARCHAR AS a FROM range(10) tbl(a));
 ----
 Key name for struct_extract needs to be a constant string
 
 statement error
-select struct_extract({'a': 42}, 42)
+SELECT struct_extract({'a': 42}, 42)
 ----
 can only be used on unnamed structs
 
 query I
-select struct_extract_at({'a': 42}, 1)
+SELECT struct_extract_at({'a': 42}, 1)
 ----
 42
 
 statement error
-select struct_extract_at({'a': 42}, 0)
+SELECT struct_extract_at({'a': 42}, 0)
 ----
 out of range
 
 statement error
-select struct_extract_at({'a': 42}, 42)
+SELECT struct_extract_at({'a': 42}, 42)
 ----
 out of range
 
-
-# test string to struct within struct casting
+# Test string to struct cast within struct casting.
 query I
-SELECT {a:{b:'{a:3, b: "Hello World"}'}}::STRUCT(a STRUCT(b STRUCT(a INT, b VARCHAR)));
+SELECT {a: {b: '{a: 3, b: "Hello World"}'}}::STRUCT(a STRUCT(b STRUCT(a INT, b VARCHAR)));
 ----
 {'a': {'b': {'a': 3, 'b': Hello World}}}
 
-# test if try_cast continues after encountering error
+# Test if try_cast continues after encountering error.
 query I 
-SELECT TRY_CAST(struct_pack(a=>4, b=> 'Ducky', c=>'1964-06-15') AS STRUCT(a INT, b DOUBLE, c DATE));
+SELECT TRY_CAST(struct_pack(a => 4, b => 'Ducky', c => '1964-06-15')
+AS STRUCT(a INT, b DOUBLE, c DATE));
 ----
 {'a': 4, 'b': NULL, 'c': 1964-06-15}
 
 query I 
-SELECT TRY_CAST(struct_pack(a=>4, b=> 'Ducky', c=>'Tommorow', d=>{a:3.0}) AS STRUCT(a VARCHAR[], b VARCHAR, c DATE, d STRUCT(a INT)));
+SELECT TRY_CAST(struct_pack(a => 4, b => 'Ducky', c => 'Tommorow', d => {a:3.0})
+AS STRUCT(a VARCHAR[], b VARCHAR, c DATE, d STRUCT(a INT)));
 ----
 {'a': NULL, 'b': Ducky, 'c': NULL, 'd': {'a': 3}}
 

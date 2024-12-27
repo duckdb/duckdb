@@ -14,10 +14,8 @@ INSERT INTO t1 VALUES (ROW(NULL));
 statement ok
 CREATE TABLE foo (bar struct(pip int));
 
-statement error
+statement ok
 INSERT INTO foo VALUES ({'ignoreme': 3});
-----
-element "ignoreme" in source struct was not found in target struct
 
 statement error
 create table wrong as from (VALUES (ROW(3)));
@@ -28,9 +26,10 @@ statement ok
 INSERT INTO foo VALUES (ROW(42));
 
 query I
-SELECT * FROM foo;
+SELECT bar FROM foo ORDER BY ALL;
 ----
 {'pip': 42}
+{'pip': NULL}
 
 statement ok
 CREATE OR REPLACE TABLE T AS SELECT [{'a': 'A', 'b':'B'}] as x, [{'b':'BB','a':'AA'}] as y;
@@ -40,18 +39,26 @@ SELECT x, y, ARRAY_CONCAT(x, y) FROM T;
 ----
 an explicit cast is required
 
-statement error
+statement ok
 INSERT INTO t1 VALUES ({c: 34});
+
+query I
+SELECT s FROM t1 ORDER BY ALL;
 ----
-element "c" in source struct was not found in target struct
+{'v': NULL}
+{'v': NULL}
 
 statement ok
 CREATE OR REPLACE TABLE T (s STRUCT(a INT, b INT));
 
-statement error
+statement ok
 INSERT INTO T VALUES ({l: 1, m: 2}), ({x: 3, y: 4});
+
+query I
+SELECT s FROM T ORDER BY ALL;
 ----
-element "l" in source struct was not found in target struct
+{'a': NULL, 'b': NULL}
+{'a': NULL, 'b': NULL}
 
 # Can insert unnamed struct into named struct
 
