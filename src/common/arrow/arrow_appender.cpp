@@ -1,4 +1,7 @@
 #include "duckdb/common/arrow/arrow_appender.hpp"
+
+#include <fmt/core.h>
+
 #include "duckdb/common/arrow/arrow_buffer.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/array.hpp"
@@ -7,6 +10,7 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/list.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
@@ -14,10 +18,15 @@ namespace duckdb {
 // ArrowAppender
 //===--------------------------------------------------------------------===//
 
-ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options)
-    : types(std::move(types_p)) {
-	for (auto &type : types) {
-		auto entry = InitializeChild(type, initial_capacity, options);
+ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options,
+                             unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast,
+                             ClientContext &context)
+    : types(std::move(types_p)), context(context) {
+	for (idx_t i = 0; i < types.size(); i++) {
+		auto entry = InitializeChild(types[i], initial_capacity, options);
+		if (extension_type_cast.find(i) != extension_type_cast.end()) {
+			entry->extension_type = extension_type_cast[i];
+		}
 		root_data.push_back(std::move(entry));
 	}
 }
@@ -26,11 +35,17 @@ ArrowAppender::~ArrowAppender() {
 }
 
 //! Append a data chunk to the underlying arrow array
-void ArrowAppender::Append(DataChunk &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowAppender::Append(DataChunk &input, const idx_t from, const idx_t to, const idx_t input_size) {
 	D_ASSERT(types == input.GetTypes());
 	D_ASSERT(to >= from);
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
-		root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
+		if (root_data[i]->extension_type && root_data[i]->extension_type->duckdb_to_arrow) {
+			Vector input_data(root_data[i]->extension_type->GetInternalType());
+			root_data[i]->extension_type->duckdb_to_arrow(context, input.data[i], input_data, input_size);
+			root_data[i]->append_vector(*root_data[i], input_data, from, to, input_size);
+		} else {
+			root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
+		}
 	}
 	row_count += to - from;
 }

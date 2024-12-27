@@ -267,4 +267,3 @@ class TestCanonicalExtensionTypes(object):
         print(arrow_table)
         print(result_table)
         assert result_table.equals(arrow_table)
-

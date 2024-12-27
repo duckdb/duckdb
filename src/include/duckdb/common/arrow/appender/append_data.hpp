@@ -28,7 +28,7 @@ typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type
 // FIXME: we should separate the append state variables from the variables required by the ArrowArray into
 // ArrowAppendState
 struct ArrowAppendData {
-	explicit ArrowAppendData(ClientProperties &options_p) : options(options_p) {
+	explicit ArrowAppendData(const ClientProperties &options_p) : options(options_p) {
 		dictionary.release = nullptr;
 		arrow_buffers.resize(3);
 	}
@@ -60,6 +60,8 @@ struct ArrowAppendData {
 	//! function pointers for construction
 	initialize_t initialize = nullptr;
 	append_vector_t append_vector = nullptr;
+	//! Arrow Extension Type information
+	shared_ptr<ArrowExtensionType> extension_type = nullptr;
 	finalize_t finalize = nullptr;
 
 	//! child data (if any)

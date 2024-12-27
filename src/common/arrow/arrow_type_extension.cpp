@@ -318,14 +318,22 @@ struct ArrowBool8 {
 			result_ptr[i] = source_ptr[i];
 		}
 	}
+	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+		auto source_ptr = reinterpret_cast<bool *>(FlatVector::GetData(source));
+		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
+		for (idx_t i = 0; i < count; i++) {
+			result_ptr[i] = source_ptr[i];
+		}
+	}
 };
 
 void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 	// Types that are 1:1
 	config.RegisterArrowExtension({"arrow.uuid", "w:16", make_shared_ptr<ArrowExtensionType>(LogicalType::UUID)});
-	config.RegisterArrowExtension({"arrow.bool8", "c",
-	                               make_shared_ptr<ArrowExtensionType>(LogicalType::BOOLEAN, LogicalType::TINYINT,
-	                                                                   ArrowBool8::ArrowToDuck, nullptr)});
+	config.RegisterArrowExtension(
+	    {"arrow.bool8", "c",
+	     make_shared_ptr<ArrowExtensionType>(LogicalType::BOOLEAN, LogicalType::TINYINT, ArrowBool8::ArrowToDuck,
+	                                         ArrowBool8::DuckToArrow)});
 
 	config.RegisterArrowExtension(
 	    {"DuckDB", "hugeint", "w:16", make_shared_ptr<ArrowExtensionType>(LogicalType::HUGEINT)});

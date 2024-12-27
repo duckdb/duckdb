@@ -376,7 +376,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
                                    ClientContext &context) {
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
-	idx_t column_count = types.size();
+	const idx_t column_count = types.size();
 	// Allocate as unique_ptr first to clean-up properly on error
 	auto root_holder = make_uniq<DuckDBArrowSchemaHolder>();
 
