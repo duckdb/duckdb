@@ -160,12 +160,13 @@ JULIA_BASE_TYPE_MAP = {
     "bool": "Bool",
     "void": "Cvoid",
     "size_t": "Csize_t",
-
     # DuckDB specific types
     "idx_t": "idx_t",
     "duckdb_type": "DUCKDB_TYPE",
-    "duckdb_table_function": "duckdb_table_function", # actually struct pointer
-    "duckdb_table_function_t": "duckdb_table_function_ptr", # function pointer type
+    "duckdb_string_t": "duckdb_string_t",  # INLINE prefix with pointer string type
+    "duckdb_string": "duckdb_string",  # Pointer + size type
+    "duckdb_table_function": "duckdb_table_function",  # actually struct pointer
+    "duckdb_table_function_t": "duckdb_table_function_ptr",  # function pointer type
 }
 
 
@@ -242,7 +243,7 @@ class JuliaApiTarget(AbstractApiTarget):
 
             t = type_list[0]
             if len(type_list) == 1:
-                is_const = False #  Track that the type is const, even though we cannot use it in Julia
+                is_const = False  #  Track that the type is const, even though we cannot use it in Julia
                 if t.startswith("const "):
                     t, is_const = t.removeprefix("const "), True
 
@@ -543,6 +544,24 @@ end
 
                 self.write_function(function_map[f])
                 self.write_empty_line()
+
+            # Write new functions
+            self.write_group_start("New Functions")
+            self.write_empty_line()
+            current_group = None
+            for group in function_groups:
+                for fn in group["entries"]:
+                    if fn["name"] in self.manual_order:
+                        continue
+
+                    if current_group != group["group"]:
+                        current_group = group["group"]
+                        self.write_group_start(current_group)
+                        self.write_empty_line()
+
+                    self.write_function(fn)
+                    self.write_empty_line()
+
         else:
             for group in function_groups:
                 self.write_group_start(group["group"])
