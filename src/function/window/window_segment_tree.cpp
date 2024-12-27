@@ -10,6 +10,18 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
+bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
+	if (!wexpr.aggregate) {
+		return false;
+	}
+
+	return !wexpr.distinct && wexpr.arg_orders.empty();
+}
+
+WindowSegmentTree::WindowSegmentTree(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+    : WindowAggregator(wexpr, shared) {
+}
+
 class WindowSegmentTreeGlobalState : public WindowAggregatorGlobalState {
 public:
 	using AtomicCounters = vector<std::atomic<idx_t>>;
@@ -42,11 +54,6 @@ public:
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 16;
 };
-
-WindowSegmentTree::WindowSegmentTree(const BoundWindowExpression &wexpr, WindowAggregationMode mode_p,
-                                     const WindowExcludeMode exclude_mode_p, WindowSharedExpressions &shared)
-    : WindowAggregator(wexpr, exclude_mode_p, shared), mode(mode_p) {
-}
 
 class WindowSegmentTreePart {
 public:

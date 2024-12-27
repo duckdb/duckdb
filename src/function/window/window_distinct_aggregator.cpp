@@ -6,6 +6,7 @@
 #include "duckdb/function/window/window_aggregate_states.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 
 #include <numeric>
 #include <thread>
@@ -15,10 +16,17 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowDistinctAggregator
 //===--------------------------------------------------------------------===//
-WindowDistinctAggregator::WindowDistinctAggregator(const BoundWindowExpression &wexpr,
-                                                   const WindowExcludeMode exclude_mode_p,
-                                                   WindowSharedExpressions &shared, ClientContext &context)
-    : WindowAggregator(wexpr, exclude_mode_p, shared), context(context) {
+bool WindowDistinctAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
+	if (!wexpr.aggregate) {
+		return false;
+	}
+
+	return wexpr.distinct && wexpr.exclude_clause == WindowExcludeMode::NO_OTHER && wexpr.arg_orders.empty();
+}
+
+WindowDistinctAggregator::WindowDistinctAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared,
+                                                   ClientContext &context)
+    : WindowAggregator(wexpr, shared), context(context) {
 }
 
 class WindowDistinctAggregatorLocalState;

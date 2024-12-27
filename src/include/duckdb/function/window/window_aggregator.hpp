@@ -105,9 +105,8 @@ public:
 		}
 	}
 
-	WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p);
-	WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p,
-	                 WindowSharedExpressions &shared);
+	explicit WindowAggregator(const BoundWindowExpression &wexpr);
+	WindowAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 	virtual ~WindowAggregator();
 
 	//	Threading states

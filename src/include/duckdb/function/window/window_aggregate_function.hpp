@@ -6,6 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#pragma once
+
 #include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/function/window/window_aggregator.hpp"
@@ -16,10 +18,6 @@ class WindowAggregateExecutor : public WindowExecutor {
 public:
 	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared,
 	                        WindowAggregationMode mode);
-
-	bool IsConstantAggregate();
-	bool IsCustomAggregate();
-	bool IsDistinctAggregate();
 
 	void Sink(DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx, WindowExecutorGlobalState &gstate,
 	          WindowExecutorLocalState &lstate) const override;
