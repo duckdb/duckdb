@@ -171,27 +171,15 @@ end
         DuckDB.drop!(db, "temp")
 
         DBInterface.execute(db, "CREATE TABLE temp AS SELECT * FROM Album")
-        
-        # FIXME this tests used to work, but now they fail because they are interpreted as named parameters
-        #r = DBInterface.execute(db, "SELECT * FROM temp LIMIT ?", (a = 3,)) |> columntable
-        #@test length(r) == 3 && length(r[1]) == 3
-        #r = DBInterface.execute(db, "SELECT * FROM temp LIMIT ?", a = 3) |> columntable
-        #@test length(r) == 3 && length(r[1]) == 3
-        #r = DBInterface.execute(db, "SELECT * FROM temp WHERE Title ILIKE ?", (word = "%time%",)) |> columntable
-        #@test r[1] == [76, 111, 187]
-        
-        DBInterface.execute(
-            db,
-            raw"INSERT INTO temp VALUES ($lid, $title, $rid)",
-            (lid = 0, title = "Test Album", rid = 1)
-        )
-        DBInterface.execute(
-            db,
-            raw"INSERT INTO temp VALUES ($lid, $title, $rid)",
-            lid = 400,
-            title = "Test2 Album",
-            rid = 3
-        )
+        r = DBInterface.execute(db, "SELECT * FROM temp LIMIT ?", (a = 3,)) |> columntable
+        @test length(r) == 3 && length(r[1]) == 3
+        r = DBInterface.execute(db, "SELECT * FROM temp LIMIT ?", a = 3) |> columntable
+        @test length(r) == 3 && length(r[1]) == 3
+        r = DBInterface.execute(db, "SELECT * FROM temp WHERE Title ILIKE ?", (word = "%time%",)) |> columntable
+        @test r[1] == [76, 111, 187]
+        # FIXME: these are supposed to be named parameter tests, but we don't support that yet
+        DBInterface.execute(db, "INSERT INTO temp VALUES (?, ?, ?)", (lid = 0, title = "Test Album", rid = 1))
+        DBInterface.execute(db, "INSERT INTO temp VALUES (?, ?, ?)", lid = 400, title = "Test2 Album", rid = 3)
         r = DBInterface.execute(db, "SELECT * FROM temp WHERE AlbumId IN (0, 400)") |> columntable
         @test r[1] == [0, 400]
         @test r[2] == ["Test Album", "Test2 Album"]

@@ -6,9 +6,6 @@
     DBInterface.execute(con, "CREATE TABLE test_table(i INTEGER, j DOUBLE)")
     stmt = DBInterface.prepare(con, "INSERT INTO test_table VALUES(?, ?)")
 
-    @test DuckDB.nparams(stmt) == 2
-    @test DuckDB.parameter_names(stmt) == ["1", "2"]
-    @test DuckDB.parameter_types(stmt) == [DuckDB.DUCKDB_TYPE_INTEGER, DuckDB.DUCKDB_TYPE_DOUBLE]
     DBInterface.execute(stmt, [1, 3.5])
     DBInterface.execute(stmt, [missing, nothing])
     DBInterface.execute(stmt, [2, 0.5])
@@ -83,26 +80,11 @@ end
     end
 end
 
-@testset "DBInterface.prepare: named parameters" begin
+@testset "DBInterface.prepare: named parameters not supported yet" begin
     con = DBInterface.connect(DuckDB.DB)
 
     DBInterface.execute(con, "CREATE TABLE test_table(i INTEGER, j DOUBLE)")
-    stmt = DBInterface.prepare(con, raw"INSERT INTO test_table VALUES($col1, $col2)")
-
-    @test DuckDB.nparams(stmt) == 2
-    @test DuckDB.parameter_names(stmt) == ["col1", "col2"]
-
-    DBInterface.execute(stmt, col1 = 1, col2 = 3.5)
-    DBInterface.execute(stmt, col1 = missing, col2 = nothing)
-    DBInterface.execute(stmt, col1 = 2, col2 = 0.5)
-    DBInterface.execute(stmt, Dict(["col1" => 3, "col2" => 0.25]))
-
-    @test_throws DuckDB.QueryException DBInterface.execute(stmt, col3 = 4, col4 = 0.25)
-
-    result = DataFrame(DBInterface.execute(con, "SELECT * FROM test_table"))
-
-    @test isequal(result.i, [1, missing, 2, 3])
-    @test isequal(result.j, [3.5, missing, 0.5, 0.25])
+    @test_throws DuckDB.QueryException DBInterface.prepare(con, "INSERT INTO test_table VALUES(:col1, :col2)")
 
     DBInterface.close!(con)
 end
