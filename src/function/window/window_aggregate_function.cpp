@@ -26,20 +26,31 @@ public:
 	const Expression *filter_ref;
 };
 
-void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &eval_chunk, Vector &result, WindowExecutorLocalState &lstate,
-                              WindowExecutorGlobalState &gstate) const {
-	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
-	lbstate.UpdateBounds(gstate, row_idx, eval_chunk, lstate.range_cursor);
+static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &wexpr) {
+	// Remove redundant/irrelevant modifiers (they can be serious performance cliffs)
+	if (wexpr.aggregate) {
+		const auto &aggr = wexpr.aggregate;
+		auto &arg_orders = wexpr.arg_orders;
+		if (aggr->distinct_dependent != AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+			wexpr.distinct = false;
+		}
+		if (aggr->order_dependent != AggregateOrderDependent::ORDER_DEPENDENT) {
+			arg_orders.clear();
+		} else {
+			//	If the argument order is prefix of the partition ordering,
+			//	then we can just use the partition ordering.
+			if (BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) == arg_orders.size()) {
+				arg_orders.clear();
+			}
+		}
+	}
 
-	const auto count = eval_chunk.size();
-	EvaluateInternal(gstate, lstate, eval_chunk, result, count, row_idx);
-
-	result.Verify(count);
+	return wexpr;
 }
 
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context,
                                                  WindowSharedExpressions &shared, WindowAggregationMode mode)
-    : WindowExecutor(wexpr, context, shared), mode(mode) {
+    : WindowExecutor(SimplifyWindowedAggregate(wexpr), context, shared), mode(mode) {
 
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
 	if (!ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {

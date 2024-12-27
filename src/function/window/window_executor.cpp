@@ -47,6 +47,17 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &cont
 	}
 }
 
+void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &eval_chunk, Vector &result, WindowExecutorLocalState &lstate,
+                              WindowExecutorGlobalState &gstate) const {
+	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
+	lbstate.UpdateBounds(gstate, row_idx, eval_chunk, lstate.range_cursor);
+
+	const auto count = eval_chunk.size();
+	EvaluateInternal(gstate, lstate, eval_chunk, result, count, row_idx);
+
+	result.Verify(count);
+}
+
 WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &executor, const idx_t payload_count,
                                                      const ValidityMask &partition_mask, const ValidityMask &order_mask)
     : executor(executor), payload_count(payload_count), partition_mask(partition_mask), order_mask(order_mask) {
