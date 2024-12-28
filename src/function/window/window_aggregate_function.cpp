@@ -60,7 +60,7 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
 		aggregator = make_uniq<WindowDistinctAggregator>(wexpr, shared, context);
 	} else if (WindowConstantAggregator::CanAggregate(wexpr)) {
-		aggregator = make_uniq<WindowConstantAggregator>(wexpr, shared);
+		aggregator = make_uniq<WindowConstantAggregator>(wexpr, shared, context);
 	} else if (WindowCustomAggregator::CanAggregate(wexpr, mode)) {
 		aggregator = make_uniq<WindowCustomAggregator>(wexpr, shared);
 	} else if (WindowSegmentTree::CanAggregate(wexpr)) {
