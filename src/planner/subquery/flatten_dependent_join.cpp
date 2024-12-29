@@ -635,6 +635,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			    plan->children[i]->type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 				continue;
 			}
+			plan->children[i]->ResolveOperatorTypes();
 			auto &join = plan->children[i];
 			vector<unique_ptr<Expression>> select_list;
 			select_list.reserve(join->GetColumnBindings().size());
