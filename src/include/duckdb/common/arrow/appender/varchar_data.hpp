@@ -86,9 +86,10 @@ struct ArrowVarcharData {
 			    UnsafeNumericCast<idx_t>(last_offset) + string_length > NumericLimits<int32_t>::Maximum()) {
 				D_ASSERT(append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR);
 				throw InvalidInputException(
-				    "Arrow Appender: The offset (%lu) exceeds the maximum total string size for regular string buffers (%u). "
-				    "Enable `arrow_large_buffer_size` for larger buffers.",
-				    current_offset, NumericLimits<int32_t>::Maximum());
+				    "Arrow Appender: The maximum total string size for regular string buffers is "
+				    "%u but the offset of %lu exceeds this.\n* SET arrow_large_buffer_size=true to use large string "
+				    "buffers",
+				    NumericLimits<int32_t>::Maximum(), current_offset);
 			}
 			offset_data[offset_idx] = UnsafeNumericCast<BUFTYPE>(current_offset);
 
