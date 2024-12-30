@@ -319,8 +319,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
 		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
+		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
