@@ -52,8 +52,8 @@ public:
 	}
 
 	//! Select using a cutoff on the radix bits of the hash
-	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
-	                    SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits,
+	                    const ValidityMask &partition_mask, SelectionVector *true_sel, SelectionVector *false_sel);
 };
 
 //! RadixPartitionedColumnData is a PartitionedColumnData that partitions input based on the radix of a hash

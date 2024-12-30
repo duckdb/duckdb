@@ -141,22 +141,24 @@ jobs:
       - uses: ./duckdb/.github/actions/build_extensions_dockerized
         with:
           vcpkg_target_triplet: x64-linux
-          deploy_as: linux_amd64_gcc4
           duckdb_arch: linux_amd64_gcc4
-          treat_warn_as_error: 0
-          s3_id: ${{ secrets.S3_ID }}
-          s3_key: ${{ secrets.S3_KEY }}
-          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-          aarch64_cross_compile: 1
-          run_tests: 0 # Cannot run tests here due to cross-compiling
-          run_autoload_tests: 0
-          ninja: 1
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: manylinux-extensions-x64
           path: |
             build/release/extension/*/*.duckdb_extension
+
+   upload-linux-extensions-gcc4:
+    ## TODO: Add a if: github.ref == main, for now this is explicitly missing to be able to test on PR, expected is this should fail due to missing secrets
+    name: Upload Linux Extensions (gcc4)
+    needs: manylinux-extensions-x64
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: manylinux-extensions-x64
+      duckdb_arch: linux_amd64_gcc4
+      duckdb_sha: ${{ github.sha }}
 
    linux-python3:
     name: Python 3 Linux
@@ -232,7 +234,7 @@ jobs:
         pip install 'cibuildwheel>=2.16.2' build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       if: ${{ matrix.arch == 'x86_64' }}
       with:
         name: manylinux-extensions-x64

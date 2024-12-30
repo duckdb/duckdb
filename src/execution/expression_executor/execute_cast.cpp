@@ -12,7 +12,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCastE
 	result->Finalize();
 
 	if (expr.bound_cast.init_local_state) {
-		CastLocalStateParameters parameters(root.executor->GetContext(), expr.bound_cast.cast_data);
+		auto context_ptr = root.executor->HasContext() ? &root.executor->GetContext() : nullptr;
+		CastLocalStateParameters parameters(context_ptr, expr.bound_cast.cast_data);
 		result->local_state = expr.bound_cast.init_local_state(parameters);
 	}
 	return std::move(result);
@@ -32,13 +33,13 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	if (expr.try_cast) {
 		string error_message;
 		CastParameters parameters(expr.bound_cast.cast_data.get(), false, &error_message, lstate);
-		parameters.query_location = expr.query_location;
+		parameters.query_location = expr.GetQueryLocation();
 		expr.bound_cast.function(child, result, count, parameters);
 	} else {
 		// cast it to the type specified by the cast expression
 		D_ASSERT(result.GetType() == expr.return_type);
 		CastParameters parameters(expr.bound_cast.cast_data.get(), false, nullptr, lstate);
-		parameters.query_location = expr.query_location;
+		parameters.query_location = expr.GetQueryLocation();
 		expr.bound_cast.function(child, result, count, parameters);
 	}
 }

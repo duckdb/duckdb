@@ -1,0 +1,143 @@
+# name: test/sql/sample/table_samples/table_sample_is_stored.test_slow
+# description: Test sampling of larger relations
+# group: [table_samples]
+
+require vector_size 2048
+
+require noforcestorage
+
+load __TEST_DIR__/test_samples.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table materialized_range as select * from range(5000000);
+
+statement ok
+create table integers_1 as (select (range + 5) a, range b, get_current_time() as time from materialized_range);
+
+query II nosort result_1
+select a::INT, b from duckdb_table_sample('integers_1') order by all;
+----
+
+statement ok
+create table integers_2 as (select (range + 5) a, range b, get_current_time() as time from materialized_range);
+
+## samples should be the same given the same table and the same contents.
+query II nosort result_1
+select a::INT, b from duckdb_table_sample('integers_2') order by all;
+----
+
+statement ok
+create or replace table integers_1 as (select (range + 5) a, range b from materialized_range);
+
+statement ok
+create or replace table integers_2 as (select (range + 5) a, range b from materialized_range);
+
+# sample only has values in the table it was sampled from
+query I
+select count(*) from (select b from duckdb_table_sample('integers_1') intersect (select b from integers_1));
+----
+2048
+
+query I
+select count(*) from (select b from duckdb_table_sample('integers_2') intersect (select b from integers_2));
+----
+2048
+
+# sample exists after restart
+restart
+
+query I
+select count(*) from duckdb_table_sample('integers_1');
+----
+2048
+
+query I
+select count(*) from duckdb_table_sample('integers_2');
+----
+2048
+
+
+query II
+select floor(b / 1000000) as interval, count(*) as frequency from duckdb_table_sample('integers_1') group by interval order by all;
+----
+0.0	453
+1.0	407
+2.0	406
+3.0	403
+4.0	379
+
+
+# adding another interval should subtract an equal number from the rest of the intervals
+statement ok
+insert into integers_1 (select (range + 5) a, range b from range(5000000,6000000));
+
+query II
+select floor(b / 1000000) as interval, count(*) as frequency from duckdb_table_sample('integers_1') group by interval order by all;
+----
+0.0	374
+1.0	334
+2.0	332
+3.0	335
+4.0	313
+5.0	360
+
+# If double the table count is appended, around half the sample should account for the new values.
+statement ok
+insert into integers_1 (select -1, -1 from range(6000000));
+
+query I
+select count(*) from integers_1;
+----
+12000000
+
+# about half of the samples should have the pair '-1', 1.
+query I
+select count(*) from duckdb_table_sample('integers_1') where a = -1 and b = -1;
+----
+1022
+
+
+restart
+
+# updated sample is also newly serialized
+query I
+select count(*) from duckdb_table_sample('integers_1') where a = -1 and b = -1;
+----
+1022
+
+# create a view on top of the sample
+statement ok
+create view sample_view as select * from duckdb_table_sample('integers_1');
+
+# update the sample
+statement ok
+insert into integers_1 (select -2, -2 from range(6000000));
+
+# 2048 / 3 = 682 (706 is good)
+query I
+select count(*) from sample_view where a = -2 and b = -2;
+----
+624
+
+restart
+
+query I
+select count(*) from sample_view where a = -2 and b = -2;
+----
+624
+
+# currently have 18_000_000 values in the table.
+# to try and get 1 value in the sample, we should add
+# 18000000 / 2048 = 8789 values to see 1
+
+statement ok
+insert into integers_1 (select -3, -3 from range(7000));
+
+# 1 value makes it
+query I
+select count(*) from sample_view where a = -3 and b = -3;
+----
+1

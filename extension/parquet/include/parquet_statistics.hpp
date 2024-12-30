@@ -35,6 +35,10 @@ struct ParquetStatisticsUtils {
 
 	static bool BloomFilterExcludes(const TableFilter &filter, const duckdb_parquet::ColumnMetaData &column_meta_data,
 	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator);
+
+private:
+	static Value ConvertValueInternal(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
+	                                  const std::string &stats);
 };
 
 class ParquetBloomFilter {

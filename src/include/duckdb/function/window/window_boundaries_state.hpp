@@ -47,6 +47,9 @@ struct WindowInputExpression {
 			auto &col = chunk.data[col_idx];
 			ptype = col.GetType().InternalType();
 			scalar = (col.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			if (!scalar && col.GetVectorType() != VectorType::FLAT_VECTOR) {
+				col.Flatten(chunk.size());
+			}
 		}
 	}
 

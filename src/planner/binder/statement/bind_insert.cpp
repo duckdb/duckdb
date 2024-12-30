@@ -48,7 +48,7 @@ unique_ptr<ParsedExpression> ExpandDefaultExpression(const ColumnDefinition &col
 }
 
 void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column) {
-	D_ASSERT(expr->type == ExpressionType::VALUE_DEFAULT);
+	D_ASSERT(expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT);
 	expr = ExpandDefaultExpression(column);
 }
 
@@ -56,7 +56,7 @@ void ExpressionBinder::DoUpdateSetQualifyInLambda(FunctionExpression &function, 
                                                   vector<unordered_set<string>> &lambda_params) {
 
 	for (auto &child : function.children) {
-		if (child->expression_class != ExpressionClass::LAMBDA) {
+		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			DoUpdateSetQualify(child, table_name, lambda_params);
 			continue;
 		}
@@ -135,7 +135,7 @@ void ExpressionBinder::DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, co
 
 // Replace binding.table_index with 'dest' if it's 'source'
 void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_columnref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_columnref.binding.table_index == source) {
 			bound_columnref.binding.table_index = dest;
@@ -148,7 +148,6 @@ void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
                                         TableCatalogEntry &table, TableStorageInfo &storage_info) {
 	D_ASSERT(insert.children.size() == 1);
-	D_ASSERT(insert.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 
 	vector<column_t> logical_column_ids;
 	vector<string> column_names;
@@ -168,11 +167,16 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		    insert.set_columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
+
+		if (!column.Type().SupportsRegularUpdate()) {
+			insert.update_is_del_and_insert = true;
+		}
+
 		insert.set_columns.push_back(column.Physical());
 		logical_column_ids.push_back(column.Oid());
 		insert.set_types.push_back(column.Type());
 		column_names.push_back(colname);
-		if (expr->type == ExpressionType::VALUE_DEFAULT) {
+		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 			expr = ExpandDefaultExpression(column);
 		}
 
@@ -197,13 +201,13 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 		}
 	}
 
-	// Verify that none of the columns that are targeted with a SET expression are indexed on
+	// If any column targeted by a SET expression has an index, then
+	// we need to rewrite this to an DELETE + INSERT.
 	for (idx_t i = 0; i < logical_column_ids.size(); i++) {
 		auto &column = logical_column_ids[i];
 		if (indexed_columns.count(column)) {
-			throw BinderException("Can not assign to column '%s' because it has a UNIQUE/PRIMARY KEY constraint or is "
-			                      "referenced by an INDEX",
-			                      column_names[i]);
+			insert.update_is_del_and_insert = true;
+			break;
 		}
 	}
 }
@@ -495,6 +499,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		if (values_list) {
 			throw BinderException("INSERT BY NAME can only be used when inserting from a SELECT statement");
 		}
+		if (stmt.default_values) {
+			throw BinderException("INSERT BY NAME cannot be combined with with DEFAULT VALUES");
+		}
 		if (!stmt.columns.empty()) {
 			throw BinderException("INSERT BY NAME cannot be combined with an explicit column list");
 		}
@@ -582,7 +589,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 			// now replace any DEFAULT values with the corresponding default expression
 			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
-				if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
+				if (expr_list.values[list_idx][col_idx]->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 					// DEFAULT value! replace the entry
 					ReplaceDefaultExpression(expr_list.values[list_idx][col_idx], column);
 				}

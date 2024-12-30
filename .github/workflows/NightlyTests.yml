@@ -31,7 +31,7 @@ env:
 jobs:
   linux-memory-leaks:
      name: Linux Memory Leaks
-     runs-on: ubuntu-20.04
+     runs-on: ubuntu-24.04
      env:
        GEN: ninja
 
@@ -103,11 +103,9 @@ jobs:
 
   smaller-binary:
     name: Smaller Binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;json"
@@ -212,13 +210,12 @@ jobs:
   linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
+    container: quay.io/pypa/manylinux2028_x86_64
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     needs: linux-memory-leaks
     env:
       CC: /usr/bin/gcc
       CXX: /usr/bin/g++
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - uses: actions/checkout@v3
@@ -230,7 +227,6 @@ jobs:
           ninja-build: 1
           ccache: 1
           glibc32: 1
-          gcc_4_8: 1 # Note: we run this job on the older gcc 4.8 toolchain
 
       - name: Build
         shell: bash
@@ -341,11 +337,10 @@ jobs:
          cd tools/pythonpkg
          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install .
 
-     # explicitly skip the TestMemoryLeaks tests, as the address sanitizer will increase the memory usage, causing the test to fail
      - name: Run Python Tests
        shell: bash
        run: |
-         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tools/pythonpkg/tests/fast --skiplist TestMemoryLeaks
+         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tools/pythonpkg/tests/fast
 
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
@@ -490,11 +485,9 @@ jobs:
 
   no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       DISABLE_STRING_INLINE: 1
@@ -534,7 +527,7 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      CORE_EXTENSIONS: "parquet;json;tpch;tpcds"
+      CORE_EXTENSIONS: "parquet;json;tpch;tpcds;httpfs"
       DEBUG_STACKTRACE: 1
       LATEST_STORAGE: 1
       BLOCK_VERIFICATION: 1
@@ -613,11 +606,9 @@ jobs:
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       FORCE_ASYNC_SINK_SOURCE: 1
@@ -806,11 +797,9 @@ jobs:
 
   block-sizes:
     name: Block Sizes
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
       BLOCK_ALLOC_SIZE: 16384
       CORE_EXTENSIONS: "json;parquet"
@@ -852,6 +841,7 @@ jobs:
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
+    if: false
     runs-on: ubuntu-22.04
     steps:
     - uses: mymindstorm/setup-emsdk@v12
@@ -917,7 +907,7 @@ jobs:
       run: |
         zip -r duckdb-wasm32.zip duckdb-wasm/packages/duckdb-wasm/src/bindings
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: duckdb-wasm32
         path: |
@@ -960,7 +950,7 @@ jobs:
         run: |
           zip -r coverage.zip coverage_html
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage

@@ -51,6 +51,10 @@ string ValidityMask::ToString(idx_t count) const {
 	result += "]";
 	return result;
 }
+
+string ValidityMask::ToString() const {
+	return ValidityMask::ToString(capacity);
+}
 // LCOV_EXCL_STOP
 
 void ValidityMask::Resize(idx_t new_size) {

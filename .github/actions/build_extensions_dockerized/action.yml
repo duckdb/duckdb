@@ -1,88 +1,12 @@
-name: "Build Extensions"
-description: "Build, test and deploy the DuckDB extensions"
+name: "Build Extensions using Docker"
+description: "Build and test the DuckDB extensions"
 inputs:
-  # Test config
-  run_tests:
-    description: 'Run extension tests after build'
-    default: 1
-  run_autoload_tests:
-    description: 'Runs the autoloading tests'
-    default: 1
-
-  # Deploy config
-  deploy_as:
-    description: 'Binary architecture name for deploy step'
-    default: ''
-  deploy_version:
-    description: 'Version tag or commit short hash for deploy step'
-    default: ''
-  s3_id:
-    description: 'S3 key ID'
-    default: ''
-  s3_key:
-    description: 'S3 key secret'
-    default: ''
-  signing_pk:
-    description: 'Extension signing RSA private key'
-    default: ''
-
   # Build config
   duckdb_arch:
     description: 'Provide DUCKDB_PLATFORM to build system for cross compilation'
     default: ''
-  static_link_build:
-    description: 'Links DuckDB statically to the loadable extensions'
-    default: 1
-  no_static_linking:
-    description: 'Disables linking extensions into DuckDB for testing'
-    default: 0
-  vcpkg_build:
-    description: 'Installs vcpkg and pass its toolchain to CMakes'
-    default: 1
-  build_dir:
-    description: 'DuckDB source directory to run the build in'
-    default: '.'
-  ninja:
-    description: 'Use ninja for building'
-    default: 0
-  openssl_path:
-    description: 'Directory of OpenSSL installation'
-    default: ''
-  post_install:
-    description: 'Post-install scripts to run'
-    default: ''
-  treat_warn_as_error:
-    description: 'Treat compilation warnings as errors'
-    default: 1
-  build_in_tree_extensions:
-    description: 'Build in-tree extensions'
-    default: 1
-  build_out_of_tree_extensions:
-    description: 'Build out-of-tree extensions'
-    default: 1
-  osx_universal:
-    description: 'Build Universal Binary for OSX'
-    default: 0
-  osx_arch:
-    description: 'Build specific architecture for OSX'
-    default: ''
-  aarch64_cross_compile:
-    description: 'Enable Linux aarch64 cross-compiling'
-    default: 0
   vcpkg_target_triplet:
     description: 'Target triplet for installing vcpkg dependencies'
-    default: ''
-  override_cc:
-    description: 'Override C Compiler'
-    default: ''
-  override_cxx:
-    description: 'Override CXX Compiler'
-    default: ''
-  unittest_script:
-    description: 'Script/program to execute the unittests'
-    default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
-  cmake_flags:
-    description: 'Flags to be passed to cmake'
     default: ''
 
 runs:
@@ -114,7 +38,7 @@ runs:
         run: |
           docker build \
             --build-arg 'vcpkg_url=https://github.com/microsoft/vcpkg.git' \
-            --build-arg 'vcpkg_commit=a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6' \
+            --build-arg 'vcpkg_commit=5e5d0e1cd7785623065e77eff011afdeec1a3574' \
             --build-arg 'extra_toolchains=;python3;' \
             -t duckdb/${{ inputs.duckdb_arch }} \
             ./extension-ci-tools/docker/${{ inputs.duckdb_arch }}
@@ -131,7 +55,9 @@ runs:
           echo "DUCKDB_PLATFORM=${{ inputs.duckdb_arch }}" >> docker_env.txt
           echo "DUCKDB_GIT_VERSION=${{ inputs.override_git_describe }}" >> docker_env.txt
           echo "LINUX_CI_IN_DOCKER=1" >> docker_env.txt
-          echo "TOOLCHAIN_FLAGS=''" >> docker_env.txt
+          echo "TOOLCHAIN_FLAGS=${{ inputs.duckdb_arch == 'linux_arm64' && '-DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ -DCMAKE_Fortran_COMPILER=aarch64-linux-gnu-gfortran' || '' }}" >> docker_env.txt
+          echo "CC=${{ inputs.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-gcc' || '' }}" >> docker_env.txt
+          echo "CXX=${{ inputs.duckdb_arch == 'linux_arm64' && 'aarch64-linux-gnu-g++' || '' }}" >> docker_env.txt 
 
       - name: Generate timestamp for Ccache entry
         shell: cmake -P {0}
@@ -165,27 +91,6 @@ runs:
 
       - name: Test extension (inside docker)
         shell: bash
+        if: inputs.duckdb_arch != 'linux_arm64'
         run: |
           docker run --env-file=docker_env.txt -v `pwd`:/duckdb_build_dir -v `pwd`/ccache_dir:/ccache_dir duckdb/${{ inputs.duckdb_arch }} make test_release
-
-      - name: Deploy
-        if: ${{ inputs.deploy_as != '' }}
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
-          AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
-          DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
-          AWS_DEFAULT_REGION: us-east-1
-          DUCKDB_DEPLOY_SCRIPT_MODE: for_real
-        run: |
-          cd  ${{ inputs.build_dir}}
-          if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
-              duckdb/scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
-            elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
-              duckdb/scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
-            elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
-              duckdb/scripts/extension-upload-all.sh ${{ inputs.deploy_as }} "${GITHUB_SHA:0:10}"
-            fi
-          fi
-

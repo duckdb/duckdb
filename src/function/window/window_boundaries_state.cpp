@@ -299,19 +299,31 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 	const auto order_count = wexpr.orders.size();
 
 	WindowBoundsSet result;
-	switch (wexpr.type) {
+	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_ROW_NUMBER:
 		result.insert(PARTITION_BEGIN);
+		if (!wexpr.arg_orders.empty()) {
+			// Secondary orders need to know how wide the partition is
+			result.insert(PARTITION_END);
+		}
 		break;
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_RANK:
 		result.insert(PARTITION_BEGIN);
-		result.insert(PEER_BEGIN);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PEER_BEGIN);
+		} else {
+			// Secondary orders need to know how wide the partition is
+			result.insert(PARTITION_END);
+		}
 		break;
 	case ExpressionType::WINDOW_PERCENT_RANK:
 		result.insert(PARTITION_BEGIN);
 		result.insert(PARTITION_END);
-		result.insert(PEER_BEGIN);
+		if (wexpr.arg_orders.empty()) {
+			// Secondary orders need to know where the first peer is
+			result.insert(PEER_BEGIN);
+		}
 		break;
 	case ExpressionType::WINDOW_CUME_DIST:
 		result.insert(PARTITION_BEGIN);
@@ -377,7 +389,7 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 		}
 		break;
 	default:
-		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
+		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
 	}
 
 	//	Internal dependencies
@@ -405,9 +417,9 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 }
 
 WindowBoundariesState::WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size)
-    : required(GetWindowBounds(wexpr)), type(wexpr.type), input_size(input_size), start_boundary(wexpr.start),
-      end_boundary(wexpr.end), partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
-      range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
+    : required(GetWindowBounds(wexpr)), type(wexpr.GetExpressionType()), input_size(input_size),
+      start_boundary(wexpr.start), end_boundary(wexpr.end), partition_count(wexpr.partitions.size()),
+      order_count(wexpr.orders.size()), range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)) {
 }
 

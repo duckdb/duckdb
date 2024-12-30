@@ -40,7 +40,7 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 		// remove the expression from the DISTINCT ON list
 		return nullptr;
 	}
-	D_ASSERT(bound_expr->type == ExpressionType::VALUE_CONSTANT);
+	D_ASSERT(bound_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT);
 	return bound_expr;
 }
 
@@ -86,7 +86,7 @@ BoundLimitNode Binder::BindLimitValue(OrderBinder &order_binder, unique_ptr<Pars
 				constant_val = val.GetValue<int64_t>();
 			}
 			if (constant_val < 0) {
-				throw BinderException(expr->query_location, "LIMIT/OFFSET cannot be negative");
+				throw BinderException(expr->GetQueryLocation(), "LIMIT/OFFSET cannot be negative");
 			}
 			return BoundLimitNode::ConstantValue(constant_val);
 		}
@@ -160,7 +160,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			auto &config = DBConfig::GetConfig(context);
 			D_ASSERT(!order.orders.empty());
 			auto &order_binders = order_binder.GetBinders();
-			if (order.orders.size() == 1 && order.orders[0].expression->type == ExpressionType::STAR) {
+			if (order.orders.size() == 1 && order.orders[0].expression->GetExpressionType() == ExpressionType::STAR) {
 				auto &star = order.orders[0].expression->Cast<StarExpression>();
 				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
 					// ORDER BY ALL
@@ -179,7 +179,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			// e.g. it breaks EXPLAIN output on queries
 			bool can_replace = true;
 			for (auto &order_node : order.orders) {
-				if (order_node.expression->type == ExpressionType::VALUE_CONSTANT) {
+				if (order_node.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 					// we cannot replace the sort key when we order by literals (e.g. ORDER BY 1, 2`
 					can_replace = false;
 					break;
@@ -242,10 +242,10 @@ unique_ptr<Expression> CreateOrderExpression(unique_ptr<Expression> expr, const 
 	if (index >= sql_types.size()) {
 		throw BinderException(*expr, "ORDER term out of range - should be between 1 and %lld", sql_types.size());
 	}
-	auto result = make_uniq<BoundColumnRefExpression>(std::move(expr->alias), sql_types[index],
-	                                                  ColumnBinding(table_index, index));
-	if (result->alias.empty() && index < names.size()) {
-		result->alias = names[index];
+	auto result =
+	    make_uniq<BoundColumnRefExpression>(expr->GetAlias(), sql_types[index], ColumnBinding(table_index, index));
+	if (result->GetAlias().empty() && index < names.size()) {
+		result->SetAlias(names[index]);
 	}
 	return std::move(result);
 }
@@ -294,10 +294,10 @@ static void AssignReturnType(unique_ptr<Expression> &expr, idx_t table_index, co
 	if (!expr) {
 		return;
 	}
-	if (expr->type == ExpressionType::VALUE_CONSTANT) {
+	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
 	}
-	if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return;
 	}
 	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
@@ -310,7 +310,6 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = bound_mod->Cast<BoundDistinctModifier>();
-			D_ASSERT(!distinct.target_distincts.empty());
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
 				expr = FinalizeBindOrderExpression(std::move(expr), table_index, names, sql_types, bind_state);
@@ -347,7 +346,7 @@ void Binder::BindModifiers(BoundQueryNode &result, idx_t table_index, const vect
 				for (idx_t i = 0; i < sql_types.size(); i++) {
 					auto expr = make_uniq<BoundColumnRefExpression>(sql_types[i], ColumnBinding(table_index, i));
 					if (i < names.size()) {
-						expr->alias = names[i];
+						expr->SetAlias(names[i]);
 					}
 					order.orders.emplace_back(order_type, null_order, std::move(expr));
 				}
@@ -375,14 +374,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
-	if (expr->type == ExpressionType::CONJUNCTION_AND) {
+	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr->Cast<ConjunctionExpression>();
 		for (auto &child : conj.children) {
 			BindWhereStarExpression(child);
 		}
 		return;
 	}
-	if (expr->type == ExpressionType::STAR) {
+	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
 		if (!star.columns) {
 			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
@@ -435,9 +434,9 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		auto &expr = statement.select_list[i];
 		result->names.push_back(expr->GetName());
 		ExpressionBinder::QualifyColumnNames(*this, expr);
-		if (!expr->alias.empty()) {
-			bind_state.alias_map[expr->alias] = i;
-			result->names[i] = expr->alias;
+		if (!expr->GetAlias().empty()) {
+			bind_state.alias_map[expr->GetAlias()] = i;
+			result->names[i] = expr->GetAlias();
 		}
 		bind_state.projection_map[*expr] = i;
 		bind_state.original_expressions.push_back(expr->Copy());
@@ -499,7 +498,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 				FunctionBinder function_binder(*this);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
-				function->alias = "__collated_group";
+				function->SetAlias("__collated_group");
 				result->aggregates.push_back(std::move(function));
 			}
 			result->groups.group_expressions.push_back(std::move(bound_expr));
@@ -558,7 +557,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
 		result->bound_column_count++;
 
-		if (expr->type == ExpressionType::BOUND_EXPANDED) {
+		if (expr->GetExpressionType() == ExpressionType::BOUND_EXPANDED) {
 			if (!is_original_column) {
 				throw BinderException("UNNEST of struct cannot be used in ORDER BY/DISTINCT ON clause");
 			}

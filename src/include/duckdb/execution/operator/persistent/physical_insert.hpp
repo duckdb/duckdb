@@ -15,6 +15,7 @@
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
 
 namespace duckdb {
 
@@ -42,7 +43,8 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 
 public:
-	ConstraintState &GetConstraintState(DataTable &table, TableCatalogEntry &tableref);
+	ConstraintState &GetConstraintState(DataTable &table, TableCatalogEntry &table_ref);
+	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &table_ref, ClientContext &context);
 
 public:
 	//! The chunk that ends up getting inserted
@@ -58,6 +60,10 @@ public:
 	idx_t update_count = 0;
 	unique_ptr<ConstraintState> constraint_state;
 	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
+	//! The delete state for ON CONFLICT handling that is rewritten into DELETE + INSERT.
+	unique_ptr<TableDeleteState> delete_state;
+	//! The append chunk for ON CONFLICT handling that is rewritting into DELETE + INSERT.
+	DataChunk append_chunk;
 };
 
 //! Physically insert a set of data into a table
@@ -73,7 +79,7 @@ public:
 	               vector<LogicalType> set_types, idx_t estimated_cardinality, bool return_chunk, bool parallel,
 	               OnConflictAction action_type, unique_ptr<Expression> on_conflict_condition,
 	               unique_ptr<Expression> do_update_condition, unordered_set<column_t> on_conflict_filter,
-	               vector<column_t> columns_to_fetch);
+	               vector<column_t> columns_to_fetch, bool update_is_del_and_insert);
 	//! CREATE TABLE AS
 	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info,
 	               idx_t estimated_cardinality, bool parallel);
@@ -113,6 +119,8 @@ public:
 	unique_ptr<Expression> do_update_condition;
 	// The column ids to apply the ON CONFLICT on
 	unordered_set<column_t> conflict_target;
+	//! True, if the INSERT OR REPLACE requires delete + insert.
+	bool update_is_del_and_insert;
 
 	// Column ids from the original table to fetch
 	vector<StorageIndex> columns_to_fetch;

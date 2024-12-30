@@ -58,7 +58,7 @@ public:
 
 	explicit WindowExecutorLocalState(const WindowExecutorGlobalState &gstate);
 
-	void Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx);
+	virtual void Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx);
 	virtual void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection);
 
 	//! The state used for reading the range collection
@@ -113,6 +113,9 @@ public:
 	// evaluate RANGE expressions, if needed
 	optional_ptr<Expression> range_expr;
 	column_t range_idx = DConstants::INVALID_INDEX;
+
+	//! The column indices of any ORDER BY argument expressions
+	vector<column_t> arg_order_idx;
 
 protected:
 	virtual void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,

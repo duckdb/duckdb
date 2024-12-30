@@ -508,6 +508,7 @@ void LogicalInsert::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<column_t>>(215, "columns_to_fetch", columns_to_fetch);
 	serializer.WritePropertyWithDefault<vector<column_t>>(216, "source_columns", source_columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(217, "expressions", expressions);
+	serializer.WritePropertyWithDefault<bool>(218, "update_is_del_and_insert", update_is_del_and_insert, false);
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserializer) {
@@ -530,6 +531,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<vector<column_t>>(215, "columns_to_fetch", result->columns_to_fetch);
 	deserializer.ReadPropertyWithDefault<vector<column_t>>(216, "source_columns", result->source_columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(217, "expressions", result->expressions);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(218, "update_is_del_and_insert", result->update_is_del_and_insert, false);
 	return std::move(result);
 }
 

@@ -74,7 +74,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Collate(const string &collati
 // Case Expression modifiers
 
 void DuckDBPyExpression::AssertCaseExpression() const {
-	if (expression->type != ExpressionType::CASE_EXPR) {
+	if (expression->GetExpressionType() != ExpressionType::CASE_EXPR) {
 		throw py::value_error("This method can only be used on a Expression resulting from CaseExpression or When");
 	}
 }
@@ -284,7 +284,7 @@ static void PopulateExcludeList(qualified_column_set_t &exclude, py::object list
 		if (!py::try_cast(item, expr)) {
 			throw py::value_error("Items in the exclude list should either be 'str' or Expression");
 		}
-		if (expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+		if (expr->GetExpression().GetExpressionType() != ExpressionType::COLUMN_REF) {
 			throw py::value_error("Only ColumnExpressions are accepted Expression types here");
 		}
 		auto &column = expr->GetExpression().Cast<ColumnRefExpression>();
@@ -353,7 +353,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::ob
 			if (py::isinstance<DuckDBPyExpression>(item)) {
 				// 'item' is already an Expression, check its type and use it
 				auto column_expr = py::cast<shared_ptr<DuckDBPyExpression>>(item);
-				if (column_expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+				if (column_expr->GetExpression().GetExpressionType() != ExpressionType::COLUMN_REF) {
 					throw py::value_error("'lhs' was provided as a tuple of columns, but one of the columns is not of "
 					                      "type ColumnExpression");
 				}
@@ -362,7 +362,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::ob
 				// 'item' is a tuple[str, ...] or str, construct a ColumnExpression from it
 				auto args = CreateArgsFromItem(item);
 				auto column_expr = ColumnExpression(args);
-				if (column_expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+				if (column_expr->GetExpression().GetExpressionType() != ExpressionType::COLUMN_REF) {
 					throw py::value_error("'lhs' was provided as a tuple of columns, but one of the columns is not of "
 					                      "type ColumnExpression");
 				}
@@ -376,7 +376,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::ob
 		// LambdaExpression(lhs=str)
 		auto args = CreateArgsFromItem(lhs_p);
 		auto column_expr = ColumnExpression(args);
-		if (column_expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+		if (column_expr->GetExpression().GetExpressionType() != ExpressionType::COLUMN_REF) {
 			throw py::value_error("'lhs' should be a valid ColumnExpression (or be used to create one)");
 		}
 		lhs = std::move(column_expr->expression);
@@ -384,7 +384,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::ob
 		// LambdaExpression(lhs=Expression)
 		// 'lhs_p' is already an Expression, check its type and use it
 		auto column_expr = py::cast<shared_ptr<DuckDBPyExpression>>(lhs_p);
-		if (column_expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+		if (column_expr->GetExpression().GetExpressionType() != ExpressionType::COLUMN_REF) {
 			throw py::value_error("'lhs' was an Expression, but is not of type ColumnExpression");
 		}
 		lhs = column_expr->GetExpression().Copy();

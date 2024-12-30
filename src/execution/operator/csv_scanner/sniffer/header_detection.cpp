@@ -174,6 +174,7 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
                                  CSVReaderOptions &options, CSVErrorHandler &error_handler) {
 	vector<string> detected_names;
 	auto &dialect_options = state_machine.dialect_options;
+	dialect_options.num_cols = best_sql_types_candidates_per_column_idx.size();
 	if (best_header_row.empty()) {
 		dialect_options.header = false;
 		for (idx_t col = 0; col < dialect_options.num_cols; col++) {
@@ -192,6 +193,19 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 	// If null-padding is not allowed and there is a mismatch between our header candidate and the number of columns
 	// We can't detect the dialect/type options properly
 	if (!options.null_padding && best_sql_types_candidates_per_column_idx.size() != best_header_row.size()) {
+		if (options.ignore_errors.GetValue()) {
+			dialect_options.header = false;
+			for (idx_t col = 0; col < dialect_options.num_cols; col++) {
+				detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
+			}
+			dialect_options.rows_until_header += 1;
+			if (!options.columns_set) {
+				for (idx_t i = 0; i < MinValue<idx_t>(detected_names.size(), options.name_list.size()); i++) {
+					detected_names[i] = options.name_list[i];
+				}
+			}
+			return detected_names;
+		}
 		auto error =
 		    CSVError::HeaderSniffingError(options, best_header_row, best_sql_types_candidates_per_column_idx.size(),
 		                                  state_machine.dialect_options.state_machine_options.delimiter.GetValue());

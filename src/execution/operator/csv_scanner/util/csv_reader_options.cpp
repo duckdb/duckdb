@@ -241,7 +241,11 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	} else if (loption == "skip") {
 		SetSkipRows(ParseInteger(value, loption));
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
-		maximum_line_size.Set(NumericCast<idx_t>(ParseInteger(value, loption)));
+		auto line_size = ParseInteger(value, loption);
+		if (line_size < 0) {
+			throw BinderException("Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0");
+		}
+		maximum_line_size.Set(NumericCast<idx_t>(line_size));
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, true);
@@ -272,6 +276,9 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		if (!expected_names.empty()) {
 			force_not_null = ParseColumnList(value, expected_names, loption);
 		} else {
+			if (value.IsNull()) {
+				throw BinderException("Invalid value for 'force_not_null' paramenter");
+			}
 			// Get the list of columns to use as a recovery key
 			auto &children = ListValue::GetChildren(value);
 			for (auto &child : children) {

@@ -380,7 +380,7 @@ public:
 
 	void CompressString(const string_t &string, bool end_of_vector) {
 		duckdb_zstd::ZSTD_inBuffer in_buffer = {/*data = */ string.GetData(),
-		                                        /*length = */ string.GetSize(),
+		                                        /*length = */ size_t(string.GetSize()),
 		                                        /*pos = */ 0};
 
 		if (!end_of_vector && string.GetSize() == 0) {
@@ -519,10 +519,9 @@ public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, type, row_start, info.GetBlockSize(), info.GetBlockSize());
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
+		                                                                info.GetBlockSize(), info.GetBlockSize());
 		segment = std::move(compressed_segment);
-		segment->function = function;
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
 		segment_handle = buffer_manager.Pin(segment->block);
@@ -889,7 +888,7 @@ public:
 
 	void ScanInternal(ZSTDVectorScanState &scan_state, idx_t count, Vector &result, idx_t result_offset) {
 		D_ASSERT(scan_state.scanned_count + count <= scan_state.metadata.count);
-		D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
+		D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 
 		string_length_t *string_lengths = &scan_state.string_lengths[scan_state.scanned_count];
 		idx_t uncompressed_length = 0;

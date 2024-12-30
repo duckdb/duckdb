@@ -43,7 +43,7 @@ struct WindowSharedExpressions {
 	}
 
 	//! Expression layout
-	static vector<const Expression *> GetSortedExpressions(Shared &shared);
+	static vector<optional_ptr<const Expression>> GetSortedExpressions(Shared &shared);
 
 	//! Expression execution utility
 	static void PrepareExecutors(Shared &shared, ExpressionExecutor &exec, DataChunk &chunk);

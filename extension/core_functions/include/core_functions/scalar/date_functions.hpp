@@ -33,21 +33,6 @@ struct CenturyFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-struct CurrentDateFun {
-	static constexpr const char *Name = "current_date";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "Returns the current date";
-	static constexpr const char *Example = "current_date()";
-
-	static ScalarFunction GetFunction();
-};
-
-struct TodayFun {
-	using ALIAS = CurrentDateFun;
-
-	static constexpr const char *Name = "today";
-};
-
 struct DateDiffFun {
 	static constexpr const char *Name = "date_diff";
 	static constexpr const char *Parameters = "part,startdate,enddate";
@@ -207,15 +192,6 @@ struct EraFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-struct CurrentTimeFun {
-	static constexpr const char *Name = "get_current_time";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "Returns the current time";
-	static constexpr const char *Example = "get_current_time()";
-
-	static ScalarFunction GetFunction();
-};
-
 struct GetCurrentTimestampFun {
 	static constexpr const char *Name = "get_current_timestamp";
 	static constexpr const char *Parameters = "";
@@ -305,6 +281,15 @@ struct MakeTimestampFun {
 	static constexpr const char *Parameters = "year,month,day,hour,minute,seconds";
 	static constexpr const char *Description = "The timestamp for the given parts";
 	static constexpr const char *Example = "make_timestamp(1992, 9, 20, 13, 34, 27.123456)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct MakeTimestampNsFun {
+	static constexpr const char *Name = "make_timestamp_ns";
+	static constexpr const char *Parameters = "nanos";
+	static constexpr const char *Description = "The timestamp for the given nanoseconds since epoch";
+	static constexpr const char *Example = "make_timestamp(1732117793000000000)";
 
 	static ScalarFunctionSet GetFunctions();
 };

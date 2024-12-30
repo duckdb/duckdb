@@ -94,6 +94,11 @@ void CSVErrorHandler::DontPrintErrorLine() {
 	print_line = false;
 }
 
+void CSVErrorHandler::SetIgnoreErrors(bool ignore_errors_p) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	ignore_errors = ignore_errors_p;
+}
+
 CSVError::CSVError(string error_message_p, CSVErrorType type_p, LinesPerBoundary error_info_p)
     : error_message(std::move(error_message_p)), type(type_p), error_info(error_info_p) {
 }
@@ -336,12 +341,13 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	}
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns + 1;
+	idx_t byte_pos = byte_position.GetIndex() == 0 ? 0 : byte_position.GetIndex() - 1;
 	if (actual_columns >= options.dialect_options.num_cols) {
-		return CSVError(error.str(), TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
-		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, row_byte_position, byte_pos,
+		                options, how_to_fix_it.str(), current_path);
 	} else {
-		return CSVError(error.str(), TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
-		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, row_byte_position, byte_pos,
+		                options, how_to_fix_it.str(), current_path);
 	}
 }
 

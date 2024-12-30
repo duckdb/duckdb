@@ -264,8 +264,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 					if (parse_types[chunk_col_id].type_id != LogicalTypeId::VARCHAR) {
 						// If it is not a varchar, empty values are not accepted, we must error.
 						current_errors.Insert(CAST_ERROR, cur_col_id, chunk_col_id, last_position);
+					} else {
+						static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 					}
-					static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = string_t();
 				} else {
 					if (chunk_col_id == number_of_columns) {
 						// We check for a weird case, where we ignore an extra value, if it is a null value
@@ -425,7 +426,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			if (force_error) {
 				HandleUnicodeError(cur_col_id, last_position);
 			}
-			// If we got here, we are ingoring errors, hence we must ignore this line.
+			// If we got here, we are ignoring errors, hence we must ignore this line.
 			current_errors.Insert(INVALID_UNICODE, cur_col_id, chunk_col_id, last_position);
 			break;
 		}
@@ -1332,17 +1333,21 @@ void StringValueScanner::ProcessOverBufferValue() {
 			value = string_t(over_buffer_string.c_str() + result.quoted_position,
 			                 UnsafeNumericCast<uint32_t>(over_buffer_string.size() - 1 - result.quoted_position));
 			if (result.escaped) {
-				const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
-				value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
-				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-				                     result.parse_chunk.data[result.chunk_col_id]);
+				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
+					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
+					value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
+					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     result.parse_chunk.data[result.chunk_col_id]);
+				}
 			}
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
-				value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-				                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-				                     result.parse_chunk.data[result.chunk_col_id]);
+				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
+					value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
+					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     result.parse_chunk.data[result.chunk_col_id]);
+				}
 			}
 		}
 		if (states.EmptyLine() && state_machine->dialect_options.num_cols == 1) {

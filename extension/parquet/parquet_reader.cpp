@@ -900,6 +900,8 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 			if (!OP::Operation(v_ptr[0], constant)) {
 				filter_mask.reset();
 			}
+		} else {
+			filter_mask.reset();
 		}
 		return;
 	}
@@ -910,8 +912,14 @@ void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_ma
 
 	if (!unified.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			if (filter_mask.test(i) && unified.validity.RowIsValid(unified.sel->get_index(i))) {
-				filter_mask.set(i, OP::Operation(data_ptr[unified.sel->get_index(i)], constant));
+			if (filter_mask.test(i)) {
+				auto idx = unified.sel->get_index(i);
+				bool is_valid = unified.validity.RowIsValid(idx);
+				if (is_valid) {
+					filter_mask.set(i, OP::Operation(data_ptr[idx], constant));
+				} else {
+					filter_mask.set(i, false);
+				}
 			}
 		}
 	} else {

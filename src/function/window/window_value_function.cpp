@@ -2,6 +2,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/function/window/window_aggregator.hpp"
 #include "duckdb/function/window/window_collection.hpp"
+#include "duckdb/function/window/window_index_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -19,6 +20,11 @@ public:
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(executor, payload_count, partition_mask, order_mask), ignore_nulls(&all_valid),
 	      child_idx(executor.child_idx) {
+
+		if (!executor.arg_order_idx.empty()) {
+			inner_sort = make_uniq<WindowIndexTree>(executor.context, executor.wexpr.arg_orders, executor.arg_order_idx,
+			                                        payload_count);
+		}
 	}
 
 	void Finalize(CollectionPtr collection) {
@@ -34,6 +40,8 @@ public:
 	optional_ptr<ValidityMask> ignore_nulls;
 
 	const column_t child_idx;
+
+	unique_ptr<WindowIndexTree> inner_sort;
 };
 
 //===--------------------------------------------------------------------===//
@@ -46,13 +54,27 @@ public:
 	explicit WindowValueLocalState(const WindowValueGlobalState &gvstate)
 	    : WindowExecutorBoundsState(gvstate), gvstate(gvstate) {
 		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.exclude_clause);
+
+		if (gvstate.inner_sort) {
+			local_sort = gvstate.inner_sort->GetLocalState();
+			if (gvstate.executor.wexpr.ignore_nulls) {
+				sort_nulls.Initialize();
+			}
+		}
 	}
 
+	//! Accumulate the secondary sort values
+	void Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
+	          idx_t input_idx) override;
 	//! Finish the sinking and prepare to scan
 	void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) override;
 
 	//! The corresponding global value state
 	const WindowValueGlobalState &gvstate;
+	//! The optional sorting state for secondary sorts
+	unique_ptr<WindowAggregatorState> local_sort;
+	//! Reusable selection vector for NULLs
+	SelectionVector sort_nulls;
 	//! The frame boundaries, used for EXCLUDE
 	SubFrames frames;
 
@@ -60,8 +82,43 @@ public:
 	unique_ptr<WindowCursor> cursor;
 };
 
+void WindowValueLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                 idx_t input_idx) {
+	WindowExecutorBoundsState::Sink(gstate, sink_chunk, coll_chunk, input_idx);
+
+	if (local_sort) {
+		idx_t filtered = 0;
+		optional_ptr<SelectionVector> filter_sel;
+
+		// If we need to IGNORE NULLS for the child, and there are NULLs,
+		// then build an SV to hold them
+		const auto coll_count = coll_chunk.size();
+		auto &child = coll_chunk.data[gvstate.child_idx];
+		UnifiedVectorFormat child_data;
+		child.ToUnifiedFormat(coll_count, child_data);
+		const auto &validity = child_data.validity;
+		if (gstate.executor.wexpr.ignore_nulls && !validity.AllValid()) {
+			for (sel_t i = 0; i < coll_count; ++i) {
+				if (validity.RowIsValidUnsafe(i)) {
+					sort_nulls[filtered++] = i;
+				}
+			}
+			filter_sel = &sort_nulls;
+		}
+
+		auto &local_index = local_sort->Cast<WindowIndexTreeLocalState>();
+		local_index.SinkChunk(sink_chunk, input_idx, filter_sel, filtered);
+	}
+}
+
 void WindowValueLocalState::Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection) {
 	WindowExecutorBoundsState::Finalize(gstate, collection);
+
+	if (local_sort) {
+		auto &local_index = local_sort->Cast<WindowIndexTreeLocalState>();
+		local_index.Sort();
+		local_index.index_tree.Build();
+	}
 
 	// Prepare to scan
 	if (!cursor && gvstate.child_idx != DConstants::INVALID_INDEX) {
@@ -89,11 +146,6 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientCon
 	default_idx = shared.RegisterEvaluate(wexpr.default_expr);
 }
 
-WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context,
-                                         WindowSharedExpressions &shared)
-    : WindowValueExecutor(wexpr, context, shared) {
-}
-
 unique_ptr<WindowExecutorGlobalState> WindowValueExecutor::GetGlobalState(const idx_t payload_count,
                                                                           const ValidityMask &partition_mask,
                                                                           const ValidityMask &order_mask) const {
@@ -111,51 +163,6 @@ void WindowValueExecutor::Finalize(WindowExecutorGlobalState &gstate, WindowExec
 unique_ptr<WindowExecutorLocalState> WindowValueExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) const {
 	const auto &gvstate = gstate.Cast<WindowValueGlobalState>();
 	return make_uniq<WindowValueLocalState>(gvstate);
-}
-
-void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
-                                           DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx) const {
-	auto &lvstate = lstate.Cast<WindowValueLocalState>();
-	auto &cursor = *lvstate.cursor;
-	auto partition_begin = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lvstate.bounds.data[PARTITION_END]);
-	auto rdata = FlatVector::GetData<int64_t>(result);
-	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		if (cursor.CellIsNull(0, row_idx)) {
-			FlatVector::SetNull(result, i, true);
-		} else {
-			auto n_param = cursor.GetCell<int64_t>(0, row_idx);
-			if (n_param < 1) {
-				throw InvalidInputException("Argument for ntile must be greater than zero");
-			}
-			// With thanks from SQLite's ntileValueFunc()
-			auto n_total = NumericCast<int64_t>(partition_end[i] - partition_begin[i]);
-			if (n_param > n_total) {
-				// more groups allowed than we have values
-				// map every entry to a unique group
-				n_param = n_total;
-			}
-			int64_t n_size = (n_total / n_param);
-			// find the row idx within the group
-			D_ASSERT(row_idx >= partition_begin[i]);
-			auto adjusted_row_idx = NumericCast<int64_t>(row_idx - partition_begin[i]);
-			// now compute the ntile
-			int64_t n_large = n_total - n_param * n_size;
-			int64_t i_small = n_large * (n_size + 1);
-			int64_t result_ntile;
-
-			D_ASSERT((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
-
-			if (adjusted_row_idx < i_small) {
-				result_ntile = 1 + adjusted_row_idx / (n_size + 1);
-			} else {
-				result_ntile = 1 + n_large + (adjusted_row_idx - i_small) / n_size;
-			}
-			// result has to be between [1, NTILE]
-			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
-			rdata[i] = result_ntile;
-		}
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -205,7 +212,7 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 			offset = leadlag_offset.GetCell<int64_t>(i);
 		}
 		int64_t val_idx = (int64_t)row_idx;
-		if (wexpr.type == ExpressionType::WINDOW_LEAD) {
+		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		} else {
 			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
@@ -282,6 +289,21 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstat
 	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
+		if (gvstate.inner_sort) {
+			idx_t frame_width = 0;
+			for (const auto &frame : frames) {
+				frame_width += frame.end - frame.start;
+			}
+
+			if (frame_width) {
+				const auto first_idx = gvstate.inner_sort->SelectNth(frames, 0);
+				cursor.CopyCell(0, first_idx, result, i);
+			} else {
+				FlatVector::SetNull(result, i, true);
+			}
+			return;
+		}
+
 		for (const auto &frame : frames) {
 			if (frame.start >= frame.end) {
 				continue;
@@ -317,6 +339,21 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
 	auto &ignore_nulls = *gvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
+		if (gvstate.inner_sort) {
+			idx_t frame_width = 0;
+			for (const auto &frame : frames) {
+				frame_width += frame.end - frame.start;
+			}
+
+			if (frame_width) {
+				const auto last_idx = gvstate.inner_sort->SelectNth(frames, frame_width - 1);
+				cursor.CopyCell(0, last_idx, result, i);
+			} else {
+				FlatVector::SetNull(result, i, true);
+			}
+			return;
+		}
+
 		for (idx_t f = frames.size(); f-- > 0;) {
 			const auto &frame = frames[f];
 			if (frame.start >= frame.end) {
@@ -367,6 +404,21 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
 
 		//	Decrement as we go along.
 		auto n = idx_t(n_param);
+
+		if (gvstate.inner_sort) {
+			idx_t frame_width = 0;
+			for (const auto &frame : frames) {
+				frame_width += frame.end - frame.start;
+			}
+
+			if (n < frame_width) {
+				const auto nth_index = gvstate.inner_sort->SelectNth(frames, n - 1);
+				cursor.CopyCell(0, nth_index, result, i);
+			} else {
+				FlatVector::SetNull(result, i, true);
+			}
+			return;
+		}
 
 		for (const auto &frame : frames) {
 			if (frame.start >= frame.end) {

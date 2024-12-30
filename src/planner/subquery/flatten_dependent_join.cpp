@@ -100,7 +100,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_
 }
 
 bool SubqueryDependentFilter(Expression &expr) {
-	if (expr.expression_class == ExpressionClass::BOUND_CONJUNCTION &&
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
 	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &bound_conjunction = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : bound_conjunction.children) {
@@ -109,7 +109,7 @@ bool SubqueryDependentFilter(Expression &expr) {
 			}
 		}
 	}
-	if (expr.expression_class == ExpressionClass::BOUND_SUBQUERY) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
 		return true;
 	}
 	return false;
@@ -750,6 +750,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		throw BinderException("Sampling in correlated subqueries is not (yet) supported");
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		throw BinderException("Positional join in correlated subqueries is not (yet) supported");
 	default:
 		throw InternalException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type));
 	}

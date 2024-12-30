@@ -2119,8 +2119,9 @@ void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 struct double_na_equal {
 	double_na_equal() : val(0) {
 	}
-	double_na_equal(const double val_p) : val(val_p) {
+	explicit double_na_equal(const double val_p) : val(val_p) {
 	}
+	// NOLINTNEXTLINE: allow implicit conversion to double
 	operator double() const {
 		return val;
 	}
@@ -2137,8 +2138,9 @@ struct double_na_equal {
 struct float_na_equal {
 	float_na_equal() : val(0) {
 	}
-	float_na_equal(const float val_p) : val(val_p) {
+	explicit float_na_equal(const float val_p) : val(val_p) {
 	}
+	// NOLINTNEXTLINE: allow implicit conversion to float
 	operator float() const {
 		return val;
 	}
