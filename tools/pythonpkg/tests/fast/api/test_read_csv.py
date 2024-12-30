@@ -491,9 +491,8 @@ class TestReadCSV(object):
         with pytest.raises(duckdb.InvalidInputException, match="read_csv only accepts 'names' as a list of strings"):
             rel = con.read_csv(file, names=True)
 
-        # Excessive columns is fine, just doesn't have any effect past the number of provided columns
-        rel = con.read_csv(file, names=['a', 'b', 'c', 'd', 'e'])
-        assert rel.columns == ['a', 'b', 'c', 'd']
+        with pytest.raises(duckdb.InvalidInputException, match="not possible to detect the CSV Header"):
+            rel = con.read_csv(file, names=['a', 'b', 'c', 'd', 'e'])
 
         # Duplicates are not okay
         with pytest.raises(duckdb.BinderException, match="names must have unique values"):
