@@ -620,6 +620,29 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 #endif
 		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
 		plan->children[1] = PushDownDependentJoin(std::move(plan->children[1]));
+		for (idx_t i = 0; i < plan->children.size(); i++) {
+			if (plan->children[i]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+				auto proj_index = binder.GenerateTableIndex();
+				auto bindings = plan->children[i]->GetColumnBindings();
+				plan->children[i]->ResolveOperatorTypes();
+				auto types = plan->children[i]->types;
+				vector<unique_ptr<Expression>> expressions;
+				expressions.reserve(bindings.size());
+				D_ASSERT(bindings.size() == types.size());
+
+				// No column binding replaceent is needed because the parent operator is
+				// a setop which will immediately assign new bindings.
+				for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
+					expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], bindings[col_idx]));
+				}
+				auto proj = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
+				proj->children.push_back(std::move(plan->children[i]));
+				plan->children[i] = std::move(proj);
+			}
+		}
+
+		// here we need to check the children. If they have reorderable bindings, you need to plan a projection
+		// on top that will guarantee the order of the bindings.
 #ifdef DEBUG
 		D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[1]->GetColumnBindings().size());
 		plan->children[0]->ResolveOperatorTypes();
