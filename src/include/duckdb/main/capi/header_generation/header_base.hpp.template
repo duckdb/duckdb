@@ -666,11 +666,7 @@ struct duckdb_extension_access {
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
-//===--------------------------------------------------------------------===//
-// Functions
-//===--------------------------------------------------------------------===//
-
-// DUCKDB_FUNCTIONS_ARE_GENERATED_HERE
+// FILE_CONTENT_SECTION
 
 #ifdef __cplusplus
 }
