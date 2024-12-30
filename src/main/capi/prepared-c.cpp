@@ -73,7 +73,7 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 	auto wrapper = new PreparedStatementWrapper();
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 	wrapper->statement = conn->Prepare(query);
-	*out_prepared_statement = (duckdb_prepared_statement)wrapper;
+	*out_prepared_statement = reinterpret_cast<duckdb_prepared_statement>(wrapper);
 	return !wrapper->statement->HasError() ? DuckDBSuccess : DuckDBError;
 }
 

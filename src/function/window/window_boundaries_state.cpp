@@ -328,7 +328,9 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 	case ExpressionType::WINDOW_CUME_DIST:
 		result.insert(PARTITION_BEGIN);
 		result.insert(PARTITION_END);
-		result.insert(PEER_END);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PEER_END);
+		}
 		break;
 	case ExpressionType::WINDOW_NTILE:
 	case ExpressionType::WINDOW_LEAD:

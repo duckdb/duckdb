@@ -133,7 +133,7 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	vector<HeaderValue> potential_header;
 	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
 		auto &cur_vector = data_chunk.data[col_idx];
-		auto vector_data = FlatVector::GetData<string_t>(cur_vector);
+		const auto vector_data = FlatVector::GetData<string_t>(cur_vector);
 		auto &validity = FlatVector::Validity(cur_vector);
 		HeaderValue val;
 		if (validity.RowIsValid(0)) {
@@ -181,7 +181,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	return min_sniff_res.ToSnifferResult();
 }
 
-SnifferResult CSVSniffer::SniffCSV(bool force_match) {
+SnifferResult CSVSniffer::SniffCSV(const bool force_match) {
 	buffer_manager->sniffing = true;
 	// 1. Dialect Detection
 	DetectDialect();
