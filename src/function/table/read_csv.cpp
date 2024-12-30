@@ -126,7 +126,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto &options = result->options;
 	const auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	const auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
-
+	if (multi_file_list->GetTotalFileCount() > 1) {
+		options.multi_file_reader = true;
+	}
 	options.FromNamedParameters(input.named_parameters, context);
 
 	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
@@ -175,7 +177,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->csv_names = names;
 	result->return_types = return_types;
 	result->return_names = names;
-
 	if (!options.force_not_null_names.empty()) {
 		// Let's first check all column names match
 		duckdb::unordered_set<string> column_names;

@@ -1,5 +1,5 @@
 # name: benchmark/micro/join/external_join_partition_selection.benchmark
-# description: Test that the external hash join partition selection
+# description: Test that the external hash join partition selection selects the large partition last
 # group: [join]
 
 name External Join Partition Selection

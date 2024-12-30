@@ -362,7 +362,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding) || quoted) &&
 	    !invalid_padding && comments_are_acceptable) {
-		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size()) {
+		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size() &&
+		    consistent_rows <= best_consistent_rows) {
 			// We have a candidate that fits our requirements better
 			if (candidates.front()->ever_quoted || !scanner->ever_quoted) {
 				return;
