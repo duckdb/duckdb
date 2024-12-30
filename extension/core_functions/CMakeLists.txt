@@ -55,6 +55,7 @@ set(CORE_FUNCTION_FILES
     scalar/enum/enum_functions.cpp
     scalar/math/numeric.cpp
     scalar/struct/struct_insert.cpp
+    scalar/struct/struct_update.cpp
     scalar/map/map_keys_values.cpp
     scalar/map/map_extract.cpp
     scalar/map/map_from_entries.cpp
