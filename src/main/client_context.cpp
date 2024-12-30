@@ -932,7 +932,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		vector<string> names;
 		auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
 		return make_uniq<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, std::move(names),
-		                                          std::move(collection), GetClientProperties());
+		                                          std::move(collection), GetClientProperties(), *this);
 	}
 
 	unique_ptr<QueryResult> result;

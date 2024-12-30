@@ -52,6 +52,7 @@ public:
 	//! Function to determine whether execution is considered finished
 	DUCKDB_API static bool IsResultReady(PendingExecutionResult result);
 	DUCKDB_API static bool IsExecutionFinished(PendingExecutionResult result);
+	ClientContext &GetContext() const;
 
 private:
 	shared_ptr<ClientContext> context;

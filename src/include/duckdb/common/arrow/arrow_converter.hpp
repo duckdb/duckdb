@@ -14,14 +14,15 @@
 #include <list>
 
 namespace duckdb {
-	class ArrowExtensionType;
+class ArrowExtensionType;
 struct DBConfig;
 struct ArrowConverter {
 	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
 	                                     const vector<string> &names, const ClientProperties &options,
 	                                     ClientContext &context);
-	DUCKDB_API static void ToArrowArray(DataChunk &input, ArrowArray *out_array, ClientProperties options,unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast,
-	                         ClientContext &context);
+	DUCKDB_API static void ToArrowArray(DataChunk &input, ArrowArray *out_array, ClientProperties options,
+	                                    unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast,
+	                                    ClientContext &context);
 };
 
 //===--------------------------------------------------------------------===//

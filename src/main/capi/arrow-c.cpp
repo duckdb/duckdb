@@ -89,8 +89,10 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
+	// FIXME: This is wrong
+	duckdb::unordered_map<idx_t, const duckdb::shared_ptr<duckdb::ArrowExtensionType>> extension_type_cast;
 	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             wrapper->result->client_properties);
+	                             wrapper->result->client_properties, extension_type_cast, *wrapper->context);
 	return DuckDBSuccess;
 }
 
@@ -100,8 +102,11 @@ void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, du
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
+	// FIXME: This is wrong
+	duckdb::unordered_map<idx_t, const duckdb::shared_ptr<duckdb::ArrowExtensionType>> extension_type_cast;
 	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             result_data.result->client_properties);
+	                             result_data.result->client_properties, extension_type_cast,
+	                             *result_data.result->context);
 }
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {

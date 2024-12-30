@@ -60,6 +60,8 @@ public:
 	//! User provided batch size
 	idx_t record_batch_size;
 	bool parallel;
+	// FIXME: This is wrong
+	unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast;
 };
 
 } // namespace duckdb

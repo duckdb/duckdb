@@ -11,7 +11,7 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProp
                                      vector<LogicalType> types, vector<string> names,
                                      ClientProperties client_properties, shared_ptr<BufferedData> data)
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, std::move(properties), std::move(types),
-                  std::move(names), std::move(client_properties)),
+                  std::move(names), std::move(client_properties), *data->GetContext()),
       buffered_data(std::move(data)) {
 	context = buffered_data->GetContext();
 }
@@ -160,8 +160,8 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		collection->Append(append_state, *chunk);
 	}
-	auto result =
-	    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection), client_properties);
+	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
+	                                                 client_properties, *context);
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}

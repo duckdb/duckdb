@@ -5,8 +5,9 @@
 namespace duckdb {
 
 bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t batch_size, ArrowArray *out,
-                              idx_t &count, ErrorData &error,unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast,
-	                         ClientContext &context) {
+                              idx_t &count, ErrorData &error,
+                              unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast,
+                              ClientContext &context) {
 	count = 0;
 	ArrowAppender appender(scan_state.Types(), batch_size, std::move(options), extension_type_cast, context);
 	const auto remaining_tuples_in_chunk = scan_state.RemainingInChunk();
@@ -49,11 +50,13 @@ bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ClientProperties optio
 	return true;
 }
 
-idx_t ArrowUtil::FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out,unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast,
-	                         ClientContext &context) {
+idx_t ArrowUtil::FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out,
+                            const unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> &extension_type_cast,
+                            ClientContext &context) {
 	ErrorData error;
 	idx_t result_count;
-	if (!TryFetchChunk(scan_state, std::move(options), chunk_size, out, result_count, error, extension_type_cast, context)) {
+	if (!TryFetchChunk(scan_state, std::move(options), chunk_size, out, result_count, error, extension_type_cast,
+	                   context)) {
 		error.Throw();
 	}
 	return result_count;

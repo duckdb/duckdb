@@ -131,8 +131,10 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	idx_t result_count;
 	ErrorData error;
-	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count,
-	                              error)) {
+	// FIXME: This is wrong
+	unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast;
+	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count, error,
+	                              extension_type_cast, my_stream->context)) {
 		D_ASSERT(error.HasError());
 		my_stream->last_error = error;
 		return -1;

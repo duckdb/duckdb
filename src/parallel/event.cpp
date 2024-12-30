@@ -63,6 +63,10 @@ void Event::FinishTask() {
 	}
 }
 
+ClientContext &Event::GetClientContext() {
+	return executor.context;
+}
+
 void Event::InsertEvent(shared_ptr<Event> replacement_event) {
 	replacement_event->parents = std::move(parents);
 #ifdef DEBUG
