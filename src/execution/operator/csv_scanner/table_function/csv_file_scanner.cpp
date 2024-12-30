@@ -60,7 +60,7 @@ void CSVFileScan::SetStart() {
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
-                         const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids,
+                         idx_t file_idx_p, const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids,
                          CSVSchema &file_schema, bool per_file_single_threaded)
     : file_path(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
