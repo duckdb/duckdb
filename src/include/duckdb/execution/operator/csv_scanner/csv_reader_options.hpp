@@ -87,7 +87,7 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
-	static constexpr idx_t max_line_size_default = 2097152;
+	static constexpr idx_t max_line_size_default = 2000000;
 	CSVOption<idx_t> maximum_line_size = max_line_size_default;
 	//! Whether header names shall be normalized
 	bool normalize_names = false;

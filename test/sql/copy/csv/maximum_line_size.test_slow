@@ -19,21 +19,21 @@ Maximum line size of 0 bytes exceeded. Actual Size:10006 bytes.
 statement error
 select * from read_csv_auto('data/csv/issue_8320_1.csv.gz');
 ----
-Maximum line size of 2097152 bytes exceeded
+Maximum line size of 2000000 bytes exceeded
 
 # Single line too long, but with actual newline at the end
 # "a".repeat(2 * 1024 * 1024 + 10) + "\n";
 statement error
 select * from read_csv_auto('data/csv/issue_8320_2.csv.gz');
 ----
-Maximum line size of 2097152 bytes exceeded
+Maximum line size of 2000000 bytes exceeded
 
 # Multiple lines too long
 # String value = "a".repeat(2 * 1024 * 1024 + 10) + "\n"; String data = value + value + value + value;
 statement error
 select * from read_csv_auto('data/csv/issue_8320_3.csv.gz');
 ----
-Maximum line size of 2097152 bytes exceeded
+Maximum line size of 2000000 bytes exceeded
 
 # Add a test to verify we throw if max line size below a buffer size
 statement error
