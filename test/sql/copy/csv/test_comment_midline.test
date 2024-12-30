@@ -38,6 +38,18 @@ from read_csv('data/csv/comments/14648.csv',
 ----
 Error when sniffing file "data/csv/comments/14648.csv".
 
+# Not a comment
+query III
+FROM 'data/csv/comments/14635.csv'
+----
+a	#b	c
+
+# Ignore errors will have,
+query III
+FROM read_csv('data/csv/comments/14635.csv', ignore_errors = true, columns = {'header1': 'VARCHAR', 'header2': 'VARCHAR', 'header3': 'VARCHAR'}, quote = '', escape = '', delim =',');
+----
+a	#b	c
+
 # If we only have midline comments, the comment must be explicitly given by the user
 query I
 FROM 'data/csv/comments/only_midline.csv';
@@ -129,4 +141,3 @@ FROM read_csv('data/csv/comments/simple_mid_line.csv', buffer_size = ${buffer_si
 6	7
 
 endloop
-
