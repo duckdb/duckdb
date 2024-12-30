@@ -29,3 +29,19 @@ query I
 select columns from sniff_csv('data/csv/15473_time_timestamp.csv');
 ----
 [{'name': a, 'type': VARCHAR}]
+
+
+# Test over 10000 rows
+statement ok
+CREATE TABLE t1 AS select '2024/12/12' as a, '01:02:03' as b, '2020/01/01 01:02:03' as c from range(0,10000) ;
+
+statement ok
+insert into t1  values ('1','1','1');
+
+statement ok
+COPY t1 TO '__TEST_DIR__/date_int.csv' (FORMAT CSV);
+
+query I
+select columns from sniff_csv('__TEST_DIR__/date_int.csv');
+----
+[{'name': a, 'type': VARCHAR}, {'name': b, 'type': VARCHAR}, {'name': c, 'type': VARCHAR}]

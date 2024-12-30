@@ -335,8 +335,8 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
                             unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates,
                             idx_t start_idx_detection) {
 	const idx_t chunk_size = data_chunk.size();
+	HasType has_type;
 	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
-		HasType has_type;
 		auto &cur_vector = data_chunk.data[col_idx];
 		D_ASSERT(cur_vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		D_ASSERT(cur_vector.GetType() == LogicalType::VARCHAR);
