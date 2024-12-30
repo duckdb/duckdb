@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 
+#include <fmt/core.h>
+
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
@@ -211,39 +213,6 @@ void CSVGlobalState::DecrementThread() {
 	}
 }
 
-bool IsCSVErrorAcceptedReject(CSVErrorType type) {
-	switch (type) {
-	case CSVErrorType::CAST_ERROR:
-	case CSVErrorType::TOO_MANY_COLUMNS:
-	case CSVErrorType::TOO_FEW_COLUMNS:
-	case CSVErrorType::MAXIMUM_LINE_SIZE:
-	case CSVErrorType::UNTERMINATED_QUOTES:
-	case CSVErrorType::INVALID_UNICODE:
-		return true;
-	default:
-		return false;
-	}
-}
-
-string CSVErrorTypeToEnum(CSVErrorType type) {
-	switch (type) {
-	case CSVErrorType::CAST_ERROR:
-		return "CAST";
-	case CSVErrorType::TOO_FEW_COLUMNS:
-		return "MISSING COLUMNS";
-	case CSVErrorType::TOO_MANY_COLUMNS:
-		return "TOO MANY COLUMNS";
-	case CSVErrorType::MAXIMUM_LINE_SIZE:
-		return "LINE SIZE OVER MAXIMUM";
-	case CSVErrorType::UNTERMINATED_QUOTES:
-		return "UNQUOTED VALUE";
-	case CSVErrorType::INVALID_UNICODE:
-		return "INVALID UNICODE";
-	default:
-		throw InternalException("CSV Error is not valid to be stored in a Rejects Table");
-	}
-}
-
 void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t file_idx, CSVFileScan &file) {
 	CSVReaderOptions &options = file.options;
 	// Add the row to the rejects table
@@ -317,70 +286,10 @@ void CSVGlobalState::FillRejectsTable() {
 		InternalAppender scans_appender(context, scans_table);
 		idx_t scan_idx = context.transaction.GetActiveQuery();
 		for (auto &file : file_scans) {
-			idx_t file_idx = rejects->GetCurrentFileIndex(scan_idx);
+			const idx_t file_idx = rejects->GetCurrentFileIndex(scan_idx);
 			auto file_name = file->file_path;
-			auto &errors = file->error_handler->errors;
-			// We first insert the file into the file scans table
-			for (auto &error_vector : errors) {
-				for (auto &error : error_vector.second) {
-					if (!IsCSVErrorAcceptedReject(error.type)) {
-						continue;
-					}
-					// short circuit if we already have too many rejects
-					if (limit == 0 || rejects->count < limit) {
-						if (limit != 0 && rejects->count >= limit) {
-							break;
-						}
-						rejects->count++;
-						auto row_line = file->error_handler->GetLine(error.error_info);
-						auto col_idx = error.column_idx;
-						// Add the row to the rejects table
-						errors_appender.BeginRow();
-						// 1. Scan Id
-						errors_appender.Append(scan_idx);
-						// 2. File Id
-						errors_appender.Append(file_idx);
-						// 3. Row Line
-						errors_appender.Append(row_line);
-						// 4. Byte Position of the row error
-						errors_appender.Append(error.row_byte_position + 1);
-						// 5. Byte Position where error occurred
-						if (!error.byte_position.IsValid()) {
-							// This means this error comes from a flush, and we don't support this yet, so we give it
-							// a null
-							errors_appender.Append(Value());
-						} else {
-							errors_appender.Append(error.byte_position.GetIndex() + 1);
-						}
-						// 6. Column Index
-						if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
-							errors_appender.Append(Value());
-						} else {
-							errors_appender.Append(col_idx + 1);
-						}
-						// 7. Column Name (If Applicable)
-						switch (error.type) {
-						case CSVErrorType::TOO_MANY_COLUMNS:
-						case CSVErrorType::MAXIMUM_LINE_SIZE:
-							errors_appender.Append(Value());
-							break;
-						case CSVErrorType::TOO_FEW_COLUMNS:
-							D_ASSERT(bind_data.return_names.size() > col_idx + 1);
-							errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
-							break;
-						default:
-							errors_appender.Append(string_t(bind_data.return_names[col_idx]));
-						}
-						// 8. Error Type
-						errors_appender.Append(string_t(CSVErrorTypeToEnum(error.type)));
-						// 9. Original CSV Line
-						errors_appender.Append(string_t(error.csv_row));
-						// 10. Full Error Message
-						errors_appender.Append(string_t(error.error_message));
-						errors_appender.EndRow();
-					}
-				}
-			}
+			file->error_handler->FillRejectsTable(errors_appender, file_idx, scan_idx, *file, *rejects, bind_data,
+			                                      limit);
 			if (rejects->count != 0) {
 				rejects->count = 0;
 				FillScanErrorTable(scans_appender, scan_idx, file_idx, *file);
