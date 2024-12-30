@@ -92,7 +92,7 @@
     },
     {
         "name": "arrow_large_buffer_size",
-        "description": "Whether arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
+        "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
         "scope": "global",
         "internal_setting": "arrow_offset_size",
@@ -109,7 +109,7 @@
     },
     {
         "name": "arrow_output_list_view",
-        "description": "Whether export to arrow format should use ListView as the physical layout for LIST columns",
+        "description": "Whether export to Arrow format should use ListView as the physical layout for LIST columns",
         "type": "BOOLEAN",
         "internal_setting": "arrow_use_list_view",
         "scope": "global"
