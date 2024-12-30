@@ -1,0 +1,31 @@
+# name: test/sql/copy/csv/test_15473.test
+# description: Test for issue 15473
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select columns from sniff_csv('data/csv/15473.csv');
+----
+[{'name': name, 'type': VARCHAR}, {'name': Date, 'type': VARCHAR}, {'name': height, 'type': BIGINT}]
+
+query I
+select columns from sniff_csv('data/csv/15473_time.csv');
+----
+[{'name': a, 'type': VARCHAR}]
+
+query I
+select columns from sniff_csv('data/csv/15473_timestamp.csv');
+----
+[{'name': a, 'type': VARCHAR}]
+
+query I
+select columns from sniff_csv('data/csv/15473_date_timestamp.csv');
+----
+[{'name': a, 'type': VARCHAR}]
+
+query I
+select columns from sniff_csv('data/csv/15473_time_timestamp.csv');
+----
+[{'name': a, 'type': VARCHAR}]

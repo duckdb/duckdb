@@ -296,10 +296,10 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate, const
 	// check all formats and keep the first one that works
 	StrpTimeFormat::ParseResult result;
 	auto save_format_candidates = type_format_candidates;
-	bool had_format_candidates = !save_format_candidates.empty();
-	bool initial_format_candidates =
+	const bool had_format_candidates = !save_format_candidates.empty();
+	const bool initial_format_candidates =
 	    save_format_candidates.size() == original_format_candidates.at(sql_type.id()).format.size();
-	bool is_set_by_user = options.dialect_options.date_format.find(sql_type.id())->second.IsSetByUser();
+	const bool is_set_by_user = options.dialect_options.date_format.find(sql_type.id())->second.IsSetByUser();
 	while (!type_format_candidates.empty() && !is_set_by_user) {
 		//	avoid using exceptions for flow control...
 		auto &current_format = candidate.dialect_options.date_format[sql_type.id()].GetValue();
@@ -335,8 +335,8 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
                             unordered_map<idx_t, vector<LogicalType>> &info_sql_types_candidates,
                             idx_t start_idx_detection) {
 	const idx_t chunk_size = data_chunk.size();
-	HasType has_type;
 	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
+		HasType has_type;
 		auto &cur_vector = data_chunk.data[col_idx];
 		D_ASSERT(cur_vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		D_ASSERT(cur_vector.GetType() == LogicalType::VARCHAR);
@@ -371,7 +371,9 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 					break;
 				}
 
-				if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
+				if (row_idx != start_idx_detection &&
+				    (cur_top_candidate == LogicalType::BOOLEAN || cur_top_candidate == LogicalType::DATE ||
+				     cur_top_candidate == LogicalType::TIME || cur_top_candidate == LogicalType::TIMESTAMP)) {
 					// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
 					// immediately pop to varchar.
 					while (col_type_candidates.back() != LogicalType::VARCHAR) {
