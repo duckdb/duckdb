@@ -505,7 +505,7 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	D_ASSERT(num_samples_to_keep <= sample_count);
 	D_ASSERT(stats_sample);
 	D_ASSERT(sample_count == FIXED_SAMPLE_SIZE);
-	auto new_reservoir_chunk = CreateNewSampleChunk(types, FIXED_SAMPLE_SIZE);
+	auto new_reservoir_chunk = CreateNewSampleChunk(types, sample_count);
 
 	// The current selection vector can potentially have 2048 valid mappings.
 	// If we need to save a sample with less rows than that, we need to do the following
