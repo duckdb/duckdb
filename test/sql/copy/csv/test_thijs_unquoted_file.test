@@ -13,8 +13,13 @@ ANTON SONNENSCHUTZSYSTEME GESELLSCHAFT MIT BESCHRÄNKTER HAFTUN	 	2012
 ENERGYS MAINTENANCE S	 	2015
 SYSTEMAT BELGIUM  S	 	2013
 
+query II
+SELECT DELIMITER, QUOTE FROM sniff_csv('data/csv/rabo-anon.csv.gz', RFC_4180=FALSE)
+----
+,	"
+
 statement ok
-CREATE TABLE T AS FROM read_csv('data/csv/rabo-anon.csv.gz', delim = ',', quote = '"', RFC_4180=FALSE);
+CREATE TABLE T AS FROM read_csv('data/csv/rabo-anon.csv.gz', RFC_4180=FALSE);
 
 query I
 select count(*) from T
