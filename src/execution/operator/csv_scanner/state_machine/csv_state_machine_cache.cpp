@@ -438,4 +438,3 @@ CSVStateMachineCache &CSVStateMachineCache::Get(ClientContext &context) {
 }
 
 } // namespace duckdb
-
