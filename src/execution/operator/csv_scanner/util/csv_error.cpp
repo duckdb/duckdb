@@ -165,7 +165,7 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const 
 					break;
 				}
 				rejects.count++;
-				const auto row_line = file.error_handler->GetLine(error.error_info);
+				const auto row_line = file.error_handler->GetLineInternal(error.error_info);
 				const auto col_idx = error.column_idx;
 				// Add the row to the rejects table
 				errors_appender.BeginRow();

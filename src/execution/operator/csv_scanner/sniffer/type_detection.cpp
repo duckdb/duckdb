@@ -423,7 +423,8 @@ void CSVSniffer::DetectTypes() {
 		SetUserDefinedDateTimeFormat(*candidate->state_machine);
 		// Parse chunk and read csv with info candidate
 		auto &data_chunk = candidate->ParseChunk().ToChunk();
-		if (candidate->error_handler->AnyErrors() && !candidate->error_handler->HasError(MAXIMUM_LINE_SIZE) && !candidate->state_machine->options.ignore_errors.GetValue()) {
+		if (candidate->error_handler->AnyErrors() && !candidate->error_handler->HasError(MAXIMUM_LINE_SIZE) &&
+		    !candidate->state_machine->options.ignore_errors.GetValue()) {
 			continue;
 		}
 		idx_t start_idx_detection = 0;
