@@ -30,13 +30,6 @@ public:
 
 	idx_t boundary_idx = 0;
 	idx_t lines_in_batch = 0;
-
-	bool operator<(const LinesPerBoundary &other) const {
-		if (boundary_idx < other.boundary_idx) {
-			return true;
-		}
-		return lines_in_batch < other.lines_in_batch;
-	}
 };
 
 enum CSVErrorType : uint8_t {
@@ -138,7 +131,7 @@ public:
 	void SetIgnoreErrors(bool ignore_errors);
 	idx_t GetSize();
 
-	void FillRejectsTable(InternalAppender &errors_appender, idx_t file_idx, idx_t scan_idx, CSVFileScan &file,
+	void FillRejectsTable(InternalAppender &errors_appender, idx_t file_idx, idx_t scan_idx, const CSVFileScan &file,
 	                      CSVRejectsTable &rejects, const ReadCSVData &bind_data, idx_t limit);
 
 private:
@@ -159,7 +152,7 @@ private:
 	bool ignore_errors = false;
 	bool print_line = true;
 	//! Set of errors
-	map<LinesPerBoundary, vector<CSVError>> errors;
+	vector<CSVError> errors;
 };
 
 } // namespace duckdb
