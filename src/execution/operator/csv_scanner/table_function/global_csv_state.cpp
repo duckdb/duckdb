@@ -1,7 +1,4 @@
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
-
-#include <fmt/core.h>
-
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
