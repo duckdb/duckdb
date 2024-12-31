@@ -439,15 +439,3 @@ CSVStateMachineCache &CSVStateMachineCache::Get(ClientContext &context) {
 
 } // namespace duckdb
 
-// "bla ";
-// qqqqqud
-// qqqqqmd
-// "bla "";
-// qqqqquud
-// qqqqqmud
-
-// "bla ";";
-// qqqqqud
-// qqqqqmd
-
-// "bla ";\n";

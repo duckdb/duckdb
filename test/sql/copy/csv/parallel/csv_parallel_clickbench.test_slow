@@ -121,7 +121,7 @@ CREATE TABLE hits
 );
 
 statement ok
-insert into hits from read_csv('/Users/holanda/Downloads/hits.csv');
+insert into hits from read_csv('https://datasets.clickhouse.com/hits_compatible/hits.csv.gz');
 
 #Q 01
 query I
