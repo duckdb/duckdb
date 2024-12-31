@@ -99,7 +99,7 @@ bool CSVErrorHandler::AnyErrors() {
 	return !errors.empty();
 }
 
-bool CSVErrorHandler::HasError(CSVErrorType error_type) {
+bool CSVErrorHandler::HasError(const CSVErrorType error_type) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	for (auto &error : errors) {
 		for (const auto &er : error.second) {
@@ -148,9 +148,9 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 	}
 }
 
-void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, idx_t file_idx, idx_t scan_idx,
+void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const idx_t file_idx, const idx_t scan_idx,
                                        CSVFileScan &file, CSVRejectsTable &rejects, const ReadCSVData &bind_data,
-                                       idx_t limit) {
+                                       const idx_t limit) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	auto &errors = file.error_handler->errors;
 	// We first insert the file into the file scans table
@@ -165,8 +165,8 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, idx_t 
 					break;
 				}
 				rejects.count++;
-				auto row_line = file.error_handler->GetLine(error.error_info);
-				auto col_idx = error.column_idx;
+				const auto row_line = file.error_handler->GetLine(error.error_info);
+				const auto col_idx = error.column_idx;
 				// Add the row to the rejects table
 				errors_appender.BeginRow();
 				// 1. Scan Id

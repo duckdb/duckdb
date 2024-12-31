@@ -423,21 +423,9 @@ void CSVSniffer::DetectTypes() {
 		SetUserDefinedDateTimeFormat(*candidate->state_machine);
 		// Parse chunk and read csv with info candidate
 		auto &data_chunk = candidate->ParseChunk().ToChunk();
-		// if (candidate->error_handler->AnyErrors()) {
-		//
-		// 	bool break_loop = false;
-		// 	for (auto &errors : candidate->error_handler->errors) {
-		// 		for (auto &error : errors.second) {
-		// 			if (error.type != CSVErrorType::MAXIMUM_LINE_SIZE) {
-		// 				break_loop = true;
-		// 				break;
-		// 			}
-		// 		}
-		// 	}
-		// 	if (break_loop && !candidate->state_machine->options.ignore_errors.GetValue()) {
-		// 		continue;
-		// 	}
-		// }
+		if (candidate->error_handler->AnyErrors() && !candidate->error_handler->HasError(MAXIMUM_LINE_SIZE) && !candidate->state_machine->options.ignore_errors.GetValue()) {
+			continue;
+		}
 		idx_t start_idx_detection = 0;
 		idx_t chunk_size = data_chunk.size();
 		if (chunk_size > 1 &&

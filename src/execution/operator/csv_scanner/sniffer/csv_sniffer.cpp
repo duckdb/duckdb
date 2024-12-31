@@ -206,7 +206,7 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 	}
 	buffer_manager->sniffing = false;
 	if (best_candidate->error_handler->AnyErrors() && !options.ignore_errors.GetValue()) {
-		error_handler->ErrorIfTypeExists(MAXIMUM_LINE_SIZE);
+		best_candidate->error_handler->ErrorIfTypeExists(MAXIMUM_LINE_SIZE);
 	}
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// We are done, Set the CSV Options in the reference. Construct and return the result.
