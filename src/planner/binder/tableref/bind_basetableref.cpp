@@ -85,9 +85,14 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// check if the table name refers to a CTE
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
+	// unless we want to refer to the recurring table of "using key".
 	vector<reference<CommonTableExpressionInfo>> found_ctes;
-	if (ref.schema_name.empty()) {
+	if (ref.schema_name.empty() || ref.schema_name == "recurring") {
 		found_ctes = FindCTE(ref.table_name, ref.table_name == alias);
+	}
+
+	if (ref.schema_name == "recurring" && found_ctes.empty()) {
+		throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
 	}
 
 	if (!found_ctes.empty()) {
@@ -110,7 +115,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 #endif
 				}
-				auto result = make_uniq<BoundCTERef>(index, ctebinding->index, materialized);
+				auto result =
+				    make_uniq<BoundCTERef>(index, ctebinding->index, materialized, ref.schema_name == "recurring");
 				auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 				auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
 

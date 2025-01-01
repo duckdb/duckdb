@@ -11,6 +11,11 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	result->aliases = aliases;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+
+	for (auto &key : result->key_targets) {
+		result->key_targets.push_back(key->Copy());
+	}
+
 	result->materialized = materialized;
 	return result;
 }
@@ -40,6 +45,12 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 		auto info = make_uniq<CommonTableExpressionInfo>();
 
 		auto &cte = *PGPointerCast<duckdb_libpgquery::PGCommonTableExpr>(cte_ele->data.ptr_value);
+
+		auto key_target = PGPointerCast<duckdb_libpgquery::PGNode>(cte.recursive_keys->head->data.ptr_value);
+		if (key_target) {
+			TransformExpressionList(*cte.recursive_keys, info->key_targets);
+		}
+
 		if (cte.aliascolnames) {
 			for (auto node = cte.aliascolnames->head; node != nullptr; node = node->next) {
 				auto value = PGPointerCast<duckdb_libpgquery::PGValue>(node->data.ptr_value);
@@ -116,6 +127,9 @@ unique_ptr<SelectStatement> Transformer::TransformRecursiveCTE(duckdb_libpgquery
 		result.left = TransformSelectNode(*stmt.larg);
 		result.right = TransformSelectNode(*stmt.rarg);
 		result.aliases = info.aliases;
+		for (auto &key : info.key_targets) {
+			result.key_targets.emplace_back(key->Copy());
+		}
 		break;
 	}
 	case duckdb_libpgquery::PG_SETOP_EXCEPT:
