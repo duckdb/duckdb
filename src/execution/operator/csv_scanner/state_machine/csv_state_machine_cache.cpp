@@ -238,6 +238,10 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::COMMENT;
 	}
+	if (delimiter_first_byte != ' ' && quote != ' ' && escape != ' ' && comment != ' ') {
+		// If space is not a special character, we can safely ignore it in an unquoted state
+		transition_array[' '][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::UNQUOTED;
+	}
 
 	// 8) Not Set
 	if (multi_byte_delimiter) {
