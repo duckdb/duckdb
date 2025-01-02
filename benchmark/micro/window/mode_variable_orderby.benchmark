@@ -1,0 +1,38 @@
+# name: benchmark/micro/window/mode_variable_orderby.benchmark
+# description: Measure performance of moving MODE with variable frames
+# group: [window]
+
+name Windowed MODE, Variable 400
+group micro
+subgroup window
+
+require tpch
+
+load
+CALL dbgen(sf=0.1);
+
+run
+SELECT 
+	l_orderkey, 
+	l_shipdate, 
+	l_linenumber, 
+	mode(l_linenumber ORDER BY l_linenumber DESC) over w AS l_mode,
+FROM lineitem
+WINDOW w AS (
+    order by l_orderkey, l_shipdate 
+        rows between mod(rowid * 47, 521) preceding and 400 - mod(rowid * 47, 521) following
+)
+QUALIFY l_mode > 1
+ORDER BY ALL
+;
+
+result IIII
+39	1996-12-08	6	3
+599938	1995-07-03	6	2
+599942	1995-08-08	1	2
+599968	1997-03-18	1	2
+599971	1996-01-07	2	2
+599973	1996-09-27	6	2
+599974	1995-09-05	1	2
+599975	1997-05-08	4	2
+600000	1998-05-10	1	2
