@@ -300,6 +300,13 @@ SELECT * FROM integers WHERE a!=1 OR a>3 OR a<2 ORDER by a
 4	4
 5	5
 
+# test comparison with null in OR conjunctions uses ISNULL/ISNOTNULL table filter
+statement ok
+CREATE TABLE t0(c1 INT);
+
+statement ok
+SELECT * FROM t0 WHERE ((t0.c1 IS DISTINCT FROM NULL) OR (NOT NULL));
+
 mode skip
 
 #### numeric statistics
