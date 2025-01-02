@@ -111,7 +111,7 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs,
 	auto path_components = PathComponents();
 	for (auto &path_ele : path_components) {
 		extension_directory = fs.JoinPath(extension_directory, path_ele);
-		if (!fs.DirectoryExists(extension_directory)) {
+		if (!fs.DirectoryExists(extension_directory) && create) {
 			fs.CreateDirectory(extension_directory);
 		}
 	}
