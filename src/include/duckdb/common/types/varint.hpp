@@ -16,11 +16,18 @@
 #include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
+using digit_t = uint32_t;
+using twodigit_t = uint64_t;
+
 //! The Varint class is a static class that holds helper functions for the Varint type.
 class Varint {
 public:
 	//! Header size of a Varint is always 3 bytes.
 	DUCKDB_API static constexpr uint8_t VARINT_HEADER_SIZE = 3;
+	//! Max(e such that 10**e fits in a digit_t)
+	DUCKDB_API static constexpr uint8_t DECIMAL_SHIFT = 9;
+	//! 10 ** DECIMAL_SHIFT
+	DUCKDB_API static constexpr digit_t DECIMAL_BASE = 1000000000;
 	//! Verifies if a Varint is valid. i.e., if it has 3 header bytes. The header correctly represents the number of
 	//! data bytes, and the data bytes has no leading zero bytes.
 	DUCKDB_API static void Verify(const string_t &input);
