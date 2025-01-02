@@ -1419,7 +1419,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 					result.AddRow(result, previous_buffer_handle->actual_size);
 				}
 				lines_read++;
-			} else if (states.IsQuotedCurrent()) {
+			} else if (states.IsQuotedCurrent() &&
+			           state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
 				// Unterminated quote
 				LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos,
 				                                   result.buffer_size};
@@ -1430,7 +1431,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 				if (result.IsCommentSet(result)) {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
-					if (result.quoted && states.IsDelimiterBytes()) {
+					if (result.quoted && states.IsDelimiterBytes() &&
+					    state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
 						result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
 						                             result.last_position);
 					}
@@ -1738,7 +1740,8 @@ void StringValueScanner::FinalizeChunkProcess() {
 				result.number_of_rows++;
 			}
 		}
-		if (states.IsQuotedCurrent() && !has_unterminated_quotes) {
+		if (states.IsQuotedCurrent() && !has_unterminated_quotes &&
+		    state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
 			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,

@@ -240,7 +240,7 @@ protected:
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::QUOTED: {
-				if (states.states[0] == CSVState::UNQUOTED) {
+				if (states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::MAYBE_QUOTED) {
 					T::SetEscaped(result);
 				}
 				ever_quoted = true;
@@ -263,6 +263,9 @@ protected:
 				}
 			} break;
 			case CSVState::UNQUOTED: {
+				if (states.states[0] == CSVState::MAYBE_QUOTED) {
+					T::SetEscaped(result);
+				}
 				T::SetUnquoted(result);
 				iterator.pos.buffer_pos++;
 				break;
