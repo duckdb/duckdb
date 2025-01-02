@@ -705,7 +705,8 @@
       },
       {"id": 114,
         "name": "buffer_size",
-        "type": "CSVOption<idx_t>"
+        "type": "idx_t",
+        "deleted": true
       },
       {"id": 115,
         "name": "file_options",
@@ -837,6 +838,10 @@
       {"id": 142,
         "name": "multi_file_reader",
         "type": "bool"
+      },
+      {"id": 143,
+        "name": "buffer_size",
+        "type": "CSVOption<idx_t>"
       }
     ],
     "constructor": ["delimiter", "multi_byte_delimiter"],

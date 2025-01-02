@@ -183,7 +183,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(111, "file_path", file_path);
 	serializer.WritePropertyWithDefault<string>(112, "decimal_separator", decimal_separator);
 	serializer.WritePropertyWithDefault<bool>(113, "null_padding", null_padding);
-	serializer.WriteProperty<CSVOption<idx_t>>(114, "buffer_size", buffer_size);
+	/* [Deleted] (idx_t) "buffer_size" */
 	serializer.WriteProperty<MultiFileReaderOptions>(115, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<bool>>(116, "force_quote", force_quote);
 	serializer.WritePropertyWithDefault<string>(117, "rejects_table_name", rejects_table_name, "reject_errors");
@@ -212,6 +212,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CSVOption<bool>>(140, "rfc_4180", dialect_options.state_machine_options.rfc_4180);
 	serializer.WriteProperty<CSVOption<string>>(141, "multi_byte_delimiter", GetMultiByteDelimiter());
 	serializer.WritePropertyWithDefault<bool>(142, "multi_file_reader", multi_file_reader);
+	serializer.WriteProperty<CSVOption<idx_t>>(143, "buffer_size", buffer_size);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -229,7 +230,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	auto file_path = deserializer.ReadPropertyWithDefault<string>(111, "file_path");
 	auto decimal_separator = deserializer.ReadPropertyWithDefault<string>(112, "decimal_separator");
 	auto null_padding = deserializer.ReadPropertyWithDefault<bool>(113, "null_padding");
-	auto buffer_size = deserializer.ReadProperty<CSVOption<idx_t>>(114, "buffer_size");
+	deserializer.ReadDeletedProperty<idx_t>(114, "buffer_size");
 	auto file_options = deserializer.ReadProperty<MultiFileReaderOptions>(115, "file_options");
 	auto force_quote = deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote");
 	auto rejects_table_name = deserializer.ReadPropertyWithExplicitDefault<string>(117, "rejects_table_name", "reject_errors");
@@ -272,7 +273,6 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	result.file_path = std::move(file_path);
 	result.decimal_separator = std::move(decimal_separator);
 	result.null_padding = null_padding;
-	result.buffer_size = buffer_size;
 	result.file_options = file_options;
 	result.force_quote = std::move(force_quote);
 	result.rejects_table_name = std::move(rejects_table_name);
@@ -297,6 +297,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	result.encoding = std::move(encoding);
 	result.dialect_options.state_machine_options.rfc_4180 = dialect_options_state_machine_options_rfc_4180;
 	deserializer.ReadPropertyWithDefault<bool>(142, "multi_file_reader", result.multi_file_reader);
+	deserializer.ReadProperty<CSVOption<idx_t>>(143, "buffer_size", result.buffer_size);
 	return result;
 }
 
