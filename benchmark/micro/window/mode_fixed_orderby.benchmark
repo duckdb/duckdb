@@ -1,0 +1,31 @@
+# name: benchmark/micro/window/mode_fixed_orderby.benchmark
+# description: Measure performance of moving MODE with variable frames
+# group: [window]
+
+name Windowed MODE, Fixed 200
+group micro
+subgroup window
+
+require tpch
+
+load
+CALL dbgen(sf=0.01);
+
+run
+SELECT 
+	l_orderkey, 
+	l_shipdate, 
+	l_linenumber, 
+	mode(l_linenumber ORDER BY l_linenumber DESC) over w AS l_mode,
+FROM lineitem
+WINDOW w AS (
+    order by l_orderkey, l_shipdate 
+        rows between 175 preceding and 175 following
+)
+QUALIFY l_mode > 1
+ORDER BY ALL
+;
+
+result IIII
+8610	1994-07-06	5	2
+36738	1996-10-05	6	2

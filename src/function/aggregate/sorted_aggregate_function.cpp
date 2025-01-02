@@ -29,7 +29,7 @@ struct SortedAggregateBindData : public FunctionData {
 			arg_types.emplace_back(child->return_type);
 			ListSegmentFunctions funcs;
 			GetSegmentDataFunctions(funcs, arg_types.back());
-			arg_funcs.emplace_back(funcs);
+			arg_funcs.emplace_back(std::move(funcs));
 		}
 		sort_types.reserve(order_bys.size());
 		sort_funcs.reserve(order_bys.size());
@@ -38,7 +38,7 @@ struct SortedAggregateBindData : public FunctionData {
 			sort_types.emplace_back(order.expression->return_type);
 			ListSegmentFunctions funcs;
 			GetSegmentDataFunctions(funcs, sort_types.back());
-			sort_funcs.emplace_back(funcs);
+			sort_funcs.emplace_back(std::move(funcs));
 		}
 		sorted_on_args = (children.size() == order_bys.size());
 		for (size_t i = 0; sorted_on_args && i < children.size(); ++i) {

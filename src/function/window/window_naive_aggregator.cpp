@@ -267,6 +267,9 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 			}
 
 			global_sort.AddLocalState(local_sort);
+			if (global_sort.sorted_blocks.empty()) {
+				return;
+			}
 			global_sort.PrepareMergePhase();
 			while (global_sort.sorted_blocks.size() > 1) {
 				global_sort.InitializeMergeRound();

@@ -405,6 +405,9 @@ ScalarFunctionSet RegexpMatchesFun::GetFunctions() {
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	    RegexpMatchesFunction<RegexPartialMatch>, RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState,
 	    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+	for (auto &func : regexp_partial_match.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 	return (regexp_partial_match);
 }
 

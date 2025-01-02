@@ -11,7 +11,12 @@ bool WindowCustomAggregator::CanAggregate(const BoundWindowExpression &wexpr, Wi
 		return false;
 	}
 
-	if (!AggregateObject(wexpr).function.window) {
+	if (!wexpr.aggregate->window) {
+		return false;
+	}
+
+	//	ORDER BY arguments are not currently supported
+	if (!wexpr.arg_orders.empty()) {
 		return false;
 	}
 

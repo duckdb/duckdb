@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
@@ -63,6 +64,13 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 		for (auto &reference : table_references) {
 			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
 			relation_mapping[reference] = relation_id;
+		}
+	} else if (op.type == LogicalOperatorType::LOGICAL_UNNEST) {
+		// logical unnest has a logical_unnest index, but other bindings can refer to
+		// columns that are not unnested.
+		auto bindings = op.GetColumnBindings();
+		for (auto &binding : bindings) {
+			relation_mapping[binding.table_index] = relation_id;
 		}
 	} else {
 		// Relations should never return more than 1 table index
