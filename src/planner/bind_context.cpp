@@ -719,21 +719,21 @@ vector<BindingAlias> BindContext::GetBindingAliases() {
 void BindContext::RemoveContext(const vector<BindingAlias> &aliases) {
 	for (auto &alias : aliases) {
 		// remove the binding from any USING columns
+		vector<string> removed_using_columns;
 		for (auto &using_sets : using_columns) {
 			for (auto &using_set_ref : using_sets.second) {
 				auto &using_set = using_set_ref.get();
 				auto it = std::remove_if(using_set.bindings.begin(), using_set.bindings.end(),
 				                         [&](const BindingAlias &using_alias) { return using_alias == alias; });
 				using_set.bindings.erase(it, using_set.bindings.end());
-				if (using_set.bindings.empty()) {
-					throw InternalException(
-					    "BindContext::RemoveContext - no more tables that refer to this using binding");
-				}
-				if (using_set.primary_binding == alias) {
-					throw InternalException(
-					    "BindContext::RemoveContext - cannot remove primary binding from using binding");
+				if (using_set.bindings.empty() || using_set.primary_binding == alias) {
+					// if the using column is no longer referred to - remove it entirely
+					removed_using_columns.push_back(using_sets.first);
 				}
 			}
+		}
+		for (auto &removed_col : removed_using_columns) {
+			using_columns.erase(removed_col);
 		}
 
 		// remove the binding from the list of bindings
