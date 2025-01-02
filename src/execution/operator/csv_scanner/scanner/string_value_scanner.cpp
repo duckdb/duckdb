@@ -1280,7 +1280,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.IsUnquoted()) {
 			result.SetUnquoted(result);
 		}
-		if (states.IsEscaped()) {
+		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
 			result.escaped = true;
 		}
 		if (states.IsComment()) {
@@ -1320,7 +1320,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.IsComment()) {
 			result.comment = true;
 		}
-		if (states.IsEscaped()) {
+		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
 			result.escaped = true;
 		}
 		if (states.IsInvalid()) {
