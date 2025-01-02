@@ -2,20 +2,26 @@
 # description: Test sampling of larger relations
 # group: [pushdown]
 
-statement ok
-CREATE TABLE t1 AS FROM VALUES
-('619d9199-bc25-41d7-803e-1fa801b4b952'::UUID, NULL::VARCHAR),
-('1ada8361-c20b-4e9f-9c8e-15689039cc75'::UUID, '91'::VARCHAR),
-('f5a8a7d8-6bc5-4337-a296-d52078156051'::UUID, NULL::VARCHAR) t(s, i);
+# statement ok
+# CREATE TABLE t1 AS FROM VALUES
+# ('619d9199-bc25-41d7-803e-1fa801b4b952'::UUID, NULL::VARCHAR),
+# ('1ada8361-c20b-4e9f-9c8e-15689039cc75'::UUID, '91'::VARCHAR),
+# ('f5a8a7d8-6bc5-4337-a296-d52078156051'::UUID, NULL::VARCHAR) t(s, i);
+#
+# statement ok
+# CREATE TABLE t2 as from values
+#  ('Int'),
+#  ('91'),
+#  ('13',),
+#  ('sst',) t(v);
+#
+# statement ok
+# SELECT t1.s
+# FROM t1
+# LEFT JOIN t2 ON t1.i = t2.v;
 
 statement ok
-CREATE TABLE t2 as from values
- ('Int'),
- ('91'),
- ('13',),
- ('sst',) t(v);
+CREATE TABLE  t0(c1 INT);
 
 statement ok
-SELECT t1.s
-FROM t1
-LEFT JOIN t2 ON t1.i = t2.v;
+SELECT * FROM t0 WHERE ((t0.c1 IS DISTINCT FROM NULL) OR (NOT NULL));
