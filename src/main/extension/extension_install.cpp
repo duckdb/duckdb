@@ -70,7 +70,7 @@ duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
 	return res;
 }
 
-string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs) {
+string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs, bool create) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
 #endif
@@ -88,6 +88,9 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 		// expand ~ in extension directory
 		extension_directory = fs.ExpandPath(extension_directory);
 		if (!fs.DirectoryExists(extension_directory)) {
+			if (!create) {
+				return extension_directory;
+			}
 			auto sep = fs.PathSeparator(extension_directory);
 			auto splits = StringUtil::Split(extension_directory, sep);
 			D_ASSERT(!splits.empty());
@@ -115,10 +118,10 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 	return extension_directory;
 }
 
-string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
+string ExtensionHelper::ExtensionDirectory(ClientContext &context, bool create) {
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto &fs = FileSystem::GetFileSystem(context);
-	return ExtensionDirectory(db, fs);
+	return ExtensionDirectory(db, fs, create);
 }
 
 bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &message) {
