@@ -1,0 +1,10 @@
+# name: test/sql/copy/csv/14512.test
+# description: Test for issue #14512
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIII
+FROM read_csv_auto('data/csv/14512.csv', delim=',', all_varchar=True, ignore_errors=True, header=True);
+----
