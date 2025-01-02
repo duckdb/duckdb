@@ -1,9 +1,35 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/platform.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
 #include <string>
 
 // duplicated from string_util.h to avoid linking issues
 #ifndef DUCKDB_QUOTE_DEFINE
 #define DUCKDB_QUOTE_DEFINE_IMPL(x) #x
 #define DUCKDB_QUOTE_DEFINE(x)      DUCKDB_QUOTE_DEFINE_IMPL(x)
+#endif
+
+#if defined(_WIN32) || defined(__APPLE__) || defined(__FreeBSD__)
+#else
+#if !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#include <features.h>
+#ifndef __USE_GNU
+#define __MUSL__
+#endif
+#undef _GNU_SOURCE /* don't contaminate other includes unnecessarily */
+#else
+#include <features.h>
+#ifndef __USE_GNU
+#define __MUSL__
+#endif
+#endif
 #endif
 
 namespace duckdb {
@@ -37,11 +63,16 @@ std::string DuckDBPlatform() { // NOLINT: allow definition in header
 	arch = "arm64";
 #endif
 
-#if !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI == 0
+#if defined(__MUSL__)
+	if (os == "linux") {
+		postfix = "_musl";
+	}
+#elif !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI == 0
 	if (os == "linux") {
 		postfix = "_gcc4";
 	}
 #endif
+
 #if defined(__ANDROID__)
 	postfix += "_android"; // using + because it may also be gcc4
 #endif
