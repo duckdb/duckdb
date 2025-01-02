@@ -728,6 +728,9 @@ ScalarFunctionSet DateTruncFun::GetFunctions() {
 	                                      DateTruncFunction<date_t, timestamp_t>, DateTruncBind));
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                                      DateTruncFunction<interval_t, interval_t>));
+	for (auto &func : date_trunc.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 	return date_trunc;
 }
 

@@ -1747,7 +1747,7 @@ FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const 
 const StringUtil::EnumStringLiteral *GetFunctionErrorsValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FunctionErrors::CANNOT_ERROR), "CANNOT_ERROR" },
-		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_ERROR), "CAN_THROW_ERROR" }
+		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_RUNTIME_ERROR), "CAN_THROW_RUNTIME_ERROR" }
 	};
 	return values;
 }
