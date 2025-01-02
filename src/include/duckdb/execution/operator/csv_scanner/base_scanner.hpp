@@ -30,7 +30,8 @@ public:
 	}
 
 	static inline void SetUnquoted(ScannerResult &result) {
-		if (result.states.states[0] == CSVState::UNQUOTED && result.states.states[1] == CSVState::UNQUOTED) {
+		if (result.states.states[0] == CSVState::UNQUOTED && result.states.states[1] == CSVState::UNQUOTED &&
+		    result.state_machine.dialect_options.state_machine_options.escape != '\0') {
 			// This means we touched an unescaped quote, we must go through the remove escape code to remove it.
 			result.escaped = true;
 		}
@@ -164,6 +165,7 @@ protected:
 	template <class T>
 	void Process(T &result) {
 		idx_t to_pos;
+		const bool has_escaped_value = state_machine->dialect_options.state_machine_options.escape != '\0';
 		const idx_t start_pos = iterator.pos.buffer_pos;
 		if (iterator.IsBoundarySet()) {
 			to_pos = iterator.GetEndPos();
@@ -244,14 +246,15 @@ protected:
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::QUOTED: {
-				if (states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::MAYBE_QUOTED) {
+				if ((states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::MAYBE_QUOTED) &&
+				    has_escaped_value) {
 					T::SetEscaped(result);
 				}
 				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
-					uint64_t value =
+					const uint64_t value =
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
 					if (ContainsZeroByte((value ^ state_machine->transition_array.quote) &
 					                     (value ^ state_machine->transition_array.escape))) {
@@ -310,7 +313,7 @@ protected:
 				T::SetComment(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
-					uint64_t value =
+					const uint64_t value =
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
 					if (ContainsZeroByte((value ^ state_machine->transition_array.new_line) &
 					                     (value ^ state_machine->transition_array.carriage_return))) {
