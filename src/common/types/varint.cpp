@@ -220,7 +220,7 @@ string Varint::VarIntToVarchar(const string_t &blob) {
 		}
 	}
 
-	if (digits.size() == 0) {
+	if (digits.empty()) {
 		digits.push_back(0);
 	}
 
