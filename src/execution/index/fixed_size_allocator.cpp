@@ -54,9 +54,8 @@ IndexPointer FixedSizeAllocator::New() {
 		buffers_with_free_space.insert(buffer_id);
 
 		// set the bitmask
-		auto buffer_iter = buffers.find(buffer_id);
-		D_ASSERT(buffer_iter != buffers.end());
-		auto &buffer = buffer_iter->second;
+		D_ASSERT(buffers.find(buffer_id) != buffers.end());
+		auto &buffer = buffers.find(buffer_id)->second;
 		ValidityMask mask(reinterpret_cast<validity_t *>(buffer.Get()), available_segments_per_buffer);
 
 		// zero-initialize the bitmask to avoid leaking memory to disk
@@ -73,9 +72,8 @@ IndexPointer FixedSizeAllocator::New() {
 	D_ASSERT(!buffers_with_free_space.empty());
 	auto buffer_id = uint32_t(*buffers_with_free_space.begin());
 
-	auto buffer_iter = buffers.find(buffer_id);
-	D_ASSERT(buffer_iter != buffers.end());
-	auto &buffer = buffer_iter->second;
+	D_ASSERT(buffers.find(buffer_id) != buffers.end());
+	auto &buffer = buffers.find(buffer_id)->second;
 	auto offset = buffer.GetOffset(bitmask_count, available_segments_per_buffer);
 
 	total_segment_count++;
@@ -97,9 +95,8 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	auto buffer_id = ptr.GetBufferId();
 	auto offset = ptr.GetOffset();
 
-	auto buffer_iter = buffers.find(buffer_id);
-	D_ASSERT(buffer_iter != buffers.end());
-	auto &buffer = buffer_iter->second;
+	D_ASSERT(buffers.find(buffer_id) != buffers.end());
+	auto &buffer = buffers.find(buffer_id)->second;
 
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffer.Get());
 	ValidityMask mask(bitmask_ptr, offset + 1); // FIXME
@@ -218,9 +215,8 @@ bool FixedSizeAllocator::InitializeVacuum() {
 	// adjust the buffers, and erase all to-be-vacuumed buffers from the available buffer list
 	for (auto &vacuum_buffer : temporary_vacuum_buffers) {
 		auto buffer_id = vacuum_buffer.second;
-		auto buffer_iter = buffers.find(buffer_id);
-		D_ASSERT(buffer_iter != buffers.end());
-		buffer_iter->second.vacuum = true;
+		D_ASSERT(buffers.find(buffer_id) != buffers.end());
+		buffers.find(buffer_id)->second.vacuum = true;
 		buffers_with_free_space.erase(buffer_id);
 	}
 
@@ -234,12 +230,11 @@ bool FixedSizeAllocator::InitializeVacuum() {
 void FixedSizeAllocator::FinalizeVacuum() {
 
 	for (auto &buffer_id : vacuum_buffers) {
-		auto buffer_iter = buffers.find(buffer_id);
-		D_ASSERT(buffer_iter != buffers.end());
-		auto &buffer = buffer_iter->second;
+		D_ASSERT(buffers.find(buffer_id) != buffers.end());
+		auto &buffer = buffers.find(buffer_id)->second;
 		D_ASSERT(buffer.InMemory());
 		buffer.Destroy();
-		buffers.erase(buffer_iter);
+		buffers.erase(buffer_id);
 	}
 	vacuum_buffers.clear();
 }
