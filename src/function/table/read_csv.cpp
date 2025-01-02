@@ -74,7 +74,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	}
 
 	// We do a copy of the options to not pollute the options of the first file.
-	const idx_t max_files_to_sniff = 10;
+	constexpr idx_t max_files_to_sniff = 10;
 	idx_t files_to_sniff = file_paths.size() > max_files_to_sniff ? max_files_to_sniff : file_paths.size();
 	while (total_number_of_rows < required_number_of_lines && current_file + 1 < files_to_sniff) {
 		auto option_copy = option_og;
@@ -124,8 +124,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
-	auto multi_file_reader = MultiFileReader::Create(input.table_function);
-	auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
+	const auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	const auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 	if (multi_file_list->GetTotalFileCount() > 1) {
 		options.multi_file_reader = true;
 	}
@@ -133,23 +133,25 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
 	options.Verify();
-	if (!options.auto_detect) {
-		if (!options.columns_set) {
-			throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
-			                      "read_csv_auto or set read_csv(..., "
-			                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+	if (!options.file_options.union_by_name) {
+		if (options.auto_detect) {
+			SchemaDiscovery(context, *result, options, return_types, names, *multi_file_list);
 		} else {
+			// If we are not running the sniffer, the columns must be set!
+			if (!options.columns_set) {
+				throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
+				                      "read_csv_auto or set read_csv(..., "
+				                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+			}
 			names = options.name_list;
 			return_types = options.sql_type_list;
 		}
-	}
-	if (options.auto_detect && !options.file_options.union_by_name) {
-		SchemaDiscovery(context, *result, options, return_types, names, *multi_file_list);
-	}
+		D_ASSERT(return_types.size() == names.size());
+		result->options.dialect_options.num_cols = names.size();
 
-	D_ASSERT(return_types.size() == names.size());
-	result->options.dialect_options.num_cols = names.size();
-	if (options.file_options.union_by_name) {
+		multi_file_reader->BindOptions(options.file_options, *multi_file_list, return_types, names,
+		                               result->reader_bind);
+	} else {
 		result->reader_bind = multi_file_reader->BindUnionReader<CSVFileScan>(context, return_types, names,
 		                                                                      *multi_file_list, *result, options);
 		if (result->union_readers.size() > 1) {
@@ -158,7 +160,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		}
 		if (!options.sql_types_per_column.empty()) {
-			auto exception = CSVError::ColumnTypesError(options.sql_types_per_column, names);
+			const auto exception = CSVError::ColumnTypesError(options.sql_types_per_column, names);
 			if (!exception.error_message.empty()) {
 				throw BinderException(exception.error_message);
 			}
@@ -169,14 +171,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 				}
 			}
 		}
-		result->csv_types = return_types;
-		result->csv_names = names;
-	} else {
-		result->csv_types = return_types;
-		result->csv_names = names;
-		multi_file_reader->BindOptions(options.file_options, *multi_file_list, return_types, names,
-		                               result->reader_bind);
 	}
+
+	result->csv_types = return_types;
+	result->csv_names = names;
 	result->return_types = return_types;
 	result->return_names = names;
 	if (!options.force_not_null_names.empty()) {
@@ -203,7 +201,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	// TODO: make the CSV reader use MultiFileList throughout, instead of converting to vector<string>
 	result->files = multi_file_list->GetAllFiles();
-
 	result->Finalize();
 	return std::move(result);
 }

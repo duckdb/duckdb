@@ -242,13 +242,13 @@ void RoaringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_coun
 	return;
 }
 
-} // namespace roaring
-
 unique_ptr<CompressedSegmentState> RoaringInitSegment(ColumnSegment &segment, block_id_t block_id,
                                                       optional_ptr<ColumnSegmentState> segment_state) {
 	// 'ValidityInitSegment' is used normally, which memsets the page to all bits set.
 	return nullptr;
 }
+
+} // namespace roaring
 
 //===--------------------------------------------------------------------===//
 // Get Function
@@ -258,7 +258,7 @@ CompressionFunction GetCompressionFunction(PhysicalType data_type) {
 	                           roaring::RoaringAnalyze, roaring::RoaringFinalAnalyze, roaring::RoaringInitCompression,
 	                           roaring::RoaringCompress, roaring::RoaringFinalizeCompress, roaring::RoaringInitScan,
 	                           roaring::RoaringScan, roaring::RoaringScanPartial, roaring::RoaringFetchRow,
-	                           roaring::RoaringSkip, RoaringInitSegment);
+	                           roaring::RoaringSkip, roaring::RoaringInitSegment);
 }
 
 CompressionFunction RoaringCompressionFun::GetFunction(PhysicalType type) {

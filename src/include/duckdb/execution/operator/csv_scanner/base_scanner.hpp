@@ -30,6 +30,10 @@ public:
 	}
 
 	static inline void SetUnquoted(ScannerResult &result) {
+		if (result.states.states[0] == CSVState::UNQUOTED && result.states.states[1] == CSVState::UNQUOTED) {
+			// This means we touched an unescaped quote, we must go through the remove escape code to remove it.
+			result.escaped = true;
+		}
 		result.quoted = true;
 	}
 
@@ -240,7 +244,7 @@ protected:
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::QUOTED: {
-				if (states.states[0] == CSVState::UNQUOTED) {
+				if (states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::MAYBE_QUOTED) {
 					T::SetEscaped(result);
 				}
 				ever_quoted = true;
@@ -263,6 +267,9 @@ protected:
 				}
 			} break;
 			case CSVState::UNQUOTED: {
+				if (states.states[0] == CSVState::MAYBE_QUOTED) {
+					T::SetEscaped(result);
+				}
 				T::SetUnquoted(result);
 				iterator.pos.buffer_pos++;
 				break;
