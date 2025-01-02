@@ -32,17 +32,7 @@ de:08317:12007:2:1	Lahr Schlüssel Vis-à-Vis Bus more text	48.3411985847104	7.8
 de:08317:12007:2:1	Lahr Schlüssel Vis-à-Vis Bus	48.3411985847104	7.87932997062448
 
 query II
-from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', rfc_4180=false);
-----
-1	pedro "pdet" holanda
-2	pedro "pdet" holanda
-3	pedro "pdet" ho;landa
-4	pedro "pdet" holanda
-5	pedro "pdet" holanda
-6	pedro "pdet" holanda
-
-query II
-from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', rfc_4180=false, escape = '', quote = '"', delim = ';');
+from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', escape = '"', rfc_4180=false);
 ----
 1	pedro pdet holanda
 2	pedro pdet holanda
@@ -51,11 +41,21 @@ from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', rfc_4180=false, e
 5	pedro pdet holanda
 6	pedro pdet holanda
 
+query II
+from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', rfc_4180=false, escape = '', quote = '"', delim = ';');
+----
+1	pedro "pdet" holanda
+2	pedro "pdet" holanda
+3	pedro "pdet" ho;landa
+4	pedro "pdet" holanda
+5	pedro "pdet" holanda
+6	pedro "pdet" holanda
+
 
 loop buffer_size 30 35
 
 query II
-from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', rfc_4180=false, buffer_size = ${buffer_size}, header = 0)
+from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', rfc_4180=false, escape = '', buffer_size = ${buffer_size}, header = 0)
 ----
 1	pedro "pdet" holanda
 2	pedro "pdet" holanda
