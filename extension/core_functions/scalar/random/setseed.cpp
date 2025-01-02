@@ -55,6 +55,7 @@ unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bou
 ScalarFunction SetseedFun::GetFunction() {
 	ScalarFunction setseed("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, SetSeedFunction, SetSeedBind);
 	setseed.stability = FunctionStability::VOLATILE;
+	BaseScalarFunction::SetReturnsError(setseed);
 	return setseed;
 }
 
