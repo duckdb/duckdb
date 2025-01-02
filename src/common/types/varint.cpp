@@ -165,11 +165,11 @@ void Varint::GetByteArray(vector<uint8_t> &byte_array, bool &is_negative, const 
 	if (is_negative) {
 		for (idx_t i = 3; i < blob.GetSize(); i++) {
 			byte_array.push_back(static_cast<uint8_t>(~blob_ptr[i]));
-		} 
+		}
 	} else {
 		for (idx_t i = 3; i < blob.GetSize(); i++) {
 			byte_array.push_back(static_cast<uint8_t>(blob_ptr[i]));
-		} 	
+		}
 	}
 }
 
@@ -189,14 +189,14 @@ string Varint::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 	return result;
 }
 
-// Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b). 
+// Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b).
 string Varint::VarIntToVarchar(const string_t &blob) {
 	string decimal_string;
 	vector<uint8_t> byte_array;
 	bool is_negative;
 	GetByteArray(byte_array, is_negative, blob);
 	vector<digit_t> digits;
-	// Rounding byte_array to digit_bytes multiple size, so that we can process every digit_bytes bytes 
+	// Rounding byte_array to digit_bytes multiple size, so that we can process every digit_bytes bytes
 	// at a time without if check in the for loop
 	idx_t digit_bytes = sizeof(digit_t);
 	idx_t digit_bits = digit_bytes * 8;
@@ -205,16 +205,16 @@ string Varint::VarIntToVarchar(const string_t &blob) {
 	for (idx_t i = 0; i < byte_array.size(); i += digit_bytes) {
 		digit_t hi = 0;
 		for (idx_t j = 0; j < digit_bytes; j++) {
-			hi |= UnsafeNumericCast<digit_t>(byte_array[i+j]<< (8*(digit_bytes-j-1)));
+			hi |= UnsafeNumericCast<digit_t>(byte_array[i + j] << (8 * (digit_bytes - j - 1)));
 		}
 
 		for (idx_t j = 0; j < digits.size(); j++) {
 			twodigit_t tmp = UnsafeNumericCast<twodigit_t>(digits[j]) << digit_bits | hi;
 			hi = UnsafeNumericCast<digit_t>(tmp / UnsafeNumericCast<twodigit_t>(DECIMAL_BASE));
-			digits[j] = UnsafeNumericCast<digit_t>(tmp-UnsafeNumericCast<twodigit_t>(DECIMAL_BASE*hi));
+			digits[j] = UnsafeNumericCast<digit_t>(tmp - UnsafeNumericCast<twodigit_t>(DECIMAL_BASE * hi));
 		}
 
-		while(hi) {
+		while (hi) {
 			digits.push_back(hi % UnsafeNumericCast<digit_t>(DECIMAL_BASE));
 			hi /= UnsafeNumericCast<digit_t>(DECIMAL_BASE);
 		}
@@ -224,7 +224,7 @@ string Varint::VarIntToVarchar(const string_t &blob) {
 		digits.push_back(0);
 	}
 
-	for (idx_t i = 0; i < digits.size()-1; i++) {
+	for (idx_t i = 0; i < digits.size() - 1; i++) {
 		auto remain = digits[i];
 		for (idx_t j = 0; j < DECIMAL_SHIFT; j++) {
 			decimal_string += DigitToChar(UnsafeNumericCast<int>(remain % 10));
