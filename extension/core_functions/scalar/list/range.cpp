@@ -253,6 +253,9 @@ ScalarFunctionSet ListRangeFun::GetFunctions() {
 	range_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
 	                                     LogicalType::LIST(LogicalType::TIMESTAMP),
 	                                     ListRangeFunction<TimestampRangeInfo, false>));
+	for (auto &func : range_set.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 	return range_set;
 }
 
@@ -269,6 +272,9 @@ ScalarFunctionSet GenerateSeriesFun::GetFunctions() {
 	generate_series.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
 	                                           LogicalType::LIST(LogicalType::TIMESTAMP),
 	                                           ListRangeFunction<TimestampRangeInfo, true>));
+	for (auto &func : generate_series.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 	return generate_series;
 }
 
