@@ -1,5 +1,5 @@
 # name: test/common/test_local_file_urls.test
-# group: [file_system]
+# group: [common]
 
 # Note: __WORKING_DIRECTORY__ will be replaced with the full path to the working dir of the tests (root of duckdb repo)
 

@@ -97,7 +97,7 @@ public:
 	static bool IsPrivateFile(const string &path_p, FileOpener *opener);
 
 	// Gets a pointer to the normalized file path (skipping any potential file:// prefix)
-	static const char* NormalizeLocalPath(const string &path);
+	static const char *NormalizeLocalPath(const string &path);
 
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
