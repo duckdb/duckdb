@@ -7,6 +7,7 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
+
 namespace duckdb {
 
 static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
