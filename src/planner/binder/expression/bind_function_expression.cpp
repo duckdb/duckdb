@@ -37,7 +37,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	// lookup the function in the catalog
-	QueryErrorContext error_context(function.query_location);
+	QueryErrorContext error_context(function.GetQueryLocation());
 	binder.BindSchemaOrCatalog(function.catalog, function.schema);
 	auto func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
 	                            function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
@@ -131,7 +131,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		error.AddQueryLocation(function);
 		error.Throw();
 	}
-	if (result->type == ExpressionType::BOUND_FUNCTION) {
+	if (result->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 		auto &bound_function = result->Cast<BoundFunctionExpression>();
 		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
@@ -195,10 +195,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// successfully bound: replace the node with a BoundExpression
-	auto alias = function.children[1]->alias;
-	bind_lambda_result.expression->alias = alias;
+	auto alias = function.children[1]->GetAlias();
+	bind_lambda_result.expression->SetAlias(alias);
 	if (!alias.empty()) {
-		bind_lambda_result.expression->alias = alias;
+		bind_lambda_result.expression->SetAlias(alias);
 	}
 	function.children[1] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
 

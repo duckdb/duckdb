@@ -211,6 +211,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(139, "encoding", encoding);
 	serializer.WriteProperty<CSVOption<bool>>(140, "rfc_4180", dialect_options.state_machine_options.rfc_4180);
 	serializer.WriteProperty<CSVOption<string>>(141, "multi_byte_delimiter", GetMultiByteDelimiter());
+	serializer.WritePropertyWithDefault<bool>(142, "multi_file_reader", multi_file_reader);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -295,6 +296,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	result.dialect_options.rows_until_header = dialect_options_rows_until_header;
 	result.encoding = std::move(encoding);
 	result.dialect_options.state_machine_options.rfc_4180 = dialect_options_state_machine_options_rfc_4180;
+	deserializer.ReadPropertyWithDefault<bool>(142, "multi_file_reader", result.multi_file_reader);
 	return result;
 }
 
@@ -596,8 +598,8 @@ void ReservoirSample::Serialize(Serializer &serializer) const {
 
 unique_ptr<BlockingSample> ReservoirSample::Deserialize(Deserializer &deserializer) {
 	auto sample_count = deserializer.ReadPropertyWithDefault<idx_t>(200, "sample_count");
-	auto result = duckdb::unique_ptr<ReservoirSample>(new ReservoirSample(sample_count));
-	deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk", result->reservoir_chunk);
+	auto reservoir_chunk = deserializer.ReadPropertyWithDefault<unique_ptr<ReservoirChunk>>(201, "reservoir_chunk");
+	auto result = duckdb::unique_ptr<ReservoirSample>(new ReservoirSample(sample_count, std::move(reservoir_chunk)));
 	return std::move(result);
 }
 

@@ -21,7 +21,7 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanDelete(ClientContext &context, Log
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {
 	D_ASSERT(op.children.size() == 1);
 	D_ASSERT(op.expressions.size() == 1);
-	D_ASSERT(op.expressions[0]->type == ExpressionType::BOUND_REF);
+	D_ASSERT(op.expressions[0]->GetExpressionType() == ExpressionType::BOUND_REF);
 
 	auto plan = CreatePlan(*op.children[0]);
 

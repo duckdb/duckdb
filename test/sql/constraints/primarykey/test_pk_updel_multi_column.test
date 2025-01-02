@@ -3,74 +3,111 @@
 # group: [primarykey]
 
 statement ok
+PRAGMA enable_verification;
+
+statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));
 
 statement ok
-INSERT INTO test VALUES (11, 'hello'), (12, 'world'), (13, 'blablabla')
+INSERT INTO test VALUES (11, 'hello'), (12, 'world'), (13, 'blablabla');
 
 statement ok
-UPDATE test SET b='pandas';
+UPDATE test SET b = 'pandas';
 
 query IT
-SELECT * FROM test ORDER BY a;
-----
-11	pandas
-12	pandas
-13	pandas
-
-statement error
-UPDATE test SET a=a+1;
-----
-
-query IT
-SELECT * FROM test ORDER BY a;
-----
-11	pandas
-12	pandas
-13	pandas
-
-statement error
-UPDATE test SET a=13 WHERE a=12;
-----
-
-statement error
-UPDATE test SET a=4;
-----
-
-query IT
-SELECT * FROM test ORDER BY a;
+SELECT * FROM test ORDER BY ALL;
 ----
 11	pandas
 12	pandas
 13	pandas
 
 statement ok
-DELETE FROM test WHERE a=12
+UPDATE test SET a = a + 1;
+
+query IT
+SELECT * FROM test ORDER BY ALL;
+----
+12	pandas
+13	pandas
+14	pandas
+
+statement error
+UPDATE test SET a = 13 WHERE a = 12;
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+statement error
+UPDATE test SET a = 4;
+----
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
+
+query IT
+SELECT * FROM test ORDER BY a;
+----
+12	pandas
+13	pandas
+14	pandas
+
+statement ok
+UPDATE test SET a = a - 1;
+
+query IT
+SELECT * FROM test ORDER BY ALL;
+----
+11	pandas
+12	pandas
+13	pandas
+
+statement ok
+DELETE FROM test WHERE a = 12;
+
+query IT
+SELECT * FROM test ORDER BY a;
+----
+11	pandas
+13	pandas
 
 statement ok
 INSERT INTO test VALUES (12, 'pandas');
 
+query IT
+SELECT * FROM test ORDER BY a;
+----
+11	pandas
+12	pandas
+13	pandas
+
 statement error
 INSERT INTO test VALUES (12, 'pandas');
 ----
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement ok
-DELETE FROM test WHERE a=12
-
-statement ok
-INSERT INTO test VALUES (4, 'pandas');
-
-statement ok
-UPDATE test SET a=4 WHERE a=12;
+DELETE FROM test WHERE a = 12;
 
 query IT
 SELECT * FROM test ORDER BY a;
 ----
-4	pandas
+11	pandas
+13	pandas
+
+statement ok
+INSERT INTO test VALUES (12, 'other pandas');
+
+statement ok
+UPDATE test SET a = 4 WHERE a = 42;
+
+statement ok
+UPDATE test SET a = 4 WHERE a = 12;
+
+query IT
+SELECT * FROM test ORDER BY a;
+----
+4	other pandas
 11	pandas
 13	pandas
 
 statement error
-UPDATE test SET b=NULL WHERE a=13;
+UPDATE test SET b = NULL WHERE a = 13;
 ----
-
+<REGEX>:Constraint Error.*NOT NULL constraint failed.*

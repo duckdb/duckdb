@@ -152,7 +152,6 @@ struct RLECompressState : public CompressionState {
 
 		auto column_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
 		                                                            info.GetBlockSize());
-		column_segment->function = function;
 		current_segment = std::move(column_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);

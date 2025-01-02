@@ -27,7 +27,6 @@ static unique_ptr<FunctionData> DuckDBMemoryBind(ClientContext &context, TableFu
 
 unique_ptr<GlobalTableFunctionState> DuckDBMemoryInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBMemoryData>();
-
 	result->entries = BufferManager::GetBufferManager(context).GetMemoryUsageInfo();
 	return std::move(result);
 }

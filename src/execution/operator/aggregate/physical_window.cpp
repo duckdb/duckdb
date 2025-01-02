@@ -2,7 +2,6 @@
 
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
-#include "duckdb/function/window/window_cumedist_function.hpp"
 #include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/function/window/window_rank_function.hpp"
 #include "duckdb/function/window/window_rownumber_function.hpp"
@@ -190,7 +189,7 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 	idx_t max_orders = 0;
 	for (idx_t i = 0; i < select_list.size(); ++i) {
 		auto &expr = select_list[i];
-		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_WINDOW);
+		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &bound_window = expr->Cast<BoundWindowExpression>();
 		if (bound_window.partitions.empty() && bound_window.orders.empty()) {
 			is_order_dependent = true;
@@ -205,7 +204,7 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,
                                                         WindowSharedExpressions &shared, WindowAggregationMode mode) {
-	switch (wexpr.type) {
+	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_AGGREGATE:
 		return make_uniq<WindowAggregateExecutor>(wexpr, context, shared, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
@@ -231,7 +230,7 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 		return make_uniq<WindowNthValueExecutor>(wexpr, context, shared);
 		break;
 	default:
-		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
+		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
 	}
 }
 

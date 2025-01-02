@@ -75,7 +75,6 @@ SELECT COUNT(*) FROM range(2000000) USING SAMPLE 2
 ----
 2
 
-
 # test sample with multiple columns
 # we insert the same data in the entire column
 statement ok
@@ -215,13 +214,22 @@ statement error
 select * from integers using sample 10000%;
 ----
 
-query I
+query I noresult repeatable_seed_0
 select i from integers using sample (1 rows) repeatable (0);
 ----
-152
+96
 
-query I
-select i from integers using sample reservoir(1%) repeatable (0);
+query I noresult repeatable_seed_0
+select i from integers using sample (1 rows) repeatable (0);
 ----
-51
-78
+
+
+query I noresult repeatable_seed_1
+select i from integers using sample reservoir(1%) repeatable (0) order by i;
+----
+
+query I noresult repeatable_seed_1
+select i from integers using sample reservoir(1%) repeatable (0) order by i;
+----
+58
+127

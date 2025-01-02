@@ -13,7 +13,7 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 	auto &groups = aggregate.groups;
 	column_binding_set_t group_binding_set;
 	for (const auto &group : groups) {
-		if (group->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (group->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue;
 		}
 		auto &colref = group->Cast<BoundColumnRefExpression>();
@@ -67,7 +67,7 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 	// Anything referenced in the aggregate functions is also excluded
 	for (idx_t expr_idx = 0; expr_idx < aggregate.expressions.size(); expr_idx++) {
 		const auto &expr = *aggregate.expressions[expr_idx];
-		D_ASSERT(expr.type == ExpressionType::BOUND_AGGREGATE);
+		D_ASSERT(expr.GetExpressionType() == ExpressionType::BOUND_AGGREGATE);
 		const auto &aggr_expr = expr.Cast<BoundAggregateExpression>();
 		for (const auto &child : aggr_expr.children) {
 			GetReferencedBindings(*child, referenced_bindings);
@@ -78,7 +78,7 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		if (aggr_expr.order_bys) {
 			for (const auto &order : aggr_expr.order_bys->orders) {
 				const auto &order_expr = *order.expression;
-				if (order_expr.type != ExpressionType::BOUND_COLUMN_REF) {
+				if (order_expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 					GetReferencedBindings(order_expr, referenced_bindings);
 				}
 			}
