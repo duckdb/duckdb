@@ -93,7 +93,7 @@ struct ListFilterFunctor {
 	}
 	//! Pushes an empty list to the entry_lengths vector
 	static void PushEmptyList(vector<idx_t> &entry_lengths) {
-		entry_lengths.emplace_back(0);
+		entry_lengths.emplace_back(0ULL);
 	}
 	//! Pushes the length of the original list to the entry_lengths vector
 	static void SetResultEntry(list_entry_t *, idx_t &, const list_entry_t &entry, const idx_t,

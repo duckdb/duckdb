@@ -24,7 +24,7 @@
 #  ifdef __arm__
 #    define LG_QUANTUM		3
 #  endif
-#  ifdef __aarch64__
+#  if defined(__aarch64__) || defined(_M_ARM64)
 #    define LG_QUANTUM		4
 #  endif
 #  ifdef __hppa__

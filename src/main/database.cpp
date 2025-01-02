@@ -33,7 +33,7 @@
 
 namespace duckdb {
 
-DBConfig::DBConfig() {
+DBConfig::DBConfig() : allocation_functions(DEFAULT_ALLOCATION_FUNCTIONS) {
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	encoding_functions = make_uniq<EncodingFunctionSet>();
 	encoding_functions->Initialize(*this);

@@ -1,7 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "jemalloc_extension.hpp"
 
-#include "duckdb/common/allocator.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "jemalloc/jemalloc.h"
 #include "malloc_ncpus.h"
 
@@ -9,25 +9,16 @@
 
 namespace duckdb {
 
-void JemallocExtension::Load(DuckDB &db) {
-	// NOP: This extension can only be loaded statically
+void JemallocExtension::Load(DuckDB &db) { // This is a static-only extension
+	ExtensionUtil::InitializeExtension(*db.instance);
 }
 
 std::string JemallocExtension::Name() {
 	return "jemalloc";
 }
 
-data_ptr_t JemallocExtension::Allocate(PrivateAllocatorData *private_data, idx_t size) {
-	return data_ptr_cast(duckdb_je_malloc(size));
-}
-
-void JemallocExtension::Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-	duckdb_je_free(pointer);
-}
-
-data_ptr_t JemallocExtension::Reallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-                                         idx_t size) {
-	return data_ptr_cast(duckdb_je_realloc(pointer, size));
+AllocationFunctions JemallocExtension::GetAllocationFunctions() {
+	return AllocationFunctions(duckdb_je_malloc, duckdb_je_realloc, duckdb_je_free);
 }
 
 static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {
@@ -90,15 +81,9 @@ void JemallocExtension::ThreadIdle() {
 }
 
 void JemallocExtension::FlushAll() {
-	// Flush thread-local cache
-	SetJemallocCTL("thread.tcache.flush");
-
 	// Flush all arenas
 	const auto purge_arena = PurgeArenaString(MALLCTL_ARENAS_ALL);
 	SetJemallocCTL(purge_arena.c_str());
-
-	// Reset the peak after resetting
-	SetJemallocCTL("thread.peak.reset");
 }
 
 void JemallocExtension::SetBackgroundThreads(bool enable) {

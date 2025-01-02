@@ -8,8 +8,13 @@
 
 #pragma once
 
+#include "duckdb/common/deque.hpp"
+
 #include <queue>
 
 namespace duckdb {
-using std::queue;
+
+template <class T, class DEQUE = deque<T>>
+using queue = std::queue<T, DEQUE>;
+
 } // namespace duckdb

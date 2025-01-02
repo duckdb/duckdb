@@ -774,3 +774,4 @@
 #define opt_bin_info_max_batched_size JEMALLOC_N(opt_bin_info_max_batched_size)
 #define opt_bin_info_remote_free_max JEMALLOC_N(opt_bin_info_remote_free_max)
 #define opt_bin_info_remote_free_max_batch JEMALLOC_N(opt_bin_info_remote_free_max_batch)
+#define opt_experimental_tcache_gc JEMALLOC_N(opt_experimental_tcache_gc)

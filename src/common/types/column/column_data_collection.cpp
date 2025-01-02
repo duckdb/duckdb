@@ -555,7 +555,8 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		}
 
 		if (heap_size != 0) {
-			current_segment.swizzle_data.emplace_back(child_index, current_segment.count, append_count);
+			current_segment.swizzle_data.emplace_back(child_index, current_segment.count,
+			                                          UnsafeNumericCast<uint16_t>(append_count));
 		}
 
 		current_segment.count += append_count;

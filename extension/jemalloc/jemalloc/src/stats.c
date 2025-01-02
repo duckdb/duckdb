@@ -1564,7 +1564,8 @@ stats_general_print(emitter_t *emitter) {
 	OPT_WRITE_SIZE_T("hpa_hugification_threshold")
 	OPT_WRITE_UINT64("hpa_hugify_delay_ms")
 	OPT_WRITE_UINT64("hpa_min_purge_interval_ms")
-	OPT_WRITE_BOOL("hpa_strict_min_purge_interval")
+	OPT_WRITE_BOOL("experimental_hpa_strict_min_purge_interval")
+	OPT_WRITE_SSIZE_T("experimental_hpa_max_purge_nhp")
 	if (je_mallctl("opt.hpa_dirty_mult", (void *)&u32v, &u32sz, NULL, 0)
 	    == 0) {
 		/*
@@ -1599,6 +1600,7 @@ stats_general_print(emitter_t *emitter) {
 	OPT_WRITE_BOOL("utrace")
 	OPT_WRITE_BOOL("xmalloc")
 	OPT_WRITE_BOOL("experimental_infallible_new")
+	OPT_WRITE_BOOL("experimental_tcache_gc")
 	OPT_WRITE_SIZE_T("max_batched_size")
 	OPT_WRITE_SIZE_T("remote_free_max")
 	OPT_WRITE_SIZE_T("remote_free_max_batch")

@@ -39,7 +39,7 @@
 //#ifdef SKIPLIST_THREAD_SUPPORT
 //    #include <mutex>
 //#endif
-#include <vector>
+#include "duckdb/common/vector.hpp"
 
 #ifdef INCLUDE_METHODS_THAT_USE_STREAMS
 #include <sstream>
@@ -94,7 +94,7 @@ public:
     // Will throw a SkipList::IndexError if any index out of range.
     // This is useful for rolling median on even length lists where
     // the caller might want to implement the mean of two values.
-    void at(size_t index, size_t count, std::vector<T> &dest) const;
+    void at(size_t index, size_t count, duckdb::vector<T> &dest) const;
     // Computes index of the first occurrence of a value
     // Will throw a ValueError if the value does not exist in the skip list
     size_t index(const T& value) const;
@@ -225,7 +225,7 @@ const T &HeadNode<T, _Compare>::at(size_t index) const {
  */
 template <typename T, typename _Compare>
 void HeadNode<T, _Compare>::at(size_t index, size_t count,
-                               std::vector<T> &dest) const {
+                               duckdb::vector<T> &dest) const {
 #ifdef SKIPLIST_THREAD_SUPPORT
     std::lock_guard<std::mutex> lock(gSkipListMutex);
 #endif

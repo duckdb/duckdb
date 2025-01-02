@@ -6,6 +6,12 @@
 #include "jemalloc/internal/ehooks.h"
 #include "jemalloc/internal/mutex.h"
 
+/*
+ * Alignment when THP is not enabled.  Set to constant 2M in case the HUGEPAGE
+ * value is unexpected high (which would cause VM over-reservation).
+ */
+#define BASE_BLOCK_MIN_ALIGN ((size_t)2 << 20)
+
 enum metadata_thp_mode_e {
 	metadata_thp_disabled   = 0,
 	/*
@@ -25,7 +31,6 @@ typedef enum metadata_thp_mode_e metadata_thp_mode_t;
 #define METADATA_THP_DEFAULT metadata_thp_disabled
 extern metadata_thp_mode_t opt_metadata_thp;
 extern const char *const metadata_thp_mode_names[];
-
 
 /* Embedded at the beginning of every block of base-managed virtual memory. */
 typedef struct base_block_s base_block_t;

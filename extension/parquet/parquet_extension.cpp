@@ -1645,6 +1645,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 
 void ParquetExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
+	ExtensionUtil::InitializeExtension(db_instance);
 	auto &fs = db.GetFileSystem();
 	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
 

@@ -27,6 +27,14 @@ extern size_t	os_page;
 #define HUGEPAGE	((size_t)(1U << LG_HUGEPAGE))
 #define HUGEPAGE_MASK	((size_t)(HUGEPAGE - 1))
 
+/*
+ * Used to validate that the hugepage size is not unexpectedly high.  The huge
+ * page features (HPA, metadata_thp) are primarily designed with a 2M THP size
+ * in mind.  Much larger sizes are not tested and likely to cause issues such as
+ * bad fragmentation or simply broken.
+ */
+#define HUGEPAGE_MAX_EXPECTED_SIZE ((size_t)(16U << 20))
+
 #if LG_HUGEPAGE != 0
 #  define HUGEPAGE_PAGES (HUGEPAGE / PAGE)
 #else

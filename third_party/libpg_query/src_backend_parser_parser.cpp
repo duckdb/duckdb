@@ -76,8 +76,8 @@ PGKeywordCategory is_keyword(const char *text) {
 	return PGKeywordCategory::PG_KEYWORD_NONE;
 }
 
-std::vector<PGKeyword> keyword_list() {
-    std::vector<PGKeyword> result;
+duckdb::vector<PGKeyword> keyword_list() {
+    duckdb::vector<PGKeyword> result;
 	for(size_t i = 0; i < NumScanKeywords; i++) {
 		PGKeyword keyword;
 		keyword.text = ScanKeywords[i].name;
@@ -100,11 +100,11 @@ std::vector<PGKeyword> keyword_list() {
 	return result;
 }
 
-std::vector<PGSimplifiedToken> tokenize(const char *str) {
+duckdb::vector<PGSimplifiedToken> tokenize(const char *str) {
 	core_yyscan_t yyscanner;
 	base_yy_extra_type yyextra;
 
-	std::vector<PGSimplifiedToken> result;
+	duckdb::vector<PGSimplifiedToken> result;
 	yyscanner = scanner_init(str, &yyextra.core_yy_extra, ScanKeywords, NumScanKeywords);
 	yyextra.have_lookahead = false;
 

@@ -8,19 +8,32 @@
 
 #pragma once
 
-#include "duckdb/common/assert.hpp"
-#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/likely.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/memory_safety.hpp"
+#include "duckdb/common/stl_allocator.hpp"
+#include "duckdb/common/typedefs.hpp"
+
 #include <vector>
+
+//! We put the vector exceptions in the implementation file so we don't have to include exception.hpp here
+//! duckdb::vector is not compatible with std::vector, and we have had to change some std::vector to duckdb::vector
+//! in our 'third_party' directory. This requires including this file, which includes exception.hpp, causing problems
+namespace duckdb_vector_exceptions {
+
+void ThrowIndexOutOfBoundsException(duckdb::idx_t index, duckdb::idx_t size);
+void ThrowBackOnEmptyVectorException();
+void ThrowEraseAtException(duckdb::idx_t index, duckdb::idx_t size);
+
+} // namespace duckdb_vector_exceptions
 
 namespace duckdb {
 
-template <class DATA_TYPE, bool SAFE = true>
-class vector : public std::vector<DATA_TYPE, std::allocator<DATA_TYPE>> { // NOLINT: matching name of std
+template <class DATA_TYPE, bool SAFE = true, // vector<bool> is evil so we work around it
+          class ALLOCATOR = typename std::conditional<std::is_same<DATA_TYPE, bool>::value, std::allocator<DATA_TYPE>,
+                                                      stl_allocator<DATA_TYPE>>::type>
+class vector : public std::vector<DATA_TYPE, ALLOCATOR> { // NOLINT: matching name of std
 public:
-	using original = std::vector<DATA_TYPE, std::allocator<DATA_TYPE>>;
+	using original = std::vector<DATA_TYPE, ALLOCATOR>;
 	using original::original;
 	using size_type = typename original::size_type;
 	using const_reference = typename original::const_reference;
@@ -32,7 +45,7 @@ private:
 		return;
 #else
 		if (DUCKDB_UNLIKELY(index >= size)) {
-			throw InternalException("Attempted to access index %ld within vector of size %ld", index, size);
+			duckdb_vector_exceptions::ThrowIndexOutOfBoundsException(index, size);
 		}
 #endif
 	}
@@ -89,14 +102,14 @@ public:
 
 	typename original::reference back() { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty vector!");
+			duckdb_vector_exceptions::ThrowBackOnEmptyVectorException();
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	typename original::const_reference back() const { // NOLINT: hiding on purpose
 		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty vector!");
+			duckdb_vector_exceptions::ThrowBackOnEmptyVectorException();
 		}
 		return get<SAFE>(original::size() - 1);
 	}
@@ -107,7 +120,7 @@ public:
 
 	void erase_at(idx_t idx) { // NOLINT: not using camelcase on purpose here
 		if (MemorySafety<SAFE>::ENABLED && idx > original::size()) {
-			throw InternalException("Can't remove offset %d from vector of size %d", idx, original::size());
+			duckdb_vector_exceptions::ThrowEraseAtException(idx, original::size());
 		}
 		unsafe_erase_at(idx);
 	}
@@ -115,5 +128,8 @@ public:
 
 template <typename T>
 using unsafe_vector = vector<T, false>;
+
+template <typename T>
+using static_vector = vector<T, true, std::allocator<T>>;
 
 } // namespace duckdb

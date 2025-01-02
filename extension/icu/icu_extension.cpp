@@ -336,6 +336,7 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 
 static void LoadInternal(DuckDB &ddb) {
 	auto &db = *ddb.instance;
+	ExtensionUtil::InitializeExtension(db);
 
 	// iterate over all the collations
 	int32_t count;

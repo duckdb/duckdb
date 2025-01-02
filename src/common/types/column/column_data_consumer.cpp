@@ -28,7 +28,7 @@ void ColumnDataConsumer::InitializeScan() {
 	chunk_references.reserve(chunk_count);
 	for (auto &segment : collection.GetSegments()) {
 		for (idx_t chunk_index = 0; chunk_index < segment->chunk_data.size(); chunk_index++) {
-			chunk_references.emplace_back(segment.get(), chunk_index);
+			chunk_references.emplace_back(segment.get(), NumericCast<uint32_t>(chunk_index));
 		}
 	}
 	std::sort(chunk_references.begin(), chunk_references.end());
