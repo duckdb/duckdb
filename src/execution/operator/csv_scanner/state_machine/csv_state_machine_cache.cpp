@@ -24,6 +24,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	for (uint32_t i = 0; i < StateMachine::NUM_STATES; i++) {
 		const auto cur_state = static_cast<CSVState>(i);
 		switch (cur_state) {
+		case CSVState::MAYBE_QUOTED:
 		case CSVState::QUOTED:
 		case CSVState::QUOTED_NEW_LINE:
 		case CSVState::ESCAPE:
@@ -226,11 +227,20 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
-	if (state_machine_options.escape == '\0' && state_machine_options.rfc_4180 == false) {
-		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
+	if (state_machine_options.rfc_4180 == false) {
+		if (escape == '\0') {
+			// If escape is defined, it limits a bit how relaxed quotes can be in a reliable way.
+			transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::MAYBE_QUOTED;
+		} else {
+			transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
+		}
 	}
 	if (comment != '\0') {
 		transition_array[comment][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::COMMENT;
+	}
+	if (delimiter_first_byte != ' ' && quote != ' ' && escape != ' ' && comment != ' ') {
+		// If space is not a special character, we can safely ignore it in an unquoted state
+		transition_array[' '][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::UNQUOTED;
 	}
 
 	// 8) Not Set
@@ -314,7 +324,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	}
 
 	// 13) Escaped Return State
-	if (enable_unquoted_escape && new_line_id == NewLineIdentifier::CARRY_ON) {
+	if (enable_unquoted_escape) {
 		// The new state is STANDARD for \r + \n and \r + ordinary character.
 		// Other special characters need to be handled.
 		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::DELIMITER;
@@ -329,6 +339,25 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			transition_array[comment][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::COMMENT;
 		}
 		transition_array[escape][static_cast<uint8_t>(CSVState::ESCAPED_RETURN)] = CSVState::UNQUOTED_ESCAPE;
+	}
+
+	// 14) Maybe quoted
+	transition_array[quote][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] = CSVState::MAYBE_QUOTED;
+
+	transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] =
+	    CSVState::RECORD_SEPARATOR;
+	if (new_line_id == NewLineIdentifier::CARRY_ON) {
+		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] =
+		    CSVState::CARRIAGE_RETURN;
+	} else {
+		transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] =
+		    CSVState::RECORD_SEPARATOR;
+	}
+	if (multi_byte_delimiter) {
+		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] =
+		    CSVState::DELIMITER_FIRST_BYTE;
+	} else {
+		transition_array[delimiter_first_byte][static_cast<uint8_t>(CSVState::MAYBE_QUOTED)] = CSVState::DELIMITER;
 	}
 
 	// Initialize characters we can skip during processing, for Standard and Quoted states

@@ -531,6 +531,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 			} else {
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
+				    result.state_machine.dialect_options.state_machine_options.quote.GetValue(),
 				    result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
@@ -1213,13 +1214,18 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector) {
+string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, Vector &vector) {
 	// Figure out the exact size
 	idx_t str_pos = 0;
 	bool just_escaped = false;
 	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
 		if (str_ptr[cur_pos] == escape && !just_escaped) {
 			just_escaped = true;
+		} else if (str_ptr[cur_pos] == quote) {
+			if (just_escaped) {
+				str_pos++;
+			}
+			just_escaped = false;
 		} else {
 			just_escaped = false;
 			str_pos++;
@@ -1232,9 +1238,14 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 	str_pos = 0;
 	just_escaped = false;
 	for (idx_t cur_pos = 0; cur_pos < end; cur_pos++) {
-		char c = str_ptr[cur_pos];
+		const char c = str_ptr[cur_pos];
 		if (c == escape && !just_escaped) {
 			just_escaped = true;
+		} else if (str_ptr[cur_pos] == quote) {
+			if (just_escaped) {
+				removed_escapes_ptr[str_pos++] = c;
+			}
+			just_escaped = false;
 		} else {
 			just_escaped = false;
 			removed_escapes_ptr[str_pos++] = c;
@@ -1272,7 +1283,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.IsUnquoted()) {
 			result.SetUnquoted(result);
 		}
-		if (states.IsEscaped()) {
+		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
 			result.escaped = true;
 		}
 		if (states.IsComment()) {
@@ -1312,7 +1323,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.IsComment()) {
 			result.comment = true;
 		}
-		if (states.IsEscaped()) {
+		if (states.IsEscaped() && result.state_machine.dialect_options.state_machine_options.escape != '\0') {
 			result.escaped = true;
 		}
 		if (states.IsInvalid()) {
@@ -1337,6 +1348,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
 					value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
 					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
 					                     result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
@@ -1346,6 +1358,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
 					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
 					                     result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
@@ -1422,7 +1435,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 					result.AddRow(result, previous_buffer_handle->actual_size);
 				}
 				lines_read++;
-			} else if (states.IsQuotedCurrent()) {
+			} else if (states.IsQuotedCurrent() &&
+			           state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
 				// Unterminated quote
 				LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos,
 				                                   result.buffer_size};
@@ -1433,7 +1447,8 @@ bool StringValueScanner::MoveToNextBuffer() {
 				if (result.IsCommentSet(result)) {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
-					if (result.quoted && states.IsDelimiterBytes()) {
+					if (result.quoted && states.IsDelimiterBytes() &&
+					    state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
 						result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
 						                             result.last_position);
 					}
@@ -1750,7 +1765,8 @@ void StringValueScanner::FinalizeChunkProcess() {
 				result.number_of_rows++;
 			}
 		}
-		if (states.IsQuotedCurrent() && !has_unterminated_quotes) {
+		if (states.IsQuotedCurrent() && !has_unterminated_quotes &&
+		    state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
 			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,

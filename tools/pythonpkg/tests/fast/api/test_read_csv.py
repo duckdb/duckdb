@@ -613,7 +613,7 @@ class TestReadCSV(object):
             {'filename': 'test'},
             {'hive_partitioning': True},
             {'hive_partitioning': False},
-            # {'union_by_name': True},
+            {'union_by_name': True},
             {'union_by_name': False},
             {'hive_types_autocast': False},
             {'hive_types_autocast': True},
@@ -638,3 +638,17 @@ class TestReadCSV(object):
         con = duckdb.connect()
         rel = con.read_csv(str(file1), columns={'a': 'VARCHAR'}, auto_detect=False, header=False, comment='#')
         assert rel.fetchall() == [('one|two|three|four',), ('1|2|3|4',), ('1|2|3|4',)]
+
+    def test_union_by_name(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one|two|three|four\n1|2|3|4')
+
+        file1 = tmp_path / "file2.csv"
+        file1.write_text('two|three|four|five\n2|3|4|5')
+
+        con = duckdb.connect()
+
+        file_path = tmp_path / "file*.csv"
+        rel = con.read_csv(file_path, union_by_name=True)
+        assert rel.columns == ['one', 'two', 'three', 'four', 'five']
+        assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]
