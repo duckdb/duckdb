@@ -7,8 +7,6 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-//class StructUpdateFunctionExpressionState : ExpressionState {};
-
 namespace duckdb {
 
 static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -24,32 +22,32 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 	auto new_entries = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(args.ColumnCount(), true);
 
-	for (idx_t j = 1; j < func_args.size(); j++) {
-		auto &new_child = func_args[j];
-		new_entries.emplace(new_child->alias, j);
+	for (idx_t arg_idx = 1; arg_idx < func_args.size(); arg_idx++) {
+		auto &new_child = func_args[arg_idx];
+		new_entries.emplace(new_child->alias, arg_idx);
 	}
 
 	// Assign the original child entries to the STRUCT.
-	for (idx_t i = 0; i < starting_child_entries.size(); i++) {
-		auto &starting_child = starting_child_entries[i];
-		auto update = new_entries.find(starting_types[i].first.c_str());
+	for (idx_t field_idx = 0; field_idx < starting_child_entries.size(); field_idx++) {
+		auto &starting_child = starting_child_entries[field_idx];
+		auto update = new_entries.find(starting_types[field_idx].first.c_str());
 
 		if(update == new_entries.end()) {
 			// No update present, copy from source
 			result_child_entries[i]->Reference(*starting_child);
 		} else {
 			// We found a replacement of the same name to update
-			auto j = update->second;
-			result_child_entries[i]->Reference(args.data[j]);
-			is_new_field[j] = false;
+			auto arg_idx = update->second;
+			result_child_entries[field_idx]->Reference(args.data[arg_idx]);
+			is_new_field[arg_idx] = false;
 		}
 
 	}
 
 	// Assign the new (not updated) children to the end of the result vector.
-	for (idx_t j = 1, k = starting_child_entries.size(); j < args.ColumnCount(); j++) {
-		if(is_new_field[j]) {
-			result_child_entries[k++]->Reference(args.data[j]);
+	for (idx_t arg_idx = 1, field_idx = starting_child_entries.size(); arg_idx < args.ColumnCount(); arg_idx++) {
+		if(is_new_field[arg_idx]) {
+			result_child_entries[field_idx++]->Reference(args.data[arg_idx]);
 		}
 	}
 
@@ -78,33 +76,33 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 	auto is_new_field = vector<bool>(arguments.size(), true);
 
 	// Validate incomming arguments and record names
-	for (idx_t j = 1; j < arguments.size(); j++) {
-		auto &child = arguments[j];
+	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
+		auto &child = arguments[arg_idx];
 		if (child->alias.empty()) {
 			throw BinderException("Need named argument for struct insert, e.g., a := b");
 		}
-		incomming_children.emplace(child->alias, j);
+		incomming_children.emplace(child->alias,arg_idxj);
 	}
 
-	for (idx_t i = 0; i < existing_children.size(); i++) {
-		auto &existing_child = existing_children[i];
+	for (idx_t field_idx = 0; field_idx < existing_children.size(); field_idx++) {
+		auto &existing_child = existing_children[field_idx];
 		auto update = incomming_children.find(existing_child.first);
 		if (update == incomming_children.end()) {
 			// No update provided for the named value
 			new_children.push_back(make_pair(existing_child.first, existing_child.second));
 		} else {
 			// Update the struct with the new data of the same name
-			auto j = update->second;
-			auto &new_child = arguments[j];
+			auto arg_idx = update->second;
+			auto &new_child = arguments[arg_idx];
 			new_children.push_back(make_pair(new_child->alias, new_child->return_type));
-			is_new_field[j] = false;
+			is_new_field[arg_idx] = false;
 		}
 	}
 
 	// Loop through the additional arguments (name/value pairs)
-	for (idx_t j = 1; j < arguments.size(); j++) {
-		if(is_new_field[j]) {
-			auto &child = arguments[j];
+	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
+		if(is_new_field[arg_idx]) {
+			auto &child = arguments[arg_idx];
 			new_children.push_back(make_pair(child->alias, child->return_type));
 		}
 	}
@@ -114,7 +112,6 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 }
 
 unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionStatisticsInput &input) {
-	printf("Stats\n");
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 
@@ -122,28 +119,28 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 	auto is_new_field = vector<bool>(expr.children.size(), true);
 	auto new_stats = StructStats::CreateUnknown(expr.return_type);
 
-	for (idx_t j = 1; j < expr.children.size(); j++) {
-		auto &new_child = expr.children[j];
-		incomming_children.emplace(new_child->alias, j);
+	for (idx_t arg_idx = 1; arg_idx < expr.children.size(); arg_idx++) {
+		auto &new_child = expr.children[arg_idx];
+		incomming_children.emplace(new_child->alias, arg_idx);
 	}
 
 	auto existing_count = StructType::GetChildCount(child_stats[0].GetType());
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);
-	for (idx_t i = 0; i < existing_count; i++) {
-		auto &existing_child = existing_stats[i];
+	for (idx_t field_idx = 0; field_idx < existing_count; field_idx++) {
+		auto &existing_child = existing_stats[field_idx];
 		auto update = incomming_children.find(existing_child.GetType().GetAlias());
 		if(update == incomming_children.end()) {
-			StructStats::SetChildStats(new_stats, i, existing_child);
+			StructStats::SetChildStats(new_stats, field_idx, existing_child);
 		} else {
-			auto j = update->second;
-			StructStats::SetChildStats(new_stats, i, child_stats[j]);
-			is_new_field[j] = false;
+			auto arg_idx = update->second;
+			StructStats::SetChildStats(new_stats, field_idx, child_stats[arg_idx]);
+			is_new_field[arg_idx] = false;
 		}
 	}
 
-	for (idx_t j = 1, k = existing_count; j < expr.children.size(); j++) {
-		if(is_new_field[j]) {
-			StructStats::SetChildStats(new_stats, k++, child_stats[j]);
+	for (idx_t arg_idx = 1, field_idx = existing_count; arg_idx < expr.children.size(); arg_idx++) {
+		if(is_new_field[arg_idx]) {
+			StructStats::SetChildStats(new_stats, field_idx++, child_stats[arg_idx]);
 		}
 	}
 
