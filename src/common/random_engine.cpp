@@ -1,7 +1,6 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "pcg_random.hpp"
-#include <random>
 
 namespace duckdb {
 
@@ -14,7 +13,9 @@ struct RandomState {
 
 RandomEngine::RandomEngine(int64_t seed) : random_state(make_uniq<RandomState>()) {
 	if (seed < 0) {
-		random_state->pcg.seed(pcg_extras::seed_seq_from<std::random_device>());
+		auto now = std::chrono::high_resolution_clock::now();
+		uint64_t time_seed = now.time_since_epoch().count();
+		random_state->pcg.seed(time_seed);
 	} else {
 		random_state->pcg.seed(NumericCast<uint64_t>(seed));
 	}
