@@ -414,7 +414,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				return plan;
 			}
 		} else if (join.join_type == JoinType::RIGHT) {
-			// left outer join
+			// right outer join
 			if (!left_has_correlation) {
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
@@ -450,6 +450,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			this->base_binding = left_binding;
 		} else if (join.join_type == JoinType::RIGHT) {
 			this->base_binding = right_binding;
+			delim_offset += plan->children[0]->GetColumnBindings().size();
 		}
 		// add the correlated columns to the join conditions
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
