@@ -7,7 +7,6 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-
 namespace duckdb {
 
 static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -33,7 +32,7 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 		auto &starting_child = starting_child_entries[field_idx];
 		auto update = new_entries.find(starting_types[field_idx].first.c_str());
 
-		if(update == new_entries.end()) {
+		if (update == new_entries.end()) {
 			// No update present, copy from source
 			result_child_entries[i]->Reference(*starting_child);
 		} else {
@@ -42,12 +41,11 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 			result_child_entries[field_idx]->Reference(args.data[arg_idx]);
 			is_new_field[arg_idx] = false;
 		}
-
 	}
 
 	// Assign the new (not updated) children to the end of the result vector.
 	for (idx_t arg_idx = 1, field_idx = starting_child_entries.size(); arg_idx < args.ColumnCount(); arg_idx++) {
-		if(is_new_field[arg_idx]) {
+		if (is_new_field[arg_idx]) {
 			result_child_entries[field_idx++]->Reference(args.data[arg_idx]);
 		}
 	}
@@ -82,7 +80,7 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 		if (child->alias.empty()) {
 			throw BinderException("Need named argument for struct insert, e.g., a := b");
 		}
-		incomming_children.emplace(child->alias,arg_idxj);
+		incomming_children.emplace(child->alias, arg_idxj);
 	}
 
 	for (idx_t field_idx = 0; field_idx < existing_children.size(); field_idx++) {
@@ -102,7 +100,7 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 
 	// Loop through the additional arguments (name/value pairs)
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
-		if(is_new_field[arg_idx]) {
+		if (is_new_field[arg_idx]) {
 			auto &child = arguments[arg_idx];
 			new_children.push_back(make_pair(child->alias, child->return_type));
 		}
@@ -130,7 +128,7 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 	for (idx_t field_idx = 0; field_idx < existing_count; field_idx++) {
 		auto &existing_child = existing_stats[field_idx];
 		auto update = incomming_children.find(existing_child.GetType().GetAlias());
-		if(update == incomming_children.end()) {
+		if (update == incomming_children.end()) {
 			StructStats::SetChildStats(new_stats, field_idx, existing_child);
 		} else {
 			auto arg_idx = update->second;
@@ -140,7 +138,7 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 	}
 
 	for (idx_t arg_idx = 1, field_idx = existing_count; arg_idx < expr.children.size(); arg_idx++) {
-		if(is_new_field[arg_idx]) {
+		if (is_new_field[arg_idx]) {
 			StructStats::SetChildStats(new_stats, field_idx++, child_stats[arg_idx]);
 		}
 	}
