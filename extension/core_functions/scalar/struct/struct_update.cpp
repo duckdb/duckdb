@@ -80,7 +80,7 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 		if (child->alias.empty()) {
 			throw BinderException("Need named argument for struct insert, e.g., a := b");
 		}
-		incomming_children.emplace(child->alias, arg_idxj);
+		incomming_children.emplace(child->alias, arg_idx);
 	}
 
 	for (idx_t field_idx = 0; field_idx < existing_children.size(); field_idx++) {
