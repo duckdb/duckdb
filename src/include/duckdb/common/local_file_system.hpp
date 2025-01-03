@@ -96,7 +96,7 @@ public:
 	//! Checks a file is private (checks for 600 on linux/macos, TODO: currently always returns true on windows)
 	static bool IsPrivateFile(const string &path_p, FileOpener *opener);
 
-	// Gets a pointer to the normalized file path (skipping any potential file:// prefix)
+	// returns a C-string of the path that trims any file:// prefix
 	static const char *NormalizeLocalPath(const string &path);
 
 private:
