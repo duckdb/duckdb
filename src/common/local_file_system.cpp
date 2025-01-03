@@ -1080,7 +1080,7 @@ void LocalFileSystem::RemoveDirectory(const string &directory, optional_ptr<File
 }
 
 void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	auto normalized_path = LocalFileSystem::NormalizeLocalPath(directory);
+	auto normalized_path = LocalFileSystem::NormalizeLocalPath(filename);
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(normalized_path);
 	if (!DeleteFileW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();

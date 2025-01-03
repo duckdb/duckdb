@@ -41,6 +41,7 @@ SELECT id, filename[:17], parse_filename(filename) FROM read_csv_auto("file://lo
 1	file://localhost/	test.csv
 2	file://localhost/	test.csv
 
+require noforcestorage
 
 # Ensure secrets work correctly using the file://
 statement ok
