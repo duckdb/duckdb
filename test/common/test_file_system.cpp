@@ -43,9 +43,9 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	}
 
 	// Path of format file:///bla/bla on 'nix and file:///X:/bla/bla on Windows
-	auto dname_triple_slash = fs->JoinPath("file://",dname_converted_slashes);
+	auto dname_triple_slash = fs->JoinPath("file://", dname_converted_slashes);
 	// Path of format file://localhost/bla/bla on 'nix and file://localhost/X:/bla/bla on Windows
-	auto dname_localhost = fs->JoinPath("file://localhost",dname_converted_slashes);
+	auto dname_localhost = fs->JoinPath("file://localhost", dname_converted_slashes);
 
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
