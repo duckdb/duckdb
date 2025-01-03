@@ -940,6 +940,10 @@ other			.
 						nchars = strchr(yytext, '?') - yytext;
 					}
 
+					if (nchars == 2 && yytext[0] == '>' && (yytext[1] == '*' || yytext[1] == '+')) {
+						nchars = 1; /* for PGQ it is confusing in "- >*" to glue >* into one op */
+					} 
+
 					SET_YYLLOC();
 
 					if ((yy_size_t) nchars < yyleng)
