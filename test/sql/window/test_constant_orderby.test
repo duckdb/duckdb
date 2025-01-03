@@ -1,0 +1,30 @@
+# name: test/sql/window/test_constant_orderby.test
+# description: Constant window aggregation functionality.
+# group: [window]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.01);
+
+query IIII
+SELECT 
+	l_orderkey,
+	l_shipmode, 
+	l_linenumber, 
+	mode(l_linenumber ORDER BY l_linenumber DESC) over w AS l_mode,
+FROM lineitem
+WINDOW w AS (partition by l_shipmode)
+ORDER BY ALL
+LIMIT 10
+----
+1	AIR	4	1
+1	FOB	5	1
+1	MAIL	2	1
+1	MAIL	6	1
+1	REG AIR	3	1
+1	TRUCK	1	1
+2	RAIL	1	1
+3	AIR	1	1
+3	FOB	5	1
+3	RAIL	2	1

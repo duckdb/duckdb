@@ -136,6 +136,10 @@ WindowValueExecutor::WindowValueExecutor(BoundWindowExpression &wexpr, ClientCon
                                          WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, context, shared) {
 
+	for (const auto &order : wexpr.arg_orders) {
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
+	}
+
 	//	The children have to be handled separately because only the first one is global
 	if (!wexpr.children.empty()) {
 		child_idx = shared.RegisterCollection(wexpr.children[0], wexpr.ignore_nulls);

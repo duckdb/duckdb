@@ -22,6 +22,8 @@ public:
 
 	//! The evaluation index of the NTILE column
 	column_t ntile_idx = DConstants::INVALID_INDEX;
+	//! The column indices of any ORDER BY argument expressions
+	vector<column_t> arg_order_idx;
 
 protected:
 	void EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate, DataChunk &eval_chunk,
