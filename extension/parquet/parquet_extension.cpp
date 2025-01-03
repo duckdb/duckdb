@@ -268,7 +268,18 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 	MultiFileReaderBindData bind_data;
 	schema_col_names.reserve(options.schema.size());
 	schema_col_types.reserve(options.schema.size());
-	bool match_by_field_id = false;
+	bool match_by_field_id;
+	if (!options.schema.empty()) {
+		auto &column = options.schema[0];
+		if (column.identifier.type().id() == LogicalTypeId::INTEGER) {
+			match_by_field_id = true;
+		} else {
+			match_by_field_id = false;
+		}
+	} else {
+		match_by_field_id = false;
+	}
+
 	for (idx_t i = 0; i < options.schema.size(); i++) {
 		const auto &column = options.schema[i];
 		schema_col_names.push_back(column.name);
@@ -276,11 +287,6 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 
 		auto res = MultiFileReaderColumnDefinition(column.name, column.type);
 		res.identifier = column.identifier;
-		if (!i) {
-			if (res.identifier.type().id() == LogicalTypeId::INTEGER) {
-				match_by_field_id = true;
-			}
-		}
 #ifdef DEBUG
 		if (match_by_field_id) {
 			D_ASSERT(res.identifier.type().id() == LogicalTypeId::INTEGER);
