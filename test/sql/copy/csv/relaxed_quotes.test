@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIII
-from read_csv('data/csv/stops.csv');
+from read_csv('data/csv/unescaped_quotes/stops.csv');
 ----
 "de:08115:1303:2:1"	"Weil der Stadt Bahnhof"	"48.7551432936956"	"8.87272294455349"
 "de:08115:1303:2:4"	"Weil der Stadt Bahnhof"	"48.7542193911232"	"8.87191446079767"
@@ -19,7 +19,7 @@ from read_csv('data/csv/stops.csv');
 "de:08317:12007:2:1"	"Lahr Schlüssel "Vis-à-Vis Bus""	"48.3411985847104"	"7.87932997062448"
 
 query IIII
-from read_csv('data/csv/stops.csv', rfc_4180=false);
+from read_csv('data/csv/unescaped_quotes/stops.csv', rfc_4180=false);
 ----
 de:08115:1303:2:1	Weil der Stadt Bahnhof	48.7551432936956	8.87272294455349
 de:08115:1303:2:4	Weil der Stadt Bahnhof	48.7542193911232	8.87191446079767
@@ -28,11 +28,11 @@ de:08115:4574:0:2	Weil der Stadt Stadtgarten	48.7523774577301	8.869444093766
 de:08115:4575:0:1	Weil der Stadt Merklinger Straße	48.7554808692434	8.86798882300553
 de:08115:4575:0:2	Weil der Stadt Merklinger Straße	48.7554808692434	8.86798882300553
 de:08115:4577:0:1	Münklingen Neuhauser Str.	48.7769389105929	8.81035291436839
-de:08317:12007:2:1	Lahr Schlüssel "Vis-à-Vis Bus" more text	48.3411985847104	7.87932997062448
-de:08317:12007:2:1	Lahr Schlüssel "Vis-à-Vis Bus"	48.3411985847104	7.87932997062448
+de:08317:12007:2:1	Lahr Schlüssel Vis-à-Vis Bus more text	48.3411985847104	7.87932997062448
+de:08317:12007:2:1	Lahr Schlüssel Vis-à-Vis Bus	48.3411985847104	7.87932997062448
 
 query II
-from read_csv('data/csv/unescaped_quote.csv', rfc_4180=false);
+from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', escape = '"', rfc_4180=false);
 ----
 1	pedro pdet holanda
 2	pedro pdet holanda
@@ -42,7 +42,7 @@ from read_csv('data/csv/unescaped_quote.csv', rfc_4180=false);
 6	pedro pdet holanda
 
 query II
-from read_csv('data/csv/unescaped_quote.csv', rfc_4180=false, escape = '', quote = '"', delim = ';');
+from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', rfc_4180=false, escape = '', quote = '"', delim = ';');
 ----
 1	pedro "pdet" holanda
 2	pedro "pdet" holanda
@@ -55,19 +55,19 @@ from read_csv('data/csv/unescaped_quote.csv', rfc_4180=false, escape = '', quote
 loop buffer_size 30 35
 
 query II
-from read_csv('data/csv/unescaped_quote.csv', rfc_4180=false, buffer_size = ${buffer_size}, header = 0)
+from read_csv('data/csv/unescaped_quotes/unescaped_quote.csv', rfc_4180=false, escape = '', buffer_size = ${buffer_size}, header = 0)
 ----
-1	pedro pdet holanda
-2	pedro pdet holanda
-3	pedro pdet ho;landa
-4	pedro pdet holanda
-5	pedro pdet holanda
-6	pedro pdet holanda
+1	pedro "pdet" holanda
+2	pedro "pdet" holanda
+3	pedro "pdet" ho;landa
+4	pedro "pdet" holanda
+5	pedro "pdet" holanda
+6	pedro "pdet" holanda
 
 endloop
 
 statement ok
-create table t as from read_csv('data/csv/unescaped_quote_new_line.csv', rfc_4180=false, header = 0)
+create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line.csv', rfc_4180=false, header = 0)
 
 query I
 select count(*) from t;
@@ -78,9 +78,64 @@ statement ok
 drop table t;
 
 statement error
-create table t as from read_csv('data/csv/unescaped_quote_new_line.csv', rfc_4180=false, buffer_size = 30, header = 0)
+create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', rfc_4180=false, buffer_size = 20, header = 0)
+----
+
+
+statement error
+create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', rfc_4180=false, buffer_size = 20, header = 0)
 ----
 
 statement ok
-create table t as from read_csv('data/csv/unescaped_quote_new_line.csv', rfc_4180=false, buffer_size = 30, header = 0, parallel = false)
+create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line.csv', rfc_4180=false, buffer_size = 30, header = 0, parallel = false)
 
+statement ok
+drop table t
+
+statement ok
+create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', rfc_4180=false, buffer_size = 30, header = 0, parallel = false)
+
+
+query I
+FROM read_csv('data/csv/unescaped_quotes/end_quote.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false)
+----
+Pedro "the" legend
+Pedro "the
+
+query I
+FROM read_csv('data/csv/unescaped_quotes/end_quote.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false)
+----
+Pedro "the" legend
+Pedro "the
+
+
+query I
+FROM read_csv('data/csv/unescaped_quotes/end_quote_2.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false)
+----
+Pedro "the" legend
+Pedro "the
+Pedro "the
+
+query I
+FROM read_csv('data/csv/unescaped_quotes/end_quote_3.csv', columns = {'a':'varchar'}, header = false, quote = '"', rfc_4180 = false)
+----
+Pedro "the
+Pedro "the" legend
+Pedro "the
+
+# What happens when we mix everything
+query I
+FROM read_csv('data/csv/unescaped_quotes/some_escaped_some_not.csv', columns = {'a':'varchar'}, header = false, quote = '"', escape = '"', rfc_4180 = false)
+----
+Pedro "the" legend
+Pedro the legend
+Pedro "the
+Pedro the
+
+# It is not possible to read this with escape set.
+query I
+FROM read_csv('data/csv/unescaped_quotes/end_quote_mixed.csv', columns = {'a':'varchar'}, header = false, quote = '"', escape = '', rfc_4180 = false)
+----
+Pedro "the
+Pedro ""the"" legend
+Pedro "the

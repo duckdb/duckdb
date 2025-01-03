@@ -11,17 +11,17 @@
 #include "duckdb/common/types.hpp"
 
 template <size_t SIZE>
-static inline void MemcpyFixed(void *dest, const void *src) {
+inline void MemcpyFixed(void *dest, const void *src) {
 	memcpy(dest, src, SIZE);
 }
 
 template <size_t SIZE>
-static inline int MemcmpFixed(const void *str1, const void *str2) {
+inline int MemcmpFixed(const void *str1, const void *str2) {
 	return memcmp(str1, str2, SIZE);
 }
 
 template <size_t SIZE>
-static inline void MemsetFixed(void *ptr, int value) {
+inline void MemsetFixed(void *ptr, int value) {
 	memset(ptr, value, SIZE);
 }
 
@@ -30,7 +30,7 @@ namespace duckdb {
 //! This templated memcpy is significantly faster than std::memcpy,
 //! but only when you are calling memcpy with a const size in a loop.
 //! For instance `while (<cond>) { memcpy(<dest>, <src>, const_size); ... }`
-static inline void FastMemcpy(void *dest, const void *src, const size_t size) {
+inline void FastMemcpy(void *dest, const void *src, const size_t size) {
 	// LCOV_EXCL_START
 	switch (size) {
 	case 0:
@@ -556,7 +556,7 @@ static inline void FastMemcpy(void *dest, const void *src, const size_t size) {
 //! This templated memcmp is significantly faster than std::memcmp,
 //! but only when you are calling memcmp with a const size in a loop.
 //! For instance `while (<cond>) { memcmp(<str1>, <str2>, const_size); ... }`
-static inline int FastMemcmp(const void *str1, const void *str2, const size_t size) {
+inline int FastMemcmp(const void *str1, const void *str2, const size_t size) {
 	// LCOV_EXCL_START
 	switch (size) {
 	case 0:
@@ -695,7 +695,7 @@ static inline int FastMemcmp(const void *str1, const void *str2, const size_t si
 	// LCOV_EXCL_STOP
 }
 
-static inline void FastMemset(void *ptr, int value, size_t size) {
+inline void FastMemset(void *ptr, int value, size_t size) {
 	// LCOV_EXCL_START
 	switch (size) {
 	case 0:
