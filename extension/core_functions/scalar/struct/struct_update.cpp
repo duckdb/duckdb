@@ -119,17 +119,18 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 	auto incomming_children = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(expr.children.size(), true);
 	auto new_stats = StructStats::CreateUnknown(expr.return_type);
-
+	
 	for (idx_t arg_idx = 1; arg_idx < expr.children.size(); arg_idx++) {
 		auto &new_child = expr.children[arg_idx];
 		incomming_children.emplace(new_child->alias, arg_idx);
 	}
 
-	auto existing_count = StructType::GetChildCount(child_stats[0].GetType());
+	auto existing_type = child_stats[0].GetType();
+	auto existing_count = StructType::GetChildCount(existing_type);
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);
 	for (idx_t field_idx = 0; field_idx < existing_count; field_idx++) {
 		auto &existing_child = existing_stats[field_idx];
-		auto update = incomming_children.find(existing_child.GetType().GetAlias());
+		auto update = incomming_children.find(StructType::GetChildName(existing_type, field_idx));
 		if (update == incomming_children.end()) {
 			StructStats::SetChildStats(new_stats, field_idx, existing_child);
 		} else {
