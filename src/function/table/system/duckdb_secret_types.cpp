@@ -16,7 +16,7 @@ struct DuckDBSecretTypesData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBSecretTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                   vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -64,8 +64,8 @@ void DuckDBSecretTypesFunction(ClientContext &context, TableFunctionInput &data_
 }
 
 void DuckDBSecretTypesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("duckdb_secret_types", {}, DuckDBSecretTypesFunction, DuckDBSecretTypesBind, DuckDBSecretTypesInit));
+	set.AddFunction(TableFunction("duckdb_secret_types", {}, DuckDBSecretTypesFunction, DuckDBSecretTypesBind,
+	                              DuckDBSecretTypesInit));
 }
 
 } // namespace duckdb
