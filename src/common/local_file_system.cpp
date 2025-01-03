@@ -1259,29 +1259,34 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 	return result;
 }
 
-const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
+// Helper function to handle file:// URLs
+static idx_t GetFileUrlOffset(const string &path) {
 	if (!StringUtil::StartsWith(path, "file://")) {
-		return path.c_str();
+		return 0;
 	}
 
 	if (path[7] == '/') {
 #ifdef _WIN32
-		return path.c_str() + 8;
+		return 8;
 #else
-		return path.c_str() + 7;
+		return 7;
 #endif
 	}
 
 	if (path.compare(7, 10, "localhost/") == 0) {
 #ifdef _WIN32
-		return path.c_str() + 17;
+		return 17;
 #else
-		return path.c_str() + 16;
+		return 16;
 #endif
 	}
 
-	// unkown file:// url format, just forward the problem by returning the whole string
-	return path.c_str();
+	// unkown file:// url format
+	return 0;
+}
+
+const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
+	return path.c_str() + GetFileUrlOffset(path);
 }
 
 vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
@@ -1291,26 +1296,8 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	// split up the path into separate chunks
 	vector<string> splits;
 
-	bool is_file_url;
-	idx_t file_url_path_offset;
-	if (StringUtil::StartsWith(path, "file:///")) {
-#ifdef _WIN32
-		file_url_path_offset = 8;
-#else
-		file_url_path_offset = 7;
-#endif
-		is_file_url = true;
-	} else if (StringUtil::StartsWith(path, "file://localhost/")) {
-#ifdef _WIN32
-		file_url_path_offset = 17;
-#else
-		file_url_path_offset = 16;
-#endif
-		is_file_url = true;
-	} else {
-		file_url_path_offset = 0;
-		is_file_url = false;
-	}
+	bool is_file_url = StringUtil::StartsWith(path, "file://");
+	idx_t file_url_path_offset = GetFileUrlOffset(path);
 
 	idx_t last_pos = 0;
 	for (idx_t i = file_url_path_offset; i < path.size(); i++) {
@@ -1357,13 +1344,8 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	}
 	vector<string> previous_directories;
 	if (absolute_path) {
-		if (is_file_url) {
-			// for file:// paths, we don't start by scanning the current directory
-			previous_directories.push_back(splits[0]);
-		} else {
-			// for regular absolute paths, we don't start by scanning the current directory
-			previous_directories.push_back(splits[0]);
-		}
+		// for absolute paths, we don't start by scanning the current directory
+		previous_directories.push_back(splits[0]);
 	} else {
 		// If file_search_path is set, use those paths as the first glob elements
 		Value value;
