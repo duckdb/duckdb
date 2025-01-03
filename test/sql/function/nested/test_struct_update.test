@@ -1,4 +1,4 @@
-# name: test/sql/function/nested/test_struct_insert.test
+# name: test/sql/function/nested/test_struct_update.test
 # description: Test the struct_insert function.
 # group: [nested]
 
