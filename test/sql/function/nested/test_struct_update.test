@@ -28,17 +28,22 @@ SELECT struct_update({'a': 1, 'b': 'abc', 'c': true}, d := {'a': 'new stuff'});
 statement error
 SELECT struct_update();
 ----
-<REGEX>:Invalid Input Error.*Missing required arguments for struct_insert function.*
+<REGEX>:Invalid Input Error.*Missing required arguments for struct_update function.*
 
 statement error
 SELECT struct_update({a: 1, b: 2});
 ----
-<REGEX>:Invalid Input Error.*insert nothing into a STRUCT.*
+<REGEX>:Invalid Input Error.*update nothing into a STRUCT.*
 
 statement error
 SELECT struct_update(123, a := 1);
 ----
-<REGEX>:Invalid Input Error.*The first argument to struct_insert must be a STRUCT.*
+<REGEX>:Invalid Input Error.*The first argument to struct_update must be a STRUCT.*
+
+statement error
+SELECT struct_update({a: 1, b: 2}, a := 2, a := 3);
+----
+<REGEX>:Invalid Input Error.*Duplicate named argument .*
 
 # Test changing a value in a STRUCT field
 query T
