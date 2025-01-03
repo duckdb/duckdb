@@ -173,6 +173,7 @@ def main():
         file_paths = [os.path.relpath(path, test_directory) for path in file_paths]
 
     start_offset = args.start_offset
+    should_fail = False
 
     total_tests = len(file_paths)
     for i, file_path in enumerate(file_paths):
@@ -201,11 +202,13 @@ def main():
             continue
         if result.type == ExecuteResult.Type.ERROR:
             print("ERROR")
-            exit(1)
+            should_fail = True
     if len(executor.skip_log) != 0:
         for item in executor.skip_log:
             print(item)
         executor.skip_log.clear()
+    if should_fail:
+        exit(1)
 
 
 if __name__ == '__main__':
