@@ -95,6 +95,10 @@ struct DuckDBOptimizersFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBSecretTypesFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBSequencesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

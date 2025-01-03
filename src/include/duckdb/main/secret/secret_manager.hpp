@@ -135,6 +135,9 @@ public:
 	//! List all secrets from all secret storages
 	DUCKDB_API vector<SecretEntry> AllSecrets(CatalogTransaction transaction);
 
+	//! List all secret types
+	DUCKDB_API vector<SecretType> AllSecretTypes();
+
 	//! Secret Manager settings
 	DUCKDB_API virtual void SetEnablePersistentSecrets(bool enabled);
 	DUCKDB_API virtual void ResetEnablePersistentSecrets();

@@ -31,6 +31,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBOptimizersFun::RegisterFunction(*this);
 	DuckDBSecretsFun::RegisterFunction(*this);
 	DuckDBWhichSecretFun::RegisterFunction(*this);
+	DuckDBSecretTypesFun::RegisterFunction(*this);
 	DuckDBSequencesFun::RegisterFunction(*this);
 	DuckDBSettingsFun::RegisterFunction(*this);
 	DuckDBTablesFun::RegisterFunction(*this);

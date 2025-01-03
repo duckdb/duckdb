@@ -489,6 +489,17 @@ vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
 	return result;
 }
 
+vector<SecretType> SecretManager::AllSecretTypes() {
+	unique_lock<mutex> lck(manager_lock);
+	vector<SecretType> result;
+
+	for (const auto& secret : secret_types) {
+		result.push_back(secret.second);
+	}
+
+	return result;
+}
+
 void SecretManager::ThrowOnSettingChangeIfInitialized() {
 	if (initialized) {
 		throw InvalidInputException(
