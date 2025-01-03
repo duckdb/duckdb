@@ -120,8 +120,12 @@ public:
 	static ExtensionUpdateResult UpdateExtension(ClientContext &context, const string &extension_name);
 
 	//! Get the extension directory base on the current config
-	static string ExtensionDirectory(ClientContext &context, bool create = true);
-	static string ExtensionDirectory(DatabaseInstance &db, FileSystem &fs, bool create = true);
+	static string ExtensionDirectory(ClientContext &context);
+	static string ExtensionDirectory(DatabaseInstance &db, FileSystem &fs);
+
+	// Get the extension directory path
+	static string GetExtensionDirectoryPath(ClientContext &context);
+	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
