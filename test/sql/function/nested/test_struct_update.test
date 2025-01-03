@@ -69,8 +69,7 @@ SELECT struct_update({a: 1, b: 2}, d := 3, a := 'c');
 ----
 {'a': c, 'b': 2, 'd': 3}
 
-# Test inserting NULL as the default value.
-
+# Test using in a table
 statement ok
 CREATE TABLE tbl (col STRUCT(i INT));
 
@@ -78,11 +77,40 @@ statement ok
 INSERT INTO tbl SELECT {'i': range} FROM range(3);
 
 query I
-SELECT struct_update(col, a := col.i + 1, b := NULL::VARCHAR) FROM tbl ORDER BY ALL;
+SELECT struct_update(col, i:=10) FROM tbl;
 ----
-{'i': 0, 'a': 1, 'b': NULL}
-{'i': 1, 'a': 2, 'b': NULL}
-{'i': 2, 'a': 3, 'b': NULL}
+{'i': 10}
+{'i': 10}
+{'i': 10}
+
+query I
+SELECT struct_update(col, i:=col.i+1) FROM tbl;
+----
+{'i': 1}
+{'i': 2}
+{'i': 3}
+
+query I
+SELECT struct_update(col, i:='i='||col.i) FROM tbl;
+----
+{'i': i=0}
+{'i': i=1}
+{'i': i=2}
+
+# Test inserting NULL as the default value.
+query I
+SELECT struct_update(col, a := NULL::VARCHAR) FROM tbl ORDER BY ALL;
+----
+{'i': 0, 'a': NULL}
+{'i': 1, 'a': NULL}
+{'i': 2, 'a': NULL}
+
+query I
+SELECT struct_update(col, a := NULL::VARCHAR) FROM tbl ORDER BY ALL;
+----
+{'i': 0, 'a': NULL}
+{'i': 1, 'a': NULL}
+{'i': 2, 'a': NULL}
 
 query I
 SELECT struct_update(col, a := NULL, b := NULL::VARCHAR, c := [NULL]) FROM tbl ORDER BY ALL;
@@ -99,7 +127,7 @@ SELECT struct_update(col, i := 10, a := NULL, b := NULL::VARCHAR, c := [NULL]) F
 {'i': 10, 'a': NULL, 'b': NULL, 'c': [NULL]}
 
 query I
-SELECT struct_update(col, i := i+10, a := NULL, b := NULL::VARCHAR, c := [NULL]) FROM tbl ORDER BY ALL;
+SELECT struct_update(col, i := col.i+10, a := NULL, b := NULL::VARCHAR, c := [NULL]) FROM tbl ORDER BY ALL;
 ----
 {'i': 10, 'a': NULL, 'b': NULL, 'c': [NULL]}
 {'i': 11, 'a': NULL, 'b': NULL, 'c': [NULL]}
