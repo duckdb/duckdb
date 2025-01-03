@@ -36,8 +36,17 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto dname = fs->JoinPath(fs->GetWorkingDirectory(), TestCreatePath("TEST_DIR"));
 	auto dname_converted_slashes = StringUtil::Replace(dname, "\\", "/");
+
+	// handle differences between windows and linux
+	if (StringUtil::StartsWith(dname_converted_slashes, "/")) {
+		dname_converted_slashes = dname_converted_slashes.substr(1);
+	}
+
+	// Path of format file:///bla/bla on 'nix and file:///X:/bla/bla on Windows
 	auto dname_triple_slash = fs->JoinPath("file://",dname_converted_slashes);
+	// Path of format file://localhost/bla/bla on 'nix and file://localhost/X:/bla/bla on Windows
 	auto dname_localhost = fs->JoinPath("file://localhost",dname_converted_slashes);
+
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
 

@@ -4,10 +4,10 @@
 # Note: __WORKING_DIRECTORY__ will be replaced with the full path to the working dir of the tests (root of duckdb repo)
 
 statement ok
-SET VARIABLE work_dir_triple_slash='file:///' || replace('__WORKING_DIRECTORY__', '\', '/')
+SET VARIABLE work_dir_triple_slash='file:///' || ltrim(replace('__WORKING_DIRECTORY__', '\', '/'), '/')
 
 statement ok
-SET VARIABLE work_dir_localhost='file://localhost/' || replace('__WORKING_DIRECTORY__', '\', '/') || '/'
+SET VARIABLE work_dir_localhost='file://localhost/' || ltrim(replace('__WORKING_DIRECTORY__', '\', '/'), '/')
 
 # testing file:///some/path/to/duckdb/repo
 query II
