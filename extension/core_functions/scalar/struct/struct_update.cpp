@@ -78,7 +78,9 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
 		auto &child = arguments[arg_idx];
 		if (child->alias.empty()) {
-			throw BinderException("Need named argument for struct insert, e.g., a := b");
+			throw BinderException("Need named argument for struct update, e.g., a := b");
+		} else if (incomming_children.find(child->alias) != incomming_children.end()) {
+			throw InvalidInputException("Duplicate named argument provided for %s", child->alias.c_str());
 		}
 		incomming_children.emplace(child->alias, arg_idx);
 	}
