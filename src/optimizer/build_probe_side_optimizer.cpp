@@ -8,6 +8,10 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
@@ -68,7 +72,7 @@ static void FlipChildren(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		// don't need to do anything here.
+		// don't need to do anything here
 		return;
 	}
 	default:
@@ -207,6 +211,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
+	// then the currentoperator
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();

@@ -140,6 +140,7 @@ ScalarFunction NextvalFun::GetFunction() {
 	next_val.deserialize = Deserialize;
 	next_val.get_modified_databases = NextValModifiedDatabases;
 	next_val.init_local_state = NextValLocalFunction;
+	BaseScalarFunction::SetReturnsError(next_val);
 	return next_val;
 }
 
@@ -151,6 +152,7 @@ ScalarFunction CurrvalFun::GetFunction() {
 	curr_val.serialize = Serialize;
 	curr_val.deserialize = Deserialize;
 	curr_val.init_local_state = NextValLocalFunction;
+	BaseScalarFunction::SetReturnsError(curr_val);
 	return curr_val;
 }
 

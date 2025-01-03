@@ -469,15 +469,15 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	RequireTemporaryDirectory();
 
 	// Append to a few grouped files.
-	if (buffer.size == GetBlockSize()) {
-		evicted_data_per_tag[uint8_t(tag)] += GetBlockSize();
+	if (buffer.AllocSize() == GetBlockAllocSize()) {
+		evicted_data_per_tag[uint8_t(tag)] += GetBlockAllocSize();
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
 	}
 
 	// Get the path to write to.
 	auto path = GetTemporaryPath(block_id);
-	evicted_data_per_tag[uint8_t(tag)] += buffer.size;
+	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
 
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
@@ -528,7 +528,7 @@ void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
 	}
 	// check if we should delete the file from the shared pool of files, or from the general file system
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
-		evicted_data_per_tag[uint8_t(block.GetMemoryTag())] -= GetBlockSize();
+		evicted_data_per_tag[uint8_t(block.GetMemoryTag())] -= GetBlockAllocSize();
 		temporary_directory.handle->GetTempFile().DeleteTemporaryBuffer(id);
 		return;
 	}

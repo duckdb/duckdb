@@ -626,6 +626,8 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 			// This can happen for empty structs/maps ("{}"), or in rare cases where an inconsistent struct becomes
 			// consistent when merged, but does not have enough children to be considered a map.
 			return CalculateMapAndStructSimilarity(type, merged, true, max_depth, depth);
+		} else if (type.id() != LogicalTypeId::STRUCT) {
+			return -1;
 		}
 
 		// Only structs can be merged into a struct

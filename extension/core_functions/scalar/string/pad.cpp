@@ -131,13 +131,17 @@ static void PadFunction(DataChunk &args, ExpressionState &state, Vector &result)
 }
 
 ScalarFunction LpadFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                      PadFunction<LeftPadOperator>);
+	ScalarFunction func({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                    PadFunction<LeftPadOperator>);
+	BaseScalarFunction::SetReturnsError(func);
+	return func;
 }
 
 ScalarFunction RpadFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                      PadFunction<RightPadOperator>);
+	ScalarFunction func({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                    PadFunction<RightPadOperator>);
+	BaseScalarFunction::SetReturnsError(func);
+	return func;
 }
 
 } // namespace duckdb

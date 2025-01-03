@@ -833,6 +833,10 @@
         "name": "multi_byte_delimiter",
         "type": "CSVOption<string>",
         "serialize_property": "GetMultiByteDelimiter()"
+      },
+      {"id": 142,
+        "name": "multi_file_reader",
+        "type": "bool"
       }
     ],
     "constructor": ["delimiter", "multi_byte_delimiter"],

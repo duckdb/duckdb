@@ -18,8 +18,15 @@ ANALYZE test(x, x);
 ----
 <REGEX>:Binder Error.*cannot vacuum.*the same column twice.*
 
-statement ok
+statement error
+ANALYZE test(y);
+----
+cannot vacuum or analyze generated column "y"
+
+statement error
 ANALYZE test(y, x);
+----
+cannot vacuum or analyze generated column "y"
 
 statement ok
 INSERT INTO test SELECT range % 5000 FROM range(10000);
@@ -37,6 +44,9 @@ SELECT stats(y) FROM test LIMIT 1;
 
 statement ok
 PRAGMA verify_parallelism;
+
+statement ok
+ANALYZE test
 
 statement ok
 ANALYZE test(x);

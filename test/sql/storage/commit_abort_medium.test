@@ -5,11 +5,6 @@
 # load the DB from disk
 load __TEST_DIR__/commit_abort.db
 
-# FIXME: this test fails right now because deleted tuples are not correctly removed
-# while checkpointing, which causes the start-up after checkpoint to fail during
-# primary index construction. It should be re-enabled when deleted tuples are properly vacuumed.
-mode skip
-
 statement ok
 PRAGMA enable_verification
 

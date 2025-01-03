@@ -29,6 +29,13 @@ SELECT columns[1].type FROM sniff_csv('data/csv/bad_date_2.csv')
 ----
 DATE
 
+
+query I
+SELECT columns FROM sniff_csv('data/csv/bad_date_2.csv')
+----
+[{'name': date, 'type': DATE}, {'name': specification_version, 'type': VARCHAR}]
+
+
 query II
 FROM 'data/csv/conflict_timestamp.csv'
 ----

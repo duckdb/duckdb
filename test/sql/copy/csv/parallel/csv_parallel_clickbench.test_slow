@@ -4,19 +4,13 @@
 
 mode skip
 
-require parquet
-
 require httpfs
-
-statement ok
-pragma threads=4
 
 statement ok
 PRAGMA enable_verification
 
-
 statement ok
-CREATE TABLE hits_og
+CREATE TABLE hits
 (
     WatchID BIGINT NOT NULL,
     JavaEnable SMALLINT NOT NULL,
@@ -126,197 +120,11 @@ CREATE TABLE hits_og
     PRIMARY KEY (CounterID, EventDate, UserID, EventTime, WatchID)
 );
 
-
 statement ok
-INSERT INTO hits_og SELECT * FROM read_parquet('https://github.com/duckdb/duckdb-data/releases/download/v1.0/hits.parquet');
-
-statement ok
-COPY hits_og TO '__TEST_DIR__/hits.csv';
-
-statement ok
-create table hits as select * from hits_og limit 0;
-
-statement ok
-insert into hits from read_csv('__TEST_DIR__/hits.csv', compression = 'none', nullstr = 'null');
+insert into hits from read_csv('https://datasets.clickhouse.com/hits_compatible/hits.csv.gz');
 
 #Q 01
 query I
 SELECT COUNT(*) FROM hits;
 ----
-10000000
-
-#Q 02
-query I
-SELECT COUNT(*) FROM hits WHERE AdvEngineID <> 0;
-----
-202134
-
-#Q 03
-query III
-SELECT SUM(AdvEngineID), COUNT(*), AVG(ResolutionWidth) FROM hits;
-----
-3152344	10000000	1508.8046441000000000
-
-#Q 04
-query I
-SELECT AVG(UserID) FROM hits;
-----
-2513100748938099884
-
-#Q 05
-query I
-SELECT COUNT(DISTINCT UserID) FROM hits;
-----
-1530334
-
-#Q 06
-query I
-SELECT COUNT(DISTINCT SearchPhrase) FROM hits;
-----
-835093
-
-#Q 07
-query II
-SELECT MIN(EventDate), MAX(EventDate) FROM hits;
-----
-2013-07-02	2013-07-31
-
-#Q 08
-query II
-SELECT AdvEngineID, COUNT(*) FROM hits WHERE AdvEngineID <> 0 GROUP BY AdvEngineID ORDER BY COUNT(*) DESC;
-----
-27	107440
-2	89562
-13	4741
-25	340
-52	34
-28	8
-3	5
-50	4
-
-
-#Q 09
-query II
-SELECT RegionID, COUNT(DISTINCT UserID) AS u FROM hits GROUP BY RegionID ORDER BY u DESC LIMIT 10;
-----
-229	238734
-2	110580
-208	74491
-158	41364
-34	33519
-169	32199
-55	30880
-42	28675
-107	25750
-51	22482
-
-#Q 10
-query IIIII
-SELECT RegionID, SUM(AdvEngineID), COUNT(*) AS c, AVG(ResolutionWidth), COUNT(DISTINCT UserID) FROM hits GROUP BY RegionID ORDER BY c DESC LIMIT 10;
-----
-229	496242	1696554	1547.9009669011419619	238734
-2	169267	897731	1426.8183241973375098	110580
-208	134381	476811	1372.3153052257603117	74491
-42	58343	253806	1585.9053450273043190	28675
-55	64858	237320	1424.5055199730321928	30880
-34	62485	190432	1568.6156265753654848	33519
-226	34883	183117	1590.0829251243740341	18527
-36	38255	171419	1592.5158529684574055	21284
-40	39327	162012	1602.8290990790805619	17720
-158	24748	150726	735.0502302190730199	41364
-
-
-#Q 11
-query II
-SELECT MobilePhoneModel, COUNT(DISTINCT UserID) AS u FROM hits WHERE MobilePhoneModel <> '' GROUP BY MobilePhoneModel ORDER BY u DESC LIMIT 10;
-----
-iPad	74651
-iPhone	3440
-A500	1340
-N8-00	399
-ONE TOUCH 6030A	267
-iPho	195
-3110000	137
-GT-P7300B	135
-eagle75	132
-GT-I9500	124
-
-
-#Q 12
-query III
-SELECT MobilePhone, MobilePhoneModel, COUNT(DISTINCT UserID) AS u FROM hits WHERE MobilePhoneModel <> '' GROUP BY MobilePhone, MobilePhoneModel ORDER BY u DESC LIMIT 10;
-----
-1	iPad	62929
-5	iPad	3498
-6	iPad	2092
-7	iPad	2001
-118	A500	1337
-6	iPhone	1017
-26	iPhone	1014
-10	iPad	968
-13	iPad	734
-32	iPad	688
-
-
-#Q 13
-query II
-SELECT SearchPhrase, COUNT(*) AS c FROM hits WHERE SearchPhrase <> '' GROUP BY SearchPhrase ORDER BY c DESC LIMIT 10;
-----
-ведомосквы вместу	4948
-смотреть онлайн бесплатно	3377
-ебутсы арениксандройд полнечный	3013
-ебутсы для	2552
-смотреть онлайн	2520
-ведомосквы вы из	2473
-ведомосквиталия страции	2035
-ведомосковский	1686
-из руками руками в евпатов и подряд	1596
-рецепты сбербан	1244
-
-
-#Q 14
-query II
-SELECT SearchPhrase, COUNT(DISTINCT UserID) AS u FROM hits WHERE SearchPhrase <> '' GROUP BY SearchPhrase ORDER BY u DESC LIMIT 10;
-----
-ебутсы арениксандройд полнечный	2898
-смотреть онлайн бесплатно	2740
-ебутсы для	2414
-смотреть онлайн	2040
-из руками руками в евпатов и подряд	1542
-ведомосквы вместу	1386
-смотреть онлайн бесплатно в хорошем	946
-рецепты сбербан	909
-смотреть	898
-ф-1	894
-
-
-#Q 15
-query III
-SELECT SearchEngineID, SearchPhrase, COUNT(*) AS c FROM hits WHERE SearchPhrase <> '' GROUP BY SearchEngineID, SearchPhrase ORDER BY c DESC LIMIT 10;
-----
-2	ведомосквы вместу	3481
-2	ебутсы арениксандройд полнечный	2419
-2	смотреть онлайн бесплатно	2253
-2	ведомосквы вы из	1859
-2	ебутсы для	1811
-2	ведомосковский	1682
-2	смотреть онлайн	1540
-2	ведомосквиталия страции	1443
-2	из руками руками в евпатов и подряд	1183
-2	рецепты сбербан	1172
-
-
-#Q 16
-query II
-SELECT UserID, COUNT(*) FROM hits GROUP BY UserID ORDER BY COUNT(*) DESC LIMIT 10;
-----
-6949028786848070043	2496
-6762020047108358913	2051
-6718662516719813769	1678
-840609390070579088	1498
-6796732604398989098	1328
-1508127196834704092	1303
-3787634936610360879	1272
-2162069977849117686	1257
-671159363023897628	1248
-7923680072445463340	1207
+99997497

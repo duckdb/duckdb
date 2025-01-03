@@ -1,0 +1,8 @@
+# name: test/sql/json/issues/internal_issue3813.test
+# description: Test internal issue 3813 - AFL++ issue: map_inference_threshold causes internal exception in json reader
+# group: [issues]
+
+require json
+
+statement ok
+SELECT * FROM read_json('data/json/internal_3813.json', map_inference_threshold=10);

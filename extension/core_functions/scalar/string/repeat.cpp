@@ -81,6 +81,9 @@ ScalarFunctionSet RepeatFun::GetFunctions() {
 	}
 	repeat.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT},
 	                                  LogicalType::LIST(LogicalType::ANY), RepeatListFunction, RepeatBindFunction));
+	for (auto &func : repeat.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 	return repeat;
 }
 

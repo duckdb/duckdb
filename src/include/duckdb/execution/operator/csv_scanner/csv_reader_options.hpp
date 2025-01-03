@@ -135,6 +135,8 @@ struct CSVReaderOptions {
 	map<LogicalTypeId, Value> write_date_format = {{LogicalTypeId::DATE, Value()}, {LogicalTypeId::TIMESTAMP, Value()}};
 	//! Whether  a type format is specified
 	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+	//! If this reader is a multifile reader
+	bool multi_file_reader = false;
 
 	void Serialize(Serializer &serializer) const;
 	static CSVReaderOptions Deserialize(Deserializer &deserializer);

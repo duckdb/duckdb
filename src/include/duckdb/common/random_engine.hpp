@@ -36,7 +36,7 @@ public:
 	uint32_t NextRandomInteger(uint32_t min, uint32_t max);
 	uint64_t NextRandomInteger64();
 
-	void SetSeed(uint32_t seed);
+	void SetSeed(uint64_t seed);
 
 	static RandomEngine &Get(ClientContext &context);
 

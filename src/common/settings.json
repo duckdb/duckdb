@@ -92,7 +92,7 @@
     },
     {
         "name": "arrow_large_buffer_size",
-        "description": "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
+        "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
         "scope": "global",
         "internal_setting": "arrow_offset_size",
@@ -109,7 +109,7 @@
     },
     {
         "name": "arrow_output_list_view",
-        "description": "If export to arrow format should use ListView as the physical layout for LIST columns",
+        "description": "Whether export to Arrow format should use ListView as the physical layout for LIST columns",
         "type": "BOOLEAN",
         "internal_setting": "arrow_use_list_view",
         "scope": "global"
@@ -628,7 +628,7 @@
     },
     {
         "name": "produce_arrow_string_view",
-        "description": "If strings should be produced by DuckDB in Utf8View format instead of Utf8",
+        "description": "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8",
         "type": "BOOLEAN",
         "scope": "global",
         "internal_setting": "produce_arrow_string_views"

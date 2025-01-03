@@ -224,7 +224,7 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t block_index,
                                                AllocatedData &compressed_buffer) const {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
-	D_ASSERT(buffer.size == BufferManager::GetBufferManager(db).GetBlockSize());
+	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
 		buffer.Write(*handle, GetPositionInFile(block_index));
 	} else {
@@ -427,7 +427,7 @@ TemporaryFileManager::TemporaryFileManagerLock::TemporaryFileManagerLock(mutex &
 
 void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
-	D_ASSERT(buffer.size == BufferManager::GetBufferManager(db).GetBlockSize());
+	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 
 	const auto adaptivity_idx = TaskScheduler::GetEstimatedCPUId() % COMPRESSION_ADAPTIVITIES;
 	auto &compression_adaptivity = compression_adaptivities[adaptivity_idx];

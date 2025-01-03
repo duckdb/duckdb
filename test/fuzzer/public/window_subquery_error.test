@@ -1,0 +1,14 @@
+# name: test/fuzzer/public/window_subquery_error.test
+# description: Test window function with a subquery that generates an error message
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE v00 (c01 INT, c02 STRING);
+
+statement error
+SELECT 'string' IN ( SELECT string_agg ('str') OVER ( PARTITION BY c02 + 'string' IN ( SELECT 'string' )) );
+----
+correlated columns in window functions not supported

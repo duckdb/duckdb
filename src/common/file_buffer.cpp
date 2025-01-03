@@ -42,19 +42,22 @@ FileBuffer::~FileBuffer() {
 	allocator.FreeData(internal_buffer, internal_size);
 }
 
-void FileBuffer::ReallocBuffer(size_t new_size) {
+void FileBuffer::ReallocBuffer(idx_t new_size) {
 	data_ptr_t new_buffer;
 	if (internal_buffer) {
 		new_buffer = allocator.ReallocateData(internal_buffer, internal_size, new_size);
 	} else {
 		new_buffer = allocator.AllocateData(new_size);
 	}
+
+	// FIXME: should we throw one of our exceptions here?
 	if (!new_buffer) {
 		throw std::bad_alloc();
 	}
 	internal_buffer = new_buffer;
 	internal_size = new_size;
-	// Caller must update these.
+
+	// The caller must update these.
 	buffer = nullptr;
 	size = 0;
 }

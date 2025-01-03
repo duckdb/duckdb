@@ -468,6 +468,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	// found a matching function, bind it as an aggregate
 	auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
+		bound_function.errors = best_function.errors;
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);
 	}
 
@@ -512,6 +513,7 @@ static unique_ptr<FunctionData> ListUniqueBind(ClientContext &context, ScalarFun
 ScalarFunction ListAggregateFun::GetFunction() {
 	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
 	                             ListAggregateFunction, ListAggregateBind);
+	BaseScalarFunction::SetReturnsError(result);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.varargs = LogicalType::ANY;
 	result.serialize = ListAggregatesBindData::SerializeFunction;

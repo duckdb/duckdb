@@ -670,6 +670,8 @@ struct duckdb_extension_access {
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
+#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
+
 //===--------------------------------------------------------------------===//
 // Functions
 //===--------------------------------------------------------------------===//
@@ -4498,6 +4500,8 @@ Destroys the cast function object.
 * @param cast_function The cast function object.
 */
 DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
+
+#endif
 
 #ifdef __cplusplus
 }

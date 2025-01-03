@@ -1,0 +1,29 @@
+# name: test/sql/window/test_cume_dist_orderby.test
+# description: Test argument ordering for CUME_DIST
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+SELECT 
+	i,
+	(i * 29) % 11 AS outside,
+	i // 2 AS inside,
+	cume_dist(ORDER BY inside DESC) OVER w,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY outside
+)
+ORDER BY inside DESC, i
+----
+8	1	4	0.2
+9	8	4	0.2
+6	9	3	0.4
+7	5	3	0.4
+4	6	2	0.6
+5	2	2	0.6
+2	3	1	0.8
+3	10	1	0.8
+0	0	0	1.0
+1	7	0	1.0

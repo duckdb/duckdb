@@ -34,7 +34,8 @@ public:
 	Allocator &allocator;
 	//! The buffer that users can write to
 	data_ptr_t buffer;
-	//! The size of the portion that users can write to, this is equivalent to internal_size - BLOCK_HEADER_SIZE
+	//! The user-facing size of the buffer.
+	//! This is equivalent to internal_size - BLOCK_HEADER_SIZE.
 	uint64_t size;
 
 public:
@@ -49,12 +50,15 @@ public:
 		return type;
 	}
 
-	// Same rules as the constructor. We will add room for a header, in additio to
-	// the requested user bytes. We will then sector-align the result.
+	// Same rules as the constructor. We add room for a header, in addition to
+	// the requested user bytes. We then sector-align the result.
 	void Resize(uint64_t user_size);
 
 	uint64_t AllocSize() const {
 		return internal_size;
+	}
+	uint64_t Size() const {
+		return size;
 	}
 	data_ptr_t InternalBuffer() {
 		return internal_buffer;
@@ -66,18 +70,19 @@ public:
 	};
 
 	MemoryRequirement CalculateMemory(uint64_t user_size);
-
 	void Initialize(DebugInitialize info);
 
 protected:
-	//! The type of the buffer
+	//! The type of the buffer.
 	FileBufferType type;
-	//! The pointer to the internal buffer that will be read or written, including the buffer header
+	//! The pointer to the internal buffer that will be read from or written to.
+	//! This includes the buffer header.
 	data_ptr_t internal_buffer;
-	//! The aligned size as passed to the constructor. This is the size that is read or written to disk.
+	//! The aligned size as passed to the constructor.
+	//! This is the size that is read from or written to disk.
 	uint64_t internal_size;
 
-	void ReallocBuffer(size_t malloc_size);
+	void ReallocBuffer(idx_t new_size);
 	void Init();
 };
 

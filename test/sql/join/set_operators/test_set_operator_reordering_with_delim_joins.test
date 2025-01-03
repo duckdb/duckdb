@@ -1,0 +1,20 @@
+# name: test/sql/join/set_operators/test_set_operator_reordering_with_delim_joins.test
+# description: Test reodering set operators
+# group: [set_operators]
+
+statement ok
+create or replace table xx as select w from (values ('a'),('b'),('c'),('d'),('e')) t(w);
+
+statement ok
+select w from (from xx limit 4)
+CROSS JOIN (select 1 as f1) p
+WHERE
+   w IN (
+	  SELECT 'a'
+	  UNION -- with 'UNION ALL' it works also using 'limit 4'
+	  SELECT 'b'
+	  UNION
+	  SELECT 'c' WHERE p.f1 = 1
+	  UNION
+	  SELECT 'd' WHERE p.f1 = 1
+);

@@ -5,7 +5,7 @@ setuptools>=58
 pytest
 pandas
 pytest-timeout
-mypy
+mypy<=1.13
 psutil>=5.9.0
 requests>=2.26
 fsspec

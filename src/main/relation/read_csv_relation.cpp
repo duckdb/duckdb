@@ -13,7 +13,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-
+#include "duckdb/function/table/read_csv.hpp"
 namespace duckdb {
 
 void ReadCSVRelation::InitializeAlias(const vector<string> &input) {
@@ -46,34 +46,63 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 
 	// Run the auto-detect, populating the options with the detected settings
 
-	shared_ptr<CSVBufferManager> buffer_manager;
-	if (csv_options.auto_detect) {
-		context->RunFunctionInTransaction([&]() {
-			buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0], 0);
-			CSVSniffer sniffer(csv_options, buffer_manager, CSVStateMachineCache::Get(*context));
-			auto sniffer_result = sniffer.SniffCSV();
-			auto &types = sniffer_result.return_types;
-			auto &names = sniffer_result.names;
-			for (idx_t i = 0; i < types.size(); i++) {
-				columns.emplace_back(names[i], types[i]);
+	if (csv_options.file_options.union_by_name) {
+		SimpleMultiFileList multi_file_list(files);
+		vector<LogicalType> types;
+		vector<string> names;
+		auto result = make_uniq<ReadCSVData>();
+
+		multi_file_reader->BindUnionReader<CSVFileScan>(*context, types, names, multi_file_list, *result, csv_options);
+		if (result->union_readers.size() > 1) {
+			for (idx_t i = 0; i < result->union_readers.size(); i++) {
+				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);
 			}
-		});
-	} else {
-		for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {
-			D_ASSERT(csv_options.name_list.size() == csv_options.sql_type_list.size());
-			columns.emplace_back(csv_options.name_list[i], csv_options.sql_type_list[i]);
 		}
+		if (!csv_options.sql_types_per_column.empty()) {
+			const auto exception = CSVError::ColumnTypesError(csv_options.sql_types_per_column, names);
+			if (!exception.error_message.empty()) {
+				throw BinderException(exception.error_message);
+			}
+			for (idx_t i = 0; i < names.size(); i++) {
+				auto it = csv_options.sql_types_per_column.find(names[i]);
+				if (it != csv_options.sql_types_per_column.end()) {
+					types[i] = csv_options.sql_type_list[it->second];
+				}
+			}
+		}
+		D_ASSERT(names.size() == types.size());
+		for (idx_t i = 0; i < names.size(); i++) {
+			columns.emplace_back(names[i], types[i]);
+		}
+	} else {
+		if (csv_options.auto_detect) {
+			shared_ptr<CSVBufferManager> buffer_manager;
+			context->RunFunctionInTransaction([&]() {
+				buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0], 0);
+				CSVSniffer sniffer(csv_options, buffer_manager, CSVStateMachineCache::Get(*context));
+				auto sniffer_result = sniffer.SniffCSV();
+				auto &types = sniffer_result.return_types;
+				auto &names = sniffer_result.names;
+				for (idx_t i = 0; i < types.size(); i++) {
+					columns.emplace_back(names[i], types[i]);
+				}
+			});
+		} else {
+			for (idx_t i = 0; i < csv_options.sql_type_list.size(); i++) {
+				D_ASSERT(csv_options.name_list.size() == csv_options.sql_type_list.size());
+				columns.emplace_back(csv_options.name_list[i], csv_options.sql_type_list[i]);
+			}
+		}
+		// After sniffing we can consider these set, so they are exported as named parameters
+		// FIXME: This is horribly hacky, should be refactored at some point
+		csv_options.dialect_options.state_machine_options.escape.ChangeSetByUserTrue();
+		csv_options.dialect_options.state_machine_options.delimiter.ChangeSetByUserTrue();
+		csv_options.dialect_options.state_machine_options.quote.ChangeSetByUserTrue();
+		csv_options.dialect_options.header.ChangeSetByUserTrue();
+		csv_options.dialect_options.skip_rows.ChangeSetByUserTrue();
 	}
 
-	// After sniffing we can consider these set, so they are exported as named parameters
-	// FIXME: This is horribly hacky, should be refactored at some point
-	csv_options.dialect_options.state_machine_options.escape.ChangeSetByUserTrue();
-	csv_options.dialect_options.state_machine_options.delimiter.ChangeSetByUserTrue();
-	csv_options.dialect_options.state_machine_options.quote.ChangeSetByUserTrue();
-	csv_options.dialect_options.header.ChangeSetByUserTrue();
-	csv_options.dialect_options.skip_rows.ChangeSetByUserTrue();
-
-	// Capture the options potentially set/altered by the auto detection phase
+	// Capture the options potentially set/altered by the auto-detection phase
 	csv_options.ToNamedParameters(options);
 
 	// No need to auto-detect again
@@ -85,7 +114,9 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 		column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
 	}
 
-	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
+	if (!csv_options.file_options.union_by_name) {
+		AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
+	}
 	RemoveNamedParameterIfExists("names");
 	RemoveNamedParameterIfExists("types");
 	RemoveNamedParameterIfExists("dtypes");

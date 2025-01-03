@@ -242,4 +242,38 @@ void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gsta
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// WindowCumeDistExecutor
+//===--------------------------------------------------------------------===//
+WindowCumeDistExecutor::WindowCumeDistExecutor(BoundWindowExpression &wexpr, ClientContext &context,
+                                               WindowSharedExpressions &shared)
+    : WindowPeerExecutor(wexpr, context, shared) {
+}
+
+void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
+                                              DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx) const {
+	auto &gpeer = gstate.Cast<WindowPeerGlobalState>();
+	auto &lpeer = lstate.Cast<WindowPeerLocalState>();
+	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_END]);
+	auto rdata = FlatVector::GetData<double>(result);
+
+	if (gpeer.token_tree) {
+		for (idx_t i = 0; i < count; ++i, ++row_idx) {
+			const auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i]));
+			const auto peer_end = gpeer.token_tree->PeerEnd(partition_begin[i], partition_end[i], row_idx);
+			const auto num = static_cast<double>(peer_end - partition_begin[i]);
+			rdata[i] = denom > 0 ? (num / denom) : 0;
+		}
+		return;
+	}
+
+	auto peer_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_END]);
+	for (idx_t i = 0; i < count; ++i, ++row_idx) {
+		const auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i]));
+		const auto num = static_cast<double>(peer_end[i] - partition_begin[i]);
+		rdata[i] = denom > 0 ? (num / denom) : 0;
+	}
+}
+
 } // namespace duckdb

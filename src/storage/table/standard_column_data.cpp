@@ -83,8 +83,10 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
                                 SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	// check if we can do a specialized select
 	// the compression functions need to support this
-	bool has_filter = HasCompressionFunction() && GetCompressionFunction().filter;
-	bool validity_has_filter = validity.HasCompressionFunction() && validity.GetCompressionFunction().filter;
+	auto compression = GetCompressionFunction();
+	bool has_filter = compression && compression->filter;
+	auto validity_compression = validity.GetCompressionFunction();
+	bool validity_has_filter = validity_compression && validity_compression->filter;
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
@@ -102,8 +104,10 @@ void StandardColumnData::Select(TransactionData transaction, idx_t vector_index,
                                 SelectionVector &sel, idx_t sel_count) {
 	// check if we can do a specialized select
 	// the compression functions need to support this
-	bool has_select = HasCompressionFunction() && GetCompressionFunction().select;
-	bool validity_has_select = validity.HasCompressionFunction() && validity.GetCompressionFunction().select;
+	auto compression = GetCompressionFunction();
+	bool has_select = compression && compression->select;
+	auto validity_compression = validity.GetCompressionFunction();
+	bool validity_has_select = validity_compression && validity_compression->select;
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;

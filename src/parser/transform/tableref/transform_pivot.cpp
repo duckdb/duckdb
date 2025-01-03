@@ -73,6 +73,7 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot,
 					                      "PIVOT IN list must contain columns or lists of columns");
 				} else {
 					// for unpivot - we can forward the expression immediately
+					entry.values.clear();
 					entry.expr = std::move(expr);
 				}
 			}

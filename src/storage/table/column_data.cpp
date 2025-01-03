@@ -571,12 +571,12 @@ void ColumnData::UpdateCompressionFunction(SegmentLock &l, const CompressionFunc
 		// if we have no segments - we have not set it yet, so assign it
 		// if we have segments, the compression is mixed, so ignore it
 		if (data.GetSegmentCount(l) == 0) {
-			compression = function;
+			compression.set(function);
 		}
 	} else if (compression->type != function.type) {
 		// we already have compression set - and we are adding a segment with a different compression
 		// compression in the segment is mixed - clear the compression pointer
-		compression = nullptr;
+		compression.reset();
 	}
 }
 
@@ -632,7 +632,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	checkpointer.FinalizeCheckpoint(data.MoveSegments(l));
 
 	// reset the compression function
-	compression = nullptr;
+	compression.reset();
 	// replace the old tree with the new one
 	auto new_segments = checkpoint_state->new_tree.MoveSegments();
 	for (auto &new_segment : new_segments) {

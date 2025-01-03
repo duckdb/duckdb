@@ -10,8 +10,19 @@
 
 #pragma once
 
-#if (defined(DUCKDB_USE_STANDARD_ASSERT) || !defined(DEBUG)) && !defined(DUCKDB_FORCE_ASSERT) && !defined(__MVS__)
+// clang-format off
+#if ( \
+    /* Not a debug build */ \
+    !defined(DEBUG) && \
+    /* FORCE_ASSERT is not set (enables assertions even on release mode when set to true) */ \
+    !defined(DUCKDB_FORCE_ASSERT) && \
+    /* The project is not compiled for Microsoft Visual Studio */ \
+    !defined(__MVS__) \
+)
+// clang-format on
 
+//! On most builds, NDEBUG is defined, turning the assert call into a NO-OP
+//! Only the 'else' condition is supposed to check the assertions
 #include <assert.h>
 #define D_ASSERT assert
 namespace duckdb {

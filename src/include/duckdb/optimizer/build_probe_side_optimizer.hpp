@@ -11,7 +11,6 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
 
@@ -32,7 +31,6 @@ private:
 
 public:
 	explicit BuildProbeSideOptimizer(ClientContext &context, LogicalOperator &op);
-
 	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override {};
 

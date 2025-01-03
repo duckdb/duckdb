@@ -636,19 +636,20 @@ const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 		{ static_cast<uint32_t>(CSVState::COMMENT), "COMMENT" },
 		{ static_cast<uint32_t>(CSVState::STANDARD_NEWLINE), "STANDARD_NEWLINE" },
 		{ static_cast<uint32_t>(CSVState::UNQUOTED_ESCAPE), "UNQUOTED_ESCAPE" },
-		{ static_cast<uint32_t>(CSVState::ESCAPED_RETURN), "ESCAPED_RETURN" }
+		{ static_cast<uint32_t>(CSVState::ESCAPED_RETURN), "ESCAPED_RETURN" },
+		{ static_cast<uint32_t>(CSVState::MAYBE_QUOTED), "MAYBE_QUOTED" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value) {
-	return StringUtil::EnumToString(GetCSVStateValues(), 18, "CSVState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCSVStateValues(), 19, "CSVState", static_cast<uint32_t>(value));
 }
 
 template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value) {
-	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 18, "CSVState", value));
+	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 19, "CSVState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCTEMaterializeValues() {
@@ -1747,7 +1748,7 @@ FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const 
 const StringUtil::EnumStringLiteral *GetFunctionErrorsValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FunctionErrors::CANNOT_ERROR), "CANNOT_ERROR" },
-		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_ERROR), "CAN_THROW_ERROR" }
+		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_RUNTIME_ERROR), "CAN_THROW_RUNTIME_ERROR" }
 	};
 	return values;
 }

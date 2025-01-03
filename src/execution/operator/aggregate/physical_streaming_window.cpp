@@ -332,7 +332,7 @@ public:
 
 bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr) {
 	auto &wexpr = expr->Cast<BoundWindowExpression>();
-	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls ||
+	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls || !wexpr.arg_orders.empty() ||
 	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}

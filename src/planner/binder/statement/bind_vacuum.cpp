@@ -27,8 +27,9 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	auto &columns = info.columns;
 	if (columns.empty()) {
 		// Empty means ALL columns should be vacuumed/analyzed
-		auto &get = ref->get->Cast<LogicalGet>();
-		columns.insert(columns.end(), get.names.begin(), get.names.end());
+		for (auto &col : table.GetColumns().Physical()) {
+			columns.push_back(col.GetName());
+		}
 	}
 
 	case_insensitive_set_t column_name_set;
@@ -45,7 +46,9 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		auto &col = table.GetColumn(col_name);
 		// ignore generated column
 		if (col.Generated()) {
-			continue;
+			throw BinderException(
+			    "cannot vacuum or analyze generated column \"%s\" - specify non-generated columns to vacuum or analyze",
+			    col.GetName());
 		}
 		non_generated_column_names.push_back(col_name);
 		ColumnRefExpression colref(col_name, table.name);
@@ -56,8 +59,6 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		select_list.push_back(std::move(result.expression));
 	}
 	info.columns = std::move(non_generated_column_names);
-	// Creating a table without any physical columns is not supported
-	D_ASSERT(!select_list.empty());
 
 	auto table_scan = CreatePlan(*ref);
 	D_ASSERT(table_scan->type == LogicalOperatorType::LOGICAL_GET);
