@@ -34,7 +34,7 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 
 		if (update == new_entries.end()) {
 			// No update present, copy from source
-			result_child_entries[i]->Reference(*starting_child);
+			result_child_entries[field_idx]->Reference(*starting_child);
 		} else {
 			// We found a replacement of the same name to update
 			auto arg_idx = update->second;
