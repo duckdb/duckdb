@@ -205,18 +205,18 @@ string Varint::VarIntToVarchar(const string_t &blob) {
 	for (idx_t i = 0; i < byte_array.size(); i += digit_bytes) {
 		digit_t hi = 0;
 		for (idx_t j = 0; j < digit_bytes; j++) {
-			hi |= UnsafeNumericCast<digit_t>(byte_array[i + j] << (8 * (digit_bytes - j - 1)));
+			hi |= UnsafeNumericCast<digit_t>(byte_array[i + j]) << (8 * (digit_bytes - j - 1));
 		}
 
 		for (idx_t j = 0; j < digits.size(); j++) {
 			twodigit_t tmp = UnsafeNumericCast<twodigit_t>(digits[j]) << digit_bits | hi;
-			hi = UnsafeNumericCast<digit_t>(tmp / UnsafeNumericCast<twodigit_t>(DECIMAL_BASE));
-			digits[j] = UnsafeNumericCast<digit_t>(tmp - UnsafeNumericCast<twodigit_t>(DECIMAL_BASE * hi));
+			hi = static_cast<digit_t>(tmp / UnsafeNumericCast<twodigit_t>(DECIMAL_BASE));
+			digits[j] = static_cast<digit_t>(tmp - UnsafeNumericCast<twodigit_t>(DECIMAL_BASE * hi));
 		}
 
 		while (hi) {
-			digits.push_back(hi % UnsafeNumericCast<digit_t>(DECIMAL_BASE));
-			hi /= UnsafeNumericCast<digit_t>(DECIMAL_BASE);
+			digits.push_back(hi % DECIMAL_BASE);
+			hi /= DECIMAL_BASE;
 		}
 	}
 
@@ -227,14 +227,14 @@ string Varint::VarIntToVarchar(const string_t &blob) {
 	for (idx_t i = 0; i < digits.size() - 1; i++) {
 		auto remain = digits[i];
 		for (idx_t j = 0; j < DECIMAL_SHIFT; j++) {
-			decimal_string += DigitToChar(UnsafeNumericCast<int>(remain % 10));
+			decimal_string += DigitToChar(static_cast<int>(remain % 10));
 			remain /= 10;
 		}
 	}
 
 	auto remain = digits.back();
 	do {
-		decimal_string += DigitToChar(UnsafeNumericCast<int>(remain % 10));
+		decimal_string += DigitToChar(static_cast<int>(remain % 10));
 		remain /= 10;
 	} while (remain != 0);
 
