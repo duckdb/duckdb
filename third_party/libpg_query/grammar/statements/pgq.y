@@ -753,7 +753,7 @@ StickyArrowHead:
             {   /* DDB lexer may concatenate an > with + or * into an "operator" */
                 char *op = $1;
                 if (op[0] ='>' && (op[1] == '+' || op[1] == '*') && op[2] == 0)  {
-                    $$ = (op[1] == '*') ? "->*" : "->+";
+                    $$ = (char*) ((op[1] == '*') ? "->*" : "->+");
                 } else {
                     char msg[128];
                     snprintf(msg, 128, "PGQ does not allow - followed by %s here.", op);
@@ -761,6 +761,7 @@ StickyArrowHead:
                 }
             }
     ;
+
 
 StickyDash:
         Op
@@ -783,45 +784,44 @@ StickyDash:
 
 /* we allow spaces inside the arrows */
 Arrow:
+        '-' StickyArrowHead
+            {   $$ = $2; }
+    |
+        '-' '>'
+            {   $$ = "->"; }
+    |
         '-'
             {   $$ = "-"; }
+    |
+        StickyDash
+            {   $$ = $1; }
+    |
+        '<' LAMBDA_ARROW
+            {    $$ = "<->";  }
+    |
+        '<' '-' StickyArrowHead
+            {   $$ = (char*) (($3 == "->*") ? "<->*" : "<->+"); }
+    |
+        '<' '-' '>'
+            {    $$ = "<->";  }
+    |
+        '<' StickyDash
+            {   char *op = $2;
+                if (op[0] == '<') {
+                    parser_yyerror("PGQ does not allow < followed by < as edge operator");
+                }
+                $$ = (char*) ((op[1] == 0)   ? "<-" :
+                              (op[1] == '*') ? "<-*" :
+                              (op[1] == '+') ? "<-+" :
+                              (op[2] == '*') ? "<->*" :
+                              (op[2] == '+') ? "<->+" : "<->");
+            }
     |
         '<' '-'
             {   $$ = "<-";  }
     |
         LAMBDA_ARROW
             {   $$ = "->"; }
-    |
-        '-' '>'
-            {   $$ = "->"; }
-    |
-        '<' LAMBDA_ARROW
-            {    $$ = "<->";  }
-    |
-        '<' '-' '>'
-            {    $$ = "<->";  }
-    |
-        StickyDash
-            {   $$ = $1; }
-    |
-        '<' StickyDash
-            {   char *op = $2;
-                if (op[0] == '<') {
-                    parse_yyerror("PGQ does not allow < followed by < as edge operator");
-                }
-                $$ = (op[1] == 0)   ? "<-" :
-                     (op[1] == '*') ? "<-*" :
-                     (op[1] == '+') ? "<-+" :
-                     (op[2] == '*') ? "<->*" :
-                     (op[2] == '+') ? "<->+" : "<->";
-            }
-    |
-        '<' '-' StickyArrowHead
-            {   $$ = ($3 == "->*") ? "<->*" : "<->+"; }
-        ;
-    |
-        '-' StickyArrowHead
-            {   $$ = $2 }
         ;
 
 ArrowLeft:
