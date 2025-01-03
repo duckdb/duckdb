@@ -91,16 +91,17 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 }
 
 #else
-static std::wstring NormalizePathAndConvertToUnicode() {
+static std::wstring NormalizePathAndConvertToUnicode(const string &path) {
 	string normalized_path_copy;
 	const char * normalized_path;
 	if (StringUtil::StartsWith(path, "file://")) {
-		normalized_path_copy = NormalizeAbsolutePath(LocalFileSystem::NormalizeLocalPath(path));
+		normalized_path_copy = LocalFileSystem::NormalizeLocalPath(path);
+		normalized_path_copy = LocalFileSystem().ConvertSeparators(normalized_path_copy);
 		normalized_path = normalized_path_copy.c_str();
 	} else {
-		normalized_path = filename.c_str();
+		normalized_path = path.c_str();
 	}
-	return WindowsUtil::UTF8ToUnicode(path_ref);
+	return WindowsUtil::UTF8ToUnicode(normalized_path);
 }
 
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
@@ -1042,7 +1043,7 @@ static DWORD WindowsGetFileAttributes(const string &filename) {
 	return GetFileAttributesW(unicode_path.c_str());
 }
 
-static DWORD WindowsGetFileAttributes(const std:wstring &filename) {
+static DWORD WindowsGetFileAttributes(const std::wstring &filename) {
 	return GetFileAttributesW(filename.c_str());
 }
 
@@ -1264,11 +1265,19 @@ const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
 	}
 
 	if (path[7] == '/') {
+#ifdef _WIN32
+		return path.c_str() + 8;
+#else
 		return path.c_str() + 7;
+#endif
 	}
 
 	if (path.compare(7, 10, "localhost/") == 0) {
+#ifdef _WIN32
+		return path.c_str() + 17;
+#else
 		return path.c_str() + 16;
+#endif
 	}
 
 	// unkown file:// url format, just forward the problem by returning the whole string
@@ -1285,9 +1294,19 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	bool is_file_url;
 	idx_t file_url_path_offset;
 	if (StringUtil::StartsWith(path, "file:///")) {
+#ifdef _WIN32
+		file_url_path_offset = 8;
+#else
 		file_url_path_offset = 7;
+#endif
+		is_file_url = true;
 	} else if (StringUtil::StartsWith(path, "file://localhost/")) {
+#ifdef _WIN32
+		file_url_path_offset = 17;
+#else
 		file_url_path_offset = 16;
+#endif
+		is_file_url = true;
 	} else {
 		file_url_path_offset = 0;
 		is_file_url = false;
@@ -1302,6 +1321,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 				continue;
 			}
 			if (splits.empty()) {
+//				splits.push_back(path.substr(file_url_path_offset, i-file_url_path_offset));
 				splits.push_back(path.substr(0, i));
 			} else {
 				splits.push_back(path.substr(last_pos, i - last_pos));

@@ -11,9 +11,18 @@ using namespace std;
 static void create_dummy_file(string fname) {
 	string normalized_string;
 	if (StringUtil::StartsWith(fname, "file:///")) {
+#ifdef _WIN32
+		normalized_string = fname.substr(8);
+#else
 		normalized_string = fname.substr(7);
+#endif
+
 	} else if (StringUtil::StartsWith(fname, "file://localhost/")) {
+#ifdef _WIN32
 		normalized_string = fname.substr(18);
+#else
+		normalized_string = fname.substr(18);
+#endif
 	} else {
 		normalized_string = fname;
 	}
@@ -26,8 +35,9 @@ static void create_dummy_file(string fname) {
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto dname = fs->JoinPath(fs->GetWorkingDirectory(), TestCreatePath("TEST_DIR"));
-	auto dname_triple_slash = "file://" + dname;
-	auto dname_localhost = "file://localhost" + dname;
+	auto dname_converted_slashes = StringUtil::Replace(dname, "\\", "/");
+	auto dname_triple_slash = fs->JoinPath("file://",dname_converted_slashes);
+	auto dname_localhost = fs->JoinPath("file://localhost",dname_converted_slashes);
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
 
