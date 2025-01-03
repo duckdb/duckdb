@@ -40,13 +40,27 @@ SELECT struct_update(123, a := 1);
 ----
 <REGEX>:Invalid Input Error.*The first argument to struct_insert must be a STRUCT.*
 
+# Test changing a value in a STRUCT field
+query T
+SELECT struct_update({a: 1, b: 2}, a := 3);
+----
+{'a': 3, 'b': 2}
+
+# Test changing the type and value of a STRUCT field
 query T
 SELECT struct_update({a: 1, b: 2}, a := 'c');
 ----
 {'a': 'c', 'b': 2}
 
+# Test updating and adding a field to a STRUCT
 query T
 SELECT struct_update({a: 1, b: 2}, a := 'c', d := 3);
+----
+{'a': 'c', 'b': 2, 'd': 3}
+
+# Test adding a field to a STRUCT and updating out of order
+query T
+SELECT struct_update({a: 1, b: 2}, d := 3, a := 'c');
 ----
 {'a': 'c', 'b': 2, 'd': 3}
 
