@@ -90,7 +90,6 @@ string ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSyst
 	extension_directory = fs.ConvertSeparators(extension_directory);
 	// expand ~ in extension directory
 	extension_directory = fs.ExpandPath(extension_directory);
-
 	return extension_directory;
 }
 
