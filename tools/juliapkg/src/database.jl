@@ -5,6 +5,7 @@ mutable struct DuckDBHandle
     file::String
     handle::duckdb_database
     functions::Vector{Any}
+    scalar_functions::Dict{String, Any}
     registered_objects::Dict{Any, Any}
 
     function DuckDBHandle(f::AbstractString, config::Config)
@@ -17,7 +18,7 @@ mutable struct DuckDBHandle
             throw(ConnectionException(error_message))
         end
 
-        db = new(f, handle[], Vector(), Dict())
+        db = new(f, handle[], Vector(), Dict(), Dict())
         finalizer(_close_database, db)
         return db
     end
