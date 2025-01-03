@@ -4,6 +4,8 @@
 
 require skip_reload
 
+require sqlite_scanner
+
 statement ok
 PRAGMA enable_verification
 
@@ -58,3 +60,13 @@ ATTACH '__TEST_DIR__/attach_or_replace.db' AS db2;
 
 statement ok
 SELECT * FROM db2.all_types;
+
+# ATTACHing the same path to the same alias but to a different DB type is odd but not explicitly disallowed
+statement ok
+ATTACH OR REPLACE 'sqlite:__TEST_DIR__/attach_or_replace.db' AS db2;
+
+# This does lead to errors
+statement error
+SELECT * FROM information_schema.tables;
+----
+file is not a database

@@ -50,8 +50,10 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 			}
 			if (info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
-				// same path, same name, DB does not need replacing
-				if (existing_db->GetCatalog().GetDBPath() == path) {
+				// same path, name and type, DB does not need replacing
+				auto const db_type = options.db_type.empty() ? "duckdb" : options.db_type;
+				if (existing_db->GetCatalog().GetDBPath() == path &&
+				    existing_db->GetCatalog().GetCatalogType() == db_type) {
 					return SourceResultType::FINISHED;
 				}
 			} else {
