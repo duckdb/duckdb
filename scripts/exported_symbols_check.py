@@ -53,7 +53,7 @@ for symbol in res.stdout.decode('utf-8').split('\n'):
 
     is_whitelisted = False
     for entry in whitelist:
-        if entry in symbol:
+        if entry in symbol and "random_device" not in symbol:
             is_whitelisted = True
     if is_whitelisted:
         continue
