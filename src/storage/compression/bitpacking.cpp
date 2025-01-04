@@ -723,7 +723,6 @@ public:
 			current_delta_offset = *reinterpret_cast<T *>(current_group_ptr);
 			current_group_ptr += sizeof(T);
 		}
-
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
@@ -969,7 +968,7 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 
 template <class T>
 unique_ptr<CompressedSegmentState> BitpackingInitSegment(ColumnSegment &segment, block_id_t block_id,
-														 optional_ptr<ColumnSegmentState> segment_state) {
+                                                         optional_ptr<ColumnSegmentState> segment_state) {
 	// segment_state is not used for Bitpacking (no specialized serialize/deserialize methods)
 	// block_id would equal INVALID_BLOCK for a constant value block (not materialized)
 	// auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -989,14 +988,12 @@ unique_ptr<CompressedSegmentState> BitpackingInitSegment(ColumnSegment &segment,
 template <class T, bool WRITE_STATISTICS = true>
 CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 	auto bitpacking = CompressionFunction(
-										  CompressionType::COMPRESSION_BITPACKING, data_type,
-										  BitpackingInitAnalyze<T>, BitpackingAnalyze<T>, BitpackingFinalAnalyze<T>,
-										  BitpackingInitCompression<T, WRITE_STATISTICS>, BitpackingCompress<T, WRITE_STATISTICS>,
-										  BitpackingFinalizeCompress<T, WRITE_STATISTICS>,
-										  BitpackingInitScan<T>, BitpackingScan<T>, BitpackingScanPartial<T>,
-										  BitpackingFetchRow<T>, BitpackingSkip<T>);
+	    CompressionType::COMPRESSION_BITPACKING, data_type, BitpackingInitAnalyze<T>, BitpackingAnalyze<T>,
+	    BitpackingFinalAnalyze<T>, BitpackingInitCompression<T, WRITE_STATISTICS>,
+	    BitpackingCompress<T, WRITE_STATISTICS>, BitpackingFinalizeCompress<T, WRITE_STATISTICS>, BitpackingInitScan<T>,
+	    BitpackingScan<T>, BitpackingScanPartial<T>, BitpackingFetchRow<T>, BitpackingSkip<T>);
 	bitpacking.init_segment = BitpackingInitSegment<T>;
-	//bitpacking.serialize_state = BitpackingSerializeState<T>;
+	// bitpacking.serialize_state = BitpackingSerializeState<T>;
 	// bitpacking.deserialize_state = BitpackingDeserializeState<T>;
 	// bitpacking.cleanup_state = ZSTDStorage::CleanupState;
 	return bitpacking;
