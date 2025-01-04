@@ -2911,7 +2911,7 @@ The result must be destroyed with `duckdb_destroy_value`.
 Returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
 """
 function duckdb_bind_get_parameter(info, index)
-    return ccall((:duckdb_bind_get_parameter, libduckdb), duckdb_value, (duckdb_bind_info, idx_t), info, index - 1)
+    return ccall((:duckdb_bind_get_parameter, libduckdb), duckdb_value, (duckdb_bind_info, idx_t), info, index)
 end
 
 """
