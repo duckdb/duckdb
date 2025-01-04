@@ -106,10 +106,18 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 	if (!best_function.IsValid()) {
 		// no matching function was found, throw an error
 		vector<string> candidates;
+		string catalog_name;
+		string schema_name;
 		for (auto &f : functions.functions) {
+			if (catalog_name.empty() && !f.catalog_name.empty()) {
+				catalog_name = f.catalog_name;
+			}
+			if (schema_name.empty() && !f.schema_name.empty()) {
+				schema_name = f.schema_name;
+			}
 			candidates.push_back(f.ToString());
 		}
-		error = ErrorData(BinderException::NoMatchingFunction(name, arguments, candidates));
+		error = ErrorData(BinderException::NoMatchingFunction(catalog_name, schema_name, name, arguments, candidates));
 		return candidate_functions;
 	}
 	candidate_functions.push_back(best_function.GetIndex());
@@ -117,13 +125,14 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 }
 
 template <class T>
-optional_idx FunctionBinder::MultipleCandidateException(const string &name, FunctionSet<T> &functions,
+optional_idx FunctionBinder::MultipleCandidateException(const string &catalog_name, const string &schema_name,
+                                                        const string &name, FunctionSet<T> &functions,
                                                         vector<idx_t> &candidate_functions,
                                                         const vector<LogicalType> &arguments, ErrorData &error) {
 	D_ASSERT(functions.functions.size() > 1);
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
-	string call_str = Function::CallToString(name, arguments);
+	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments);
 	string candidate_str;
 	for (auto &conf : candidate_functions) {
 		T f = functions.GetFunctionByOffset(conf);
@@ -155,7 +164,10 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, Funct
 			}
 		}
 		if (!has_parameters) {
-			return MultipleCandidateException(name, functions, candidate_functions, arguments, error);
+			string catalog_name = functions.functions.size() > 0 ? functions.functions[0].catalog_name : "";
+			string schema_name = functions.functions.size() > 0 ? functions.functions[0].schema_name : "";
+			return MultipleCandidateException(catalog_name, schema_name, name, functions, candidate_functions,
+			                                  arguments, error);
 		}
 	}
 	return candidate_functions[0];

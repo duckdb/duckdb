@@ -21,21 +21,26 @@ public:
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
 		D_ASSERT(!function.name.empty());
 		serializer.WriteProperty(500, "name", function.name);
-		serializer.WriteProperty(501, "arguments", function.arguments);
-		serializer.WriteProperty(502, "original_arguments", function.original_arguments);
+		serializer.WritePropertyWithDefault<string>(501, "catalog_name", function.catalog_name, "");
+		serializer.WritePropertyWithDefault<string>(502, "schema_name", function.schema_name, "");
+		serializer.WriteProperty(503, "arguments", function.arguments);
+		serializer.WriteProperty(504, "original_arguments", function.original_arguments);
 		bool has_serialize = function.serialize;
-		serializer.WriteProperty(503, "has_serialize", has_serialize);
+		serializer.WriteProperty(505, "has_serialize", has_serialize);
 		if (has_serialize) {
-			serializer.WriteObject(504, "function_data",
+			serializer.WriteObject(506, "function_data",
 			                       [&](Serializer &obj) { function.serialize(obj, bind_info, function); });
 			D_ASSERT(function.deserialize);
 		}
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &name,
-	                                vector<LogicalType> arguments, vector<LogicalType> original_arguments) {
-		auto &func_catalog = Catalog::GetEntry(context, catalog_type, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
+	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
+	                                const string &schema_name, const string &name, vector<LogicalType> arguments,
+	                                vector<LogicalType> original_arguments) {
+		auto &func_catalog =
+		    Catalog::GetEntry(context, catalog_type, catalog_name.empty() ? SYSTEM_CATALOG : catalog_name,
+		                      schema_name.empty() ? DEFAULT_SCHEMA : schema_name, name);
 		if (func_catalog.type != catalog_type) {
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 		}
@@ -51,11 +56,13 @@ public:
 	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto name = deserializer.ReadProperty<string>(500, "name");
-		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
-		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
-		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, name, std::move(arguments),
-		                                                         std::move(original_arguments));
-		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
+		auto catalog_name = deserializer.ReadPropertyWithDefault<string>(501, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<string>(502, "schema_name");
+		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(503, "arguments");
+		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(504, "original_arguments");
+		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
+		                                                         std::move(arguments), std::move(original_arguments));
+		auto has_serialize = deserializer.ReadProperty<bool>(505, "has_serialize");
 		return make_pair(std::move(function), has_serialize);
 	}
 
@@ -66,7 +73,7 @@ public:
 			                             function.name);
 		}
 		unique_ptr<FunctionData> result;
-		deserializer.ReadObject(504, "function_data",
+		deserializer.ReadObject(506, "function_data",
 		                        [&](Deserializer &obj) { result = function.deserialize(obj, function); });
 		return result;
 	}
