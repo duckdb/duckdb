@@ -13,8 +13,8 @@ struct RandomState {
 
 RandomEngine::RandomEngine(int64_t seed) : random_state(make_uniq<RandomState>()) {
 	if (seed < 0) {
-		auto now = std::chrono::high_resolution_clock::now();
-		uint64_t time_seed = now.time_since_epoch().count();
+		const auto now = std::chrono::high_resolution_clock::now();
+		auto time_seed = now.time_since_epoch().count();
 		random_state->pcg.seed(time_seed);
 	} else {
 		random_state->pcg.seed(NumericCast<uint64_t>(seed));
