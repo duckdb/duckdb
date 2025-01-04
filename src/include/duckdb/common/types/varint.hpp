@@ -28,6 +28,10 @@ public:
 	DUCKDB_API static constexpr uint8_t DECIMAL_SHIFT = 9;
 	//! 10 ** DECIMAL_SHIFT
 	DUCKDB_API static constexpr digit_t DECIMAL_BASE = 1000000000;
+	//! Bytes of a digit_t
+	DUCKDB_API static constexpr uint8_t DIGIT_BYTES = sizeof(digit_t);
+	//! Bits of a digit_t
+	DUCKDB_API static constexpr uint8_t DIGIT_BITS = DIGIT_BYTES * 8;
 	//! Verifies if a Varint is valid. i.e., if it has 3 header bytes. The header correctly represents the number of
 	//! data bytes, and the data bytes has no leading zero bytes.
 	DUCKDB_API static void Verify(const string_t &input);

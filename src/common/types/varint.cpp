@@ -198,18 +198,16 @@ string Varint::VarIntToVarchar(const string_t &blob) {
 	vector<digit_t> digits;
 	// Rounding byte_array to digit_bytes multiple size, so that we can process every digit_bytes bytes
 	// at a time without if check in the for loop
-	idx_t digit_bytes = sizeof(digit_t);
-	idx_t digit_bits = digit_bytes * 8;
-	idx_t padding_size = (digit_bytes - byte_array.size() % digit_bytes) % digit_bytes;
+	idx_t padding_size = (-byte_array.size()) & (DIGIT_BYTES - 1);
 	byte_array.insert(byte_array.begin(), padding_size, 0);
-	for (idx_t i = 0; i < byte_array.size(); i += digit_bytes) {
+	for (idx_t i = 0; i < byte_array.size(); i += DIGIT_BYTES) {
 		digit_t hi = 0;
-		for (idx_t j = 0; j < digit_bytes; j++) {
-			hi |= UnsafeNumericCast<digit_t>(byte_array[i + j]) << (8 * (digit_bytes - j - 1));
+		for (idx_t j = 0; j < DIGIT_BYTES; j++) {
+			hi |= UnsafeNumericCast<digit_t>(byte_array[i + j]) << (8 * (DIGIT_BYTES - j - 1));
 		}
 
 		for (idx_t j = 0; j < digits.size(); j++) {
-			twodigit_t tmp = UnsafeNumericCast<twodigit_t>(digits[j]) << digit_bits | hi;
+			twodigit_t tmp = UnsafeNumericCast<twodigit_t>(digits[j]) << DIGIT_BITS | hi;
 			hi = static_cast<digit_t>(tmp / UnsafeNumericCast<twodigit_t>(DECIMAL_BASE));
 			digits[j] = static_cast<digit_t>(tmp - UnsafeNumericCast<twodigit_t>(DECIMAL_BASE * hi));
 		}
