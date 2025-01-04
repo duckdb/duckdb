@@ -1,5 +1,5 @@
 # name: test/sql/function/nested/test_struct_update.test
-# description: Test the struct_insert function.
+# description: Test the struct_update function.
 # group: [nested]
 
 statement ok
