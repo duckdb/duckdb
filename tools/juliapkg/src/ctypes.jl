@@ -307,9 +307,6 @@ struct duckdb_query_progress_type
 end
 
 struct duckdb_varint
-    # uint8_t *data;
-    # idx_t size;
-    # bool is_negative;
     data::Ptr{UInt8}
     size::idx_t
     is_negative::Bool
