@@ -748,102 +748,48 @@ FullElementSpec:
 			}
 		;
 
-StickyDash:
-        Op
-            {   /* DDB lexer may concatenate an arrow with + or * into an "operator" */
-                char *op = $1, *ok = NULL;
-                /* only <-, <->, -, -> are ok */
-                if (op[0] == '<') op++; /* also accept <-> */
-                if (op[0] == '-') {
-                    ok = op + 1  + (op[1] == '>');
-                }
-                /* it may optionally be followed by a single * or + */
-                if (!ok || (ok[0] && ((ok[0] != '*' && ok[0] != '+') || ok[1]))) {
-                    char msg[128];
-                    snprintf(msg, 128, "PGQ expected an arrow instead of %s operator.", $1);
-                    parser_yyerror(msg);
-                }
-                $$ = $1;
-            }
-
-
 /* we allow spaces inside the arrows */
 Arrow:
-        '-' '>'
-            {   $$ = "->"; }
-    |
-        '-'
-            {   $$ = "-"; }
-    |
-        StickyDash
-            {   $$ = $1; }
+	ArrowRight
+            {   $$ = $1;    }
     |
         '<' LAMBDA_ARROW
-            {    $$ = "<->";  }
+            {   $$ = "<->"; }
     |
         '<' '-' '>'
-            {    $$ = "<->";  }
-    |
-        '<' StickyDash
-            {   char *op = $2;
-                if (op[0] == '<') {
-                    parser_yyerror("PGQ does not allow < followed by < as edge operator");
-                }
-                $$ = (char*) ((op[1] == 0)   ? "<-" :
-                              (op[1] == '*') ? "<-*" :
-                              (op[1] == '+') ? "<-+" :
-                              (op[2] == '*') ? "<->*" :
-                              (op[2] == '+') ? "<->+" : "<->");
-            }
+            {   $$ = "<->"; }
     |
         '<' '-'
             {   $$ = "<-";  }
-    |
+        ;
+
+ArrowRight:
         LAMBDA_ARROW
-            {   $$ = "->"; }
+            {   $$ = "->";  }
+    |
+        '-' '>'
+            {   $$ = "->";  }
+    |
+        '-'
+            {   $$ = "-";   }
         ;
 
 ArrowLeft:
         '-' '['
-            {   $$ = "-"; }
+            {   $$ = "-";   }
     |
         '<' '-' '['
             {   $$ = "<-";  }
         ;
 
-ArrowKleeneOptional:
-        Arrow KleeneOptional
-            {
-                PGSubPath *p = (PGSubPath*) $2;
-                char *op = $1;
-                int len = strlen(op);
-                int plus = (op[len-1] == '+');
-                int star = (op[len-1] == '*');
-                if (plus || star) { /* + or * was glued to the end of the arrow */
-                    if (!p->single_bind || p->lower != 1 || p-> upper != 1) {
-                        parser_yyerror("PGQ cannot accept + or * followed by another quantifier.");
-                    } else {
-                        p->single_bind = 0;
-                        p->lower = plus;
-                        p->upper = (1<<30);
-                    }
-                }
-                p->path = (PGList*) op; /* return the arrow temporarily in 'path'.. */
-                $$ = (PGNode*) p;
-            }
-        ;
-
 EdgePattern:
-        ArrowLeft FullElementSpec ']' ArrowKleeneOptional
+        ArrowLeft FullElementSpec ']' ArrowRight KleeneOptional
             {
-                PGSubPath *p = (PGSubPath*) $4;
+                PGSubPath *p = (PGSubPath*) $5;
                 char *left = $1;
-                char *dash = (char*) p->path;
+                char *dash = (char*) $4;
                 PGPathInfo* i = (PGPathInfo*) $2;
                 PGPathElement *n = makeNode(PGPathElement);
-                if (dash[0] == '<') { /* ArrowKleeneOptional accepts <- but that is not ok here */
-                    parser_yyerror("PGQ cannot accept < after ] edge pattern closing.");
-                }
                 n->match_type = (dash[1] == '>')?
                                     ((left[0] == '<')?PG_MATCH_EDGE_LEFT_RIGHT:PG_MATCH_EDGE_RIGHT):
                                     ((left[0] == '<')?PG_MATCH_EDGE_LEFT:PG_MATCH_EDGE_ANY);
@@ -861,10 +807,10 @@ EdgePattern:
                 }
             }
     |
-        ArrowKleeneOptional
+        Arrow KleeneOptional
             {
-                PGSubPath *p = (PGSubPath*) $1;
-                char *left = (char*) p->path;
+                PGSubPath *p = (PGSubPath*) $2;
+                char *left = (char*) $1;
                 PGPathElement *n = makeNode(PGPathElement);;
                 char *dash = left + (left[0] == '<');
                 n->label_expr = NULL;

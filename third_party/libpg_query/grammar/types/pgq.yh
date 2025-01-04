@@ -43,9 +43,8 @@
 %type <node> OrLabelExpression
 %type <node> LabelExpressionOptional
 %type <str> Arrow
-%type <str> StickyDash
+%type <str> ArrowRight
 %type <str> ArrowLeft
-%type <node> ArrowKleeneOptional
 %type <str> VariableOptional
 %type <node> FullElementSpec
 %type <list> EdgePattern
