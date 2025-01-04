@@ -20,6 +20,8 @@ public:
 public:
 	virtual void Update(double percentage) = 0;
 	virtual void Finish() = 0;
+	virtual void AddInfo(const char *name, double value) {
+	}
 };
 
 } // namespace duckdb

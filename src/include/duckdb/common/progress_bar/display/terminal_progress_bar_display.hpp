@@ -22,6 +22,7 @@ public:
 public:
 	void Update(double percentage) override;
 	void Finish() override;
+	void AddInfo(const char *name, double value) override;
 
 private:
 	int32_t rendered_percentage = -1;
@@ -43,7 +44,9 @@ private:
 
 private:
 	static int32_t NormalizePercentage(double percentage);
-	void PrintProgressInternal(int32_t percentage);
+	void PrintProgressInternal(int32_t percentage, bool end);
+	double progress_bar_error = -1.0;
+	double query_time = -1.0;
 };
 
 } // namespace duckdb

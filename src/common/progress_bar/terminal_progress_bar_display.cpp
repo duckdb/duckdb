@@ -2,6 +2,8 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/to_string.hpp"
 
+#include <string.h>
+
 namespace duckdb {
 
 int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
@@ -14,7 +16,7 @@ int32_t TerminalProgressBarDisplay::NormalizePercentage(double percentage) {
 	return int32_t(percentage);
 }
 
-void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage) {
+void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, bool end) {
 	string result;
 	// we divide the number of blocks by the percentage
 	// 0%   = 0
@@ -25,14 +27,39 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage) {
 
 	// render the percentage with some padding to ensure everything stays nicely aligned
 	result = "\r";
-	if (percentage < 100) {
+	if (end && query_time >= 0.0) {
+		idx_t sec = idx_t(query_time);
+		idx_t ms = idx_t(query_time * 1e3);
+		if (ms < 10) {
+			result += " ~" + to_string(ms) + "ms";
+		} else if (ms < 100) {
+			result += " " + to_string(ms) + "ms";
+		} else if (ms < 10000) {
+			result += to_string(sec) + ".";
+			result += to_string((ms / 100) % 10);
+			result += to_string((ms / 10) % 100);
+			result += "s";
+		} else if (sec < 100) {
+			result += to_string(sec);
+			result += to_string(sec) + ".";
+			result += to_string((ms / 100) % 10);
+			result += "s";
+		} else if (sec < 1000) {
+			result += " " + to_string(sec) + "s";
+		} else {
+			// This will shift results, but I guess it's fine
+			result += to_string(sec) + "s";
+		}
+	} else {
+		if (percentage < 100) {
+			result += " ";
+		}
+		if (percentage < 10) {
+			result += " ";
+		}
+		result += to_string(percentage) + "%";
 		result += " ";
 	}
-	if (percentage < 10) {
-		result += " ";
-	}
-	result += to_string(percentage) + "%";
-	result += " ";
 	result += PROGRESS_START;
 	idx_t i;
 	for (i = 0; i < idx_t(blocks_to_draw); i++) {
@@ -53,6 +80,12 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage) {
 	result += PROGRESS_END;
 	result += " ";
 
+	if (end) {
+		if (progress_bar_error >= 0.0) {
+			result += "progress_bar_error:" + to_string(progress_bar_error);
+		}
+	}
+
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
 }
 
@@ -61,15 +94,23 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 	if (percentage_int == rendered_percentage) {
 		return;
 	}
-	PrintProgressInternal(percentage_int);
+	PrintProgressInternal(percentage_int, false);
 	Printer::Flush(OutputStream::STREAM_STDOUT);
 	rendered_percentage = percentage_int;
 }
 
 void TerminalProgressBarDisplay::Finish() {
-	PrintProgressInternal(100);
+	PrintProgressInternal(100, true);
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, "\n");
 	Printer::Flush(OutputStream::STREAM_STDOUT);
+}
+
+void TerminalProgressBarDisplay::AddInfo(const char *name, double value) {
+	if (strcmp(name, "query_time") == 0) {
+		query_time = value;
+	} else if (strcmp(name, "progress_bar_error") == 0) {
+		progress_bar_error = value;
+	}
 }
 
 } // namespace duckdb

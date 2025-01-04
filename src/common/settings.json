@@ -357,6 +357,13 @@
         ]
     },
     {
+        "name": "enable_progress_bar_debug",
+        "description": "Controls the printing of debug information, when 'enable_progress_bar_debug' is true",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "enable_progress_bar_print",
         "description": "Controls the printing of the progress bar, when 'enable_progress_bar' is true",
         "type": "BOOLEAN",
