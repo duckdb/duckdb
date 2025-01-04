@@ -55,6 +55,23 @@ string BitpackingModeToString(const BitpackingMode &mode) {
 	}
 }
 
+struct BitpackingSegmentState : public CompressedSegmentState {
+
+	BitpackingSegmentState() : CompressedSegmentState(), mode(BitpackingMode::AUTO) {
+	}
+
+public:
+	string GetSegmentInfo() const override {
+		string result;
+		if (mode != BitpackingMode::INVALID) {
+			result = "Mode: " + BitpackingModeToString(mode);
+		}
+		return result;
+	}
+
+	BitpackingMode mode;
+};
+
 typedef struct {
 	BitpackingMode mode;
 	uint32_t offset;
@@ -375,9 +392,9 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 // Compress
 //===--------------------------------------------------------------------===//
 template <class T, bool WRITE_STATISTICS, class T_S = typename MakeSigned<T>::type>
-struct BitpackingCompressState : public CompressionState {
+struct BitpackingCompressionState : public CompressionState {
 public:
-	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
+	explicit BitpackingCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
 	    : CompressionState(info), checkpointer(checkpointer),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
@@ -403,7 +420,7 @@ public:
 public:
 	struct BitpackingWriter {
 		static void WriteConstant(T constant, idx_t count, void *data_ptr, bool all_invalid) {
-			auto state = reinterpret_cast<BitpackingCompressState<T, WRITE_STATISTICS> *>(data_ptr);
+			auto state = reinterpret_cast<BitpackingCompressionState<T, WRITE_STATISTICS> *>(data_ptr);
 
 			ReserveSpace(state, sizeof(T));
 			WriteMetaData(state, BitpackingMode::CONSTANT);
@@ -414,7 +431,7 @@ public:
 
 		static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T *values, bool *validity,
 		                               void *data_ptr) {
-			auto state = reinterpret_cast<BitpackingCompressState<T, WRITE_STATISTICS> *>(data_ptr);
+			auto state = reinterpret_cast<BitpackingCompressionState<T, WRITE_STATISTICS> *>(data_ptr);
 
 			ReserveSpace(state, 2 * sizeof(T));
 			WriteMetaData(state, BitpackingMode::CONSTANT_DELTA);
@@ -425,7 +442,7 @@ public:
 		}
 		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference,
 		                          T_S delta_offset, T *original_values, idx_t count, void *data_ptr) {
-			auto state = reinterpret_cast<BitpackingCompressState<T, WRITE_STATISTICS> *>(data_ptr);
+			auto state = reinterpret_cast<BitpackingCompressionState<T, WRITE_STATISTICS> *>(data_ptr);
 
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(count, width);
 			ReserveSpace(state, bp_size + 3 * sizeof(T));
@@ -443,7 +460,7 @@ public:
 
 		static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count,
 		                     void *data_ptr) {
-			auto state = reinterpret_cast<BitpackingCompressState<T, WRITE_STATISTICS> *>(data_ptr);
+			auto state = reinterpret_cast<BitpackingCompressionState<T, WRITE_STATISTICS> *>(data_ptr);
 
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(count, width);
 			ReserveSpace(state, bp_size + 2 * sizeof(T));
@@ -464,19 +481,19 @@ public:
 			ptr += sizeof(T_OUT);
 		}
 
-		static void WriteMetaData(BitpackingCompressState<T, WRITE_STATISTICS> *state, BitpackingMode mode) {
+		static void WriteMetaData(BitpackingCompressionState<T, WRITE_STATISTICS> *state, BitpackingMode mode) {
 			bitpacking_metadata_t metadata {mode, (uint32_t)(state->data_ptr - state->handle.Ptr())};
 			state->metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
 			Store<bitpacking_metadata_encoded_t>(EncodeMeta(metadata), state->metadata_ptr);
 		}
 
-		static void ReserveSpace(BitpackingCompressState<T, WRITE_STATISTICS> *state, idx_t data_bytes) {
+		static void ReserveSpace(BitpackingCompressionState<T, WRITE_STATISTICS> *state, idx_t data_bytes) {
 			idx_t meta_bytes = sizeof(bitpacking_metadata_encoded_t);
 			state->FlushAndCreateSegmentIfFull(data_bytes, meta_bytes);
 			D_ASSERT(state->CanStore(data_bytes, meta_bytes));
 		}
 
-		static void UpdateStats(BitpackingCompressState<T, WRITE_STATISTICS> *state, idx_t count) {
+		static void UpdateStats(BitpackingCompressionState<T, WRITE_STATISTICS> *state, idx_t count) {
 			state->current_segment->count += count;
 
 			if (WRITE_STATISTICS && !state->state.all_invalid) {
@@ -514,7 +531,7 @@ public:
 
 		for (idx_t i = 0; i < count; i++) {
 			idx_t idx = vdata.sel->get_index(i);
-			state.template Update<BitpackingCompressState<T, WRITE_STATISTICS, T_S>::BitpackingWriter>(
+			state.template Update<BitpackingCompressionState<T, WRITE_STATISTICS, T_S>::BitpackingWriter>(
 			    data[idx], vdata.validity.RowIsValid(idx));
 		}
 	}
@@ -556,7 +573,7 @@ public:
 	}
 
 	void Finalize() {
-		state.template Flush<BitpackingCompressState<T, WRITE_STATISTICS, T_S>::BitpackingWriter>();
+		state.template Flush<BitpackingCompressionState<T, WRITE_STATISTICS, T_S>::BitpackingWriter>();
 		FlushSegment();
 		current_segment.reset();
 	}
@@ -565,12 +582,12 @@ public:
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &checkpointer,
                                                        unique_ptr<AnalyzeState> state) {
-	return make_uniq<BitpackingCompressState<T, WRITE_STATISTICS>>(checkpointer, state->info);
+	return make_uniq<BitpackingCompressionState<T, WRITE_STATISTICS>>(checkpointer, state->info);
 }
 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = state_p.Cast<BitpackingCompressState<T, WRITE_STATISTICS>>();
+	auto &state = state_p.Cast<BitpackingCompressionState<T, WRITE_STATISTICS>>();
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
@@ -578,7 +595,7 @@ void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t co
 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingFinalizeCompress(CompressionState &state_p) {
-	auto &state = state_p.Cast<BitpackingCompressState<T, WRITE_STATISTICS>>();
+	auto &state = state_p.Cast<BitpackingCompressionState<T, WRITE_STATISTICS>>();
 	state.Finalize();
 }
 
@@ -706,6 +723,7 @@ public:
 			current_delta_offset = *reinterpret_cast<T *>(current_group_ptr);
 			current_group_ptr += sizeof(T);
 		}
+
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
@@ -949,16 +967,39 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 	scan_state.Skip(segment, skip_count);
 }
 
+template <class T>
+unique_ptr<CompressedSegmentState> BitpackingInitSegment(ColumnSegment &segment, block_id_t block_id,
+														 optional_ptr<ColumnSegmentState> segment_state) {
+	// segment_state is not used for Bitpacking (no specialized serialize/deserialize methods)
+	// block_id would equal INVALID_BLOCK for a constant value block (not materialized)
+	// auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	if (block_id == INVALID_BLOCK) {
+		return nullptr; // auto handle = buffer_manager.Pin(segment.block);
+	}
+	auto result = make_uniq<BitpackingSegmentState>();
+	// Use scan_state to trigger decoding of the (first group's?) metadata
+	BitpackingScanState<T> scan_state(segment);
+	result->mode = scan_state.current_group.mode;
+	return std::move(result);
+}
+
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 template <class T, bool WRITE_STATISTICS = true>
 CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_BITPACKING, data_type, BitpackingInitAnalyze<T>,
-	                           BitpackingAnalyze<T>, BitpackingFinalAnalyze<T>,
-	                           BitpackingInitCompression<T, WRITE_STATISTICS>, BitpackingCompress<T, WRITE_STATISTICS>,
-	                           BitpackingFinalizeCompress<T, WRITE_STATISTICS>, BitpackingInitScan<T>,
-	                           BitpackingScan<T>, BitpackingScanPartial<T>, BitpackingFetchRow<T>, BitpackingSkip<T>);
+	auto bitpacking = CompressionFunction(
+										  CompressionType::COMPRESSION_BITPACKING, data_type,
+										  BitpackingInitAnalyze<T>, BitpackingAnalyze<T>, BitpackingFinalAnalyze<T>,
+										  BitpackingInitCompression<T, WRITE_STATISTICS>, BitpackingCompress<T, WRITE_STATISTICS>,
+										  BitpackingFinalizeCompress<T, WRITE_STATISTICS>,
+										  BitpackingInitScan<T>, BitpackingScan<T>, BitpackingScanPartial<T>,
+										  BitpackingFetchRow<T>, BitpackingSkip<T>);
+	bitpacking.init_segment = BitpackingInitSegment<T>;
+	//bitpacking.serialize_state = BitpackingSerializeState<T>;
+	// bitpacking.deserialize_state = BitpackingDeserializeState<T>;
+	// bitpacking.cleanup_state = ZSTDStorage::CleanupState;
+	return bitpacking;
 }
 
 CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
