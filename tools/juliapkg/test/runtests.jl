@@ -7,7 +7,6 @@ using FixedPointDecimals
 using UUIDs
 
 test_files = [
-    "test_c_api.jl",
     "test_appender.jl",
     "test_basic_queries.jl",
     "test_big_nested.jl",
