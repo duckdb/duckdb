@@ -1,4 +1,3 @@
-from abc import abstractmethod
 import argparse
 import logging
 import os
@@ -13,10 +12,6 @@ from generate_c_api import (
     parse_capi_function_definitions,
     parse_ext_api_definitions,
 )
-
-
-# Paths
-JULIA_PACKAGE_DIR = pathlib.Path(__file__).parent.parent
 
 
 class FunctionDefParam(TypedDict):
@@ -133,6 +128,211 @@ JULIA_BASE_TYPE_MAP = {
     "duckdb_cast_function_t": "duckdb_cast_function_ptr",  # function pointer type
 }
 
+
+# TODO this the original order of the functions in `api.jl` and is only used to keep the PR review small
+JULIA_API_ORIGINAL_ORDER = [
+    "duckdb_open",
+    "duckdb_open_ext",
+    "duckdb_close",
+    "duckdb_connect",
+    "duckdb_disconnect",
+    "duckdb_create_config",
+    "duckdb_config_count",
+    "duckdb_get_config_flag",
+    "duckdb_set_config",
+    "duckdb_destroy_config",
+    "duckdb_query",
+    "duckdb_destroy_result",
+    "duckdb_column_name",
+    "duckdb_column_type",
+    "duckdb_column_logical_type",
+    "duckdb_column_count",
+    "duckdb_row_count",
+    "duckdb_rows_changed",
+    "duckdb_column_data",
+    "duckdb_nullmask_data",
+    "duckdb_result_error",
+    "duckdb_result_get_chunk",
+    "duckdb_result_is_streaming",
+    "duckdb_stream_fetch_chunk",
+    "duckdb_result_chunk_count",
+    "duckdb_value_boolean",
+    "duckdb_value_int8",
+    "duckdb_value_int16",
+    "duckdb_value_int32",
+    "duckdb_value_int64",
+    "duckdb_value_hugeint",
+    "duckdb_value_uhugeint",
+    "duckdb_value_uint8",
+    "duckdb_value_uint16",
+    "duckdb_value_uint32",
+    "duckdb_value_uint64",
+    "duckdb_value_float",
+    "duckdb_value_double",
+    "duckdb_value_date",
+    "duckdb_value_time",
+    "duckdb_value_timestamp",
+    "duckdb_value_interval",
+    "duckdb_value_varchar",
+    "duckdb_value_varchar_internal",
+    "duckdb_value_is_null",
+    "duckdb_malloc",
+    "duckdb_free",
+    "duckdb_vector_size",
+    "duckdb_from_time_tz",
+    "duckdb_prepare",
+    "duckdb_destroy_prepare",
+    "duckdb_prepare_error",
+    "duckdb_nparams",
+    "duckdb_param_type",
+    "duckdb_bind_boolean",
+    "duckdb_bind_int8",
+    "duckdb_bind_int16",
+    "duckdb_bind_int32",
+    "duckdb_bind_int64",
+    "duckdb_bind_hugeint",
+    "duckdb_bind_uhugeint",
+    "duckdb_bind_uint8",
+    "duckdb_bind_uint16",
+    "duckdb_bind_uint32",
+    "duckdb_bind_uint64",
+    "duckdb_bind_float",
+    "duckdb_bind_double",
+    "duckdb_bind_date",
+    "duckdb_bind_time",
+    "duckdb_bind_timestamp",
+    "duckdb_bind_interval",
+    "duckdb_bind_varchar",
+    "duckdb_bind_varchar_length",
+    "duckdb_bind_blob",
+    "duckdb_bind_null",
+    "duckdb_execute_prepared",
+    "duckdb_pending_prepared",
+    "duckdb_pending_prepared_streaming",
+    "duckdb_pending_execute_check_state",
+    "duckdb_destroy_pending",
+    "duckdb_pending_error",
+    "duckdb_pending_execute_task",
+    "duckdb_execute_pending",
+    "duckdb_pending_execution_is_finished",
+    "duckdb_destroy_value",
+    "duckdb_create_varchar",
+    "duckdb_create_varchar_length",
+    "duckdb_create_int64",
+    "duckdb_get_varchar",
+    "duckdb_get_int64",
+    "duckdb_create_logical_type",
+    "duckdb_create_decimal_type",
+    "duckdb_get_type_id",
+    "duckdb_decimal_width",
+    "duckdb_decimal_scale",
+    "duckdb_decimal_internal_type",
+    "duckdb_enum_internal_type",
+    "duckdb_enum_dictionary_size",
+    "duckdb_enum_dictionary_value",
+    "duckdb_list_type_child_type",
+    "duckdb_struct_type_child_count",
+    "duckdb_union_type_member_count",
+    "duckdb_struct_type_child_name",
+    "duckdb_union_type_member_name",
+    "duckdb_struct_type_child_type",
+    "duckdb_union_type_member_type",
+    "duckdb_destroy_logical_type",
+    "duckdb_create_data_chunk",
+    "duckdb_destroy_data_chunk",
+    "duckdb_data_chunk_reset",
+    "duckdb_data_chunk_get_column_count",
+    "duckdb_data_chunk_get_size",
+    "duckdb_data_chunk_set_size",
+    "duckdb_data_chunk_get_vector",
+    "duckdb_vector_get_column_type",
+    "duckdb_vector_get_data",
+    "duckdb_vector_get_validity",
+    "duckdb_vector_ensure_validity_writable",
+    "duckdb_list_vector_get_child",
+    "duckdb_list_vector_get_size",
+    "duckdb_struct_vector_get_child",
+    "duckdb_union_vector_get_member",
+    "duckdb_vector_assign_string_element",
+    "duckdb_vector_assign_string_element_len",
+    "duckdb_create_table_function",
+    "duckdb_destroy_table_function",
+    "duckdb_table_function_set_name",
+    "duckdb_table_function_add_parameter",
+    "duckdb_table_function_set_extra_info",
+    "duckdb_table_function_set_bind",
+    "duckdb_table_function_set_init",
+    "duckdb_table_function_set_local_init",
+    "duckdb_table_function_set_function",
+    "duckdb_table_function_supports_projection_pushdown",
+    "duckdb_register_table_function",
+    "duckdb_bind_get_extra_info",
+    "duckdb_bind_add_result_column",
+    "duckdb_bind_get_parameter_count",
+    "duckdb_bind_get_parameter",
+    "duckdb_bind_set_bind_data",
+    "duckdb_bind_set_cardinality",
+    "duckdb_bind_set_error",
+    "duckdb_init_get_extra_info",
+    "duckdb_init_get_bind_data",
+    "duckdb_init_set_init_data",
+    "duckdb_init_get_column_count",
+    "duckdb_init_get_column_index",
+    "duckdb_init_set_max_threads",
+    "duckdb_init_set_error",
+    "duckdb_function_get_extra_info",
+    "duckdb_function_get_bind_data",
+    "duckdb_function_get_init_data",
+    "duckdb_function_get_local_init_data",
+    "duckdb_function_set_error",
+    "duckdb_add_replacement_scan",
+    "duckdb_replacement_scan_set_function_name",
+    "duckdb_replacement_scan_add_parameter",
+    "duckdb_replacement_scan_set_error",
+    "duckdb_appender_create",
+    "duckdb_appender_error",
+    "duckdb_appender_flush",
+    "duckdb_appender_close",
+    "duckdb_appender_destroy",
+    "duckdb_appender_begin_row",
+    "duckdb_appender_end_row",
+    "duckdb_append_bool",
+    "duckdb_append_int8",
+    "duckdb_append_int16",
+    "duckdb_append_int32",
+    "duckdb_append_int64",
+    "duckdb_append_hugeint",
+    "duckdb_append_uhugeint",
+    "duckdb_append_uint8",
+    "duckdb_append_uint16",
+    "duckdb_append_uint32",
+    "duckdb_append_uint64",
+    "duckdb_append_float",
+    "duckdb_append_double",
+    "duckdb_append_date",
+    "duckdb_append_time",
+    "duckdb_append_timestamp",
+    "duckdb_append_interval",
+    "duckdb_append_varchar",
+    "duckdb_append_varchar_length",
+    "duckdb_append_blob",
+    "duckdb_append_null",
+    "duckdb_execute_tasks",
+    "duckdb_create_task_state",
+    "duckdb_execute_tasks_state",
+    "duckdb_execute_n_tasks_state",
+    "duckdb_finish_execution",
+    "duckdb_task_state_is_finished",
+    "duckdb_destroy_task_state",
+    "duckdb_execution_is_finished",
+    "duckdb_create_scalar_function",
+    "duckdb_destroy_scalar_function",
+    "duckdb_scalar_function_set_name",
+    "duckdb_scalar_function_add_parameter",
+    "duckdb_scalar_function_set_return_type",
+    "duckdb_scalar_function_set_function",
+    "duckdb_register_scalar_function",
+]
 
 class JuliaApiTarget:
     indent: int = 0
@@ -447,13 +647,14 @@ class JuliaApiTarget:
         self._write_function_definition(function_obj)
 
     def write_footer(self):
-        self.write_empty_line()
+        self.write_empty_line(n=1)
         s = """
 # !!!!!!!!!!!!
 # WARNING: this file is autogenerated by scripts/generate_c_api_julia.py, manual changes will be overwritten
 # !!!!!!!!!!!!
 """
         self.file.write(s)
+        self.write_empty_line()
 
     def write_header(self, version=""):
         s = """
@@ -490,17 +691,15 @@ end
         function_groups: List[FunctionGroup],
         function_map: Dict[str, FunctionDef],
     ):
-        self._analyze_types(function_groups)
-
+        
+        self._analyze_types(function_groups)    # Create the julia type map
         self.write_header(version)
         self.write_empty_line()
-
         if self.manual_order is not None:
             current_group = None
             for f in self.manual_order:
                 if f not in function_map:
-                    # raise ValueError(f"Function {f} not found in function_map")
-                    logging.warning(f"Function {f} not found in function_map")
+                    print(f"WARNING: Function {f} not found in function_map")
                     continue
 
                 if current_group != function_map[f]["group"]:
@@ -512,14 +711,14 @@ end
                 self.write_empty_line()
 
             # Write new functions
+            self.write_empty_line(n=1)
             self.write_group_start("New Functions")
-            self.write_empty_line()
+            self.write_empty_line(n=2)
             current_group = None
             for group in function_groups:
                 for fn in group["entries"]:
                     if fn["name"] in self.manual_order:
                         continue
-
                     if current_group != group["group"]:
                         current_group = group["group"]
                         self.write_group_start(current_group)
@@ -569,15 +768,21 @@ end
 
     @staticmethod
     def get_function_order(filepath):
-        # scan the file and get the order of the functions
         path = pathlib.Path(filepath)
-        if not path.exists():
+        if not path.exists() or not path.is_file():
             raise FileNotFoundError(f"File {path} does not exist")
 
         with open(path, "r") as f:
             lines = f.readlines()
 
+        is_julia_file = path.suffix == ".jl"
+
+        if not is_julia_file:
+            # read the file and assume that we have a function name per line
+            return [x.strip() for x in lines if x.strip() != ""]
+
         # find the function definitions
+        # TODO this a very simple regex that only supports the long function form `function name(...)`
         function_regex = r"^function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\("
         function_order = []
         for line in lines:
@@ -593,9 +798,9 @@ end
 
 def main():
     """Main function to generate the Julia API."""
-    
+
     print("Creating Julia API")
-    
+
     parser = configure_parser()
     args = parser.parse_args()
     print("Arguments:")
@@ -607,11 +812,11 @@ def main():
     enable_auto_1base_index = args.auto_1_index
 
     capi_defintions_dir = pathlib.Path(args.capi_dir)
-
-
-    ext_api_definitions = parse_ext_api_definitions(EXT_API_DEFINITION_PATTERN)
+    ext_api_definition_pattern = str(capi_defintions_dir) + "/apis/v1/*/*.json"
+    capi_function_definition_pattern = str(capi_defintions_dir) + "/functions/**/*.json"
+    ext_api_definitions = parse_ext_api_definitions(ext_api_definition_pattern)
     ext_api_version = get_extension_api_version(ext_api_definitions)
-    function_groups, function_map = parse_capi_function_definitions()
+    function_groups, function_map = parse_capi_function_definitions(capi_function_definition_pattern)
 
     if not julia_path_old.exists():
         raise FileNotFoundError(
@@ -650,22 +855,12 @@ def main():
         keep_old_order = julia_path_old is not None
 
         if keep_old_order:
-            manual_order = printer.get_function_order(julia_path_old)
-
-            if "duckdb_vector_assign_string_element_len" in manual_order:
-                print("INFO: duckdb_vector_assign_string_element_len is in old API")
-
-            if "duckdb_vector_assign_string_element_len" in function_map.keys():
-                print("INFO: duckdb_vector_assign_string_element_len is in new API")
-            else:
-                raise ValueError(
-                    "duckdb_vector_assign_string_element_len not found in new API"
-                )
+            manual_order = JULIA_API_ORIGINAL_ORDER
             printer.manual_order = manual_order
 
         printer.write_functions(ext_api_version, function_groups, function_map)
 
-        print("Type maps:")
+        print("Type maps: (Julia Type -> C Type)")
         K = list(printer.inverse_type_maps.keys())
         K.sort()
         for k in K:
@@ -680,7 +875,6 @@ def main():
 
 
 def configure_parser():
-
     parser = argparse.ArgumentParser(description="Generate the DuckDB Julia API")
     parser.add_argument(
         "--auto-1-index",
@@ -693,7 +887,7 @@ def configure_parser():
         type=str,
         help="Path to the original API file to keep the function order",
     )
-    
+
     parser.add_argument(
         "--capi-dir",
         type=str,
@@ -703,11 +897,10 @@ def configure_parser():
     parser.add_argument(
         "output",
         type=str,
-        #default="src/api.jl",
+        # default="src/api.jl",
         help="Path to the output file",
     )
     return parser
-
 
 
 if __name__ == "__main__":

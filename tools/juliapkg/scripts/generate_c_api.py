@@ -69,9 +69,10 @@ def get_extension_api_version(ext_api_definitions):
 
 
 # Parse the CAPI_FUNCTION_DEFINITION_FILES to get the full list of functions
-def parse_capi_function_definitions():
+def parse_capi_function_definitions(function_definition_file_pattern):
     # Collect all functions
-    function_files = glob.glob(CAPI_FUNCTION_DEFINITION_FILES, recursive=True)
+    #function_files = glob.glob(CAPI_FUNCTION_DEFINITION_FILES, recursive=True)
+    function_files = glob.glob(function_definition_file_pattern, recursive=True)
 
     function_groups = []
     function_map = {}
