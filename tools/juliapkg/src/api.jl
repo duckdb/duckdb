@@ -2614,6 +2614,7 @@ end
 # Table Functions
 # --------------------------------------------------------------------------------
 
+
 """
     duckdb_create_table_function()
 
@@ -3877,6 +3878,7 @@ Returns: nothing
 function duckdb_execution_is_finished(con)
     return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
 end
+
 
 # --------------------------------------------------------------------------------
 # Scalar Functions
