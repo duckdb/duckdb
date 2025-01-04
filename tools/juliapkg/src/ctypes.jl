@@ -551,29 +551,3 @@ function Base.convert(::Type{UUID}, val::duckdb_hugeint)
     end
 end
 
-
-# %% --- Helper ------------------------------------------ #
-
-Base.convert(::Type{String}, val::duckdb_string_t) = _convert_string(val)
-function _convert_string(val::Ptr{duckdb_string_t})
-    #base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
-    #length_ptr = Base.unsafe_convert(Ptr{Int32}, base_ptr)
-
-    s::duckdb_string_t = unsafe_pointer_to_objref(val)
-    if s.length <= STRING_INLINE_LENGTH
-        return string(s.data) # inline string
-    else
-        s_ext::duckdb_string_t_ptr = unsafe_pointer_to_objref(val)
-        #ptr_ptr = Base.unsafe_convert(Ptr{Ptr{UInt8}}, val + sizeof(Int32) * 2)
-        #data_ptr = Base.unsafe_load(ptr_ptr)
-        # return unsafe_string(data_ptr, length)
-
-        prefix = string(s_ext.prefix)
-        data = unsafe_string(s_ext.data, s_ext.length)
-        return prefix * data
-    end
-end
-
-function _convert_blob(val::Ptr{Cvoid})::Base.CodeUnits{UInt8, String}
-    return Base.codeunits(_convert_string(val))
-end
