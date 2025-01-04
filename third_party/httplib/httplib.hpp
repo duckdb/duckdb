@@ -246,7 +246,7 @@ using socket_t = int;
 #include <unordered_map>
 #include <unordered_set>
 #include "duckdb/common/re2_regex.hpp"
-#include"duckdb/common/random_engine.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 #ifdef _WIN32
