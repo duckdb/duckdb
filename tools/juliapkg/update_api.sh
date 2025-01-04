@@ -13,7 +13,7 @@ cd "$GIR_ROOT_DIR"
 # Generate the Julia API
 python tools/juliapkg/scripts/generate_c_api_julia.py \
     --auto-1-index \
-    --base-api tools/juliapkg/src/api_old.jl \
+    --use-original-order \
     --capi-dir src/include/duckdb/main/capi/header_generation \
     tools/juliapkg/src/api.jl
 

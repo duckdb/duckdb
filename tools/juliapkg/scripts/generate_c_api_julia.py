@@ -334,6 +334,7 @@ JULIA_API_ORIGINAL_ORDER = [
     "duckdb_register_scalar_function",
 ]
 
+
 class JuliaApiTarget:
     indent: int = 0
     linesep: str = os.linesep
@@ -691,8 +692,7 @@ end
         function_groups: List[FunctionGroup],
         function_map: Dict[str, FunctionDef],
     ):
-        
-        self._analyze_types(function_groups)    # Create the julia type map
+        self._analyze_types(function_groups)  # Create the julia type map
         self.write_header(version)
         self.write_empty_line()
         if self.manual_order is not None:
@@ -808,20 +808,17 @@ def main():
         print(f"    {k}: {v}")
 
     julia_path = pathlib.Path(args.output)
-    julia_path_old = pathlib.Path(args.base_api) if args.base_api else None
     enable_auto_1base_index = args.auto_1_index
+    enable_original_order = args.use_original_order
 
     capi_defintions_dir = pathlib.Path(args.capi_dir)
     ext_api_definition_pattern = str(capi_defintions_dir) + "/apis/v1/*/*.json"
     capi_function_definition_pattern = str(capi_defintions_dir) + "/functions/**/*.json"
     ext_api_definitions = parse_ext_api_definitions(ext_api_definition_pattern)
     ext_api_version = get_extension_api_version(ext_api_definitions)
-    function_groups, function_map = parse_capi_function_definitions(capi_function_definition_pattern)
-
-    if not julia_path_old.exists():
-        raise FileNotFoundError(
-            f"File {julia_path_old} does not exist. Ideally rename the current file 'api.jl' to 'api_old.jl'"
-        )
+    function_groups, function_map = parse_capi_function_definitions(
+        capi_function_definition_pattern
+    )
 
     overwrite_function_signatures = {
         # Must be Ptr{Cvoid} and not Ref
@@ -852,22 +849,24 @@ def main():
             overwrite_function_signatures=overwrite_function_signatures,
         ) as printer
     ):
-        keep_old_order = julia_path_old is not None
-
-        if keep_old_order:
-            manual_order = JULIA_API_ORIGINAL_ORDER
-            printer.manual_order = manual_order
+        if enable_original_order:
+            print(
+                "INFO: Using the original order of the functions from the old API file."
+            )
+            printer.manual_order = JULIA_API_ORIGINAL_ORDER
 
         printer.write_functions(ext_api_version, function_groups, function_map)
 
-        print("Type maps: (Julia Type -> C Type)")
-        K = list(printer.inverse_type_maps.keys())
-        K.sort()
-        for k in K:
-            if k.startswith("Ptr") or k.startswith("Ref"):
-                continue
-            v = ", ".join(printer.inverse_type_maps[k])
-            print(f"    {k} -> {v}")
+        if args.print_type_mapping:
+            print("Type maps: (Julia Type -> C Type)")
+            K = list(printer.inverse_type_maps.keys())
+            K.sort()
+            for k in K:
+                if k.startswith("Ptr") or k.startswith("Ref"):
+                    continue
+                v = ", ".join(printer.inverse_type_maps[k])
+                print(f"    {k} -> {v}")
+
         print("Julia API generated successfully!")
         print("Please review the mapped types and check the generated file:")
         print("Hint: also run './format.sh' to format the file and reduce the diff.")
@@ -883,9 +882,17 @@ def configure_parser():
         help="Automatically convert 0-based indices to 1-based indices",
     )
     parser.add_argument(
-        "--base-api",
-        type=str,
-        help="Path to the original API file to keep the function order",
+        "--use-original-order",
+        action="store_true",
+        default=True,
+        help="Use the original order of the functions from the old API file. New functions will be appended at the end.",
+    )
+
+    parser.add_argument(
+        "--print-type-mapping",
+        action="store_true",
+        default=False,
+        help="Print the type mapping from C to Julia",
     )
 
     parser.add_argument(
