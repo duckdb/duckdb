@@ -119,7 +119,7 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 	auto incomming_children = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(expr.children.size(), true);
 	auto new_stats = StructStats::CreateUnknown(expr.return_type);
-	
+
 	for (idx_t arg_idx = 1; arg_idx < expr.children.size(); arg_idx++) {
 		auto &new_child = expr.children[arg_idx];
 		incomming_children.emplace(new_child->alias, arg_idx);
