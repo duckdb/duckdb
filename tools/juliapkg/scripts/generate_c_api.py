@@ -8,9 +8,7 @@ from functools import reduce
 from pathlib import Path
 
 
-EXT_API_DEFINITION_PATTERN = (
-    "src/include/duckdb/main/capi/header_generation/apis/v1/*/*.json"
-)
+EXT_API_DEFINITION_PATTERN = "src/include/duckdb/main/capi/header_generation/apis/v1/*/*.json"
 
 # The JSON files that define all available CAPI functions
 CAPI_FUNCTION_DEFINITION_FILES = 'src/include/duckdb/main/capi/header_generation/functions/**/*.json'
@@ -71,7 +69,7 @@ def get_extension_api_version(ext_api_definitions):
 # Parse the CAPI_FUNCTION_DEFINITION_FILES to get the full list of functions
 def parse_capi_function_definitions(function_definition_file_pattern):
     # Collect all functions
-    #function_files = glob.glob(CAPI_FUNCTION_DEFINITION_FILES, recursive=True)
+    # function_files = glob.glob(CAPI_FUNCTION_DEFINITION_FILES, recursive=True)
     function_files = glob.glob(function_definition_file_pattern, recursive=True)
 
     function_groups = []
@@ -89,9 +87,7 @@ def parse_capi_function_definitions(function_definition_file_pattern):
             function_groups.append(json_data)
             for function in json_data["entries"]:
                 if function["name"] in function_map:
-                    print(
-                        f"Duplicate symbol found when parsing C API file {file}: {function['name']}"
-                    )
+                    print(f"Duplicate symbol found when parsing C API file {file}: {function['name']}")
                     exit(1)
 
                 function["group"] = json_data["group"]
@@ -109,9 +105,7 @@ def parse_capi_function_definitions(function_definition_file_pattern):
         )
 
     for order_group in ORIGINAL_FUNCTION_GROUP_ORDER:
-        curr_group = next(
-            group for group in function_groups if group["group"] == order_group
-        )
+        curr_group = next(group for group in function_groups if group["group"] == order_group)
         function_groups.remove(curr_group)
         function_groups_ordered.append(curr_group)
 
