@@ -550,4 +550,3 @@ function Base.convert(::Type{UUID}, val::duckdb_hugeint)
         return UUID(UInt128(hugeint) + base_value + 1)
     end
 end
-
