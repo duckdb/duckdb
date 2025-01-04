@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import argparse
 import logging
 import os
 import pathlib
@@ -12,6 +13,10 @@ from generate_c_api import (
     parse_capi_function_definitions,
     parse_ext_api_definitions,
 )
+
+
+# Paths
+JULIA_PACKAGE_DIR = pathlib.Path(__file__).parent.parent
 
 
 class FunctionDefParam(TypedDict):
@@ -67,49 +72,6 @@ def parse_c_type(type_str: str, type: list[str] = []):
 
     type.append(type_str)
     return type
-
-
-class AbstractApiTarget:
-    @abstractmethod
-    def declare_typedefs(self, type_defs):
-        pass
-
-    def write_empty_line(self):
-        pass
-
-    @abstractmethod
-    def write_function(self, function_obj: FunctionDef):
-        pass
-
-    @abstractmethod
-    def write_group_start(self, group: str):
-        pass
-
-    def write_header(self, version):
-        """Writes the header of the file."""
-        pass
-
-    def write_footer(self):
-        pass
-
-    def write_functions(
-        self,
-        version,
-        function_groups: List[FunctionGroup],
-        function_maps: Dict[str, FunctionDef],
-    ):
-        self.write_header(version)
-        self.write_empty_line()
-
-        for group in function_groups:
-            self.write_group_start(group["group"])
-            self.write_empty_line()
-            for fn in group["entries"]:
-                self.write_function(fn)
-                self.write_empty_line()
-            self.write_empty_line()
-            self.write_empty_line()
-        self.write_footer()
 
 
 JULIA_RESERVED_KEYWORDS = {
@@ -172,7 +134,7 @@ JULIA_BASE_TYPE_MAP = {
 }
 
 
-class JuliaApiTarget(AbstractApiTarget):
+class JuliaApiTarget:
     indent: int = 0
     linesep: str = os.linesep
     type_maps: dict[str, str] = {}  # C to Julia
@@ -229,11 +191,14 @@ class JuliaApiTarget(AbstractApiTarget):
     def __exit__(self, exc_type, exc_value, traceback):
         self.file.close()
 
-    def write_empty_line(self) -> None:
+    def write_empty_line(self, n=1) -> None:
         """Writes an empty line to the output file."""
-        self.file.write(self.linesep)
+        for i in range(n):
+            self.file.write(self.linesep)
 
-    def _get_casted_type(self, type_str: str, is_return_arg=False, auto_remove_t_suffix=True):
+    def _get_casted_type(
+        self, type_str: str, is_return_arg=False, auto_remove_t_suffix=True
+    ):
         type_str = type_str.strip()
         type_definition = parse_c_type(type_str, [])
 
@@ -324,10 +289,14 @@ class JuliaApiTarget(AbstractApiTarget):
         arg_names = [_get_arg_name(param["name"]) for param in function_obj["params"]]
 
         if function_obj["name"] in self.overwrite_function_signatures:
-            return_type, arg_types = self.overwrite_function_signatures[function_obj["name"]]
+            return_type, arg_types = self.overwrite_function_signatures[
+                function_obj["name"]
+            ]
             return arg_names, arg_types
 
-        arg_types = [self._get_casted_type(param["type"]) for param in function_obj["params"]]
+        arg_types = [
+            self._get_casted_type(param["type"]) for param in function_obj["params"]
+        ]
         return arg_names, arg_types
 
     def _write_function_docstring(self, function_obj: FunctionDef):
@@ -357,20 +326,28 @@ class JuliaApiTarget(AbstractApiTarget):
         arg_names, arg_types = self.get_argument_names_and_types(function_obj)
         arg_names_s = ", ".join(arg_names)
         arg_comments = [
-            function_obj.get("comment", {}).get("param_comments", {}).get(param["name"], "")
+            function_obj.get("comment", {})
+            .get("param_comments", {})
+            .get(param["name"], "")
             for param in function_obj["params"]
         ]
 
-        return_value_comment = function_obj.get("comment", {}).get("return_value", "nothing")
+        return_value_comment = function_obj.get("comment", {}).get(
+            "return_value", "nothing"
+        )
 
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
-        self.file.write(f"{'    ' * self.indent}    {function_obj['name']}({arg_names_s})\n")
+        self.file.write(
+            f"{'    ' * self.indent}    {function_obj['name']}({arg_names_s})\n"
+        )
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(f"{'    ' * self.indent}{description}\n")
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(f"{'    ' * self.indent}# Arguments\n")
         for i, arg_name in enumerate(arg_names):
-            self.file.write(f"{'    ' * self.indent}- `{arg_name}`: {arg_comments[i]}\n")
+            self.file.write(
+                f"{'    ' * self.indent}- `{arg_name}`: {arg_comments[i]}\n"
+            )
         self.file.write(f"{'    ' * self.indent}\n")
         self.file.write(f"{'    ' * self.indent}Returns: {return_value_comment}\n")
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
@@ -407,32 +384,19 @@ class JuliaApiTarget(AbstractApiTarget):
         self.file.write(f"{'    ' * indent}    :{function_obj['name']},\n")
         self.file.write(f"{'    ' * indent})\n")
 
+    def _list_to_julia_tuple(self, lst):
+        if len(lst) == 0:
+            return "()"
+        elif len(lst) == 1:
+            return f"({lst[0]},)"
+        else:
+            return f"({', '.join(lst)})"
+
     def _write_function_definition(self, function_obj: FunctionDef):
-        """_create_function_definition
-
-
-        Example:
-        ```julia
-            function duckdb_get_int64(handle)
-                return ccall((:duckdb_get_int64, libduckdb), Int64, (duckdb_value,), handle)
-            end
-        ```
-
-        Args:
-            function_obj: _description_
-        """
-
         fname = function_obj["name"]
         arg_names, arg_types = self.get_argument_names_and_types(function_obj)
-        if len(arg_types) == 0:
-            arg_types_s = ""
-        elif len(arg_types) == 1:
-            arg_types_s = arg_types[0] + ","
-        else:
-            arg_types_s = ", ".join(arg_types)
-
-        arg_names_s = ", ".join(arg_names)  # for function definition
-        # for function call
+        arg_types_tuple = self._list_to_julia_tuple(arg_types)
+        arg_names_definition = ", ".join(arg_names)
         arg_names_call = ", ".join(
             [
                 (
@@ -446,7 +410,9 @@ class JuliaApiTarget(AbstractApiTarget):
             ]
         )
 
-        return_type = self._get_casted_type(function_obj["return_type"], is_return_arg=True)
+        return_type = self._get_casted_type(
+            function_obj["return_type"], is_return_arg=True
+        )
 
         is_index1_function = (
             fname not in self.auto_1base_index_ignore_functions
@@ -454,16 +420,17 @@ class JuliaApiTarget(AbstractApiTarget):
             and fname in self.auto_1base_index_return_functions
         )
 
-        self.file.write(f"{'    ' * self.indent}function {fname}({arg_names_s})\n")
+        self.file.write(
+            f"{'    ' * self.indent}function {fname}({arg_names_definition})\n"
+        )
 
-        if function_obj.get("group_deprecated", False) or function_obj.get("deprecated", False):
+        if function_obj.get("group_deprecated", False) or function_obj.get(
+            "deprecated", False
+        ):
             self._write_function_depwarn(function_obj, indent=1)
 
-        # !!!!!!!! REMOVE !!!!!
-        # self.file.write(f"{'    ' * self.indent}    println(\"{fname}()\")\n")
-
         self.file.write(
-            f"{'    ' * self.indent}    return ccall((:{fname}, libduckdb), {return_type}, ({arg_types_s}), {arg_names_call}){' + 1' if is_index1_function else ''}\n"
+            f"{'    ' * self.indent}    return ccall((:{fname}, libduckdb), {return_type}, {arg_types_tuple}, {arg_names_call}){' + 1' if is_index1_function else ''}\n"
         )
         self.file.write(f"{'    ' * self.indent}end\n")
 
@@ -471,11 +438,22 @@ class JuliaApiTarget(AbstractApiTarget):
         if function_obj["name"] in self.skipped_functions:
             return
 
-        if function_obj.get("group_deprecated", False):
+        if function_obj.get("group_deprecated", False) or function_obj.get(
+            "deprecated", False
+        ):
             self.deprecated_functions.append(function_obj["name"])
 
         self._write_function_docstring(function_obj)
         self._write_function_definition(function_obj)
+
+    def write_footer(self):
+        self.write_empty_line()
+        s = """
+# !!!!!!!!!!!!
+# WARNING: this file is autogenerated by scripts/generate_c_api_julia.py, manual changes will be overwritten
+# !!!!!!!!!!!!
+"""
+        self.file.write(s)
 
     def write_header(self, version=""):
         s = """
@@ -567,9 +545,13 @@ end
             for fn in group["entries"]:
                 for param in fn["params"]:
                     if param["type"] not in self.type_maps:
-                        self.type_maps[param["type"]] = self._get_casted_type(param["type"])
+                        self.type_maps[param["type"]] = self._get_casted_type(
+                            param["type"]
+                        )
                 if fn["return_type"] not in self.type_maps:
-                    self.type_maps[fn["return_type"]] = self._get_casted_type(fn["return_type"])
+                    self.type_maps[fn["return_type"]] = self._get_casted_type(
+                        fn["return_type"]
+                    )
 
         for k, v in self.type_maps.items():
             if v not in self.inverse_type_maps:
@@ -611,15 +593,25 @@ end
 
 def main():
     """Main function to generate the Julia API."""
+    
+    print("Creating Julia API")
+    
+    parser = configure_parser()
+    args = parser.parse_args()
+    print("Arguments:")
+    for k, v in vars(args).items():
+        print(f"    {k}: {v}")
+
+    julia_path = pathlib.Path(args.output)
+    julia_path_old = pathlib.Path(args.base_api) if args.base_api else None
+    enable_auto_1base_index = args.auto_1_index
+
+    capi_defintions_dir = pathlib.Path(args.capi_dir)
+
 
     ext_api_definitions = parse_ext_api_definitions(EXT_API_DEFINITION_PATTERN)
     ext_api_version = get_extension_api_version(ext_api_definitions)
     function_groups, function_map = parse_capi_function_definitions()
-
-    print("Creating Julia API")
-    ROOT = pathlib.Path(__file__).parent.parent
-    julia_path = ROOT / "tools" / "juliapkg" / "src" / "api.jl"
-    julia_path_old = ROOT / "tools" / "juliapkg" / "src" / "api_old.jl"
 
     if not julia_path_old.exists():
         raise FileNotFoundError(
@@ -638,24 +630,37 @@ def main():
         ),
     }
 
-    with JuliaApiTarget(
-        julia_path,
-        indent=0,
-        auto_1base_index=True,  # WARNING: every arg named "col/row/index" or similar will be 1-based indexed, so the argument is subtracted by 1
-        auto_1base_index_return_functions={"duckdb_init_get_column_index"},
-        auto_1base_index_ignore_functions={
-            "duckdb_parameter_name",
-            "duckdb_param_type",
-            "duckdb_param_logical_type",
-        },
-        skipped_functions={},
-        type_map=JULIA_BASE_TYPE_MAP,
-        overwrite_function_signatures=overwrite_function_signatures,
-    ) as printer:
-        keep_old_order = True
+    with (
+        JuliaApiTarget(
+            julia_path,
+            indent=0,
+            auto_1base_index=enable_auto_1base_index,  # WARNING: every arg named "col/row/index" or similar will be 1-based indexed, so the argument is subtracted by 1
+            auto_1base_index_return_functions={"duckdb_init_get_column_index"},
+            auto_1base_index_ignore_functions={
+                "duckdb_parameter_name",  # Parameter names start at 1
+                "duckdb_param_type",  # Parameter types (like names) start at 1
+                "duckdb_param_logical_type",  # ...
+                "duckdb_bind_get_parameter",  # Would be breaking API change
+            },
+            skipped_functions={},
+            type_map=JULIA_BASE_TYPE_MAP,
+            overwrite_function_signatures=overwrite_function_signatures,
+        ) as printer
+    ):
+        keep_old_order = julia_path_old is not None
 
         if keep_old_order:
             manual_order = printer.get_function_order(julia_path_old)
+
+            if "duckdb_vector_assign_string_element_len" in manual_order:
+                print("INFO: duckdb_vector_assign_string_element_len is in old API")
+
+            if "duckdb_vector_assign_string_element_len" in function_map.keys():
+                print("INFO: duckdb_vector_assign_string_element_len is in new API")
+            else:
+                raise ValueError(
+                    "duckdb_vector_assign_string_element_len not found in new API"
+                )
             printer.manual_order = manual_order
 
         printer.write_functions(ext_api_version, function_groups, function_map)
@@ -672,6 +677,37 @@ def main():
         print("Please review the mapped types and check the generated file:")
         print("Hint: also run './format.sh' to format the file and reduce the diff.")
         print(f"Output: {julia_path}")
+
+
+def configure_parser():
+
+    parser = argparse.ArgumentParser(description="Generate the DuckDB Julia API")
+    parser.add_argument(
+        "--auto-1-index",
+        action="store_true",
+        default=True,
+        help="Automatically convert 0-based indices to 1-based indices",
+    )
+    parser.add_argument(
+        "--base-api",
+        type=str,
+        help="Path to the original API file to keep the function order",
+    )
+    
+    parser.add_argument(
+        "--capi-dir",
+        type=str,
+        required=True,
+        help="Path to the input C API definitions. Should be a directory containing JSON files.",
+    )
+    parser.add_argument(
+        "output",
+        type=str,
+        #default="src/api.jl",
+        help="Path to the output file",
+    )
+    return parser
+
 
 
 if __name__ == "__main__":
