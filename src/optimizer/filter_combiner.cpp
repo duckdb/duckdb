@@ -707,13 +707,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					    invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
 					if (const_val->value.IsNull()) {
 						switch (comparison_type) {
-						case ExpressionType::COMPARE_EQUAL:
 						case ExpressionType::COMPARE_DISTINCT_FROM: {
 							auto null_filter = make_uniq<IsNullFilter>();
 							conj_filter->child_filters.push_back(std::move(null_filter));
 							break;
 						}
-						case ExpressionType::COMPARE_NOTEQUAL:
 						case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
 							auto null_filter = make_uniq<IsNotNullFilter>();
 							conj_filter->child_filters.push_back(std::move(null_filter));
@@ -734,8 +732,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 			}
 		}
 	}
-
-	//	GenerateORFilters(table_filters, column_ids);
 
 	return table_filters;
 }

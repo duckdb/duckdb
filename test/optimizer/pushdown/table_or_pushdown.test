@@ -305,7 +305,21 @@ statement ok
 CREATE TABLE t0(c1 INT);
 
 statement ok
+insert into t0 values (1), (2), (2), (0);
+
+statement ok
 SELECT * FROM t0 WHERE ((t0.c1 IS DISTINCT FROM NULL) OR (NOT NULL));
+
+statement ok
+SELECT * FROM t0 WHERE ((t0.c1 = NULL) OR (NOT NULL) OR (t0.c1 = 1));
+
+query I
+select * from t0 where (NULL OR cast(t0.c1 as bool)) order by all;
+----
+1
+2
+2
+
 
 mode skip
 
