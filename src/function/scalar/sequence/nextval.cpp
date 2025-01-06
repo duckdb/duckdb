@@ -91,8 +91,8 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 static unique_ptr<FunctionData> NextValBind(ScalarFunctionBindInput &bind_input, ScalarFunction &,
                                             vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
-		return nullptr;
+	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
 	}
 	if (!arguments[0]->IsFoldable()) {
 		throw NotImplementedException(

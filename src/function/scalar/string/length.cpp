@@ -110,14 +110,14 @@ static void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector 
 
 static unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFunction &bound_function,
                                                       vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->HasParameter()) {
+	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
 	const auto &arg_type = arguments[0]->return_type.id();
 	if (arg_type == LogicalTypeId::ARRAY) {
 		bound_function.function = ArrayLengthFunction;
-	} else if (arg_type == LogicalTypeId::LIST || arg_type == LogicalTypeId::UNKNOWN) {
+	} else if (arg_type == LogicalTypeId::LIST) {
 		bound_function.function = ListLengthFunction;
 	} else {
 		// Unreachable
@@ -185,7 +185,7 @@ static void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, V
 
 static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, ScalarFunction &bound_function,
                                                             vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->HasParameter()) {
+	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 	auto type = arguments[0]->return_type;
@@ -207,7 +207,7 @@ static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &conte
 		data->dimensions = dimensions;
 		return std::move(data);
 
-	} else if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::UNKNOWN) {
+	} else if (type.id() == LogicalTypeId::LIST) {
 		bound_function.function = ListLengthBinaryFunction;
 		bound_function.arguments[0] = type;
 		return nullptr;

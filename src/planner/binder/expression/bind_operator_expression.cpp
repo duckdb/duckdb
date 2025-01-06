@@ -134,11 +134,14 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		D_ASSERT(op.children[1]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
+		if (extract_exp->HasParameter() || extract_exp->return_type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
 		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
 		const auto &extract_expr_type = extract_exp->return_type;
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
 		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
-		    extract_expr_type.id() != LogicalTypeId::UNKNOWN && !extract_expr_type.IsJSONType()) {
+		    !extract_expr_type.IsJSONType()) {
 			return BindResult(StringUtil::Format(
 			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, map, or json",
 			    name_exp->ToString(), extract_exp->ToString()));
