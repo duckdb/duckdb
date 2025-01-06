@@ -305,10 +305,31 @@ statement ok
 CREATE TABLE t0(c1 INT);
 
 statement ok
-insert into t0 values (1), (2), (2), (0);
+insert into t0 values (1), (2), (2), (0), (NULL);
 
-statement ok
-SELECT * FROM t0 WHERE ((t0.c1 IS DISTINCT FROM NULL) OR (NOT NULL));
+# is distinct from NULL
+query I
+SELECT * FROM t0 WHERE ((t0.c1 IS DISTINCT FROM NULL) OR (NULL));
+----
+1
+2
+2
+0
+
+# is not distinct from NULL
+query I
+SELECT * FROM t0 WHERE ((t0.c1 IS NOT DISTINCT FROM NULL) OR (NULL));
+----
+NULL
+
+# = NULL in conjunction or
+query I
+SELECT * FROM t0 WHERE ((t0.c1 = NULL) OR (NULL));
+----
+
+query I
+SELECT * FROM t0 WHERE ((t0.c1 != NULL) OR (NULL));
+----
 
 statement ok
 SELECT * FROM t0 WHERE ((t0.c1 = NULL) OR (NOT NULL) OR (t0.c1 = 1));

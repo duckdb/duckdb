@@ -708,15 +708,16 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					if (const_val->value.IsNull()) {
 						switch (comparison_type) {
 						case ExpressionType::COMPARE_DISTINCT_FROM: {
-							auto null_filter = make_uniq<IsNullFilter>();
-							conj_filter->child_filters.push_back(std::move(null_filter));
-							break;
-						}
-						case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
 							auto null_filter = make_uniq<IsNotNullFilter>();
 							conj_filter->child_filters.push_back(std::move(null_filter));
 							break;
 						}
+						case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
+							auto null_filter = make_uniq<IsNullFilter>();
+							conj_filter->child_filters.push_back(std::move(null_filter));
+							break;
+						}
+						// if any other comparison type (i.e EQUAL, NOT_EQUAL) DO NOT PUSH A TABLE FILTER.
 						default:
 							break;
 						}
