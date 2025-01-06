@@ -418,9 +418,10 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		if (is_repeated) {
 			result_type = LogicalType::LIST(result_type);
-			return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                   std::move(result));
+			result = make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                     std::move(result));
 		}
+		result->SetParentSchema(s_ele);
 		return result;
 	} else { // leaf node
 		if (!s_ele.__isset.type) {
