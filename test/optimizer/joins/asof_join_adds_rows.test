@@ -1,0 +1,92 @@
+# name: test/optimizer/joins/asof_join_adds_rows.test
+# description: In the join order optimizer queries need to have the correct bindings
+# group: [joins]
+
+require json
+
+
+statement ok
+create table t1 as from values (
+'2024-12-23'::TIMESTAMPTZ,
+'2024-12-23'::TIMESTAMPTZ,
+'2024-12-23'::TIMESTAMPTZ,
+'2024-12-23'::TIMESTAMPTZ,
+'2024-02-11'::TIMESTAMPTZ,
+'2024-02-11'::TIMESTAMPTZ,
+'2024-12-23'::TIMESTAMPTZ) t(a);
+
+statement ok
+create table t2 as SELECT
+  *
+FROM
+  (
+	VALUES
+	  ('fqn2', '2021-03-03'::TIMESTAMPTZ),
+	  ('fqn2', '2021-02-02'::TIMESTAMPTZ),
+	  ('fqn1', '2021-01-01'::TIMESTAMPTZ)
+  ) AS data (ap_fqn, timepoint);
+
+
+
+query III
+WITH
+  id_with_timepoint AS (
+    SELECT
+      'ID1' AS user_id,
+      '2024-12-23'::TIMESTAMPTZ AS lastSeen
+  ),
+  id_and_payload_with_timepoint AS (
+    SELECT
+      'ID1' AS user_id,
+      '2024-02-11'::TIMESTAMPTZ AS timepoint,
+      '{ "amp": [ {"k": "fqn1"}, {"k": "fqn2"}]}'::VARCHAR AS payload
+  ),
+  id_with_payload_intermediate AS (
+    SELECT
+      id_with_timepoint.user_id,
+      id_with_timepoint.lastSeen,
+      id_and_payload_with_timepoint.payload,
+    FROM
+      id_with_timepoint ASOF
+      LEFT JOIN id_and_payload_with_timepoint ON (
+        id_with_timepoint.user_id = id_and_payload_with_timepoint.user_id
+        AND id_and_payload_with_timepoint.timepoint < id_with_timepoint.lastSeen
+      )
+  ),
+  id_with_fqn AS (
+    SELECT
+      user_id,
+      lastSeen,
+      t.k_fqn
+    FROM
+      id_with_payload_intermediate
+      LEFT JOIN LATERAL UNNEST(payload ->> '$.amp[*].k') AS t (k_fqn) ON TRUE
+  ),
+  fqn_table AS (
+    SELECT
+      *
+    FROM
+      (
+        VALUES
+          ('fqn2', '2021-03-03'::TIMESTAMPTZ),
+          ('fqn2', '2021-02-02'::TIMESTAMPTZ),
+          ('fqn1', '2021-01-01'::TIMESTAMPTZ)
+      ) AS data (ap_fqn, timepoint)
+  )
+SELECT
+  id_with_fqn.user_id,
+  id_with_fqn.k_fqn,
+  fqn_table.ap_fqn,
+  fqn_table.timepoint
+FROM
+  id_with_fqn ASOF
+  LEFT JOIN fqn_table ON (
+    id_with_fqn.k_fqn = fqn_table.ap_fqn
+    AND fqn_table.timepoint < id_with_fqn.lastSeen
+  )
+ORDER BY
+  k_fqn,
+  timepoint;
+----
+ID1	fqn1	fqn1	2021-01-01 00:00:00+01
+ID1	fqn2	fqn2	2021-03-03 00:00:00+01
