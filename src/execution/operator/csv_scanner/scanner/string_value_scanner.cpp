@@ -684,6 +684,11 @@ bool LineError::HandleErrors(StringValueResult &result) {
 			    result.state_machine.options, cur_error.current_line_size, lines_per_batch, borked_line,
 			    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl), result.path);
 			break;
+		case INVALID_STATE:
+			csv_error = CSVError::InvalidState(
+			    result.state_machine.options, cur_error.current_line_size, lines_per_batch, borked_line,
+			    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl), result.path);
+			break;
 		default:
 			throw InvalidInputException("CSV Error not allowed when inserting row");
 		}
