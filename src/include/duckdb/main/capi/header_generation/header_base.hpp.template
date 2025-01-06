@@ -438,7 +438,12 @@ typedef struct {
 	void *internal_data;
 } duckdb_result;
 
-//! A database object. Should be closed with `duckdb_close`.
+//! A database instance cache object. Must be destroyed with `duckdb_destroy_instance_cache`.
+typedef struct _duckdb_instance_cache {
+	void *internal_ptr;
+} * duckdb_instance_cache;
+
+//! A database object. Must be closed with `duckdb_close`.
 typedef struct _duckdb_database {
 	void *internal_ptr;
 } * duckdb_database;
