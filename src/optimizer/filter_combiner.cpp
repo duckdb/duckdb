@@ -717,7 +717,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 							conj_filter->child_filters.push_back(std::move(null_filter));
 							break;
 						}
-						// if any other comparison type (i.e EQUAL, NOT_EQUAL) DO NOT PUSH A TABLE FILTER.
+						// if any other comparison type (i.e EQUAL, NOT_EQUAL) do not push a table filter
 						default:
 							break;
 						}
