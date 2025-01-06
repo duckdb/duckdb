@@ -94,7 +94,7 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 static std::wstring NormalizePathAndConvertToUnicode(const string &path) {
 	string normalized_path_copy;
 	const char *normalized_path;
-	if (StringUtil::StartsWith(path, "file://")) {
+	if (StringUtil::StartsWith(path, "file:/")) {
 		normalized_path_copy = LocalFileSystem::NormalizeLocalPath(path);
 		normalized_path_copy = LocalFileSystem().ConvertSeparators(normalized_path_copy);
 		normalized_path = normalized_path_copy.c_str();
@@ -1259,12 +1259,22 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 	return result;
 }
 
-// Helper function to handle file:// URLs
+// Helper function to handle file:/ URLs
 static idx_t GetFileUrlOffset(const string &path) {
-	if (!StringUtil::StartsWith(path, "file://")) {
+	if (!StringUtil::StartsWith(path, "file:/")) {
 		return 0;
 	}
 
+	// Url without host: file:/some/path
+	if (path[6] != '/') {
+#ifdef _WIN32
+		return 6;
+#else
+		return 5;
+#endif
+	}
+
+	// Url with empty host: file:///some/path
 	if (path[7] == '/') {
 #ifdef _WIN32
 		return 8;
@@ -1273,6 +1283,7 @@ static idx_t GetFileUrlOffset(const string &path) {
 #endif
 	}
 
+	// Url with localhost: file://localhost/some/path
 	if (path.compare(7, 10, "localhost/") == 0) {
 #ifdef _WIN32
 		return 17;
@@ -1281,7 +1292,7 @@ static idx_t GetFileUrlOffset(const string &path) {
 #endif
 	}
 
-	// unkown file:// url format
+	// unkown file:/ url format
 	return 0;
 }
 
@@ -1296,7 +1307,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	// split up the path into separate chunks
 	vector<string> splits;
 
-	bool is_file_url = StringUtil::StartsWith(path, "file://");
+	bool is_file_url = StringUtil::StartsWith(path, "file:/");
 	idx_t file_url_path_offset = GetFileUrlOffset(path);
 
 	idx_t last_pos = 0;

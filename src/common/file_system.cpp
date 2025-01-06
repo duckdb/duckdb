@@ -115,7 +115,7 @@ string FileSystem::GetEnvVariable(const string &name) {
 
 bool FileSystem::IsPathAbsolute(const string &path) {
 	auto path_separator = PathSeparator(path);
-	return PathMatched(path, path_separator) || StringUtil::StartsWith(path, "file://");
+	return PathMatched(path, path_separator) || StringUtil::StartsWith(path, "file:/");
 }
 
 string FileSystem::PathSeparator(const string &path) {
@@ -237,7 +237,7 @@ string FileSystem::NormalizeAbsolutePath(const string &path) {
 }
 
 string FileSystem::PathSeparator(const string &path) {
-	if (StringUtil::StartsWith(path, "file://")) {
+	if (StringUtil::StartsWith(path, "file:/")) {
 		return "/";
 	} else {
 		return "\\";

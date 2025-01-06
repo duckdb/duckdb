@@ -46,6 +46,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	auto dname_triple_slash = fs->JoinPath("file://", dname_converted_slashes);
 	// Path of format file://localhost/bla/bla on 'nix and file://localhost/X:/bla/bla on Windows
 	auto dname_localhost = fs->JoinPath("file://localhost", dname_converted_slashes);
+	auto dname_no_host = fs->JoinPath("file:", dname_converted_slashes);
 
 	string fname = "TEST_FILE";
 	string fname2 = "TEST_FILE_TWO";
@@ -63,6 +64,7 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 
 	auto fname_in_dir = fs->JoinPath(dname_triple_slash, fname);
 	auto fname_in_dir2 = fs->JoinPath(dname_localhost, fname2);
+	auto fname_in_dir3 = fs->JoinPath(dname_no_host, fname2);
 
 	create_dummy_file(fname_in_dir);
 	REQUIRE(fs->FileExists(fname_in_dir));
@@ -84,8 +86,8 @@ TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	REQUIRE(!fs->FileExists(fname_in_dir));
 	REQUIRE(fs->FileExists(fname_in_dir2));
 
-	auto file_listing_after_move = fs->Glob(fs->JoinPath(dname_localhost, "*"));
-	REQUIRE(file_listing_after_move[0] == fname_in_dir2);
+	auto file_listing_after_move = fs->Glob(fs->JoinPath(dname_no_host, "*"));
+	REQUIRE(file_listing_after_move[0] == fname_in_dir3);
 
 	fs->RemoveDirectory(dname_triple_slash);
 
