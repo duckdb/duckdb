@@ -451,8 +451,10 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// look for the table in the catalog
 	auto &schema = catalog.GetSchema(transaction, create_info->schema);
 	auto catalog_table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table);
-	// FIXME: Bug in older versions causes catalog_table to be nullptr. Should we throw a warning in that case?
-	D_ASSERT(catalog_table);
+	if (!catalog_table) {
+		// See internal issue 3663.
+		throw IOException("corrupt database file - index entry without table entry");
+	}
 	auto &table = catalog_table->Cast<DuckTableEntry>();
 
 	// we also need to make sure the index type is loaded
