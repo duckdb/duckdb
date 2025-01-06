@@ -129,6 +129,7 @@ CompressionType ForceCompression(vector<optional_ptr<CompressionFunction>> &comp
 }
 
 void ColumnDataCheckpointer::InitAnalyze() {
+	analyze_states.resize(checkpoint_states.size());
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		if (!has_changes[i]) {
 			continue;
@@ -138,8 +139,13 @@ void ColumnDataCheckpointer::InitAnalyze() {
 		auto &states = analyze_states[i];
 		auto &checkpoint_state = checkpoint_states[i];
 		auto &coldata = checkpoint_state.get().column_data;
-		for (auto &func : functions) {
-			states.push_back(func->init_analyze(coldata, coldata.type.InternalType()));
+		states.resize(functions.size());
+		for (idx_t j = 0; j < functions.size(); j++) {
+			auto &func = functions[j];
+			if (!func) {
+				continue;
+			}
+			states[j] = func->init_analyze(coldata, coldata.type.InternalType());
 		}
 	}
 }
@@ -191,6 +197,9 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	result.resize(checkpoint_states.size());
 
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
+		if (!has_changes[i]) {
+			continue;
+		}
 		auto &functions = compression_functions[i];
 		auto &states = analyze_states[i];
 		auto &forced_method = forced_methods[i];
@@ -236,7 +245,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 			throw FatalException("No suitable compression/storage method found to store column of type %s",
 			                     col_data.type.ToString());
 		}
-		D_ASSERT(compression_idx == DConstants::INVALID_INDEX);
+		D_ASSERT(compression_idx != DConstants::INVALID_INDEX);
 		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), *functions[compression_idx]);
 	}
 	return result;
@@ -371,6 +380,8 @@ void ColumnDataCheckpointer::Checkpoint() {
 		// just move on to finalizing
 		return;
 	}
+
+	WriteToDisk();
 }
 
 void ColumnDataCheckpointer::FinalizeCheckpoint() {

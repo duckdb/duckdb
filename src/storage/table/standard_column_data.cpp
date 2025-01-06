@@ -394,8 +394,7 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 	ColumnData::CheckpointScan(segment, state, row_group_start, count, scan_vector);
 
 	idx_t offset_in_row_group = state.row_index - row_group_start;
-	validity.CheckpointScan(*state.child_states[0].current, state.child_states[0], offset_in_row_group, count,
-	                        scan_vector);
+	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
 bool StandardColumnData::IsPersistent() {
