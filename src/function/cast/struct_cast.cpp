@@ -32,6 +32,7 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	vector<idx_t> source_indexes;
 	vector<idx_t> target_indexes;
 	vector<idx_t> target_null_indexes;
+	bool has_any_match = is_unnamed;
 
 	for (idx_t i = 0; i < source_children.size(); i++) {
 		auto &source_child = source_children[i];
@@ -46,12 +47,17 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 			}
 			target_idx = target_child->second;
 			target_children_map.erase(target_child);
+			has_any_match = true;
 		}
 
 		source_indexes.push_back(i);
 		target_indexes.push_back(target_idx);
 		auto child_cast = input.GetCastFunction(source_child.second, target_children[target_idx].second);
 		child_cast_info.push_back(std::move(child_cast));
+	}
+
+	if (!has_any_match) {
+		throw BinderException("STRUCT to STRUCT cast must have at least one matching member");
 	}
 
 	// The remaining target children have no match in the source struct.

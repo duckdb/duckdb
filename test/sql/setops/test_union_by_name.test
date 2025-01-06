@@ -168,11 +168,16 @@ select {'a': '0'} as c union all by name select {'a': 0} as c
 query I
 SELECT {'a': 'hello'} AS c UNION ALL BY NAME SELECT {'b': 'hello'} AS c;
 ----
-{'a': hello}
-{'a': NULL}
+{'a': hello, 'b': NULL}
+{'a': NULL, 'b': hello}
 
 query I
 SELECT {'a': 'hello'} AS c UNION ALL BY NAME SELECT {'a': 'hello', 'b': 'world'} AS c;
 ----
-{'a': hello}
-{'a': hello}
+{'a': hello, 'b': NULL}
+{'a': hello, 'b': world}
+
+query I
+SELECT [{'a': 42}, {'b': 84}];
+----
+[{'a': 42, 'b': NULL}, {'a': NULL, 'b': 84}]

@@ -5,55 +5,55 @@
 statement ok
 PRAGMA enable_verification
 
-query I
+statement error
 SELECT struct_pack(b => 42)::STRUCT(a INT);
 ----
-{'a': NULL}
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
-query I
+statement error
 SELECT struct_extract(struct_pack(b => 42)::STRUCT(a INT), 'a');
 ----
-NULL
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
 query I
 SELECT struct_extract(struct_pack(a => 42)::STRUCT(a STRING), 'a');
 ----
 42
 
-query I
+statement error
 SELECT struct_extract(struct_pack(b => 42)::ROW(a INT), 'a');
 ----
-NULL
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
 query I
 SELECT struct_extract(struct_pack(a => 42)::ROW(a INT), 'a');
 ----
 42
 
-query I
+statement error
 SELECT struct_extract(struct_pack(b => 42::DOUBLE)::STRUCT(a INT), 'a');
 ----
-NULL
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
 query I
 SELECT struct_extract(struct_pack(a => 42::DOUBLE)::STRUCT(a INT), 'a');
 ----
 42
 
-query I
+statement error
 SELECT struct_extract(struct_pack(b => '42'::DOUBLE)::STRUCT(a INT), 'a');
 ----
-NULL
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
 query I
 SELECT struct_extract(struct_pack(a => '42'::DOUBLE)::STRUCT(a INT), 'a');
 ----
 42
 
-query I
+statement error
 SELECT struct_pack(b => '42'::DOUBLE)::STRUCT(a INT, c STRING)
 ----
-{'a': NULL, 'c': NULL}
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
 statement error
 SELECT struct_pack(b => 'hello'::STRING)::STRUCT(b INT)
@@ -75,15 +75,15 @@ SELECT struct_pack(a => struct_pack(b => 42)::STRUCT(b INT))::STRUCT(a INT)
 ----
 Unimplemented type for cast (STRUCT(b INTEGER) -> INTEGER)
 
-query I
+statement error
 SELECT struct_pack(b => 'hello'::STRING)::STRUCT(a INT)
 ----
-{'a': NULL}
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
-query I
+statement error
 SELECT struct_pack(b => '42'::DOUBLE, c => 'asdf'::STRING)::STRUCT(a1 INT, a2 STRING);
 ----
-{'a1': NULL, 'a2': NULL}
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
 query I
 SELECT struct_pack(a1 => '42'::DOUBLE, a2 => 'asdf'::STRING)::STRUCT(a1 INT, a2 STRING);
