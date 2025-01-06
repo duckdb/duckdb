@@ -145,8 +145,8 @@
  */
 %nonassoc	UNBOUNDED		/* ideally should have same precedence as IDENT */
 %nonassoc	IDENT GENERATED NULL_P PARTITION RANGE ROWS GROUPS PRECEDING FOLLOWING CUBE ROLLUP ENUM_P
-%left		'+' '-'
 %left		Op OPERATOR		/* multi-character ops and user-defined operators */
+%left		'+' '-'
 %left		'*' '/' '%' INTEGER_DIVISION
 %left		'^' POWER_OF
 /* Unary Operators */
