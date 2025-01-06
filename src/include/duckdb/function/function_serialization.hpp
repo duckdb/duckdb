@@ -20,15 +20,18 @@ public:
 	template <class FUNC>
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
 		D_ASSERT(!function.name.empty());
-		serializer.WriteProperty(500, "name", function.name);
-		serializer.WritePropertyWithDefault<string>(501, "catalog_name", function.catalog_name, "");
-		serializer.WritePropertyWithDefault<string>(502, "schema_name", function.schema_name, "");
-		serializer.WriteProperty(503, "arguments", function.arguments);
-		serializer.WriteProperty(504, "original_arguments", function.original_arguments);
+		if (!function.catalog_name.empty() && !function.schema_name.empty()) {
+			serializer.WriteProperty(500, "name",
+			                         function.catalog_name + "." + function.schema_name + "." + function.name);
+		} else {
+			serializer.WriteProperty(500, "name", function.name);
+		}
+		serializer.WriteProperty(501, "arguments", function.arguments);
+		serializer.WriteProperty(502, "original_arguments", function.original_arguments);
 		bool has_serialize = function.serialize;
-		serializer.WriteProperty(505, "has_serialize", has_serialize);
+		serializer.WriteProperty(503, "has_serialize", has_serialize);
 		if (has_serialize) {
-			serializer.WriteObject(506, "function_data",
+			serializer.WriteObject(504, "function_data",
 			                       [&](Serializer &obj) { function.serialize(obj, bind_info, function); });
 			D_ASSERT(function.deserialize);
 		}
@@ -56,13 +59,30 @@ public:
 	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto name = deserializer.ReadProperty<string>(500, "name");
-		auto catalog_name = deserializer.ReadPropertyWithDefault<string>(501, "catalog_name");
-		auto schema_name = deserializer.ReadPropertyWithDefault<string>(502, "schema_name");
-		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(503, "arguments");
-		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(504, "original_arguments");
+		string catalog_name;
+		string schema_name;
+		if (name.find('.') != std::string::npos) {
+			std::vector<std::string> parts;
+			std::stringstream ss(name);
+			std::string token;
+
+			while (std::getline(ss, token, '.')) {
+				parts.push_back(token);
+			}
+
+			if (parts.size() != 3) {
+				throw InternalException(
+				    "DeserializeBase - expected three parts for fully qualified serialized function %s", name);
+			}
+			catalog_name = parts[0];
+			schema_name = parts[1];
+			name = parts[2];
+		}
+		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
+		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
 		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
 		                                                         std::move(arguments), std::move(original_arguments));
-		auto has_serialize = deserializer.ReadProperty<bool>(505, "has_serialize");
+		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 		return make_pair(std::move(function), has_serialize);
 	}
 
@@ -73,7 +93,7 @@ public:
 			                             function.name);
 		}
 		unique_ptr<FunctionData> result;
-		deserializer.ReadObject(506, "function_data",
+		deserializer.ReadObject(504, "function_data",
 		                        [&](Deserializer &obj) { result = function.deserialize(obj, function); });
 		return result;
 	}
