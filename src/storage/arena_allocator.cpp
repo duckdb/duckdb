@@ -107,7 +107,7 @@ data_ptr_t ArenaAllocator::Reallocate(data_ptr_t pointer, idx_t old_size, idx_t 
 		return pointer;
 	}
 
-	auto head_ptr = head->data.get() + head->current_position;
+	const auto head_ptr = head->data.get() + head->current_position - old_size;
 	int64_t diff = NumericCast<int64_t>(size) - NumericCast<int64_t>(old_size);
 	if (pointer == head_ptr && (size < old_size || NumericCast<int64_t>(head->current_position) + diff <=
 	                                                   NumericCast<int64_t>(head->maximum_size))) {
