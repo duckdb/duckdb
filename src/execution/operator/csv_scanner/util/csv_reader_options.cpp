@@ -8,11 +8,11 @@
 
 namespace duckdb {
 
-CSVReaderOptions::CSVReaderOptions(CSVOption<char> single_byte_delimiter,
+CSVReaderOptions::CSVReaderOptions(const CSVOption<char> single_byte_delimiter,
                                    const CSVOption<string> &multi_byte_delimiter) {
 	if (multi_byte_delimiter.GetValue().empty()) {
-		char single_byte_value = single_byte_delimiter.GetValue();
-		string value(1, single_byte_value);
+		const char single_byte_value = single_byte_delimiter.GetValue();
+		const string value(1, single_byte_value);
 		dialect_options.state_machine_options.delimiter = value;
 	} else {
 		dialect_options.state_machine_options.delimiter = multi_byte_delimiter;
@@ -62,6 +62,9 @@ static string ParseString(const Value &value, const string &loption) {
 }
 
 static int64_t ParseInteger(const Value &value, const string &loption) {
+	if (value.IsNull()) {
+		throw BinderException("\"%s\" expects a non-null integer value", loption);
+	}
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		if (children.size() != 1) {
