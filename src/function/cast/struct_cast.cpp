@@ -1,4 +1,4 @@
-#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
