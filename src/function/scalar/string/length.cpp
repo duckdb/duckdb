@@ -113,9 +113,11 @@ static unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, Sc
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
+
+	const auto &arg_type = arguments[0]->return_type.id();
+	if (arg_type == LogicalTypeId::ARRAY) {
 		bound_function.function = ArrayLengthFunction;
-	} else if (arguments[0]->return_type.id() == LogicalTypeId::LIST) {
+	} else if (arg_type == LogicalTypeId::LIST || arg_type == LogicalTypeId::UNKNOWN) {
 		bound_function.function = ListLengthFunction;
 	} else {
 		// Unreachable
@@ -205,7 +207,7 @@ static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &conte
 		data->dimensions = dimensions;
 		return std::move(data);
 
-	} else if (type.id() == LogicalTypeId::LIST) {
+	} else if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::UNKNOWN) {
 		bound_function.function = ListLengthBinaryFunction;
 		bound_function.arguments[0] = type;
 		return nullptr;
