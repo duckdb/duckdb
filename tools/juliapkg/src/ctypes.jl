@@ -9,6 +9,7 @@ const duckdb_vector = Ptr{Cvoid}
 const duckdb_appender = Ptr{Cvoid}
 const duckdb_logical_type = Ptr{Cvoid}
 const duckdb_value = Ptr{Cvoid}
+const duckdb_scalar_function = Ptr{Cvoid}
 const duckdb_table_function = Ptr{Cvoid}
 const duckdb_bind_info = Ptr{Cvoid}
 const duckdb_init_info = Ptr{Cvoid}

@@ -87,6 +87,9 @@ ScalarFunctionSet ListDistanceFun::GetFunctions() {
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<DistanceOp>(set, type);
 	}
+	for (auto &func : set.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 	return set;
 }
 
@@ -110,6 +113,9 @@ ScalarFunctionSet ListCosineSimilarityFun::GetFunctions() {
 	ScalarFunctionSet set("list_cosine_similarity");
 	for (auto &type : LogicalType::Real()) {
 		AddListFoldFunction<CosineSimilarityOp>(set, type);
+	}
+	for (auto &func : set.functions) {
+		BaseScalarFunction::SetReturnsError(func);
 	}
 	return set;
 }

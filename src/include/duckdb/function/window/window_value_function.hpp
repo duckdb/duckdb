@@ -38,6 +38,8 @@ class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
 	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context, WindowSharedExpressions &shared);
 
+	unique_ptr<WindowExecutorGlobalState> GetGlobalState(const idx_t payload_count, const ValidityMask &partition_mask,
+	                                                     const ValidityMask &order_mask) const override;
 	unique_ptr<WindowExecutorLocalState> GetLocalState(const WindowExecutorGlobalState &gstate) const override;
 
 protected:
