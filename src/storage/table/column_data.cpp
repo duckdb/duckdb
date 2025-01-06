@@ -630,17 +630,6 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	ColumnDataCheckpointer checkpointer(states, GetDatabase(), row_group, checkpoint_info);
 	checkpointer.Checkpoint();
 	checkpointer.FinalizeCheckpoint();
-
-	// reset the compression function
-	compression.reset();
-	// replace the old tree with the new one
-	auto new_segments = checkpoint_state->new_tree.MoveSegments();
-	auto l = data.Lock();
-	for (auto &new_segment : new_segments) {
-		AppendSegment(l, std::move(new_segment.node));
-	}
-	ClearUpdates();
-
 	return checkpoint_state;
 }
 

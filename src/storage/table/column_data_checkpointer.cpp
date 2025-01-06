@@ -10,30 +10,30 @@ namespace duckdb {
 //! ColumnDataCheckpointData
 
 CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
-	auto &db = col_data.GetDatabase();
-	auto &column_type = col_data.type;
+	auto &db = col_data->GetDatabase();
+	auto &column_type = col_data->type;
 	auto &config = DBConfig::GetConfig(db);
 	return *config.GetCompressionFunction(compression_type, column_type.InternalType());
 }
 
 DatabaseInstance &ColumnDataCheckpointData::GetDatabase() {
-	return col_data.GetDatabase();
+	return col_data->GetDatabase();
 }
 
 const LogicalType &ColumnDataCheckpointData::GetType() const {
-	return col_data.type;
+	return col_data->type;
 }
 
 ColumnData &ColumnDataCheckpointData::GetColumnData() {
-	return col_data;
+	return *col_data;
 }
 
 RowGroup &ColumnDataCheckpointData::GetRowGroup() {
-	return row_group;
+	return *row_group;
 }
 
 ColumnCheckpointState &ColumnDataCheckpointData::GetCheckpointState() {
-	return checkpoint_state;
+	return *checkpoint_state;
 }
 
 //! ColumnDataCheckpointer
@@ -281,8 +281,8 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 	// Initialize the compression for the selected function
 	D_ASSERT(analyze_result.size() == checkpoint_states.size());
-	vector<ColumnDataCheckpointData> checkpoint_data;
-	vector<unique_ptr<CompressionState>> compression_states;
+	vector<ColumnDataCheckpointData> checkpoint_data(checkpoint_states.size());
+	vector<unique_ptr<CompressionState>> compression_states(checkpoint_states.size());
 	for (idx_t i = 0; i < analyze_result.size(); i++) {
 		if (!has_changes[i]) {
 			continue;
@@ -293,9 +293,9 @@ void ColumnDataCheckpointer::WriteToDisk() {
 		auto &checkpoint_state = checkpoint_states[i];
 		auto &col_data = checkpoint_state.get().column_data;
 
-		checkpoint_data.emplace_back(checkpoint_state, col_data, col_data.GetDatabase(), row_group, has_changes[i],
-		                             checkpoint_info);
-		compression_states.push_back(function->init_compression(checkpoint_data[i], std::move(analyze_state)));
+		checkpoint_data[i] =
+		    ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group, checkpoint_info);
+		compression_states[i] = function->init_compression(checkpoint_data[i], std::move(analyze_state));
 	}
 
 	// Scan over the existing segment + changes and compress the data
@@ -395,6 +395,16 @@ void ColumnDataCheckpointer::FinalizeCheckpoint() {
 		} else {
 			WritePersistentSegments(state);
 		}
+
+		// reset the compression function
+		col_data.compression.reset();
+		// replace the old tree with the new one
+		auto new_segments = state.new_tree.MoveSegments();
+		auto l = col_data.data.Lock();
+		for (auto &new_segment : new_segments) {
+			col_data.AppendSegment(l, std::move(new_segment.node));
+		}
+		col_data.ClearUpdates();
 	}
 }
 

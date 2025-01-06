@@ -18,10 +18,13 @@ struct TableScanOptions;
 //! Holds state related to a single column during compression
 struct ColumnDataCheckpointData {
 public:
+	//! Default constructor used when column data does not need to be checkpointed
+	ColumnDataCheckpointData() {
+	}
 	ColumnDataCheckpointData(ColumnCheckpointState &checkpoint_state, ColumnData &col_data, DatabaseInstance &db,
-	                         RowGroup &row_group, bool has_changes, ColumnCheckpointInfo &checkpoint_info)
+	                         RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info)
 	    : checkpoint_state(checkpoint_state), col_data(col_data), db(db), row_group(row_group),
-	      has_changes(has_changes), checkpoint_info(checkpoint_info) {
+	      checkpoint_info(checkpoint_info) {
 	}
 
 public:
@@ -32,13 +35,12 @@ public:
 	ColumnCheckpointState &GetCheckpointState();
 	DatabaseInstance &GetDatabase();
 
-public:
-	ColumnCheckpointState &checkpoint_state;
-	ColumnData &col_data;
-	DatabaseInstance &db;
-	RowGroup &row_group;
-	bool has_changes;
-	ColumnCheckpointInfo &checkpoint_info;
+private:
+	optional_ptr<ColumnCheckpointState> checkpoint_state;
+	optional_ptr<ColumnData> col_data;
+	optional_ptr<DatabaseInstance> db;
+	optional_ptr<RowGroup> row_group;
+	optional_ptr<ColumnCheckpointInfo> checkpoint_info;
 };
 
 struct CheckpointAnalyzeResult {

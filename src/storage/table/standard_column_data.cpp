@@ -232,160 +232,29 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
-	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
-	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
+	auto base_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
+	auto validity_state_p = validity.CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity.type).ToUnique();
 
-	/* TODO: abstract this
+	auto &validity_state = *validity_state_p;
+	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
+	checkpoint_state.validity_state = std::move(validity_state_p);
 
-	create base checkpoint state
-	create validity checkpoint state
+	auto &nodes = data.ReferenceSegments();
+	if (nodes.empty()) {
+		// empty table: flush the empty list
+		return base_state;
+	}
 
 	vector<reference<ColumnCheckpointState>> checkpoint_states;
-	vector<reference<column_segment_vector_t>> column_segments;
+	checkpoint_states.emplace_back(checkpoint_state);
+	checkpoint_states.emplace_back(validity_state);
 
-	ColumnDataCheckpointer checkpointer(checkpoint_states);
+	ColumnDataCheckpointer checkpointer(checkpoint_states, GetDatabase(), row_group, checkpoint_info);
+	checkpointer.Checkpoint();
+	checkpointer.FinalizeCheckpoint();
 
-	D_ASSERT(checkpoint_states.size() == column_segments.size());
-	has_changes.reserve(checkpoint_states.size());
-	for (idx_t i = 0; i < column_segments.size(); i++) {
-	    auto &nodes = column_segments[i];
-	    has_changes.push_back(HasChanges(nodes));
-	}
-
-	bool any_has_changes = false;
-	for (auto &changes : has_changes) {
-	    if (changes) {
-	        any_has_changes = true;
-	    }
-	}
-	if (!any_has_changes) {
-	    return;
-	}
-
-	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-	    auto &changes = has_changes[i];
-	    if (!changes) {
-	        continue;
-	    }
-	    auto &nodes = column_segments[i];
-	    CommitDropSegments(nodes);
-	}
-
-	// vector<vector<reference<const CompressionFunction>>> compression_functions; (created as part of the
-	ColumnDataCheckpointer constructor);
-	vector<vector<unique_ptr<AnalyzeState>> analyze_states;
-	// TODO:
-	// figure out the forced compression function
-
-	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-	    auto &changes = has_changes[i];
-	    if (!changes) {
-	        continue;
-	    }
-
-	    auto &functions = compression_functions[i];
-	    auto &states = analyze_states[i];
-	    auto &checkpoint_state = checkpoint_states[i];
-	    auto &coldata = checkpoint_state.coldata;
-	    for (auto &func : functions) {
-	        states.push_back(func.init_analyze(coldata, coldata.GetType())
-	    }
-	}
-
-	D_ASSERT(!checkpoint_states.empty());
-	auto &first_state = checkpoint_states[0];
-	auto &coldata = first_state.coldata;
-	auto &first_nodes = column_segments[0];
-	ScanSegments(coldata, first_nodes, [](Vector &input, input_count) {
-	    for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-	        auto &changes = has_changes[i];
-	        if (!changes) {
-	            continue;
-	        }
-
-	        auto &functions = compression_functions[i];
-	        auto &states = analyze_states[i];
-	        for (idx_t j = 0; j < functions.size(); j++) {
-	            auto &function = functions[j];
-	            auto &state = states[j];
-	            if (!state) {
-	                continue;
-	            }
-	            if (!function.analyze(state, input, input_count)) {
-	                function = nullptr;
-	                state = nullptr;
-	            }
-	        }
-	    }
-	});
-
-	vector<reference<const CompressionFunction>> compression_function;
-	vector<unique_ptr<CompressionState>> compression_state;
-
-	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-	    auto &changes = has_changes[i];
-	    if (!changes) {
-	        continue;
-	    }
-
-	    TODO:
-	    final analyze and prefer the forced compression method
-	    followed by 'init_compression' to create the 'compression_state' for this coldata
-	}
-
-	ScanSegments(coldata, first_nodes, [](Vector &input, idx_t input_count) {
-	    for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-	        auto &changes = has_changes[i];
-	        if (!changes) {
-	            continue;
-	        }
-
-	        auto &state = compression_state[i];
-	        auto &function = compression_function[i];
-	        function.compress(state, input, input_count);
-	    }
-	});
-
-	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-	    auto &changes = has_changes[i];
-	    if (!changes) {
-	        continue;
-	    }
-
-	    auto &function = compression_function[i];
-	    function.compress_finalize(state);
-	}
-
-
-	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-	    auto &changes = has_changes[i];
-	    auto &coldata = checkpoint_states[i];
-
-	    auto existing_nodes = coldata.
-
-	    if (!changes) {
-	        WritePersistentSegments(coldata);
-	    } else {
-	        auto &coldata = checkpoint_states[i].coldata;
-	        new_segments = checkpointer.MoveSegments();
-	        coldata.AppendSegments(new_segments);
-	        coldata.ClearUpdates();
-	    }
-
-	    // reset the compression function
-	    coldata.compression.reset();
-	    // replace the old tree with the new one
-	    auto new_segments = checkpoint_state->new_tree.MoveSegments();
-	    for (auto &new_segment : new_segments) {
-	        coldata.AppendSegment(l, std::move(new_segment.node));
-	    }
-	    coldata.ClearUpdates();
-	}
-
-	END OF TODO */
-
-	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
-	checkpoint_state.validity_state = std::move(validity_state);
 	return base_state;
 }
 
