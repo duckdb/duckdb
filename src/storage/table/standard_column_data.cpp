@@ -234,6 +234,7 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
 	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
 	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
+
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);
 	return base_state;

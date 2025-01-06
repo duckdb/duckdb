@@ -7,38 +7,49 @@
 
 namespace duckdb {
 
-ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p,
-                                               ColumnCheckpointState &state_p, ColumnCheckpointInfo &checkpoint_info_p)
-    : col_data(col_data_p), row_group(row_group_p), state(state_p),
-      is_validity(GetType().id() == LogicalTypeId::VALIDITY),
-      intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity),
-      checkpoint_info(checkpoint_info_p) {
+//! ColumnDataCheckpointData
 
-	auto &config = DBConfig::GetConfig(GetDatabase());
-	auto functions = config.GetCompressionFunctions(GetType().InternalType());
-	for (auto &func : functions) {
-		compression_functions.push_back(&func.get());
-	}
+CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
+	auto &db = col_data.GetDatabase();
+	auto &column_type = col_data.type;
+	auto &config = DBConfig::GetConfig(db);
+	return *config.GetCompressionFunction(compression_type, column_type.InternalType());
 }
 
-DatabaseInstance &ColumnDataCheckpointer::GetDatabase() {
+DatabaseInstance &ColumnDataCheckpointData::GetDatabase() {
 	return col_data.GetDatabase();
 }
 
-const LogicalType &ColumnDataCheckpointer::GetType() const {
+const LogicalType &ColumnDataCheckpointData::GetType() const {
 	return col_data.type;
 }
 
-ColumnData &ColumnDataCheckpointer::GetColumnData() {
+ColumnData &ColumnDataCheckpointData::GetColumnData() {
 	return col_data;
 }
 
-RowGroup &ColumnDataCheckpointer::GetRowGroup() {
+RowGroup &ColumnDataCheckpointData::GetRowGroup() {
 	return row_group;
 }
 
-ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
-	return state;
+ColumnCheckpointState &ColumnDataCheckpointData::GetCheckpointState() {
+	return checkpoint_state;
+}
+
+//! ColumnDataCheckpointer
+
+ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p,
+                                               ColumnCheckpointState &state_p, ColumnCheckpointInfo &checkpoint_info_p)
+    : col_data(col_data_p), row_group(row_group_p), state(state_p),
+      is_validity(col_data.type.id() == LogicalTypeId::VALIDITY),
+      intermediate(is_validity ? LogicalType::BOOLEAN : col_data.type, true, is_validity),
+      checkpoint_info(checkpoint_info_p) {
+
+	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
+	auto functions = config.GetCompressionFunctions(col_data.type.InternalType());
+	for (auto &func : functions) {
+		compression_functions.push_back(&func.get());
+	}
 }
 
 void ColumnDataCheckpointer::ScanSegments(const column_segment_vector_t &nodes,
@@ -100,7 +111,7 @@ CompressionType ForceCompression(vector<optional_ptr<CompressionFunction>> &comp
 unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(const column_segment_vector_t &nodes,
                                                                              idx_t &compression_idx) {
 	D_ASSERT(!compression_functions.empty());
-	auto &config = DBConfig::GetConfig(GetDatabase());
+	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
 	CompressionType forced_method = CompressionType::COMPRESSION_AUTO;
 
 	auto compression_type = checkpoint_info.GetCompressionType();
@@ -198,7 +209,9 @@ void ColumnDataCheckpointer::WriteToDisk(const column_segment_vector_t &nodes) {
 
 	// now that we have analyzed the compression functions we can start writing to disk
 	auto best_function = compression_functions[compression_idx];
-	auto compress_state = best_function->init_compression(*this, std::move(analyze_state));
+	ColumnDataCheckpointData checkpoint_data(state, col_data, col_data.GetDatabase(), row_group, has_changes,
+	                                         checkpoint_info);
+	auto compress_state = best_function->init_compression(checkpoint_data, std::move(analyze_state));
 
 	ScanSegments(
 	    nodes, [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
@@ -258,8 +271,8 @@ void ColumnDataCheckpointer::FinalizeCheckpoint(column_segment_vector_t &&nodes)
 }
 
 CompressionFunction &ColumnDataCheckpointer::GetCompressionFunction(CompressionType compression_type) {
-	auto &db = GetDatabase();
-	auto &column_type = GetType();
+	auto &db = col_data.GetDatabase();
+	auto &column_type = col_data.type;
 	auto &config = DBConfig::GetConfig(db);
 	return *config.GetCompressionFunction(compression_type, column_type.InternalType());
 }
