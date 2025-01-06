@@ -17,4 +17,10 @@ SELECT NULL FROM read_csv(NULL, ${paramenter} := NULL)
 
 endloop
 
+statement error
+SELECT NULL FROM sniff_csv(NULL)
+----
 
+statement error
+SELECT NULL FROM read_csv(NULL)
+----

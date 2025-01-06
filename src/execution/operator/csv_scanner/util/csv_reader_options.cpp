@@ -32,7 +32,9 @@ static bool ParseBoolean(const vector<Value> &set, const string &loption) {
 }
 
 static bool ParseBoolean(const Value &value, const string &loption) {
-
+	if (value.IsNull()) {
+		throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", loption);
+	}
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		return ParseBoolean(children, loption);
@@ -227,7 +229,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	if (loption == "auto_detect") {
 		auto_detect = ParseBoolean(value, loption);
 	} else if (loption == "sample_size") {
-		auto sample_size_option = ParseInteger(value, loption);
+		const auto sample_size_option = ParseInteger(value, loption);
 		if (sample_size_option < 1 && sample_size_option != -1) {
 			throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 		}
