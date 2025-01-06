@@ -41,34 +41,50 @@ public:
 	ColumnCheckpointInfo &checkpoint_info;
 };
 
+struct CheckpointAnalyzeResult {
+public:
+	//! Default constructor, returned when the column data doesn't require checkpoint
+	CheckpointAnalyzeResult() {
+	}
+	CheckpointAnalyzeResult(unique_ptr<AnalyzeState> &&analyze_state, CompressionFunction &function)
+	    : analyze_state(std::move(analyze_state)), function(function) {
+	}
+
+public:
+	unique_ptr<AnalyzeState> analyze_state;
+	optional_ptr<CompressionFunction> function;
+};
+
 class ColumnDataCheckpointer {
 public:
-	ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p, ColumnCheckpointState &state_p,
+	ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &states, DatabaseInstance &db, RowGroup &row_group,
 	                       ColumnCheckpointInfo &checkpoint_info);
 
 public:
-	void Checkpoint(const column_segment_vector_t &nodes);
-	void FinalizeCheckpoint(column_segment_vector_t &&nodes);
-	CompressionFunction &GetCompressionFunction(CompressionType type);
+	void Checkpoint();
+	void FinalizeCheckpoint();
 
 private:
-	void ScanSegments(const column_segment_vector_t &nodes, const std::function<void(Vector &, idx_t)> &callback);
-	unique_ptr<AnalyzeState> DetectBestCompressionMethod(const column_segment_vector_t &nodes, idx_t &compression_idx);
-	void WriteToDisk(const column_segment_vector_t &nodes);
-	bool HasChanges(const column_segment_vector_t &nodes);
-	void WritePersistentSegments(column_segment_vector_t nodes);
+	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback);
+	vector<CheckpointAnalyzeResult> DetectBestCompressionMethod();
+	void WriteToDisk();
+	bool HasChanges(ColumnData &col_data);
+	void WritePersistentSegments(ColumnCheckpointState &state);
+	void InitAnalyze();
+	void DropSegments();
 
 private:
-	ColumnData &col_data;
+	vector<reference<ColumnCheckpointState>> &checkpoint_states;
+	DatabaseInstance &db;
 	RowGroup &row_group;
-	ColumnCheckpointState &state;
-	bool is_validity;
-	bool has_changes;
 	Vector intermediate;
-	vector<optional_ptr<CompressionFunction>> compression_functions;
 	ColumnCheckpointInfo &checkpoint_info;
 
-	vector<unique_ptr<AnalyzeState>> analyze_states;
+	vector<bool> has_changes;
+	//! For every column data that is being checkpointed, the applicable functions
+	vector<vector<optional_ptr<CompressionFunction>>> compression_functions;
+	//! For every column data that is being checkpointed, the analyze state of functions being tried
+	vector<vector<unique_ptr<AnalyzeState>>> analyze_states;
 };
 
 } // namespace duckdb

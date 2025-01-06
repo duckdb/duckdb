@@ -620,21 +620,22 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
-	auto l = data.Lock();
-	auto &nodes = data.ReferenceSegments(l);
+	auto &nodes = data.ReferenceSegments();
 	if (nodes.empty()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
 
-	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	checkpointer.Checkpoint(nodes);
-	checkpointer.FinalizeCheckpoint(data.MoveSegments(l));
+	vector<reference<ColumnCheckpointState>> states {*checkpoint_state};
+	ColumnDataCheckpointer checkpointer(states, GetDatabase(), row_group, checkpoint_info);
+	checkpointer.Checkpoint();
+	checkpointer.FinalizeCheckpoint();
 
 	// reset the compression function
 	compression.reset();
 	// replace the old tree with the new one
 	auto new_segments = checkpoint_state->new_tree.MoveSegments();
+	auto l = data.Lock();
 	for (auto &new_segment : new_segments) {
 		AppendSegment(l, std::move(new_segment.node));
 	}
