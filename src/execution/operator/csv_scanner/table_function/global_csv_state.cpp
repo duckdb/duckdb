@@ -225,6 +225,7 @@ bool IsCSVErrorAcceptedReject(CSVErrorType type) {
 	case CSVErrorType::MAXIMUM_LINE_SIZE:
 	case CSVErrorType::UNTERMINATED_QUOTES:
 	case CSVErrorType::INVALID_UNICODE:
+	case CSVErrorType::INVALID_STATE:
 		return true;
 	default:
 		return false;
@@ -245,6 +246,8 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 		return "UNQUOTED VALUE";
 	case CSVErrorType::INVALID_UNICODE:
 		return "INVALID UNICODE";
+	case CSVErrorType::INVALID_STATE:
+		return "INVALID STATE";
 	default:
 		throw InternalException("CSV Error is not valid to be stored in a Rejects Table");
 	}
@@ -309,7 +312,7 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	scan_appender.EndRow();
 }
 
-void CSVGlobalState::FillRejectsTable() {
+void CSVGlobalState::FillRejectsTable() const {
 	auto &options = bind_data.options;
 
 	if (options.store_rejects.GetValue()) {

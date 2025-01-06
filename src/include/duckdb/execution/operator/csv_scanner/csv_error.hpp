@@ -66,8 +66,9 @@ public:
 	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
 	                              string &csv_row, idx_t byte_position, const string &current_path);
 	//! Produces error for when the state machine reaches an invalid state
-	static CSVError InvalidState(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
-	                             string &csv_row, idx_t byte_position, const string &current_path);
+	static CSVError InvalidState(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
+	                             string &csv_row, idx_t row_byte_position, optional_idx byte_position,
+	                             const string &current_path);
 	//! Produces an error message for a dialect sniffing error.
 	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space);
 	//! Produces an error message for a header sniffing error.
@@ -77,7 +78,7 @@ public:
 	static CSVError UnterminatedQuotesError(const CSVReaderOptions &options, idx_t current_column,
 	                                        LinesPerBoundary error_info, string &csv_row, idx_t row_byte_position,
 	                                        optional_idx byte_position, const string &current_path);
-	//! Produces error messages for null_padding option is set and we have quoted new values in parallel
+	//! Produces error messages for null_padding option is set, and we have quoted new values in parallel
 	static CSVError NullPaddingFail(const CSVReaderOptions &options, LinesPerBoundary error_info,
 	                                const string &current_path);
 	//! Produces error for incorrect (e.g., smaller and lower than the predefined) number of columns in a CSV Line

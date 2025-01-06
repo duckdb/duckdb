@@ -179,8 +179,9 @@ CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_s
 	                how_to_fix_it.str(), current_path);
 }
 
-CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
-                                string &csv_row, idx_t byte_position, const string &current_path) {
+CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
+                                string &csv_row, idx_t row_byte_position, optional_idx byte_position,
+                                const string &current_path) {
 	std::ostringstream error;
 	error << "The CSV Parser state machine reached an invalid state.\nThis can happen when is not possible to parse "
 	         "your CSV File with the given options, or the CSV File is not RFC 4180 compliant ";
@@ -189,8 +190,8 @@ CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t actual_si
 	how_to_fix_it << "Possible fixes:" << '\n';
 	how_to_fix_it << "* Enable scanning files that are not RFC 4180 compliant (rfc_4180=false)." << '\n';
 
-	return CSVError(error.str(), INVALID_STATE, 0, csv_row, error_info, byte_position, byte_position, options,
-	                how_to_fix_it.str(), current_path);
+	return CSVError(error.str(), INVALID_STATE, current_column, csv_row, error_info, row_byte_position, byte_position,
+	                options, how_to_fix_it.str(), current_path);
 }
 CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
                                        const idx_t column_count, const string &delimiter) {

@@ -685,9 +685,17 @@ bool LineError::HandleErrors(StringValueResult &result) {
 			    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl), result.path);
 			break;
 		case INVALID_STATE:
-			csv_error = CSVError::InvalidState(
-			    result.state_machine.options, cur_error.current_line_size, lines_per_batch, borked_line,
-			    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl), result.path);
+			if (result.current_line_position.begin == line_pos) {
+				csv_error = CSVError::InvalidState(
+				    result.state_machine.options, col_idx, lines_per_batch, borked_line,
+				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
+				    line_pos.GetGlobalPosition(result.requested_size, first_nl), result.path);
+			} else {
+				csv_error = CSVError::InvalidState(
+				    result.state_machine.options, col_idx, lines_per_batch, borked_line,
+				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
+				    line_pos.GetGlobalPosition(result.requested_size), result.path);
+			}
 			break;
 		default:
 			throw InvalidInputException("CSV Error not allowed when inserting row");
@@ -883,7 +891,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 }
 
 void StringValueResult::InvalidState(StringValueResult &result) {
-	result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
+	result.current_errors.Insert(INVALID_STATE, result.cur_col_id, result.chunk_col_id, result.last_position);
 }
 
 bool StringValueResult::EmptyLine(StringValueResult &result, const idx_t buffer_pos) {
@@ -1729,11 +1737,18 @@ void StringValueScanner::FinalizeChunkProcess() {
 	// If we are not done we have two options.
 	// 1) If a boundary is set.
 	if (iterator.IsBoundarySet()) {
-		bool has_unterminated_quotes = false;
-		if (!result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
+		bool found_error = false;
+		CSVErrorType type;
+		if (!result.current_errors.HasErrorType(UNTERMINATED_QUOTES) &&
+		    !result.current_errors.HasErrorType(INVALID_STATE)) {
 			iterator.done = true;
 		} else {
-			has_unterminated_quotes = true;
+			found_error = true;
+			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
+				type = UNTERMINATED_QUOTES;
+			} else {
+				type = INVALID_STATE;
+			}
 		}
 		// We read until the next line or until we have nothing else to read.
 		// Move to next buffer
@@ -1752,18 +1767,21 @@ void StringValueScanner::FinalizeChunkProcess() {
 			}
 		} else {
 			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
-				has_unterminated_quotes = true;
+				found_error = true;
+				type = UNTERMINATED_QUOTES;
+			} else if (result.current_errors.HasErrorType(INVALID_STATE)) {
+				found_error = true;
+				type = INVALID_STATE;
 			}
 			if (result.current_errors.HandleErrors(result)) {
 				result.number_of_rows++;
 			}
 		}
-		if (states.IsQuotedCurrent() && !has_unterminated_quotes &&
+		if (states.IsQuotedCurrent() && !found_error &&
 		    state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
-			result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
-			                             result.last_position);
+			result.current_errors.Insert(type, result.cur_col_id, result.chunk_col_id, result.last_position);
 			if (result.current_errors.HandleErrors(result)) {
 				result.number_of_rows++;
 			}
