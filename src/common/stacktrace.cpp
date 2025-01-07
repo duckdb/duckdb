@@ -21,7 +21,7 @@ static string UnmangleSymbol(string symbol) {
 		}
 	}
 	for (idx_t i = mangle_start; i < symbol.size(); i++) {
-		if (StringUtil::CharacterIsSpace(symbol[i])) {
+		if (StringUtil::CharacterIsSpace(symbol[i]) || symbol[i] == ')') {
 			mangle_end = i;
 			break;
 		}
