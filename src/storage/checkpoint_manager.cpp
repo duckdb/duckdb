@@ -450,7 +450,12 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 
 	// look for the table in the catalog
 	auto &schema = catalog.GetSchema(transaction, create_info->schema);
-	auto &table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table)->Cast<DuckTableEntry>();
+	auto catalog_table = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, info.table);
+	if (!catalog_table) {
+		// See internal issue 3663.
+		throw IOException("corrupt database file - index entry without table entry");
+	}
+	auto &table = catalog_table->Cast<DuckTableEntry>();
 
 	// we also need to make sure the index type is loaded
 	// backwards compatibility:
@@ -462,6 +467,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// now we can look for the index in the catalog and assign the table info
 	auto &index = schema.CreateIndex(transaction, info, table)->Cast<DuckIndexEntry>();
 	auto &data_table = table.GetStorage();
+	auto &table_info = data_table.GetDataTableInfo();
 
 	IndexStorageInfo index_storage_info;
 	if (root_block_pointer.IsValid()) {
@@ -471,7 +477,7 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 
 	} else {
 		// Read the matching index storage info.
-		for (auto const &elem : data_table.GetDataTableInfo()->GetIndexStorageInfo()) {
+		for (auto const &elem : table_info->GetIndexStorageInfo()) {
 			if (elem.name == index.name) {
 				index_storage_info = elem;
 				break;
@@ -479,12 +485,13 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 		}
 	}
 
-	D_ASSERT(index_storage_info.IsValid() && !index_storage_info.name.empty());
+	D_ASSERT(index_storage_info.IsValid());
+	D_ASSERT(!index_storage_info.name.empty());
 
 	// Create an unbound index and add it to the table.
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), index_storage_info,
 	                                             TableIOManager::Get(data_table), data_table.db);
-	data_table.GetDataTableInfo()->GetIndexes().AddIndex(std::move(unbound_index));
+	table_info->GetIndexes().AddIndex(std::move(unbound_index));
 }
 
 //===--------------------------------------------------------------------===//

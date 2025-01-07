@@ -6,8 +6,14 @@ mutable struct Stmt <: DBInterface.Statement
 
     function Stmt(con::Connection, sql::AbstractString, result_type::Type)
         handle = Ref{duckdb_prepared_statement}()
-        if duckdb_prepare(con.handle, sql, handle) != DuckDBSuccess
-            error_message = unsafe_string(duckdb_prepare_error(handle))
+        result = duckdb_prepare(con.handle, sql, handle)
+        if result != DuckDBSuccess
+            ptr = duckdb_prepare_error(handle[])
+            if ptr == C_NULL
+                error_message = "Preparation of statement failed: unknown error"
+            else
+                error_message = unsafe_string(ptr)
+            end
             duckdb_destroy_prepare(handle)
             throw(QueryException(error_message))
         end
