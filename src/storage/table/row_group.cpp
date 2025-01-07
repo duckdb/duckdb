@@ -107,9 +107,37 @@ ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
 }
 
 ColumnData &RowGroup::GetColumn(storage_t c) {
-	auto &const_this = (const RowGroup &)*this; // NOLINT
-	auto &res = const_this.GetColumn(c);
-	return (ColumnData &)res; // NOLINT
+	D_ASSERT(c < columns.size());
+	if (!is_loaded) {
+		// not being lazy loaded
+		D_ASSERT(columns[c]);
+		return *columns[c];
+	}
+	if (is_loaded[c]) {
+		D_ASSERT(columns[c]);
+		return *columns[c];
+	}
+	lock_guard<mutex> l(row_group_lock);
+	if (columns[c]) {
+		D_ASSERT(is_loaded[c]);
+		return *columns[c];
+	}
+	if (column_pointers.size() != columns.size()) {
+		throw InternalException("Lazy loading a column but the pointer was not set");
+	}
+	auto &metadata_manager = GetCollection().GetMetadataManager();
+	auto &types = GetCollection().GetTypes();
+	auto &block_pointer = column_pointers[c];
+	MetadataReader column_data_reader(metadata_manager, block_pointer);
+	this->columns[c] =
+	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c]);
+	is_loaded[c] = true;
+	if (this->columns[c]->count != this->count) {
+		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
+		                        "not match count of row group %llu",
+		                        c, start, this->columns[c]->count.load(), this->count.load());
+	}
+	return *columns[c];
 }
 
 const ColumnData &RowGroup::GetColumn(storage_t c) const {

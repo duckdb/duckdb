@@ -125,18 +125,49 @@ public:
 		auto l = Lock();
 		return GetSegmentByIndex(l, index);
 	}
+
 	const T *GetSegmentByIndex(SegmentLock &l, int64_t index) const {
-		auto &non_const_this = (SegmentTree &)(*this); // NOLINT
-		auto res = non_const_this.GetSegmentByIndex(l, index);
-		return (const T *)(res); // NOLINT
+		if (index < 0) {
+			// load all segments
+			LoadAllSegments(l);
+			index += nodes.size();
+			if (index < 0) {
+				return nullptr;
+			}
+			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
+		} else {
+			// lazily load segments until we reach the specific segment
+			while (idx_t(index) >= nodes.size() && LoadNextSegment(l)) {
+			}
+			if (idx_t(index) >= nodes.size()) {
+				return nullptr;
+			}
+			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
+		}
 	}
 
 	//! Gets the next segment
 	T *GetNextSegment(T *segment) {
-		auto &const_this = (const SegmentTree &)(*this); // NOLINT
-		auto res = const_this.GetNextSegment(segment);
-		return (T *)(res); // NOLINT
+		if (!SUPPORTS_LAZY_LOADING) {
+			return segment->Next();
+		}
+		if (finished_loading) {
+			return segment->Next();
+		}
+		auto l = Lock();
+		return GetNextSegment(l, segment);
 	}
+
+	T *GetNextSegment(SegmentLock &l, T *segment) {
+		if (!segment) {
+			return nullptr;
+		}
+#ifdef DEBUG
+		D_ASSERT(nodes[segment->index].node.get() == segment);
+#endif
+		return GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment->index + 1));
+	}
+
 	const T *GetNextSegment(const T *segment) const {
 		if (!SUPPORTS_LAZY_LOADING) {
 			return segment->Next();
