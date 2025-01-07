@@ -112,7 +112,7 @@ public:
 	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
-	virtual bool HasChanges(idx_t start_row, idx_t end_row) const;
+	bool HasChanges(idx_t start_row, idx_t end_row) const;
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 

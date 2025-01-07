@@ -23,7 +23,6 @@ public:
 	ValidityColumnData validity;
 
 public:
-	bool HasChanges(idx_t start_row, idx_t end_row) const override;
 	void SetStart(idx_t new_start) override;
 
 	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
