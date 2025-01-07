@@ -45,6 +45,7 @@ static string UnmangleSymbol(string symbol) {
 }
 
 static string CleanupStackTrace(string symbol) {
+#ifdef __APPLE__
 	// structure of frame pointers is [depth] [library] [pointer] [symbol]
 	// we are only interested in [depth] and [symbol]
 
@@ -77,6 +78,9 @@ static string CleanupStackTrace(string symbol) {
 	}
 	idx_t space_count = STACK_TRACE_INDENTATION - start;
 	return symbol.substr(0, start) + string(space_count, ' ') + symbol.substr(frame_end, symbol.size() - frame_end);
+#else
+	return symbol;
+#endif
 }
 
 string StackTrace::GetStacktracePointers(idx_t max_depth) {
