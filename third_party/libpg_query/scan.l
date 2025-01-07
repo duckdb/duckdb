@@ -145,6 +145,7 @@ extern void core_yyset_column(int column_no, yyscan_t yyscanner);
  *  <xh> hexadecimal numeric string
  *  <xq> standard quoted strings
  *  <xe> extended quoted strings (support backslash escape sequences)
+ *  <bt> backtick quoted strings
  *  <xdolq> $foo$ quoted strings
  *  <xui> quoted identifier with Unicode escapes
  *  <xuiend> end of a quoted identifier with Unicode escapes, UESCAPE can follow
@@ -162,6 +163,7 @@ extern void core_yyset_column(int column_no, yyscan_t yyscanner);
 %x xh
 %x xe
 %x xq
+%x bt
 %x xdolq
 %x xui
 %x xuiend
@@ -279,6 +281,15 @@ xdstart			{dquote}
 xdstop			{dquote}
 xddouble		{dquote}{dquote}
 xdinside		[^"]+
+
+/* Triple backticks
+ * Allow multi-line string literals.
+ */
+btick			`
+xbtstart		{btick}{btick}{btick}
+xbtstop			{btick}{btick}{btick}
+xbtdouble		{dquote}{dquote}
+xbtinside		([^`]|`[^`]|``[^`])+
 
 /* Unicode escapes */
 uescape			[uU][eE][sS][cC][aA][pP][eE]{whitespace}*{quote}[^']{quote}
@@ -725,6 +736,29 @@ other			.
 					addlitchar(yytext[0], yyscanner);
 				}
 <xdolq><<EOF>>	{ yyerror("unterminated dollar-quoted string"); }
+
+{xbtstart}		{
+					SET_YYLLOC();
+					BEGIN(bt);
+					startlit();
+				}
+<bt>{xbtstop}	{
+					char	   *ident;
+
+					BEGIN(INITIAL);
+					ident = litbufdup(yyscanner);
+					yylval->str = ident;
+					return SCONST;
+				}
+<bt>{xbtinside}  {
+					addlit(yytext, yyleng, yyscanner);
+				}
+<bt>.			{
+					yyerror("Unexpected character in triple backtick string literal");
+				}
+<bt><<EOF>>		{
+					yyerror("Unterminated triple backtick string literal");
+				}
 
 {xdstart}		{
 					SET_YYLLOC();
@@ -1667,6 +1701,7 @@ core_yyfree(void *ptr, core_yyscan_t yyscanner)
 #undef xh
 #undef xe
 #undef xq
+#undef bt
 #undef xdolq
 #undef xui
 #undef xuiend
