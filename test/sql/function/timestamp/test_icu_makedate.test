@@ -396,6 +396,11 @@ FROM all_types a;
 Overflow in subtraction
 
 statement error
+SELECT make_timestamptz(9223372036854775807); -- Infinity
+----
+Conversion Error: Timestamp microseconds out of range: 9223372036854775807
+
+statement error
 SELECT make_timestamptz(294248, 1, 10, 4, 0, 54.775807);
 ----
 Conversion Error: ICU date overflows timestamp range

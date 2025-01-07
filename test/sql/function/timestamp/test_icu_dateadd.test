@@ -558,3 +558,19 @@ query I
 select ('1920-12-12 01:02:02+05:30'::timestamptz + interval '1 month -400 day')::timestamptz as r;
 ----
 1919-12-09 01:02:02+05:30
+
+# Adding and subtracting infinities
+statement error
+SELECT TIMESTAMPTZ 'Infinity' - TIMESTAMPTZ 'Infinity';
+----
+Cannot subtract infinite timestamps
+
+statement error
+SELECT TIMESTAMPTZ 'Infinity' - TIMESTAMPTZ '-Infinity';
+----
+Cannot subtract infinite timestamps
+
+statement error
+SELECT TIMESTAMPTZ 'Infinity' - TIMESTAMPTZ '2020-01-01';
+----
+Cannot subtract infinite timestamps

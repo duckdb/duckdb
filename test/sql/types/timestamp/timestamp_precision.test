@@ -65,7 +65,13 @@ statement error
 CREATE TABLE ts_precision(sec TIMESTAMP(99999));
 ----
 
-# timestamp only supporst a single modifier
+# timestamp only supports a single modifier
 statement error
 CREATE TABLE ts_precision(sec TIMESTAMP(1, 1));
 ----
+
+# Handle infinite values
+statement error
+SELECT TIMESTAMP_NS '2262-04-11 23:47:16.854775807';
+----
+Conversion Error: Could not convert string '2262-04-11 23:47:16.854775807' to INT64
