@@ -1,6 +1,7 @@
 #include "duckdb/storage/compression/dictionary/analyze.hpp"
 
 namespace duckdb {
+namespace dictionary {
 
 DictionaryAnalyzeState::DictionaryAnalyzeState(const CompressionInfo &info)
     : DictionaryCompressionState(info), segment_count(0), current_tuple_count(0), current_unique_count(0),
@@ -51,4 +52,5 @@ void DictionaryAnalyzeState::Flush(bool final) {
 void DictionaryAnalyzeState::Verify() {
 }
 
+} // namespace dictionary
 } // namespace duckdb

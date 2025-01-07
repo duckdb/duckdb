@@ -46,6 +46,7 @@ Data layout per segment:
 */
 
 namespace duckdb {
+namespace dictionary {
 
 struct DictionaryCompressionStorage {
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
@@ -153,17 +154,21 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	scan_state.ScanToFlatVector(result, result_idx, NumericCast<idx_t>(row_id), 1);
 }
 
+} // namespace dictionary
+
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type) {
 	auto res = CompressionFunction(
-	    CompressionType::COMPRESSION_DICTIONARY, data_type, DictionaryCompressionStorage ::StringInitAnalyze,
-	    DictionaryCompressionStorage::StringAnalyze, DictionaryCompressionStorage::StringFinalAnalyze,
-	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
-	    DictionaryCompressionStorage::FinalizeCompress, DictionaryCompressionStorage::StringInitScan,
-	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial<false>,
-	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
+	    CompressionType::COMPRESSION_DICTIONARY, data_type, dictionary::DictionaryCompressionStorage::StringInitAnalyze,
+	    dictionary::DictionaryCompressionStorage::StringAnalyze,
+	    dictionary::DictionaryCompressionStorage::StringFinalAnalyze,
+	    dictionary::DictionaryCompressionStorage::InitCompression, dictionary::DictionaryCompressionStorage::Compress,
+	    dictionary::DictionaryCompressionStorage::FinalizeCompress,
+	    dictionary::DictionaryCompressionStorage::StringInitScan, dictionary::DictionaryCompressionStorage::StringScan,
+	    dictionary::DictionaryCompressionStorage::StringScanPartial<false>,
+	    dictionary::DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
 	    UncompressedStringStorage::StringInitSegment);
 	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
 	return res;

@@ -7,7 +7,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
-namespace dictionary {
+namespace dict_fsst {
 
 // Dictionary compression uses a combination of bitpacking and a dictionary to compress string segments. The data is
 // stored across three buffers: the index buffer, the selection buffer and the dictionary. Firstly the Index buffer
@@ -22,9 +22,9 @@ namespace dictionary {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-struct DictionaryCompressionCompressState : public DictionaryCompressionState {
+struct DictFSSTCompressionCompressState : public DictFSSTCompressionState {
 public:
-	DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info);
+	DictFSSTCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info);
 
 public:
 	void CreateEmptySegment(idx_t row_start);
@@ -60,5 +60,5 @@ public:
 	uint32_t latest_lookup_result;
 };
 
-} // namespace dictionary
+} // namespace dict_fsst
 } // namespace duckdb

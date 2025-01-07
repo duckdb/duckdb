@@ -19,7 +19,9 @@ vector<string> ListCompressionTypes(void) {
 bool CompressionTypeIsDeprecated(CompressionType compression_type) {
 	const bool is_patas = compression_type == CompressionType::COMPRESSION_PATAS;
 	const bool is_chimp = compression_type == CompressionType::COMPRESSION_CHIMP;
-	return (is_patas || is_chimp);
+	const bool is_dict = compression_type == CompressionType::COMPRESSION_DICTIONARY;
+	const bool is_fsst = compression_type == CompressionType::COMPRESSION_FSST;
+	return (is_patas || is_chimp || is_dict || is_fsst);
 }
 
 CompressionType CompressionTypeFromString(const string &str) {
@@ -50,6 +52,8 @@ CompressionType CompressionTypeFromString(const string &str) {
 		return CompressionType::COMPRESSION_ALPRD;
 	} else if (compression == "roaring") {
 		return CompressionType::COMPRESSION_ROARING;
+	} else if (compression == "dict_fsst") {
+		return CompressionType::COMPRESSION_DICT_FSST;
 	} else {
 		return CompressionType::COMPRESSION_AUTO;
 	}
@@ -85,6 +89,8 @@ string CompressionTypeToString(CompressionType type) {
 		return "ALPRD";
 	case CompressionType::COMPRESSION_ROARING:
 		return "Roaring";
+	case CompressionType::COMPRESSION_DICT_FSST:
+		return "DICT_FSST";
 	case CompressionType::COMPRESSION_EMPTY:
 		return "Empty Validity";
 	default:

@@ -1,7 +1,7 @@
-#include "duckdb/storage/compression/dictionary/decompression.hpp"
+#include "duckdb/storage/compression/dict_fsst/decompression.hpp"
 
 namespace duckdb {
-namespace dictionary {
+namespace dict_fsst {
 
 uint16_t CompressedStringScanState::GetStringLength(sel_t index) {
 	if (index == 0) {
@@ -29,7 +29,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	baseptr = handle->Ptr() + segment.GetBlockOffset();
 
 	// Load header values
-	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
+	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
 	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
 	index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
 	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
@@ -39,11 +39,11 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
 	}
 	index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
-	base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
+	base_data = data_ptr_cast(baseptr + DictFSSTCompression::DICTIONARY_HEADER_SIZE);
 
 	block_size = segment.GetBlockManager().GetBlockSize();
 
-	dict = DictionaryCompression::GetDictionary(segment, *handle);
+	dict = DictFSSTCompression::GetDictionary(segment, *handle);
 
 	if (!initialize_dictionary) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
@@ -122,5 +122,5 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
 }
 
-} // namespace dictionary
+} // namespace dict_fsst
 } // namespace duckdb

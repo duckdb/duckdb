@@ -29,7 +29,8 @@ enum class CompressionType : uint8_t {
 	COMPRESSION_ZSTD = 12,
 	COMPRESSION_ROARING = 13,
 	COMPRESSION_EMPTY = 14, // internal only
-	COMPRESSION_COUNT       // This has to stay the last entry of the type!
+	COMPRESSION_DICT_FSST = 15,
+	COMPRESSION_COUNT // This has to stay the last entry of the type!
 };
 
 bool CompressionTypeIsDeprecated(CompressionType compression_type);

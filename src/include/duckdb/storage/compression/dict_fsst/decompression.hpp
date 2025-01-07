@@ -1,9 +1,10 @@
 #pragma once
 
-#include "duckdb/storage/compression/dictionary/common.hpp"
+#include "duckdb/storage/compression/dict_fsst/common.hpp"
 
 namespace duckdb {
-namespace dictionary {
+
+namespace dict_fsst {
 
 //===--------------------------------------------------------------------===//
 // Scan
@@ -48,5 +49,6 @@ public:
 	idx_t block_size;
 };
 
-} // namespace dictionary
+} // namespace dict_fsst
+
 } // namespace duckdb

@@ -5,14 +5,15 @@
 #include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
-namespace dictionary {
+
+namespace dict_fsst {
 
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
-struct DictionaryAnalyzeState : public DictionaryCompressionState {
+struct DictFSSTAnalyzeState : public DictFSSTCompressionState {
 public:
-	explicit DictionaryAnalyzeState(const CompressionInfo &info);
+	explicit DictFSSTAnalyzeState(const CompressionInfo &info);
 
 public:
 	bool LookupString(string_t str) override;
@@ -34,15 +35,16 @@ public:
 	bitpacking_width_t next_width;
 };
 
-struct DictionaryCompressionAnalyzeState : public AnalyzeState {
+struct DictFSSTCompressionAnalyzeState : public AnalyzeState {
 public:
-	explicit DictionaryCompressionAnalyzeState(const CompressionInfo &info)
-	    : AnalyzeState(info), analyze_state(make_uniq<DictionaryAnalyzeState>(info)) {
+	explicit DictFSSTCompressionAnalyzeState(const CompressionInfo &info)
+	    : AnalyzeState(info), analyze_state(make_uniq<DictFSSTAnalyzeState>(info)) {
 	}
 
 public:
-	unique_ptr<DictionaryAnalyzeState> analyze_state;
+	unique_ptr<DictFSSTAnalyzeState> analyze_state;
 };
 
-} // namespace dictionary
+} // namespace dict_fsst
+
 } // namespace duckdb

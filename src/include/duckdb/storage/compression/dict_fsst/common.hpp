@@ -6,7 +6,8 @@
 #include "duckdb/storage/string_uncompressed.hpp"
 
 namespace duckdb {
-namespace dictionary {
+
+namespace dict_fsst {
 
 typedef struct {
 	uint32_t dict_size;
@@ -14,13 +15,13 @@ typedef struct {
 	uint32_t index_buffer_offset;
 	uint32_t index_buffer_count;
 	uint32_t bitpacking_width;
-} dictionary_compression_header_t;
+} dict_fsst_compression_header_t;
 
-struct DictionaryCompression {
+struct DictFSSTCompression {
 public:
 	static constexpr float MINIMUM_COMPRESSION_RATIO = 1.2F;
 	//! Dictionary header size at the beginning of the string segment (offset + length)
-	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dictionary_compression_header_t);
+	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dict_fsst_compression_header_t);
 
 public:
 	static bool HasEnoughSpace(idx_t current_count, idx_t index_count, idx_t dict_size,
@@ -33,10 +34,10 @@ public:
 };
 
 //! Abstract class managing the compression state for size analysis or compression.
-class DictionaryCompressionState : public CompressionState {
+class DictFSSTCompressionState : public CompressionState {
 public:
-	explicit DictionaryCompressionState(const CompressionInfo &info);
-	~DictionaryCompressionState() override;
+	explicit DictFSSTCompressionState(const CompressionInfo &info);
+	~DictFSSTCompressionState() override;
 
 public:
 	bool UpdateState(Vector &scan_vector, idx_t count);
@@ -58,5 +59,6 @@ protected:
 	virtual void Flush(bool final = false) = 0;
 };
 
-} // namespace dictionary
+} // namespace dict_fsst
+
 } // namespace duckdb
