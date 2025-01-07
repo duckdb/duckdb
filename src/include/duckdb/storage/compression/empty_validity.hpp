@@ -16,9 +16,9 @@ public:
 		idx_t non_nulls = 0;
 	};
 	struct EmptyValidityCompressionState : public CompressionState {
-		explicit EmptyValidityCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
+		explicit EmptyValidityCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 		    : CompressionState(info),
-		      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY)) {
+		      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY)) {
 		}
 		optional_ptr<CompressionFunction> function;
 	};
@@ -50,15 +50,15 @@ public:
 	static idx_t FinalAnalyze(AnalyzeState &state_p) {
 		return 0;
 	}
-	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer,
+	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state_p) {
-		auto res = make_uniq<EmptyValidityCompressionState>(checkpointer, state_p->info);
+		auto res = make_uniq<EmptyValidityCompressionState>(checkpoint_data, state_p->info);
 		auto &state = state_p->Cast<EmptyValidityAnalyzeState>();
 
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
+		auto &db = checkpoint_data.GetDatabase();
+		auto &type = checkpoint_data.GetType();
 
-		auto row_start = checkpointer.GetRowGroup().start;
+		auto row_start = checkpoint_data.GetRowGroup().start;
 
 		auto &info = state.info;
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *res->function, type, row_start,
@@ -71,11 +71,11 @@ public:
 			compressed_segment->stats.statistics.SetHasNoNullFast();
 		}
 
-		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
+		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 		auto handle = buffer_manager.Pin(compressed_segment->block);
 
-		auto &checkpointer_state = checkpointer.GetCheckpointState();
-		checkpointer_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);
+		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
+		checkpoint_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);
 
 		return res;
 	}

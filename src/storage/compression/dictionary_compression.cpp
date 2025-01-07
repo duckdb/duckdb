@@ -52,7 +52,7 @@ struct DictionaryCompressionStorage {
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
-	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer,
+	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state);
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
@@ -94,9 +94,9 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
+unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                                            unique_ptr<AnalyzeState> state) {
-	return make_uniq<DictionaryCompressionCompressState>(checkpointer, state->info);
+	return make_uniq<DictionaryCompressionCompressState>(checkpoint_data, state->info);
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {

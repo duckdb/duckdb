@@ -247,12 +247,29 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
+	auto base_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
+	auto validity_state_p = validity.CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity.type).ToUnique();
 
-	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
-	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
-
+	auto &validity_state = *validity_state_p;
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
-	checkpoint_state.validity_state = std::move(validity_state);
+	checkpoint_state.validity_state = std::move(validity_state_p);
+
+	auto &nodes = data.ReferenceSegments();
+	if (nodes.empty()) {
+		// empty table: flush the empty list
+		return base_state;
+	}
+
+	vector<reference<ColumnCheckpointState>> checkpoint_states;
+	checkpoint_states.emplace_back(checkpoint_state);
+	checkpoint_states.emplace_back(validity_state);
+
+	ColumnDataCheckpointer checkpointer(checkpoint_states, GetDatabase(), row_group, checkpoint_info);
+	checkpointer.Checkpoint();
+	checkpointer.FinalizeCheckpoint();
+
 	return base_state;
 }
 
