@@ -20,7 +20,8 @@ struct RandomState {
 RandomEngine::RandomEngine(int64_t seed) : random_state(make_uniq<RandomState>()) {
 	if (seed < 0) {
 #ifdef __linux__
-		idx_t random_seed = getrandom(buffer, sizeof(buffer), 0);
+		idx_t random_seed;
+		getrandom(&random_seed, sizeof(random_seed), 0);
 		random_state->pcg.seed(random_seed);
 #else
 		random_state->pcg.seed(pcg_extras::seed_seq_from<std::random_device>());
