@@ -220,6 +220,11 @@ if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
 endif()
 
+option(EXPORT_DYNAMIC_SYMBOLS "Export dynamic symbols." FALSE)
+if(${EXPORT_DYNAMIC_SYMBOLS})
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rdynamic")
+endif()
+
 if (UNSAFE_NUMERIC_CAST)
   message(status "UNSAFE_NUMERIC_CAST")
   add_definitions(-DUNSAFE_NUMERIC_CAST=1)
