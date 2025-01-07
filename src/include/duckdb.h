@@ -711,11 +711,9 @@ DUCKDB_API duckdb_state duckdb_get_or_create_from_cache(duckdb_instance_cache in
                                                         char **out_error);
 
 /*!
-Creates a new database instance cache.
-The instance cache is necessary if a client/program (re)opens multiple databases to the same file within the same
-process. Must be destroyed with 'duckdb_destroy_instance_cache'.
+Destroys an existing database instance cache and de-allocates its memory.
 
-* @return The database instance cache, or `nullptr` on failure.
+* @param instance_cache The instance cache to destroy.
 */
 DUCKDB_API void duckdb_destroy_instance_cache(duckdb_instance_cache *instance_cache);
 

@@ -59,9 +59,10 @@
                 }
             ],
             "comment": {
-                "description": "Creates a new database instance cache.\nThe instance cache is necessary if a client/program (re)opens multiple databases to the same file within the same process.\nMust be destroyed with 'duckdb_destroy_instance_cache'.\n\n",
-                "param_comments": {},
-                "return_value": "The database instance cache, or `nullptr` on failure."
+                "description": "Destroys an existing database instance cache and de-allocates its memory.\n\n",
+                "param_comments": {
+                    "instance_cache": "The instance cache to destroy."
+                }
             }
         },
         {
