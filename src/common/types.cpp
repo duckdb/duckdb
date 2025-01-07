@@ -365,21 +365,29 @@ bool TypeIsInteger(PhysicalType type) {
 	       type == PhysicalType::UINT128;
 }
 
+static string TypeModifierListToString(const vector<Value> &mod_list) {
+	string result;
+	if (mod_list.empty()) {
+		return result;
+	}
+	result = "(";
+	for (idx_t i = 0; i < mod_list.size(); i++) {
+		result += mod_list[i].ToString();
+		if (i < mod_list.size() - 1) {
+			result += ", ";
+		}
+	}
+	result += ")";
+	return result;
+}
+
 string LogicalType::ToString() const {
 	if (id_ != LogicalTypeId::USER) {
 		auto alias = GetAlias();
 		if (!alias.empty()) {
-			auto mods_ptr = GetModifiers();
-			if (mods_ptr && !mods_ptr->empty()) {
-				auto &mods = *mods_ptr;
-				alias += "(";
-				for (idx_t i = 0; i < mods.size(); i++) {
-					alias += mods[i].ToString();
-					if (i < mods.size() - 1) {
-						alias += ", ";
-					}
-				}
-				alias += ")";
+			if (HasExtensionInfo()) {
+				auto &ext_info = *GetExtensionInfo();
+				alias += TypeModifierListToString(ext_info.modifiers);
 			}
 			return alias;
 		}
@@ -491,14 +499,7 @@ string LogicalType::ToString() const {
 		result += KeywordHelper::WriteOptionallyQuoted(type);
 
 		if (!mods.empty()) {
-			result += "(";
-			for (idx_t i = 0; i < mods.size(); i++) {
-				result += mods[i].ToString();
-				if (i < mods.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += ")";
+			result += TypeModifierListToString(mods);
 		}
 
 		return result;
@@ -1360,51 +1361,32 @@ bool LogicalType::HasAlias() const {
 	return false;
 }
 
-void LogicalType::SetModifiers(vector<Value> modifiers) {
-	if (!type_info_ && !modifiers.empty()) {
-		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
-	}
-	type_info_->modifiers = std::move(modifiers);
-}
-
-bool LogicalType::HasModifiers() const {
-	if (id() == LogicalTypeId::USER) {
-		return !UserType::GetTypeModifiers(*this).empty();
-	}
-	if (type_info_) {
-		return !type_info_->modifiers.empty();
+bool LogicalType::HasExtensionInfo() const {
+	if (type_info_ && type_info_->extension_info) {
+		return true;
 	}
 	return false;
 }
 
-vector<Value> LogicalType::GetModifiersCopy() const {
-	if (id() == LogicalTypeId::USER) {
-		return UserType::GetTypeModifiers(*this);
-	}
-	if (type_info_) {
-		return type_info_->modifiers;
-	}
-	return {};
-}
-
-optional_ptr<vector<Value>> LogicalType::GetModifiers() {
-	if (id() == LogicalTypeId::USER) {
-		return UserType::GetTypeModifiers(*this);
-	}
-	if (type_info_) {
-		return type_info_->modifiers;
+optional_ptr<const ExtensionTypeInfo> LogicalType::GetExtensionInfo() const {
+	if (type_info_ && type_info_->extension_info) {
+		return type_info_->extension_info.get();
 	}
 	return nullptr;
 }
 
-optional_ptr<const vector<Value>> LogicalType::GetModifiers() const {
-	if (id() == LogicalTypeId::USER) {
-		return UserType::GetTypeModifiers(*this);
-	}
-	if (type_info_) {
-		return type_info_->modifiers;
+optional_ptr<ExtensionTypeInfo> LogicalType::GetExtensionInfo() {
+	if (type_info_ && type_info_->extension_info) {
+		return type_info_->extension_info.get();
 	}
 	return nullptr;
+}
+
+void LogicalType::SetExtensionInfo(unique_ptr<ExtensionTypeInfo> info) {
+	if (!type_info_) {
+		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
+	}
+	type_info_->extension_info = std::move(info);
 }
 
 //===--------------------------------------------------------------------===//
