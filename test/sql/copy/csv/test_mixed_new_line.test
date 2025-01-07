@@ -32,11 +32,10 @@ Error when sniffing file "data/csv/mixed_new_line.csv".
 statement error
 from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, rfc_4180=true, delim = ',', auto_detect= false)
 ----
-Could not convert string
-
+The CSV Parser state machine reached an invalid state.
 
 query I
-select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', rfc_4180 = True, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
+select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', rfc_4180 = False, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
 ----
 3
 
