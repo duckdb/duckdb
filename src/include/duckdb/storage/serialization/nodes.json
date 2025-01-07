@@ -581,6 +581,11 @@
         "name": "filename_column",
         "type": "string",
         "default": "MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN"
+      },
+      {
+        "id": 107,
+        "name": "cache_union_readers",
+        "type": "bool"
       }
     ],
     "pointer_type": "none"

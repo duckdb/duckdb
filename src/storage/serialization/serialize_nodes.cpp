@@ -490,6 +490,7 @@ void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(104, "hive_types_autocast", hive_types_autocast);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", hive_types_schema);
 	serializer.WritePropertyWithDefault<string>(106, "filename_column", filename_column, MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN);
+	serializer.WritePropertyWithDefault<bool>(107, "cache_union_readers", cache_union_readers);
 }
 
 MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -501,6 +502,7 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &deseria
 	deserializer.ReadPropertyWithDefault<bool>(104, "hive_types_autocast", result.hive_types_autocast);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", result.hive_types_schema);
 	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column, MultiFileReaderOptions::DEFAULT_FILENAME_COLUMN);
+	deserializer.ReadPropertyWithDefault<bool>(107, "cache_union_readers", result.cache_union_readers);
 	return result;
 }
 
