@@ -50,6 +50,10 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list) {
 	auto &operator_expr = expr->Cast<OperatorExpression>();
 
+	if (operator_expr.type == ExpressionType::OPERATOR_NOT) {
+		throw BinderException("*COLUMNS() can not be used together with the NOT operator");
+	}
+
 	// Replace children
 	expression_list_t new_children;
 	for (auto &child : operator_expr.children) {

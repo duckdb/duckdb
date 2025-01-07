@@ -7,4 +7,4 @@ CREATE TABLE v00 (c01 INT, c02 STRING);
 statement error
 SELECT NOT (*COLUMNS(*)) FROM v00;
 ----
-Binder Error: Failed to bind the NOT operator, too many child expressions found (2), expected only one
+Binder Error: *COLUMNS() can not be used together with the NOT operator
