@@ -54,10 +54,10 @@ UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other)
 	return *this;
 }
 
-Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
+Vector::Vector(LogicalType type_p, bool create_data, bool initialize_to_zero, idx_t capacity)
     : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr), validity(capacity) {
 	if (create_data) {
-		Initialize(zero_data, capacity);
+		Initialize(initialize_to_zero, capacity);
 	}
 }
 
@@ -306,7 +306,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(bool zero_data, idx_t capacity) {
+void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 	auxiliary.reset();
 	validity.Reset();
 	auto &type = GetType();
@@ -325,7 +325,7 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 	if (type_size > 0) {
 		buffer = VectorBuffer::CreateStandardVector(type, capacity);
 		data = buffer->GetData();
-		if (zero_data) {
+		if (initialize_to_zero) {
 			memset(data, 0, capacity * type_size);
 		}
 	}

@@ -3,17 +3,17 @@
 
 namespace duckdb {
 
-DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer_p,
+DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
                                                                        const CompressionInfo &info)
-    : DictionaryCompressionState(info), checkpointer(checkpointer_p),
-      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
-      heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
-	CreateEmptySegment(checkpointer.GetRowGroup().start);
+    : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
+      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+      heap(BufferAllocator::Get(checkpoint_data.GetDatabase())) {
+	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 
 void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
-	auto &db = checkpointer.GetDatabase();
-	auto &type = checkpointer.GetType();
+	auto &db = checkpoint_data.GetDatabase();
+	auto &type = checkpoint_data.GetType();
 
 	auto compressed_segment =
 	    ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(), info.GetBlockSize());
@@ -31,7 +31,7 @@ void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
 	next_width = 0;
 
 	// Reset the pointers into the current segment.
-	auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
+	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	current_handle = buffer_manager.Pin(current_segment->block);
 	current_dictionary = DictionaryCompression::GetDictionary(*current_segment, current_handle);
 	current_end_ptr = current_handle.Ptr() + current_dictionary.end;
@@ -105,7 +105,7 @@ void DictionaryCompressionCompressState::Flush(bool final) {
 	auto next_start = current_segment->start + current_segment->count;
 
 	auto segment_size = Finalize();
-	auto &state = checkpointer.GetCheckpointState();
+	auto &state = checkpoint_data.GetCheckpointState();
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 	if (!final) {
@@ -114,7 +114,7 @@ void DictionaryCompressionCompressState::Flush(bool final) {
 }
 
 idx_t DictionaryCompressionCompressState::Finalize() {
-	auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
+	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	auto handle = buffer_manager.Pin(current_segment->block);
 	D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
