@@ -7,7 +7,8 @@ namespace duckdb {
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
                                                  vector<string> names_p, unique_ptr<ColumnDataCollection> collection_p,
-                                                 ClientProperties client_properties, ClientContext &context)
+                                                 ClientProperties client_properties,
+                                                 optional_ptr<ClientContext> context)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), collection_p->Types(),
                   std::move(names_p), std::move(client_properties), context),
       collection(std::move(collection_p)), scan_initialized(false) {

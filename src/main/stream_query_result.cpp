@@ -161,7 +161,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		collection->Append(append_state, *chunk);
 	}
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
-	                                                 client_properties, *context);
+	                                                 client_properties, context.get());
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
