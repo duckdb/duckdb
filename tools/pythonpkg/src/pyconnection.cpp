@@ -83,6 +83,13 @@ DuckDBPyConnection::~DuckDBPyConnection() {
 }
 
 void DuckDBPyConnection::DetectEnvironment() {
+	// Get the formatted Python version
+	py::module_ sys = py::module_::import("sys");
+	py::object version_info = sys.attr("version_info");
+	int major = py::cast<int>(version_info.attr("major"));
+	int minor = py::cast<int>(version_info.attr("minor"));
+	DuckDBPyConnection::formatted_python_version = major + "." + minor;
+
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
 	auto main_module = py::module_::import("__main__");
 	if (py::hasattr(main_module, "__file__")) {
@@ -2146,9 +2153,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const py::object &dat
 	    "If set, restores the old behavior of scanning all preceding frames to locate the referenced variable.",
 	    LogicalType::BOOLEAN, Value::BOOLEAN(false));
 	if (!DuckDBPyConnection::IsJupyter()) {
-		config_dict["duckdb_api"] = Value("python");
+		config_dict["duckdb_api"] = Value("python/" + DuckDBPyConnection::formatted_python_version);
 	} else {
-		config_dict["duckdb_api"] = Value("python jupyter");
+		config_dict["duckdb_api"] = Value("python/" + DuckDBPyConnection::formatted_python_version + " jupyter");
 	}
 	config.SetOptionsByName(config_dict);
 

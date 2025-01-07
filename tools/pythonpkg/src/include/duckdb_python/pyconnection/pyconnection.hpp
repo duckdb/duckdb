@@ -357,6 +357,7 @@ private:
 	vector<unique_ptr<SQLStatement>> GetStatements(const py::object &query);
 
 	static PythonEnvironmentType environment;
+	static std::string formatted_python_version;
 	static void DetectEnvironment();
 };
 
