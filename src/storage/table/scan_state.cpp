@@ -126,7 +126,7 @@ void ColumnScanState::NextInternal(idx_t count) {
 	}
 	row_index += count;
 	while (row_index >= current->start + current->count) {
-		current = segment_tree->GetNextSegment(current);
+		current = segment_tree->GetNextSegment(current.get());
 		initialized = false;
 		segment_checked = false;
 		if (!current) {
@@ -180,7 +180,7 @@ bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) 
 			return false;
 		} else {
 			do {
-				row_group = row_groups->GetNextSegment(row_group);
+				row_group = row_groups->GetNextSegment(row_group.get());
 				if (row_group) {
 					if (row_group->start >= max_row) {
 						row_group = nullptr;
@@ -204,7 +204,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 		if (result.size() > 0) {
 			return true;
 		} else {
-			row_group = row_groups->GetNextSegment(l, row_group);
+			row_group = row_groups->GetNextSegment(l, row_group.get());
 			if (row_group) {
 				row_group->InitializeScan(*this);
 			}
@@ -219,7 +219,7 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
 		if (result.size() > 0) {
 			return true;
 		} else {
-			row_group = row_groups->GetNextSegment(row_group);
+			row_group = row_groups->GetNextSegment(row_group.get());
 			if (row_group) {
 				row_group->InitializeScan(*this);
 			}

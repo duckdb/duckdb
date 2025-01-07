@@ -13,7 +13,7 @@ ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_
 	}
 }
 
-FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
+FilterPropagateResult ConstantFilter::CheckStatistics(const BaseStatistics &stats) {
 	if (!stats.CanHaveNoNull()) {
 		// no non-null values are possible: always false
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;

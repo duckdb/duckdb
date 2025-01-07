@@ -99,6 +99,9 @@ idx_t RowGroup::GetRowGroupSize() const {
 	return collection.get().GetRowGroupSize();
 }
 
+const ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
+	return GetColumn(c.GetPrimaryIndex());
+}
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) {
 	return GetColumn(c.GetPrimaryIndex());
 }
@@ -137,10 +140,47 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	return *columns[c];
 }
 
-BlockManager &RowGroup::GetBlockManager() {
+const ColumnData &RowGroup::GetColumn(storage_t c) const {
+	D_ASSERT(c < columns.size());
+	if (!is_loaded) {
+		// not being lazy loaded
+		D_ASSERT(columns[c]);
+		return *columns[c];
+	}
+	if (is_loaded[c]) {
+		D_ASSERT(columns[c]);
+		return *columns[c];
+	}
+	lock_guard<mutex> l(row_group_lock);
+	if (columns[c]) {
+		D_ASSERT(is_loaded[c]);
+		return *columns[c];
+	}
+	if (column_pointers.size() != columns.size()) {
+		throw InternalException("Lazy loading a column but the pointer was not set");
+	}
+	auto &metadata_manager = GetCollection().GetMetadataManager();
+	auto &types = GetCollection().GetTypes();
+	auto &block_pointer = column_pointers[c];
+	MetadataReader column_data_reader(metadata_manager, block_pointer);
+	this->columns[c] =
+	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c]);
+	is_loaded[c] = true;
+	if (this->columns[c]->count != this->count) {
+		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
+		                        "not match count of row group %llu",
+		                        c, start, this->columns[c]->count.load(), this->count.load());
+	}
+	return *columns[c];
+}
+
+BlockManager &RowGroup::GetBlockManager() const {
 	return GetCollection().GetBlockManager();
 }
 DataTableInfo &RowGroup::GetTableInfo() {
+	return GetCollection().GetTableInfo();
+}
+const DataTableInfo &RowGroup::GetTableInfo() const {
 	return GetCollection().GetTableInfo();
 }
 
@@ -219,7 +259,7 @@ void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 	}
 }
 
-bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset) {
+bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset) const {
 	auto &column_ids = state.GetColumnIds();
 	auto &filters = state.GetFilterInfo();
 	if (!CheckZonemap(filters)) {
@@ -249,7 +289,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 	return true;
 }
 
-bool RowGroup::InitializeScan(CollectionScanState &state) {
+bool RowGroup::InitializeScan(CollectionScanState &state) const {
 	auto &column_ids = state.GetColumnIds();
 	auto &filters = state.GetFilterInfo();
 	if (!CheckZonemap(filters)) {
@@ -389,7 +429,7 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 	GetColumn(column_idx).CommitDropColumn();
 }
 
-void RowGroup::NextVector(CollectionScanState &state) {
+void RowGroup::NextVector(CollectionScanState &state) const {
 	state.vector_index++;
 	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -410,7 +450,7 @@ static FilterPropagateResult CheckRowIdFilter(TableFilter &filter, idx_t beg_row
 	return filter.CheckStatistics(dummy_stats);
 }
 
-bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
+bool RowGroup::CheckZonemap(ScanFilterInfo &filters) const {
 	auto &filter_list = filters.GetFilterList();
 	// new row group - label all filters as up for grabs again
 	filters.CheckAllFilters();
@@ -443,7 +483,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 	return true;
 }
 
-bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
+bool RowGroup::CheckZonemapSegments(CollectionScanState &state) const {
 	auto &filters = state.GetFilterInfo();
 	for (auto &entry : filters.GetFilterList()) {
 		if (entry.IsAlwaysTrue()) {
@@ -499,7 +539,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 }
 
 template <TableScanType TYPE>
-void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
+void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result) const {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
 	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	const auto &column_ids = state.GetColumnIds();
@@ -712,11 +752,11 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 	}
 }
 
-void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
+void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result) const {
 	TemplatedScan<TableScanType::TABLE_SCAN_REGULAR>(transaction, state, result);
 }
 
-void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) {
+void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) const {
 	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
 	transaction_t start_ts;
@@ -745,7 +785,7 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	}
 }
 
-optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
+optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() const {
 	if (!HasUnloadedDeletes()) {
 		// deletes are loaded - return the version info
 		return version_info;
@@ -763,7 +803,7 @@ optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
 	return version_info;
 }
 
-void RowGroup::SetVersionInfo(shared_ptr<RowVersionManager> version) {
+void RowGroup::SetVersionInfo(shared_ptr<RowVersionManager> version) const {
 	owned_version_info = std::move(version);
 	version_info = owned_version_info.get();
 }
@@ -797,7 +837,7 @@ RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
-                             idx_t max_count) {
+                             idx_t max_count) const {
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return max_count;
@@ -806,7 +846,7 @@ idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, Sele
 }
 
 idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
-                                      SelectionVector &sel_vector, idx_t max_count) {
+                                      SelectionVector &sel_vector, idx_t max_count) const {
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return max_count;

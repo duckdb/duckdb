@@ -14,7 +14,7 @@ WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
 	D_ASSERT(Exception::UncaughtException() || offset == 0);
 }
 
-shared_ptr<BlockHandle> UncompressedStringSegmentState::GetHandle(BlockManager &manager, block_id_t block_id) {
+shared_ptr<BlockHandle> UncompressedStringSegmentState::GetHandle(BlockManager &manager, block_id_t block_id) const {
 	lock_guard<mutex> lock(block_lock);
 	auto entry = handles.find(block_id);
 	if (entry != handles.end()) {

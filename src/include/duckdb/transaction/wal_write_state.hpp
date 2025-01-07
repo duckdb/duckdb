@@ -31,7 +31,7 @@ public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
 
 private:
-	void SwitchTable(DataTableInfo *table, UndoFlags new_op);
+	void SwitchTable(const DataTableInfo *table, UndoFlags new_op);
 
 	void WriteCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data);
 	void WriteDelete(DeleteInfo &info);
@@ -42,7 +42,7 @@ private:
 	WriteAheadLog &log;
 	optional_ptr<StorageCommitState> commit_state;
 
-	optional_ptr<DataTableInfo> current_table_info;
+	optional_ptr<const DataTableInfo> current_table_info;
 
 	unique_ptr<DataChunk> delete_chunk;
 	unique_ptr<DataChunk> update_chunk;

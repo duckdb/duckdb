@@ -38,7 +38,7 @@ public:
 
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
-	SegmentLock Lock() {
+	SegmentLock Lock() const {
 		return SegmentLock(node_lock);
 	}
 
@@ -47,17 +47,29 @@ public:
 	}
 
 	//! Gets a pointer to the first segment. Useful for scans.
-	T *GetRootSegment() {
+	const T *GetRootSegment() const {
 		auto l = Lock();
 		return GetRootSegment(l);
 	}
 
+	const T *GetRootSegment(SegmentLock &l) const {
+		if (nodes.empty()) {
+			LoadNextSegment(l);
+		}
+		return GetRootSegmentInternal();
+	}
+
+	T *GetRootSegment() {
+		auto l = Lock();
+		return GetRootSegment(l);
+	}
 	T *GetRootSegment(SegmentLock &l) {
 		if (nodes.empty()) {
 			LoadNextSegment(l);
 		}
 		return GetRootSegmentInternal();
 	}
+
 	//! Obtains ownership of the data of the segment tree
 	vector<SegmentNode<T>> MoveSegments(SegmentLock &l) {
 		LoadAllSegments(l);
@@ -89,25 +101,48 @@ public:
 		auto l = Lock();
 		return GetSegmentByIndex(l, index);
 	}
-	T *GetSegmentByIndex(SegmentLock &l, int64_t index) {
+
+	optional_idx GetSegmentIndex(SegmentLock &l, int64_t index) const {
 		if (index < 0) {
 			// load all segments
 			LoadAllSegments(l);
 			index += nodes.size();
 			if (index < 0) {
-				return nullptr;
+				return optional_idx();
 			}
-			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
+			return UnsafeNumericCast<idx_t>(index);
 		} else {
 			// lazily load segments until we reach the specific segment
 			while (idx_t(index) >= nodes.size() && LoadNextSegment(l)) {
 			}
 			if (idx_t(index) >= nodes.size()) {
-				return nullptr;
+				return optional_idx();
 			}
-			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
+			return UnsafeNumericCast<idx_t>(index);
 		}
 	}
+
+	T *GetSegmentByIndex(SegmentLock &l, int64_t index) {
+		auto node_index = GetSegmentIndex(l, index);
+		if (!node_index.IsValid()) {
+			return nullptr;
+		}
+		return nodes[node_index.GetIndex()].node.get();
+	}
+
+	const T *GetSegmentByIndex(int64_t index) const {
+		auto l = Lock();
+		return GetSegmentByIndex(l, index);
+	}
+
+	const T *GetSegmentByIndex(SegmentLock &l, int64_t index) const {
+		auto node_index = GetSegmentIndex(l, index);
+		if (!node_index.IsValid()) {
+			return nullptr;
+		}
+		return nodes[node_index.GetIndex()].node.get();
+	}
+
 	//! Gets the next segment
 	T *GetNextSegment(T *segment) {
 		if (!SUPPORTS_LAZY_LOADING) {
@@ -119,7 +154,29 @@ public:
 		auto l = Lock();
 		return GetNextSegment(l, segment);
 	}
+
 	T *GetNextSegment(SegmentLock &l, T *segment) {
+		if (!segment) {
+			return nullptr;
+		}
+#ifdef DEBUG
+		D_ASSERT(nodes[segment->index].node.get() == segment);
+#endif
+		return GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment->index + 1));
+	}
+
+	const T *GetNextSegment(const T *segment) const {
+		if (!SUPPORTS_LAZY_LOADING) {
+			return segment->Next();
+		}
+		if (finished_loading) {
+			return segment->Next();
+		}
+		auto l = Lock();
+		return GetNextSegment(l, segment);
+	}
+
+	const T *GetNextSegment(SegmentLock &l, const T *segment) const {
 		if (!segment) {
 			return nullptr;
 		}
@@ -138,27 +195,12 @@ public:
 		return nodes.back().node.get();
 	}
 	//! Gets a pointer to a specific column segment for the given row
-	T *GetSegment(idx_t row_number) {
+	T *GetSegment(idx_t row_number) const {
 		auto l = Lock();
 		return GetSegment(l, row_number);
 	}
-	T *GetSegment(SegmentLock &l, idx_t row_number) {
+	T *GetSegment(SegmentLock &l, idx_t row_number) const {
 		return nodes[GetSegmentIndex(l, row_number)].node.get();
-	}
-
-	//! Append a column segment to the tree
-	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment) {
-		D_ASSERT(segment);
-		// add the node to the list of nodes
-		if (!nodes.empty()) {
-			nodes.back().node->next = segment.get();
-		}
-		SegmentNode<T> node;
-		segment->index = nodes.size();
-		segment->next = nullptr;
-		node.row_start = segment->start;
-		node.node = std::move(segment);
-		nodes.push_back(std::move(node));
 	}
 	void AppendSegment(unique_ptr<T> segment) {
 		auto l = Lock();
@@ -169,11 +211,11 @@ public:
 		AppendSegmentInternal(l, std::move(segment));
 	}
 	//! Debug method, check whether the segment is in the segment tree
-	bool HasSegment(T *segment) {
+	bool HasSegment(const T *segment) const {
 		auto l = Lock();
 		return HasSegment(l, segment);
 	}
-	bool HasSegment(SegmentLock &, T *segment) {
+	bool HasSegment(SegmentLock &, const T *segment) const {
 		return segment->index < nodes.size() && nodes[segment->index].node.get() == segment;
 	}
 
@@ -187,7 +229,7 @@ public:
 	}
 
 	//! Get the segment index of the column segment for the given row
-	idx_t GetSegmentIndex(SegmentLock &l, idx_t row_number) {
+	idx_t GetSegmentIndex(SegmentLock &l, idx_t row_number) const {
 		idx_t segment_index;
 		if (TryGetSegmentIndex(l, row_number, segment_index)) {
 			return segment_index;
@@ -201,7 +243,7 @@ public:
 		throw InternalException("Could not find node in column segment tree!\n%s%s", error, Exception::GetStackTrace());
 	}
 
-	bool TryGetSegmentIndex(SegmentLock &l, idx_t row_number, idx_t &result) {
+	bool TryGetSegmentIndex(SegmentLock &l, idx_t row_number, idx_t &result) const {
 		// load segments until the row number is within bounds
 		while (nodes.empty() || (row_number >= (nodes.back().row_start + nodes.back().node->count))) {
 			if (!LoadNextSegment(l)) {
@@ -267,21 +309,37 @@ public:
 	}
 
 protected:
-	atomic<bool> finished_loading;
-
+	mutable atomic<bool> finished_loading;
 	//! Load the next segment - only used when lazily loading
-	virtual unique_ptr<T> LoadSegment() {
+	virtual unique_ptr<T> LoadSegment() const {
 		return nullptr;
 	}
 
 private:
 	//! The nodes in the tree, can be binary searched
-	vector<SegmentNode<T>> nodes;
+	mutable vector<SegmentNode<T>> nodes;
 	//! Lock to access or modify the nodes
-	mutex node_lock;
+	mutable mutex node_lock;
 
 private:
+	//! Append a column segment to the tree
+	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment) const {
+		D_ASSERT(segment);
+		// add the node to the list of nodes
+		if (!nodes.empty()) {
+			nodes.back().node->next = segment.get();
+		}
+		SegmentNode<T> node;
+		segment->index = nodes.size();
+		segment->next = nullptr;
+		node.row_start = segment->start;
+		node.node = std::move(segment);
+		nodes.push_back(std::move(node));
+	}
 	T *GetRootSegmentInternal() {
+		return nodes.empty() ? nullptr : nodes[0].node.get();
+	}
+	const T *GetRootSegmentInternal() const {
 		return nodes.empty() ? nullptr : nodes[0].node.get();
 	}
 
@@ -330,7 +388,7 @@ private:
 	};
 
 	//! Load the next segment, if there are any left to load
-	bool LoadNextSegment(SegmentLock &l) {
+	bool LoadNextSegment(SegmentLock &l) const {
 		if (!SUPPORTS_LAZY_LOADING) {
 			return false;
 		}
@@ -346,7 +404,7 @@ private:
 	}
 
 	//! Load all segments, if there are any left to load
-	void LoadAllSegments(SegmentLock &l) {
+	void LoadAllSegments(SegmentLock &l) const {
 		if (!SUPPORTS_LAZY_LOADING) {
 			return;
 		}

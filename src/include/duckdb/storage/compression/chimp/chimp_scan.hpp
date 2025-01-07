@@ -137,7 +137,7 @@ struct ChimpScanState : public SegmentScanState {
 public:
 	using CHIMP_TYPE = typename ChimpType<T>::TYPE;
 
-	explicit ChimpScanState(ColumnSegment &segment) : segment(segment), segment_count(segment.count) {
+	explicit ChimpScanState(const ColumnSegment &segment) : segment(segment), segment_count(segment.count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
@@ -155,7 +155,7 @@ public:
 	idx_t total_value_count = 0;
 	ChimpGroupState<CHIMP_TYPE> group_state;
 
-	ColumnSegment &segment;
+	const ColumnSegment &segment;
 	idx_t segment_count;
 
 	idx_t LeftInGroup() const {
@@ -239,7 +239,7 @@ public:
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
 	// TODO: use the metadata to determine if we can skip a group
-	void Skip(ColumnSegment &segment, idx_t skip_count) {
+	void Skip(const ColumnSegment &segment, idx_t skip_count) {
 		using INTERNAL_TYPE = typename ChimpType<T>::TYPE;
 		INTERNAL_TYPE buffer[ChimpPrimitives::CHIMP_SEQUENCE_SIZE];
 
@@ -252,7 +252,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> ChimpInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ChimpInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, ChimpScanState<T>>(segment);
 	return result;
 }
@@ -261,7 +261,7 @@ unique_ptr<SegmentScanState> ChimpInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template <class T>
-void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void ChimpScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                       idx_t result_offset) {
 	using INTERNAL_TYPE = typename ChimpType<T>::TYPE;
 	auto &scan_state = state.scan_state->Cast<ChimpScanState<T>>();
@@ -280,13 +280,13 @@ void ChimpScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 }
 
 template <class T>
-void ChimpSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+void ChimpSkip(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	auto &scan_state = state.scan_state->Cast<ChimpScanState<T>>();
 	scan_state.Skip(segment, skip_count);
 }
 
 template <class T>
-void ChimpScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void ChimpScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	ChimpScanPartial<T>(segment, state, scan_count, result, 0);
 }
 

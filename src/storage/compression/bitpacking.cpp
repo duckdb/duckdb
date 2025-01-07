@@ -626,7 +626,7 @@ static T DeltaDecode(T *data, T previous_value, const size_t size) {
 template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
-	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
+	explicit BitpackingScanState(const ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 		auto data_ptr = handle.Ptr();
@@ -641,7 +641,7 @@ public:
 	}
 
 	BufferHandle handle;
-	ColumnSegment &current_segment;
+	const ColumnSegment &current_segment;
 
 	T decompression_buffer[BITPACKING_METADATA_GROUP_SIZE];
 
@@ -708,7 +708,7 @@ public:
 		}
 	}
 
-	void Skip(ColumnSegment &segment, idx_t skip_count) {
+	void Skip(const ColumnSegment &segment, idx_t skip_count) {
 		bool skip_sign_extend = true;
 
 		idx_t skipped = 0;
@@ -779,7 +779,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> BitpackingInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq<BitpackingScanState<T>>(segment);
 	return std::move(result);
 }
@@ -788,7 +788,7 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template <class T, class T_S = typename MakeSigned<T>::type, class T_U = typename MakeUnsigned<T>::type>
-void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void BitpackingScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<BitpackingScanState<T>>();
 
@@ -879,7 +879,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 }
 
 template <class T>
-void BitpackingScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void BitpackingScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	BitpackingScanPartial<T>(segment, state, scan_count, result, 0);
 }
 
@@ -887,7 +887,7 @@ void BitpackingScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 // Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+void BitpackingFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                         idx_t result_idx) {
 	BitpackingScanState<T> scan_state(segment);
 	scan_state.Skip(segment, NumericCast<idx_t>(row_id));
@@ -944,7 +944,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 }
 
 template <class T>
-void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+void BitpackingSkip(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
 	scan_state.Skip(segment, skip_count);
 }
