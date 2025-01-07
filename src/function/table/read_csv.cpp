@@ -156,7 +156,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		                                                                      *multi_file_list, *result, options);
 		if (!options.file_options.cache_union_readers) {
 			// Have to initialize first reader if we're not caching union readers
-			auto reader = make_uniq<CSVFileScan>(context, multi_file_list->GetFirstFile(), options);
+			unique_ptr<CSVFileScan> reader;
+			reader = make_uniq<CSVFileScan>(context, multi_file_list->GetFirstFile(), options);
 			result->Initialize(std::move(reader));
 		}
 		if (result->union_readers.size() > 1) {

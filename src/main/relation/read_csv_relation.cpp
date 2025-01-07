@@ -55,7 +55,8 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 		multi_file_reader->BindUnionReader<CSVFileScan>(*context, types, names, multi_file_list, *result, csv_options);
 		if (!csv_options.file_options.cache_union_readers) {
 			// Have to initialize first reader if we're not caching union readers
-			auto reader = make_uniq<CSVFileScan>(*context, multi_file_list.GetFirstFile(), csv_options);
+			unique_ptr<CSVFileScan> reader;
+			reader = make_uniq<CSVFileScan>(*context, multi_file_list.GetFirstFile(), csv_options);
 			result->Initialize(std::move(reader));
 		}
 		if (result->union_readers.size() > 1) {
