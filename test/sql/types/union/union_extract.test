@@ -133,3 +133,9 @@ EXECUTE p1('c');
 NULL
 text
 NULL
+
+
+query III
+from (values('asdf'::UNION(a INTEGER, b VARCHAR, c FLOAT))) v(c) select c.*;
+----
+NULL	asdf	NULL
