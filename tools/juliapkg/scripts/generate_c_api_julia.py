@@ -852,7 +852,7 @@ def configure_parser():
     parser.add_argument(
         "--use-original-order",
         action="store_true",
-        default=True,
+        default=False,
         help="Use the original order of the functions from the old API file. New functions will be appended at the end.",
     )
 
