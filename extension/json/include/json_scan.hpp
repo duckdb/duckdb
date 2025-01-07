@@ -42,6 +42,19 @@ public:
 
 struct DateFormatMap {
 public:
+	DateFormatMap() {
+	}
+
+	DateFormatMap(DateFormatMap &&other) noexcept {
+		candidate_formats = other.candidate_formats;
+	}
+
+	DateFormatMap &operator=(DateFormatMap &&other) noexcept {
+		candidate_formats = other.candidate_formats;
+		return *this;
+	}
+
+public:
 	void Initialize(const type_id_map_t<vector<const char *>> &format_templates) {
 		for (const auto &entry : format_templates) {
 			const auto &type = entry.first;
@@ -49,6 +62,12 @@ public:
 				AddFormat(type, format_string);
 			}
 		}
+	}
+
+	DateFormatMap Copy() const {
+		DateFormatMap result;
+		result.candidate_formats = candidate_formats;
+		return result;
 	}
 
 	void AddFormat(LogicalTypeId type, const string &format_string) {
@@ -59,6 +78,7 @@ public:
 	}
 
 	bool HasFormats(LogicalTypeId type) const {
+		lock_guard<mutex> guard(lock);
 		return candidate_formats.find(type) != candidate_formats.end();
 	}
 
@@ -76,6 +96,9 @@ public:
 		D_ASSERT(candidate_formats.find(type) != candidate_formats.end());
 		return candidate_formats.find(type)->second.back();
 	}
+
+public:
+	mutable mutex lock;
 
 private:
 	type_id_map_t<vector<StrpTimeFormat>> candidate_formats;
