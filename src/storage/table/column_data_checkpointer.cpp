@@ -274,8 +274,12 @@ void ColumnDataCheckpointer::DropSegments() {
 	}
 }
 
-static bool ValidityCoveredByBasedata(vector<CheckpointAnalyzeResult> &result) {
+bool ColumnDataCheckpointer::ValidityCoveredByBasedata(vector<CheckpointAnalyzeResult> &result) {
 	if (result.size() != 2) {
+		return false;
+	}
+	if (!has_changes[0]) {
+		// The base data had no changes so it will not be rewritten
 		return false;
 	}
 	auto &base = result[0];
