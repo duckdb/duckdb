@@ -133,6 +133,13 @@ void WindowNaiveState::Finalize(WindowAggregatorGlobalState &gastate, Collection
 	//	Set up the argument ORDER BY scanner if needed
 	if (!aggregator.arg_order_idx.empty() && !arg_orderer) {
 		arg_orderer = make_uniq<WindowCursor>(*collection, aggregator.arg_order_idx);
+		orderby_sort.Initialize(BufferAllocator::Get(gastate.context), arg_orderer->chunk.GetTypes());
+	}
+
+	// Initialise the chunks
+	const auto types = cursor->chunk.GetTypes();
+	if (leaves.ColumnCount() == 0 && !types.empty()) {
+		leaves.Initialize(BufferAllocator::Get(gastate.context), types);
 	}
 }
 
@@ -205,10 +212,6 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 	auto &filter_mask = gsink.filter_mask;
 	const auto types = cursor->chunk.GetTypes();
 
-	if (leaves.ColumnCount() == 0 && !types.empty()) {
-		leaves.Initialize(Allocator::DefaultAllocator(), types);
-	}
-
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
 
@@ -225,10 +228,6 @@ void WindowNaiveState::Evaluate(const WindowAggregatorGlobalState &gsink, const 
 
 		// 	Sort the input rows by the argument
 		if (arg_orderer) {
-			if (!orderby_sort.ColumnCount()) {
-				orderby_sort.Initialize(Allocator::DefaultAllocator(), arg_orderer->chunk.GetTypes());
-			}
-
 			auto &context = aggregator.executor.context;
 			auto &orders = aggregator.wexpr.arg_orders;
 			auto &buffer_manager = BufferManager::GetBufferManager(context);
