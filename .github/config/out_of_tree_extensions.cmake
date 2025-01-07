@@ -74,20 +74,20 @@ duckdb_extension_load(excel
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
-#if (NOT WIN32)
-#    set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
-#else ()
-#    set(LOAD_ICEBERG_TESTS "")
-#endif()
-#
-#if (NOT MINGW AND NOT ${WASM_ENABLED})
-#    duckdb_extension_load(iceberg
-#            ${LOAD_ICEBERG_TESTS}
-#            GIT_URL https://github.com/duckdb/duckdb_iceberg
-#            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
-#            APPLY_PATCHES
-#            )
-#endif()
+if (NOT WIN32)
+    set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
+else ()
+    set(LOAD_ICEBERG_TESTS "")
+endif()
+
+if (NOT MINGW AND NOT ${WASM_ENABLED})
+    duckdb_extension_load(iceberg
+            ${LOAD_ICEBERG_TESTS}
+            GIT_URL https://github.com/duckdb/duckdb_iceberg
+            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
+            APPLY_PATCHES
+            )
+endif()
 
 ################# INET
 duckdb_extension_load(inet
