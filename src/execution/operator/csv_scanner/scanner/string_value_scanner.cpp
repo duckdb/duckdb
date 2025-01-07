@@ -331,8 +331,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		} else {
 			idx_t pos;
 			bool special;
-			success = Date::TryConvertDate(
-			    value_ptr, size, pos, static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
+			success = Date::TryConvertDate(value_ptr, size, pos,
+			                               static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special,
+			                               false) == DateCastResult::SUCCESS;
 		}
 		break;
 	}

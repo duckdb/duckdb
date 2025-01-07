@@ -258,8 +258,14 @@ struct ICUStrptime : public ICUDateFunc {
 			    const auto len = input.GetSize();
 			    string_t tz(nullptr, 0);
 			    bool has_offset = false;
-			    if (!Timestamp::TryConvertTimestampTZ(str, len, result, has_offset, tz)) {
-				    auto msg = Timestamp::ConversionError(string(str, len));
+			    auto success = Timestamp::TryConvertTimestampTZ(str, len, result, has_offset, tz);
+			    if (success != TimestampCastResult::SUCCESS) {
+				    string msg;
+				    if (success == TimestampCastResult::ERROR_RANGE) {
+					    msg = Timestamp::RangeError(string(str, len));
+				    } else {
+					    msg = Timestamp::FormatError(string(str, len));
+				    }
 				    HandleCastError::AssignError(msg, parameters);
 				    mask.SetInvalid(idx);
 			    } else if (!has_offset) {

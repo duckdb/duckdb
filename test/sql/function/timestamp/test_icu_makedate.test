@@ -394,3 +394,8 @@ SELECT make_timestamptz(
 FROM all_types a;
 ----
 Overflow in subtraction
+
+statement error
+SELECT make_timestamptz(294248, 1, 10, 4, 0, 54.775807);
+----
+Conversion Error: ICU date overflows timestamp range

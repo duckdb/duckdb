@@ -64,25 +64,31 @@ timestamp_t &timestamp_t::operator-=(const int64_t &delta) {
 	return *this;
 }
 
-bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset, string_t &tz,
-                                      optional_ptr<int32_t> nanos) {
+TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
+                                                     string_t &tz, optional_ptr<int32_t> nanos) {
 	idx_t pos;
 	date_t date;
 	dtime_t time;
 	has_offset = false;
-	if (!Date::TryConvertDate(str, len, pos, date, has_offset)) {
-		return false;
+	switch (Date::TryConvertDate(str, len, pos, date, has_offset)) {
+	case DateCastResult::ERROR_INCORRECT_FORMAT:
+		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
+	case DateCastResult::ERROR_RANGE:
+		return TimestampCastResult::ERROR_RANGE;
+	default:
+		break;
 	}
 	if (pos == len) {
 		// no time: only a date or special
 		if (date == date_t::infinity()) {
 			result = timestamp_t::infinity();
-			return true;
+			return TimestampCastResult::SUCCESS;
 		} else if (date == date_t::ninfinity()) {
 			result = timestamp_t::ninfinity();
-			return true;
+			return TimestampCastResult::SUCCESS;
 		}
-		return Timestamp::TryFromDatetime(date, dtime_t(0), result);
+		return Timestamp::TryFromDatetime(date, dtime_t(0), result) ? TimestampCastResult::SUCCESS
+		                                                            : TimestampCastResult::ERROR_RANGE;
 	}
 	// try to parse a time field
 	if (str[pos] == ' ' || str[pos] == 'T') {
@@ -93,15 +99,15 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 	// operation. Note that we can't pass strict== true here because we
 	// want to process any suffix.
 	if (!Time::TryConvertInterval(str + pos, len - pos, time_pos, time, false, nanos)) {
-		return false;
+		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	//	We parsed an interval, so make sure it is in range.
 	if (time.micros > Interval::MICROS_PER_DAY) {
-		return false;
+		return TimestampCastResult::ERROR_RANGE;
 	}
 	pos += time_pos;
 	if (!Timestamp::TryFromDatetime(date, time, result)) {
-		return false;
+		return TimestampCastResult::ERROR_RANGE;
 	}
 	if (pos < len) {
 		// skip a "Z" at the end (as per the ISO8601 specs)
@@ -112,13 +118,13 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 		} else if (Timestamp::TryParseUTCOffset(str, pos, len, hour_offset, minute_offset)) {
 			const int64_t delta = hour_offset * Interval::MICROS_PER_HOUR + minute_offset * Interval::MICROS_PER_MINUTE;
 			if (!TrySubtractOperator::Operation(result.value, delta, result.value)) {
-				return false;
+				return TimestampCastResult::ERROR_RANGE;
 			}
 			has_offset = true;
 		} else {
 			// Parse a time zone: / [A-Za-z0-9/_]+/
 			if (str[pos++] != ' ') {
-				return false;
+				return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
 			}
 			auto tz_name = str + pos;
 			for (; pos < len && CharacterIsTimeZone(str[pos]); ++pos) {
@@ -136,10 +142,10 @@ bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &r
 			pos++;
 		}
 		if (pos < len) {
-			return false;
+			return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 		}
 	}
-	return true;
+	return TimestampCastResult::SUCCESS;
 }
 
 TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
@@ -148,8 +154,8 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 	bool has_offset = false;
 	// We don't understand TZ without an extension, so fail if one was provided.
 	auto success = TryConvertTimestampTZ(str, len, result, has_offset, tz, nanos);
-	if (!success) {
-		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
+	if (success != TimestampCastResult::SUCCESS) {
+		return success;
 	}
 	if (tz.GetSize() == 0) {
 		// no timezone provided - success!
@@ -191,8 +197,8 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 	return TimestampCastResult::SUCCESS;
 }
 
-string Timestamp::ConversionError(const string &str) {
-	return StringUtil::Format("timestamp field value out of range: \"%s\", "
+string Timestamp::FormatError(const string &str) {
+	return StringUtil::Format("invalid timestamp field format: \"%s\", "
 	                          "expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])",
 	                          str);
 }
@@ -203,25 +209,35 @@ string Timestamp::UnsupportedTimezoneError(const string &str) {
 	                          str);
 }
 
-string Timestamp::ConversionError(string_t str) {
-	return Timestamp::ConversionError(str.GetString());
+string Timestamp::RangeError(const string &str) {
+	return StringUtil::Format("timestamp field value out of range: \"%s\"", str);
+}
+
+string Timestamp::FormatError(string_t str) {
+	return Timestamp::FormatError(str.GetString());
 }
 
 string Timestamp::UnsupportedTimezoneError(string_t str) {
 	return Timestamp::UnsupportedTimezoneError(str.GetString());
 }
 
+string Timestamp::RangeError(string_t str) {
+	return Timestamp::RangeError(str.GetString());
+}
+
 timestamp_t Timestamp::FromCString(const char *str, idx_t len, optional_ptr<int32_t> nanos) {
 	timestamp_t result;
-	auto cast_result = Timestamp::TryConvertTimestamp(str, len, result, nanos);
-	if (cast_result == TimestampCastResult::SUCCESS) {
-		return result;
+	switch (Timestamp::TryConvertTimestamp(str, len, result, nanos)) {
+	case TimestampCastResult::SUCCESS:
+		break;
+	case TimestampCastResult::ERROR_NON_UTC_TIMEZONE:
+		throw ConversionException(UnsupportedTimezoneError(string(str, len)));
+	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
+		throw ConversionException(FormatError(string(str, len)));
+	case TimestampCastResult::ERROR_RANGE:
+		throw ConversionException(RangeError(string(str, len)));
 	}
-	if (cast_result == TimestampCastResult::ERROR_NON_UTC_TIMEZONE) {
-		throw ConversionException(Timestamp::UnsupportedTimezoneError(string(str, len)));
-	} else {
-		throw ConversionException(Timestamp::ConversionError(string(str, len)));
-	}
+	return result;
 }
 
 bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, int &minute_offset) {
@@ -334,7 +350,7 @@ bool Timestamp::TryFromDatetime(date_t date, dtime_tz_t timetz, timestamp_t &res
 timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
 	timestamp_t result;
 	if (!TryFromDatetime(date, time, result)) {
-		throw ConversionException("Overflow exception in date/time -> timestamp conversion");
+		throw ConversionException("Date and time not in timestamp range");
 	}
 	return result;
 }
