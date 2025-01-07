@@ -47,7 +47,6 @@ public:
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	StringHeap heap;
 	string_map_t<uint32_t> current_string_map;
 	vector<uint32_t> index_buffer;
 	vector<uint32_t> selection_buffer;
