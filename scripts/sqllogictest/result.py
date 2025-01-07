@@ -332,9 +332,9 @@ class QueryResult:
                 hash_compare_error = values[0] != hash_value
 
             if hash_compare_error:
-                expected_result = self.result_label_map.get(query_label)
-                logger.wrong_result_hash(expected_result, self)
-                self.fail_query(query)
+                expected_result = runner.result_label_map.get(query_label)
+                # logger.wrong_result_hash(expected_result, self)
+                context.fail(query)
 
             assert not hash_compare_error
 
