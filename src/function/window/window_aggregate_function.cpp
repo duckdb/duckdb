@@ -26,9 +26,9 @@ public:
 	const Expression *filter_ref;
 };
 
-static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &wexpr) {
+static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &wexpr, ClientContext &context) {
 	// Remove redundant/irrelevant modifiers (they can be serious performance cliffs)
-	if (wexpr.aggregate) {
+	if (wexpr.aggregate && ClientConfig::GetConfig(context).enable_optimizer) {
 		const auto &aggr = wexpr.aggregate;
 		auto &arg_orders = wexpr.arg_orders;
 		if (aggr->distinct_dependent != AggregateDistinctDependent::DISTINCT_DEPENDENT) {
@@ -50,7 +50,7 @@ static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &w
 
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context,
                                                  WindowSharedExpressions &shared, WindowAggregationMode mode)
-    : WindowExecutor(SimplifyWindowedAggregate(wexpr), context, shared), mode(mode) {
+    : WindowExecutor(SimplifyWindowedAggregate(wexpr, context), context, shared), mode(mode) {
 
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
 	if (!ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {

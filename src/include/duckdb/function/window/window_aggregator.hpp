@@ -143,7 +143,7 @@ public:
 class WindowAggregatorGlobalState : public WindowAggregatorState {
 public:
 	WindowAggregatorGlobalState(ClientContext &context, const WindowAggregator &aggregator_p, idx_t group_count)
-	    : aggregator(aggregator_p), aggr(aggregator.wexpr), locals(0), finalized(0) {
+	    : context(context), aggregator(aggregator_p), aggr(aggregator.wexpr), locals(0), finalized(0) {
 
 		if (aggr.filter) {
 			// 	Start with all invalid and set the ones that pass
@@ -152,6 +152,9 @@ public:
 			filter_mask.InitializeEmpty(group_count);
 		}
 	}
+
+	//! The context we are in
+	ClientContext &context;
 
 	//! The aggregator data
 	const WindowAggregator &aggregator;
