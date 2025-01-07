@@ -49,6 +49,7 @@ public:
 	void WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result);
 	void UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
+	void InternalException(MaterializedQueryResult &result);
 	static void LoadDatabaseFail(const string &dbpath, const string &message);
 
 private:
