@@ -64,13 +64,13 @@ public:
 			data->file_name = scan_p->file_path;
 			data->options = scan_p->options;
 			data->names = scan_p->names;
-			data->types = scan_p->return_types;
+			data->types = scan_p->types;
 			data->reader = std::move(scan_p);
 		} else {
 			data->file_name = scan_p->file_path;
 			data->options = std::move(scan_p->options);
 			data->names = std::move(scan_p->names);
-			data->types = std::move(scan_p->return_types);
+			data->types = std::move(scan_p->types);
 		}
 		data->options.auto_detect = false;
 		return data;
@@ -97,7 +97,7 @@ public:
 	bool on_disk_file = true;
 
 	vector<string> names;
-	vector<LogicalType> return_types;
+	vector<LogicalType> types;
 	MultiFileReaderData reader_data;
 
 	vector<LogicalType> file_types;
