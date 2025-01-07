@@ -1,4 +1,4 @@
-# name: test/optimizer/joins/cross_join_and_unnest_dont_work.test
+# name: test/optimizer/joins/asof_join_adds_rows.test
 # description: In the join order optimizer queries need to have the correct bindings
 # group: [joins]
 
