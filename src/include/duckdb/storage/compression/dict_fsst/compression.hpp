@@ -29,10 +29,10 @@ public:
 public:
 	void CreateEmptySegment(idx_t row_start);
 	void Verify() override;
-	bool LookupString(string_t str) override;
+	optional_idx LookupString(string_t str) override;
 	void AddNewString(string_t str) override;
 	void AddNull() override;
-	void AddLastLookup() override;
+	void AddLookup(uint32_t lookup_result) override;
 	bool HasRoomForString(bool new_string, idx_t string_size) override;
 	void Flush(bool final = false) override;
 	idx_t Finalize();
@@ -54,9 +54,6 @@ public:
 
 	bitpacking_width_t current_width = 0;
 	bitpacking_width_t next_width = 0;
-
-	// Result of latest LookupString call
-	uint32_t latest_lookup_result;
 };
 
 } // namespace dict_fsst

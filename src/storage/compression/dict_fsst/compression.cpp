@@ -47,14 +47,14 @@ void DictFSSTCompressionCompressState::Verify() {
 	D_ASSERT(index_buffer.size() == current_string_map.size() + 1); // +1 is for null value
 }
 
-bool DictFSSTCompressionCompressState::LookupString(string_t str) {
+optional_idx DictFSSTCompressionCompressState::LookupString(string_t str) {
 	auto search = current_string_map.find(str);
 	auto has_result = search != current_string_map.end();
 
-	if (has_result) {
-		latest_lookup_result = search->second;
+	if (!has_result) {
+		return optional_idx();
 	}
-	return has_result;
+	return search->second;
 }
 
 void DictFSSTCompressionCompressState::AddNewString(string_t str) {
@@ -93,8 +93,8 @@ void DictFSSTCompressionCompressState::AddNull() {
 	current_segment->count++;
 }
 
-void DictFSSTCompressionCompressState::AddLastLookup() {
-	selection_buffer.push_back(latest_lookup_result);
+void DictFSSTCompressionCompressState::AddLookup(uint32_t lookup_result) {
+	selection_buffer.push_back(lookup_result);
 	current_segment->count++;
 }
 

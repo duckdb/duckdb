@@ -51,7 +51,7 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		idx_t string_size = 0;
-		bool new_string = false;
+		optional_idx lookup_result;
 		auto row_is_valid = vdata.validity.RowIsValid(idx);
 
 		if (row_is_valid) {
@@ -60,16 +60,17 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 				// Big strings not implemented for dictionary compression
 				return false;
 			}
-			new_string = !LookupString(data[idx]);
+			lookup_result = LookupString(data[idx]);
 		}
 
+		bool new_string = !lookup_result.IsValid();
 		bool fits = HasRoomForString(new_string, string_size);
 		if (!fits) {
 			// TODO: Check if the dictionary requires FSST encoding
 			Flush();
-			new_string = true;
+			lookup_result = optional_idx();
 
-			fits = HasRoomForString(new_string, string_size);
+			fits = HasRoomForString(true, string_size);
 			if (!fits) {
 				throw InternalException("Dictionary compression could not write to new segment");
 			}
@@ -77,10 +78,10 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 
 		if (!row_is_valid) {
 			AddNull();
-		} else if (new_string) {
-			AddNewString(data[idx]);
+		} else if (lookup_result.IsValid()) {
+			AddLookup(UnsafeNumericCast<uint32_t>(lookup_result.GetIndex()));
 		} else {
-			AddLastLookup();
+			AddNewString(data[idx]);
 		}
 
 		Verify();

@@ -47,9 +47,9 @@ protected:
 	// Should verify the State
 	virtual void Verify() = 0;
 	// Performs a lookup of str, storing the result internally
-	virtual bool LookupString(string_t str) = 0;
+	virtual optional_idx LookupString(string_t str) = 0;
 	// Add the most recently looked up str to compression state
-	virtual void AddLastLookup() = 0;
+	virtual void AddLookup(uint32_t lookup_result) = 0;
 	// Add string to the state that is known to not be seen yet
 	virtual void AddNewString(string_t str) = 0;
 	// Add a null value to the compression state
@@ -58,6 +58,10 @@ protected:
 	virtual bool HasRoomForString(bool new_string, idx_t string_size) = 0;
 	// Flush the segment to disk if compressing or reset the counters if analyzing
 	virtual void Flush(bool final = false) = 0;
+
+protected:
+	//! Whether the dictionary has been encoded with FSST
+	bool fsst_encoded = false;
 };
 
 } // namespace dict_fsst

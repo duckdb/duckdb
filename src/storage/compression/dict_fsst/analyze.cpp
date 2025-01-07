@@ -8,8 +8,8 @@ DictFSSTAnalyzeState::DictFSSTAnalyzeState(const CompressionInfo &info)
       current_dict_size(0), current_width(0), next_width(0) {
 }
 
-bool DictFSSTAnalyzeState::LookupString(string_t str) {
-	return current_set.count(str);
+optional_idx DictFSSTAnalyzeState::LookupString(string_t str) {
+	return current_set.count(str) ? 1 : optional_idx();
 }
 
 void DictFSSTAnalyzeState::AddNewString(string_t str) {
@@ -24,7 +24,7 @@ void DictFSSTAnalyzeState::AddNewString(string_t str) {
 	current_width = next_width;
 }
 
-void DictFSSTAnalyzeState::AddLastLookup() {
+void DictFSSTAnalyzeState::AddLookup(uint32_t) {
 	current_tuple_count++;
 }
 
