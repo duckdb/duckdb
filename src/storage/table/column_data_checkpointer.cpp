@@ -287,11 +287,28 @@ void ColumnDataCheckpointer::DropSegments() {
 	}
 }
 
+static bool ValidityCoveredByBasedata(vector<CheckpointAnalyzeResult> &result) {
+	if (result.size() != 2) {
+		return false;
+	}
+	auto &base = result[0];
+	D_ASSERT(base.function);
+	return base.function->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
+}
+
 void ColumnDataCheckpointer::WriteToDisk() {
 	DropSegments();
 
 	// Analyze the candidate functions to select one of them to use for compression
 	auto analyze_result = DetectBestCompressionMethod();
+	if (ValidityCoveredByBasedata(analyze_result)) {
+		D_ASSERT(analyze_result.size() == 2);
+		auto &validity = analyze_result[1];
+		auto &config = DBConfig::GetConfig(db);
+		// Override the function to the COMPRESSION_EMPTY
+		// turning the compression+final compress steps into a no-op, saving a single empty segment
+		validity.function = config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT);
+	}
 
 	// Initialize the compression for the selected function
 	D_ASSERT(analyze_result.size() == checkpoint_states.size());

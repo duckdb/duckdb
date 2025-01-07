@@ -9,18 +9,16 @@ namespace duckdb {
 
 class EmptyValidityCompression {
 public:
-	struct EmptyValidityAnalyzeState : public AnalyzeState {
-		explicit EmptyValidityAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
-		}
-		idx_t count = 0;
-		idx_t non_nulls = 0;
-	};
 	struct EmptyValidityCompressionState : public CompressionState {
 		explicit EmptyValidityCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 		    : CompressionState(info),
-		      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY)) {
+		      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY)),
+		      checkpoint_data(checkpoint_data) {
 		}
 		optional_ptr<CompressionFunction> function;
+		ColumnDataCheckpointData &checkpoint_data;
+		idx_t count = 0;
+		idx_t non_nulls = 0;
 	};
 	struct EmptyValiditySegmentScanState : public SegmentScanState {
 		EmptyValiditySegmentScanState() {
@@ -29,45 +27,40 @@ public:
 
 public:
 	static CompressionFunction CreateFunction() {
-		return CompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT, InitAnalyze, Analyze,
-		                           FinalAnalyze, InitCompression, Compress, FinalizeCompress, InitScan, Scan,
-		                           ScanPartial, FetchRow, Skip, InitSegment);
+		return CompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT, nullptr, nullptr, nullptr,
+		                           InitCompression, Compress, FinalizeCompress, InitScan, Scan, ScanPartial, FetchRow,
+		                           Skip, InitSegment);
 	}
 
 public:
-	static unique_ptr<AnalyzeState> InitAnalyze(ColumnData &col_data, PhysicalType type) {
-		CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
-		return make_uniq<EmptyValidityAnalyzeState>(info);
-	}
-	static bool Analyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-		auto &state = state_p.Cast<EmptyValidityAnalyzeState>();
-		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(count, format);
-		state.non_nulls += format.validity.CountValid(count);
-		state.count += count;
-		return true;
-	}
-	static idx_t FinalAnalyze(AnalyzeState &state_p) {
-		return 0;
-	}
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state_p) {
 		auto res = make_uniq<EmptyValidityCompressionState>(checkpoint_data, state_p->info);
-		auto &state = state_p->Cast<EmptyValidityAnalyzeState>();
+		return res;
+	}
+	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+		auto &state = state_p.Cast<EmptyValidityCompressionState>();
+		UnifiedVectorFormat format;
+		scan_vector.ToUnifiedFormat(count, format);
+		state.non_nulls += format.validity.CountValid(count);
+		state.count += count;
+	}
+	static void FinalizeCompress(CompressionState &state_p) {
+		auto &state = state_p.Cast<EmptyValidityCompressionState>();
+		auto &checkpoint_data = state.checkpoint_data;
 
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
-
 		auto row_start = checkpoint_data.GetRowGroup().start;
 
 		auto &info = state.info;
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *res->function, type, row_start,
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
 		compressed_segment->count = state.count;
 		if (state.non_nulls != state.count) {
 			compressed_segment->stats.statistics.SetHasNullFast();
 		}
-		if (state.non_nulls == 0) {
+		if (state.non_nulls != 0) {
 			compressed_segment->stats.statistics.SetHasNoNullFast();
 		}
 
@@ -76,14 +69,6 @@ public:
 
 		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		checkpoint_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);
-
-		return res;
-	}
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-		return;
-	}
-	static void FinalizeCompress(CompressionState &state_p) {
-		return;
 	}
 	static unique_ptr<SegmentScanState> InitScan(ColumnSegment &segment) {
 		return make_uniq<EmptyValiditySegmentScanState>();
