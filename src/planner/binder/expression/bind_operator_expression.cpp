@@ -13,7 +13,7 @@ namespace duckdb {
 
 LogicalType ExpressionBinder::ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
 	// NOT expression, cast child to BOOLEAN
-	D_ASSERT(children.size() != 1);
+	D_ASSERT(children.size() == 1);
 	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), LogicalType::BOOLEAN);
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
