@@ -124,6 +124,23 @@ void DictFSSTCompressionCompressState::Flush(bool final) {
 	}
 }
 
+void DictFSSTCompressionCompressState::ProcessStrings(UnifiedVectorFormat &input, idx_t count) {
+	if (!fsst_encoded) {
+		// No need to process anything
+		return;
+	}
+	throw NotImplementedException("FSST ENCODED PROCESS STRINGS");
+	// TODO: perform fsst encoding on the provided strings
+}
+
+const string_t &DictFSSTCompressionCompressState::GetString(const string_t *strings, idx_t index, idx_t raw_index) {
+	if (!fsst_encoded) {
+		return strings[index];
+	}
+	throw NotImplementedException("FSST ENCODED GET STRING");
+	// TODO: look up the encoded string given the 'raw_index'
+}
+
 idx_t DictFSSTCompressionCompressState::Finalize() {
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	auto handle = buffer_manager.Pin(current_segment->block);

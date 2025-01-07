@@ -48,19 +48,22 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	Verify();
 
+	ProcessStrings(vdata, count);
+
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		idx_t string_size = 0;
 		optional_idx lookup_result;
 		auto row_is_valid = vdata.validity.RowIsValid(idx);
 
+		auto &str = GetString(data, idx, i);
 		if (row_is_valid) {
-			string_size = data[idx].GetSize();
+			string_size = str.GetSize();
 			if (string_size >= StringUncompressed::GetStringBlockLimit(info.GetBlockSize())) {
 				// Big strings not implemented for dictionary compression
 				return false;
 			}
-			lookup_result = LookupString(data[idx]);
+			lookup_result = LookupString(str);
 		}
 
 		bool new_string = !lookup_result.IsValid();
@@ -81,7 +84,7 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		} else if (lookup_result.IsValid()) {
 			AddLookup(UnsafeNumericCast<uint32_t>(lookup_result.GetIndex()));
 		} else {
-			AddNewString(data[idx]);
+			AddNewString(str);
 		}
 
 		Verify();

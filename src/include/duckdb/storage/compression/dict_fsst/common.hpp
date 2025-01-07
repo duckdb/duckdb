@@ -58,6 +58,10 @@ protected:
 	virtual bool HasRoomForString(bool new_string, idx_t string_size) = 0;
 	// Flush the segment to disk if compressing or reset the counters if analyzing
 	virtual void Flush(bool final = false) = 0;
+	// Process the strings of the vector if necessary
+	virtual void ProcessStrings(UnifiedVectorFormat &input, idx_t count) = 0;
+	// Retrieve the string given the indices
+	virtual const string_t &GetString(const string_t *strings, idx_t index, idx_t raw_index) = 0;
 
 protected:
 	//! Whether the dictionary has been encoded with FSST

@@ -32,6 +32,14 @@ void DictFSSTAnalyzeState::AddNull() {
 	current_tuple_count++;
 }
 
+void DictFSSTAnalyzeState::ProcessStrings(UnifiedVectorFormat &input, idx_t count) {
+	return;
+}
+
+const string_t &DictFSSTAnalyzeState::GetString(const string_t *strings, idx_t index, idx_t raw_index) {
+	return strings[index];
+}
+
 bool DictFSSTAnalyzeState::HasRoomForString(bool new_string, idx_t string_size) {
 	if (!new_string) {
 		return DictFSSTCompression::HasEnoughSpace(current_tuple_count + 1, current_unique_count, current_dict_size,

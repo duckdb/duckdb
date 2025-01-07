@@ -35,6 +35,8 @@ public:
 	void AddLookup(uint32_t lookup_result) override;
 	bool HasRoomForString(bool new_string, idx_t string_size) override;
 	void Flush(bool final = false) override;
+	void ProcessStrings(UnifiedVectorFormat &input, idx_t count) override;
+	const string_t &GetString(const string_t *strings, idx_t index, idx_t raw_index) override;
 	idx_t Finalize();
 
 public:

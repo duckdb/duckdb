@@ -7,7 +7,7 @@ require vector_size 2048
 load __TEST_DIR__/force_dictionary.db
 
 statement ok
-PRAGMA force_compression = 'dictionary'
+PRAGMA force_compression = 'dict_fsst';
 
 statement ok
 CREATE TABLE test_dict (a VARCHAR);
@@ -21,4 +21,4 @@ CHECKPOINT
 query I
 SELECT compression FROM pragma_storage_info('test_dict') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-Dictionary
+Dict FSST
