@@ -8,11 +8,11 @@
 namespace duckdb {
 
 bool Transformer::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry, bool root_entry) {
-	switch (expr->type) {
+	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = expr->Cast<ColumnRefExpression>();
 		if (colref.IsQualified()) {
-			throw ParserException(expr->query_location, "PIVOT IN list cannot contain qualified column references");
+			throw ParserException(expr->GetQueryLocation(), "PIVOT IN list cannot contain qualified column references");
 		}
 		entry.values.emplace_back(colref.GetColumnName());
 		return true;
@@ -46,10 +46,11 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot,
 		TransformExpressionList(*pivot.pivot_columns, col.pivot_expressions);
 		for (auto &expr : col.pivot_expressions) {
 			if (expr->IsScalar()) {
-				throw ParserException(expr->query_location, "Cannot pivot on constant value \"%s\"", expr->ToString());
+				throw ParserException(expr->GetQueryLocation(), "Cannot pivot on constant value \"%s\"",
+				                      expr->ToString());
 			}
 			if (expr->HasSubquery()) {
-				throw ParserException(expr->query_location, "Cannot pivot on subquery \"%s\"", expr->ToString());
+				throw ParserException(expr->GetQueryLocation(), "Cannot pivot on subquery \"%s\"", expr->ToString());
 			}
 		}
 	} else if (pivot.unpivot_columns) {
@@ -62,16 +63,17 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot,
 			auto n = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 			auto expr = TransformExpression(n);
 			PivotColumnEntry entry;
-			entry.alias = expr->alias;
+			entry.alias = expr->GetAlias();
 			auto transformed = TransformPivotInList(expr, entry);
 			if (!transformed) {
 				// could not transform into list of constant values
 				if (is_pivot) {
 					// for pivot - throw an exception
-					throw ParserException(expr->query_location,
+					throw ParserException(expr->GetQueryLocation(),
 					                      "PIVOT IN list must contain columns or lists of columns");
 				} else {
 					// for unpivot - we can forward the expression immediately
+					entry.values.clear();
 					entry.expr = std::move(expr);
 				}
 			}

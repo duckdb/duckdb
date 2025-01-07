@@ -24,7 +24,7 @@ namespace duckdb {
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, optional_ptr<ColumnData> parent)
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
-      type(std::move(type_p)), parent(parent), allocation_size(0) {
+      type(std::move(type_p)), allocation_size(0), parent(parent) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -438,7 +438,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		AppendTransientSegment(l, start);
 	}
 	auto segment = data.GetLastSegment(l);
-	if (segment->segment_type == ColumnSegmentType::PERSISTENT || !segment->function.get().init_append) {
+	if (segment->segment_type == ColumnSegmentType::PERSISTENT || !segment->GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->start + segment->count;
 		AppendTransientSegment(l, total_rows);
@@ -449,7 +449,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
-	D_ASSERT(state.current->function.get().append);
+	D_ASSERT(state.current->GetCompressionFunction().append);
 }
 
 void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
@@ -565,23 +565,23 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	AppendSegment(l, std::move(new_segment));
 }
 
-void ColumnData::UpdateCompressionFunction(SegmentLock &l, CompressionFunction &function) {
+void ColumnData::UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function) {
 	if (!compression) {
 		// compression is empty...
 		// if we have no segments - we have not set it yet, so assign it
 		// if we have segments, the compression is mixed, so ignore it
 		if (data.GetSegmentCount(l) == 0) {
-			compression = function;
+			compression.set(function);
 		}
 	} else if (compression->type != function.type) {
 		// we already have compression set - and we are adding a segment with a different compression
 		// compression in the segment is mixed - clear the compression pointer
-		compression = nullptr;
+		compression.reset();
 	}
 }
 
 void ColumnData::AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment) {
-	UpdateCompressionFunction(l, segment->function);
+	UpdateCompressionFunction(l, segment->GetCompressionFunction());
 	data.AppendSegment(l, std::move(segment));
 }
 
@@ -620,25 +620,16 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
-	auto l = data.Lock();
-	auto nodes = data.MoveSegments(l);
+	auto &nodes = data.ReferenceSegments();
 	if (nodes.empty()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
 
-	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	checkpointer.Checkpoint(std::move(nodes));
-
-	// reset the compression function
-	compression = nullptr;
-	// replace the old tree with the new one
-	auto new_segments = checkpoint_state->new_tree.MoveSegments();
-	for (auto &new_segment : new_segments) {
-		AppendSegment(l, std::move(new_segment.node));
-	}
-	ClearUpdates();
-
+	vector<reference<ColumnCheckpointState>> states {*checkpoint_state};
+	ColumnDataCheckpointer checkpointer(states, GetDatabase(), row_group, checkpoint_info);
+	checkpointer.Checkpoint();
+	checkpointer.FinalizeCheckpoint();
 	return checkpoint_state;
 }
 
@@ -874,7 +865,7 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 		column_info.segment_type = type.ToString();
 		column_info.segment_start = segment->start;
 		column_info.segment_count = segment->count;
-		column_info.compression_type = CompressionTypeToString(segment->function.get().type);
+		column_info.compression_type = CompressionTypeToString(segment->GetCompressionFunction().type);
 		{
 			lock_guard<mutex> l(stats_lock);
 			column_info.segment_stats = segment->stats.statistics.ToString();

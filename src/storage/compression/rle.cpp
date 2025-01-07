@@ -137,22 +137,21 @@ struct RLECompressState : public CompressionState {
 		return (info.GetBlockSize() - RLEConstants::RLE_HEADER_SIZE) / entry_size;
 	}
 
-	RLECompressState(ColumnDataCheckpointer &checkpointer_p, const CompressionInfo &info)
-	    : CompressionState(info), checkpointer(checkpointer_p),
-	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
-		CreateEmptySegment(checkpointer.GetRowGroup().start);
+	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info)
+	    : CompressionState(info), checkpoint_data(checkpoint_data_p),
+	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
+		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 
 		state.dataptr = (void *)this;
 		max_rle_count = MaxRLECount();
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
+		auto &db = checkpoint_data.GetDatabase();
+		auto &type = checkpoint_data.GetType();
 
 		auto column_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
 		                                                            info.GetBlockSize());
-		column_segment->function = function;
 		current_segment = std::move(column_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -204,7 +203,7 @@ struct RLECompressState : public CompressionState {
 		Store<uint64_t>(minimal_rle_offset, data_ptr);
 		handle.Destroy();
 
-		auto &state = checkpointer.GetCheckpointState();
+		auto &state = checkpoint_data.GetCheckpointState();
 		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 	}
 
@@ -215,7 +214,7 @@ struct RLECompressState : public CompressionState {
 		current_segment.reset();
 	}
 
-	ColumnDataCheckpointer &checkpointer;
+	ColumnDataCheckpointData &checkpoint_data;
 	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
@@ -226,8 +225,9 @@ struct RLECompressState : public CompressionState {
 };
 
 template <class T, bool WRITE_STATISTICS>
-unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpointer, state->info);
+unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointData &checkpoint_data,
+                                                unique_ptr<AnalyzeState> state) {
+	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpoint_data, state->info);
 }
 
 template <class T, bool WRITE_STATISTICS>

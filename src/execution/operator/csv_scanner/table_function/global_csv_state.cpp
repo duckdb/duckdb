@@ -87,6 +87,15 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 		                 previous_scanner->GetValidationLine());
 	}
 	if (single_threaded) {
+		{
+			lock_guard<mutex> parallel_lock(main_mutex);
+			if (previous_scanner) {
+				// Cleanup previous scanner.
+				previous_scanner->buffer_tracker.reset();
+				current_buffer_in_use.reset();
+				previous_scanner->csv_file_scan->Finish();
+			}
+		}
 		idx_t cur_idx;
 		bool empty_file = false;
 		do {
@@ -108,6 +117,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			auto file_scan = make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
 			                                              bind_data, column_ids, file_schema, true);
 			empty_file = file_scan->file_size == 0;
+
 			if (!empty_file) {
 				lock_guard<mutex> parallel_lock(main_mutex);
 				file_scans.emplace_back(std::move(file_scan));
@@ -116,11 +126,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
 				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
 				                                                        current_boundary.GetBufferIdx());
-				if (previous_scanner) {
-					previous_scanner->buffer_tracker.reset();
-					current_buffer_in_use.reset();
-					previous_scanner->csv_file_scan->Finish();
-				}
+
 				return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
 				                                     current_file->state_machine, current_file->error_handler,
 				                                     current_file, false, current_boundary);
@@ -178,7 +184,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 
 idx_t CSVGlobalState::MaxThreads() const {
 	// We initialize max one thread per our set bytes per thread limit
-	if (single_threaded) {
+	if (single_threaded || !file_scans.front()->on_disk_file) {
 		return system_threads;
 	}
 	idx_t total_threads = file_scans.front()->file_size / CSVIterator::BYTES_PER_THREAD + 1;

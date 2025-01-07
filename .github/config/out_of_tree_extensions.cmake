@@ -43,19 +43,13 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             )
 endif()
 
-### Currently libxml2, an azure dependency, has the repository repo return 503
-### Re-enable AZURE when the problem goes away. This means AZURE needs to be
-### build on a side
-if (NO)
 ################# AZURE
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb_azure
-            GIT_TAG a40ecb7bc9036eb8ecc5bf30db935a31b78011f5
-            APPLY_PATCHES
+            GIT_TAG 88011ee6ef66f223badc9beb04d4723651ac6623
             )
-endif()
 endif()
 
 ################# DELTA
@@ -80,20 +74,20 @@ duckdb_extension_load(excel
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
-#if (NOT WIN32)
-#    set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
-#else ()
-#    set(LOAD_ICEBERG_TESTS "")
-#endif()
-#
-#if (NOT MINGW AND NOT ${WASM_ENABLED})
-#    duckdb_extension_load(iceberg
-#            ${LOAD_ICEBERG_TESTS}
-#            GIT_URL https://github.com/duckdb/duckdb_iceberg
-#            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
-#            APPLY_PATCHES
-#            )
-#endif()
+if (NOT WIN32)
+    set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
+else ()
+    set(LOAD_ICEBERG_TESTS "")
+endif()
+
+if (NOT MINGW AND NOT ${WASM_ENABLED})
+    duckdb_extension_load(iceberg
+            ${LOAD_ICEBERG_TESTS}
+            GIT_URL https://github.com/duckdb/duckdb_iceberg
+            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
+            APPLY_PATCHES
+            )
+endif()
 
 ################# INET
 duckdb_extension_load(inet
@@ -126,6 +120,7 @@ duckdb_extension_load(spatial
     GIT_TAG a60aa3733741a99c49baaf33390c0f7c8a9598a3
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()
 
@@ -144,20 +139,18 @@ duckdb_extension_load(sqlite_scanner
         APPLY_PATCHES
         )
 
-if (NOT ${WASM_ENABLED})
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb_sqlsmith
-        GIT_TAG d6d62c1cba6b1369ba79db4bff3c67f24aaa95c2
+        GIT_TAG b13723fe701f1e38d2cd65b3b6eb587c6553a251
         )
-endif()
 
 ################# VSS
 duckdb_extension_load(vss
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb_vss
-        GIT_TAG 96374099476b3427c9ab43c1821e610b0465c864
+        GIT_TAG bae5b0653b18bbd05840d1773a49dc4a1165831f
         TEST_DIR test/sql
         APPLY_PATCHES
     )

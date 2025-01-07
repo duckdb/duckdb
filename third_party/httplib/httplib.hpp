@@ -2080,8 +2080,7 @@ namespace detail {
 
 std::string encode_query_param(const std::string &value);
 
-std::string decode_url(const std::string &s, bool convert_plus_to_space);
-
+std::string decode_url(const std::string &s, bool convert_plus_to_space, const std::set<char> &exclude = {});
 void read_file(const std::string &path, std::string &out);
 
 std::string trim_copy(const std::string &s);
@@ -2495,7 +2494,8 @@ inline std::string encode_url(const std::string &s) {
 }
 
 inline std::string decode_url(const std::string &s,
-                              bool convert_plus_to_space) {
+                              bool convert_plus_to_space,
+                              const std::set<char> &exclude) {
   std::string result;
 
   for (size_t i = 0; i < s.size(); i++) {
@@ -2514,8 +2514,12 @@ inline std::string decode_url(const std::string &s,
       } else {
         auto val = 0;
         if (from_hex_to_i(s, i + 1, 2, val)) {
-          // 2 digits hex codes
-          result += static_cast<char>(val);
+          const auto converted = static_cast<char>(val);
+          if (exclude.count(converted) == 0) {
+            result += converted;
+          } else {
+            result.append(s, i, 3);
+          }
           i += 2; // '00'
         } else {
           result += s[i];
@@ -7105,9 +7109,9 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   if (next_scheme.empty()) { next_scheme = scheme; }
   if (next_host.empty()) { next_host = host_; }
   if (next_path.empty()) { next_path = "/"; }
-
-  auto path = detail::decode_url(next_path, true) + next_query;
-
+  
+  auto path = detail::decode_url(next_path, true, std::set<char> {'/'}) + next_query;
+	
   if (next_scheme == scheme && next_host == host_ && next_port == port_) {
     return detail::redirect(*this, req, res, path, location, error);
   } else {

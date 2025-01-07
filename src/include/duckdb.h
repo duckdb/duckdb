@@ -85,7 +85,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_FLOAT = 10,
 	// double
 	DUCKDB_TYPE_DOUBLE = 11,
-	// duckdb_timestamp, in microseconds
+	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP = 12,
 	// duckdb_date
 	DUCKDB_TYPE_DATE = 13,
@@ -101,13 +101,13 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_VARCHAR = 17,
 	// duckdb_blob
 	DUCKDB_TYPE_BLOB = 18,
-	// decimal
+	// duckdb_decimal
 	DUCKDB_TYPE_DECIMAL = 19,
-	// duckdb_timestamp, in seconds
+	// duckdb_timestamp_s (seconds)
 	DUCKDB_TYPE_TIMESTAMP_S = 20,
-	// duckdb_timestamp, in milliseconds
+	// duckdb_timestamp_ms (milliseconds)
 	DUCKDB_TYPE_TIMESTAMP_MS = 21,
-	// duckdb_timestamp, in nanoseconds
+	// duckdb_timestamp_ns (nanoseconds)
 	DUCKDB_TYPE_TIMESTAMP_NS = 22,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ENUM = 23,
@@ -127,7 +127,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_BIT = 29,
 	// duckdb_time_tz
 	DUCKDB_TYPE_TIME_TZ = 30,
-	// duckdb_timestamp
+	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 	// ANY type
 	DUCKDB_TYPE_ANY = 34,
@@ -406,6 +406,25 @@ typedef struct {
 	idx_t size;
 } duckdb_blob;
 
+//! BITs are composed of a byte pointer and a size.
+//! BIT byte data has 0 to 7 bits of padding.
+//! The first byte contains the number of padding bits.
+//! This number of bits of the second byte are set to 1, starting from the MSB.
+//! You must free `data` with `duckdb_free`.
+typedef struct {
+	uint8_t *data;
+	idx_t size;
+} duckdb_bit;
+
+//! VARINTs are composed of a byte pointer, a size, and an is_negative bool.
+//! The absolute value of the number is stored in `data` in little endian format.
+//! You must free `data` with `duckdb_free`.
+typedef struct {
+	uint8_t *data;
+	idx_t size;
+	bool is_negative;
+} duckdb_varint;
+
 //! A query result consists of a pointer to its internal data.
 //! Must be freed with 'duckdb_destroy_result'.
 typedef struct {
@@ -650,6 +669,8 @@ struct duckdb_extension_access {
 	//! Fetch the API
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
+
+#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
 
 //===--------------------------------------------------------------------===//
 // Functions
@@ -1992,6 +2013,22 @@ Creates a value from a uhugeint
 DUCKDB_API duckdb_value duckdb_create_uhugeint(duckdb_uhugeint input);
 
 /*!
+Creates a VARINT value from a duckdb_varint
+
+* @param input The duckdb_varint value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_varint(duckdb_varint input);
+
+/*!
+Creates a DECIMAL value from a duckdb_decimal
+
+* @param input The duckdb_decimal value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_decimal(duckdb_decimal input);
+
+/*!
 Creates a value from a float
 
 * @param input The float value
@@ -2090,6 +2127,22 @@ Creates a value from a blob
 DUCKDB_API duckdb_value duckdb_create_blob(const uint8_t *data, idx_t length);
 
 /*!
+Creates a BIT value from a duckdb_bit
+
+* @param input The duckdb_bit value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_bit(duckdb_bit input);
+
+/*!
+Creates a UUID value from a uhugeint
+
+* @param input The duckdb_uhugeint containing the UUID
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_uuid(duckdb_uhugeint input);
+
+/*!
 Returns the boolean value of the given value.
 
 * @param val A duckdb_value containing a boolean
@@ -2176,6 +2229,23 @@ Returns the uhugeint value of the given value.
 * @return A duckdb_uhugeint, or MinValue<uhugeint> if the value cannot be converted
 */
 DUCKDB_API duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val);
+
+/*!
+Returns the duckdb_varint value of the given value.
+The `data` field must be destroyed with `duckdb_free`.
+
+* @param val A duckdb_value containing a VARINT
+* @return A duckdb_varint. The `data` field must be destroyed with `duckdb_free`.
+*/
+DUCKDB_API duckdb_varint duckdb_get_varint(duckdb_value val);
+
+/*!
+Returns the duckdb_decimal value of the given value.
+
+* @param val A duckdb_value containing a DECIMAL
+* @return A duckdb_decimal, or MinValue<decimal> if the value cannot be converted
+*/
+DUCKDB_API duckdb_decimal duckdb_get_decimal(duckdb_value val);
 
 /*!
 Returns the float value of the given value.
@@ -2281,6 +2351,23 @@ Returns the blob value of the given value.
 * @return A duckdb_blob
 */
 DUCKDB_API duckdb_blob duckdb_get_blob(duckdb_value val);
+
+/*!
+Returns the duckdb_bit value of the given value.
+The `data` field must be destroyed with `duckdb_free`.
+
+* @param val A duckdb_value containing a BIT
+* @return A duckdb_bit
+*/
+DUCKDB_API duckdb_bit duckdb_get_bit(duckdb_value val);
+
+/*!
+Returns a duckdb_uhugeint representing the UUID value of the given value.
+
+* @param val A duckdb_value containing a UUID
+* @return A duckdb_uhugeint representing the UUID value
+*/
+DUCKDB_API duckdb_uhugeint duckdb_get_uuid(duckdb_value val);
 
 /*!
 Obtains a string representation of the given value.
@@ -3808,6 +3895,20 @@ Append a DEFAULT value (NULL if DEFAULT not available for column) to the appende
 DUCKDB_API duckdb_state duckdb_append_default(duckdb_appender appender);
 
 /*!
+Append a DEFAULT value, at the specified row and column, (NULL if DEFAULT not available for column) to the chunk created
+from the specified appender. The default value of the column must be a constant value. Non-deterministic expressions
+like nextval('seq') or random() are not supported.
+
+* @param appender The appender to get the default value from.
+* @param chunk The data chunk to append the default value to.
+* @param col The chunk column index to append the default value to.
+* @param row The chunk row index to append the default value to.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_append_default_to_chunk(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
+                                                       idx_t row);
+
+/*!
 Append a bool value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
@@ -4399,6 +4500,8 @@ Destroys the cast function object.
 * @param cast_function The cast function object.
 */
 DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
+
+#endif
 
 #ifdef __cplusplus
 }

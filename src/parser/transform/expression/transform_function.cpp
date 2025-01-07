@@ -90,7 +90,7 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 }
 
 bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
-	if (expr.expression_class != ExpressionClass::STAR) {
+	if (expr.GetExpressionClass() != ExpressionClass::STAR) {
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
@@ -108,6 +108,27 @@ bool Transformer::InWindowDefinition() {
 		return parent->InWindowDefinition();
 	}
 	return false;
+}
+
+static bool IsOrderableWindowFunction(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_CUME_DIST:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+		return true;
+	case ExpressionType::WINDOW_AGGREGATE:
+	case ExpressionType::WINDOW_RANK_DENSE:
+		return false;
+	default:
+		throw InternalException("Unknown orderable window type %s", ExpressionTypeToString(type).c_str());
+	}
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall &root) {
@@ -157,8 +178,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("DISTINCT is not implemented for non-aggregate window functions!");
 		}
 
-		if (root.agg_order) {
-			throw ParserException("ORDER BY is not implemented for window functions!");
+		if (root.agg_order && !IsOrderableWindowFunction(win_fun_type)) {
+			throw ParserException("ORDER BY is not supported for the window function \"%s\"", lowercase_name.c_str());
 		}
 
 		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && root.agg_filter) {
@@ -180,6 +201,12 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		if (root.agg_filter) {
 			auto filter_expr = TransformExpression(root.agg_filter);
 			expr->filter_expr = std::move(filter_expr);
+		}
+
+		if (root.agg_order) {
+			auto order_bys = make_uniq<OrderModifier>();
+			TransformOrderBy(root.agg_order, order_bys->orders);
+			expr->arg_orders = std::move(order_bys->orders);
 		}
 
 		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {

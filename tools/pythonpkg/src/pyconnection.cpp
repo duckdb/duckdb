@@ -931,6 +931,7 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 	// List of strings to match against
 	const unordered_set<string> valid_parameters = {"header",
 	                                                "compression",
+	                                                "comment"
 	                                                "sep",
 	                                                "delimiter",
 	                                                "dtype",
@@ -1015,6 +1016,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	py::object union_by_name = py::none();
 	py::object hive_types = py::none();
 	py::object hive_types_autocast = py::none();
+	py::object comment = py::none();
+
 	for (auto &arg : kwargs) {
 		const auto &arg_name = py::str(arg.first).cast<std::string>();
 		if (arg_name == "header") {
@@ -1025,6 +1028,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			sep = kwargs[arg_name.c_str()];
 		} else if (arg_name == "delimiter") {
 			delimiter = kwargs[arg_name.c_str()];
+		} else if (arg_name == "comment") {
+			comment = kwargs[arg_name.c_str()];
 		} else if (arg_name == "dtype") {
 			dtype = kwargs[arg_name.c_str()];
 		} else if (arg_name == "na_values") {
@@ -1226,6 +1231,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			throw InvalidInputException("read_csv only accepts 'quotechar' as a string");
 		}
 		bind_parameters["quote"] = Value(py::str(quotechar));
+	}
+
+	if (!py::none().is(comment)) {
+		if (!py::isinstance<py::str>(comment)) {
+			throw InvalidInputException("read_csv only accepts 'comment' as a string");
+		}
+		bind_parameters["comment"] = Value(py::str(comment));
 	}
 
 	if (!py::none().is(escapechar)) {
@@ -2015,8 +2027,11 @@ py::dict DuckDBPyConnection::FetchTF() {
 }
 
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch) {
-	auto arrow = FetchArrow(rows_per_batch);
-	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
+	if (!con.HasResult()) {
+		throw InvalidInputException("No open result set");
+	}
+	auto &result = con.GetResult();
+	return result.ToPolars(rows_per_batch);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) {

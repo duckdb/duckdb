@@ -299,39 +299,88 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 	const auto order_count = wexpr.orders.size();
 
 	WindowBoundsSet result;
-	switch (wexpr.type) {
+	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		result.insert(PARTITION_BEGIN);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
+		break;
+	case ExpressionType::WINDOW_NTILE:
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
+		break;
+	case ExpressionType::WINDOW_RANK:
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PEER_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
 	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_RANK:
 		result.insert(PARTITION_BEGIN);
 		result.insert(PEER_BEGIN);
 		break;
 	case ExpressionType::WINDOW_PERCENT_RANK:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
-		result.insert(PEER_BEGIN);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+			result.insert(PEER_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
 	case ExpressionType::WINDOW_CUME_DIST:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
-		result.insert(PEER_END);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+			result.insert(PEER_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
-	case ExpressionType::WINDOW_NTILE:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_NTH_VALUE:
 	case ExpressionType::WINDOW_AGGREGATE:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
 		result.insert(FRAME_BEGIN);
 		result.insert(FRAME_END);
+		break;
+	default:
+		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
+	}
+
+	//	Internal dependencies
+	if (result.count(FRAME_BEGIN) || result.count(FRAME_END)) {
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
 
 		// if we have EXCLUDE GROUP / TIES, we also need peer boundaries
 		if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
@@ -375,12 +424,8 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 		default:
 			break;
 		}
-		break;
-	default:
-		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
 	}
 
-	//	Internal dependencies
 	if (result.count(VALID_END)) {
 		result.insert(PARTITION_END);
 		if (HasFollowingRange(wexpr)) {
@@ -405,9 +450,9 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 }
 
 WindowBoundariesState::WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size)
-    : required(GetWindowBounds(wexpr)), type(wexpr.type), input_size(input_size), start_boundary(wexpr.start),
-      end_boundary(wexpr.end), partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
-      range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
+    : required(GetWindowBounds(wexpr)), type(wexpr.GetExpressionType()), input_size(input_size),
+      start_boundary(wexpr.start), end_boundary(wexpr.end), partition_count(wexpr.partitions.size()),
+      order_count(wexpr.orders.size()), range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)) {
 }
 

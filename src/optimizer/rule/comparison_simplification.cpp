@@ -29,12 +29,12 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), constant_expr, constant_value)) {
 		return nullptr;
 	}
-	if (constant_value.IsNull() && !(expr.type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
-	                                 expr.type == ExpressionType::COMPARE_DISTINCT_FROM)) {
+	if (constant_value.IsNull() && !(expr.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+	                                 expr.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM)) {
 		// comparison with constant NULL, return NULL
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
-	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST) {
+	if (column_ref_expr->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
 		//! Here we check if we can apply the expression on the constant side
 		//! We can do this if the cast itself is invertible and casting the constant is
 		//! invertible in practice.

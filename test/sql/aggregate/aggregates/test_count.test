@@ -2,14 +2,8 @@
 # description: Test COUNT operator
 # group: [aggregates]
 
-mode skip
-
-# FIXME - prepared statements on COUNT DISTINCT run into an internal error
-
 statement ok
 PRAGMA enable_verification
-
-mode unskip
 
 # test counts on scalar values
 query IIIII

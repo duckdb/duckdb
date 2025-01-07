@@ -89,8 +89,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// this reduces the amount of columns we need to extract from the join hash table
 			for (auto &cond : comp_join.conditions) {
 				if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
-					if (cond.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-					    cond.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+					if (cond.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
 						auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
@@ -353,7 +353,8 @@ bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optiona
 		return false;
 	}
 	auto &function = expr.Cast<BoundFunctionExpression>();
-	if (function.function.name != "struct_extract" && function.function.name != "array_extract") {
+	if (function.function.name != "struct_extract_at" && function.function.name != "struct_extract" &&
+	    function.function.name != "array_extract") {
 		return false;
 	}
 	if (!function.bind_info) {

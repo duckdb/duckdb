@@ -1351,7 +1351,8 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 }
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
-                                       DataChunk &output, idx_t start, bool arrow_scan_is_projected) {
+                                       DataChunk &output, idx_t start, bool arrow_scan_is_projected,
+                                       idx_t rowid_column_index) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
 		auto col_idx = scan_state.column_ids.empty() ? idx : scan_state.column_ids[idx];
 
@@ -1359,9 +1360,22 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		// table function, we need to use original column ids here.
 		auto arrow_array_idx = arrow_scan_is_projected ? idx : col_idx;
 
-		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
-			// This column is skipped by the projection pushdown
-			continue;
+		if (rowid_column_index != COLUMN_IDENTIFIER_ROW_ID) {
+			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				arrow_array_idx = rowid_column_index;
+			} else if (col_idx >= rowid_column_index) {
+				// Since the rowid column is skipped when the table is bound (its not a named column),
+				// we need to shift references forward in the Arrow array by one to match the alignment
+				// that DuckDB believes the Arrow array is in.
+				col_idx += 1;
+				arrow_array_idx += 1;
+			}
+		} else {
+			// If there isn't any defined row_id_index, and we're asked for it, skip the column.
+			// This is the incumbent behavior.
+			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				continue;
+			}
 		}
 
 		auto &parent_array = scan_state.chunk->arrow_array;

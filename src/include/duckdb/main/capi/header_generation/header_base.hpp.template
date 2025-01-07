@@ -79,7 +79,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_FLOAT = 10,
 	// double
 	DUCKDB_TYPE_DOUBLE = 11,
-	// duckdb_timestamp, in microseconds
+	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP = 12,
 	// duckdb_date
 	DUCKDB_TYPE_DATE = 13,
@@ -95,13 +95,13 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_VARCHAR = 17,
 	// duckdb_blob
 	DUCKDB_TYPE_BLOB = 18,
-	// decimal
+	// duckdb_decimal
 	DUCKDB_TYPE_DECIMAL = 19,
-	// duckdb_timestamp, in seconds
+	// duckdb_timestamp_s (seconds)
 	DUCKDB_TYPE_TIMESTAMP_S = 20,
-	// duckdb_timestamp, in milliseconds
+	// duckdb_timestamp_ms (milliseconds)
 	DUCKDB_TYPE_TIMESTAMP_MS = 21,
-	// duckdb_timestamp, in nanoseconds
+	// duckdb_timestamp_ns (nanoseconds)
 	DUCKDB_TYPE_TIMESTAMP_NS = 22,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ENUM = 23,
@@ -121,7 +121,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_BIT = 29,
 	// duckdb_time_tz
 	DUCKDB_TYPE_TIME_TZ = 30,
-	// duckdb_timestamp
+	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 	// ANY type
 	DUCKDB_TYPE_ANY = 34,
@@ -403,6 +403,25 @@ typedef struct {
 	idx_t size;
 } duckdb_blob;
 
+//! BITs are composed of a byte pointer and a size.
+//! BIT byte data has 0 to 7 bits of padding.
+//! The first byte contains the number of padding bits.
+//! This number of bits of the second byte are set to 1, starting from the MSB.
+//! You must free `data` with `duckdb_free`.
+typedef struct {
+	uint8_t *data;
+	idx_t size;
+} duckdb_bit;
+
+//! VARINTs are composed of a byte pointer, a size, and an is_negative bool.
+//! The absolute value of the number is stored in `data` in little endian format.
+//! You must free `data` with `duckdb_free`.
+typedef struct {
+	uint8_t *data;
+	idx_t size;
+	bool is_negative;
+} duckdb_varint;
+
 //! A query result consists of a pointer to its internal data.
 //! Must be freed with 'duckdb_destroy_result'.
 typedef struct {
@@ -647,11 +666,7 @@ struct duckdb_extension_access {
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
-//===--------------------------------------------------------------------===//
-// Functions
-//===--------------------------------------------------------------------===//
-
-// DUCKDB_FUNCTIONS_ARE_GENERATED_HERE
+// FILE_CONTENT_SECTION
 
 #ifdef __cplusplus
 }

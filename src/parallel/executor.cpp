@@ -27,7 +27,7 @@ Executor::Executor(ClientContext &context) : context(context), executor_tasks(0)
 }
 
 Executor::~Executor() {
-	D_ASSERT(executor_tasks == 0);
+	D_ASSERT(Exception::UncaughtException() || executor_tasks == 0);
 }
 
 Executor &Executor::Get(ClientContext &context) {

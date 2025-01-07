@@ -89,6 +89,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
+#include "duckdb/function/partition_stats.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_datetime_type.hpp"
@@ -144,6 +145,44 @@
 #include "duckdb/verification/statement_verifier.hpp"
 
 namespace duckdb {
+
+const StringUtil::EnumStringLiteral *GetARTAppendModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTAppendMode::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ARTAppendMode::IGNORE_DUPLICATES), "IGNORE_DUPLICATES" },
+		{ static_cast<uint32_t>(ARTAppendMode::INSERT_DUPLICATES), "INSERT_DUPLICATES" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTAppendMode>(ARTAppendMode value) {
+	return StringUtil::EnumToString(GetARTAppendModeValues(), 3, "ARTAppendMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTAppendMode EnumUtil::FromString<ARTAppendMode>(const char *value) {
+	return static_cast<ARTAppendMode>(StringUtil::StringToEnum(GetARTAppendModeValues(), 3, "ARTAppendMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetARTConflictTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTConflictType::NO_CONFLICT), "NO_CONFLICT" },
+		{ static_cast<uint32_t>(ARTConflictType::CONSTRAINT), "CONSTRAINT" },
+		{ static_cast<uint32_t>(ARTConflictType::TRANSACTION), "TRANSACTION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value) {
+	return StringUtil::EnumToString(GetARTConflictTypeValues(), 3, "ARTConflictType", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
+	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 3, "ARTConflictType", value));
+}
 
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
@@ -597,19 +636,20 @@ const StringUtil::EnumStringLiteral *GetCSVStateValues() {
 		{ static_cast<uint32_t>(CSVState::COMMENT), "COMMENT" },
 		{ static_cast<uint32_t>(CSVState::STANDARD_NEWLINE), "STANDARD_NEWLINE" },
 		{ static_cast<uint32_t>(CSVState::UNQUOTED_ESCAPE), "UNQUOTED_ESCAPE" },
-		{ static_cast<uint32_t>(CSVState::ESCAPED_RETURN), "ESCAPED_RETURN" }
+		{ static_cast<uint32_t>(CSVState::ESCAPED_RETURN), "ESCAPED_RETURN" },
+		{ static_cast<uint32_t>(CSVState::MAYBE_QUOTED), "MAYBE_QUOTED" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CSVState>(CSVState value) {
-	return StringUtil::EnumToString(GetCSVStateValues(), 18, "CSVState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCSVStateValues(), 19, "CSVState", static_cast<uint32_t>(value));
 }
 
 template<>
 CSVState EnumUtil::FromString<CSVState>(const char *value) {
-	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 18, "CSVState", value));
+	return static_cast<CSVState>(StringUtil::StringToEnum(GetCSVStateValues(), 19, "CSVState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCTEMaterializeValues() {
@@ -1425,19 +1465,20 @@ const StringUtil::EnumStringLiteral *GetExtensionABITypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExtensionABIType::UNKNOWN), "UNKNOWN" },
 		{ static_cast<uint32_t>(ExtensionABIType::CPP), "CPP" },
-		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT), "C_STRUCT" }
+		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT), "C_STRUCT" },
+		{ static_cast<uint32_t>(ExtensionABIType::C_STRUCT_UNSTABLE), "C_STRUCT_UNSTABLE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExtensionABIType>(ExtensionABIType value) {
-	return StringUtil::EnumToString(GetExtensionABITypeValues(), 3, "ExtensionABIType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExtensionABITypeValues(), 4, "ExtensionABIType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExtensionABIType EnumUtil::FromString<ExtensionABIType>(const char *value) {
-	return static_cast<ExtensionABIType>(StringUtil::StringToEnum(GetExtensionABITypeValues(), 3, "ExtensionABIType", value));
+	return static_cast<ExtensionABIType>(StringUtil::StringToEnum(GetExtensionABITypeValues(), 4, "ExtensionABIType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtensionInstallModeValues() {
@@ -1707,7 +1748,7 @@ FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const 
 const StringUtil::EnumStringLiteral *GetFunctionErrorsValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FunctionErrors::CANNOT_ERROR), "CANNOT_ERROR" },
-		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_ERROR), "CAN_THROW_ERROR" }
+		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_RUNTIME_ERROR), "CAN_THROW_RUNTIME_ERROR" }
 	};
 	return values;
 }
@@ -3083,6 +3124,24 @@ const char* EnumUtil::ToChars<SampleType>(SampleType value) {
 template<>
 SampleType EnumUtil::FromString<SampleType>(const char *value) {
 	return static_cast<SampleType>(StringUtil::StringToEnum(GetSampleTypeValues(), 3, "SampleType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSamplingStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SamplingState::RANDOM), "RANDOM" },
+		{ static_cast<uint32_t>(SamplingState::RESERVOIR), "RESERVOIR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SamplingState>(SamplingState value) {
+	return StringUtil::EnumToString(GetSamplingStateValues(), 2, "SamplingState", static_cast<uint32_t>(value));
+}
+
+template<>
+SamplingState EnumUtil::FromString<SamplingState>(const char *value) {
+	return static_cast<SamplingState>(StringUtil::StringToEnum(GetSamplingStateValues(), 2, "SamplingState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {

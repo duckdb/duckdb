@@ -208,8 +208,6 @@ jobs:
             run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
 
     env:
-      DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-      AWS_DEFAULT_REGION: us-east-1
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       GEN: ninja
       DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
@@ -300,6 +298,8 @@ jobs:
   test-uploaded-extensions:
     name: Test uploaded OSX Extensions
     needs: upload-osx-extensions
+    ### This needs to be reworked, currently some info are missing
+    if: false
     runs-on: macos-14
     steps:
     - uses: actions/checkout@v4

@@ -1,0 +1,20 @@
+# name: test/sql/index/art/storage/test_art_mem_limit.test
+# description: Test retrieving memory information after creating an ART.
+# group: [storage]
+
+load __TEST_DIR__/index_mem_limit.db
+
+statement ok
+SET threads=1;
+
+statement ok
+SET memory_limit = '5MB';
+
+statement ok
+CREATE TABLE tbl AS SELECT range AS id FROM range(100000);
+
+statement ok
+CREATE INDEX idx ON tbl(id);
+
+statement ok
+FROM duckdb_memory();

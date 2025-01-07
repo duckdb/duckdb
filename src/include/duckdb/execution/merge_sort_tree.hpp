@@ -110,6 +110,10 @@ struct MergeSortTree {
 		return tree[0].first;
 	}
 
+	inline const Elements &LowestLevel() const {
+		return tree[0].first;
+	}
+
 	Elements &Allocate(idx_t count);
 
 	void Build();
@@ -121,7 +125,7 @@ struct MergeSortTree {
 	}
 
 	template <typename L>
-	void AggregateLowerBound(const idx_t lower, const idx_t upper, const idx_t needle, L aggregate) const;
+	void AggregateLowerBound(const idx_t lower, const idx_t upper, const E needle, L aggregate) const;
 
 	Tree tree;
 	CompareElements cmp;
@@ -253,6 +257,7 @@ protected:
 		return level;
 	}
 
+public:
 	void Print() const {
 		std::ostringstream out;
 		const char *separator = "    ";
@@ -566,7 +571,7 @@ idx_t MergeSortTree<E, O, CMP, F, C>::SelectNth(const SubFrames &frames, idx_t n
 
 template <typename E, typename O, typename CMP, uint64_t F, uint64_t C>
 template <typename L>
-void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, const idx_t upper, const idx_t needle,
+void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, const idx_t upper, const E needle,
                                                          L aggregate) const {
 
 	if (lower >= upper) {
@@ -633,7 +638,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 				// Search based on cascading info from previous level
 				const auto *search_begin = level_data + cascading_idcs[cascading_idx.first];
 				const auto *search_end = level_data + cascading_idcs[cascading_idx.first + FANOUT];
-				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle, cmp.cmp) - level_data;
 				// Compute runBegin and pass it to our callback
 				const auto run_begin = curr.first - level_width;
 				aggregate(level, run_begin, NumericCast<idx_t>(run_pos));
@@ -645,7 +650,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 			if (curr.first != lower) {
 				const auto *search_begin = level_data + cascading_idcs[cascading_idx.first];
 				const auto *search_end = level_data + cascading_idcs[cascading_idx.first + FANOUT];
-				auto idx = NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle) - level_data);
+				auto idx = NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle, cmp.cmp) - level_data);
 				cascading_idx.first = (idx / CASCADING + 2 * (lower / level_width)) * FANOUT;
 			}
 
@@ -655,7 +660,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 				// Search based on cascading info from previous level
 				const auto *search_begin = level_data + cascading_idcs[cascading_idx.second];
 				const auto *search_end = level_data + cascading_idcs[cascading_idx.second + FANOUT];
-				const auto run_pos = std::lower_bound(search_begin, search_end, needle) - level_data;
+				const auto run_pos = std::lower_bound(search_begin, search_end, needle, cmp.cmp) - level_data;
 				// Compute runBegin and pass it to our callback
 				const auto run_begin = curr.second;
 				aggregate(level, run_begin, NumericCast<idx_t>(run_pos));
@@ -667,7 +672,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 			if (curr.second != upper) {
 				const auto *search_begin = level_data + cascading_idcs[cascading_idx.second];
 				const auto *search_end = level_data + cascading_idcs[cascading_idx.second + FANOUT];
-				auto idx = NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle) - level_data);
+				auto idx = NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle, cmp.cmp) - level_data);
 				cascading_idx.second = (idx / CASCADING + 2 * (upper / level_width)) * FANOUT;
 			}
 		} while (level >= LowestCascadingLevel());
@@ -683,7 +688,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 				const auto *search_end = level_data + curr.first;
 				const auto *search_begin = search_end - level_width;
 				const auto run_pos =
-				    NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle) - level_data);
+				    NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle, cmp.cmp) - level_data);
 				const auto run_begin = NumericCast<idx_t>(search_begin - level_data);
 				aggregate(level, run_begin, run_pos);
 				curr.first -= level_width;
@@ -693,7 +698,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 				const auto *search_begin = level_data + curr.second;
 				const auto *search_end = search_begin + level_width;
 				const auto run_pos =
-				    NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle) - level_data);
+				    NumericCast<idx_t>(std::lower_bound(search_begin, search_end, needle, cmp.cmp) - level_data);
 				const auto run_begin = NumericCast<idx_t>(search_begin - level_data);
 				aggregate(level, run_begin, run_pos);
 				curr.second += level_width;
@@ -709,7 +714,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 		while (lower_it != curr.first) {
 			const auto *search_begin = level_data + lower_it;
 			const auto run_begin = lower_it;
-			const auto run_pos = run_begin + (*search_begin < needle);
+			const auto run_pos = run_begin + cmp.cmp(*search_begin, needle);
 			aggregate(level, run_begin, run_pos);
 			++lower_it;
 		}
@@ -717,7 +722,7 @@ void MergeSortTree<E, O, CMP, F, C>::AggregateLowerBound(const idx_t lower, cons
 		while (curr.second != upper) {
 			const auto *search_begin = level_data + curr.second;
 			const auto run_begin = curr.second;
-			const auto run_pos = run_begin + (*search_begin < needle);
+			const auto run_pos = run_begin + cmp.cmp(*search_begin, needle);
 			aggregate(level, run_begin, run_pos);
 			++curr.second;
 		}

@@ -1,0 +1,24 @@
+# name: benchmark/micro/join/external_join_partition_selection.benchmark
+# description: Test that the external hash join partition selection selects the large partition last
+# group: [join]
+
+name External Join Partition Selection
+group join
+
+cache external_join_partition_selection.duckdb
+
+load
+create table build as select range * 2 c from range(100e5::bigint);
+insert into build select 42 c from range(100e5::bigint);
+create table probe as select range c from range(1000e5::bigint);
+
+init
+set threads=4;
+set temp_directory='${BENCHMARK_DIR}/external_join_partition_selection.duckdb.tmp';
+set memory_limit='500mb';
+
+run
+select count(*) from probe join build using (c)
+
+result I
+20000000

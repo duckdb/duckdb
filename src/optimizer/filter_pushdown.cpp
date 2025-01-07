@@ -40,7 +40,7 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &
 			auto &expr = proj.expressions.at(col_index);
 			vector<ColumnBinding> bindings_to_keep;
 			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
-				if (child.expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+				if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 					auto &col_ref = child.Cast<BoundColumnRefExpression>();
 					bindings_to_keep.push_back(col_ref.binding);
 				}

@@ -40,6 +40,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/common/extension_type_info.hpp"
 
 namespace duckdb {
 
@@ -253,318 +254,146 @@ static bool IsValidUserType(optional_ptr<CatalogEntry> entry) {
 }
 
 void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
-	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
-		auto child_type = ListType::GetChildType(type);
-		BindLogicalType(child_type, catalog, schema);
+	if (type.id() != LogicalTypeId::USER) {
+		// Recursive types, make sure to bind any nested user types recursively
 		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiersCopy();
-		if (type.id() == LogicalTypeId::LIST) {
+		auto ext_info = type.HasExtensionInfo() ? make_uniq<ExtensionTypeInfo>(*type.GetExtensionInfo()) : nullptr;
+
+		switch (type.id()) {
+		case LogicalTypeId::LIST: {
+			auto child_type = ListType::GetChildType(type);
+			BindLogicalType(child_type, catalog, schema);
 			type = LogicalType::LIST(child_type);
-		} else {
-			D_ASSERT(child_type.id() == LogicalTypeId::STRUCT); // map must be list of structs
-			type = LogicalType::MAP(child_type);
+		} break;
+		case LogicalTypeId::MAP: {
+			auto key_type = MapType::KeyType(type);
+			BindLogicalType(key_type, catalog, schema);
+			auto value_type = MapType::ValueType(type);
+			BindLogicalType(value_type, catalog, schema);
+			type = LogicalType::MAP(key_type, value_type);
+		} break;
+		case LogicalTypeId::ARRAY: {
+			auto child_type = ArrayType::GetChildType(type);
+			auto array_size = ArrayType::GetSize(type);
+			BindLogicalType(child_type, catalog, schema);
+			type = LogicalType::ARRAY(child_type, array_size);
+		} break;
+		case LogicalTypeId::STRUCT: {
+			auto child_types = StructType::GetChildTypes(type);
+			for (auto &child_type : child_types) {
+				BindLogicalType(child_type.second, catalog, schema);
+			}
+			type = LogicalType::STRUCT(child_types);
+		} break;
+		case LogicalTypeId::UNION: {
+			auto member_types = UnionType::CopyMemberTypes(type);
+			for (auto &member_type : member_types) {
+				BindLogicalType(member_type.second, catalog, schema);
+			}
+			type = LogicalType::UNION(member_types);
+		} break;
+		default:
+			break;
 		}
 
+		// Set the alias and extension info back
 		type.SetAlias(alias);
-		type.SetModifiers(modifiers);
-	} else if (type.id() == LogicalTypeId::STRUCT) {
-		auto child_types = StructType::GetChildTypes(type);
-		for (auto &child_type : child_types) {
-			BindLogicalType(child_type.second, catalog, schema);
-		}
-		// Generate new Struct Type
-		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiersCopy();
-		type = LogicalType::STRUCT(child_types);
-		type.SetAlias(alias);
-		type.SetModifiers(modifiers);
-	} else if (type.id() == LogicalTypeId::ARRAY) {
-		auto child_type = ArrayType::GetChildType(type);
-		auto array_size = ArrayType::GetSize(type);
-		BindLogicalType(child_type, catalog, schema);
-		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiersCopy();
-		type = LogicalType::ARRAY(child_type, array_size);
-		type.SetAlias(alias);
-		type.SetModifiers(modifiers);
-	} else if (type.id() == LogicalTypeId::UNION) {
-		auto member_types = UnionType::CopyMemberTypes(type);
-		for (auto &member_type : member_types) {
-			BindLogicalType(member_type.second, catalog, schema);
-		}
-		// Generate new Union Type
-		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiersCopy();
-		type = LogicalType::UNION(member_types);
-		type.SetAlias(alias);
-		type.SetModifiers(modifiers);
-	} else if (type.id() == LogicalTypeId::USER) {
-		auto user_type_name = UserType::GetTypeName(type);
-		auto user_type_schema = UserType::GetSchema(type);
-		auto user_type_mods = UserType::GetTypeModifiers(type);
+		type.SetExtensionInfo(std::move(ext_info));
 
-		bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
-
-		if (catalog) {
-			// The search order is:
-			// 1) In the explicitly set schema (my_schema.my_type)
-			// 2) In the same schema as the table
-			// 3) In the same catalog
-			// 4) System catalog
-
-			optional_ptr<CatalogEntry> entry = nullptr;
-			if (!user_type_schema.empty()) {
-				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, user_type_schema, user_type_name,
-				                                 OnEntryNotFound::RETURN_NULL);
-			}
-			if (!IsValidUserType(entry)) {
-				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
-				                                 OnEntryNotFound::RETURN_NULL);
-			}
-			if (!IsValidUserType(entry)) {
-				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, INVALID_SCHEMA, user_type_name,
-				                                 OnEntryNotFound::RETURN_NULL);
-			}
-			if (!IsValidUserType(entry)) {
-				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA,
-				                                 user_type_name, OnEntryNotFound::THROW_EXCEPTION);
-			}
-			auto &type_entry = entry->Cast<TypeCatalogEntry>();
-			type = type_entry.user_type;
-			user_bind_modifiers_func = type_entry.bind_modifiers;
-		} else {
-			string type_catalog = UserType::GetCatalog(type);
-			string type_schema = UserType::GetSchema(type);
-
-			BindSchemaOrCatalog(context, type_catalog, type_schema);
-			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, type_catalog, type_schema, user_type_name);
-			auto &type_entry = entry->Cast<TypeCatalogEntry>();
-			type = type_entry.user_type;
-			user_bind_modifiers_func = type_entry.bind_modifiers;
-		}
-
-		BindLogicalType(type, catalog, schema);
-
-		// Apply the type modifiers (if any)
-		if (user_bind_modifiers_func) {
-			// If an explicit bind_modifiers function was provided, use that to set the type modifier
-			BindTypeModifiersInput input {context, type, user_type_mods};
-			type = user_bind_modifiers_func(input);
-		} else if (type.HasModifiers()) {
-			// If the type already has modifiers, try to replace them with the user-provided ones if they are compatible
-			// This enables registering custom types with "default" type modifiers that can be overridden, without
-			// having to provide a custom bind_modifiers function
-			auto type_mods_size = type.GetModifiers()->size();
-
-			// Are we trying to pass more type modifiers than the type has?
-			if (user_type_mods.size() > type_mods_size) {
-				throw BinderException(
-				    "Cannot apply '%d' type modifier(s) to type '%s' taking at most '%d' type modifier(s)",
-				    user_type_mods.size(), user_type_name, type_mods_size);
-			}
-
-			// Deep copy the type so that we can replace the type modifiers
-			type = type.DeepCopy();
-
-			// Re-fetch the type modifiers now that we've deduplicated the ExtraTypeInfo
-			auto &type_mods = *type.GetModifiers();
-
-			// Replace them in order, casting if necessary
-			for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
-				auto &type_mod = type_mods[i];
-				auto user_type_mod = user_type_mods[i];
-				if (type_mod.type() == user_type_mod.type()) {
-					type_mod = std::move(user_type_mod);
-				} else if (user_type_mod.DefaultTryCastAs(type_mod.type())) {
-					type_mod = std::move(user_type_mod);
-				} else {
-					throw BinderException("Cannot apply type modifier '%s' to type '%s', expected value of type '%s'",
-					                      user_type_mod.ToString(), user_type_name, type_mod.type().ToString());
-				}
-			}
-		} else if (!user_type_mods.empty()) {
-			// We're trying to pass type modifiers to a type that doesnt have any
-			throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
-		}
-	}
-}
-
-static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints,
-                                          ForeignKeyConstraint &fk) {
-	// find the matching primary key constraint
-	bool found_constraint = false;
-	// if no columns are defined, we will automatically try to bind to the primary key
-	bool find_primary_key = fk.pk_columns.empty();
-	for (auto &constr : constraints) {
-		if (constr->type != ConstraintType::UNIQUE) {
-			continue;
-		}
-		auto &unique = constr->Cast<UniqueConstraint>();
-		if (find_primary_key && !unique.IsPrimaryKey()) {
-			continue;
-		}
-		found_constraint = true;
-
-		vector<string> pk_names;
-		if (unique.HasIndex()) {
-			pk_names.push_back(columns.GetColumn(LogicalIndex(unique.GetIndex())).Name());
-		} else {
-			pk_names = unique.GetColumnNames();
-		}
-		if (find_primary_key) {
-			// found matching primary key
-			if (pk_names.size() != fk.fk_columns.size()) {
-				auto pk_name_str = StringUtil::Join(pk_names, ",");
-				auto fk_name_str = StringUtil::Join(fk.fk_columns, ",");
-				throw BinderException(
-				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
-				    fk_name_str, pk_name_str);
-			}
-			fk.pk_columns = pk_names;
-			return;
-		}
-		if (pk_names.size() != fk.fk_columns.size()) {
-			// the number of referencing and referenced columns for foreign keys must be the same
-			continue;
-		}
-		bool equals = true;
-		for (idx_t i = 0; i < fk.pk_columns.size(); i++) {
-			if (!StringUtil::CIEquals(fk.pk_columns[i], pk_names[i])) {
-				equals = false;
-				break;
-			}
-		}
-		if (!equals) {
-			continue;
-		}
-		// found match
 		return;
 	}
-	// no match found! examine why
-	if (!found_constraint) {
-		// no unique constraint or primary key
-		string search_term = find_primary_key ? "primary key" : "primary key or unique constraint";
-		throw BinderException("Failed to create foreign key: there is no %s for referenced table \"%s\"", search_term,
-		                      fk.info.table);
+
+	// User type, bind the user type
+	auto user_type_name = UserType::GetTypeName(type);
+	auto user_type_schema = UserType::GetSchema(type);
+	auto user_type_mods = UserType::GetTypeModifiers(type);
+
+	bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
+
+	if (catalog) {
+		// The search order is:
+		// 1) In the explicitly set schema (my_schema.my_type)
+		// 2) In the same schema as the table
+		// 3) In the same catalog
+		// 4) System catalog
+
+		optional_ptr<CatalogEntry> entry = nullptr;
+		if (!user_type_schema.empty()) {
+			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, user_type_schema, user_type_name,
+			                                 OnEntryNotFound::RETURN_NULL);
+		}
+		if (!IsValidUserType(entry)) {
+			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
+			                                 OnEntryNotFound::RETURN_NULL);
+		}
+		if (!IsValidUserType(entry)) {
+			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, INVALID_SCHEMA, user_type_name,
+			                                 OnEntryNotFound::RETURN_NULL);
+		}
+		if (!IsValidUserType(entry)) {
+			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, user_type_name,
+			                                 OnEntryNotFound::THROW_EXCEPTION);
+		}
+		auto &type_entry = entry->Cast<TypeCatalogEntry>();
+		type = type_entry.user_type;
+		user_bind_modifiers_func = type_entry.bind_modifiers;
+	} else {
+		string type_catalog = UserType::GetCatalog(type);
+		string type_schema = UserType::GetSchema(type);
+
+		BindSchemaOrCatalog(context, type_catalog, type_schema);
+		auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, type_catalog, type_schema, user_type_name);
+		auto &type_entry = entry->Cast<TypeCatalogEntry>();
+		type = type_entry.user_type;
+		user_bind_modifiers_func = type_entry.bind_modifiers;
 	}
-	// check if all the columns exist
-	for (auto &name : fk.pk_columns) {
-		bool found = columns.ColumnExists(name);
-		if (!found) {
+
+	// Now we bind the inner user type
+	BindLogicalType(type, catalog, schema);
+
+	// Apply the type modifiers (if any)
+	if (user_bind_modifiers_func) {
+		// If an explicit bind_modifiers function was provided, use that to construct the type
+		BindTypeModifiersInput input {context, type, user_type_mods};
+		type = user_bind_modifiers_func(input);
+	} else if (type.HasExtensionInfo()) {
+		auto &ext_info = *type.GetExtensionInfo();
+
+		// If the type already has modifiers, try to replace them with the user-provided ones if they are compatible
+		// This enables registering custom types with "default" type modifiers that can be overridden, without
+		// having to provide a custom bind_modifiers function
+		auto type_mods_size = ext_info.modifiers.size();
+
+		// Are we trying to pass more type modifiers than the type has?
+		if (user_type_mods.size() > type_mods_size) {
 			throw BinderException(
-			    "Failed to create foreign key: referenced table \"%s\" does not have a column named \"%s\"",
-			    fk.info.table, name);
+			    "Cannot apply '%d' type modifier(s) to type '%s' taking at most '%d' type modifier(s)",
+			    user_type_mods.size(), user_type_name, type_mods_size);
 		}
-	}
-	auto fk_names = StringUtil::Join(fk.pk_columns, ",");
-	throw BinderException("Failed to create foreign key: referenced table \"%s\" does not have a primary key or unique "
-	                      "constraint on the columns %s",
-	                      fk.info.table, fk_names);
-}
 
-static void FindForeignKeyIndexes(const ColumnList &columns, const vector<string> &names,
-                                  vector<PhysicalIndex> &indexes) {
-	D_ASSERT(indexes.empty());
-	D_ASSERT(!names.empty());
-	for (auto &name : names) {
-		if (!columns.ColumnExists(name)) {
-			throw BinderException("column \"%s\" named in key does not exist", name);
-		}
-		auto &column = columns.GetColumn(name);
-		if (column.Generated()) {
-			throw BinderException("Failed to create foreign key: referenced column \"%s\" is a generated column",
-			                      column.Name());
-		}
-		indexes.push_back(column.Physical());
-	}
-}
+		// Deep copy the type so that we can replace the type modifiers
+		type = type.DeepCopy();
 
-static void CheckForeignKeyTypes(const ColumnList &pk_columns, const ColumnList &fk_columns, ForeignKeyConstraint &fk) {
-	D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
-	for (idx_t c_idx = 0; c_idx < fk.info.pk_keys.size(); c_idx++) {
-		auto &pk_col = pk_columns.GetColumn(fk.info.pk_keys[c_idx]);
-		auto &fk_col = fk_columns.GetColumn(fk.info.fk_keys[c_idx]);
-		if (pk_col.Type() != fk_col.Type()) {
-			throw BinderException("Failed to create foreign key: incompatible types between column \"%s\" (\"%s\") and "
-			                      "column \"%s\" (\"%s\")",
-			                      pk_col.Name(), pk_col.Type().ToString(), fk_col.Name(), fk_col.Type().ToString());
-		}
-	}
-}
+		// Re-fetch the type modifiers now that we've deduplicated the ExtraTypeInfo
+		auto &type_mods = type.GetExtensionInfo()->modifiers;
 
-void ExpressionContainsGeneratedColumn(const ParsedExpression &expr, const unordered_set<string> &gcols,
-                                       bool &contains_gcol) {
-	if (contains_gcol) {
-		return;
-	}
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = expr.Cast<ColumnRefExpression>();
-		auto &name = column_ref.GetColumnName();
-		if (gcols.count(name)) {
-			contains_gcol = true;
-			return;
-		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { ExpressionContainsGeneratedColumn(child, gcols, contains_gcol); });
-}
-
-static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
-	unordered_set<string> generated_columns;
-	for (auto &col : table_info.columns.Logical()) {
-		if (!col.Generated()) {
-			continue;
-		}
-		generated_columns.insert(col.Name());
-	}
-	if (generated_columns.empty()) {
-		return false;
-	}
-
-	for (auto &constr : table_info.constraints) {
-		switch (constr->type) {
-		case ConstraintType::CHECK: {
-			auto &constraint = constr->Cast<CheckConstraint>();
-			auto &expr = constraint.expression;
-			bool contains_generated_column = false;
-			ExpressionContainsGeneratedColumn(*expr, generated_columns, contains_generated_column);
-			if (contains_generated_column) {
-				return true;
-			}
-			break;
-		}
-		case ConstraintType::NOT_NULL: {
-			auto &constraint = constr->Cast<NotNullConstraint>();
-			if (table_info.columns.GetColumn(constraint.index).Generated()) {
-				return true;
-			}
-			break;
-		}
-		case ConstraintType::UNIQUE: {
-			auto &constraint = constr->Cast<UniqueConstraint>();
-			if (!constraint.HasIndex()) {
-				for (auto &col : constraint.GetColumnNames()) {
-					if (generated_columns.count(col)) {
-						return true;
-					}
-				}
+		// Replace them in order, casting if necessary
+		for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
+			auto &type_mod = type_mods[i];
+			auto user_type_mod = user_type_mods[i];
+			if (type_mod.type() == user_type_mod.type()) {
+				type_mod = std::move(user_type_mod);
+			} else if (user_type_mod.DefaultTryCastAs(type_mod.type())) {
+				type_mod = std::move(user_type_mod);
 			} else {
-				if (table_info.columns.GetColumn(constraint.GetIndex()).Generated()) {
-					return true;
-				}
+				throw BinderException("Cannot apply type modifier '%s' to type '%s', expected value of type '%s'",
+				                      user_type_mod.ToString(), user_type_name, type_mod.type().ToString());
 			}
-			break;
 		}
-		case ConstraintType::FOREIGN_KEY: {
-			// If it contained a generated column, an exception would have been thrown inside AddDataTableIndex earlier
-			break;
-		}
-		default: {
-			throw NotImplementedException("ConstraintType not implemented");
-		}
-		}
+	} else if (!user_type_mods.empty()) {
+		// We're trying to pass type modifiers to a type that doesnt have any
+		throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
 	}
-	return false;
 }
 
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
@@ -646,66 +475,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
-		auto &create_info = stmt.info->Cast<CreateTableInfo>();
-		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
-		reference_set_t<SchemaCatalogEntry> fk_schemas;
-		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
-			auto &cond = create_info.constraints[i];
-			if (cond->type != ConstraintType::FOREIGN_KEY) {
-				continue;
-			}
-			auto &fk = cond->Cast<ForeignKeyConstraint>();
-			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-				continue;
-			}
-			D_ASSERT(fk.info.pk_keys.empty());
-			D_ASSERT(fk.info.fk_keys.empty());
-			FindForeignKeyIndexes(create_info.columns, fk.fk_columns, fk.info.fk_keys);
-
-			// Resolve the self-reference.
-			if (StringUtil::CIEquals(create_info.table, fk.info.table)) {
-				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
-				FindMatchingPrimaryKeyColumns(create_info.columns, create_info.constraints, fk);
-				FindForeignKeyIndexes(create_info.columns, fk.pk_columns, fk.info.pk_keys);
-				CheckForeignKeyTypes(create_info.columns, create_info.columns, fk);
-				continue;
-			}
-
-			// Resolve the table reference.
-			auto table_entry =
-			    entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, INVALID_CATALOG, fk.info.schema, fk.info.table);
-			if (table_entry->type == CatalogType::VIEW_ENTRY) {
-				throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
-			}
-
-			auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
-			fk_schemas.insert(pk_table_entry_ptr.schema);
-			FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
-			FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
-			CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
-			auto &storage = pk_table_entry_ptr.GetStorage();
-
-			if (!storage.HasForeignKeyIndex(fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE)) {
-				auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
-				throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
-				                      "present on these columns",
-				                      pk_table_entry_ptr.name, fk_column_names);
-			}
-
-			D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
-			D_ASSERT(fk.info.pk_keys.size() == fk.pk_columns.size());
-			D_ASSERT(fk.info.fk_keys.size() == fk.fk_columns.size());
-		}
-		if (AnyConstraintReferencesGeneratedColumn(create_info)) {
-			throw BinderException("Constraints on generated columns are not supported yet");
-		}
 		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
 		auto root = std::move(bound_info->query);
-		for (auto &fk_schema : fk_schemas) {
-			if (&fk_schema.get() != &bound_info->schema) {
-				throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
-			}
-		}
 
 		// create the logical operator
 		auto &schema = bound_info->schema;

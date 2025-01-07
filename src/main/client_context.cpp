@@ -76,6 +76,9 @@ private:
 #ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
 	~DebugClientContextState() override {
+		if (Exception::UncaughtException()) {
+			return;
+		}
 		D_ASSERT(!active_transaction);
 		D_ASSERT(!active_query);
 	}
@@ -167,9 +170,10 @@ void ClientContext::Destroy() {
 }
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
+	error.FinalizeError();
 	if (config.errors_as_json) {
 		error.ConvertErrorToJSON();
-	} else if (!query.empty()) {
+	} else {
 		error.AddErrorLocation(query);
 	}
 }

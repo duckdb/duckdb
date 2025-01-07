@@ -319,7 +319,7 @@ public:
 
 struct RoaringCompressState : public CompressionState {
 public:
-	explicit RoaringCompressState(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> analyze_state_p);
+	explicit RoaringCompressState(ColumnDataCheckpointData &checkpoint_data, unique_ptr<AnalyzeState> analyze_state_p);
 
 public:
 	//! RoaringStateAppender interface
@@ -350,7 +350,7 @@ public:
 	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> &container_metadata;
 
-	ColumnDataCheckpointer &checkpointer;
+	ColumnDataCheckpointData &checkpoint_data;
 	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
