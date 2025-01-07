@@ -75,6 +75,7 @@ __version__: str
 
 __interactive__: bool
 __jupyter__: bool
+__formatted_python_version__: str
 
 class BinderException(ProgrammingError): ...
 
