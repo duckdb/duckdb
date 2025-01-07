@@ -319,14 +319,6 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 }
 
-SegmentLock ColumnData::GetSegmentLock() {
-	return data.Lock();
-}
-
-vector<SegmentNode<ColumnSegment>> ColumnData::MoveSegments(const SegmentLock &lock) {
-	return data.MoveSegments();
-}
-
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
 	ColumnScanState child_state;
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);

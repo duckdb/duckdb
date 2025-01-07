@@ -94,19 +94,6 @@ public:
 		return *parent;
 	}
 
-	bool DoesNotRequireValidity() const {
-		if (type.id() != LogicalTypeId::VALIDITY) {
-			return false;
-		}
-		if (!parent->compression) {
-			return false;
-		}
-		if (parent->compression->validity != CompressionValidity::NO_VALIDITY_REQUIRED) {
-			return false;
-		}
-		return true;
-	}
-
 	virtual void SetStart(idx_t new_start);
 	//! The root type of the column
 	const LogicalType &RootType() const;
@@ -226,8 +213,6 @@ protected:
 	                    idx_t update_count, Vector &base_vector);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
-	SegmentLock GetSegmentLock();
-	vector<SegmentNode<ColumnSegment>> MoveSegments(const SegmentLock &lock);
 
 private:
 	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);

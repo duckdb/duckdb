@@ -51,19 +51,6 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 	return Vector(type, true, false);
 }
 
-// auto &config = DBConfig::GetConfig(GetDatabase());
-// if (is_validity && col_data_p.DoesNotRequireValidity()) {
-//	// The latest checkpointed base data, that this validity belongs to, was checkpointed with a compression
-//	// function that also encodes the validity mask. Therefore the validity mask does not have to be separately
-//	// compressed.
-//	auto empty_validity =
-//	    config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, GetType().InternalType());
-//	compression_functions.push_back(empty_validity);
-//} else {
-//	auto functions = config.GetCompressionFunctions(GetType().InternalType());
-//	for (auto &func : functions) {
-//		compression_functions.push_back(&func.get());
-
 ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &checkpoint_states,
                                                DatabaseInstance &db, RowGroup &row_group,
                                                ColumnCheckpointInfo &checkpoint_info)
