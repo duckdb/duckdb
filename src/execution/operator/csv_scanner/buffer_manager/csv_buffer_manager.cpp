@@ -7,7 +7,7 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
                                    const idx_t file_idx_p, bool per_file_single_threaded_p,
                                    unique_ptr<CSVFileHandle> file_handle_p)
     : context(context_p), per_file_single_threaded(per_file_single_threaded_p), file_idx(file_idx_p),
-      file_path(file_path_p), buffer_size(options.buffer_size.GetValue()) {
+      file_path(file_path_p), buffer_size(options.buffer_size_option.GetValue()) {
 	D_ASSERT(!file_path.empty());
 	if (file_handle_p) {
 		file_handle = std::move(file_handle_p);

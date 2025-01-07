@@ -840,7 +840,7 @@
         "type": "bool"
       },
       {"id": 143,
-        "name": "buffer_size",
+        "name": "buffer_size_option",
         "type": "CSVOption<idx_t>"
       }
     ],

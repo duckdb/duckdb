@@ -10,7 +10,7 @@ namespace duckdb {
 CSVFileHandle::CSVFileHandle(DBConfig &config, unique_ptr<FileHandle> file_handle_p, const string &path_p,
                              const CSVReaderOptions &options)
     : compression_type(options.compression), file_handle(std::move(file_handle_p)),
-      encoder(config, options.encoding, options.buffer_size.GetValue()), path(path_p) {
+      encoder(config, options.encoding, options.buffer_size_option.GetValue()), path(path_p) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();

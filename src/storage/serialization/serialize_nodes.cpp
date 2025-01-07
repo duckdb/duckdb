@@ -212,7 +212,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CSVOption<bool>>(140, "rfc_4180", dialect_options.state_machine_options.rfc_4180);
 	serializer.WriteProperty<CSVOption<string>>(141, "multi_byte_delimiter", GetMultiByteDelimiter());
 	serializer.WritePropertyWithDefault<bool>(142, "multi_file_reader", multi_file_reader);
-	serializer.WriteProperty<CSVOption<idx_t>>(143, "buffer_size", buffer_size);
+	serializer.WriteProperty<CSVOption<idx_t>>(143, "buffer_size_option", buffer_size_option);
 }
 
 CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -297,7 +297,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	result.encoding = std::move(encoding);
 	result.dialect_options.state_machine_options.rfc_4180 = dialect_options_state_machine_options_rfc_4180;
 	deserializer.ReadPropertyWithDefault<bool>(142, "multi_file_reader", result.multi_file_reader);
-	deserializer.ReadProperty<CSVOption<idx_t>>(143, "buffer_size", result.buffer_size);
+	deserializer.ReadProperty<CSVOption<idx_t>>(143, "buffer_size_option", result.buffer_size_option);
 	return result;
 }
 
