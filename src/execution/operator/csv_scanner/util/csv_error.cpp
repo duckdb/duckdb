@@ -113,6 +113,7 @@ idx_t CSVErrorHandler::GetSize() {
 
 bool IsCSVErrorAcceptedReject(CSVErrorType type) {
 	switch (type) {
+	case CSVErrorType::INVALID_STATE:
 	case CSVErrorType::CAST_ERROR:
 	case CSVErrorType::TOO_MANY_COLUMNS:
 	case CSVErrorType::TOO_FEW_COLUMNS:
@@ -138,6 +139,8 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 		return "UNQUOTED VALUE";
 	case CSVErrorType::INVALID_UNICODE:
 		return "INVALID UNICODE";
+	case CSVErrorType::INVALID_STATE:
+		return "INVALID STATE";
 	default:
 		throw InternalException("CSV Error is not valid to be stored in a Rejects Table");
 	}

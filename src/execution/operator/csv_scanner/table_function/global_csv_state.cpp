@@ -187,8 +187,8 @@ idx_t CSVGlobalState::MaxThreads() const {
 	if (single_threaded || !file_scans.front()->on_disk_file) {
 		return system_threads;
 	}
-	const idx_t total_threads = file_scans.front()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
-
+	const idx_t bytes_per_thread = CSVIterator::BytesPerThread(file_scans.front()->options);
+	const idx_t total_threads = file_scans.front()->file_size / bytes_per_thread + 1;
 	if (total_threads < system_threads) {
 		return total_threads;
 	}
