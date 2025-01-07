@@ -274,9 +274,9 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	// 10. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	std::ostringstream columns;
 	columns << "{";
-	for (idx_t i = 0; i < file.types.size(); i++) {
-		columns << "'" << file.names[i] << "': '" << file.types[i].ToString() << "'";
-		if (i != file.types.size() - 1) {
+	for (idx_t i = 0; i < file.return_types.size(); i++) {
+		columns << "'" << file.names[i] << "': '" << file.return_types[i].ToString() << "'";
+		if (i != file.return_types.size() - 1) {
 			columns << ",";
 		}
 	}

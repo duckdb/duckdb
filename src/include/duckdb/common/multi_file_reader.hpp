@@ -240,14 +240,12 @@ struct MultiFileReader {
 		if (options.file_options.union_by_name) {
 			if (!options.file_options.cache_union_readers) {
 				// Have to initialize first reader if we're not caching union readers
-				shared_ptr<READER_CLASS> reader;
-				reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
+				auto reader = READER_CLASS::CreateReaderPtr(context, files.GetFirstFile(), options);
 				result.Initialize(std::move(reader));
 			}
 			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
 		} else {
-			shared_ptr<READER_CLASS> reader;
-			reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
+			auto reader = READER_CLASS::CreateReaderPtr(context, files.GetFirstFile(), options);
 			return_types = reader->return_types;
 			names = reader->names;
 			result.Initialize(std::move(reader));

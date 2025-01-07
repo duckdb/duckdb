@@ -21,7 +21,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 		auto &union_reader = *bind_data.initial_reader;
 		names = union_reader.GetNames();
 		options = union_reader.options;
-		types = union_reader.GetTypes();
+		return_types = union_reader.GetTypes();
 		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 		                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
 		InitializeFileNamesTypes();
@@ -30,15 +30,15 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 	if (!bind_data.column_info.empty()) {
 		// Serialized Union By name
 		names = bind_data.column_info[0].names;
-		types = bind_data.column_info[0].types;
+		return_types = bind_data.column_info[0].types;
 		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 		                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
 		InitializeFileNamesTypes();
 		return;
 	}
 	names = bind_data.csv_names;
-	types = bind_data.csv_types;
-	file_schema.Initialize(names, types, file_path);
+	return_types = bind_data.csv_types;
+	file_schema.Initialize(names, return_types, file_path);
 	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 	                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
 
@@ -74,7 +74,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		file_size = union_reader.file_size;
 		names = union_reader.GetNames();
 		options = union_reader.options;
-		types = union_reader.GetTypes();
+		return_types = union_reader.GetTypes();
 		state_machine = union_reader.state_machine;
 		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, bind_data.return_types,
 		                                    bind_data.return_names, column_ids, nullptr, file_path, context, nullptr);
@@ -95,11 +95,11 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	if (file_idx < bind_data.column_info.size()) {
 		// (Serialized) Union By name
 		names = bind_data.column_info[file_idx].names;
-		types = bind_data.column_info[file_idx].types;
+		return_types = bind_data.column_info[file_idx].types;
 		if (file_idx < bind_data.union_readers.size()) {
 			// union readers - use cached options
 			D_ASSERT(names == bind_data.union_readers[file_idx]->names);
-			D_ASSERT(types == bind_data.union_readers[file_idx]->types);
+			D_ASSERT(return_types == bind_data.union_readers[file_idx]->types);
 			options = bind_data.union_readers[file_idx]->options;
 		} else {
 			// Serialized union by name - sniff again
@@ -120,18 +120,20 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	}
 	// Sniff it!
 	names = bind_data.csv_names;
-	types = bind_data.csv_types;
+	return_types = bind_data.csv_types;
 	if (options.auto_detect && bind_data.files.size() > 1) {
 		if (file_schema.Empty()) {
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
-			file_schema.Initialize(bind_data.csv_names, bind_data.csv_types, options.file_path);
+			file_schema.Initialize(result.names, result.return_types, options.file_path);
+			names = result.names;
+			return_types = result.return_types;
 		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
 			options.file_path = file_path;
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache, false);
 			auto result = sniffer.AdaptiveSniff(file_schema);
 			names = result.names;
-			types = result.return_types;
+			return_types = result.return_types;
 		}
 	}
 	if (options.dialect_options.num_cols == 0) {
@@ -165,7 +167,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const 
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
 			names = sniffer_result.names;
-			types = sniffer_result.return_types;
+			return_types = sniffer_result.return_types;
 		}
 	}
 	if (options.dialect_options.num_cols == 0) {
@@ -190,13 +192,13 @@ void CSVFileScan::InitializeFileNamesTypes() {
 
 	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
 		idx_t result_idx = reader_data.column_ids[i];
-		file_types.emplace_back(types[result_idx]);
+		file_types.emplace_back(return_types[result_idx]);
 		projected_columns.insert(result_idx);
 		projection_ids.emplace_back(result_idx, i);
 	}
 
 	if (reader_data.column_ids.empty()) {
-		file_types = types;
+		file_types = return_types;
 	}
 
 	// We need to be sure that our types are also following the cast_map
@@ -224,7 +226,7 @@ const vector<string> &CSVFileScan::GetNames() {
 	return names;
 }
 const vector<LogicalType> &CSVFileScan::GetTypes() {
-	return types;
+	return return_types;
 }
 
 void CSVFileScan::InitializeProjection() {

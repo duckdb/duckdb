@@ -58,19 +58,23 @@ public:
 	void InitializeProjection();
 	void Finish();
 
+	static unique_ptr<CSVFileScan> CreateReaderPtr(ClientContext &context, string file_name, CSVReaderOptions csv_options) {
+		return make_uniq<CSVFileScan>(context, file_name, csv_options);
+	}
+
 	static unique_ptr<CSVUnionData> StoreUnionReader(unique_ptr<CSVFileScan> scan_p, idx_t file_idx) {
 		auto data = make_uniq<CSVUnionData>();
 		if (file_idx == 0) {
 			data->file_name = scan_p->file_path;
 			data->options = scan_p->options;
 			data->names = scan_p->names;
-			data->types = scan_p->types;
+			data->types = scan_p->return_types;
 			data->reader = std::move(scan_p);
 		} else {
 			data->file_name = scan_p->file_path;
 			data->options = std::move(scan_p->options);
 			data->names = std::move(scan_p->names);
-			data->types = std::move(scan_p->types);
+			data->types = std::move(scan_p->return_types);
 		}
 		data->options.auto_detect = false;
 		return data;
@@ -97,7 +101,7 @@ public:
 	bool on_disk_file = true;
 
 	vector<string> names;
-	vector<LogicalType> types;
+	vector<LogicalType> return_types;
 	MultiFileReaderData reader_data;
 
 	vector<LogicalType> file_types;
