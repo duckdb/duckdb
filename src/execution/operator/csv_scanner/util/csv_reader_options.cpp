@@ -548,6 +548,13 @@ void CSVReaderOptions::Verify() {
 	}
 }
 
+bool GetBooleanValue(const pair<const string, Value> &option) {
+	if (option.second.IsNull()) {
+		throw BinderException("read_csv %s cannot be NULL", option.first);
+	}
+	return BooleanValue::Get(option.second);
+}
+
 void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context) {
 	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
@@ -677,9 +684,9 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 				sql_type_list.push_back(std::move(def_type));
 			}
 		} else if (loption == "all_varchar") {
-			all_varchar = BooleanValue::Get(kv.second);
+			all_varchar = GetBooleanValue(kv);
 		} else if (loption == "normalize_names") {
-			normalize_names = BooleanValue::Get(kv.second);
+			normalize_names = GetBooleanValue(kv);
 		} else {
 			SetReadOption(loption, kv.second, name_list);
 		}
@@ -691,7 +698,6 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 		user_defined_parameters.erase(user_defined_parameters.size() - 2);
 	}
 }
-
 //! This function is used to remember options set by the sniffer, for use in ReadCSVRelation
 void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;

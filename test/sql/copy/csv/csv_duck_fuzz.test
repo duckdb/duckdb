@@ -5,14 +5,17 @@
 statement ok
 PRAGMA enable_verification
 
-foreach paramenter sep delim quote new_line escape nullstr columns auto_type_candidates header auto_detect sample_size all_varchar dateformat timestampformat normalize_names compression skip max_line_size maximum_line_size ignore_errors store_rejects rejects_table rejects_scan rejects_limit force_not_null buffer_size decimal_separator parallel null_padding allow_quoted_nulls column_types dtypes types names column_names comment encoding rfc_4180
+# The important thing here is that we don't crash, some parameters accept null values (i.e., delimiter),
+# and others will have different error messages, not making it possible to use a regex to test errors.
 
-statement error
-SELECT NULL FROM sniff_csv(NULL, ${paramenter} := NULL)
+foreach parameter sep delim quote new_line escape nullstr columns auto_type_candidates header auto_detect sample_size all_varchar dateformat timestampformat normalize_names compression skip max_line_size maximum_line_size ignore_errors store_rejects rejects_table rejects_scan rejects_limit force_not_null buffer_size decimal_separator parallel null_padding allow_quoted_nulls column_types dtypes types names column_names comment encoding rfc_4180
+
+statement maybe
+SELECT NULL FROM sniff_csv('data/csv/14512.csv', ${parameter} := NULL)
 ----
 
-statement error
-SELECT NULL FROM read_csv(NULL, ${paramenter} := NULL)
+statement maybe
+SELECT NULL FROM read_csv('data/csv/14512.csv', ${parameter} := NULL)
 ----
 
 endloop
@@ -20,7 +23,9 @@ endloop
 statement error
 SELECT NULL FROM sniff_csv(NULL)
 ----
+sniff_csv cannot take NULL as a file path parameter
 
 statement error
 SELECT NULL FROM read_csv(NULL)
 ----
+read_csv cannot take NULL list as parameter
