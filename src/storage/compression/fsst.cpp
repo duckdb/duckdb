@@ -463,6 +463,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	size_t compress_buffer_size = MaxValue<size_t>(total_size * 2 + 7, 1);
 	vector<unsigned char *> strings_out(total_count, nullptr);
 	vector<size_t> sizes_out(total_count, 0);
+	// FIXME: Isn't this wasteful? why are we initializing this memory with 0s ?
 	vector<unsigned char> compress_buffer(compress_buffer_size, 0);
 
 	auto res = duckdb_fsst_compress(

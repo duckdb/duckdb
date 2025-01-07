@@ -8,8 +8,7 @@ namespace dict_fsst {
 DictFSSTCompressionCompressState::DictFSSTCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
                                                                    const CompressionInfo &info)
     : DictFSSTCompressionState(info), checkpoint_data(checkpoint_data_p),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICT_FSST)),
-      heap(BufferAllocator::Get(checkpoint_data.GetDatabase())) {
+      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICT_FSST)) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 
@@ -79,7 +78,9 @@ void DictFSSTCompressionCompressState::AddNewString(string_t str) {
 	if (str.IsInlined()) {
 		current_string_map.insert({str, index_buffer.size() - 1});
 	} else {
-		current_string_map.insert({heap.AddBlob(str), index_buffer.size() - 1});
+		string_t dictionary_string((const char *)dict_pos, UnsafeNumericCast<uint32_t>(str.GetSize())); // NOLINT
+		D_ASSERT(!dictionary_string.IsInlined());
+		current_string_map.insert({dictionary_string, index_buffer.size() - 1});
 	}
 	DictFSSTCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
 
