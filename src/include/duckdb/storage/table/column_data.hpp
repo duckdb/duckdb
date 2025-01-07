@@ -48,24 +48,6 @@ public:
 	CompressionType GetCompressionType();
 };
 
-struct ColumnCheckpointData {
-	ColumnCheckpointData(SegmentLock &base_lock, SegmentLock &validity_lock, column_segment_vector_t &&base,
-	                     column_segment_vector_t &&validity)
-	    : base_lock(base_lock), validity_lock(validity_lock), base_data(std::move(base)),
-	      validity_data(std::move(validity)) {
-	}
-
-public:
-	//! The lock for the column data
-	SegmentLock &base_lock;
-	//! The lock for the validity data
-	SegmentLock &validity_lock;
-	//! The actual column data
-	column_segment_vector_t base_data;
-	//! The accompanying validity data
-	column_segment_vector_t validity_data;
-};
-
 class ColumnData {
 	friend class ColumnDataCheckpointer;
 
@@ -130,6 +112,7 @@ public:
 	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
+	virtual bool HasChanges(idx_t start_row, idx_t end_row) const;
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 
@@ -266,8 +249,6 @@ protected:
 private:
 	//! The parent column (if any)
 	optional_ptr<ColumnData> parent;
-	//! The validity data (if any)
-	optional_ptr<ColumnData> validity;
 	//!	The compression function used by the ColumnData
 	//! This is empty if the segments have mixed compression or the ColumnData is empty
 	atomic_ptr<const CompressionFunction> compression;

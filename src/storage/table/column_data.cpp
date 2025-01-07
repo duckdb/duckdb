@@ -27,8 +27,6 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
       type(std::move(type_p)), allocation_size(0), parent(parent) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
-	} else if (type.id() == LogicalTypeId::VALIDITY) {
-		parent->validity = this;
 	}
 }
 
@@ -63,6 +61,16 @@ const LogicalType &ColumnData::RootType() const {
 bool ColumnData::HasUpdates() const {
 	lock_guard<mutex> update_guard(update_lock);
 	return updates.get();
+}
+
+bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
+	if (!updates) {
+		return false;
+	}
+	if (updates->HasUpdates(start_row, end_row)) {
+		return true;
+	}
+	return false;
 }
 
 void ColumnData::ClearUpdates() {

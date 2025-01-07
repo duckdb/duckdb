@@ -34,6 +34,21 @@ ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx
 	return validity.GetVectorScanType(state.child_states[0], scan_count, result);
 }
 
+bool StandardColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
+	if (ColumnData::HasChanges(start_row, end_row)) {
+		return true;
+	}
+	auto validity_compression = validity.GetCompressionFunction();
+	if (!validity_compression) {
+		return false;
+	}
+	if (validity_compression->type != CompressionType::COMPRESSION_EMPTY) {
+		// Validity data is separately compressed, this segment is not responsible for storing the validity
+		return false;
+	}
+	return validity.HasChanges(start_row, end_row);
+}
+
 void StandardColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
 	ColumnData::InitializePrefetch(prefetch_state, scan_state, rows);
 	validity.InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);

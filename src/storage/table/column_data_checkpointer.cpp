@@ -225,22 +225,7 @@ bool ColumnDataCheckpointer::HasChanges(const column_segment_vector_t &nodes) {
 		// persistent segment; check if there were any updates or deletions in this segment
 		idx_t start_row_idx = segment->start - row_group.start;
 		idx_t end_row_idx = start_row_idx + segment->count;
-		if (col_data.updates && col_data.updates->HasUpdates(start_row_idx, end_row_idx)) {
-			return true;
-		}
-		if (!col_data.validity) {
-			// This data doesn't have validity data associated with it (likely because it *is* validity)
-			continue;
-		}
-		if (!col_data.validity->compression) {
-			// Validity data not all compressed with the same compression function
-			continue;
-		}
-		if (col_data.validity->compression->type != CompressionType::COMPRESSION_EMPTY) {
-			// Validity data is separately compressed, this segment is not responsible for storing the validity
-			continue;
-		}
-		if (col_data.validity->updates && col_data.validity->updates->HasUpdates(start_row_idx, end_row_idx)) {
+		if (col_data.HasChanges(start_row_idx, end_row_idx)) {
 			return true;
 		}
 	}
