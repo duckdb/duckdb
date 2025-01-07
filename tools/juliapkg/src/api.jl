@@ -109,6 +109,34 @@ function duckdb_connect(database, out_connection)
 end
 
 """
+    duckdb_interrupt(connection)
+
+Interrupt running query
+
+# Arguments
+- `connection`: The connection to interrupt
+
+Returns: nothing
+"""
+function duckdb_interrupt(connection)
+    return ccall((:duckdb_interrupt, libduckdb), Cvoid, (duckdb_connection,), connection)
+end
+
+"""
+    duckdb_query_progress(connection)
+
+Get progress of the running query
+
+# Arguments
+- `connection`: The working connection
+
+Returns: -1 if no progress or a percentage of the progress
+"""
+function duckdb_query_progress(connection)
+    return ccall((:duckdb_query_progress, libduckdb), duckdb_query_progress_type, (duckdb_connection,), connection)
+end
+
+"""
     duckdb_disconnect(connection)
 
 Closes the specified connection and de-allocates all memory allocated for that connection.
@@ -121,6 +149,23 @@ Returns: nothing
 function duckdb_disconnect(connection)
     return ccall((:duckdb_disconnect, libduckdb), Cvoid, (Ref{duckdb_connection},), connection)
 end
+
+"""
+    duckdb_library_version()
+
+Returns the version of the linked DuckDB, with a version postfix for dev versions
+
+Usually used for developing C extensions that must return this for a compatibility check.
+
+# Arguments
+
+Returns: nothing
+"""
+function duckdb_library_version()
+    return ccall((:duckdb_library_version, libduckdb), Cstring, ())
+end
+
+
 
 # --------------------------------------------------------------------------------
 # Configuration
@@ -223,6 +268,8 @@ function duckdb_destroy_config(config)
     return ccall((:duckdb_destroy_config, libduckdb), Cvoid, (Ref{duckdb_config},), config)
 end
 
+
+
 # --------------------------------------------------------------------------------
 # Query Execution
 # --------------------------------------------------------------------------------
@@ -302,6 +349,20 @@ Returns: The column type of the specified column.
 """
 function duckdb_column_type(result, col)
     return ccall((:duckdb_column_type, libduckdb), DUCKDB_TYPE, (Ref{duckdb_result}, idx_t), result, col - 1)
+end
+
+"""
+    duckdb_result_statement_type(result)
+
+Returns the statement type of the statement that was executed
+
+# Arguments
+- `result`: The result object to fetch the statement type from.
+
+Returns: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
+"""
+function duckdb_result_statement_type(result)
+    return ccall((:duckdb_result_statement_type, libduckdb), duckdb_statement_type, (duckdb_result,), result)
 end
 
 """
@@ -455,6 +516,23 @@ function duckdb_result_error(result)
     return ccall((:duckdb_result_error, libduckdb), Cstring, (Ref{duckdb_result},), result)
 end
 
+"""
+    duckdb_result_error_type(result)
+
+Returns the result error type contained within the result. The error is only set if `duckdb_query` returns
+`DuckDBError`.
+
+# Arguments
+- `result`: The result object to fetch the error from.
+
+Returns: The error type of the result.
+"""
+function duckdb_result_error_type(result)
+    return ccall((:duckdb_result_error_type, libduckdb), duckdb_error_type, (Ref{duckdb_result},), result)
+end
+
+
+
 # --------------------------------------------------------------------------------
 # Result Functions
 # --------------------------------------------------------------------------------
@@ -516,44 +594,6 @@ function duckdb_result_is_streaming(result)
     return ccall((:duckdb_result_is_streaming, libduckdb), Bool, (duckdb_result,), result)
 end
 
-# --------------------------------------------------------------------------------
-# Streaming Result Interface
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_stream_fetch_chunk(result)
-
-**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
-
-Fetches a data chunk from the (streaming) duckdb_result. This function should be called repeatedly until the result is
-exhausted.
-
-The result must be destroyed with `duckdb_destroy_data_chunk`.
-
-This function can only be used on duckdb_results created with 'duckdb_pending_prepared_streaming'
-
-If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be
-mixed with the legacy result functions or the materialized result functions).
-
-It is not known beforehand how many chunks will be returned by this result.
-
-# Arguments
-- `result`: The result object to fetch the data chunk from.
-
-Returns: The resulting data chunk. Returns `NULL` if the result has an error.
-"""
-function duckdb_stream_fetch_chunk(result)
-    Base.depwarn(
-        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
-        :duckdb_stream_fetch_chunk
-    )
-    return ccall((:duckdb_stream_fetch_chunk, libduckdb), duckdb_data_chunk, (duckdb_result,), result)
-end
-
-# --------------------------------------------------------------------------------
-# Result Functions
-# --------------------------------------------------------------------------------
-
 """
     duckdb_result_chunk_count(result)
 
@@ -573,6 +613,22 @@ function duckdb_result_chunk_count(result)
     )
     return ccall((:duckdb_result_chunk_count, libduckdb), idx_t, (duckdb_result,), result)
 end
+
+"""
+    duckdb_result_return_type(result)
+
+Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
+
+# Arguments
+- `result`: The result object
+
+Returns: The return_type
+"""
+function duckdb_result_return_type(result)
+    return ccall((:duckdb_result_return_type, libduckdb), duckdb_result_type, (duckdb_result,), result)
+end
+
+
 
 # --------------------------------------------------------------------------------
 # Safe Fetch Functions
@@ -725,6 +781,33 @@ function duckdb_value_uhugeint(result, col, row)
     return ccall(
         (:duckdb_value_uhugeint, libduckdb),
         duckdb_uhugeint,
+        (Ref{duckdb_result}, idx_t, idx_t),
+        result,
+        col - 1,
+        row - 1
+    )
+end
+
+"""
+    duckdb_value_decimal(result, col, row)
+
+**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+# Arguments
+- `result`: 
+- `col`: 
+- `row`: 
+
+Returns: The duckdb_decimal value at the specified location, or 0 if the value cannot be converted.
+"""
+function duckdb_value_decimal(result, col, row)
+    Base.depwarn(
+        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
+        :duckdb_value_decimal
+    )
+    return ccall(
+        (:duckdb_value_decimal, libduckdb),
+        duckdb_decimal,
         (Ref{duckdb_result}, idx_t, idx_t),
         result,
         col - 1,
@@ -1024,6 +1107,36 @@ function duckdb_value_varchar(result, col, row)
 end
 
 """
+    duckdb_value_string(result, col, row)
+
+**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+No support for nested types, and for other complex types.
+The resulting field \"string.data\" must be freed with `duckdb_free.`
+
+# Arguments
+- `result`: 
+- `col`: 
+- `row`: 
+
+Returns: The string value at the specified location. Attempts to cast the result value to string.
+"""
+function duckdb_value_string(result, col, row)
+    Base.depwarn(
+        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
+        :duckdb_value_string
+    )
+    return ccall(
+        (:duckdb_value_string, libduckdb),
+        duckdb_string,
+        (Ref{duckdb_result}, idx_t, idx_t),
+        result,
+        col - 1,
+        row - 1
+    )
+end
+
+"""
     duckdb_value_varchar_internal(result, col, row)
 
 **DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
@@ -1055,6 +1168,65 @@ function duckdb_value_varchar_internal(result, col, row)
 end
 
 """
+    duckdb_value_string_internal(result, col, row)
+
+**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
+null bytes.
+
+# Arguments
+- `result`: 
+- `col`: 
+- `row`: 
+
+Returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
+If the column is NOT a VARCHAR column this function will return NULL.
+
+The result must NOT be freed.
+"""
+function duckdb_value_string_internal(result, col, row)
+    Base.depwarn(
+        "**DEPRECATION NOTICE**: **DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains",
+        :duckdb_value_string_internal
+    )
+    return ccall(
+        (:duckdb_value_string_internal, libduckdb),
+        duckdb_string,
+        (Ref{duckdb_result}, idx_t, idx_t),
+        result,
+        col - 1,
+        row - 1
+    )
+end
+
+"""
+    duckdb_value_blob(result, col, row)
+
+**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+# Arguments
+- `result`: 
+- `col`: 
+- `row`: 
+
+Returns: The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the
+value cannot be converted. The resulting field "blob.data" must be freed with `duckdb_free.`
+"""
+function duckdb_value_blob(result, col, row)
+    Base.depwarn(
+        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
+        :duckdb_value_blob
+    )
+    return ccall(
+        (:duckdb_value_blob, libduckdb),
+        duckdb_blob,
+        (Ref{duckdb_result}, idx_t, idx_t),
+        result,
+        col - 1,
+        row - 1
+    )
+end
+
+"""
     duckdb_value_is_null(result, col, row)
 
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
@@ -1073,6 +1245,8 @@ function duckdb_value_is_null(result, col, row)
     )
     return ccall((:duckdb_value_is_null, libduckdb), Bool, (Ref{duckdb_result}, idx_t, idx_t), result, col - 1, row - 1)
 end
+
+
 
 # --------------------------------------------------------------------------------
 # Helpers
@@ -1122,9 +1296,125 @@ function duckdb_vector_size()
     return ccall((:duckdb_vector_size, libduckdb), idx_t, ())
 end
 
+"""
+    duckdb_string_is_inlined(string)
+
+Whether or not the duckdb_string_t value is inlined.
+This means that the data of the string does not have a separate allocation.
+
+# Arguments
+- `string`: 
+
+Returns: nothing
+"""
+function duckdb_string_is_inlined(string)
+    return ccall((:duckdb_string_is_inlined, libduckdb), Bool, (duckdb_string_t,), string)
+end
+
+"""
+    duckdb_string_t_length(string)
+
+Get the string length of a string_t
+
+# Arguments
+- `string`: The string to get the length of.
+
+Returns: The length.
+"""
+function duckdb_string_t_length(string)
+    return ccall((:duckdb_string_t_length, libduckdb), UInt32, (duckdb_string_t,), string)
+end
+
+"""
+    duckdb_string_t_data(string)
+
+Get a pointer to the string data of a string_t
+
+# Arguments
+- `string`: The string to get the pointer to.
+
+Returns: The pointer.
+"""
+function duckdb_string_t_data(string)
+    return ccall((:duckdb_string_t_data, libduckdb), Cstring, (Ref{duckdb_string_t},), string)
+end
+
+
+
 # --------------------------------------------------------------------------------
 # Date Time Timestamp Helpers
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_from_date(date)
+
+Decompose a `duckdb_date` object into year, month and date (stored as `duckdb_date_struct`).
+
+# Arguments
+- `date`: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
+
+Returns: The `duckdb_date_struct` with the decomposed elements.
+"""
+function duckdb_from_date(date)
+    return ccall((:duckdb_from_date, libduckdb), duckdb_date_struct, (duckdb_date,), date)
+end
+
+"""
+    duckdb_to_date(date)
+
+Re-compose a `duckdb_date` from year, month and date (`duckdb_date_struct`).
+
+# Arguments
+- `date`: The year, month and date stored in a `duckdb_date_struct`.
+
+Returns: The `duckdb_date` element.
+"""
+function duckdb_to_date(date)
+    return ccall((:duckdb_to_date, libduckdb), duckdb_date, (duckdb_date_struct,), date)
+end
+
+"""
+    duckdb_is_finite_date(date)
+
+Test a `duckdb_date` to see if it is a finite value.
+
+# Arguments
+- `date`: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
+
+Returns: True if the date is finite, false if it is ±infinity.
+"""
+function duckdb_is_finite_date(date)
+    return ccall((:duckdb_is_finite_date, libduckdb), Bool, (duckdb_date,), date)
+end
+
+"""
+    duckdb_from_time(time)
+
+Decompose a `duckdb_time` object into hour, minute, second and microsecond (stored as `duckdb_time_struct`).
+
+# Arguments
+- `time`: The time object, as obtained from a `DUCKDB_TYPE_TIME` column.
+
+Returns: The `duckdb_time_struct` with the decomposed elements.
+"""
+function duckdb_from_time(time)
+    return ccall((:duckdb_from_time, libduckdb), duckdb_time_struct, (duckdb_time,), time)
+end
+
+"""
+    duckdb_create_time_tz(micros, offset)
+
+Create a `duckdb_time_tz` object from micros and a timezone offset.
+
+# Arguments
+- `micros`: The microsecond component of the time.
+- `offset`: The timezone offset component of the time.
+
+Returns: The `duckdb_time_tz` element.
+"""
+function duckdb_create_time_tz(micros, offset)
+    return ccall((:duckdb_create_time_tz, libduckdb), duckdb_time_tz, (Int64, Int32), micros, offset)
+end
 
 """
     duckdb_from_time_tz(micros)
@@ -1141,6 +1431,216 @@ Returns: nothing
 function duckdb_from_time_tz(micros)
     return ccall((:duckdb_from_time_tz, libduckdb), duckdb_time_tz_struct, (duckdb_time_tz,), micros)
 end
+
+"""
+    duckdb_to_time(time)
+
+Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).
+
+# Arguments
+- `time`: The hour, minute, second and microsecond in a `duckdb_time_struct`.
+
+Returns: The `duckdb_time` element.
+"""
+function duckdb_to_time(time)
+    return ccall((:duckdb_to_time, libduckdb), duckdb_time, (duckdb_time_struct,), time)
+end
+
+"""
+    duckdb_from_timestamp(ts)
+
+Decompose a `duckdb_timestamp` object into a `duckdb_timestamp_struct`.
+
+# Arguments
+- `ts`: The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
+
+Returns: The `duckdb_timestamp_struct` with the decomposed elements.
+"""
+function duckdb_from_timestamp(ts)
+    return ccall((:duckdb_from_timestamp, libduckdb), duckdb_timestamp_struct, (duckdb_timestamp,), ts)
+end
+
+"""
+    duckdb_to_timestamp(ts)
+
+Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
+
+# Arguments
+- `ts`: The de-composed elements in a `duckdb_timestamp_struct`.
+
+Returns: The `duckdb_timestamp` element.
+"""
+function duckdb_to_timestamp(ts)
+    return ccall((:duckdb_to_timestamp, libduckdb), duckdb_timestamp, (duckdb_timestamp_struct,), ts)
+end
+
+"""
+    duckdb_is_finite_timestamp(ts)
+
+Test a `duckdb_timestamp` to see if it is a finite value.
+
+# Arguments
+- `ts`: The duckdb_timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
+
+Returns: True if the timestamp is finite, false if it is ±infinity.
+"""
+function duckdb_is_finite_timestamp(ts)
+    return ccall((:duckdb_is_finite_timestamp, libduckdb), Bool, (duckdb_timestamp,), ts)
+end
+
+"""
+    duckdb_is_finite_timestamp_s(ts)
+
+Test a `duckdb_timestamp_s` to see if it is a finite value.
+
+# Arguments
+- `ts`: The duckdb_timestamp_s object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column.
+
+Returns: True if the timestamp is finite, false if it is ±infinity.
+"""
+function duckdb_is_finite_timestamp_s(ts)
+    return ccall((:duckdb_is_finite_timestamp_s, libduckdb), Bool, (duckdb_timestamp_s,), ts)
+end
+
+"""
+    duckdb_is_finite_timestamp_ms(ts)
+
+Test a `duckdb_timestamp_ms` to see if it is a finite value.
+
+# Arguments
+- `ts`: The duckdb_timestamp_ms object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column.
+
+Returns: True if the timestamp is finite, false if it is ±infinity.
+"""
+function duckdb_is_finite_timestamp_ms(ts)
+    return ccall((:duckdb_is_finite_timestamp_ms, libduckdb), Bool, (duckdb_timestamp_ms,), ts)
+end
+
+"""
+    duckdb_is_finite_timestamp_ns(ts)
+
+Test a `duckdb_timestamp_ns` to see if it is a finite value.
+
+# Arguments
+- `ts`: The duckdb_timestamp_ns object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column.
+
+Returns: True if the timestamp is finite, false if it is ±infinity.
+"""
+function duckdb_is_finite_timestamp_ns(ts)
+    return ccall((:duckdb_is_finite_timestamp_ns, libduckdb), Bool, (duckdb_timestamp_ns,), ts)
+end
+
+
+
+# --------------------------------------------------------------------------------
+# Hugeint Helpers
+# --------------------------------------------------------------------------------
+
+"""
+    duckdb_hugeint_to_double(val)
+
+Converts a duckdb_hugeint object (as obtained from a `DUCKDB_TYPE_HUGEINT` column) into a double.
+
+# Arguments
+- `val`: The hugeint value.
+
+Returns: The converted `double` element.
+"""
+function duckdb_hugeint_to_double(val)
+    return ccall((:duckdb_hugeint_to_double, libduckdb), Float64, (duckdb_hugeint,), val)
+end
+
+"""
+    duckdb_double_to_hugeint(val)
+
+Converts a double value to a duckdb_hugeint object.
+
+If the conversion fails because the double value is too big the result will be 0.
+
+# Arguments
+- `val`: The double value.
+
+Returns: The converted `duckdb_hugeint` element.
+"""
+function duckdb_double_to_hugeint(val)
+    return ccall((:duckdb_double_to_hugeint, libduckdb), duckdb_hugeint, (Float64,), val)
+end
+
+
+
+# --------------------------------------------------------------------------------
+# Unsigned Hugeint Helpers
+# --------------------------------------------------------------------------------
+
+"""
+    duckdb_uhugeint_to_double(val)
+
+Converts a duckdb_uhugeint object (as obtained from a `DUCKDB_TYPE_UHUGEINT` column) into a double.
+
+# Arguments
+- `val`: The uhugeint value.
+
+Returns: The converted `double` element.
+"""
+function duckdb_uhugeint_to_double(val)
+    return ccall((:duckdb_uhugeint_to_double, libduckdb), Float64, (duckdb_uhugeint,), val)
+end
+
+"""
+    duckdb_double_to_uhugeint(val)
+
+Converts a double value to a duckdb_uhugeint object.
+
+If the conversion fails because the double value is too big the result will be 0.
+
+# Arguments
+- `val`: The double value.
+
+Returns: The converted `duckdb_uhugeint` element.
+"""
+function duckdb_double_to_uhugeint(val)
+    return ccall((:duckdb_double_to_uhugeint, libduckdb), duckdb_uhugeint, (Float64,), val)
+end
+
+
+
+# --------------------------------------------------------------------------------
+# Decimal Helpers
+# --------------------------------------------------------------------------------
+
+"""
+    duckdb_double_to_decimal(val, width, scale)
+
+Converts a double value to a duckdb_decimal object.
+
+If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
+
+# Arguments
+- `val`: The double value.
+- `width`: 
+- `scale`: 
+
+Returns: The converted `duckdb_decimal` element.
+"""
+function duckdb_double_to_decimal(val, width, scale)
+    return ccall((:duckdb_double_to_decimal, libduckdb), duckdb_decimal, (Float64, UInt8, UInt8), val, width, scale)
+end
+
+"""
+    duckdb_decimal_to_double(val)
+
+Converts a duckdb_decimal object (as obtained from a `DUCKDB_TYPE_DECIMAL` column) into a double.
+
+# Arguments
+- `val`: The decimal value.
+
+Returns: The converted `double` element.
+"""
+function duckdb_decimal_to_double(val)
+    return ccall((:duckdb_decimal_to_double, libduckdb), Float64, (duckdb_decimal,), val)
+end
+
+
 
 # --------------------------------------------------------------------------------
 # Prepared Statements
@@ -1222,6 +1722,30 @@ function duckdb_nparams(prepared_statement)
 end
 
 """
+    duckdb_parameter_name(prepared_statement, index)
+
+Returns the name used to identify the parameter
+The returned string should be freed using `duckdb_free`.
+
+Returns NULL if the index is out of range for the provided prepared statement.
+
+# Arguments
+- `prepared_statement`: The prepared statement for which to get the parameter name from.
+- `index`: 
+
+Returns: nothing
+"""
+function duckdb_parameter_name(prepared_statement, index)
+    return ccall(
+        (:duckdb_parameter_name, libduckdb),
+        Cstring,
+        (duckdb_prepared_statement, idx_t),
+        prepared_statement,
+        index
+    )
+end
+
+"""
     duckdb_param_type(prepared_statement, param_idx)
 
 Returns the parameter type for the parameter at the given index.
@@ -1244,9 +1768,115 @@ function duckdb_param_type(prepared_statement, param_idx)
     )
 end
 
+"""
+    duckdb_param_logical_type(prepared_statement, param_idx)
+
+Returns the logical type for the parameter at the given index.
+
+Returns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.
+
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+# Arguments
+- `prepared_statement`: The prepared statement.
+- `param_idx`: The parameter index.
+
+Returns: The logical type of the parameter
+"""
+function duckdb_param_logical_type(prepared_statement, param_idx)
+    return ccall(
+        (:duckdb_param_logical_type, libduckdb),
+        duckdb_logical_type,
+        (duckdb_prepared_statement, idx_t),
+        prepared_statement,
+        param_idx
+    )
+end
+
+"""
+    duckdb_clear_bindings(prepared_statement)
+
+Clear the params bind to the prepared statement.
+
+# Arguments
+- `prepared_statement`: 
+
+Returns: nothing
+"""
+function duckdb_clear_bindings(prepared_statement)
+    return ccall((:duckdb_clear_bindings, libduckdb), duckdb_state, (duckdb_prepared_statement,), prepared_statement)
+end
+
+"""
+    duckdb_prepared_statement_type(statement)
+
+Returns the statement type of the statement to be executed
+
+# Arguments
+- `statement`: The prepared statement.
+
+Returns: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
+"""
+function duckdb_prepared_statement_type(statement)
+    return ccall(
+        (:duckdb_prepared_statement_type, libduckdb),
+        duckdb_statement_type,
+        (duckdb_prepared_statement,),
+        statement
+    )
+end
+
+
+
 # --------------------------------------------------------------------------------
 # Bind Values To Prepared Statements
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_bind_value(prepared_statement, param_idx, val)
+
+Binds a value to the prepared statement at the specified index.
+
+# Arguments
+- `prepared_statement`: 
+- `param_idx`: 
+- `val`: 
+
+Returns: nothing
+"""
+function duckdb_bind_value(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_value, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, idx_t, duckdb_value),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+    duckdb_bind_parameter_index(prepared_statement, param_idx_out, name)
+
+Retrieve the index of the parameter for the prepared statement, identified by name
+
+# Arguments
+- `prepared_statement`: 
+- `param_idx_out`: 
+- `name`: 
+
+Returns: nothing
+"""
+function duckdb_bind_parameter_index(prepared_statement, param_idx_out, name)
+    return ccall(
+        (:duckdb_bind_parameter_index, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, Ref{idx_t}, Cstring),
+        prepared_statement,
+        param_idx_out,
+        name
+    )
+end
 
 """
     duckdb_bind_boolean(prepared_statement, param_idx, val)
@@ -1403,6 +2033,29 @@ function duckdb_bind_uhugeint(prepared_statement, param_idx, val)
         (:duckdb_bind_uhugeint, libduckdb),
         duckdb_state,
         (duckdb_prepared_statement, idx_t, duckdb_uhugeint),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
+    duckdb_bind_decimal(prepared_statement, param_idx, val)
+
+Binds a duckdb_decimal value to the prepared statement at the specified index.
+
+# Arguments
+- `prepared_statement`: 
+- `param_idx`: 
+- `val`: 
+
+Returns: nothing
+"""
+function duckdb_bind_decimal(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_decimal, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, idx_t, duckdb_decimal),
         prepared_statement,
         param_idx,
         val
@@ -1617,6 +2270,29 @@ function duckdb_bind_timestamp(prepared_statement, param_idx, val)
 end
 
 """
+    duckdb_bind_timestamp_tz(prepared_statement, param_idx, val)
+
+Binds a duckdb_timestamp value to the prepared statement at the specified index.
+
+# Arguments
+- `prepared_statement`: 
+- `param_idx`: 
+- `val`: 
+
+Returns: nothing
+"""
+function duckdb_bind_timestamp_tz(prepared_statement, param_idx, val)
+    return ccall(
+        (:duckdb_bind_timestamp_tz, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, idx_t, duckdb_timestamp),
+        prepared_statement,
+        param_idx,
+        val
+    )
+end
+
+"""
     duckdb_bind_interval(prepared_statement, param_idx, val)
 
 Binds a duckdb_interval value to the prepared statement at the specified index.
@@ -1733,6 +2409,8 @@ function duckdb_bind_null(prepared_statement, param_idx)
     )
 end
 
+
+
 # --------------------------------------------------------------------------------
 # Execute Prepared Statements
 # --------------------------------------------------------------------------------
@@ -1762,2999 +2440,6 @@ function duckdb_execute_prepared(prepared_statement, out_result)
         out_result
     )
 end
-
-# --------------------------------------------------------------------------------
-# Pending Result Interface
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_pending_prepared(prepared_statement, out_result)
-
-Executes the prepared statement with the given bound parameters, and returns a pending result.
-The pending result represents an intermediate structure for a query that is not yet fully executed.
-The pending result can be used to incrementally execute a query, returning control to the client between tasks.
-
-Note that after calling `duckdb_pending_prepared`, the pending result should always be destroyed using
-`duckdb_destroy_pending`, even if this function returns DuckDBError.
-
-# Arguments
-- `prepared_statement`: The prepared statement to execute.
-- `out_result`: The pending query result.
-
-Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-"""
-function duckdb_pending_prepared(prepared_statement, out_result)
-    return ccall(
-        (:duckdb_pending_prepared, libduckdb),
-        duckdb_state,
-        (duckdb_prepared_statement, Ref{duckdb_pending_result}),
-        prepared_statement,
-        out_result
-    )
-end
-
-"""
-    duckdb_pending_prepared_streaming(prepared_statement, out_result)
-
-**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
-
-Executes the prepared statement with the given bound parameters, and returns a pending result.
-This pending result will create a streaming duckdb_result when executed.
-The pending result represents an intermediate structure for a query that is not yet fully executed.
-
-Note that after calling `duckdb_pending_prepared_streaming`, the pending result should always be destroyed using
-`duckdb_destroy_pending`, even if this function returns DuckDBError.
-
-# Arguments
-- `prepared_statement`: The prepared statement to execute.
-- `out_result`: The pending query result.
-
-Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-"""
-function duckdb_pending_prepared_streaming(prepared_statement, out_result)
-    Base.depwarn(
-        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
-        :duckdb_pending_prepared_streaming
-    )
-    return ccall(
-        (:duckdb_pending_prepared_streaming, libduckdb),
-        duckdb_state,
-        (duckdb_prepared_statement, Ref{duckdb_pending_result}),
-        prepared_statement,
-        out_result
-    )
-end
-
-"""
-    duckdb_pending_execute_check_state(pending_result)
-
-If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
-If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.
-If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
-
-The error message can be obtained by calling duckdb_pending_error on the pending_result.
-
-# Arguments
-- `pending_result`: The pending result.
-
-Returns: The state of the pending result.
-"""
-function duckdb_pending_execute_check_state(pending_result)
-    return ccall(
-        (:duckdb_pending_execute_check_state, libduckdb),
-        duckdb_pending_state,
-        (duckdb_pending_result,),
-        pending_result
-    )
-end
-
-"""
-    duckdb_destroy_pending(pending_result)
-
-Closes the pending result and de-allocates all memory allocated for the result.
-
-# Arguments
-- `pending_result`: The pending result to destroy.
-
-Returns: nothing
-"""
-function duckdb_destroy_pending(pending_result)
-    return ccall((:duckdb_destroy_pending, libduckdb), Cvoid, (Ref{duckdb_pending_result},), pending_result)
-end
-
-"""
-    duckdb_pending_error(pending_result)
-
-Returns the error message contained within the pending result.
-
-The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_pending` is called.
-
-# Arguments
-- `pending_result`: The pending result to fetch the error from.
-
-Returns: The error of the pending result.
-"""
-function duckdb_pending_error(pending_result)
-    return ccall((:duckdb_pending_error, libduckdb), Cstring, (duckdb_pending_result,), pending_result)
-end
-
-"""
-    duckdb_pending_execute_task(pending_result)
-
-Executes a single task within the query, returning whether or not the query is ready.
-
-If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
-If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_task function should be called again.
-If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
-
-The error message can be obtained by calling duckdb_pending_error on the pending_result.
-
-# Arguments
-- `pending_result`: The pending result to execute a task within.
-
-Returns: The state of the pending result after the execution.
-"""
-function duckdb_pending_execute_task(pending_result)
-    return ccall(
-        (:duckdb_pending_execute_task, libduckdb),
-        duckdb_pending_state,
-        (duckdb_pending_result,),
-        pending_result
-    )
-end
-
-"""
-    duckdb_execute_pending(pending_result, out_result)
-
-Fully execute a pending query result, returning the final query result.
-
-If duckdb_pending_execute_task has been called until DUCKDB_PENDING_RESULT_READY was returned, this will return fast.
-Otherwise, all remaining tasks must be executed first.
-
-Note that the result must be freed with `duckdb_destroy_result`.
-
-# Arguments
-- `pending_result`: The pending result to execute.
-- `out_result`: The result object.
-
-Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-"""
-function duckdb_execute_pending(pending_result, out_result)
-    return ccall(
-        (:duckdb_execute_pending, libduckdb),
-        duckdb_state,
-        (duckdb_pending_result, Ref{duckdb_result}),
-        pending_result,
-        out_result
-    )
-end
-
-"""
-    duckdb_pending_execution_is_finished(pending_state)
-
-Returns whether a duckdb_pending_state is finished executing. For example if `pending_state` is
-DUCKDB_PENDING_RESULT_READY, this function will return true.
-
-# Arguments
-- `pending_state`: The pending state on which to decide whether to finish execution.
-
-Returns: Boolean indicating pending execution should be considered finished.
-"""
-function duckdb_pending_execution_is_finished(pending_state)
-    return ccall((:duckdb_pending_execution_is_finished, libduckdb), Bool, (duckdb_pending_state,), pending_state)
-end
-
-# --------------------------------------------------------------------------------
-# Value Interface
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_destroy_value(value)
-
-Destroys the value and de-allocates all memory allocated for that type.
-
-# Arguments
-- `value`: The value to destroy.
-
-Returns: nothing
-"""
-function duckdb_destroy_value(value)
-    return ccall((:duckdb_destroy_value, libduckdb), Cvoid, (Ref{duckdb_value},), value)
-end
-
-"""
-    duckdb_create_varchar(text)
-
-Creates a value from a null-terminated string
-
-# Arguments
-- `text`: The null-terminated string
-
-Returns: The value. This must be destroyed with `duckdb_destroy_value`.
-"""
-function duckdb_create_varchar(text)
-    return ccall((:duckdb_create_varchar, libduckdb), duckdb_value, (Cstring,), text)
-end
-
-"""
-    duckdb_create_varchar_length(text, length)
-
-Creates a value from a string
-
-# Arguments
-- `text`: The text
-- `length`: The length of the text
-
-Returns: The value. This must be destroyed with `duckdb_destroy_value`.
-"""
-function duckdb_create_varchar_length(text, length)
-    return ccall((:duckdb_create_varchar_length, libduckdb), duckdb_value, (Cstring, idx_t), text, length)
-end
-
-"""
-    duckdb_create_int64(val)
-
-Creates a value from an int64
-
-# Arguments
-- `val`: 
-
-Returns: The value. This must be destroyed with `duckdb_destroy_value`.
-"""
-function duckdb_create_int64(val)
-    return ccall((:duckdb_create_int64, libduckdb), duckdb_value, (Int64,), val)
-end
-
-"""
-    duckdb_get_varchar(value)
-
-Obtains a string representation of the given value.
-The result must be destroyed with `duckdb_free`.
-
-# Arguments
-- `value`: The value
-
-Returns: The string value. This must be destroyed with `duckdb_free`.
-"""
-function duckdb_get_varchar(value)
-    return ccall((:duckdb_get_varchar, libduckdb), Cstring, (duckdb_value,), value)
-end
-
-"""
-    duckdb_get_int64(val)
-
-Returns the int64_t value of the given value.
-
-# Arguments
-- `val`: A duckdb_value containing a bigint
-
-Returns: A int64_t, or MinValue<int64> if the value cannot be converted
-"""
-function duckdb_get_int64(val)
-    return ccall((:duckdb_get_int64, libduckdb), Int64, (duckdb_value,), val)
-end
-
-# --------------------------------------------------------------------------------
-# Logical Type Interface
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_create_logical_type(_type)
-
-Creates a `duckdb_logical_type` from a primitive type.
-The resulting logical type must be destroyed with `duckdb_destroy_logical_type`.
-
-Returns an invalid logical type, if type is: `DUCKDB_TYPE_INVALID`, `DUCKDB_TYPE_DECIMAL`, `DUCKDB_TYPE_ENUM`,
-`DUCKDB_TYPE_LIST`, `DUCKDB_TYPE_STRUCT`, `DUCKDB_TYPE_MAP`, `DUCKDB_TYPE_ARRAY`, or `DUCKDB_TYPE_UNION`.
-
-# Arguments
-- `_type`: The primitive type to create.
-
-Returns: The logical type.
-"""
-function duckdb_create_logical_type(_type)
-    return ccall((:duckdb_create_logical_type, libduckdb), duckdb_logical_type, (DUCKDB_TYPE,), _type)
-end
-
-"""
-    duckdb_create_decimal_type(width, scale)
-
-Creates a DECIMAL type with the specified width and scale.
-The resulting type should be destroyed with `duckdb_destroy_logical_type`.
-
-# Arguments
-- `width`: The width of the decimal type
-- `scale`: The scale of the decimal type
-
-Returns: The logical type.
-"""
-function duckdb_create_decimal_type(width, scale)
-    return ccall((:duckdb_create_decimal_type, libduckdb), duckdb_logical_type, (UInt8, UInt8), width, scale)
-end
-
-"""
-    duckdb_get_type_id(_type)
-
-Retrieves the enum `duckdb_type` of a `duckdb_logical_type`.
-
-# Arguments
-- `_type`: The logical type.
-
-Returns: The `duckdb_type` id.
-"""
-function duckdb_get_type_id(_type)
-    return ccall((:duckdb_get_type_id, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), _type)
-end
-
-"""
-    duckdb_decimal_width(_type)
-
-Retrieves the width of a decimal type.
-
-# Arguments
-- `_type`: The logical type object
-
-Returns: The width of the decimal type
-"""
-function duckdb_decimal_width(_type)
-    return ccall((:duckdb_decimal_width, libduckdb), UInt8, (duckdb_logical_type,), _type)
-end
-
-"""
-    duckdb_decimal_scale(_type)
-
-Retrieves the scale of a decimal type.
-
-# Arguments
-- `_type`: The logical type object
-
-Returns: The scale of the decimal type
-"""
-function duckdb_decimal_scale(_type)
-    return ccall((:duckdb_decimal_scale, libduckdb), UInt8, (duckdb_logical_type,), _type)
-end
-
-"""
-    duckdb_decimal_internal_type(_type)
-
-Retrieves the internal storage type of a decimal type.
-
-# Arguments
-- `_type`: The logical type object
-
-Returns: The internal type of the decimal type
-"""
-function duckdb_decimal_internal_type(_type)
-    return ccall((:duckdb_decimal_internal_type, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), _type)
-end
-
-"""
-    duckdb_enum_internal_type(_type)
-
-Retrieves the internal storage type of an enum type.
-
-# Arguments
-- `_type`: The logical type object
-
-Returns: The internal type of the enum type
-"""
-function duckdb_enum_internal_type(_type)
-    return ccall((:duckdb_enum_internal_type, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), _type)
-end
-
-"""
-    duckdb_enum_dictionary_size(_type)
-
-Retrieves the dictionary size of the enum type.
-
-# Arguments
-- `_type`: The logical type object
-
-Returns: The dictionary size of the enum type
-"""
-function duckdb_enum_dictionary_size(_type)
-    return ccall((:duckdb_enum_dictionary_size, libduckdb), UInt32, (duckdb_logical_type,), _type)
-end
-
-"""
-    duckdb_enum_dictionary_value(_type, index)
-
-Retrieves the dictionary value at the specified position from the enum.
-
-The result must be freed with `duckdb_free`.
-
-# Arguments
-- `_type`: The logical type object
-- `index`: The index in the dictionary
-
-Returns: The string value of the enum type. Must be freed with `duckdb_free`.
-"""
-function duckdb_enum_dictionary_value(_type, index)
-    return ccall((:duckdb_enum_dictionary_value, libduckdb), Cstring, (duckdb_logical_type, idx_t), _type, index - 1)
-end
-
-"""
-    duckdb_list_type_child_type(_type)
-
-Retrieves the child type of the given LIST type. Also accepts MAP types.
-The result must be freed with `duckdb_destroy_logical_type`.
-
-# Arguments
-- `_type`: The logical type, either LIST or MAP.
-
-Returns: The child type of the LIST or MAP type.
-"""
-function duckdb_list_type_child_type(_type)
-    return ccall((:duckdb_list_type_child_type, libduckdb), duckdb_logical_type, (duckdb_logical_type,), _type)
-end
-
-"""
-    duckdb_struct_type_child_count(_type)
-
-Returns the number of children of a struct type.
-
-# Arguments
-- `_type`: The logical type object
-
-Returns: The number of children of a struct type.
-"""
-function duckdb_struct_type_child_count(_type)
-    return ccall((:duckdb_struct_type_child_count, libduckdb), idx_t, (duckdb_logical_type,), _type)
-end
-
-"""
-    duckdb_union_type_member_count(_type)
-
-Returns the number of members that the union type has.
-
-# Arguments
-- `_type`: The logical type (union) object
-
-Returns: The number of members of a union type.
-"""
-function duckdb_union_type_member_count(_type)
-    return ccall((:duckdb_union_type_member_count, libduckdb), idx_t, (duckdb_logical_type,), _type)
-end
-
-"""
-    duckdb_struct_type_child_name(_type, index)
-
-Retrieves the name of the struct child.
-
-The result must be freed with `duckdb_free`.
-
-# Arguments
-- `_type`: The logical type object
-- `index`: The child index
-
-Returns: The name of the struct type. Must be freed with `duckdb_free`.
-"""
-function duckdb_struct_type_child_name(_type, index)
-    return ccall((:duckdb_struct_type_child_name, libduckdb), Cstring, (duckdb_logical_type, idx_t), _type, index - 1)
-end
-
-"""
-    duckdb_union_type_member_name(_type, index)
-
-Retrieves the name of the union member.
-
-The result must be freed with `duckdb_free`.
-
-# Arguments
-- `_type`: The logical type object
-- `index`: The child index
-
-Returns: The name of the union member. Must be freed with `duckdb_free`.
-"""
-function duckdb_union_type_member_name(_type, index)
-    return ccall((:duckdb_union_type_member_name, libduckdb), Cstring, (duckdb_logical_type, idx_t), _type, index - 1)
-end
-
-"""
-    duckdb_struct_type_child_type(_type, index)
-
-Retrieves the child type of the given struct type at the specified index.
-
-The result must be freed with `duckdb_destroy_logical_type`.
-
-# Arguments
-- `_type`: The logical type object
-- `index`: The child index
-
-Returns: The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
-"""
-function duckdb_struct_type_child_type(_type, index)
-    return ccall(
-        (:duckdb_struct_type_child_type, libduckdb),
-        duckdb_logical_type,
-        (duckdb_logical_type, idx_t),
-        _type,
-        index - 1
-    )
-end
-
-"""
-    duckdb_union_type_member_type(_type, index)
-
-Retrieves the child type of the given union member at the specified index.
-
-The result must be freed with `duckdb_destroy_logical_type`.
-
-# Arguments
-- `_type`: The logical type object
-- `index`: The child index
-
-Returns: The child type of the union member. Must be destroyed with `duckdb_destroy_logical_type`.
-"""
-function duckdb_union_type_member_type(_type, index)
-    return ccall(
-        (:duckdb_union_type_member_type, libduckdb),
-        duckdb_logical_type,
-        (duckdb_logical_type, idx_t),
-        _type,
-        index - 1
-    )
-end
-
-"""
-    duckdb_destroy_logical_type(_type)
-
-Destroys the logical type and de-allocates all memory allocated for that type.
-
-# Arguments
-- `_type`: The logical type to destroy.
-
-Returns: nothing
-"""
-function duckdb_destroy_logical_type(_type)
-    return ccall((:duckdb_destroy_logical_type, libduckdb), Cvoid, (Ref{duckdb_logical_type},), _type)
-end
-
-# --------------------------------------------------------------------------------
-# Data Chunk Interface
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_create_data_chunk(types, column_count)
-
-Creates an empty data chunk with the specified column types.
-The result must be destroyed with `duckdb_destroy_data_chunk`.
-
-# Arguments
-- `types`: An array of column types. Column types can not contain ANY and INVALID types.
-- `column_count`: The number of columns.
-
-Returns: The data chunk.
-"""
-function duckdb_create_data_chunk(types, column_count)
-    return ccall(
-        (:duckdb_create_data_chunk, libduckdb),
-        duckdb_data_chunk,
-        (Ref{duckdb_logical_type}, idx_t),
-        types,
-        column_count
-    )
-end
-
-"""
-    duckdb_destroy_data_chunk(chunk)
-
-Destroys the data chunk and de-allocates all memory allocated for that chunk.
-
-# Arguments
-- `chunk`: The data chunk to destroy.
-
-Returns: nothing
-"""
-function duckdb_destroy_data_chunk(chunk)
-    return ccall((:duckdb_destroy_data_chunk, libduckdb), Cvoid, (Ref{duckdb_data_chunk},), chunk)
-end
-
-"""
-    duckdb_data_chunk_reset(chunk)
-
-Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.
-After calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current
-data and validity pointers
-
-# Arguments
-- `chunk`: The data chunk to reset.
-
-Returns: nothing
-"""
-function duckdb_data_chunk_reset(chunk)
-    return ccall((:duckdb_data_chunk_reset, libduckdb), Cvoid, (duckdb_data_chunk,), chunk)
-end
-
-"""
-    duckdb_data_chunk_get_column_count(chunk)
-
-Retrieves the number of columns in a data chunk.
-
-# Arguments
-- `chunk`: The data chunk to get the data from
-
-Returns: The number of columns in the data chunk
-"""
-function duckdb_data_chunk_get_column_count(chunk)
-    return ccall((:duckdb_data_chunk_get_column_count, libduckdb), idx_t, (duckdb_data_chunk,), chunk)
-end
-
-"""
-    duckdb_data_chunk_get_size(chunk)
-
-Retrieves the current number of tuples in a data chunk.
-
-# Arguments
-- `chunk`: The data chunk to get the data from
-
-Returns: The number of tuples in the data chunk
-"""
-function duckdb_data_chunk_get_size(chunk)
-    return ccall((:duckdb_data_chunk_get_size, libduckdb), idx_t, (duckdb_data_chunk,), chunk)
-end
-
-"""
-    duckdb_data_chunk_set_size(chunk, size)
-
-Sets the current number of tuples in a data chunk.
-
-# Arguments
-- `chunk`: The data chunk to set the size in
-- `size`: The number of tuples in the data chunk
-
-Returns: nothing
-"""
-function duckdb_data_chunk_set_size(chunk, size)
-    return ccall((:duckdb_data_chunk_set_size, libduckdb), Cvoid, (duckdb_data_chunk, idx_t), chunk, size)
-end
-
-"""
-    duckdb_data_chunk_get_vector(chunk, col_idx)
-
-Retrieves the vector at the specified column index in the data chunk.
-
-The pointer to the vector is valid for as long as the chunk is alive.
-It does NOT need to be destroyed.
-
-# Arguments
-- `chunk`: The data chunk to get the data from
-- `col_idx`: 
-
-Returns: The vector
-"""
-function duckdb_data_chunk_get_vector(chunk, col_idx)
-    return ccall(
-        (:duckdb_data_chunk_get_vector, libduckdb),
-        duckdb_vector,
-        (duckdb_data_chunk, idx_t),
-        chunk,
-        col_idx - 1
-    )
-end
-
-# --------------------------------------------------------------------------------
-# Vector Interface
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_vector_get_column_type(vector)
-
-Retrieves the column type of the specified vector.
-
-The result must be destroyed with `duckdb_destroy_logical_type`.
-
-# Arguments
-- `vector`: The vector get the data from
-
-Returns: The type of the vector
-"""
-function duckdb_vector_get_column_type(vector)
-    return ccall((:duckdb_vector_get_column_type, libduckdb), duckdb_logical_type, (duckdb_vector,), vector)
-end
-
-"""
-    duckdb_vector_get_data(vector)
-
-Retrieves the data pointer of the vector.
-
-The data pointer can be used to read or write values from the vector.
-How to read or write values depends on the type of the vector.
-
-# Arguments
-- `vector`: The vector to get the data from
-
-Returns: The data pointer
-"""
-function duckdb_vector_get_data(vector)
-    return ccall((:duckdb_vector_get_data, libduckdb), Ptr{Cvoid}, (duckdb_vector,), vector)
-end
-
-"""
-    duckdb_vector_get_validity(vector)
-
-Retrieves the validity mask pointer of the specified vector.
-
-If all values are valid, this function MIGHT return NULL!
-
-The validity mask is a bitset that signifies null-ness within the data chunk.
-It is a series of uint64_t values, where each uint64_t value contains validity for 64 tuples.
-The bit is set to 1 if the value is valid (i.e. not NULL) or 0 if the value is invalid (i.e. NULL).
-
-Validity of a specific value can be obtained like this:
-
-idx_t entry_idx = row_idx / 64;
-idx_t idx_in_entry = row_idx % 64;
-bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
-
-Alternatively, the (slower) duckdb_validity_row_is_valid function can be used.
-
-# Arguments
-- `vector`: The vector to get the data from
-
-Returns: The pointer to the validity mask, or NULL if no validity mask is present
-"""
-function duckdb_vector_get_validity(vector)
-    return ccall((:duckdb_vector_get_validity, libduckdb), Ptr{UInt64}, (duckdb_vector,), vector)
-end
-
-"""
-    duckdb_vector_ensure_validity_writable(vector)
-
-Ensures the validity mask is writable by allocating it.
-
-After this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.
-This allows NULL values to be written to the vector, regardless of whether a validity mask was present before.
-
-# Arguments
-- `vector`: The vector to alter
-
-Returns: nothing
-"""
-function duckdb_vector_ensure_validity_writable(vector)
-    return ccall((:duckdb_vector_ensure_validity_writable, libduckdb), Cvoid, (duckdb_vector,), vector)
-end
-
-"""
-    duckdb_list_vector_get_child(vector)
-
-Retrieves the child vector of a list vector.
-
-The resulting vector is valid as long as the parent vector is valid.
-
-# Arguments
-- `vector`: The vector
-
-Returns: The child vector
-"""
-function duckdb_list_vector_get_child(vector)
-    return ccall((:duckdb_list_vector_get_child, libduckdb), duckdb_vector, (duckdb_vector,), vector)
-end
-
-"""
-    duckdb_list_vector_get_size(vector)
-
-Returns the size of the child vector of the list.
-
-# Arguments
-- `vector`: The vector
-
-Returns: The size of the child list
-"""
-function duckdb_list_vector_get_size(vector)
-    return ccall((:duckdb_list_vector_get_size, libduckdb), idx_t, (duckdb_vector,), vector)
-end
-
-"""
-    duckdb_struct_vector_get_child(vector, index)
-
-Retrieves the child vector of a struct vector.
-
-The resulting vector is valid as long as the parent vector is valid.
-
-# Arguments
-- `vector`: The vector
-- `index`: The child index
-
-Returns: The child vector
-"""
-function duckdb_struct_vector_get_child(vector, index)
-    return ccall((:duckdb_struct_vector_get_child, libduckdb), duckdb_vector, (duckdb_vector, idx_t), vector, index - 1)
-end
-
-"""
-    duckdb_vector_assign_string_element(vector, index, str)
-
-Assigns a string element in the vector at the specified location.
-
-# Arguments
-- `vector`: The vector to alter
-- `index`: The row position in the vector to assign the string to
-- `str`: The null-terminated string
-
-Returns: nothing
-"""
-function duckdb_vector_assign_string_element(vector, index, str)
-    return ccall(
-        (:duckdb_vector_assign_string_element, libduckdb),
-        Cvoid,
-        (duckdb_vector, idx_t, Cstring),
-        vector,
-        index - 1,
-        str
-    )
-end
-
-"""
-    duckdb_vector_assign_string_element_len(vector, index, str, str_len)
-
-Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
-
-# Arguments
-- `vector`: The vector to alter
-- `index`: The row position in the vector to assign the string to
-- `str`: The string
-- `str_len`: The length of the string (in bytes)
-
-Returns: nothing
-"""
-function duckdb_vector_assign_string_element_len(vector, index, str, str_len)
-    return ccall(
-        (:duckdb_vector_assign_string_element_len, libduckdb),
-        Cvoid,
-        (duckdb_vector, idx_t, Cstring, idx_t),
-        vector,
-        index - 1,
-        str,
-        str_len
-    )
-end
-
-# --------------------------------------------------------------------------------
-# Table Functions
-# --------------------------------------------------------------------------------
-
-
-"""
-    duckdb_create_table_function()
-
-Creates a new empty table function.
-
-The return value should be destroyed with `duckdb_destroy_table_function`.
-
-# Arguments
-
-Returns: The table function object.
-"""
-function duckdb_create_table_function()
-    return ccall((:duckdb_create_table_function, libduckdb), duckdb_table_function, ())
-end
-
-"""
-    duckdb_destroy_table_function(table_function)
-
-Destroys the given table function object.
-
-# Arguments
-- `table_function`: The table function to destroy
-
-Returns: nothing
-"""
-function duckdb_destroy_table_function(table_function)
-    return ccall((:duckdb_destroy_table_function, libduckdb), Cvoid, (Ref{duckdb_table_function},), table_function)
-end
-
-"""
-    duckdb_table_function_set_name(table_function, name)
-
-Sets the name of the given table function.
-
-# Arguments
-- `table_function`: The table function
-- `name`: The name of the table function
-
-Returns: nothing
-"""
-function duckdb_table_function_set_name(table_function, name)
-    return ccall(
-        (:duckdb_table_function_set_name, libduckdb),
-        Cvoid,
-        (duckdb_table_function, Cstring),
-        table_function,
-        name
-    )
-end
-
-"""
-    duckdb_table_function_add_parameter(table_function, _type)
-
-Adds a parameter to the table function.
-
-# Arguments
-- `table_function`: The table function.
-- `_type`: The parameter type. Cannot contain INVALID.
-
-Returns: nothing
-"""
-function duckdb_table_function_add_parameter(table_function, _type)
-    return ccall(
-        (:duckdb_table_function_add_parameter, libduckdb),
-        Cvoid,
-        (duckdb_table_function, duckdb_logical_type),
-        table_function,
-        _type
-    )
-end
-
-"""
-    duckdb_table_function_set_extra_info(table_function, extra_info, destroy)
-
-Assigns extra information to the table function that can be fetched during binding, etc.
-
-# Arguments
-- `table_function`: The table function
-- `extra_info`: The extra information
-- `destroy`: The callback that will be called to destroy the bind data (if any)
-
-Returns: nothing
-"""
-function duckdb_table_function_set_extra_info(table_function, extra_info, destroy)
-    return ccall(
-        (:duckdb_table_function_set_extra_info, libduckdb),
-        Cvoid,
-        (duckdb_table_function, Ref{Cvoid}, duckdb_delete_callback),
-        table_function,
-        extra_info,
-        destroy
-    )
-end
-
-"""
-    duckdb_table_function_set_bind(table_function, bind)
-
-Sets the bind function of the table function.
-
-# Arguments
-- `table_function`: The table function
-- `bind`: The bind function
-
-Returns: nothing
-"""
-function duckdb_table_function_set_bind(table_function, bind)
-    return ccall(
-        (:duckdb_table_function_set_bind, libduckdb),
-        Cvoid,
-        (duckdb_table_function, duckdb_table_function_bind),
-        table_function,
-        bind
-    )
-end
-
-"""
-    duckdb_table_function_set_init(table_function, init)
-
-Sets the init function of the table function.
-
-# Arguments
-- `table_function`: The table function
-- `init`: The init function
-
-Returns: nothing
-"""
-function duckdb_table_function_set_init(table_function, init)
-    return ccall(
-        (:duckdb_table_function_set_init, libduckdb),
-        Cvoid,
-        (duckdb_table_function, duckdb_table_function_init),
-        table_function,
-        init
-    )
-end
-
-"""
-    duckdb_table_function_set_local_init(table_function, init)
-
-Sets the thread-local init function of the table function.
-
-# Arguments
-- `table_function`: The table function
-- `init`: The init function
-
-Returns: nothing
-"""
-function duckdb_table_function_set_local_init(table_function, init)
-    return ccall(
-        (:duckdb_table_function_set_local_init, libduckdb),
-        Cvoid,
-        (duckdb_table_function, duckdb_table_function_init),
-        table_function,
-        init
-    )
-end
-
-"""
-    duckdb_table_function_set_function(table_function, _function)
-
-Sets the main function of the table function.
-
-# Arguments
-- `table_function`: The table function
-- `_function`: The function
-
-Returns: nothing
-"""
-function duckdb_table_function_set_function(table_function, _function)
-    return ccall(
-        (:duckdb_table_function_set_function, libduckdb),
-        Cvoid,
-        (duckdb_table_function, duckdb_table_function_ptr),
-        table_function,
-        _function
-    )
-end
-
-"""
-    duckdb_table_function_supports_projection_pushdown(table_function, pushdown)
-
-Sets whether or not the given table function supports projection pushdown.
-
-If this is set to true, the system will provide a list of all required columns in the `init` stage through
-the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
-If this is set to false (the default), the system will expect all columns to be projected.
-
-# Arguments
-- `table_function`: The table function
-- `pushdown`: True if the table function supports projection pushdown, false otherwise.
-
-Returns: nothing
-"""
-function duckdb_table_function_supports_projection_pushdown(table_function, pushdown)
-    return ccall(
-        (:duckdb_table_function_supports_projection_pushdown, libduckdb),
-        Cvoid,
-        (duckdb_table_function, Bool),
-        table_function,
-        pushdown
-    )
-end
-
-"""
-    duckdb_register_table_function(con, _function)
-
-Register the table function object within the given connection.
-
-The function requires at least a name, a bind function, an init function and a main function.
-
-If the function is incomplete or a function with this name already exists DuckDBError is returned.
-
-# Arguments
-- `con`: The connection to register it in.
-- `_function`: The function pointer
-
-Returns: Whether or not the registration was successful.
-"""
-function duckdb_register_table_function(con, _function)
-    return ccall(
-        (:duckdb_register_table_function, libduckdb),
-        duckdb_state,
-        (duckdb_connection, duckdb_table_function),
-        con,
-        _function
-    )
-end
-
-# --------------------------------------------------------------------------------
-# Table Function Bind
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_bind_get_extra_info(info)
-
-Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
-
-# Arguments
-- `info`: The info object
-
-Returns: The extra info
-"""
-function duckdb_bind_get_extra_info(info)
-    return ccall((:duckdb_bind_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_bind_info,), info)
-end
-
-"""
-    duckdb_bind_add_result_column(info, name, _type)
-
-Adds a result column to the output of the table function.
-
-# Arguments
-- `info`: The table function's bind info.
-- `name`: The column name.
-- `_type`: The logical column type.
-
-Returns: nothing
-"""
-function duckdb_bind_add_result_column(info, name, _type)
-    return ccall(
-        (:duckdb_bind_add_result_column, libduckdb),
-        Cvoid,
-        (duckdb_bind_info, Cstring, duckdb_logical_type),
-        info,
-        name,
-        _type
-    )
-end
-
-"""
-    duckdb_bind_get_parameter_count(info)
-
-Retrieves the number of regular (non-named) parameters to the function.
-
-# Arguments
-- `info`: The info object
-
-Returns: The number of parameters
-"""
-function duckdb_bind_get_parameter_count(info)
-    return ccall((:duckdb_bind_get_parameter_count, libduckdb), idx_t, (duckdb_bind_info,), info)
-end
-
-"""
-    duckdb_bind_get_parameter(info, index)
-
-Retrieves the parameter at the given index.
-
-The result must be destroyed with `duckdb_destroy_value`.
-
-# Arguments
-- `info`: The info object
-- `index`: The index of the parameter to get
-
-Returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
-"""
-function duckdb_bind_get_parameter(info, index)
-    return ccall((:duckdb_bind_get_parameter, libduckdb), duckdb_value, (duckdb_bind_info, idx_t), info, index)
-end
-
-"""
-    duckdb_bind_set_bind_data(info, bind_data, destroy)
-
-Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.
-
-# Arguments
-- `info`: The info object
-- `bind_data`: The bind data object.
-- `destroy`: The callback that will be called to destroy the bind data (if any)
-
-Returns: nothing
-"""
-function duckdb_bind_set_bind_data(info, bind_data, destroy)
-    return ccall(
-        (:duckdb_bind_set_bind_data, libduckdb),
-        Cvoid,
-        (duckdb_bind_info, Ref{Cvoid}, duckdb_delete_callback),
-        info,
-        bind_data,
-        destroy
-    )
-end
-
-"""
-    duckdb_bind_set_cardinality(info, cardinality, is_exact)
-
-Sets the cardinality estimate for the table function, used for optimization.
-
-# Arguments
-- `info`: The bind data object.
-- `cardinality`: 
-- `is_exact`: Whether or not the cardinality estimate is exact, or an approximation
-
-Returns: nothing
-"""
-function duckdb_bind_set_cardinality(info, cardinality, is_exact)
-    return ccall(
-        (:duckdb_bind_set_cardinality, libduckdb),
-        Cvoid,
-        (duckdb_bind_info, idx_t, Bool),
-        info,
-        cardinality,
-        is_exact
-    )
-end
-
-"""
-    duckdb_bind_set_error(info, error)
-
-Report that an error has occurred while calling bind.
-
-# Arguments
-- `info`: The info object
-- `error`: The error message
-
-Returns: nothing
-"""
-function duckdb_bind_set_error(info, error)
-    return ccall((:duckdb_bind_set_error, libduckdb), Cvoid, (duckdb_bind_info, Cstring), info, error)
-end
-
-# --------------------------------------------------------------------------------
-# Table Function Init
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_init_get_extra_info(info)
-
-Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
-
-# Arguments
-- `info`: The info object
-
-Returns: The extra info
-"""
-function duckdb_init_get_extra_info(info)
-    return ccall((:duckdb_init_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_init_info,), info)
-end
-
-"""
-    duckdb_init_get_bind_data(info)
-
-Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
-
-Note that the bind data should be considered as read-only.
-For tracking state, use the init data instead.
-
-# Arguments
-- `info`: The info object
-
-Returns: The bind data object
-"""
-function duckdb_init_get_bind_data(info)
-    return ccall((:duckdb_init_get_bind_data, libduckdb), Ptr{Cvoid}, (duckdb_init_info,), info)
-end
-
-"""
-    duckdb_init_set_init_data(info, init_data, destroy)
-
-Sets the user-provided init data in the init object. This object can be retrieved again during execution.
-
-# Arguments
-- `info`: The info object
-- `init_data`: The init data object.
-- `destroy`: The callback that will be called to destroy the init data (if any)
-
-Returns: nothing
-"""
-function duckdb_init_set_init_data(info, init_data, destroy)
-    return ccall(
-        (:duckdb_init_set_init_data, libduckdb),
-        Cvoid,
-        (duckdb_init_info, Ref{Cvoid}, duckdb_delete_callback),
-        info,
-        init_data,
-        destroy
-    )
-end
-
-"""
-    duckdb_init_get_column_count(info)
-
-Returns the number of projected columns.
-
-This function must be used if projection pushdown is enabled to figure out which columns to emit.
-
-# Arguments
-- `info`: The info object
-
-Returns: The number of projected columns.
-"""
-function duckdb_init_get_column_count(info)
-    return ccall((:duckdb_init_get_column_count, libduckdb), idx_t, (duckdb_init_info,), info)
-end
-
-"""
-    duckdb_init_get_column_index(info, column_index)
-
-Returns the column index of the projected column at the specified position.
-
-This function must be used if projection pushdown is enabled to figure out which columns to emit.
-
-# Arguments
-- `info`: The info object
-- `column_index`: The index at which to get the projected column index, from 0..duckdb_init_get_column_count(info)
-
-Returns: The column index of the projected column.
-"""
-function duckdb_init_get_column_index(info, column_index)
-    return ccall((:duckdb_init_get_column_index, libduckdb), idx_t, (duckdb_init_info, idx_t), info, column_index - 1) +
-           1
-end
-
-"""
-    duckdb_init_set_max_threads(info, max_threads)
-
-Sets how many threads can process this table function in parallel (default: 1)
-
-# Arguments
-- `info`: The info object
-- `max_threads`: The maximum amount of threads that can process this table function
-
-Returns: nothing
-"""
-function duckdb_init_set_max_threads(info, max_threads)
-    return ccall((:duckdb_init_set_max_threads, libduckdb), Cvoid, (duckdb_init_info, idx_t), info, max_threads)
-end
-
-"""
-    duckdb_init_set_error(info, error)
-
-Report that an error has occurred while calling init.
-
-# Arguments
-- `info`: The info object
-- `error`: The error message
-
-Returns: nothing
-"""
-function duckdb_init_set_error(info, error)
-    return ccall((:duckdb_init_set_error, libduckdb), Cvoid, (duckdb_init_info, Cstring), info, error)
-end
-
-# --------------------------------------------------------------------------------
-# Table Function
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_function_get_extra_info(info)
-
-Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
-
-# Arguments
-- `info`: The info object
-
-Returns: The extra info
-"""
-function duckdb_function_get_extra_info(info)
-    return ccall((:duckdb_function_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
-end
-
-"""
-    duckdb_function_get_bind_data(info)
-
-Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
-
-Note that the bind data should be considered as read-only.
-For tracking state, use the init data instead.
-
-# Arguments
-- `info`: The info object
-
-Returns: The bind data object
-"""
-function duckdb_function_get_bind_data(info)
-    return ccall((:duckdb_function_get_bind_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
-end
-
-"""
-    duckdb_function_get_init_data(info)
-
-Gets the init data set by `duckdb_init_set_init_data` during the init.
-
-# Arguments
-- `info`: The info object
-
-Returns: The init data object
-"""
-function duckdb_function_get_init_data(info)
-    return ccall((:duckdb_function_get_init_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
-end
-
-"""
-    duckdb_function_get_local_init_data(info)
-
-Gets the thread-local init data set by `duckdb_init_set_init_data` during the local_init.
-
-# Arguments
-- `info`: The info object
-
-Returns: The init data object
-"""
-function duckdb_function_get_local_init_data(info)
-    return ccall((:duckdb_function_get_local_init_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
-end
-
-"""
-    duckdb_function_set_error(info, error)
-
-Report that an error has occurred while executing the function.
-
-# Arguments
-- `info`: The info object
-- `error`: The error message
-
-Returns: nothing
-"""
-function duckdb_function_set_error(info, error)
-    return ccall((:duckdb_function_set_error, libduckdb), Cvoid, (duckdb_function_info, Cstring), info, error)
-end
-
-# --------------------------------------------------------------------------------
-# Replacement Scans
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_add_replacement_scan(db, replacement, extra_data, delete_callback)
-
-Add a replacement scan definition to the specified database.
-
-# Arguments
-- `db`: The database object to add the replacement scan to
-- `replacement`: The replacement scan callback
-- `extra_data`: Extra data that is passed back into the specified callback
-- `delete_callback`: The delete callback to call on the extra data, if any
-
-Returns: nothing
-"""
-function duckdb_add_replacement_scan(db, replacement, extra_data, delete_callback)
-    return ccall(
-        (:duckdb_add_replacement_scan, libduckdb),
-        Cvoid,
-        (duckdb_database, duckdb_replacement_callback, Ref{Cvoid}, duckdb_delete_callback),
-        db,
-        replacement,
-        extra_data,
-        delete_callback
-    )
-end
-
-"""
-    duckdb_replacement_scan_set_function_name(info, function_name)
-
-Sets the replacement function name. If this function is called in the replacement callback,
-the replacement scan is performed. If it is not called, the replacement callback is not performed.
-
-# Arguments
-- `info`: The info object
-- `function_name`: The function name to substitute.
-
-Returns: nothing
-"""
-function duckdb_replacement_scan_set_function_name(info, function_name)
-    return ccall(
-        (:duckdb_replacement_scan_set_function_name, libduckdb),
-        Cvoid,
-        (duckdb_replacement_scan_info, Cstring),
-        info,
-        function_name
-    )
-end
-
-"""
-    duckdb_replacement_scan_add_parameter(info, parameter)
-
-Adds a parameter to the replacement scan function.
-
-# Arguments
-- `info`: The info object
-- `parameter`: The parameter to add.
-
-Returns: nothing
-"""
-function duckdb_replacement_scan_add_parameter(info, parameter)
-    return ccall(
-        (:duckdb_replacement_scan_add_parameter, libduckdb),
-        Cvoid,
-        (duckdb_replacement_scan_info, duckdb_value),
-        info,
-        parameter
-    )
-end
-
-"""
-    duckdb_replacement_scan_set_error(info, error)
-
-Report that an error has occurred while executing the replacement scan.
-
-# Arguments
-- `info`: The info object
-- `error`: The error message
-
-Returns: nothing
-"""
-function duckdb_replacement_scan_set_error(info, error)
-    return ccall(
-        (:duckdb_replacement_scan_set_error, libduckdb),
-        Cvoid,
-        (duckdb_replacement_scan_info, Cstring),
-        info,
-        error
-    )
-end
-
-# --------------------------------------------------------------------------------
-# Appender
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_appender_create(connection, schema, table, out_appender)
-
-Creates an appender object.
-
-Note that the object must be destroyed with `duckdb_appender_destroy`.
-
-# Arguments
-- `connection`: The connection context to create the appender in.
-- `schema`: The schema of the table to append to, or `nullptr` for the default schema.
-- `table`: The table name to append to.
-- `out_appender`: The resulting appender object.
-
-Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-"""
-function duckdb_appender_create(connection, schema, table, out_appender)
-    return ccall(
-        (:duckdb_appender_create, libduckdb),
-        duckdb_state,
-        (duckdb_connection, Cstring, Cstring, Ref{duckdb_appender}),
-        connection,
-        schema,
-        table,
-        out_appender
-    )
-end
-
-"""
-    duckdb_appender_error(appender)
-
-Returns the error message associated with the given appender.
-If the appender has no error message, this returns `nullptr` instead.
-
-The error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.
-
-# Arguments
-- `appender`: The appender to get the error from.
-
-Returns: The error message, or `nullptr` if there is none.
-"""
-function duckdb_appender_error(appender)
-    return ccall((:duckdb_appender_error, libduckdb), Cstring, (duckdb_appender,), appender)
-end
-
-"""
-    duckdb_appender_flush(appender)
-
-Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a
-constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.
-It is not possible to append more values. Call duckdb_appender_error to obtain the error message followed by
-duckdb_appender_destroy to destroy the invalidated appender.
-
-# Arguments
-- `appender`: The appender to flush.
-
-Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-"""
-function duckdb_appender_flush(appender)
-    return ccall((:duckdb_appender_flush, libduckdb), duckdb_state, (duckdb_appender,), appender)
-end
-
-"""
-    duckdb_appender_close(appender)
-
-Closes the appender by flushing all intermediate states and closing it for further appends. If flushing the data
-triggers a constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.
-Call duckdb_appender_error to obtain the error message followed by duckdb_appender_destroy to destroy the invalidated
-appender.
-
-# Arguments
-- `appender`: The appender to flush and close.
-
-Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-"""
-function duckdb_appender_close(appender)
-    return ccall((:duckdb_appender_close, libduckdb), duckdb_state, (duckdb_appender,), appender)
-end
-
-"""
-    duckdb_appender_destroy(appender)
-
-Closes the appender by flushing all intermediate states to the table and destroying it. By destroying it, this function
-de-allocates all memory associated with the appender. If flushing the data triggers a constraint violation,
-then all data is invalidated, and this function returns DuckDBError. Due to the destruction of the appender, it is no
-longer possible to obtain the specific error message with duckdb_appender_error. Therefore, call duckdb_appender_close
-before destroying the appender, if you need insights into the specific error.
-
-# Arguments
-- `appender`: The appender to flush, close and destroy.
-
-Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-"""
-function duckdb_appender_destroy(appender)
-    return ccall((:duckdb_appender_destroy, libduckdb), duckdb_state, (Ref{duckdb_appender},), appender)
-end
-
-"""
-    duckdb_appender_begin_row(appender)
-
-A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
-
-# Arguments
-- `appender`: 
-
-Returns: nothing
-"""
-function duckdb_appender_begin_row(appender)
-    return ccall((:duckdb_appender_begin_row, libduckdb), duckdb_state, (duckdb_appender,), appender)
-end
-
-"""
-    duckdb_appender_end_row(appender)
-
-Finish the current row of appends. After end_row is called, the next row can be appended.
-
-# Arguments
-- `appender`: The appender.
-
-Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
-"""
-function duckdb_appender_end_row(appender)
-    return ccall((:duckdb_appender_end_row, libduckdb), duckdb_state, (duckdb_appender,), appender)
-end
-
-"""
-    duckdb_append_bool(appender, value)
-
-Append a bool value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_bool(appender, value)
-    return ccall((:duckdb_append_bool, libduckdb), duckdb_state, (duckdb_appender, Bool), appender, value)
-end
-
-"""
-    duckdb_append_int8(appender, value)
-
-Append an int8_t value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_int8(appender, value)
-    return ccall((:duckdb_append_int8, libduckdb), duckdb_state, (duckdb_appender, Int8), appender, value)
-end
-
-"""
-    duckdb_append_int16(appender, value)
-
-Append an int16_t value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_int16(appender, value)
-    return ccall((:duckdb_append_int16, libduckdb), duckdb_state, (duckdb_appender, Int16), appender, value)
-end
-
-"""
-    duckdb_append_int32(appender, value)
-
-Append an int32_t value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_int32(appender, value)
-    return ccall((:duckdb_append_int32, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
-end
-
-"""
-    duckdb_append_int64(appender, value)
-
-Append an int64_t value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_int64(appender, value)
-    return ccall((:duckdb_append_int64, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
-end
-
-"""
-    duckdb_append_hugeint(appender, value)
-
-Append a duckdb_hugeint value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_hugeint(appender, value)
-    return ccall((:duckdb_append_hugeint, libduckdb), duckdb_state, (duckdb_appender, duckdb_hugeint), appender, value)
-end
-
-"""
-    duckdb_append_uhugeint(appender, value)
-
-Append a duckdb_uhugeint value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_uhugeint(appender, value)
-    return ccall(
-        (:duckdb_append_uhugeint, libduckdb),
-        duckdb_state,
-        (duckdb_appender, duckdb_uhugeint),
-        appender,
-        value
-    )
-end
-
-"""
-    duckdb_append_uint8(appender, value)
-
-Append a uint8_t value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_uint8(appender, value)
-    return ccall((:duckdb_append_uint8, libduckdb), duckdb_state, (duckdb_appender, UInt8), appender, value)
-end
-
-"""
-    duckdb_append_uint16(appender, value)
-
-Append a uint16_t value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_uint16(appender, value)
-    return ccall((:duckdb_append_uint16, libduckdb), duckdb_state, (duckdb_appender, UInt16), appender, value)
-end
-
-"""
-    duckdb_append_uint32(appender, value)
-
-Append a uint32_t value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_uint32(appender, value)
-    return ccall((:duckdb_append_uint32, libduckdb), duckdb_state, (duckdb_appender, UInt32), appender, value)
-end
-
-"""
-    duckdb_append_uint64(appender, value)
-
-Append a uint64_t value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_uint64(appender, value)
-    return ccall((:duckdb_append_uint64, libduckdb), duckdb_state, (duckdb_appender, UInt64), appender, value)
-end
-
-"""
-    duckdb_append_float(appender, value)
-
-Append a float value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_float(appender, value)
-    return ccall((:duckdb_append_float, libduckdb), duckdb_state, (duckdb_appender, Float32), appender, value)
-end
-
-"""
-    duckdb_append_double(appender, value)
-
-Append a double value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_double(appender, value)
-    return ccall((:duckdb_append_double, libduckdb), duckdb_state, (duckdb_appender, Float64), appender, value)
-end
-
-"""
-    duckdb_append_date(appender, value)
-
-Append a duckdb_date value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_date(appender, value)
-    return ccall((:duckdb_append_date, libduckdb), duckdb_state, (duckdb_appender, duckdb_date), appender, value)
-end
-
-"""
-    duckdb_append_time(appender, value)
-
-Append a duckdb_time value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_time(appender, value)
-    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, duckdb_time), appender, value)
-end
-
-"""
-    duckdb_append_timestamp(appender, value)
-
-Append a duckdb_timestamp value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_timestamp(appender, value)
-    return ccall(
-        (:duckdb_append_timestamp, libduckdb),
-        duckdb_state,
-        (duckdb_appender, duckdb_timestamp),
-        appender,
-        value
-    )
-end
-
-"""
-    duckdb_append_interval(appender, value)
-
-Append a duckdb_interval value to the appender.
-
-# Arguments
-- `appender`: 
-- `value`: 
-
-Returns: nothing
-"""
-function duckdb_append_interval(appender, value)
-    return ccall(
-        (:duckdb_append_interval, libduckdb),
-        duckdb_state,
-        (duckdb_appender, duckdb_interval),
-        appender,
-        value
-    )
-end
-
-"""
-    duckdb_append_varchar(appender, val)
-
-Append a varchar value to the appender.
-
-# Arguments
-- `appender`: 
-- `val`: 
-
-Returns: nothing
-"""
-function duckdb_append_varchar(appender, val)
-    return ccall((:duckdb_append_varchar, libduckdb), duckdb_state, (duckdb_appender, Cstring), appender, val)
-end
-
-"""
-    duckdb_append_varchar_length(appender, val, length)
-
-Append a varchar value to the appender.
-
-# Arguments
-- `appender`: 
-- `val`: 
-- `length`: 
-
-Returns: nothing
-"""
-function duckdb_append_varchar_length(appender, val, length)
-    return ccall(
-        (:duckdb_append_varchar_length, libduckdb),
-        duckdb_state,
-        (duckdb_appender, Cstring, idx_t),
-        appender,
-        val,
-        length
-    )
-end
-
-"""
-    duckdb_append_blob(appender, data, length)
-
-Append a blob value to the appender.
-
-# Arguments
-- `appender`: 
-- `data`: 
-- `length`: 
-
-Returns: nothing
-"""
-function duckdb_append_blob(appender, data, length)
-    return ccall(
-        (:duckdb_append_blob, libduckdb),
-        duckdb_state,
-        (duckdb_appender, Ref{Cvoid}, idx_t),
-        appender,
-        data,
-        length
-    )
-end
-
-"""
-    duckdb_append_null(appender)
-
-Append a NULL value to the appender (of any type).
-
-# Arguments
-- `appender`: 
-
-Returns: nothing
-"""
-function duckdb_append_null(appender)
-    return ccall((:duckdb_append_null, libduckdb), duckdb_state, (duckdb_appender,), appender)
-end
-
-# --------------------------------------------------------------------------------
-# Threading Information
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_execute_tasks(database, max_tasks)
-
-Execute DuckDB tasks on this thread.
-
-Will return after `max_tasks` have been executed, or if there are no more tasks present.
-
-# Arguments
-- `database`: The database object to execute tasks for
-- `max_tasks`: The maximum amount of tasks to execute
-
-Returns: nothing
-"""
-function duckdb_execute_tasks(database, max_tasks)
-    return ccall((:duckdb_execute_tasks, libduckdb), Cvoid, (duckdb_database, idx_t), database, max_tasks)
-end
-
-"""
-    duckdb_create_task_state(database)
-
-Creates a task state that can be used with duckdb_execute_tasks_state to execute tasks until
-`duckdb_finish_execution` is called on the state.
-
-`duckdb_destroy_state` must be called on the result.
-
-# Arguments
-- `database`: The database object to create the task state for
-
-Returns: The task state that can be used with duckdb_execute_tasks_state.
-"""
-function duckdb_create_task_state(database)
-    return ccall((:duckdb_create_task_state, libduckdb), duckdb_task_state, (duckdb_database,), database)
-end
-
-"""
-    duckdb_execute_tasks_state(state)
-
-Execute DuckDB tasks on this thread.
-
-The thread will keep on executing tasks forever, until duckdb_finish_execution is called on the state.
-Multiple threads can share the same duckdb_task_state.
-
-# Arguments
-- `state`: The task state of the executor
-
-Returns: nothing
-"""
-function duckdb_execute_tasks_state(state)
-    return ccall((:duckdb_execute_tasks_state, libduckdb), Cvoid, (duckdb_task_state,), state)
-end
-
-"""
-    duckdb_execute_n_tasks_state(state, max_tasks)
-
-Execute DuckDB tasks on this thread.
-
-The thread will keep on executing tasks until either duckdb_finish_execution is called on the state,
-max_tasks tasks have been executed or there are no more tasks to be executed.
-
-Multiple threads can share the same duckdb_task_state.
-
-# Arguments
-- `state`: The task state of the executor
-- `max_tasks`: The maximum amount of tasks to execute
-
-Returns: The amount of tasks that have actually been executed
-"""
-function duckdb_execute_n_tasks_state(state, max_tasks)
-    return ccall((:duckdb_execute_n_tasks_state, libduckdb), idx_t, (duckdb_task_state, idx_t), state, max_tasks)
-end
-
-"""
-    duckdb_finish_execution(state)
-
-Finish execution on a specific task.
-
-# Arguments
-- `state`: The task state to finish execution
-
-Returns: nothing
-"""
-function duckdb_finish_execution(state)
-    return ccall((:duckdb_finish_execution, libduckdb), Cvoid, (duckdb_task_state,), state)
-end
-
-"""
-    duckdb_task_state_is_finished(state)
-
-Check if the provided duckdb_task_state has finished execution
-
-# Arguments
-- `state`: The task state to inspect
-
-Returns: Whether or not duckdb_finish_execution has been called on the task state
-"""
-function duckdb_task_state_is_finished(state)
-    return ccall((:duckdb_task_state_is_finished, libduckdb), Bool, (duckdb_task_state,), state)
-end
-
-"""
-    duckdb_destroy_task_state(state)
-
-Destroys the task state returned from duckdb_create_task_state.
-
-Note that this should not be called while there is an active duckdb_execute_tasks_state running
-on the task state.
-
-# Arguments
-- `state`: The task state to clean up
-
-Returns: nothing
-"""
-function duckdb_destroy_task_state(state)
-    return ccall((:duckdb_destroy_task_state, libduckdb), Cvoid, (duckdb_task_state,), state)
-end
-
-"""
-    duckdb_execution_is_finished(con)
-
-Returns true if the execution of the current query is finished.
-
-# Arguments
-- `con`: The connection on which to check
-
-Returns: nothing
-"""
-function duckdb_execution_is_finished(con)
-    return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
-end
-
-
-# --------------------------------------------------------------------------------
-# Scalar Functions
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_create_scalar_function()
-
-Creates a new empty scalar function.
-
-The return value should be destroyed with `duckdb_destroy_scalar_function`.
-
-# Arguments
-
-Returns: The scalar function object.
-"""
-function duckdb_create_scalar_function()
-    return ccall((:duckdb_create_scalar_function, libduckdb), duckdb_scalar_function, ())
-end
-
-"""
-    duckdb_destroy_scalar_function(scalar_function)
-
-Destroys the given scalar function object.
-
-# Arguments
-- `scalar_function`: The scalar function to destroy
-
-Returns: nothing
-"""
-function duckdb_destroy_scalar_function(scalar_function)
-    return ccall((:duckdb_destroy_scalar_function, libduckdb), Cvoid, (Ref{duckdb_scalar_function},), scalar_function)
-end
-
-"""
-    duckdb_scalar_function_set_name(scalar_function, name)
-
-Sets the name of the given scalar function.
-
-# Arguments
-- `scalar_function`: The scalar function
-- `name`: The name of the scalar function
-
-Returns: nothing
-"""
-function duckdb_scalar_function_set_name(scalar_function, name)
-    return ccall(
-        (:duckdb_scalar_function_set_name, libduckdb),
-        Cvoid,
-        (duckdb_scalar_function, Cstring),
-        scalar_function,
-        name
-    )
-end
-
-"""
-    duckdb_scalar_function_add_parameter(scalar_function, _type)
-
-Adds a parameter to the scalar function.
-
-# Arguments
-- `scalar_function`: The scalar function.
-- `_type`: The parameter type. Cannot contain INVALID.
-
-Returns: nothing
-"""
-function duckdb_scalar_function_add_parameter(scalar_function, _type)
-    return ccall(
-        (:duckdb_scalar_function_add_parameter, libduckdb),
-        Cvoid,
-        (duckdb_scalar_function, duckdb_logical_type),
-        scalar_function,
-        _type
-    )
-end
-
-"""
-    duckdb_scalar_function_set_return_type(scalar_function, _type)
-
-Sets the return type of the scalar function.
-
-# Arguments
-- `scalar_function`: The scalar function
-- `_type`: Cannot contain INVALID or ANY.
-
-Returns: nothing
-"""
-function duckdb_scalar_function_set_return_type(scalar_function, _type)
-    return ccall(
-        (:duckdb_scalar_function_set_return_type, libduckdb),
-        Cvoid,
-        (duckdb_scalar_function, duckdb_logical_type),
-        scalar_function,
-        _type
-    )
-end
-
-"""
-    duckdb_scalar_function_set_function(scalar_function, _function)
-
-Sets the main function of the scalar function.
-
-# Arguments
-- `scalar_function`: The scalar function
-- `_function`: The function
-
-Returns: nothing
-"""
-function duckdb_scalar_function_set_function(scalar_function, _function)
-    return ccall(
-        (:duckdb_scalar_function_set_function, libduckdb),
-        Cvoid,
-        (duckdb_scalar_function, duckdb_scalar_function),
-        scalar_function,
-        _function
-    )
-end
-
-"""
-    duckdb_register_scalar_function(con, scalar_function)
-
-Register the scalar function object within the given connection.
-
-The function requires at least a name, a function and a return type.
-
-If the function is incomplete or a function with this name already exists DuckDBError is returned.
-
-# Arguments
-- `con`: The connection to register it in.
-- `scalar_function`: The function pointer
-
-Returns: Whether or not the registration was successful.
-"""
-function duckdb_register_scalar_function(con, scalar_function)
-    return ccall(
-        (:duckdb_register_scalar_function, libduckdb),
-        duckdb_state,
-        (duckdb_connection, duckdb_scalar_function),
-        con,
-        scalar_function
-    )
-end
-
-
-# --------------------------------------------------------------------------------
-# New Functions
-# --------------------------------------------------------------------------------
-
-
-# --------------------------------------------------------------------------------
-# Open Connect
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_interrupt(connection)
-
-Interrupt running query
-
-# Arguments
-- `connection`: The connection to interrupt
-
-Returns: nothing
-"""
-function duckdb_interrupt(connection)
-    return ccall((:duckdb_interrupt, libduckdb), Cvoid, (duckdb_connection,), connection)
-end
-
-"""
-    duckdb_query_progress(connection)
-
-Get progress of the running query
-
-# Arguments
-- `connection`: The working connection
-
-Returns: -1 if no progress or a percentage of the progress
-"""
-function duckdb_query_progress(connection)
-    return ccall((:duckdb_query_progress, libduckdb), duckdb_query_progress_type, (duckdb_connection,), connection)
-end
-
-"""
-    duckdb_library_version()
-
-Returns the version of the linked DuckDB, with a version postfix for dev versions
-
-Usually used for developing C extensions that must return this for a compatibility check.
-
-# Arguments
-
-Returns: nothing
-"""
-function duckdb_library_version()
-    return ccall((:duckdb_library_version, libduckdb), Cstring, ())
-end
-
-# --------------------------------------------------------------------------------
-# Query Execution
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_result_statement_type(result)
-
-Returns the statement type of the statement that was executed
-
-# Arguments
-- `result`: The result object to fetch the statement type from.
-
-Returns: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
-"""
-function duckdb_result_statement_type(result)
-    return ccall((:duckdb_result_statement_type, libduckdb), duckdb_statement_type, (duckdb_result,), result)
-end
-
-"""
-    duckdb_result_error_type(result)
-
-Returns the result error type contained within the result. The error is only set if `duckdb_query` returns
-`DuckDBError`.
-
-# Arguments
-- `result`: The result object to fetch the error from.
-
-Returns: The error type of the result.
-"""
-function duckdb_result_error_type(result)
-    return ccall((:duckdb_result_error_type, libduckdb), duckdb_error_type, (Ref{duckdb_result},), result)
-end
-
-# --------------------------------------------------------------------------------
-# Result Functions
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_result_return_type(result)
-
-Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
-
-# Arguments
-- `result`: The result object
-
-Returns: The return_type
-"""
-function duckdb_result_return_type(result)
-    return ccall((:duckdb_result_return_type, libduckdb), duckdb_result_type, (duckdb_result,), result)
-end
-
-# --------------------------------------------------------------------------------
-# Safe Fetch Functions
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_value_decimal(result, col, row)
-
-**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
-
-# Arguments
-- `result`: 
-- `col`: 
-- `row`: 
-
-Returns: The duckdb_decimal value at the specified location, or 0 if the value cannot be converted.
-"""
-function duckdb_value_decimal(result, col, row)
-    Base.depwarn(
-        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
-        :duckdb_value_decimal
-    )
-    return ccall(
-        (:duckdb_value_decimal, libduckdb),
-        duckdb_decimal,
-        (Ref{duckdb_result}, idx_t, idx_t),
-        result,
-        col - 1,
-        row - 1
-    )
-end
-
-"""
-    duckdb_value_string(result, col, row)
-
-**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
-
-No support for nested types, and for other complex types.
-The resulting field \"string.data\" must be freed with `duckdb_free.`
-
-# Arguments
-- `result`: 
-- `col`: 
-- `row`: 
-
-Returns: The string value at the specified location. Attempts to cast the result value to string.
-"""
-function duckdb_value_string(result, col, row)
-    Base.depwarn(
-        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
-        :duckdb_value_string
-    )
-    return ccall(
-        (:duckdb_value_string, libduckdb),
-        duckdb_string,
-        (Ref{duckdb_result}, idx_t, idx_t),
-        result,
-        col - 1,
-        row - 1
-    )
-end
-
-"""
-    duckdb_value_string_internal(result, col, row)
-
-**DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains
-null bytes.
-
-# Arguments
-- `result`: 
-- `col`: 
-- `row`: 
-
-Returns: The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
-If the column is NOT a VARCHAR column this function will return NULL.
-
-The result must NOT be freed.
-"""
-function duckdb_value_string_internal(result, col, row)
-    Base.depwarn(
-        "**DEPRECATION NOTICE**: **DEPRECATED**: Use duckdb_value_string_internal instead. This function does not work correctly if the string contains",
-        :duckdb_value_string_internal
-    )
-    return ccall(
-        (:duckdb_value_string_internal, libduckdb),
-        duckdb_string,
-        (Ref{duckdb_result}, idx_t, idx_t),
-        result,
-        col - 1,
-        row - 1
-    )
-end
-
-"""
-    duckdb_value_blob(result, col, row)
-
-**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
-
-# Arguments
-- `result`: 
-- `col`: 
-- `row`: 
-
-Returns: The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the
-value cannot be converted. The resulting field "blob.data" must be freed with `duckdb_free.`
-"""
-function duckdb_value_blob(result, col, row)
-    Base.depwarn(
-        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
-        :duckdb_value_blob
-    )
-    return ccall(
-        (:duckdb_value_blob, libduckdb),
-        duckdb_blob,
-        (Ref{duckdb_result}, idx_t, idx_t),
-        result,
-        col - 1,
-        row - 1
-    )
-end
-
-# --------------------------------------------------------------------------------
-# Helpers
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_string_is_inlined(string)
-
-Whether or not the duckdb_string_t value is inlined.
-This means that the data of the string does not have a separate allocation.
-
-# Arguments
-- `string`: 
-
-Returns: nothing
-"""
-function duckdb_string_is_inlined(string)
-    return ccall((:duckdb_string_is_inlined, libduckdb), Bool, (duckdb_string_t,), string)
-end
-
-"""
-    duckdb_string_t_length(string)
-
-Get the string length of a string_t
-
-# Arguments
-- `string`: The string to get the length of.
-
-Returns: The length.
-"""
-function duckdb_string_t_length(string)
-    return ccall((:duckdb_string_t_length, libduckdb), UInt32, (duckdb_string_t,), string)
-end
-
-"""
-    duckdb_string_t_data(string)
-
-Get a pointer to the string data of a string_t
-
-# Arguments
-- `string`: The string to get the pointer to.
-
-Returns: The pointer.
-"""
-function duckdb_string_t_data(string)
-    return ccall((:duckdb_string_t_data, libduckdb), Cstring, (Ref{duckdb_string_t},), string)
-end
-
-# --------------------------------------------------------------------------------
-# Date Time Timestamp Helpers
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_from_date(date)
-
-Decompose a `duckdb_date` object into year, month and date (stored as `duckdb_date_struct`).
-
-# Arguments
-- `date`: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
-
-Returns: The `duckdb_date_struct` with the decomposed elements.
-"""
-function duckdb_from_date(date)
-    return ccall((:duckdb_from_date, libduckdb), duckdb_date_struct, (duckdb_date,), date)
-end
-
-"""
-    duckdb_to_date(date)
-
-Re-compose a `duckdb_date` from year, month and date (`duckdb_date_struct`).
-
-# Arguments
-- `date`: The year, month and date stored in a `duckdb_date_struct`.
-
-Returns: The `duckdb_date` element.
-"""
-function duckdb_to_date(date)
-    return ccall((:duckdb_to_date, libduckdb), duckdb_date, (duckdb_date_struct,), date)
-end
-
-"""
-    duckdb_is_finite_date(date)
-
-Test a `duckdb_date` to see if it is a finite value.
-
-# Arguments
-- `date`: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
-
-Returns: True if the date is finite, false if it is ±infinity.
-"""
-function duckdb_is_finite_date(date)
-    return ccall((:duckdb_is_finite_date, libduckdb), Bool, (duckdb_date,), date)
-end
-
-"""
-    duckdb_from_time(time)
-
-Decompose a `duckdb_time` object into hour, minute, second and microsecond (stored as `duckdb_time_struct`).
-
-# Arguments
-- `time`: The time object, as obtained from a `DUCKDB_TYPE_TIME` column.
-
-Returns: The `duckdb_time_struct` with the decomposed elements.
-"""
-function duckdb_from_time(time)
-    return ccall((:duckdb_from_time, libduckdb), duckdb_time_struct, (duckdb_time,), time)
-end
-
-"""
-    duckdb_create_time_tz(micros, offset)
-
-Create a `duckdb_time_tz` object from micros and a timezone offset.
-
-# Arguments
-- `micros`: The microsecond component of the time.
-- `offset`: The timezone offset component of the time.
-
-Returns: The `duckdb_time_tz` element.
-"""
-function duckdb_create_time_tz(micros, offset)
-    return ccall((:duckdb_create_time_tz, libduckdb), duckdb_time_tz, (Int64, Int32), micros, offset)
-end
-
-"""
-    duckdb_to_time(time)
-
-Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).
-
-# Arguments
-- `time`: The hour, minute, second and microsecond in a `duckdb_time_struct`.
-
-Returns: The `duckdb_time` element.
-"""
-function duckdb_to_time(time)
-    return ccall((:duckdb_to_time, libduckdb), duckdb_time, (duckdb_time_struct,), time)
-end
-
-"""
-    duckdb_from_timestamp(ts)
-
-Decompose a `duckdb_timestamp` object into a `duckdb_timestamp_struct`.
-
-# Arguments
-- `ts`: The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
-
-Returns: The `duckdb_timestamp_struct` with the decomposed elements.
-"""
-function duckdb_from_timestamp(ts)
-    return ccall((:duckdb_from_timestamp, libduckdb), duckdb_timestamp_struct, (duckdb_timestamp,), ts)
-end
-
-"""
-    duckdb_to_timestamp(ts)
-
-Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
-
-# Arguments
-- `ts`: The de-composed elements in a `duckdb_timestamp_struct`.
-
-Returns: The `duckdb_timestamp` element.
-"""
-function duckdb_to_timestamp(ts)
-    return ccall((:duckdb_to_timestamp, libduckdb), duckdb_timestamp, (duckdb_timestamp_struct,), ts)
-end
-
-"""
-    duckdb_is_finite_timestamp(ts)
-
-Test a `duckdb_timestamp` to see if it is a finite value.
-
-# Arguments
-- `ts`: The duckdb_timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
-
-Returns: True if the timestamp is finite, false if it is ±infinity.
-"""
-function duckdb_is_finite_timestamp(ts)
-    return ccall((:duckdb_is_finite_timestamp, libduckdb), Bool, (duckdb_timestamp,), ts)
-end
-
-"""
-    duckdb_is_finite_timestamp_s(ts)
-
-Test a `duckdb_timestamp_s` to see if it is a finite value.
-
-# Arguments
-- `ts`: The duckdb_timestamp_s object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column.
-
-Returns: True if the timestamp is finite, false if it is ±infinity.
-"""
-function duckdb_is_finite_timestamp_s(ts)
-    return ccall((:duckdb_is_finite_timestamp_s, libduckdb), Bool, (duckdb_timestamp_s,), ts)
-end
-
-"""
-    duckdb_is_finite_timestamp_ms(ts)
-
-Test a `duckdb_timestamp_ms` to see if it is a finite value.
-
-# Arguments
-- `ts`: The duckdb_timestamp_ms object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column.
-
-Returns: True if the timestamp is finite, false if it is ±infinity.
-"""
-function duckdb_is_finite_timestamp_ms(ts)
-    return ccall((:duckdb_is_finite_timestamp_ms, libduckdb), Bool, (duckdb_timestamp_ms,), ts)
-end
-
-"""
-    duckdb_is_finite_timestamp_ns(ts)
-
-Test a `duckdb_timestamp_ns` to see if it is a finite value.
-
-# Arguments
-- `ts`: The duckdb_timestamp_ns object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column.
-
-Returns: True if the timestamp is finite, false if it is ±infinity.
-"""
-function duckdb_is_finite_timestamp_ns(ts)
-    return ccall((:duckdb_is_finite_timestamp_ns, libduckdb), Bool, (duckdb_timestamp_ns,), ts)
-end
-
-# --------------------------------------------------------------------------------
-# Hugeint Helpers
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_hugeint_to_double(val)
-
-Converts a duckdb_hugeint object (as obtained from a `DUCKDB_TYPE_HUGEINT` column) into a double.
-
-# Arguments
-- `val`: The hugeint value.
-
-Returns: The converted `double` element.
-"""
-function duckdb_hugeint_to_double(val)
-    return ccall((:duckdb_hugeint_to_double, libduckdb), Float64, (duckdb_hugeint,), val)
-end
-
-"""
-    duckdb_double_to_hugeint(val)
-
-Converts a double value to a duckdb_hugeint object.
-
-If the conversion fails because the double value is too big the result will be 0.
-
-# Arguments
-- `val`: The double value.
-
-Returns: The converted `duckdb_hugeint` element.
-"""
-function duckdb_double_to_hugeint(val)
-    return ccall((:duckdb_double_to_hugeint, libduckdb), duckdb_hugeint, (Float64,), val)
-end
-
-# --------------------------------------------------------------------------------
-# Unsigned Hugeint Helpers
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_uhugeint_to_double(val)
-
-Converts a duckdb_uhugeint object (as obtained from a `DUCKDB_TYPE_UHUGEINT` column) into a double.
-
-# Arguments
-- `val`: The uhugeint value.
-
-Returns: The converted `double` element.
-"""
-function duckdb_uhugeint_to_double(val)
-    return ccall((:duckdb_uhugeint_to_double, libduckdb), Float64, (duckdb_uhugeint,), val)
-end
-
-"""
-    duckdb_double_to_uhugeint(val)
-
-Converts a double value to a duckdb_uhugeint object.
-
-If the conversion fails because the double value is too big the result will be 0.
-
-# Arguments
-- `val`: The double value.
-
-Returns: The converted `duckdb_uhugeint` element.
-"""
-function duckdb_double_to_uhugeint(val)
-    return ccall((:duckdb_double_to_uhugeint, libduckdb), duckdb_uhugeint, (Float64,), val)
-end
-
-# --------------------------------------------------------------------------------
-# Decimal Helpers
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_double_to_decimal(val, width, scale)
-
-Converts a double value to a duckdb_decimal object.
-
-If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
-
-# Arguments
-- `val`: The double value.
-- `width`: 
-- `scale`: 
-
-Returns: The converted `duckdb_decimal` element.
-"""
-function duckdb_double_to_decimal(val, width, scale)
-    return ccall((:duckdb_double_to_decimal, libduckdb), duckdb_decimal, (Float64, UInt8, UInt8), val, width, scale)
-end
-
-"""
-    duckdb_decimal_to_double(val)
-
-Converts a duckdb_decimal object (as obtained from a `DUCKDB_TYPE_DECIMAL` column) into a double.
-
-# Arguments
-- `val`: The decimal value.
-
-Returns: The converted `double` element.
-"""
-function duckdb_decimal_to_double(val)
-    return ccall((:duckdb_decimal_to_double, libduckdb), Float64, (duckdb_decimal,), val)
-end
-
-# --------------------------------------------------------------------------------
-# Prepared Statements
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_parameter_name(prepared_statement, index)
-
-Returns the name used to identify the parameter
-The returned string should be freed using `duckdb_free`.
-
-Returns NULL if the index is out of range for the provided prepared statement.
-
-# Arguments
-- `prepared_statement`: The prepared statement for which to get the parameter name from.
-- `index`: 
-
-Returns: nothing
-"""
-function duckdb_parameter_name(prepared_statement, index)
-    return ccall(
-        (:duckdb_parameter_name, libduckdb),
-        Cstring,
-        (duckdb_prepared_statement, idx_t),
-        prepared_statement,
-        index
-    )
-end
-
-"""
-    duckdb_param_logical_type(prepared_statement, param_idx)
-
-Returns the logical type for the parameter at the given index.
-
-Returns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.
-
-The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
-
-# Arguments
-- `prepared_statement`: The prepared statement.
-- `param_idx`: The parameter index.
-
-Returns: The logical type of the parameter
-"""
-function duckdb_param_logical_type(prepared_statement, param_idx)
-    return ccall(
-        (:duckdb_param_logical_type, libduckdb),
-        duckdb_logical_type,
-        (duckdb_prepared_statement, idx_t),
-        prepared_statement,
-        param_idx
-    )
-end
-
-"""
-    duckdb_clear_bindings(prepared_statement)
-
-Clear the params bind to the prepared statement.
-
-# Arguments
-- `prepared_statement`: 
-
-Returns: nothing
-"""
-function duckdb_clear_bindings(prepared_statement)
-    return ccall((:duckdb_clear_bindings, libduckdb), duckdb_state, (duckdb_prepared_statement,), prepared_statement)
-end
-
-"""
-    duckdb_prepared_statement_type(statement)
-
-Returns the statement type of the statement to be executed
-
-# Arguments
-- `statement`: The prepared statement.
-
-Returns: duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
-"""
-function duckdb_prepared_statement_type(statement)
-    return ccall(
-        (:duckdb_prepared_statement_type, libduckdb),
-        duckdb_statement_type,
-        (duckdb_prepared_statement,),
-        statement
-    )
-end
-
-# --------------------------------------------------------------------------------
-# Bind Values To Prepared Statements
-# --------------------------------------------------------------------------------
-
-"""
-    duckdb_bind_value(prepared_statement, param_idx, val)
-
-Binds a value to the prepared statement at the specified index.
-
-# Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
-
-Returns: nothing
-"""
-function duckdb_bind_value(prepared_statement, param_idx, val)
-    return ccall(
-        (:duckdb_bind_value, libduckdb),
-        duckdb_state,
-        (duckdb_prepared_statement, idx_t, duckdb_value),
-        prepared_statement,
-        param_idx,
-        val
-    )
-end
-
-"""
-    duckdb_bind_parameter_index(prepared_statement, param_idx_out, name)
-
-Retrieve the index of the parameter for the prepared statement, identified by name
-
-# Arguments
-- `prepared_statement`: 
-- `param_idx_out`: 
-- `name`: 
-
-Returns: nothing
-"""
-function duckdb_bind_parameter_index(prepared_statement, param_idx_out, name)
-    return ccall(
-        (:duckdb_bind_parameter_index, libduckdb),
-        duckdb_state,
-        (duckdb_prepared_statement, Ref{idx_t}, Cstring),
-        prepared_statement,
-        param_idx_out,
-        name
-    )
-end
-
-"""
-    duckdb_bind_decimal(prepared_statement, param_idx, val)
-
-Binds a duckdb_decimal value to the prepared statement at the specified index.
-
-# Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
-
-Returns: nothing
-"""
-function duckdb_bind_decimal(prepared_statement, param_idx, val)
-    return ccall(
-        (:duckdb_bind_decimal, libduckdb),
-        duckdb_state,
-        (duckdb_prepared_statement, idx_t, duckdb_decimal),
-        prepared_statement,
-        param_idx,
-        val
-    )
-end
-
-"""
-    duckdb_bind_timestamp_tz(prepared_statement, param_idx, val)
-
-Binds a duckdb_timestamp value to the prepared statement at the specified index.
-
-# Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
-
-Returns: nothing
-"""
-function duckdb_bind_timestamp_tz(prepared_statement, param_idx, val)
-    return ccall(
-        (:duckdb_bind_timestamp_tz, libduckdb),
-        duckdb_state,
-        (duckdb_prepared_statement, idx_t, duckdb_timestamp),
-        prepared_statement,
-        param_idx,
-        val
-    )
-end
-
-# --------------------------------------------------------------------------------
-# Execute Prepared Statements
-# --------------------------------------------------------------------------------
 
 """
     duckdb_execute_prepared_streaming(prepared_statement, out_result)
@@ -4788,6 +2473,8 @@ function duckdb_execute_prepared_streaming(prepared_statement, out_result)
         out_result
     )
 end
+
+
 
 # --------------------------------------------------------------------------------
 # Extract Statements
@@ -4888,9 +2575,237 @@ function duckdb_destroy_extracted(extracted_statements)
     )
 end
 
+
+
+# --------------------------------------------------------------------------------
+# Pending Result Interface
+# --------------------------------------------------------------------------------
+
+"""
+    duckdb_pending_prepared(prepared_statement, out_result)
+
+Executes the prepared statement with the given bound parameters, and returns a pending result.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+The pending result can be used to incrementally execute a query, returning control to the client between tasks.
+
+Note that after calling `duckdb_pending_prepared`, the pending result should always be destroyed using
+`duckdb_destroy_pending`, even if this function returns DuckDBError.
+
+# Arguments
+- `prepared_statement`: The prepared statement to execute.
+- `out_result`: The pending query result.
+
+Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_pending_prepared(prepared_statement, out_result)
+    return ccall(
+        (:duckdb_pending_prepared, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, Ref{duckdb_pending_result}),
+        prepared_statement,
+        out_result
+    )
+end
+
+"""
+    duckdb_pending_prepared_streaming(prepared_statement, out_result)
+
+**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+Executes the prepared statement with the given bound parameters, and returns a pending result.
+This pending result will create a streaming duckdb_result when executed.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+
+Note that after calling `duckdb_pending_prepared_streaming`, the pending result should always be destroyed using
+`duckdb_destroy_pending`, even if this function returns DuckDBError.
+
+# Arguments
+- `prepared_statement`: The prepared statement to execute.
+- `out_result`: The pending query result.
+
+Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_pending_prepared_streaming(prepared_statement, out_result)
+    Base.depwarn(
+        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
+        :duckdb_pending_prepared_streaming
+    )
+    return ccall(
+        (:duckdb_pending_prepared_streaming, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, Ref{duckdb_pending_result}),
+        prepared_statement,
+        out_result
+    )
+end
+
+"""
+    duckdb_destroy_pending(pending_result)
+
+Closes the pending result and de-allocates all memory allocated for the result.
+
+# Arguments
+- `pending_result`: The pending result to destroy.
+
+Returns: nothing
+"""
+function duckdb_destroy_pending(pending_result)
+    return ccall((:duckdb_destroy_pending, libduckdb), Cvoid, (Ref{duckdb_pending_result},), pending_result)
+end
+
+"""
+    duckdb_pending_error(pending_result)
+
+Returns the error message contained within the pending result.
+
+The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_pending` is called.
+
+# Arguments
+- `pending_result`: The pending result to fetch the error from.
+
+Returns: The error of the pending result.
+"""
+function duckdb_pending_error(pending_result)
+    return ccall((:duckdb_pending_error, libduckdb), Cstring, (duckdb_pending_result,), pending_result)
+end
+
+"""
+    duckdb_pending_execute_task(pending_result)
+
+Executes a single task within the query, returning whether or not the query is ready.
+
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_task function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+# Arguments
+- `pending_result`: The pending result to execute a task within.
+
+Returns: The state of the pending result after the execution.
+"""
+function duckdb_pending_execute_task(pending_result)
+    return ccall(
+        (:duckdb_pending_execute_task, libduckdb),
+        duckdb_pending_state,
+        (duckdb_pending_result,),
+        pending_result
+    )
+end
+
+"""
+    duckdb_pending_execute_check_state(pending_result)
+
+If this returns DUCKDB_PENDING_RESULT_READY, the duckdb_execute_pending function can be called to obtain the result.
+If this returns DUCKDB_PENDING_RESULT_NOT_READY, the duckdb_pending_execute_check_state function should be called again.
+If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
+
+The error message can be obtained by calling duckdb_pending_error on the pending_result.
+
+# Arguments
+- `pending_result`: The pending result.
+
+Returns: The state of the pending result.
+"""
+function duckdb_pending_execute_check_state(pending_result)
+    return ccall(
+        (:duckdb_pending_execute_check_state, libduckdb),
+        duckdb_pending_state,
+        (duckdb_pending_result,),
+        pending_result
+    )
+end
+
+"""
+    duckdb_execute_pending(pending_result, out_result)
+
+Fully execute a pending query result, returning the final query result.
+
+If duckdb_pending_execute_task has been called until DUCKDB_PENDING_RESULT_READY was returned, this will return fast.
+Otherwise, all remaining tasks must be executed first.
+
+Note that the result must be freed with `duckdb_destroy_result`.
+
+# Arguments
+- `pending_result`: The pending result to execute.
+- `out_result`: The result object.
+
+Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_execute_pending(pending_result, out_result)
+    return ccall(
+        (:duckdb_execute_pending, libduckdb),
+        duckdb_state,
+        (duckdb_pending_result, Ref{duckdb_result}),
+        pending_result,
+        out_result
+    )
+end
+
+"""
+    duckdb_pending_execution_is_finished(pending_state)
+
+Returns whether a duckdb_pending_state is finished executing. For example if `pending_state` is
+DUCKDB_PENDING_RESULT_READY, this function will return true.
+
+# Arguments
+- `pending_state`: The pending state on which to decide whether to finish execution.
+
+Returns: Boolean indicating pending execution should be considered finished.
+"""
+function duckdb_pending_execution_is_finished(pending_state)
+    return ccall((:duckdb_pending_execution_is_finished, libduckdb), Bool, (duckdb_pending_state,), pending_state)
+end
+
+
+
 # --------------------------------------------------------------------------------
 # Value Interface
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_destroy_value(value)
+
+Destroys the value and de-allocates all memory allocated for that type.
+
+# Arguments
+- `value`: The value to destroy.
+
+Returns: nothing
+"""
+function duckdb_destroy_value(value)
+    return ccall((:duckdb_destroy_value, libduckdb), Cvoid, (Ref{duckdb_value},), value)
+end
+
+"""
+    duckdb_create_varchar(text)
+
+Creates a value from a null-terminated string
+
+# Arguments
+- `text`: The null-terminated string
+
+Returns: The value. This must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_create_varchar(text)
+    return ccall((:duckdb_create_varchar, libduckdb), duckdb_value, (Cstring,), text)
+end
+
+"""
+    duckdb_create_varchar_length(text, length)
+
+Creates a value from a string
+
+# Arguments
+- `text`: The text
+- `length`: The length of the text
+
+Returns: The value. This must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_create_varchar_length(text, length)
+    return ccall((:duckdb_create_varchar_length, libduckdb), duckdb_value, (Cstring, idx_t), text, length)
+end
 
 """
     duckdb_create_bool(input)
@@ -5002,6 +2917,20 @@ Returns: The value. This must be destroyed with `duckdb_destroy_value`.
 """
 function duckdb_create_uint64(input)
     return ccall((:duckdb_create_uint64, libduckdb), duckdb_value, (UInt64,), input)
+end
+
+"""
+    duckdb_create_int64(val)
+
+Creates a value from an int64
+
+# Arguments
+- `val`: 
+
+Returns: The value. This must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_create_int64(val)
+    return ccall((:duckdb_create_int64, libduckdb), duckdb_value, (Int64,), val)
 end
 
 """
@@ -5357,6 +3286,20 @@ function duckdb_get_uint32(val)
 end
 
 """
+    duckdb_get_int64(val)
+
+Returns the int64_t value of the given value.
+
+# Arguments
+- `val`: A duckdb_value containing a bigint
+
+Returns: A int64_t, or MinValue<int64> if the value cannot be converted
+"""
+function duckdb_get_int64(val)
+    return ccall((:duckdb_get_int64, libduckdb), Int64, (duckdb_value,), val)
+end
+
+"""
     duckdb_get_uint64(val)
 
 Returns the uint64_t value of the given value.
@@ -5640,6 +3583,21 @@ function duckdb_get_uuid(val)
 end
 
 """
+    duckdb_get_varchar(value)
+
+Obtains a string representation of the given value.
+The result must be destroyed with `duckdb_free`.
+
+# Arguments
+- `value`: The value
+
+Returns: The string value. This must be destroyed with `duckdb_free`.
+"""
+function duckdb_get_varchar(value)
+    return ccall((:duckdb_get_varchar, libduckdb), Cstring, (duckdb_value,), value)
+end
+
+"""
     duckdb_create_struct_value(_type, values)
 
 Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.
@@ -5852,9 +3810,29 @@ function duckdb_get_struct_child(value, index)
     return ccall((:duckdb_get_struct_child, libduckdb), duckdb_value, (duckdb_value, idx_t), value, index - 1)
 end
 
+
+
 # --------------------------------------------------------------------------------
 # Logical Type Interface
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_create_logical_type(_type)
+
+Creates a `duckdb_logical_type` from a primitive type.
+The resulting logical type must be destroyed with `duckdb_destroy_logical_type`.
+
+Returns an invalid logical type, if type is: `DUCKDB_TYPE_INVALID`, `DUCKDB_TYPE_DECIMAL`, `DUCKDB_TYPE_ENUM`,
+`DUCKDB_TYPE_LIST`, `DUCKDB_TYPE_STRUCT`, `DUCKDB_TYPE_MAP`, `DUCKDB_TYPE_ARRAY`, or `DUCKDB_TYPE_UNION`.
+
+# Arguments
+- `_type`: The primitive type to create.
+
+Returns: The logical type.
+"""
+function duckdb_create_logical_type(_type)
+    return ccall((:duckdb_create_logical_type, libduckdb), duckdb_logical_type, (DUCKDB_TYPE,), _type)
+end
 
 """
     duckdb_logical_type_get_alias(_type)
@@ -6016,6 +3994,138 @@ function duckdb_create_enum_type(member_names, member_count)
 end
 
 """
+    duckdb_create_decimal_type(width, scale)
+
+Creates a DECIMAL type with the specified width and scale.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+# Arguments
+- `width`: The width of the decimal type
+- `scale`: The scale of the decimal type
+
+Returns: The logical type.
+"""
+function duckdb_create_decimal_type(width, scale)
+    return ccall((:duckdb_create_decimal_type, libduckdb), duckdb_logical_type, (UInt8, UInt8), width, scale)
+end
+
+"""
+    duckdb_get_type_id(_type)
+
+Retrieves the enum `duckdb_type` of a `duckdb_logical_type`.
+
+# Arguments
+- `_type`: The logical type.
+
+Returns: The `duckdb_type` id.
+"""
+function duckdb_get_type_id(_type)
+    return ccall((:duckdb_get_type_id, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), _type)
+end
+
+"""
+    duckdb_decimal_width(_type)
+
+Retrieves the width of a decimal type.
+
+# Arguments
+- `_type`: The logical type object
+
+Returns: The width of the decimal type
+"""
+function duckdb_decimal_width(_type)
+    return ccall((:duckdb_decimal_width, libduckdb), UInt8, (duckdb_logical_type,), _type)
+end
+
+"""
+    duckdb_decimal_scale(_type)
+
+Retrieves the scale of a decimal type.
+
+# Arguments
+- `_type`: The logical type object
+
+Returns: The scale of the decimal type
+"""
+function duckdb_decimal_scale(_type)
+    return ccall((:duckdb_decimal_scale, libduckdb), UInt8, (duckdb_logical_type,), _type)
+end
+
+"""
+    duckdb_decimal_internal_type(_type)
+
+Retrieves the internal storage type of a decimal type.
+
+# Arguments
+- `_type`: The logical type object
+
+Returns: The internal type of the decimal type
+"""
+function duckdb_decimal_internal_type(_type)
+    return ccall((:duckdb_decimal_internal_type, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), _type)
+end
+
+"""
+    duckdb_enum_internal_type(_type)
+
+Retrieves the internal storage type of an enum type.
+
+# Arguments
+- `_type`: The logical type object
+
+Returns: The internal type of the enum type
+"""
+function duckdb_enum_internal_type(_type)
+    return ccall((:duckdb_enum_internal_type, libduckdb), DUCKDB_TYPE, (duckdb_logical_type,), _type)
+end
+
+"""
+    duckdb_enum_dictionary_size(_type)
+
+Retrieves the dictionary size of the enum type.
+
+# Arguments
+- `_type`: The logical type object
+
+Returns: The dictionary size of the enum type
+"""
+function duckdb_enum_dictionary_size(_type)
+    return ccall((:duckdb_enum_dictionary_size, libduckdb), UInt32, (duckdb_logical_type,), _type)
+end
+
+"""
+    duckdb_enum_dictionary_value(_type, index)
+
+Retrieves the dictionary value at the specified position from the enum.
+
+The result must be freed with `duckdb_free`.
+
+# Arguments
+- `_type`: The logical type object
+- `index`: The index in the dictionary
+
+Returns: The string value of the enum type. Must be freed with `duckdb_free`.
+"""
+function duckdb_enum_dictionary_value(_type, index)
+    return ccall((:duckdb_enum_dictionary_value, libduckdb), Cstring, (duckdb_logical_type, idx_t), _type, index - 1)
+end
+
+"""
+    duckdb_list_type_child_type(_type)
+
+Retrieves the child type of the given LIST type. Also accepts MAP types.
+The result must be freed with `duckdb_destroy_logical_type`.
+
+# Arguments
+- `_type`: The logical type, either LIST or MAP.
+
+Returns: The child type of the LIST or MAP type.
+"""
+function duckdb_list_type_child_type(_type)
+    return ccall((:duckdb_list_type_child_type, libduckdb), duckdb_logical_type, (duckdb_logical_type,), _type)
+end
+
+"""
     duckdb_array_type_child_type(_type)
 
 Retrieves the child type of the given ARRAY type.
@@ -6078,6 +4188,128 @@ function duckdb_map_type_value_type(_type)
 end
 
 """
+    duckdb_struct_type_child_count(_type)
+
+Returns the number of children of a struct type.
+
+# Arguments
+- `_type`: The logical type object
+
+Returns: The number of children of a struct type.
+"""
+function duckdb_struct_type_child_count(_type)
+    return ccall((:duckdb_struct_type_child_count, libduckdb), idx_t, (duckdb_logical_type,), _type)
+end
+
+"""
+    duckdb_struct_type_child_name(_type, index)
+
+Retrieves the name of the struct child.
+
+The result must be freed with `duckdb_free`.
+
+# Arguments
+- `_type`: The logical type object
+- `index`: The child index
+
+Returns: The name of the struct type. Must be freed with `duckdb_free`.
+"""
+function duckdb_struct_type_child_name(_type, index)
+    return ccall((:duckdb_struct_type_child_name, libduckdb), Cstring, (duckdb_logical_type, idx_t), _type, index - 1)
+end
+
+"""
+    duckdb_struct_type_child_type(_type, index)
+
+Retrieves the child type of the given struct type at the specified index.
+
+The result must be freed with `duckdb_destroy_logical_type`.
+
+# Arguments
+- `_type`: The logical type object
+- `index`: The child index
+
+Returns: The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
+"""
+function duckdb_struct_type_child_type(_type, index)
+    return ccall(
+        (:duckdb_struct_type_child_type, libduckdb),
+        duckdb_logical_type,
+        (duckdb_logical_type, idx_t),
+        _type,
+        index - 1
+    )
+end
+
+"""
+    duckdb_union_type_member_count(_type)
+
+Returns the number of members that the union type has.
+
+# Arguments
+- `_type`: The logical type (union) object
+
+Returns: The number of members of a union type.
+"""
+function duckdb_union_type_member_count(_type)
+    return ccall((:duckdb_union_type_member_count, libduckdb), idx_t, (duckdb_logical_type,), _type)
+end
+
+"""
+    duckdb_union_type_member_name(_type, index)
+
+Retrieves the name of the union member.
+
+The result must be freed with `duckdb_free`.
+
+# Arguments
+- `_type`: The logical type object
+- `index`: The child index
+
+Returns: The name of the union member. Must be freed with `duckdb_free`.
+"""
+function duckdb_union_type_member_name(_type, index)
+    return ccall((:duckdb_union_type_member_name, libduckdb), Cstring, (duckdb_logical_type, idx_t), _type, index - 1)
+end
+
+"""
+    duckdb_union_type_member_type(_type, index)
+
+Retrieves the child type of the given union member at the specified index.
+
+The result must be freed with `duckdb_destroy_logical_type`.
+
+# Arguments
+- `_type`: The logical type object
+- `index`: The child index
+
+Returns: The child type of the union member. Must be destroyed with `duckdb_destroy_logical_type`.
+"""
+function duckdb_union_type_member_type(_type, index)
+    return ccall(
+        (:duckdb_union_type_member_type, libduckdb),
+        duckdb_logical_type,
+        (duckdb_logical_type, idx_t),
+        _type,
+        index - 1
+    )
+end
+
+"""
+    duckdb_destroy_logical_type(_type)
+
+Destroys the logical type and de-allocates all memory allocated for that type.
+
+# Arguments
+- `_type`: The logical type to destroy.
+
+Returns: nothing
+"""
+function duckdb_destroy_logical_type(_type)
+    return ccall((:duckdb_destroy_logical_type, libduckdb), Cvoid, (Ref{duckdb_logical_type},), _type)
+end
+
+"""
     duckdb_register_logical_type(con, _type, info)
 
 Registers a custom type within the given connection.
@@ -6101,9 +4333,292 @@ function duckdb_register_logical_type(con, _type, info)
     )
 end
 
+
+
+# --------------------------------------------------------------------------------
+# Data Chunk Interface
+# --------------------------------------------------------------------------------
+
+"""
+    duckdb_create_data_chunk(types, column_count)
+
+Creates an empty data chunk with the specified column types.
+The result must be destroyed with `duckdb_destroy_data_chunk`.
+
+# Arguments
+- `types`: An array of column types. Column types can not contain ANY and INVALID types.
+- `column_count`: The number of columns.
+
+Returns: The data chunk.
+"""
+function duckdb_create_data_chunk(types, column_count)
+    return ccall(
+        (:duckdb_create_data_chunk, libduckdb),
+        duckdb_data_chunk,
+        (Ref{duckdb_logical_type}, idx_t),
+        types,
+        column_count
+    )
+end
+
+"""
+    duckdb_destroy_data_chunk(chunk)
+
+Destroys the data chunk and de-allocates all memory allocated for that chunk.
+
+# Arguments
+- `chunk`: The data chunk to destroy.
+
+Returns: nothing
+"""
+function duckdb_destroy_data_chunk(chunk)
+    return ccall((:duckdb_destroy_data_chunk, libduckdb), Cvoid, (Ref{duckdb_data_chunk},), chunk)
+end
+
+"""
+    duckdb_data_chunk_reset(chunk)
+
+Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.
+After calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current
+data and validity pointers
+
+# Arguments
+- `chunk`: The data chunk to reset.
+
+Returns: nothing
+"""
+function duckdb_data_chunk_reset(chunk)
+    return ccall((:duckdb_data_chunk_reset, libduckdb), Cvoid, (duckdb_data_chunk,), chunk)
+end
+
+"""
+    duckdb_data_chunk_get_column_count(chunk)
+
+Retrieves the number of columns in a data chunk.
+
+# Arguments
+- `chunk`: The data chunk to get the data from
+
+Returns: The number of columns in the data chunk
+"""
+function duckdb_data_chunk_get_column_count(chunk)
+    return ccall((:duckdb_data_chunk_get_column_count, libduckdb), idx_t, (duckdb_data_chunk,), chunk)
+end
+
+"""
+    duckdb_data_chunk_get_vector(chunk, col_idx)
+
+Retrieves the vector at the specified column index in the data chunk.
+
+The pointer to the vector is valid for as long as the chunk is alive.
+It does NOT need to be destroyed.
+
+# Arguments
+- `chunk`: The data chunk to get the data from
+- `col_idx`: 
+
+Returns: The vector
+"""
+function duckdb_data_chunk_get_vector(chunk, col_idx)
+    return ccall(
+        (:duckdb_data_chunk_get_vector, libduckdb),
+        duckdb_vector,
+        (duckdb_data_chunk, idx_t),
+        chunk,
+        col_idx - 1
+    )
+end
+
+"""
+    duckdb_data_chunk_get_size(chunk)
+
+Retrieves the current number of tuples in a data chunk.
+
+# Arguments
+- `chunk`: The data chunk to get the data from
+
+Returns: The number of tuples in the data chunk
+"""
+function duckdb_data_chunk_get_size(chunk)
+    return ccall((:duckdb_data_chunk_get_size, libduckdb), idx_t, (duckdb_data_chunk,), chunk)
+end
+
+"""
+    duckdb_data_chunk_set_size(chunk, size)
+
+Sets the current number of tuples in a data chunk.
+
+# Arguments
+- `chunk`: The data chunk to set the size in
+- `size`: The number of tuples in the data chunk
+
+Returns: nothing
+"""
+function duckdb_data_chunk_set_size(chunk, size)
+    return ccall((:duckdb_data_chunk_set_size, libduckdb), Cvoid, (duckdb_data_chunk, idx_t), chunk, size)
+end
+
+
+
 # --------------------------------------------------------------------------------
 # Vector Interface
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_vector_get_column_type(vector)
+
+Retrieves the column type of the specified vector.
+
+The result must be destroyed with `duckdb_destroy_logical_type`.
+
+# Arguments
+- `vector`: The vector get the data from
+
+Returns: The type of the vector
+"""
+function duckdb_vector_get_column_type(vector)
+    return ccall((:duckdb_vector_get_column_type, libduckdb), duckdb_logical_type, (duckdb_vector,), vector)
+end
+
+"""
+    duckdb_vector_get_data(vector)
+
+Retrieves the data pointer of the vector.
+
+The data pointer can be used to read or write values from the vector.
+How to read or write values depends on the type of the vector.
+
+# Arguments
+- `vector`: The vector to get the data from
+
+Returns: The data pointer
+"""
+function duckdb_vector_get_data(vector)
+    return ccall((:duckdb_vector_get_data, libduckdb), Ptr{Cvoid}, (duckdb_vector,), vector)
+end
+
+"""
+    duckdb_vector_get_validity(vector)
+
+Retrieves the validity mask pointer of the specified vector.
+
+If all values are valid, this function MIGHT return NULL!
+
+The validity mask is a bitset that signifies null-ness within the data chunk.
+It is a series of uint64_t values, where each uint64_t value contains validity for 64 tuples.
+The bit is set to 1 if the value is valid (i.e. not NULL) or 0 if the value is invalid (i.e. NULL).
+
+Validity of a specific value can be obtained like this:
+
+idx_t entry_idx = row_idx / 64;
+idx_t idx_in_entry = row_idx % 64;
+bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
+
+Alternatively, the (slower) duckdb_validity_row_is_valid function can be used.
+
+# Arguments
+- `vector`: The vector to get the data from
+
+Returns: The pointer to the validity mask, or NULL if no validity mask is present
+"""
+function duckdb_vector_get_validity(vector)
+    return ccall((:duckdb_vector_get_validity, libduckdb), Ptr{UInt64}, (duckdb_vector,), vector)
+end
+
+"""
+    duckdb_vector_ensure_validity_writable(vector)
+
+Ensures the validity mask is writable by allocating it.
+
+After this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.
+This allows NULL values to be written to the vector, regardless of whether a validity mask was present before.
+
+# Arguments
+- `vector`: The vector to alter
+
+Returns: nothing
+"""
+function duckdb_vector_ensure_validity_writable(vector)
+    return ccall((:duckdb_vector_ensure_validity_writable, libduckdb), Cvoid, (duckdb_vector,), vector)
+end
+
+"""
+    duckdb_vector_assign_string_element(vector, index, str)
+
+Assigns a string element in the vector at the specified location.
+
+# Arguments
+- `vector`: The vector to alter
+- `index`: The row position in the vector to assign the string to
+- `str`: The null-terminated string
+
+Returns: nothing
+"""
+function duckdb_vector_assign_string_element(vector, index, str)
+    return ccall(
+        (:duckdb_vector_assign_string_element, libduckdb),
+        Cvoid,
+        (duckdb_vector, idx_t, Cstring),
+        vector,
+        index - 1,
+        str
+    )
+end
+
+"""
+    duckdb_vector_assign_string_element_len(vector, index, str, str_len)
+
+Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
+
+# Arguments
+- `vector`: The vector to alter
+- `index`: The row position in the vector to assign the string to
+- `str`: The string
+- `str_len`: The length of the string (in bytes)
+
+Returns: nothing
+"""
+function duckdb_vector_assign_string_element_len(vector, index, str, str_len)
+    return ccall(
+        (:duckdb_vector_assign_string_element_len, libduckdb),
+        Cvoid,
+        (duckdb_vector, idx_t, Cstring, idx_t),
+        vector,
+        index - 1,
+        str,
+        str_len
+    )
+end
+
+"""
+    duckdb_list_vector_get_child(vector)
+
+Retrieves the child vector of a list vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+# Arguments
+- `vector`: The vector
+
+Returns: The child vector
+"""
+function duckdb_list_vector_get_child(vector)
+    return ccall((:duckdb_list_vector_get_child, libduckdb), duckdb_vector, (duckdb_vector,), vector)
+end
+
+"""
+    duckdb_list_vector_get_size(vector)
+
+Returns the size of the child vector of the list.
+
+# Arguments
+- `vector`: The vector
+
+Returns: The size of the child list
+"""
+function duckdb_list_vector_get_size(vector)
+    return ccall((:duckdb_list_vector_get_size, libduckdb), idx_t, (duckdb_vector,), vector)
+end
 
 """
     duckdb_list_vector_set_size(vector, size)
@@ -6145,6 +4660,23 @@ function duckdb_list_vector_reserve(vector, required_capacity)
 end
 
 """
+    duckdb_struct_vector_get_child(vector, index)
+
+Retrieves the child vector of a struct vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+# Arguments
+- `vector`: The vector
+- `index`: The child index
+
+Returns: The child vector
+"""
+function duckdb_struct_vector_get_child(vector, index)
+    return ccall((:duckdb_struct_vector_get_child, libduckdb), duckdb_vector, (duckdb_vector, idx_t), vector, index - 1)
+end
+
+"""
     duckdb_array_vector_get_child(vector)
 
 Retrieves the child vector of a array vector.
@@ -6160,6 +4692,8 @@ Returns: The child vector
 function duckdb_array_vector_get_child(vector)
     return ccall((:duckdb_array_vector_get_child, libduckdb), duckdb_vector, (duckdb_vector,), vector)
 end
+
+
 
 # --------------------------------------------------------------------------------
 # Validity Mask Functions
@@ -6240,9 +4774,61 @@ function duckdb_validity_set_row_valid(validity, row)
     return ccall((:duckdb_validity_set_row_valid, libduckdb), Cvoid, (Ref{UInt64}, idx_t), validity, row - 1)
 end
 
+
+
 # --------------------------------------------------------------------------------
 # Scalar Functions
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_create_scalar_function()
+
+Creates a new empty scalar function.
+
+The return value should be destroyed with `duckdb_destroy_scalar_function`.
+
+# Arguments
+
+Returns: The scalar function object.
+"""
+function duckdb_create_scalar_function()
+    return ccall((:duckdb_create_scalar_function, libduckdb), duckdb_scalar_function, ())
+end
+
+"""
+    duckdb_destroy_scalar_function(scalar_function)
+
+Destroys the given scalar function object.
+
+# Arguments
+- `scalar_function`: The scalar function to destroy
+
+Returns: nothing
+"""
+function duckdb_destroy_scalar_function(scalar_function)
+    return ccall((:duckdb_destroy_scalar_function, libduckdb), Cvoid, (Ref{duckdb_scalar_function},), scalar_function)
+end
+
+"""
+    duckdb_scalar_function_set_name(scalar_function, name)
+
+Sets the name of the given scalar function.
+
+# Arguments
+- `scalar_function`: The scalar function
+- `name`: The name of the scalar function
+
+Returns: nothing
+"""
+function duckdb_scalar_function_set_name(scalar_function, name)
+    return ccall(
+        (:duckdb_scalar_function_set_name, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, Cstring),
+        scalar_function,
+        name
+    )
+end
 
 """
     duckdb_scalar_function_set_varargs(scalar_function, _type)
@@ -6302,6 +4888,48 @@ function duckdb_scalar_function_set_volatile(scalar_function)
 end
 
 """
+    duckdb_scalar_function_add_parameter(scalar_function, _type)
+
+Adds a parameter to the scalar function.
+
+# Arguments
+- `scalar_function`: The scalar function.
+- `_type`: The parameter type. Cannot contain INVALID.
+
+Returns: nothing
+"""
+function duckdb_scalar_function_add_parameter(scalar_function, _type)
+    return ccall(
+        (:duckdb_scalar_function_add_parameter, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, duckdb_logical_type),
+        scalar_function,
+        _type
+    )
+end
+
+"""
+    duckdb_scalar_function_set_return_type(scalar_function, _type)
+
+Sets the return type of the scalar function.
+
+# Arguments
+- `scalar_function`: The scalar function
+- `_type`: Cannot contain INVALID or ANY.
+
+Returns: nothing
+"""
+function duckdb_scalar_function_set_return_type(scalar_function, _type)
+    return ccall(
+        (:duckdb_scalar_function_set_return_type, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, duckdb_logical_type),
+        scalar_function,
+        _type
+    )
+end
+
+"""
     duckdb_scalar_function_set_extra_info(scalar_function, extra_info, destroy)
 
 Assigns extra information to the scalar function that can be fetched during binding, etc.
@@ -6321,6 +4949,52 @@ function duckdb_scalar_function_set_extra_info(scalar_function, extra_info, dest
         scalar_function,
         extra_info,
         destroy
+    )
+end
+
+"""
+    duckdb_scalar_function_set_function(scalar_function, _function)
+
+Sets the main function of the scalar function.
+
+# Arguments
+- `scalar_function`: The scalar function
+- `_function`: The function
+
+Returns: nothing
+"""
+function duckdb_scalar_function_set_function(scalar_function, _function)
+    return ccall(
+        (:duckdb_scalar_function_set_function, libduckdb),
+        Cvoid,
+        (duckdb_scalar_function, duckdb_scalar_function),
+        scalar_function,
+        _function
+    )
+end
+
+"""
+    duckdb_register_scalar_function(con, scalar_function)
+
+Register the scalar function object within the given connection.
+
+The function requires at least a name, a function and a return type.
+
+If the function is incomplete or a function with this name already exists DuckDBError is returned.
+
+# Arguments
+- `con`: The connection to register it in.
+- `scalar_function`: The function pointer
+
+Returns: Whether or not the registration was successful.
+"""
+function duckdb_register_scalar_function(con, scalar_function)
+    return ccall(
+        (:duckdb_register_scalar_function, libduckdb),
+        duckdb_state,
+        (duckdb_connection, duckdb_scalar_function),
+        con,
+        scalar_function
     )
 end
 
@@ -6435,6 +5109,8 @@ function duckdb_register_scalar_function_set(con, set)
         set
     )
 end
+
+
 
 # --------------------------------------------------------------------------------
 # Aggregate Functions
@@ -6773,9 +5449,82 @@ function duckdb_register_aggregate_function_set(con, set)
     )
 end
 
+
+
 # --------------------------------------------------------------------------------
 # Table Functions
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_create_table_function()
+
+Creates a new empty table function.
+
+The return value should be destroyed with `duckdb_destroy_table_function`.
+
+# Arguments
+
+Returns: The table function object.
+"""
+function duckdb_create_table_function()
+    return ccall((:duckdb_create_table_function, libduckdb), duckdb_table_function, ())
+end
+
+"""
+    duckdb_destroy_table_function(table_function)
+
+Destroys the given table function object.
+
+# Arguments
+- `table_function`: The table function to destroy
+
+Returns: nothing
+"""
+function duckdb_destroy_table_function(table_function)
+    return ccall((:duckdb_destroy_table_function, libduckdb), Cvoid, (Ref{duckdb_table_function},), table_function)
+end
+
+"""
+    duckdb_table_function_set_name(table_function, name)
+
+Sets the name of the given table function.
+
+# Arguments
+- `table_function`: The table function
+- `name`: The name of the table function
+
+Returns: nothing
+"""
+function duckdb_table_function_set_name(table_function, name)
+    return ccall(
+        (:duckdb_table_function_set_name, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Cstring),
+        table_function,
+        name
+    )
+end
+
+"""
+    duckdb_table_function_add_parameter(table_function, _type)
+
+Adds a parameter to the table function.
+
+# Arguments
+- `table_function`: The table function.
+- `_type`: The parameter type. Cannot contain INVALID.
+
+Returns: nothing
+"""
+function duckdb_table_function_add_parameter(table_function, _type)
+    return ccall(
+        (:duckdb_table_function_add_parameter, libduckdb),
+        Cvoid,
+        (duckdb_table_function, duckdb_logical_type),
+        table_function,
+        _type
+    )
+end
 
 """
     duckdb_table_function_add_named_parameter(table_function, name, _type)
@@ -6800,9 +5549,236 @@ function duckdb_table_function_add_named_parameter(table_function, name, _type)
     )
 end
 
+"""
+    duckdb_table_function_set_extra_info(table_function, extra_info, destroy)
+
+Assigns extra information to the table function that can be fetched during binding, etc.
+
+# Arguments
+- `table_function`: The table function
+- `extra_info`: The extra information
+- `destroy`: The callback that will be called to destroy the bind data (if any)
+
+Returns: nothing
+"""
+function duckdb_table_function_set_extra_info(table_function, extra_info, destroy)
+    return ccall(
+        (:duckdb_table_function_set_extra_info, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Ref{Cvoid}, duckdb_delete_callback),
+        table_function,
+        extra_info,
+        destroy
+    )
+end
+
+"""
+    duckdb_table_function_set_bind(table_function, bind)
+
+Sets the bind function of the table function.
+
+# Arguments
+- `table_function`: The table function
+- `bind`: The bind function
+
+Returns: nothing
+"""
+function duckdb_table_function_set_bind(table_function, bind)
+    return ccall(
+        (:duckdb_table_function_set_bind, libduckdb),
+        Cvoid,
+        (duckdb_table_function, duckdb_table_function_bind),
+        table_function,
+        bind
+    )
+end
+
+"""
+    duckdb_table_function_set_init(table_function, init)
+
+Sets the init function of the table function.
+
+# Arguments
+- `table_function`: The table function
+- `init`: The init function
+
+Returns: nothing
+"""
+function duckdb_table_function_set_init(table_function, init)
+    return ccall(
+        (:duckdb_table_function_set_init, libduckdb),
+        Cvoid,
+        (duckdb_table_function, duckdb_table_function_init),
+        table_function,
+        init
+    )
+end
+
+"""
+    duckdb_table_function_set_local_init(table_function, init)
+
+Sets the thread-local init function of the table function.
+
+# Arguments
+- `table_function`: The table function
+- `init`: The init function
+
+Returns: nothing
+"""
+function duckdb_table_function_set_local_init(table_function, init)
+    return ccall(
+        (:duckdb_table_function_set_local_init, libduckdb),
+        Cvoid,
+        (duckdb_table_function, duckdb_table_function_init),
+        table_function,
+        init
+    )
+end
+
+"""
+    duckdb_table_function_set_function(table_function, _function)
+
+Sets the main function of the table function.
+
+# Arguments
+- `table_function`: The table function
+- `_function`: The function
+
+Returns: nothing
+"""
+function duckdb_table_function_set_function(table_function, _function)
+    return ccall(
+        (:duckdb_table_function_set_function, libduckdb),
+        Cvoid,
+        (duckdb_table_function, duckdb_table_function_ptr),
+        table_function,
+        _function
+    )
+end
+
+"""
+    duckdb_table_function_supports_projection_pushdown(table_function, pushdown)
+
+Sets whether or not the given table function supports projection pushdown.
+
+If this is set to true, the system will provide a list of all required columns in the `init` stage through
+the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
+If this is set to false (the default), the system will expect all columns to be projected.
+
+# Arguments
+- `table_function`: The table function
+- `pushdown`: True if the table function supports projection pushdown, false otherwise.
+
+Returns: nothing
+"""
+function duckdb_table_function_supports_projection_pushdown(table_function, pushdown)
+    return ccall(
+        (:duckdb_table_function_supports_projection_pushdown, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Bool),
+        table_function,
+        pushdown
+    )
+end
+
+"""
+    duckdb_register_table_function(con, _function)
+
+Register the table function object within the given connection.
+
+The function requires at least a name, a bind function, an init function and a main function.
+
+If the function is incomplete or a function with this name already exists DuckDBError is returned.
+
+# Arguments
+- `con`: The connection to register it in.
+- `_function`: The function pointer
+
+Returns: Whether or not the registration was successful.
+"""
+function duckdb_register_table_function(con, _function)
+    return ccall(
+        (:duckdb_register_table_function, libduckdb),
+        duckdb_state,
+        (duckdb_connection, duckdb_table_function),
+        con,
+        _function
+    )
+end
+
+
+
 # --------------------------------------------------------------------------------
 # Table Function Bind
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_bind_get_extra_info(info)
+
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
+
+# Arguments
+- `info`: The info object
+
+Returns: The extra info
+"""
+function duckdb_bind_get_extra_info(info)
+    return ccall((:duckdb_bind_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_bind_info,), info)
+end
+
+"""
+    duckdb_bind_add_result_column(info, name, _type)
+
+Adds a result column to the output of the table function.
+
+# Arguments
+- `info`: The table function's bind info.
+- `name`: The column name.
+- `_type`: The logical column type.
+
+Returns: nothing
+"""
+function duckdb_bind_add_result_column(info, name, _type)
+    return ccall(
+        (:duckdb_bind_add_result_column, libduckdb),
+        Cvoid,
+        (duckdb_bind_info, Cstring, duckdb_logical_type),
+        info,
+        name,
+        _type
+    )
+end
+
+"""
+    duckdb_bind_get_parameter_count(info)
+
+Retrieves the number of regular (non-named) parameters to the function.
+
+# Arguments
+- `info`: The info object
+
+Returns: The number of parameters
+"""
+function duckdb_bind_get_parameter_count(info)
+    return ccall((:duckdb_bind_get_parameter_count, libduckdb), idx_t, (duckdb_bind_info,), info)
+end
+
+"""
+    duckdb_bind_get_parameter(info, index)
+
+Retrieves the parameter at the given index.
+
+The result must be destroyed with `duckdb_destroy_value`.
+
+# Arguments
+- `info`: The info object
+- `index`: The index of the parameter to get
+
+Returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
+"""
+function duckdb_bind_get_parameter(info, index)
+    return ccall((:duckdb_bind_get_parameter, libduckdb), duckdb_value, (duckdb_bind_info, idx_t), info, index)
+end
 
 """
     duckdb_bind_get_named_parameter(info, name)
@@ -6820,6 +5796,368 @@ Returns: The value of the parameter. Must be destroyed with `duckdb_destroy_valu
 function duckdb_bind_get_named_parameter(info, name)
     return ccall((:duckdb_bind_get_named_parameter, libduckdb), duckdb_value, (duckdb_bind_info, Cstring), info, name)
 end
+
+"""
+    duckdb_bind_set_bind_data(info, bind_data, destroy)
+
+Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.
+
+# Arguments
+- `info`: The info object
+- `bind_data`: The bind data object.
+- `destroy`: The callback that will be called to destroy the bind data (if any)
+
+Returns: nothing
+"""
+function duckdb_bind_set_bind_data(info, bind_data, destroy)
+    return ccall(
+        (:duckdb_bind_set_bind_data, libduckdb),
+        Cvoid,
+        (duckdb_bind_info, Ref{Cvoid}, duckdb_delete_callback),
+        info,
+        bind_data,
+        destroy
+    )
+end
+
+"""
+    duckdb_bind_set_cardinality(info, cardinality, is_exact)
+
+Sets the cardinality estimate for the table function, used for optimization.
+
+# Arguments
+- `info`: The bind data object.
+- `cardinality`: 
+- `is_exact`: Whether or not the cardinality estimate is exact, or an approximation
+
+Returns: nothing
+"""
+function duckdb_bind_set_cardinality(info, cardinality, is_exact)
+    return ccall(
+        (:duckdb_bind_set_cardinality, libduckdb),
+        Cvoid,
+        (duckdb_bind_info, idx_t, Bool),
+        info,
+        cardinality,
+        is_exact
+    )
+end
+
+"""
+    duckdb_bind_set_error(info, error)
+
+Report that an error has occurred while calling bind.
+
+# Arguments
+- `info`: The info object
+- `error`: The error message
+
+Returns: nothing
+"""
+function duckdb_bind_set_error(info, error)
+    return ccall((:duckdb_bind_set_error, libduckdb), Cvoid, (duckdb_bind_info, Cstring), info, error)
+end
+
+
+
+# --------------------------------------------------------------------------------
+# Table Function Init
+# --------------------------------------------------------------------------------
+
+"""
+    duckdb_init_get_extra_info(info)
+
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
+
+# Arguments
+- `info`: The info object
+
+Returns: The extra info
+"""
+function duckdb_init_get_extra_info(info)
+    return ccall((:duckdb_init_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_init_info,), info)
+end
+
+"""
+    duckdb_init_get_bind_data(info)
+
+Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
+
+Note that the bind data should be considered as read-only.
+For tracking state, use the init data instead.
+
+# Arguments
+- `info`: The info object
+
+Returns: The bind data object
+"""
+function duckdb_init_get_bind_data(info)
+    return ccall((:duckdb_init_get_bind_data, libduckdb), Ptr{Cvoid}, (duckdb_init_info,), info)
+end
+
+"""
+    duckdb_init_set_init_data(info, init_data, destroy)
+
+Sets the user-provided init data in the init object. This object can be retrieved again during execution.
+
+# Arguments
+- `info`: The info object
+- `init_data`: The init data object.
+- `destroy`: The callback that will be called to destroy the init data (if any)
+
+Returns: nothing
+"""
+function duckdb_init_set_init_data(info, init_data, destroy)
+    return ccall(
+        (:duckdb_init_set_init_data, libduckdb),
+        Cvoid,
+        (duckdb_init_info, Ref{Cvoid}, duckdb_delete_callback),
+        info,
+        init_data,
+        destroy
+    )
+end
+
+"""
+    duckdb_init_get_column_count(info)
+
+Returns the number of projected columns.
+
+This function must be used if projection pushdown is enabled to figure out which columns to emit.
+
+# Arguments
+- `info`: The info object
+
+Returns: The number of projected columns.
+"""
+function duckdb_init_get_column_count(info)
+    return ccall((:duckdb_init_get_column_count, libduckdb), idx_t, (duckdb_init_info,), info)
+end
+
+"""
+    duckdb_init_get_column_index(info, column_index)
+
+Returns the column index of the projected column at the specified position.
+
+This function must be used if projection pushdown is enabled to figure out which columns to emit.
+
+# Arguments
+- `info`: The info object
+- `column_index`: The index at which to get the projected column index, from 0..duckdb_init_get_column_count(info)
+
+Returns: The column index of the projected column.
+"""
+function duckdb_init_get_column_index(info, column_index)
+    return ccall((:duckdb_init_get_column_index, libduckdb), idx_t, (duckdb_init_info, idx_t), info, column_index - 1) +
+           1
+end
+
+"""
+    duckdb_init_set_max_threads(info, max_threads)
+
+Sets how many threads can process this table function in parallel (default: 1)
+
+# Arguments
+- `info`: The info object
+- `max_threads`: The maximum amount of threads that can process this table function
+
+Returns: nothing
+"""
+function duckdb_init_set_max_threads(info, max_threads)
+    return ccall((:duckdb_init_set_max_threads, libduckdb), Cvoid, (duckdb_init_info, idx_t), info, max_threads)
+end
+
+"""
+    duckdb_init_set_error(info, error)
+
+Report that an error has occurred while calling init.
+
+# Arguments
+- `info`: The info object
+- `error`: The error message
+
+Returns: nothing
+"""
+function duckdb_init_set_error(info, error)
+    return ccall((:duckdb_init_set_error, libduckdb), Cvoid, (duckdb_init_info, Cstring), info, error)
+end
+
+
+
+# --------------------------------------------------------------------------------
+# Table Function
+# --------------------------------------------------------------------------------
+
+"""
+    duckdb_function_get_extra_info(info)
+
+Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
+
+# Arguments
+- `info`: The info object
+
+Returns: The extra info
+"""
+function duckdb_function_get_extra_info(info)
+    return ccall((:duckdb_function_get_extra_info, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
+end
+
+"""
+    duckdb_function_get_bind_data(info)
+
+Gets the bind data set by `duckdb_bind_set_bind_data` during the bind.
+
+Note that the bind data should be considered as read-only.
+For tracking state, use the init data instead.
+
+# Arguments
+- `info`: The info object
+
+Returns: The bind data object
+"""
+function duckdb_function_get_bind_data(info)
+    return ccall((:duckdb_function_get_bind_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
+end
+
+"""
+    duckdb_function_get_init_data(info)
+
+Gets the init data set by `duckdb_init_set_init_data` during the init.
+
+# Arguments
+- `info`: The info object
+
+Returns: The init data object
+"""
+function duckdb_function_get_init_data(info)
+    return ccall((:duckdb_function_get_init_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
+end
+
+"""
+    duckdb_function_get_local_init_data(info)
+
+Gets the thread-local init data set by `duckdb_init_set_init_data` during the local_init.
+
+# Arguments
+- `info`: The info object
+
+Returns: The init data object
+"""
+function duckdb_function_get_local_init_data(info)
+    return ccall((:duckdb_function_get_local_init_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
+end
+
+"""
+    duckdb_function_set_error(info, error)
+
+Report that an error has occurred while executing the function.
+
+# Arguments
+- `info`: The info object
+- `error`: The error message
+
+Returns: nothing
+"""
+function duckdb_function_set_error(info, error)
+    return ccall((:duckdb_function_set_error, libduckdb), Cvoid, (duckdb_function_info, Cstring), info, error)
+end
+
+
+
+# --------------------------------------------------------------------------------
+# Replacement Scans
+# --------------------------------------------------------------------------------
+
+"""
+    duckdb_add_replacement_scan(db, replacement, extra_data, delete_callback)
+
+Add a replacement scan definition to the specified database.
+
+# Arguments
+- `db`: The database object to add the replacement scan to
+- `replacement`: The replacement scan callback
+- `extra_data`: Extra data that is passed back into the specified callback
+- `delete_callback`: The delete callback to call on the extra data, if any
+
+Returns: nothing
+"""
+function duckdb_add_replacement_scan(db, replacement, extra_data, delete_callback)
+    return ccall(
+        (:duckdb_add_replacement_scan, libduckdb),
+        Cvoid,
+        (duckdb_database, duckdb_replacement_callback, Ref{Cvoid}, duckdb_delete_callback),
+        db,
+        replacement,
+        extra_data,
+        delete_callback
+    )
+end
+
+"""
+    duckdb_replacement_scan_set_function_name(info, function_name)
+
+Sets the replacement function name. If this function is called in the replacement callback,
+the replacement scan is performed. If it is not called, the replacement callback is not performed.
+
+# Arguments
+- `info`: The info object
+- `function_name`: The function name to substitute.
+
+Returns: nothing
+"""
+function duckdb_replacement_scan_set_function_name(info, function_name)
+    return ccall(
+        (:duckdb_replacement_scan_set_function_name, libduckdb),
+        Cvoid,
+        (duckdb_replacement_scan_info, Cstring),
+        info,
+        function_name
+    )
+end
+
+"""
+    duckdb_replacement_scan_add_parameter(info, parameter)
+
+Adds a parameter to the replacement scan function.
+
+# Arguments
+- `info`: The info object
+- `parameter`: The parameter to add.
+
+Returns: nothing
+"""
+function duckdb_replacement_scan_add_parameter(info, parameter)
+    return ccall(
+        (:duckdb_replacement_scan_add_parameter, libduckdb),
+        Cvoid,
+        (duckdb_replacement_scan_info, duckdb_value),
+        info,
+        parameter
+    )
+end
+
+"""
+    duckdb_replacement_scan_set_error(info, error)
+
+Report that an error has occurred while executing the replacement scan.
+
+# Arguments
+- `info`: The info object
+- `error`: The error message
+
+Returns: nothing
+"""
+function duckdb_replacement_scan_set_error(info, error)
+    return ccall(
+        (:duckdb_replacement_scan_set_error, libduckdb),
+        Cvoid,
+        (duckdb_replacement_scan_info, Cstring),
+        info,
+        error
+    )
+end
+
+
 
 # --------------------------------------------------------------------------------
 # Profiling Info
@@ -6912,9 +6250,38 @@ function duckdb_profiling_info_get_child(info, index)
     )
 end
 
+
+
 # --------------------------------------------------------------------------------
 # Appender
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_appender_create(connection, schema, table, out_appender)
+
+Creates an appender object.
+
+Note that the object must be destroyed with `duckdb_appender_destroy`.
+
+# Arguments
+- `connection`: The connection context to create the appender in.
+- `schema`: The schema of the table to append to, or `nullptr` for the default schema.
+- `table`: The table name to append to.
+- `out_appender`: The resulting appender object.
+
+Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_appender_create(connection, schema, table, out_appender)
+    return ccall(
+        (:duckdb_appender_create, libduckdb),
+        duckdb_state,
+        (duckdb_connection, Cstring, Cstring, Ref{duckdb_appender}),
+        connection,
+        schema,
+        table,
+        out_appender
+    )
+end
 
 """
     duckdb_appender_create_ext(connection, catalog, schema, table, out_appender)
@@ -6984,6 +6351,75 @@ function duckdb_appender_column_type(appender, col_idx)
 end
 
 """
+    duckdb_appender_error(appender)
+
+Returns the error message associated with the given appender.
+If the appender has no error message, this returns `nullptr` instead.
+
+The error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.
+
+# Arguments
+- `appender`: The appender to get the error from.
+
+Returns: The error message, or `nullptr` if there is none.
+"""
+function duckdb_appender_error(appender)
+    return ccall((:duckdb_appender_error, libduckdb), Cstring, (duckdb_appender,), appender)
+end
+
+"""
+    duckdb_appender_flush(appender)
+
+Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a
+constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.
+It is not possible to append more values. Call duckdb_appender_error to obtain the error message followed by
+duckdb_appender_destroy to destroy the invalidated appender.
+
+# Arguments
+- `appender`: The appender to flush.
+
+Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_appender_flush(appender)
+    return ccall((:duckdb_appender_flush, libduckdb), duckdb_state, (duckdb_appender,), appender)
+end
+
+"""
+    duckdb_appender_close(appender)
+
+Closes the appender by flushing all intermediate states and closing it for further appends. If flushing the data
+triggers a constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError.
+Call duckdb_appender_error to obtain the error message followed by duckdb_appender_destroy to destroy the invalidated
+appender.
+
+# Arguments
+- `appender`: The appender to flush and close.
+
+Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_appender_close(appender)
+    return ccall((:duckdb_appender_close, libduckdb), duckdb_state, (duckdb_appender,), appender)
+end
+
+"""
+    duckdb_appender_destroy(appender)
+
+Closes the appender by flushing all intermediate states to the table and destroying it. By destroying it, this function
+de-allocates all memory associated with the appender. If flushing the data triggers a constraint violation,
+then all data is invalidated, and this function returns DuckDBError. Due to the destruction of the appender, it is no
+longer possible to obtain the specific error message with duckdb_appender_error. Therefore, call duckdb_appender_close
+before destroying the appender, if you need insights into the specific error.
+
+# Arguments
+- `appender`: The appender to flush, close and destroy.
+
+Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_appender_destroy(appender)
+    return ccall((:duckdb_appender_destroy, libduckdb), duckdb_state, (Ref{duckdb_appender},), appender)
+end
+
+"""
     duckdb_appender_add_column(appender, name)
 
 Appends a column to the active column list of the appender. Immediately flushes all previous data. 
@@ -7012,6 +6448,34 @@ Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
 function duckdb_appender_clear_columns(appender)
     return ccall((:duckdb_appender_clear_columns, libduckdb), duckdb_state, (duckdb_appender,), appender)
+end
+
+"""
+    duckdb_appender_begin_row(appender)
+
+A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
+
+# Arguments
+- `appender`: 
+
+Returns: nothing
+"""
+function duckdb_appender_begin_row(appender)
+    return ccall((:duckdb_appender_begin_row, libduckdb), duckdb_state, (duckdb_appender,), appender)
+end
+
+"""
+    duckdb_appender_end_row(appender)
+
+Finish the current row of appends. After end_row is called, the next row can be appended.
+
+# Arguments
+- `appender`: The appender.
+
+Returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_appender_end_row(appender)
+    return ccall((:duckdb_appender_end_row, libduckdb), duckdb_state, (duckdb_appender,), appender)
 end
 
 """
@@ -7055,6 +6519,354 @@ function duckdb_append_default_to_chunk(appender, chunk, col, row)
 end
 
 """
+    duckdb_append_bool(appender, value)
+
+Append a bool value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_bool(appender, value)
+    return ccall((:duckdb_append_bool, libduckdb), duckdb_state, (duckdb_appender, Bool), appender, value)
+end
+
+"""
+    duckdb_append_int8(appender, value)
+
+Append an int8_t value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_int8(appender, value)
+    return ccall((:duckdb_append_int8, libduckdb), duckdb_state, (duckdb_appender, Int8), appender, value)
+end
+
+"""
+    duckdb_append_int16(appender, value)
+
+Append an int16_t value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_int16(appender, value)
+    return ccall((:duckdb_append_int16, libduckdb), duckdb_state, (duckdb_appender, Int16), appender, value)
+end
+
+"""
+    duckdb_append_int32(appender, value)
+
+Append an int32_t value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_int32(appender, value)
+    return ccall((:duckdb_append_int32, libduckdb), duckdb_state, (duckdb_appender, Int32), appender, value)
+end
+
+"""
+    duckdb_append_int64(appender, value)
+
+Append an int64_t value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_int64(appender, value)
+    return ccall((:duckdb_append_int64, libduckdb), duckdb_state, (duckdb_appender, Int64), appender, value)
+end
+
+"""
+    duckdb_append_hugeint(appender, value)
+
+Append a duckdb_hugeint value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_hugeint(appender, value)
+    return ccall((:duckdb_append_hugeint, libduckdb), duckdb_state, (duckdb_appender, duckdb_hugeint), appender, value)
+end
+
+"""
+    duckdb_append_uint8(appender, value)
+
+Append a uint8_t value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_uint8(appender, value)
+    return ccall((:duckdb_append_uint8, libduckdb), duckdb_state, (duckdb_appender, UInt8), appender, value)
+end
+
+"""
+    duckdb_append_uint16(appender, value)
+
+Append a uint16_t value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_uint16(appender, value)
+    return ccall((:duckdb_append_uint16, libduckdb), duckdb_state, (duckdb_appender, UInt16), appender, value)
+end
+
+"""
+    duckdb_append_uint32(appender, value)
+
+Append a uint32_t value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_uint32(appender, value)
+    return ccall((:duckdb_append_uint32, libduckdb), duckdb_state, (duckdb_appender, UInt32), appender, value)
+end
+
+"""
+    duckdb_append_uint64(appender, value)
+
+Append a uint64_t value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_uint64(appender, value)
+    return ccall((:duckdb_append_uint64, libduckdb), duckdb_state, (duckdb_appender, UInt64), appender, value)
+end
+
+"""
+    duckdb_append_uhugeint(appender, value)
+
+Append a duckdb_uhugeint value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_uhugeint(appender, value)
+    return ccall(
+        (:duckdb_append_uhugeint, libduckdb),
+        duckdb_state,
+        (duckdb_appender, duckdb_uhugeint),
+        appender,
+        value
+    )
+end
+
+"""
+    duckdb_append_float(appender, value)
+
+Append a float value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_float(appender, value)
+    return ccall((:duckdb_append_float, libduckdb), duckdb_state, (duckdb_appender, Float32), appender, value)
+end
+
+"""
+    duckdb_append_double(appender, value)
+
+Append a double value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_double(appender, value)
+    return ccall((:duckdb_append_double, libduckdb), duckdb_state, (duckdb_appender, Float64), appender, value)
+end
+
+"""
+    duckdb_append_date(appender, value)
+
+Append a duckdb_date value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_date(appender, value)
+    return ccall((:duckdb_append_date, libduckdb), duckdb_state, (duckdb_appender, duckdb_date), appender, value)
+end
+
+"""
+    duckdb_append_time(appender, value)
+
+Append a duckdb_time value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_time(appender, value)
+    return ccall((:duckdb_append_time, libduckdb), duckdb_state, (duckdb_appender, duckdb_time), appender, value)
+end
+
+"""
+    duckdb_append_timestamp(appender, value)
+
+Append a duckdb_timestamp value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_timestamp(appender, value)
+    return ccall(
+        (:duckdb_append_timestamp, libduckdb),
+        duckdb_state,
+        (duckdb_appender, duckdb_timestamp),
+        appender,
+        value
+    )
+end
+
+"""
+    duckdb_append_interval(appender, value)
+
+Append a duckdb_interval value to the appender.
+
+# Arguments
+- `appender`: 
+- `value`: 
+
+Returns: nothing
+"""
+function duckdb_append_interval(appender, value)
+    return ccall(
+        (:duckdb_append_interval, libduckdb),
+        duckdb_state,
+        (duckdb_appender, duckdb_interval),
+        appender,
+        value
+    )
+end
+
+"""
+    duckdb_append_varchar(appender, val)
+
+Append a varchar value to the appender.
+
+# Arguments
+- `appender`: 
+- `val`: 
+
+Returns: nothing
+"""
+function duckdb_append_varchar(appender, val)
+    return ccall((:duckdb_append_varchar, libduckdb), duckdb_state, (duckdb_appender, Cstring), appender, val)
+end
+
+"""
+    duckdb_append_varchar_length(appender, val, length)
+
+Append a varchar value to the appender.
+
+# Arguments
+- `appender`: 
+- `val`: 
+- `length`: 
+
+Returns: nothing
+"""
+function duckdb_append_varchar_length(appender, val, length)
+    return ccall(
+        (:duckdb_append_varchar_length, libduckdb),
+        duckdb_state,
+        (duckdb_appender, Cstring, idx_t),
+        appender,
+        val,
+        length
+    )
+end
+
+"""
+    duckdb_append_blob(appender, data, length)
+
+Append a blob value to the appender.
+
+# Arguments
+- `appender`: 
+- `data`: 
+- `length`: 
+
+Returns: nothing
+"""
+function duckdb_append_blob(appender, data, length)
+    return ccall(
+        (:duckdb_append_blob, libduckdb),
+        duckdb_state,
+        (duckdb_appender, Ref{Cvoid}, idx_t),
+        appender,
+        data,
+        length
+    )
+end
+
+"""
+    duckdb_append_null(appender)
+
+Append a NULL value to the appender (of any type).
+
+# Arguments
+- `appender`: 
+
+Returns: nothing
+"""
+function duckdb_append_null(appender)
+    return ccall((:duckdb_append_null, libduckdb), duckdb_state, (duckdb_appender,), appender)
+end
+
+"""
     duckdb_append_value(appender, value)
 
 Append a duckdb_value to the appender.
@@ -7090,6 +6902,8 @@ function duckdb_append_data_chunk(appender, chunk)
         chunk
     )
 end
+
+
 
 # --------------------------------------------------------------------------------
 # Table Description
@@ -7226,6 +7040,8 @@ function duckdb_table_description_get_column_name(table_description, index)
         index - 1
     )
 end
+
+
 
 # --------------------------------------------------------------------------------
 # Arrow Interface
@@ -7597,9 +7413,177 @@ function duckdb_arrow_array_scan(connection, table_name, arrow_schema, arrow_arr
     )
 end
 
+
+
+# --------------------------------------------------------------------------------
+# Threading Information
+# --------------------------------------------------------------------------------
+
+"""
+    duckdb_execute_tasks(database, max_tasks)
+
+Execute DuckDB tasks on this thread.
+
+Will return after `max_tasks` have been executed, or if there are no more tasks present.
+
+# Arguments
+- `database`: The database object to execute tasks for
+- `max_tasks`: The maximum amount of tasks to execute
+
+Returns: nothing
+"""
+function duckdb_execute_tasks(database, max_tasks)
+    return ccall((:duckdb_execute_tasks, libduckdb), Cvoid, (duckdb_database, idx_t), database, max_tasks)
+end
+
+"""
+    duckdb_create_task_state(database)
+
+Creates a task state that can be used with duckdb_execute_tasks_state to execute tasks until
+`duckdb_finish_execution` is called on the state.
+
+`duckdb_destroy_state` must be called on the result.
+
+# Arguments
+- `database`: The database object to create the task state for
+
+Returns: The task state that can be used with duckdb_execute_tasks_state.
+"""
+function duckdb_create_task_state(database)
+    return ccall((:duckdb_create_task_state, libduckdb), duckdb_task_state, (duckdb_database,), database)
+end
+
+"""
+    duckdb_execute_tasks_state(state)
+
+Execute DuckDB tasks on this thread.
+
+The thread will keep on executing tasks forever, until duckdb_finish_execution is called on the state.
+Multiple threads can share the same duckdb_task_state.
+
+# Arguments
+- `state`: The task state of the executor
+
+Returns: nothing
+"""
+function duckdb_execute_tasks_state(state)
+    return ccall((:duckdb_execute_tasks_state, libduckdb), Cvoid, (duckdb_task_state,), state)
+end
+
+"""
+    duckdb_execute_n_tasks_state(state, max_tasks)
+
+Execute DuckDB tasks on this thread.
+
+The thread will keep on executing tasks until either duckdb_finish_execution is called on the state,
+max_tasks tasks have been executed or there are no more tasks to be executed.
+
+Multiple threads can share the same duckdb_task_state.
+
+# Arguments
+- `state`: The task state of the executor
+- `max_tasks`: The maximum amount of tasks to execute
+
+Returns: The amount of tasks that have actually been executed
+"""
+function duckdb_execute_n_tasks_state(state, max_tasks)
+    return ccall((:duckdb_execute_n_tasks_state, libduckdb), idx_t, (duckdb_task_state, idx_t), state, max_tasks)
+end
+
+"""
+    duckdb_finish_execution(state)
+
+Finish execution on a specific task.
+
+# Arguments
+- `state`: The task state to finish execution
+
+Returns: nothing
+"""
+function duckdb_finish_execution(state)
+    return ccall((:duckdb_finish_execution, libduckdb), Cvoid, (duckdb_task_state,), state)
+end
+
+"""
+    duckdb_task_state_is_finished(state)
+
+Check if the provided duckdb_task_state has finished execution
+
+# Arguments
+- `state`: The task state to inspect
+
+Returns: Whether or not duckdb_finish_execution has been called on the task state
+"""
+function duckdb_task_state_is_finished(state)
+    return ccall((:duckdb_task_state_is_finished, libduckdb), Bool, (duckdb_task_state,), state)
+end
+
+"""
+    duckdb_destroy_task_state(state)
+
+Destroys the task state returned from duckdb_create_task_state.
+
+Note that this should not be called while there is an active duckdb_execute_tasks_state running
+on the task state.
+
+# Arguments
+- `state`: The task state to clean up
+
+Returns: nothing
+"""
+function duckdb_destroy_task_state(state)
+    return ccall((:duckdb_destroy_task_state, libduckdb), Cvoid, (duckdb_task_state,), state)
+end
+
+"""
+    duckdb_execution_is_finished(con)
+
+Returns true if the execution of the current query is finished.
+
+# Arguments
+- `con`: The connection on which to check
+
+Returns: nothing
+"""
+function duckdb_execution_is_finished(con)
+    return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
+end
+
+
+
 # --------------------------------------------------------------------------------
 # Streaming Result Interface
 # --------------------------------------------------------------------------------
+
+"""
+    duckdb_stream_fetch_chunk(result)
+
+**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
+
+Fetches a data chunk from the (streaming) duckdb_result. This function should be called repeatedly until the result is
+exhausted.
+
+The result must be destroyed with `duckdb_destroy_data_chunk`.
+
+This function can only be used on duckdb_results created with 'duckdb_pending_prepared_streaming'
+
+If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be
+mixed with the legacy result functions or the materialized result functions).
+
+It is not known beforehand how many chunks will be returned by this result.
+
+# Arguments
+- `result`: The result object to fetch the data chunk from.
+
+Returns: The resulting data chunk. Returns `NULL` if the result has an error.
+"""
+function duckdb_stream_fetch_chunk(result)
+    Base.depwarn(
+        "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.",
+        :duckdb_stream_fetch_chunk
+    )
+    return ccall((:duckdb_stream_fetch_chunk, libduckdb), duckdb_data_chunk, (duckdb_result,), result)
+end
 
 """
     duckdb_fetch_chunk(result)
@@ -7618,6 +7602,8 @@ Returns: The resulting data chunk. Returns `NULL` if the result has an error.
 function duckdb_fetch_chunk(result)
     return ccall((:duckdb_fetch_chunk, libduckdb), duckdb_data_chunk, (duckdb_result,), result)
 end
+
+
 
 # --------------------------------------------------------------------------------
 # Cast Functions
@@ -7845,6 +7831,8 @@ Returns: nothing
 function duckdb_destroy_cast_function(cast_function)
     return ccall((:duckdb_destroy_cast_function, libduckdb), Cvoid, (Ref{duckdb_cast_function},), cast_function)
 end
+
+
 
 
 
