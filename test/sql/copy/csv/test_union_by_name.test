@@ -56,7 +56,20 @@ SELECT * FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '
 
 query III
 SELECT a, b, c
-FROM  read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
+FROM  read_csv_auto(['ubn1.csv', 'ubn2.csv', 'ubn3.csv'], UNION_BY_NAME=TRUE)
+ORDER BY a;
+----
+1	NULL	NULL
+2	NULL	NULL
+3	4	NULL
+5	6	NULL
+100	NULL	101
+102	NULL	103
+9223372036854775807	NULL	NULL
+
+query III
+SELECT a, b, c
+FROM  read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE, CACHE_UNION_READERS=FALSE)
 ORDER BY a;
 ----
 1	NULL	NULL
@@ -70,6 +83,13 @@ ORDER BY a;
 query TTT
 SELECT typeof(a), typeof(b), typeof(c)
 FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
+LIMIT 1;
+----
+BIGINT	BIGINT	BIGINT
+
+query TTT
+SELECT typeof(a), typeof(b), typeof(c)
+FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE, CACHE_UNION_READERS=FALSE)
 LIMIT 1;
 ----
 BIGINT	BIGINT	BIGINT
@@ -99,9 +119,35 @@ NULL	NULL	300	Friday	NULL
 fg5391jn4	92	NULL	2020-12-30 04:25:58.745232+01	NULL
 test	88	NULL	2020-12-30 01:25:58.745232+01	NULL
 
+query IIIII
+SELECT  a, b, c, ts, k
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
+ORDER BY a, c, ts
+----
+NULL	NULL	3	2003-06-30 12:03:10	6
+NULL	NULL	5	2003-06-30 12:03:10	6
+NULL	NULL	6	2003-06-30 12:03:10	6
+NULL	NULL	100	Monday	NULL
+NULL	NULL	200	Sunday	NULL
+NULL	NULL	300	Friday	NULL
+1	2	3	NULL	NULL
+3	4	5	NULL	NULL
+34fd321	91	NULL	2020-12-30 03:25:58.745232+01	NULL
+4	5	6	NULL	NULL
+8cb123cb8	90	NULL	2020-12-30 02:25:58.745232+01	NULL
+fg5391jn4	92	NULL	2020-12-30 04:25:58.745232+01	NULL
+test	88	NULL	2020-12-30 01:25:58.745232+01	NULL
+
 query TTTTT
 SELECT  typeof(a), typeof(b), typeof(c), typeof(ts), typeof(k)
 FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+LIMIT 1;
+----
+VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
+
+query TTTTT
+SELECT  typeof(a), typeof(b), typeof(c), typeof(ts), typeof(k)
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
 LIMIT 1;
 ----
 VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
@@ -110,6 +156,26 @@ VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
 query II
 SELECT  c, k
 FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+ORDER BY c NULLS LAST, k NULLS LAST
+----
+3	6
+3	NULL
+5	6
+5	NULL
+6	6
+6	NULL
+100	NULL
+200	NULL
+300	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
+# projection pushdown
+query II
+SELECT  c, k
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
 ORDER BY c NULLS LAST, k NULLS LAST
 ----
 3	6
@@ -146,6 +212,26 @@ NULL
 NULL
 NULL
 
+# projection pushdown
+query I
+SELECT  ts
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
+ORDER BY ts NULLS LAST
+----
+2003-06-30 12:03:10
+2003-06-30 12:03:10
+2003-06-30 12:03:10
+2020-12-30 01:25:58.745232+01
+2020-12-30 02:25:58.745232+01
+2020-12-30 03:25:58.745232+01
+2020-12-30 04:25:58.745232+01
+Friday
+Monday
+Sunday
+NULL
+NULL
+NULL
+
 query TTT
 SELECT typeof(a), typeof(b), typeof(ts) FROM read_csv_auto('data/csv/union-by-name/ubn2.csv') LIMIT 1;
 ----
@@ -165,9 +251,29 @@ ORDER BY a, c, ts
 fg5391jn4	92	NULL	2020-12-30 03:25:58.745232	data/csv/union-by-name/ubn2.csv
 test	88	NULL	2020-12-30 00:25:58.745232	data/csv/union-by-name/ubn2.csv
 
+query IIIII
+SELECT a, b, c, ts, replace(filename, '\', '/')
+FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',FILENAME=TRUE,UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
+ORDER BY a, c, ts
+----
+1	2	3	NULL	data/csv/union-by-name/ubn1.csv
+3	4	5	NULL	data/csv/union-by-name/ubn1.csv
+34fd321	91	NULL	2020-12-30 02:25:58.745232	data/csv/union-by-name/ubn2.csv
+4	5	6	NULL	data/csv/union-by-name/ubn1.csv
+8cb123cb8	90	NULL	2020-12-30 01:25:58.745232	data/csv/union-by-name/ubn2.csv
+fg5391jn4	92	NULL	2020-12-30 03:25:58.745232	data/csv/union-by-name/ubn2.csv
+test	88	NULL	2020-12-30 00:25:58.745232	data/csv/union-by-name/ubn2.csv
+
 query TTTT
 SELECT typeof(a), typeof(b), typeof(c), typeof(ts)
 FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',UNION_BY_NAME=TRUE)
+LIMIT 1
+----
+VARCHAR	BIGINT	BIGINT	TIMESTAMP
+
+query TTTT
+SELECT typeof(a), typeof(b), typeof(c), typeof(ts)
+FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
 LIMIT 1
 ----
 VARCHAR	BIGINT	BIGINT	TIMESTAMP
@@ -181,10 +287,30 @@ LIMIT 1
 ----
 TIMESTAMP
 
+query T
+SELECT typeof(ts)
+FROM read_csv_auto('data/csv/union-by-name/ubn[23].csv',UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
+LIMIT 1
+----
+TIMESTAMP
+
 # Test glob pattern [!1-2] and union_by_name with filename options
 query IIII
 SELECT k, c, ts, replace(filename, '\', '/')
 FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
+ORDER BY c
+----
+6	3	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+6	5	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+6	6	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
+NULL	100	Monday	data/csv/union-by-name/ubn4.csv
+NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
+NULL	300	Friday	data/csv/union-by-name/ubn4.csv
+
+# Test glob pattern [!1-2] and union_by_name with filename options
+query IIII
+SELECT k, c, ts, replace(filename, '\', '/')
+FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE,UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
 ORDER BY c
 ----
 6	3	2003-06-30 12:03:10	data/csv/union-by-name/ubn3.csv
@@ -208,14 +334,32 @@ ORDER BY id
 1	value1	aaa	a
 2	value2	NULL	b
 
+query IIII
+SELECT id, value, a, part
+FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE,UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
+ORDER BY id
+----
+1	value1	aaa	a
+2	value2	NULL	b
+
 # Test hive_partition with union_by_name 
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
 ----
 
+statement error
+SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE,UNION_BY_NAME=TRUE,CACHE_UNION_READERS=FALSE)
+----
+
+
 # Test one thread per file CSV union by name where file only had header.
 query IIII
 from read_csv('data/csv/union_by_name_2/*.csv', union_by_name=True, parallel = false);
+----
+1	1	1	NULL
+
+query IIII
+from read_csv('data/csv/union_by_name_2/*.csv', union_by_name=True, parallel = false, cache_union_readers=false);
 ----
 1	1	1	NULL
 
