@@ -101,24 +101,33 @@ public:
 		auto l = Lock();
 		return GetSegmentByIndex(l, index);
 	}
-	T *GetSegmentByIndex(SegmentLock &l, int64_t index) {
+
+	optional_idx GetSegmentIndex(SegmentLock &l, int64_t index) const {
 		if (index < 0) {
 			// load all segments
 			LoadAllSegments(l);
 			index += nodes.size();
 			if (index < 0) {
-				return nullptr;
+				return optional_idx();
 			}
-			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
+			return UnsafeNumericCast<idx_t>(index);
 		} else {
 			// lazily load segments until we reach the specific segment
 			while (idx_t(index) >= nodes.size() && LoadNextSegment(l)) {
 			}
 			if (idx_t(index) >= nodes.size()) {
-				return nullptr;
+				return optional_idx();
 			}
-			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
+			return UnsafeNumericCast<idx_t>(index);
 		}
+	}
+
+	T *GetSegmentByIndex(SegmentLock &l, int64_t index) {
+		auto node_index = GetSegmentIndex(l, index);
+		if (!node_index.IsValid()) {
+			return nullptr;
+		}
+		return nodes[node_index.GetIndex()].node.get();
 	}
 
 	const T *GetSegmentByIndex(int64_t index) const {
@@ -127,23 +136,11 @@ public:
 	}
 
 	const T *GetSegmentByIndex(SegmentLock &l, int64_t index) const {
-		if (index < 0) {
-			// load all segments
-			LoadAllSegments(l);
-			index += nodes.size();
-			if (index < 0) {
-				return nullptr;
-			}
-			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
-		} else {
-			// lazily load segments until we reach the specific segment
-			while (idx_t(index) >= nodes.size() && LoadNextSegment(l)) {
-			}
-			if (idx_t(index) >= nodes.size()) {
-				return nullptr;
-			}
-			return nodes[UnsafeNumericCast<idx_t>(index)].node.get();
+		auto node_index = GetSegmentIndex(l, index);
+		if (!node_index.IsValid()) {
+			return nullptr;
 		}
+		return nodes[node_index.GetIndex()].node.get();
 	}
 
 	//! Gets the next segment
