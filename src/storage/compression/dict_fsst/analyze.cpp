@@ -32,7 +32,7 @@ void DictFSSTAnalyzeState::AddNull() {
 	current_tuple_count++;
 }
 
-bool DictFSSTAnalyzeState::CalculateSpaceRequirements(bool new_string, idx_t string_size) {
+bool DictFSSTAnalyzeState::HasRoomForString(bool new_string, idx_t string_size) {
 	if (!new_string) {
 		return DictFSSTCompression::HasEnoughSpace(current_tuple_count + 1, current_unique_count, current_dict_size,
 		                                           current_width, info.GetBlockSize());

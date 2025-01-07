@@ -20,7 +20,7 @@ public:
 	void AddNewString(string_t str) override;
 	void AddLastLookup() override;
 	void AddNull() override;
-	bool CalculateSpaceRequirements(bool new_string, idx_t string_size) override;
+	bool HasRoomForString(bool new_string, idx_t string_size) override;
 	void Flush(bool final = false) override;
 	void Verify() override;
 

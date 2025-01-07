@@ -33,7 +33,7 @@ public:
 	void AddNewString(string_t str) override;
 	void AddNull() override;
 	void AddLastLookup() override;
-	bool CalculateSpaceRequirements(bool new_string, idx_t string_size) override;
+	bool HasRoomForString(bool new_string, idx_t string_size) override;
 	void Flush(bool final = false) override;
 	idx_t Finalize();
 

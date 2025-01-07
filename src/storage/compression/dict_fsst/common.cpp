@@ -63,12 +63,13 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 			new_string = !LookupString(data[idx]);
 		}
 
-		bool fits = CalculateSpaceRequirements(new_string, string_size);
+		bool fits = HasRoomForString(new_string, string_size);
 		if (!fits) {
+			// TODO: Check if the dictionary requires FSST encoding
 			Flush();
 			new_string = true;
 
-			fits = CalculateSpaceRequirements(new_string, string_size);
+			fits = HasRoomForString(new_string, string_size);
 			if (!fits) {
 				throw InternalException("Dictionary compression could not write to new segment");
 			}

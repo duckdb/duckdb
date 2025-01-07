@@ -1,5 +1,6 @@
 #include "duckdb/storage/compression/dict_fsst/compression.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
+#include "fsst.h"
 
 namespace duckdb {
 namespace dict_fsst {
@@ -61,6 +62,11 @@ void DictFSSTCompressionCompressState::AddNewString(string_t str) {
 	UncompressedStringStorage::UpdateStringStats(current_segment->stats, str);
 
 	// Copy string to dict
+	// New entries are added to the start (growing backwards)
+	// [............xxxxooooooooo]
+	// x: new string
+	// o: existing string
+	// .: (currently) unused space
 	current_dictionary.size += str.GetSize();
 	auto dict_pos = current_end_ptr - current_dictionary.size;
 	memcpy(dict_pos, str.GetData(), str.GetSize());
@@ -91,14 +97,18 @@ void DictFSSTCompressionCompressState::AddLastLookup() {
 	current_segment->count++;
 }
 
-bool DictFSSTCompressionCompressState::CalculateSpaceRequirements(bool new_string, idx_t string_size) {
+bool DictFSSTCompressionCompressState::HasRoomForString(bool new_string, idx_t string_size) {
+	static constexpr uint16_t FSST_SYMBOL_TABLE_SIZE = sizeof(duckdb_fsst_decoder_t);
+
+	auto block_size = info.GetBlockSize();
+
 	if (!new_string) {
 		return DictFSSTCompression::HasEnoughSpace(current_segment->count.load() + 1, index_buffer.size(),
-		                                           current_dictionary.size, current_width, info.GetBlockSize());
+		                                           current_dictionary.size, current_width, block_size);
 	}
 	next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
 	return DictFSSTCompression::HasEnoughSpace(current_segment->count.load() + 1, index_buffer.size() + 1,
-	                                           current_dictionary.size + string_size, next_width, info.GetBlockSize());
+	                                           current_dictionary.size + string_size, next_width, block_size);
 }
 
 void DictFSSTCompressionCompressState::Flush(bool final) {

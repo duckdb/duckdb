@@ -195,7 +195,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	    BitpackingPrimitives::GetRequiredSize(string_count + state.empty_strings, minimum_width);
 
 	auto estimated_base_size = double(bitpacked_offsets_size + compressed_dict_size) * (1 / ANALYSIS_SAMPLE_SIZE);
-	auto num_blocks = estimated_base_size / double(state.info.GetBlockSize() - sizeof(duckdb_fsst_decoder_t));
+	auto num_blocks = estimated_base_size / (double(state.info.GetBlockSize() - sizeof(duckdb_fsst_decoder_t)));
 	auto symtable_size = num_blocks * sizeof(duckdb_fsst_decoder_t);
 	auto estimated_size = estimated_base_size + symtable_size;
 
@@ -352,12 +352,9 @@ public:
 		                                               reinterpret_cast<uint32_t *>(index_buffer.data()),
 		                                               current_segment->count, current_width);
 
-		// Write the fsst symbol table or nothing
-		if (fsst_encoder != nullptr) {
-			memcpy(base_ptr + symbol_table_offset, &fsst_serialized_symbol_table[0], fsst_serialized_symbol_table_size);
-		} else {
-			memset(base_ptr + symbol_table_offset, 0, fsst_serialized_symbol_table_size);
-		}
+		// Write the fsst symbol table
+		D_ASSERT(fsst_encoder);
+		memcpy(base_ptr + symbol_table_offset, &fsst_serialized_symbol_table[0], fsst_serialized_symbol_table_size);
 
 		Store<uint32_t>(NumericCast<uint32_t>(symbol_table_offset),
 		                data_ptr_cast(&header_ptr->fsst_symbol_table_offset));

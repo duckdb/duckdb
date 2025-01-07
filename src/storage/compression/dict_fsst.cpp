@@ -5,6 +5,38 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 
+/*
+Data layout per segment:
++-----------------------------------------------------+
+|                  Header                             |
+|   +---------------------------------------------+   |
+|   |   dict_fsst_compression_header_t  header    |   |
+|   +---------------------------------------------+   |
+|                                                     |
++-----------------------------------------------------+
+|             Selection Buffer               |
+|   +------------------------------------+   |
+|   |   uint16_t index_buffer_idx[]      |   |
+|   +------------------------------------+   |
+|      tuple index -> index buffer idx       |
+|                                            |
++--------------------------------------------+
+|               Index Buffer                 |
+|   +------------------------------------+   |
+|   |   uint16_t  dictionary_offset[]    |   |
+|   +------------------------------------+   |
+|  string_index -> offset in the dictionary  |
+|                                            |
++--------------------------------------------+
+|                Dictionary                  |
+|   +------------------------------------+   |
+|   |   uint8_t *raw_string_data         |   |
+|   +------------------------------------+   |
+|      the string data without lengths       |
+|                                            |
++--------------------------------------------+
+*/
+
 namespace duckdb {
 namespace dict_fsst {
 

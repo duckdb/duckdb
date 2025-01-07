@@ -15,6 +15,7 @@ typedef struct {
 	uint32_t index_buffer_offset;
 	uint32_t index_buffer_count;
 	uint32_t bitpacking_width;
+	bool fsst_encoded;
 } dict_fsst_compression_header_t;
 
 struct DictFSSTCompression {
@@ -54,7 +55,7 @@ protected:
 	// Add a null value to the compression state
 	virtual void AddNull() = 0;
 	// Needs to be called before adding a value. Will return false if a flush is required first.
-	virtual bool CalculateSpaceRequirements(bool new_string, idx_t string_size) = 0;
+	virtual bool HasRoomForString(bool new_string, idx_t string_size) = 0;
 	// Flush the segment to disk if compressing or reset the counters if analyzing
 	virtual void Flush(bool final = false) = 0;
 };

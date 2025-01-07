@@ -61,6 +61,11 @@ void DictionaryCompressionCompressState::AddNewString(string_t str) {
 	UncompressedStringStorage::UpdateStringStats(current_segment->stats, str);
 
 	// Copy string to dict
+	// New entries are added to the start (growing backwards)
+	// [............xxxxooooooooo]
+	// x: new string
+	// o: existing string
+	// .: (currently) unused space
 	current_dictionary.size += str.GetSize();
 	auto dict_pos = current_end_ptr - current_dictionary.size;
 	memcpy(dict_pos, str.GetData(), str.GetSize());
