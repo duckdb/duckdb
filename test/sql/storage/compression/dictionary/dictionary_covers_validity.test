@@ -15,15 +15,15 @@ CREATE TABLE tbl AS SELECT
 FROM range(5000) t(i);
 
 statement ok
+set force_compression='dictionary';
+
+statement ok
 INSERT INTO tbl VALUES (
 	{
 		'a': 10000,
 		'b': 'hello'
 	}
 );
-
-statement ok
-set force_compression='dictionary';
 
 statement ok
 force checkpoint;
@@ -38,6 +38,10 @@ VALIDITY	Constant
 VARCHAR	Dictionary
 VALIDITY	Empty Validity
 
+# Now force a different compression method, that doesn't cover the validity
+statement ok
+set force_compression='fsst';
+
 statement ok
 INSERT INTO tbl VALUES (
 	{
@@ -45,10 +49,6 @@ INSERT INTO tbl VALUES (
 		'b': 'hello'
 	}
 );
-
-# Now force a different compression method, that doesn't cover the validity
-statement ok
-set force_compression='fsst';
 
 statement ok
 force checkpoint;
