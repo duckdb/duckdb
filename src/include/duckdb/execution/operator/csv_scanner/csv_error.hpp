@@ -41,7 +41,8 @@ enum CSVErrorType : uint8_t {
 	SNIFFING = 5,          //! If something went wrong during sniffing and was not possible to find suitable candidates
 	MAXIMUM_LINE_SIZE = 6, //! Maximum line size was exceeded by a line in the CSV File
 	NULLPADDED_QUOTED_NEW_VALUE = 7, //! If the null_padding option is set, and we have quoted new values in parallel
-	INVALID_UNICODE = 8              //! If we have invalid unicode values
+	INVALID_UNICODE = 8,             //! If we have invalid unicode values
+	INVALID_STATE = 9                //! If our CSV Scanner ended up in an invalid state
 };
 
 class CSVError {
@@ -60,6 +61,10 @@ public:
 	//! Produces error for when the line size exceeds the maximum line size option
 	static CSVError LineSizeError(const CSVReaderOptions &options, LinesPerBoundary error_info, string &csv_row,
 	                              idx_t byte_position, const string &current_path);
+	//! Produces error for when the state machine reaches an invalid state
+	static CSVError InvalidState(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
+	                             string &csv_row, idx_t row_byte_position, optional_idx byte_position,
+	                             const string &current_path);
 	//! Produces an error message for a dialect sniffing error.
 	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space);
 	//! Produces an error message for a header sniffing error.
