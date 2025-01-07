@@ -952,7 +952,12 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogEntryRetriever &retri
                                                     const string &schema_name, OnEntryNotFound if_not_found,
                                                     QueryErrorContext error_context) {
 	auto entries = GetCatalogEntries(retriever, catalog_name, schema_name);
+	auto &context = retriever.GetContext();
 	for (idx_t i = 0; i < entries.size(); i++) {
+		if (!context.db->GetDatabaseManager().GetDatabase(context, entries[i].catalog)) {
+			// check if the catalog is attached before we try to get the catalog
+			continue;
+		}
 		auto on_not_found = i + 1 == entries.size() ? if_not_found : OnEntryNotFound::RETURN_NULL;
 		auto &catalog = Catalog::GetCatalog(retriever, entries[i].catalog);
 		auto result = catalog.GetSchema(retriever.GetContext(), schema_name, on_not_found, error_context);
