@@ -56,7 +56,7 @@ SELECT * FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '
 
 query III
 SELECT a, b, c
-FROM  read_csv_auto(['ubn1.csv', 'ubn2.csv', 'ubn3.csv'], UNION_BY_NAME=TRUE)
+FROM  read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
 ORDER BY a;
 ----
 1	NULL	NULL
