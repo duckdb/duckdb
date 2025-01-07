@@ -406,11 +406,6 @@ typedef struct {
 	duckdb_state (*duckdb_append_varchar_length)(duckdb_appender appender, const char *val, idx_t length);
 	duckdb_state (*duckdb_append_blob)(duckdb_appender appender, const void *data, idx_t length);
 	duckdb_state (*duckdb_append_null)(duckdb_appender appender);
-	duckdb_instance_cache (*duckdb_create_instance_cache)();
-	duckdb_state (*duckdb_get_or_create_from_cache)(duckdb_instance_cache instance_cache, const char *path,
-	                                                duckdb_database *out_database, duckdb_config config,
-	                                                char **out_error);
-	void (*duckdb_destroy_instance_cache)(duckdb_instance_cache *instance_cache);
 	// These functions have been deprecated and may be removed in future versions of DuckDB
 
 	idx_t (*duckdb_row_count)(duckdb_result *result);
@@ -465,6 +460,13 @@ typedef struct {
 	                                        duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
 	                                        duckdb_arrow_stream *out_stream);
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
+	// Exposing the instance cache
+
+	duckdb_instance_cache (*duckdb_create_instance_cache)();
+	duckdb_state (*duckdb_get_or_create_from_cache)(duckdb_instance_cache instance_cache, const char *path,
+	                                                duckdb_database *out_database, duckdb_config config,
+	                                                char **out_error);
+	void (*duckdb_destroy_instance_cache)(duckdb_instance_cache *instance_cache);
 	// New append functions that are added
 
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
@@ -833,9 +835,6 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_append_varchar_length = duckdb_append_varchar_length;
 	result.duckdb_append_blob = duckdb_append_blob;
 	result.duckdb_append_null = duckdb_append_null;
-	result.duckdb_create_instance_cache = duckdb_create_instance_cache;
-	result.duckdb_get_or_create_from_cache = duckdb_get_or_create_from_cache;
-	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_row_count = duckdb_row_count;
 	result.duckdb_column_data = duckdb_column_data;
 	result.duckdb_nullmask_data = duckdb_nullmask_data;
@@ -883,6 +882,9 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_arrow_scan = duckdb_arrow_scan;
 	result.duckdb_arrow_array_scan = duckdb_arrow_array_scan;
 	result.duckdb_stream_fetch_chunk = duckdb_stream_fetch_chunk;
+	result.duckdb_create_instance_cache = duckdb_create_instance_cache;
+	result.duckdb_get_or_create_from_cache = duckdb_get_or_create_from_cache;
+	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	return result;
 }
