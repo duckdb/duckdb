@@ -11,6 +11,7 @@ namespace duckdb {
 
 #if defined(__GLIBC__) || defined(__APPLE__)
 static string UnmangleSymbol(string symbol) {
+#ifdef __APPLE__
 	// find the mangled name
 	idx_t mangle_start = symbol.size();
 	idx_t mangle_end = 0;
@@ -42,6 +43,9 @@ static string UnmangleSymbol(string symbol) {
 	result += symbol.substr(mangle_end);
 	free(demangle_result);
 	return result;
+#else
+	return symbol;
+#endif
 }
 
 static string CleanupStackTrace(string symbol) {
