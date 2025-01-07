@@ -58,10 +58,6 @@ public:
 	void InitializeProjection();
 	void Finish();
 
-	static unique_ptr<CSVFileScan> CreateReaderPtr(ClientContext &context, string file_name, CSVReaderOptions csv_options) {
-		return make_uniq<CSVFileScan>(context, file_name, csv_options);
-	}
-
 	static unique_ptr<CSVUnionData> StoreUnionReader(unique_ptr<CSVFileScan> scan_p, idx_t file_idx) {
 		auto data = make_uniq<CSVUnionData>();
 		if (file_idx == 0) {

@@ -164,10 +164,6 @@ public:
 		return result;
 	}
 
-	static shared_ptr<ParquetReader> CreateReaderPtr(ClientContext &context, string file_name, ParquetOptions parquet_options) {
-		return make_shared_ptr<ParquetReader>(context, file_name, parquet_options);
-	}
-
 	idx_t NumRows();
 	idx_t NumRowGroups();
 

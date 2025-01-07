@@ -44,8 +44,8 @@ public:
 			idx_t start_idx = thread_idx * files_per_thread;
 			idx_t end_idx = MinValue<idx_t>(start_idx + files_per_thread, files.size());
 			executor.ScheduleTask(make_uniq<UnionByReaderTask<READER_TYPE, OPTION_TYPE>>(
-				executor, context, files, start_idx, end_idx, union_readers, union_col_types_per_thread,
-				union_col_names_per_thread, options, thread_idx));
+			    executor, context, files, start_idx, end_idx, union_readers, union_col_types_per_thread,
+			    union_col_names_per_thread, options, thread_idx));
 		}
 		// complete all tasks
 		executor.WorkOnTasks();
@@ -54,7 +54,7 @@ public:
 		case_insensitive_map_t<idx_t> union_names_map;
 		for (idx_t thread_idx = 0; thread_idx < max_threads; ++thread_idx) {
 			CombineUnionTypes(union_col_names_per_thread[thread_idx], union_col_types_per_thread[thread_idx],
-								union_col_types, union_col_names, union_names_map);
+			                  union_col_types, union_col_names, union_names_map);
 		}
 		return union_readers;
 	}
@@ -62,14 +62,13 @@ public:
 	template <class READER_TYPE, class OPTION_TYPE>
 	class UnionByReaderTask : public BaseExecutorTask {
 	public:
-		UnionByReaderTask(TaskExecutor &executor, ClientContext &context, const vector<string> &files,
-						idx_t start_idx, idx_t end_idx, vector<typename READER_TYPE::UNION_READER_DATA> &readers,
-						vector<vector<LogicalType>> &union_col_types_per_thread,
-						vector<vector<string>> &union_col_names_per_thread, OPTION_TYPE &options,
-						idx_t thread_idx)
-			: BaseExecutorTask(executor), context(context), files(files), start_idx(start_idx), end_idx(end_idx),
-				readers(readers), union_col_types_per_thread(union_col_types_per_thread),
-				union_col_names_per_thread(union_col_names_per_thread), options(options), thread_idx(thread_idx) {
+		UnionByReaderTask(TaskExecutor &executor, ClientContext &context, const vector<string> &files, idx_t start_idx,
+		                  idx_t end_idx, vector<typename READER_TYPE::UNION_READER_DATA> &readers,
+		                  vector<vector<LogicalType>> &union_col_types_per_thread,
+		                  vector<vector<string>> &union_col_names_per_thread, OPTION_TYPE &options, idx_t thread_idx)
+		    : BaseExecutorTask(executor), context(context), files(files), start_idx(start_idx), end_idx(end_idx),
+		      readers(readers), union_col_types_per_thread(union_col_types_per_thread),
+		      union_col_names_per_thread(union_col_names_per_thread), options(options), thread_idx(thread_idx) {
 		}
 
 		void ExecuteTask() override {
@@ -80,7 +79,7 @@ public:
 				auto &col_names = union_reader->names;
 				auto &sql_types = union_reader->types;
 				CombineUnionTypes(col_names, sql_types, union_col_types_per_thread[thread_idx],
-									union_col_names_per_thread[thread_idx], union_names_map);
+				                  union_col_names_per_thread[thread_idx], union_names_map);
 				if (options.file_options.cache_union_readers) {
 					readers[file_idx] = std::move(union_reader);
 				}
