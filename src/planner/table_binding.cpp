@@ -16,9 +16,9 @@
 namespace duckdb {
 
 Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes, vector<string> colnames,
-                 idx_t index)
+                 idx_t index, LogicalType rowid_type)
     : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)),
-      names(std::move(colnames)) {
+      names(std::move(colnames)), rowid_type(std::move(rowid_type)) {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
@@ -73,8 +73,8 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.table_index = index;
 	binding.column_index = column_index;
 	LogicalType sql_type = types[column_index];
-	if (colref.alias.empty()) {
-		colref.alias = names[column_index];
+	if (colref.GetAlias().empty()) {
+		colref.SetAlias(names[column_index]);
 	}
 	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
@@ -115,7 +115,8 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
                            vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
                            bool add_row_id)
-    : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
+    : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index,
+              (add_row_id && entry) ? entry->Cast<TableCatalogEntry>().GetRowIdType() : LogicalType::ROW_TYPE),
       bound_column_ids(bound_column_ids), entry(entry) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
@@ -126,7 +127,7 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 
 static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
                            const unordered_map<idx_t, string> &alias_map) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
@@ -140,7 +141,7 @@ static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
 }
 
 static void BakeTableName(ParsedExpression &expr, const BindingAlias &binding_alias) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
@@ -238,12 +239,12 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	// fetch the type of the column
 	LogicalType col_type;
 	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
-		col_type = LogicalType::ROW_TYPE;
+		col_type = LogicalType(rowid_type);
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[column_index];
-		if (colref.alias.empty()) {
-			colref.alias = names[column_index];
+		if (colref.GetAlias().empty()) {
+			colref.SetAlias(names[column_index]);
 		}
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
@@ -293,7 +294,7 @@ unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colre
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
 	auto arg = (*arguments)[column_index]->Copy();
-	arg->alias = colref.alias;
+	arg->SetAlias(colref.GetAlias());
 	return arg;
 }
 

@@ -90,7 +90,7 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 }
 
 bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
-	if (expr.expression_class != ExpressionClass::STAR) {
+	if (expr.GetExpressionClass() != ExpressionClass::STAR) {
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
@@ -115,16 +115,16 @@ static bool IsOrderableWindowFunction(ExpressionType type) {
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_NTH_VALUE:
-		return true;
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_CUME_DIST:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
+		return true;
 	case ExpressionType::WINDOW_AGGREGATE:
-	case ExpressionType::WINDOW_ROW_NUMBER:
-	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_CUME_DIST:
-	case ExpressionType::WINDOW_NTILE:
 		return false;
 	default:
 		throw InternalException("Unknown orderable window type %s", ExpressionTypeToString(type).c_str());

@@ -13,7 +13,7 @@ namespace duckdb {
 
 static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	auto ret = ExpressionBinding();
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		// TODO: Other expression classes that can have 0 children?
 		auto &func = expr.Cast<BoundFunctionExpression>();
@@ -113,11 +113,10 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
 			}
 
-			if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
-				auto &filter = it.second->Cast<ConjunctionAndFilter>();
-				idx_t cardinality_with_and_filter = RelationStatisticsHelper::InspectConjunctionAND(
-				    base_table_cardinality, it.first, filter, *column_statistics);
-				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
+			if (column_statistics) {
+				idx_t cardinality_with_filter =
+				    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
+				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
 			if (it.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
@@ -332,7 +331,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	double new_card = -1;
 	for (auto &g_set : aggr.grouping_sets) {
 		for (auto &ind : g_set) {
-			if (aggr.groups[ind]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+			if (aggr.groups[ind]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
 			auto bound_col = &aggr.groups[ind]->Cast<BoundColumnRefExpression>();
@@ -379,16 +378,22 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 	return stats;
 }
 
-idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t column_index,
-                                                      ConjunctionAndFilter &filter, BaseStatistics &base_stats) {
+idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t column_index, TableFilter &filter,
+                                                   BaseStatistics &base_stats) {
 	auto cardinality_after_filters = cardinality;
-	for (auto &child_filter : filter.child_filters) {
-		if (child_filter->filter_type != TableFilterType::CONSTANT_COMPARISON) {
-			continue;
+	switch (filter.filter_type) {
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
+		for (auto &child_filter : and_filter.child_filters) {
+			cardinality_after_filters = MinValue(
+			    cardinality_after_filters, InspectTableFilter(cardinality, column_index, *child_filter, base_stats));
 		}
-		auto &comparison_filter = child_filter->Cast<ConstantFilter>();
+		return cardinality_after_filters;
+	}
+	case TableFilterType::CONSTANT_COMPARISON: {
+		auto &comparison_filter = filter.Cast<ConstantFilter>();
 		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
-			continue;
+			return cardinality_after_filters;
 		}
 		auto column_count = base_stats.GetDistinctCount();
 		// column_count = 0 when there is no column count (i.e parquet scans)
@@ -396,8 +401,11 @@ idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t c
 			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
 			cardinality_after_filters = (cardinality + column_count - 1) / column_count;
 		}
+		return cardinality_after_filters;
 	}
-	return cardinality_after_filters;
+	default:
+		return cardinality_after_filters;
+	}
 }
 
 // TODO: Currently only simple AND filters are pushed into table scans.

@@ -18,6 +18,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/scan_vector_type.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/atomic_ptr.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -99,12 +100,8 @@ public:
 	idx_t GetAllocationSize() const {
 		return allocation_size;
 	}
-	bool HasCompressionFunction() const {
-		return compression != nullptr;
-	}
-	const CompressionFunction &GetCompressionFunction() const {
-		D_ASSERT(HasCompressionFunction());
-		return *compression;
+	optional_ptr<const CompressionFunction> GetCompressionFunction() const {
+		return compression.get();
 	}
 
 	bool HasParent() const {
@@ -190,8 +187,7 @@ public:
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group,
 	                                                                PartialBlockManager &partial_block_manager);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info,
-	                                                     ColumnCheckpointData &checkpoint_data);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, ColumnCheckpointInfo &info);
 
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
@@ -251,7 +247,7 @@ protected:
 	vector<SegmentNode<ColumnSegment>> MoveSegments(const SegmentLock &lock);
 
 private:
-	void UpdateCompressionFunction(SegmentLock &l, CompressionFunction &function);
+	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);
 
 protected:
 	//! The segments holding the data of this column segment
@@ -266,15 +262,15 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
-	//!	The compression function used by the ColumnData
-	//! This is empty if the segments have mixed compression or the ColumnData is empty
-	optional_ptr<CompressionFunction> compression;
 
 private:
 	//! The parent column (if any)
 	optional_ptr<ColumnData> parent;
 	//! The validity data (if any)
 	optional_ptr<ColumnData> validity;
+	//!	The compression function used by the ColumnData
+	//! This is empty if the segments have mixed compression or the ColumnData is empty
+	atomic_ptr<const CompressionFunction> compression;
 };
 
 struct PersistentColumnData {

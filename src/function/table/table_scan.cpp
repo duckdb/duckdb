@@ -295,7 +295,7 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 }
 
 static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &expr, bool &rewrite_possible) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref: rewrite to fit in the current set of bound column ids
 		bound_colref.binding.table_index = get.table_index;

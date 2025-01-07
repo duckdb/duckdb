@@ -281,7 +281,7 @@
         "type": "unique_ptr<ReservoirChunk>"
       }
     ],
-    "constructor": ["sample_count"]
+    "constructor": ["sample_count", "reservoir_chunk"]
   },
   {
     "class": "ReservoirSamplePercentage",
@@ -331,7 +331,6 @@
     ],
     "pointer_type": "none"
   },
-
   {
     "class": "PivotColumnEntry",
     "members": [
@@ -834,6 +833,10 @@
         "name": "multi_byte_delimiter",
         "type": "CSVOption<string>",
         "serialize_property": "GetMultiByteDelimiter()"
+      },
+      {"id": 142,
+        "name": "multi_file_reader",
+        "type": "bool"
       }
     ],
     "constructor": ["delimiter", "multi_byte_delimiter"],

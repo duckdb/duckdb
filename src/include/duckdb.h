@@ -670,6 +670,8 @@ struct duckdb_extension_access {
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
+#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
+
 //===--------------------------------------------------------------------===//
 // Functions
 //===--------------------------------------------------------------------===//
@@ -3893,6 +3895,20 @@ Append a DEFAULT value (NULL if DEFAULT not available for column) to the appende
 DUCKDB_API duckdb_state duckdb_append_default(duckdb_appender appender);
 
 /*!
+Append a DEFAULT value, at the specified row and column, (NULL if DEFAULT not available for column) to the chunk created
+from the specified appender. The default value of the column must be a constant value. Non-deterministic expressions
+like nextval('seq') or random() are not supported.
+
+* @param appender The appender to get the default value from.
+* @param chunk The data chunk to append the default value to.
+* @param col The chunk column index to append the default value to.
+* @param row The chunk row index to append the default value to.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_append_default_to_chunk(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
+                                                       idx_t row);
+
+/*!
 Append a bool value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_bool(duckdb_appender appender, bool value);
@@ -4484,6 +4500,8 @@ Destroys the cast function object.
 * @param cast_function The cast function object.
 */
 DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
+
+#endif
 
 #ifdef __cplusplus
 }

@@ -1517,6 +1517,10 @@ void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> d
 	row_groups->SetDistinct(column_id, std::move(distinct_stats));
 }
 
+unique_ptr<BlockingSample> DataTable::GetSample() {
+	return row_groups->GetSample();
+}
+
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
@@ -1533,8 +1537,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	TableStatistics global_stats;
 	row_groups->CopyStats(global_stats);
 	row_groups->Checkpoint(writer, global_stats);
-
 	// The row group payload data has been written. Now write:
+	//   sample
 	//   column stats
 	//   row-group pointers
 	//   table pointer

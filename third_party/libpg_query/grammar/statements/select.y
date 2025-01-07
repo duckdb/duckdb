@@ -2894,6 +2894,13 @@ func_application:       func_name '(' ')'
 				{
 					$$ = (PGNode *) makeFuncCall($1, NIL, @1);
 				}
+			| func_name '(' sort_clause opt_ignore_nulls ')'
+				{
+					PGFuncCall *n = makeFuncCall($1, NIL, @1);
+					n->agg_order = $3;
+					n->agg_ignore_nulls = $4;
+					$$ = (PGNode *)n;
+				}
 			| func_name '(' func_arg_list opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, $3, @1);
@@ -4029,7 +4036,7 @@ opt_replace_list: REPLACE '(' replace_list_opt_comma ')'		{ $$ = $3; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
-rename_list_el: ColId AS ColId								{ $$ = list_make2($1, $3); }
+rename_list_el: except_name AS ColId						{ $$ = list_make2($1, $3); }
 		;
 
 rename_list:

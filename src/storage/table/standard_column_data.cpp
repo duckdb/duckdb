@@ -7,6 +7,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
 
@@ -82,13 +83,15 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
                                 SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	// check if we can do a specialized select
 	// the compression functions need to support this
-	bool has_select = compression && compression->filter;
-	bool validity_has_select = validity.compression && validity.compression->filter;
+	auto compression = GetCompressionFunction();
+	bool has_filter = compression && compression->filter;
+	auto validity_compression = validity.GetCompressionFunction();
+	bool validity_has_filter = validity_compression && validity_compression->filter;
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
-	if (!has_select || !validity_has_select || !scan_entire_vector || verify_fetch_row) {
+	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row) {
 		// we are not scanning an entire vector - this can have several causes (updates, etc)
 		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter);
 		return;
@@ -101,8 +104,10 @@ void StandardColumnData::Select(TransactionData transaction, idx_t vector_index,
                                 SelectionVector &sel, idx_t sel_count) {
 	// check if we can do a specialized select
 	// the compression functions need to support this
+	auto compression = GetCompressionFunction();
 	bool has_select = compression && compression->select;
-	bool validity_has_select = validity.compression && validity.compression->select;
+	auto validity_compression = validity.GetCompressionFunction();
+	bool validity_has_select = validity_compression && validity_compression->select;
 	auto target_count = GetVectorCount(vector_index);
 	auto scan_type = GetVectorScanType(state, target_count, result);
 	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
@@ -228,17 +233,8 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
 
-	// Always grab the base lock first
-	auto base_lock = GetSegmentLock();
-	auto validity_lock = validity.GetSegmentLock();
-
-	auto base_data = MoveSegments(base_lock);
-	auto validity_data = validity.MoveSegments(validity_lock);
-
-	ColumnCheckpointData checkpoint_data(base_lock, validity_lock, std::move(base_data), std::move(validity_data));
-
-	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info, checkpoint_data);
-	auto validity_state = validity.Checkpoint(row_group, checkpoint_info, checkpoint_data);
+	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
+	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
 
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);

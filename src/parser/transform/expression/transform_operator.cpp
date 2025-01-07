@@ -168,7 +168,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		auto &similar_func = right_expr->Cast<FunctionExpression>();
 		D_ASSERT(similar_func.function_name == "similar_escape");
 		D_ASSERT(similar_func.children.size() == 2);
-		if (similar_func.children[1]->type != ExpressionType::VALUE_CONSTANT) {
+		if (similar_func.children[1]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			throw NotImplementedException("Custom escape in SIMILAR TO");
 		}
 		auto &constant = similar_func.children[1]->Cast<ConstantExpression>();
