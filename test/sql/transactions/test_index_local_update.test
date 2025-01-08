@@ -3,9 +3,6 @@
 # group: [transactions]
 
 statement ok
-SET threads=1
-
-statement ok
 CREATE TABLE integers(i INTEGER PRIMARY KEY)
 
 statement ok

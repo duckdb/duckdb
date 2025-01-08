@@ -23,9 +23,6 @@
 
 namespace duckdb {
 
-//===--------------------------------------------------------------------===//
-// Table Scan
-//===--------------------------------------------------------------------===//
 struct TableScanLocalState : public LocalTableFunctionState {
 	//! The current position in the scan.
 	TableScanState scan_state;
@@ -54,9 +51,10 @@ static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex 
 	if (column_id.IsRowIdColumn()) {
 		return StorageIndex();
 	}
-	// the index of the base ColumnIndex is equal to the physical column index in the table
-	// for any child indices - the indices are already the physical indices
-	// (since only the top-level can have generated columns)
+
+	// The index of the base ColumnIndex is equal to the physical column index in the table
+	// for any child indices because the indices are already the physical indices.
+	// Only the top-level can have generated columns.
 	auto &col = table.GetColumn(column_id.ToLogical());
 	auto result = TransformStorageIndex(column_id);
 	result.SetIndex(col.StorageOid());
@@ -71,8 +69,11 @@ public:
 		max_threads = bind_data.table.GetStorage().MaxThreads(context);
 	}
 
+	//! The maximum number of threads for this table scan.
 	idx_t max_threads;
+	//! The projected columns of this table scan.
 	vector<idx_t> projection_ids;
+	//! The types of all scanned columns.
 	vector<LogicalType> scanned_types;
 
 public:
@@ -97,15 +98,22 @@ public:
 	    : TableScanGlobalState(context, bind_data_p), next_batch_index(0), finished(false) {
 	}
 
-	//! This determines the offset of the next chunk. I.e., offset = next_batch_index * STANDARD_VECTOR_SIZE.
+	//! The batch index of the next Sink.
+	//! Also determines the offset of the next chunk. I.e., offset = next_batch_index * STANDARD_VECTOR_SIZE.
 	idx_t next_batch_index;
+	//! The total scanned row IDs.
 	unsafe_vector<row_t> row_ids;
+	//! A Vector holding the total scanned row IDs. Used for slicing.
 	unique_ptr<Vector> row_id_vector;
+	//! The column IDs of the to-be-scanned columns.
+	vector<StorageIndex> column_ids;
+	//! True, if no more row IDs must be scanned.
+	bool finished;
+	//! Synchronize changes to the global index scan state.
+	mutex index_scan_lock;
+
 	ColumnFetchState fetch_state;
 	TableScanState table_scan_state;
-	vector<StorageIndex> column_ids;
-	bool finished;
-	mutex index_scan_lock;
 
 public:
 	unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
@@ -128,6 +136,7 @@ public:
 		idx_t offset = 0;
 
 		{
+			// Synchronize changes to the shared global state.
 			lock_guard<mutex> l(index_scan_lock);
 			if (!finished) {
 				l_state.batch_index = next_batch_index;
@@ -251,8 +260,8 @@ public:
 		scanned_rows += state.local_state.processed_rows;
 		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
 		if (percentage > 100) {
-			//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
-			//! It means we finished this table.
+			// If the last chunk has fewer elements than STANDARD_VECTOR_SIZE, and if our percentage is over 100,
+			// then we finished this table.
 			return 100;
 		}
 		return percentage;
@@ -302,7 +311,6 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
                                                              DataTable &storage, const TableScanBindData &bind_data,
                                                              unsafe_vector<row_t> &row_ids) {
 	auto g_state = make_uniq<DuckIndexScanState>(context, input.bind_data.get());
-
 	if (!row_ids.empty()) {
 		std::sort(row_ids.begin(), row_ids.end());
 		g_state->row_ids = std::move(row_ids);
