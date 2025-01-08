@@ -4982,7 +4982,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				}
 			} else {
 				data.OpenDB(0);
+				BEGIN_TIMER;
 				rc = data.ExecuteSQL(z, &zErrMsg);
+				END_TIMER;
 				if (zErrMsg != 0) {
 					data.PrintDatabaseError(zErrMsg);
 					sqlite3_free(zErrMsg);
