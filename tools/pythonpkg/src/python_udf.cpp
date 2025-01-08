@@ -16,6 +16,7 @@
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
@@ -25,7 +26,9 @@ static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> 
 	ArrowConverter::ToArrowSchema(&schema, types, names, options, context);
 
 	py::list single_batch;
-	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options);
+	//! FIXME: POPULATE extension_type_cast
+	unordered_map<idx_t, const shared_ptr<ArrowExtensionType>>  extension_type_cast;
+	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options, extension_type_cast, context);
 	appender.Append(input, 0, input.size(), input.size());
 	auto array = appender.Finalize();
 	TransformDuckToArrowChunk(schema, array, single_batch);
