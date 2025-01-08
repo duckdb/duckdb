@@ -115,6 +115,7 @@ struct TableFunctionInitInput {
 			column_indexes.emplace_back(col_id);
 		}
 	}
+
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<ColumnIndex> column_indexes_p,
 	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr)

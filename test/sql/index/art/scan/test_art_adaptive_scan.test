@@ -20,17 +20,9 @@ SET index_scan_percentage = 1.0;
 statement ok
 SET index_scan_max_count = 0;
 
+# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
+
 query I
 SELECT COUNT(i) FROM integers WHERE i = 42;
 ----
 2050
-
-statement ok
-PRAGMA explain_output='optimized_only'
-
-# Verify that the plan contains an index scan.
-
-query II
-EXPLAIN SELECT COUNT(i) FROM integers WHERE i = 42;
-----
-logical_opt	<REGEX>:.*INDEX_SCAN.*

@@ -26,12 +26,21 @@ namespace duckdb {
 // Table Scan
 //===--------------------------------------------------------------------===//
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-                                LocalTableFunctionState *local_state, GlobalTableFunctionState *gstate);
+                                LocalTableFunctionState *l_state, GlobalTableFunctionState *g_state);
 
 struct TableScanLocalState : public LocalTableFunctionState {
-	//! The current position in the scan
+	//! The current position in the scan.
 	TableScanState scan_state;
-	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
+	//! The DataChunk containing all read columns.
+	//! This includes filter columns, which are immediately removed.
+	DataChunk all_columns;
+};
+
+struct IndexScanLocalState : public LocalTableFunctionState {
+	//! The batch index, which determines the offset in the row ID vector.
+	idx_t batch_index;
+	//! The DataChunk containing all read columns.
+	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
 };
 
@@ -58,7 +67,8 @@ static StorageIndex GetStorageIndex(TableCatalogEntry &table, const ColumnIndex 
 
 struct TableScanGlobalState : public GlobalTableFunctionState {
 	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p)
-	    : row_ids_offset(0), finished(false), index_scan(false) {
+	    : next_batch_index(0), finished(false), index_scan(false) {
+
 		D_ASSERT(bind_data_p);
 		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 		max_threads = bind_data.table.GetStorage().MaxThreads(context);
@@ -73,12 +83,15 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	// Probe the table (index scan).
 	unsafe_vector<row_t> row_ids;
 	unique_ptr<Vector> row_id_vector;
-	idx_t row_ids_offset;
+
+	//! This determines the offset of the next chunk. I.e., offset = next_batch_index * STANDARD_VECTOR_SIZE.
+	idx_t next_batch_index;
 	ColumnFetchState fetch_state;
-	TableScanState local_storage_state;
+	TableScanState table_scan_state;
 	vector<StorageIndex> column_ids;
 	bool finished;
 	bool index_scan;
+	mutex index_scan_lock;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
@@ -91,20 +104,24 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 
 static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                               GlobalTableFunctionState *g_state) {
-	auto l_state = make_uniq<TableScanLocalState>();
 	auto &cast_g_state = g_state->Cast<TableScanGlobalState>();
+
+	// Early-out, if index scan.
 	if (cast_g_state.index_scan) {
+		auto l_state = make_uniq<IndexScanLocalState>();
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, cast_g_state.scanned_types);
 		}
 		return std::move(l_state);
 	}
 
+	auto l_state = make_uniq<TableScanLocalState>();
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	vector<StorageIndex> storage_ids;
 	for (auto &col : input.column_indexes) {
 		storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 	}
+
 	l_state->scan_state.Initialize(std::move(storage_ids), input.filters.get(), input.sample_options.get());
 	TableScanParallelStateNext(context.client, input.bind_data.get(), l_state.get(), g_state);
 	if (input.CanRemoveFilterColumns()) {
@@ -116,11 +133,21 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 }
 
 void ScanIndex(ClientContext &context, const TableScanBindData &bind_data, TableScanGlobalState &g_state,
-               optional_ptr<TableFilterSet> filter_set) {
+               TableFunctionInitInput &input) {
 	auto &table = bind_data.table;
 	auto &storage = table.GetStorage();
+	if (!input.filters) {
+		return;
+	}
+	auto &filter_set = *input.filters;
 
-	if (!filter_set) {
+	// FIXME: We currently only support scanning one ART with one filter.
+	// If multiple filters exist, i.e., a = 11 AND b = 24, we need to
+	// 1.	1.1. Find + scan one ART for a = 11.
+	//		1.2. Find + scan one ART for b = 24.
+	//		1.3. Return the intersecting row IDs.
+	// 2. (Reorder and) scan a single ART with a compound key of (a, b).
+	if (filter_set.filters.size() != 1) {
 		return;
 	}
 
@@ -142,7 +169,8 @@ void ScanIndex(ClientContext &context, const TableScanBindData &bind_data, Table
 
 	auto &column_list = table.GetColumns();
 	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art) {
-		// NOTE: No support for index scans on compound indexes.
+		// FIXME: No support for index scans on compound ARTs.
+		// See note above on multi-filter support.
 		if (art.unbound_expressions.size() > 1) {
 			return false;
 		}
@@ -151,24 +179,37 @@ void ScanIndex(ClientContext &context, const TableScanBindData &bind_data, Table
 		auto &indexed_columns = art.GetColumnIds();
 
 		// NOTE: We do not push down multi-column filters, e.g., 42 = a + b.
-		// FIXME: Push down optional multi-column filters for a potential index scan.
 		if (indexed_columns.size() != 1) {
 			return false;
 		}
 
+		// Get ART column.
 		auto &col = column_list.GetColumn(LogicalIndex(indexed_columns[0]));
-		auto storage_index = col.Physical().index;
 
-		// Try to find a matching filter for the column.
-		auto filter = filter_set->filters.find(storage_index);
-		if (filter == filter_set->filters.end()) {
+		// The indexes of the filters match input.column_indexes, which are: i -> column_index.
+		// Try to find a filter on the ART column.
+		optional_idx storage_index;
+		for (idx_t i = 0; i < input.column_indexes.size(); i++) {
+			if (input.column_indexes[i].ToLogical() == col.Logical()) {
+				storage_index = i;
+				break;
+			}
+		}
+
+		// No filter matches the ART column.
+		if (!storage_index.IsValid()) {
 			return false;
 		}
 
-		ColumnBinding binding(0, storage_index);
+		// Try to find a matching filter for the column.
+		auto filter = filter_set.filters.find(storage_index.GetIndex());
+		if (filter == filter_set.filters.end()) {
+			return false;
+		}
+
+		ColumnBinding binding(0, storage_index.GetIndex());
 		auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 		auto filter_expr = filter->second->ToExpression(*bound_ref);
-
 		auto scan_state = art.TryInitializeScan(*index_expr, *filter_expr);
 		if (!scan_state) {
 			return false;
@@ -195,10 +236,10 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	auto &storage = bind_data.table.GetStorage();
 	auto g_state = make_uniq<TableScanGlobalState>(context, input.bind_data.get());
 
-	ScanIndex(context, bind_data, *g_state, input.filters);
+	ScanIndex(context, bind_data, *g_state, input);
 	if (g_state->index_scan) {
 		auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
-		g_state->local_storage_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
+		g_state->table_scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
 		if (input.CanRemoveFilterColumns()) {
 			g_state->projection_ids = input.projection_ids;
@@ -214,10 +255,10 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 			g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 		}
 
-		g_state->local_storage_state.Initialize(g_state->column_ids, input.filters.get());
-		local_storage.InitializeScan(storage, g_state->local_storage_state.local_state, input.filters);
+		g_state->table_scan_state.Initialize(g_state->column_ids, input.filters.get());
+		local_storage.InitializeScan(storage, g_state->table_scan_state.local_state, input.filters);
 
-		g_state->finished = false;
+		g_state->finished = g_state->row_ids.empty() ? true : false;
 		return std::move(g_state);
 	}
 
@@ -242,29 +283,36 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
                                                       column_t column_id) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
+
+	// Don't emit statistics for tables with outstanding transaction-local data.
 	if (local_storage.Find(bind_data.table.GetStorage())) {
-		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
 	return bind_data.table.GetStatistics(context, column_id);
 }
 
-static void IndexScanFunc(DuckTransaction &tx, TableScanGlobalState &g_state, TableScanLocalState &l_state,
+static void IndexScanFunc(DuckTransaction &tx, TableScanGlobalState &g_state, IndexScanLocalState &l_state,
                           DataTable &storage, DataChunk &output) {
-	auto &local_storage = LocalStorage::Get(tx);
+	auto row_id_count = g_state.row_ids.size();
+	idx_t scan_count = 0;
+	idx_t offset = 0;
 
-	if (g_state.row_ids.empty()) {
-		g_state.finished = true;
+	{
+		lock_guard<mutex> l(g_state.index_scan_lock);
+		if (!g_state.finished) {
+			l_state.batch_index = g_state.next_batch_index;
+			g_state.next_batch_index++;
+
+			offset = l_state.batch_index * STANDARD_VECTOR_SIZE;
+			auto remaining = row_id_count - offset;
+			scan_count = remaining < STANDARD_VECTOR_SIZE ? remaining : STANDARD_VECTOR_SIZE;
+			g_state.finished = remaining < STANDARD_VECTOR_SIZE ? true : false;
+		}
 	}
 
-	if (!g_state.finished) {
-		// TODO: lock here?
-		auto row_id_count = g_state.row_ids.size();
-		auto remaining = row_id_count - g_state.row_ids_offset;
-		auto scan_count = remaining < STANDARD_VECTOR_SIZE ? remaining : STANDARD_VECTOR_SIZE;
-
+	if (scan_count != 0) {
 		D_ASSERT(g_state.row_id_vector);
-		Vector row_ids(*g_state.row_id_vector, g_state.row_ids_offset, g_state.row_ids_offset + scan_count);
+		Vector row_ids(*g_state.row_id_vector, offset, offset + scan_count);
 
 		if (g_state.CanRemoveFilterColumns()) {
 			l_state.all_columns.Reset();
@@ -273,14 +321,17 @@ static void IndexScanFunc(DuckTransaction &tx, TableScanGlobalState &g_state, Ta
 		} else {
 			storage.Fetch(tx, output, g_state.column_ids, row_ids, scan_count, g_state.fetch_state);
 		}
-
-		g_state.row_ids_offset += scan_count;
-		if (g_state.row_ids_offset == row_id_count) {
-			g_state.finished = true;
-		}
 	}
+
 	if (output.size() == 0) {
-		local_storage.Scan(g_state.local_storage_state.local_state, g_state.column_ids, output);
+		auto &local_storage = LocalStorage::Get(tx);
+		if (g_state.CanRemoveFilterColumns()) {
+			l_state.all_columns.Reset();
+			local_storage.Scan(g_state.table_scan_state.local_state, g_state.column_ids, l_state.all_columns);
+			output.ReferenceColumns(l_state.all_columns, g_state.projection_ids);
+		} else {
+			local_storage.Scan(g_state.table_scan_state.local_state, g_state.column_ids, output);
+		}
 	}
 	return;
 }
@@ -288,14 +339,15 @@ static void IndexScanFunc(DuckTransaction &tx, TableScanGlobalState &g_state, Ta
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<TableScanBindData>();
 	auto &g_state = data_p.global_state->Cast<TableScanGlobalState>();
-	auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 	auto &tx = DuckTransaction::Get(context, bind_data.table.catalog);
 	auto &storage = bind_data.table.GetStorage();
 
 	if (g_state.index_scan) {
+		auto &l_state = data_p.local_state->Cast<IndexScanLocalState>();
 		return IndexScanFunc(tx, g_state, l_state, storage, output);
 	}
 
+	auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 	l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 	do {
 		if (bind_data.is_create_index) {
@@ -324,22 +376,23 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	auto &parallel_state = global_state->Cast<TableScanGlobalState>();
 	auto &state = local_state->Cast<TableScanLocalState>();
 	auto &storage = bind_data.table.GetStorage();
-
 	return storage.NextParallelScan(context, parallel_state.state, state.scan_state);
 }
 
 double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *gstate_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	auto &gstate = gstate_p->Cast<TableScanGlobalState>();
+	auto &g_state = gstate_p->Cast<TableScanGlobalState>();
 	auto &storage = bind_data.table.GetStorage();
 	idx_t total_rows = storage.GetTotalRows();
-	if (total_rows == 0 || gstate.index_scan) { // TODO: comment, good idea?
-		//! Table is either empty or smaller than a vector size, so it is finished
+
+	// The table is empty, smaller than the standard vector size, or this is an index scan.
+	if (total_rows == 0 || g_state.index_scan) {
 		return 100;
 	}
-	idx_t scanned_rows = gstate.state.scan_state.processed_rows;
-	scanned_rows += gstate.state.local_state.processed_rows;
+
+	idx_t scanned_rows = g_state.state.scan_state.processed_rows;
+	scanned_rows += g_state.state.local_state.processed_rows;
 	auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
 	if (percentage > 100) {
 		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
@@ -353,13 +406,20 @@ OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFun
 	if (input.partition_info.RequiresPartitionColumns()) {
 		throw InternalException("TableScan::GetPartitionData: partition columns not supported");
 	}
-	auto &state = input.local_state->Cast<TableScanLocalState>();
-	if (state.scan_state.table_state.row_group) {
-		return OperatorPartitionData(state.scan_state.table_state.batch_index);
+
+	auto &g_state = input.global_state->Cast<TableScanGlobalState>();
+	if (g_state.index_scan) {
+		auto &l_state = input.local_state->Cast<IndexScanLocalState>();
+		return OperatorPartitionData(l_state.batch_index);
 	}
-	if (state.scan_state.local_state.row_group) {
-		return OperatorPartitionData(state.scan_state.table_state.batch_index +
-		                             state.scan_state.local_state.batch_index);
+
+	auto &l_state = input.local_state->Cast<TableScanLocalState>();
+	if (l_state.scan_state.table_state.row_group) {
+		return OperatorPartitionData(l_state.scan_state.table_state.batch_index);
+	}
+	if (l_state.scan_state.local_state.row_group) {
+		return OperatorPartitionData(l_state.scan_state.table_state.batch_index +
+		                             l_state.scan_state.local_state.batch_index);
 	}
 	return OperatorPartitionData(0);
 }
@@ -426,19 +486,19 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
-	scan_function.init_local = TableScanInitLocal; // TODO: nullptr for index scans, can we use it?
+	scan_function.init_local = TableScanInitLocal;
 	scan_function.init_global = TableScanInitGlobal;
 	scan_function.statistics = TableScanStatistics;
 	scan_function.dependency = TableScanDependency;
 	scan_function.cardinality = TableScanCardinality;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
-	scan_function.table_scan_progress = TableScanProgress;          // TODO: nullptr for index scans - how to report?
-	scan_function.get_partition_data = TableScanGetPartitionData;   // TODO: nullptr for index scans - FIX!
-	scan_function.get_partition_stats = TableScanGetPartitionStats; // TODO: nullptr for index scans - FIX!
+	scan_function.table_scan_progress = TableScanProgress;
+	scan_function.get_partition_data = TableScanGetPartitionData;
+	scan_function.get_partition_stats = TableScanGetPartitionStats;
 	scan_function.get_bind_info = TableScanGetBindInfo;
 	scan_function.projection_pushdown = true;
-	scan_function.filter_pushdown = true; // TODO: false for index scans, shouldn't matter
+	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
 	scan_function.sampling_pushdown = true;
 	scan_function.serialize = TableScanSerialize;

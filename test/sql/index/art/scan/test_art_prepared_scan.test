@@ -14,20 +14,19 @@ INSERT INTO integers VALUES (1), (2), (4);
 statement ok
 CREATE INDEX i_index ON integers(i);
 
-statement ok
-PRAGMA explain_output='optimized_only'
+# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
 
-# verify that the index scan is being used
-query II
-EXPLAIN SELECT * FROM integers WHERE i=2
+query I
+SELECT i FROM integers WHERE i = 2
 ----
-logical_opt	<REGEX>:.*INDEX_SCAN.*
+2
 
-# verify that the index scan is being used with prepared statements as well
 statement ok
-PREPARE v1 AS SELECT * FROM integers WHERE i=$1
+PREPARE v1 AS SELECT * FROM integers WHERE i = $1
 
-query II
-EXPLAIN EXECUTE v1(2)
+# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
+
+query I
+EXECUTE v1(2)
 ----
-logical_opt	<REGEX>:.*INDEX_SCAN.*
+2

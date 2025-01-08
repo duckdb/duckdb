@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-# Take the maximum of the absolut count and the percentage, which is 100%.
+# Take the maximum of the absolute count and the percentage, which is 100%.
 
 statement ok
 SET index_scan_max_count = 1;
@@ -20,31 +20,25 @@ statement ok
 INSERT INTO integers SELECT 42 FROM range(1000);
 
 statement ok
-CREATE INDEX idx ON integers(i);
+INSERT INTO integers SELECT 43 FROM range(10000);
 
 statement ok
-SET explain_output='optimized_only';
+CREATE INDEX idx ON integers(i);
 
-query II
-EXPLAIN SELECT * FROM integers WHERE i = 42;
-----
-logical_opt	<REGEX>:.*INDEX_SCAN.*
+# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
 
-statement  ok
-SELECT * FROM integers WHERE i = 42;
+statement ok
+SELECT i FROM integers WHERE i = 42;
 
 statement ok
 SET index_scan_percentage = 0.000001;
 
 # Use one as the maximum count, with the matching keys exceeding that maximum.
 
-query II
-EXPLAIN SELECT * FROM integers WHERE i = 42;
-----
-logical_opt	<REGEX>:.*SEQ_SCAN.*
+# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
 
 statement ok
-SELECT * FROM integers WHERE i = 42;
+SELECT i FROM integers WHERE i = 42;
 
 # Let's also test more than STANDARD_VECTOR_SIZE values.
 
@@ -54,10 +48,7 @@ SET index_scan_max_count = 4000;
 statement ok
 INSERT INTO integers SELECT 4242 FROM range(4000);
 
-query II
-EXPLAIN SELECT * FROM integers WHERE i = 4242;
-----
-logical_opt	<REGEX>:.*INDEX_SCAN.*
+# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
 
 statement ok
-SELECT * FROM integers WHERE i = 4242;
+SELECT i FROM integers WHERE i = 4242;

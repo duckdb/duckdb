@@ -22,10 +22,12 @@ CREATE INDEX i_index ON test(a)
 statement ok
 INSERT INTO test VALUES (42, 88, 'hello');
 
-query II
-explain SELECT * FROM db1.test WHERE a=42
+# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
+
+query III
+SELECT a, b, c FROM db1.test WHERE a = 42
 ----
-physical_plan	<REGEX>:.*INDEX_SCAN.*
+42	88	hello
 
 statement ok
 COPY FROM DATABASE db1 TO memory
