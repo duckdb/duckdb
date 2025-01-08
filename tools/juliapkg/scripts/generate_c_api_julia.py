@@ -525,7 +525,10 @@ class JuliaApiTarget:
             for param in function_obj["params"]
         ]
 
-        return_value_comment = function_obj.get("comment", {}).get("return_value", "nothing")
+        return_value_comment = function_obj.get("comment", {}).get("return_value", "")
+        return_type = self._get_casted_type(function_obj["return_type"], is_return_arg=True)
+        if return_type == "Cvoid":
+            return_type = "Nothing" # Cvoid is equivalent to Nothing in Julia
 
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
         self.file.write(f"{'    ' * self.indent}    {function_obj['name']}({arg_names_s})\n")
@@ -536,7 +539,7 @@ class JuliaApiTarget:
         for i, arg_name in enumerate(arg_names):
             self.file.write(f"{'    ' * self.indent}- `{arg_name}`: {arg_comments[i]}\n")
         self.file.write(f"{'    ' * self.indent}\n")
-        self.file.write(f"{'    ' * self.indent}Returns: {return_value_comment}\n")
+        self.file.write(f"{'    ' * self.indent}Returns: `{return_type}` {return_value_comment}\n")
         self.file.write(f"{'    ' * self.indent}\"\"\"\n")
 
     def _get_depwarning_message(self, function_obj: FunctionDef):
