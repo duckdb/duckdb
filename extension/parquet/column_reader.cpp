@@ -135,6 +135,14 @@ const SchemaElement &ColumnReader::Schema() const {
 	return schema;
 }
 
+optional_ptr<const SchemaElement> ColumnReader::GetParentSchema() const {
+	return parent_schema;
+}
+
+void ColumnReader::SetParentSchema(const SchemaElement &parent_schema_p) {
+	parent_schema = &parent_schema_p;
+}
+
 idx_t ColumnReader::FileIdx() const {
 	return file_idx;
 }

@@ -91,6 +91,9 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 static unique_ptr<FunctionData> NextValBind(ScalarFunctionBindInput &bind_input, ScalarFunction &,
                                             vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[0]->IsFoldable()) {
 		throw NotImplementedException(
 		    "currval/nextval requires a constant sequence - non-constant sequences are no longer supported");
