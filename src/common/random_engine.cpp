@@ -4,9 +4,10 @@
 
 #ifdef __linux__
 #include <sys/syscall.h>
-#endif
-
+#include <unistd.h>
+#else
 #include <random>
+#endif
 namespace duckdb {
 
 struct RandomState {
@@ -18,7 +19,7 @@ struct RandomState {
 
 RandomEngine::RandomEngine(int64_t seed) : random_state(make_uniq<RandomState>()) {
 	if (seed < 0) {
-#if defined(__linux__) && defined(SYS_getrandom)
+#ifdef __linux__
 		idx_t random_seed;
 		syscall(SYS_getrandom, &random_seed, sizeof(random_seed), 0);
 		random_state->pcg.seed(random_seed);
