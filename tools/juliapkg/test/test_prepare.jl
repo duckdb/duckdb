@@ -89,7 +89,7 @@ end
     DBInterface.close!(con)
 end
 
-@testset "Named parameters" begin
+@testset "prepare: Named parameters" begin
     con = DBInterface.connect(DuckDB.DB)
     DBInterface.execute(con, "CREATE TABLE test_table(i INTEGER, j DOUBLE)")
     stmt = DBInterface.prepare(con, raw"INSERT INTO test_table VALUES($col1, $col2)")
