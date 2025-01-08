@@ -63,8 +63,8 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT m from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)");
 	TestArrowRoundtrip("SELECT * FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT case when i%2=0 then null else i end i FROM range(10) tbl(i)");
-	TestArrowRoundtrip("SELECT case when i%2=0 then true else false end b FROM range(10) tbl(i)");
-	TestArrowRoundtrip("SELECT case when i%2=0 then i%4=0 else null end b FROM range(10) tbl(i)");
+	TestArrowRoundtrip("SELECT case when i%2=0 then true else false end b FROM range(10) tbl(i)", false, true);
+	TestArrowRoundtrip("SELECT case when i%2=0 then i%4=0 else null end b FROM range(10) tbl(i)", false, true);
 	TestArrowRoundtrip("SELECT 'thisisalongstring'||i::varchar str FROM range(10) tbl(i)");
 	TestArrowRoundtrip(
 	    "SELECT case when i%2=0 then null else 'thisisalongstring'||i::varchar end str FROM range(10) tbl(i)");
@@ -88,7 +88,8 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 #endif
 	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz, varint) REPLACE "
 	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint, uhugeint::DOUBLE as uhugeint) "
-	                   "FROM test_all_types()");
+	                   "FROM test_all_types()",
+	                   false, true);
 }
 
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {

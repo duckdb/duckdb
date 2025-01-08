@@ -264,6 +264,9 @@ class TestCanonicalExtensionTypes(object):
         arrow_table = pa.Table.from_arrays([bool8_array], names=['bool8'])
         assert con.execute('FROM arrow_table').fetchall() == [(True,), (False,), (True,), (True,), (None,)]
         result_table = con.execute('FROM arrow_table').arrow()
-        print(arrow_table)
-        print(result_table)
-        assert result_table.equals(arrow_table)
+
+        res_storage_array = pa.array([1, 0, 1, 1, None], pa.int8())
+        res_bool8_array = pa.ExtensionArray.from_storage(pa.bool8(), res_storage_array)
+        res_arrow_table = pa.Table.from_arrays([res_bool8_array], names=['bool8'])
+
+        assert result_table.equals(res_arrow_table)

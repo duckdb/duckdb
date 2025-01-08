@@ -23,9 +23,11 @@ ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_ca
                              ClientContext &context)
     : types(std::move(types_p)), context(context) {
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto entry = InitializeChild(types[i], initial_capacity, options);
+		unique_ptr<ArrowAppendData> entry;
 		if (extension_type_cast.find(i) != extension_type_cast.end()) {
-			entry->extension_type = extension_type_cast[i];
+			entry = InitializeChild(types[i], initial_capacity, options, extension_type_cast[i]);
+		} else {
+			entry = InitializeChild(types[i], initial_capacity, options);
 		}
 		root_data.push_back(std::move(entry));
 	}
@@ -301,13 +303,19 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 }
 
 unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &type, const idx_t capacity,
-                                                           ClientProperties &options) {
+                                                           ClientProperties &options,
+                                                           shared_ptr<ArrowExtensionType> extension_type) {
 	auto result = make_uniq<ArrowAppendData>(options);
-	InitializeFunctionPointers(*result, type);
+	LogicalType array_type = type;
+	if (extension_type) {
+		array_type = extension_type->GetInternalType();
+	}
+	InitializeFunctionPointers(*result, array_type);
+	result->extension_type = extension_type;
 
 	const auto byte_count = (capacity + 7) / 8;
 	result->GetValidityBuffer().reserve(byte_count);
-	result->initialize(*result, type, capacity);
+	result->initialize(*result, array_type, capacity);
 	return result;
 }
 

@@ -34,7 +34,8 @@ public:
 	static void ReleaseArray(ArrowArray *array);
 	static ArrowArray *FinalizeChild(const LogicalType &type, unique_ptr<ArrowAppendData> append_data_p);
 	static unique_ptr<ArrowAppendData> InitializeChild(const LogicalType &type, const idx_t capacity,
-	                                                   ClientProperties &options);
+	                                                   ClientProperties &options,
+	                                                   shared_ptr<ArrowExtensionType> extension_type = nullptr);
 	static void AddChildren(ArrowAppendData &data, const idx_t count);
 
 private:
