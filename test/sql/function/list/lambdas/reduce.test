@@ -18,7 +18,7 @@ SELECT list_reduce([1, 2, 3], (x, y) -> x * y);
 query I
 SELECT list_reduce([100, 10, 1], (x, y, i) -> x - y - i);
 ----
-86
+84
 
 query I
 SELECT list_reduce([1, 2, 3], (x, y) -> y - x);
@@ -33,7 +33,7 @@ SELECT list_reduce([1, 2, 3], (x, y) -> x - y);
 query I
 SELECT list_reduce([1, 2, 3], (x, y, i) -> x + y + i);
 ----
-9
+11
 
 query I
 SELECT list_reduce([NULL], (x, y, i) -> x + y + i);
@@ -109,10 +109,10 @@ NULL
 query I
 SELECT list_reduce(a, (x, y, i) -> x + y + i) FROM t1;
 ----
-9
+11
 666
 NULL
-100
+101
 NULL
 
 statement ok
@@ -181,7 +181,7 @@ Cannot perform list_reduce on an empty input list
 query I
 SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) -> x + y + a + b + x_i + a_i));
 ----
-80
+92
 
 statement error
 SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([], (a, b, a_i) -> x + y + a + b + x_i + a_i));
@@ -234,7 +234,7 @@ NULL
 query I
 SELECT list_reduce(n, (x, y, x_i) -> list_reduce(l, (a, b, a_i) -> x + y + a + b + x_i + a_i)) FROM nested;
 ----
-80
+92
 NULL
 NULL
 NULL
@@ -312,7 +312,7 @@ SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([4, 5, 6], (a, b) -> list_re
 query I
 SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) -> list_reduce([7, 8, 9], (c, d, c_i) -> x + y + a + b + c + d + x_i + a_i + c_i)));
 ----
-1133
+1259
 
 query I
 SELECT list_reduce([[[10, 20], [100, 200]], [[30, 40], [300, 400]], [[50, 60], [500, 600]]], (x, y) -> list_pack(list_reduce(x, (l, m) -> list_pack(list_reduce(l, (a, b) -> a + b) + list_reduce(m, (c, d) -> c + d))) + list_reduce(y, (n, o) -> list_pack(list_reduce(n, (a, b) -> a + b) + list_reduce(o, (c, d) -> c + d)))));
