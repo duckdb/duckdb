@@ -6,7 +6,7 @@
 load __TEST_DIR__/issue_5488.db
 
 statement ok
-pragma force_compression='dictionary'
+pragma force_compression='dict_fsst'
 
 statement ok
 CREATE TABLE test ( col_a TEXT);

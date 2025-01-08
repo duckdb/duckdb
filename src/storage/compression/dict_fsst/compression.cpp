@@ -8,7 +8,8 @@ namespace dict_fsst {
 DictFSSTCompressionCompressState::DictFSSTCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
                                                                    const CompressionInfo &info)
     : DictFSSTCompressionState(info), checkpoint_data(checkpoint_data_p),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICT_FSST)) {
+      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICT_FSST)),
+      encoded_input(BufferAllocator::Get(checkpoint_data.GetDatabase())) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 
@@ -98,22 +99,20 @@ void DictFSSTCompressionCompressState::AddLookup(uint32_t lookup_result) {
 	current_segment->count++;
 }
 
-bool DictFSSTCompressionCompressState::HasRoomForString(bool new_string, idx_t string_size) {
-	static constexpr uint16_t FSST_SYMBOL_TABLE_SIZE = sizeof(duckdb_fsst_decoder_t);
-
-	auto block_size = info.GetBlockSize();
+idx_t DictFSSTCompressionCompressState::RequiredSpace(bool new_string, idx_t string_size) {
 
 	if (!new_string) {
-		return DictFSSTCompression::HasEnoughSpace(current_segment->count.load() + 1, index_buffer.size(),
-		                                           current_dictionary.size, current_width, block_size);
+		return DictFSSTCompression::RequiredSpace(current_segment->count.load() + 1, index_buffer.size(),
+		                                          current_dictionary.size, current_width);
 	}
-	next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
-	return DictFSSTCompression::HasEnoughSpace(current_segment->count.load() + 1, index_buffer.size() + 1,
-	                                           current_dictionary.size + string_size, next_width, block_size);
+	auto next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
+	return DictFSSTCompression::RequiredSpace(current_segment->count.load() + 1, index_buffer.size() + 1,
+	                                          current_dictionary.size + string_size, next_width);
 }
 
 void DictFSSTCompressionCompressState::Flush(bool final) {
 	auto next_start = current_segment->start + current_segment->count;
+	append_state = DictionaryAppendState::REGULAR;
 
 	auto segment_size = Finalize();
 	auto &state = checkpoint_data.GetCheckpointState();
@@ -124,21 +123,122 @@ void DictFSSTCompressionCompressState::Flush(bool final) {
 	}
 }
 
-void DictFSSTCompressionCompressState::ProcessStrings(UnifiedVectorFormat &input, idx_t count) {
-	if (!fsst_encoded) {
-		// No need to process anything
-		return;
+void DictFSSTCompressionCompressState::EncodeInputStrings(UnifiedVectorFormat &input, idx_t count) {
+	D_ASSERT(append_state == DictionaryAppendState::ENCODED);
+
+	encoded_input.Reset();
+	D_ASSERT(encoder);
+	auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+
+	vector<size_t> fsst_string_sizes;
+	vector<unsigned char *> fsst_string_ptrs;
+	//! We could use the 'current_string_map' but this won't be in-order
+	// and we want to preserve the order of the dictionary after rewriting
+	auto data = input.GetData<string_t>(input);
+	idx_t total_size = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = input.sel->get_index(i);
+		auto &str = data[idx];
+		fsst_string_sizes.push_back(str.GetSize());
+		fsst_string_ptrs.push_back((unsigned char *)str.GetData()); // NOLINT
+		total_size += str.GetSize();
 	}
-	throw NotImplementedException("FSST ENCODED PROCESS STRINGS");
-	// TODO: perform fsst encoding on the provided strings
+
+	size_t output_buffer_size = 7 + 2 * total_size; // size as specified in fsst.h
+	auto compressed_ptrs = vector<unsigned char *>(count, nullptr);
+	auto compressed_sizes = vector<size_t>(count, 0);
+	auto compressed_buffer = make_unsafe_uniq_array_uninitialized<unsigned char>(output_buffer_size);
+
+	auto res =
+	    duckdb_fsst_compress(fsst_encoder, count, &fsst_string_sizes[0], &fsst_string_ptrs[0], output_buffer_size,
+	                         compressed_buffer.get(), &compressed_sizes[0], &compressed_ptrs[0]);
+	if (res != count) {
+		throw FatalException("FSST compression failed to compress all input strings");
+	}
+
+	auto &strings = encoded_input.input_data;
+	auto &heap = encoded_input.heap;
+	for (idx_t i = 0; i < count; i++) {
+		uint32_t size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
+		string_t encoded_string((const char *)compressed_ptrs[i], size); // NOLINT;
+		strings.push_back(heap.AddString(std::move(encoded_string)));
+	}
+}
+
+bool DictFSSTCompressionCompressState::EncodeDictionary() {
+	if (current_dictionary.size < DICTIONARY_ENCODE_THRESHOLD) {
+		append_state = DictionaryAppendState::NOT_ENCODED;
+		return false;
+	}
+	append_state = DictionaryAppendState::ENCODED;
+
+	// Encode the dictionary:
+	// first prepare the input to create the fsst_encoder
+	// create the encoder
+	// allocate for enough space to encode the dictionary
+	// encode the dictionary
+	// write the (exported) symbol table to the end of the segment
+	// then rewrite the dictionary + index_buffer + current_string_map
+
+	vector<size_t> fsst_string_sizes;
+	vector<unsigned char *> fsst_string_ptrs;
+	data_ptr_t last_start = current_end_ptr;
+	//! We could use the 'current_string_map' but this won't be in-order
+	// and we want to preserve the order of the dictionary after rewriting
+	for (auto offset : index_buffer) {
+		auto start = current_end_ptr - offset;
+		size_t size = UnsafeNumericCast<size_t>(last_start - start);
+		fsst_string_sizes.push_back(size);
+		fsst_string_ptrs.push_back((unsigned char *)start); // NOLINT
+		last_start = start;
+	}
+
+	auto string_count = index_buffer.size();
+	encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
+	auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+
+	size_t output_buffer_size = 7 + 2 * current_dictionary.size; // size as specified in fsst.h
+	auto compressed_ptrs = vector<unsigned char *>(string_count, nullptr);
+	auto compressed_sizes = vector<size_t>(string_count, 0);
+	auto compressed_buffer = make_unsafe_uniq_array_uninitialized<unsigned char>(output_buffer_size);
+
+	auto res =
+	    duckdb_fsst_compress(fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
+	                         output_buffer_size, compressed_buffer.get(), &compressed_sizes[0], &compressed_ptrs[0]);
+	if (res != string_count) {
+		throw FatalException("FSST compression failed to compress all dictionary strings");
+	}
+
+	// Write the exported symbol table to the end of the segment
+	unsigned char fsst_serialized_symbol_table[sizeof(duckdb_fsst_decoder_t)];
+	auto symbol_table_size = duckdb_fsst_export(fsst_encoder, fsst_serialized_symbol_table);
+	current_end_ptr -= symbol_table_size;
+	memcpy(current_end_ptr, (void *)fsst_serialized_symbol_table, symbol_table_size);
+
+	// Rewrite the dictionary
+	current_string_map.clear();
+	uint32_t offset = 0;
+	for (idx_t i = 0; i < string_count; i++) {
+		auto &start = compressed_ptrs[i];
+		auto &size = compressed_sizes[i];
+		offset += size;
+		index_buffer[i] = offset;
+		auto dest = current_end_ptr - offset;
+		memcpy(dest, start, size);
+		string_t dictionary_string((const char *)start, UnsafeNumericCast<uint32_t>(size)); // NOLINT
+		current_string_map.insert({dictionary_string, i});
+	}
+	current_dictionary.size = offset;
+	current_dictionary.end -= symbol_table_size;
+	DictFSSTCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
+	return true;
 }
 
 const string_t &DictFSSTCompressionCompressState::GetString(const string_t *strings, idx_t index, idx_t raw_index) {
-	if (!fsst_encoded) {
+	if (append_state != DictionaryAppendState::ENCODED) {
 		return strings[index];
 	}
-	throw NotImplementedException("FSST ENCODED GET STRING");
-	// TODO: look up the encoded string given the 'raw_index'
+	return encoded_input.input_data[raw_index];
 }
 
 idx_t DictFSSTCompressionCompressState::Finalize() {

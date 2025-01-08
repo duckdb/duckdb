@@ -1,4 +1,7 @@
 #include "duckdb/storage/compression/dict_fsst/common.hpp"
+#include "fsst.h"
+
+static constexpr uint16_t FSST_SYMBOL_TABLE_SIZE = sizeof(duckdb_fsst_decoder_t);
 
 namespace duckdb {
 namespace dict_fsst {
@@ -42,13 +45,51 @@ DictFSSTCompressionState::DictFSSTCompressionState(const CompressionInfo &info) 
 DictFSSTCompressionState::~DictFSSTCompressionState() {
 }
 
+bool DictFSSTCompressionState::DryAppendToCurrentSegment(bool is_new, UnifiedVectorFormat &vdata, idx_t count,
+                                                         idx_t index, idx_t raw_index) {
+	auto strings = vdata.GetData<string_t>(vdata);
+	reference<const string_t> str = GetString(strings, index, raw_index);
+	auto required_space = RequiredSpace(is_new, str.get().GetSize());
+
+	auto block_size = info.GetBlockSize();
+
+	switch (append_state) {
+	case DictionaryAppendState::REGULAR: {
+		auto symbol_table_threshold = block_size - FSST_SYMBOL_TABLE_SIZE;
+		if (required_space > symbol_table_threshold) {
+			//! Decide whether or not to encode the dictionary
+			if (EncodeDictionary()) {
+				EncodeInputStrings(vdata, count);
+				str = GetString(strings, index, raw_index);
+				required_space = RequiredSpace(is_new, str.get().GetSize());
+				if (required_space > block_size) {
+					//! Even after encoding the dictionary, we can't add this string
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+	case DictionaryAppendState::ENCODED: {
+		return required_space <= (block_size - FSST_SYMBOL_TABLE_SIZE);
+	}
+	case DictionaryAppendState::NOT_ENCODED: {
+		return required_space <= block_size;
+	}
+	};
+}
+
 bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	Verify();
 
-	ProcessStrings(vdata, count);
+	if (append_state == DictionaryAppendState::ENCODED) {
+		// The dictionary has been encoded
+		// to look up a string in the dictionary, the input needs to be encoded as well
+		EncodeInputStrings(vdata, count);
+	}
 
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
@@ -56,9 +97,9 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		optional_idx lookup_result;
 		auto row_is_valid = vdata.validity.RowIsValid(idx);
 
-		auto &str = GetString(data, idx, i);
+		reference<const string_t> str = GetString(data, idx, i);
 		if (row_is_valid) {
-			string_size = str.GetSize();
+			string_size = str.get().GetSize();
 			if (string_size >= StringUncompressed::GetStringBlockLimit(info.GetBlockSize())) {
 				// Big strings not implemented for dictionary compression
 				return false;
@@ -67,13 +108,12 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		}
 
 		bool new_string = !lookup_result.IsValid();
-		bool fits = HasRoomForString(new_string, string_size);
+		bool fits = DryAppendToCurrentSegment(new_string, vdata, count, idx, i);
+
 		if (!fits) {
-			// TODO: Check if the dictionary requires FSST encoding
 			Flush();
 			lookup_result = optional_idx();
-
-			fits = HasRoomForString(true, string_size);
+			fits = DryAppendToCurrentSegment(true, vdata, count, idx, i);
 			if (!fits) {
 				throw InternalException("Dictionary compression could not write to new segment");
 			}

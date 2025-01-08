@@ -32,22 +32,26 @@ void DictFSSTAnalyzeState::AddNull() {
 	current_tuple_count++;
 }
 
-void DictFSSTAnalyzeState::ProcessStrings(UnifiedVectorFormat &input, idx_t count) {
-	return;
+void DictFSSTAnalyzeState::EncodeInputStrings(UnifiedVectorFormat &input, idx_t count) {
+	throw InternalException("We should never encode during analyze step");
+}
+
+bool DictFSSTAnalyzeState::EncodeDictionary() {
+	return false;
 }
 
 const string_t &DictFSSTAnalyzeState::GetString(const string_t *strings, idx_t index, idx_t raw_index) {
 	return strings[index];
 }
 
-bool DictFSSTAnalyzeState::HasRoomForString(bool new_string, idx_t string_size) {
+idx_t DictFSSTAnalyzeState::RequiredSpace(bool new_string, idx_t string_size) {
 	if (!new_string) {
-		return DictFSSTCompression::HasEnoughSpace(current_tuple_count + 1, current_unique_count, current_dict_size,
-		                                           current_width, info.GetBlockSize());
+		return DictFSSTCompression::RequiredSpace(current_tuple_count + 1, current_unique_count, current_dict_size,
+		                                          current_width);
 	}
-	next_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
-	return DictFSSTCompression::HasEnoughSpace(current_tuple_count + 1, current_unique_count + 1,
-	                                           current_dict_size + string_size, next_width, info.GetBlockSize());
+	auto next_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
+	return DictFSSTCompression::RequiredSpace(current_tuple_count + 1, current_unique_count + 1,
+	                                          current_dict_size + string_size, next_width);
 }
 
 void DictFSSTAnalyzeState::Flush(bool final) {

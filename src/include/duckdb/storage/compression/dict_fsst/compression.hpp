@@ -19,10 +19,29 @@ namespace dict_fsst {
 // scanning the whole dictionary at once and then scanning the selection buffer for each emitted vector. Secondly, it
 // allows for efficient bitpacking compression as the selection values should remain relatively small.
 
+struct EncodedInputData {
+public:
+	explicit EncodedInputData(Allocator &allocator) : heap(allocator) {
+	}
+
+public:
+	void Reset() {
+		input_data.clear();
+		heap.Destroy();
+	}
+
+public:
+	StringHeap heap;
+	vector<string_t> input_data;
+};
+
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
 struct DictFSSTCompressionCompressState : public DictFSSTCompressionState {
+public:
+	static constexpr idx_t DICTIONARY_ENCODE_THRESHOLD = 4096;
+
 public:
 	DictFSSTCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info);
 
@@ -33,9 +52,10 @@ public:
 	void AddNewString(string_t str) override;
 	void AddNull() override;
 	void AddLookup(uint32_t lookup_result) override;
-	bool HasRoomForString(bool new_string, idx_t string_size) override;
+	idx_t RequiredSpace(bool new_string, idx_t string_size) override;
 	void Flush(bool final = false) override;
-	void ProcessStrings(UnifiedVectorFormat &input, idx_t count) override;
+	void EncodeInputStrings(UnifiedVectorFormat &input, idx_t count) override;
+	bool EncodeDictionary() override;
 	const string_t &GetString(const string_t *strings, idx_t index, idx_t raw_index) override;
 	idx_t Finalize();
 
@@ -56,6 +76,9 @@ public:
 
 	bitpacking_width_t current_width = 0;
 	bitpacking_width_t next_width = 0;
+
+	EncodedInputData encoded_input;
+	void *encoder;
 };
 
 } // namespace dict_fsst

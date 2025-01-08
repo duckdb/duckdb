@@ -23,7 +23,7 @@ INSERT INTO tbl VALUES (
 );
 
 statement ok
-set force_compression='dictionary';
+set force_compression='dict_fsst';
 
 statement ok
 force checkpoint;

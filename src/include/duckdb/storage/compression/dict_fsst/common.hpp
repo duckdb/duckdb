@@ -18,6 +18,12 @@ typedef struct {
 	bool fsst_encoded;
 } dict_fsst_compression_header_t;
 
+enum class DictionaryAppendState : uint8_t {
+	REGULAR,    //! Symbol table threshold not reached yet
+	ENCODED,    //! Reached the threshold, decided to encode the dictionary
+	NOT_ENCODED //! Reached the threshold, decided not to encode the dictionary
+};
+
 struct DictFSSTCompression {
 public:
 	static constexpr float MINIMUM_COMPRESSION_RATIO = 1.2F;
@@ -54,18 +60,22 @@ protected:
 	virtual void AddNewString(string_t str) = 0;
 	// Add a null value to the compression state
 	virtual void AddNull() = 0;
-	// Needs to be called before adding a value. Will return false if a flush is required first.
-	virtual bool HasRoomForString(bool new_string, idx_t string_size) = 0;
+	virtual idx_t RequiredSpace(bool new_string, idx_t string_size) = 0;
 	// Flush the segment to disk if compressing or reset the counters if analyzing
 	virtual void Flush(bool final = false) = 0;
 	// Process the strings of the vector if necessary
-	virtual void ProcessStrings(UnifiedVectorFormat &input, idx_t count) = 0;
+	virtual void EncodeInputStrings(UnifiedVectorFormat &input, idx_t count) = 0;
+	// Encode the dictionary with FSST, return false if we decided not to encode
+	virtual bool EncodeDictionary() = 0;
 	// Retrieve the string given the indices
 	virtual const string_t &GetString(const string_t *strings, idx_t index, idx_t raw_index) = 0;
 
+private:
+	bool DryAppendToCurrentSegment(bool is_new, UnifiedVectorFormat &vdata, idx_t count, idx_t index, idx_t raw_index);
+
 protected:
-	//! Whether the dictionary has been encoded with FSST
-	bool fsst_encoded = false;
+	//! Keep track of the append state for the current segment
+	DictionaryAppendState append_state = DictionaryAppendState::REGULAR;
 };
 
 } // namespace dict_fsst

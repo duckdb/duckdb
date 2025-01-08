@@ -5,7 +5,7 @@
 load __TEST_DIR__/store_dict.db
 
 statement ok
-pragma force_compression='dictionary';
+pragma force_compression='dict_fsst';
 
 statement ok
 CREATE TABLE Hosts (ips varchar[]);
