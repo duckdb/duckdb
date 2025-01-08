@@ -37,7 +37,7 @@ restart
 query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-Dictionary
+DICT_FSST
 
 statement ok
 pragma verify_fetch_row;

@@ -13,6 +13,13 @@ DictFSSTCompressionCompressState::DictFSSTCompressionCompressState(ColumnDataChe
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 
+DictFSSTCompressionCompressState::~DictFSSTCompressionCompressState() {
+	if (encoder) {
+		auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+		duckdb_fsst_destroy(fsst_encoder);
+	}
+}
+
 void DictFSSTCompressionCompressState::CreateEmptySegment(idx_t row_start) {
 	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
@@ -105,16 +112,18 @@ idx_t DictFSSTCompressionCompressState::RequiredSpace(bool new_string, idx_t str
 		return DictFSSTCompression::RequiredSpace(current_segment->count.load() + 1, index_buffer.size(),
 		                                          current_dictionary.size, current_width);
 	}
-	auto next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
+	next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
 	return DictFSSTCompression::RequiredSpace(current_segment->count.load() + 1, index_buffer.size() + 1,
 	                                          current_dictionary.size + string_size, next_width);
 }
 
 void DictFSSTCompressionCompressState::Flush(bool final) {
 	auto next_start = current_segment->start + current_segment->count;
-	append_state = DictionaryAppendState::REGULAR;
 
 	auto segment_size = Finalize();
+	append_state = DictionaryAppendState::REGULAR;
+	encoded_input.Reset();
+
 	auto &state = checkpoint_data.GetCheckpointState();
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
@@ -172,14 +181,6 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 	}
 	append_state = DictionaryAppendState::ENCODED;
 
-	// Encode the dictionary:
-	// first prepare the input to create the fsst_encoder
-	// create the encoder
-	// allocate for enough space to encode the dictionary
-	// encode the dictionary
-	// write the (exported) symbol table to the end of the segment
-	// then rewrite the dictionary + index_buffer + current_string_map
-
 	vector<size_t> fsst_string_sizes;
 	vector<unsigned char *> fsst_string_ptrs;
 	data_ptr_t last_start = current_end_ptr;
@@ -193,6 +194,7 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 		last_start = start;
 	}
 
+	// Create the encoder
 	auto string_count = index_buffer.size();
 	encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
 	auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
@@ -202,6 +204,7 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 	auto compressed_sizes = vector<size_t>(string_count, 0);
 	auto compressed_buffer = make_unsafe_uniq_array_uninitialized<unsigned char>(output_buffer_size);
 
+	// Compress the dictionary
 	auto res =
 	    duckdb_fsst_compress(fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
 	                         output_buffer_size, compressed_buffer.get(), &compressed_sizes[0], &compressed_ptrs[0]);
@@ -245,6 +248,7 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	auto handle = buffer_manager.Pin(current_segment->block);
 	D_ASSERT(current_dictionary.end == info.GetBlockSize());
+	const bool is_fsst_encoded = append_state == DictionaryAppendState::ENCODED;
 
 	// calculate sizes
 	auto compressed_selection_buffer_size =
@@ -252,12 +256,16 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 	auto index_buffer_size = index_buffer.size() * sizeof(uint32_t);
 	auto total_size = DictFSSTCompression::DICTIONARY_HEADER_SIZE + compressed_selection_buffer_size +
 	                  index_buffer_size + current_dictionary.size;
+	if (is_fsst_encoded) {
+		total_size += sizeof(duckdb_fsst_encoder_t);
+	}
 
 	// calculate ptr and offsets
 	auto base_ptr = handle.Ptr();
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(base_ptr);
 	auto compressed_selection_buffer_offset = DictFSSTCompression::DICTIONARY_HEADER_SIZE;
 	auto index_buffer_offset = compressed_selection_buffer_offset + compressed_selection_buffer_size;
+	header_ptr->fsst_encoded = is_fsst_encoded;
 
 	// Write compressed selection buffer
 	BitpackingPrimitives::PackBuffer<sel_t, false>(base_ptr + compressed_selection_buffer_offset,
@@ -284,13 +292,18 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 	}
 
 	// Sufficient space: calculate how much space we can save.
-	auto move_amount = info.GetBlockSize() - total_size;
+	auto space_left = info.GetBlockSize() - total_size;
 
 	// Move the dictionary to align it with the offsets.
 	auto new_dictionary_offset = index_buffer_offset + index_buffer_size;
+	idx_t bytes_to_move = current_dictionary.size;
+	if (is_fsst_encoded) {
+		// Also move the symbol table located directly behind the dictionary
+		bytes_to_move += sizeof(duckdb_fsst_encoder_t);
+	}
 	memmove(base_ptr + new_dictionary_offset, base_ptr + current_dictionary.end - current_dictionary.size,
-	        current_dictionary.size);
-	current_dictionary.end -= move_amount;
+	        bytes_to_move);
+	current_dictionary.end -= space_left;
 	D_ASSERT(current_dictionary.end == total_size);
 
 	// Write the new dictionary with the updated "end".

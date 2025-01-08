@@ -35,7 +35,7 @@ select segment_type, compression from pragma_storage_info('tbl');
 VALIDITY	Constant
 BIGINT	BitPacking
 VALIDITY	Constant
-VARCHAR	Dictionary
+VARCHAR	DICT_FSST
 VALIDITY	Empty Validity
 
 statement ok

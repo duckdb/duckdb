@@ -1,7 +1,13 @@
 #include "duckdb/storage/compression/dict_fsst/decompression.hpp"
+#include "fsst.h"
+#include "duckdb/common/fsst.hpp"
 
 namespace duckdb {
 namespace dict_fsst {
+
+CompressedStringScanState::~CompressedStringScanState() {
+	delete (duckdb_fsst_decoder_t *)(decoder);
+}
 
 uint16_t CompressedStringScanState::GetStringLength(sel_t index) {
 	if (index == 0) {
@@ -11,7 +17,7 @@ uint16_t CompressedStringScanState::GetStringLength(sel_t index) {
 	}
 }
 
-string_t CompressedStringScanState::FetchStringFromDict(int32_t dict_offset, uint16_t string_len) {
+string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t dict_offset, uint16_t string_len) {
 	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(block_size));
 	if (dict_offset == 0) {
 		return string_t(nullptr, 0);
@@ -22,7 +28,12 @@ string_t CompressedStringScanState::FetchStringFromDict(int32_t dict_offset, uin
 	auto dict_pos = dict_end - dict_offset;
 
 	auto str_ptr = char_ptr_cast(dict_pos);
-	return string_t(str_ptr, string_len);
+	if (is_fsst_encoded) {
+		return FSSTPrimitives::DecompressValue(decoder, *dictionary, str_ptr, string_len, decompress_buffer);
+	} else {
+		// FIXME: the Vector doesn't seem to take ownership of the non-inlined string data???
+		return string_t(str_ptr, string_len);
+	}
 }
 
 void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initialize_dictionary) {
@@ -44,6 +55,17 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	block_size = segment.GetBlockManager().GetBlockSize();
 
 	dict = DictFSSTCompression::GetDictionary(segment, *handle);
+	is_fsst_encoded = header_ptr->fsst_encoded;
+	if (is_fsst_encoded) {
+		decoder = new duckdb_fsst_decoder_t;
+		auto symbol_table_location = baseptr + dict.end;
+		auto ret = duckdb_fsst_import((duckdb_fsst_decoder_t *)decoder, symbol_table_location);
+		(void)(ret);
+		D_ASSERT(ret != 0); // FIXME: the old code set the decoder to nullptr instead, why???
+
+		auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
+		decompress_buffer.resize(string_block_limit + 1);
+	}
 
 	if (!initialize_dictionary) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
@@ -56,10 +78,10 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	auto &validity = FlatVector::Validity(*dictionary);
 	D_ASSERT(index_buffer_count >= 1);
 	validity.SetInvalid(0);
+
 	for (uint32_t i = 0; i < index_buffer_count; i++) {
-		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
-		uint16_t str_len = GetStringLength(i);
-		dict_child_data[i] = FetchStringFromDict(UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
+		auto str_len = GetStringLength(i);
+		dict_child_data[i] = FetchStringFromDict(*dictionary, UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
 	}
 }
 
@@ -92,7 +114,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		}
 		auto dict_offset = index_buffer_ptr[string_number];
 		auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_number));
-		result_data[result_offset + i] = FetchStringFromDict(UnsafeNumericCast<int32_t>(dict_offset), str_len);
+		result_data[result_offset + i] = FetchStringFromDict(result, UnsafeNumericCast<int32_t>(dict_offset), str_len);
 	}
 }
 

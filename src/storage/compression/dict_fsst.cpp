@@ -35,6 +35,12 @@ Data layout per segment:
 |      the string data without lengths       |
 |                                            |
 +--------------------------------------------+
+|             FSST Symbol Table (opt)        |
+|   +------------------------------------+   |
+|   |   duckdb_fsst_decoder_t table      |   |
+|   +------------------------------------+   |
+|                                            |
++--------------------------------------------+
 */
 
 namespace duckdb {

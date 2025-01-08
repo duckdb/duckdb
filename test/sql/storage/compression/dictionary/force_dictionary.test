@@ -21,4 +21,4 @@ CHECKPOINT
 query I
 SELECT compression FROM pragma_storage_info('test_dict') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-Dict FSST
+DICT_FSST

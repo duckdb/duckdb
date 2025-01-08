@@ -17,6 +17,7 @@ public:
 	}
 	explicit CompressedStringScanState(BufferHandle &handle_p) : StringScanState(), owned_handle(), handle(handle_p) {
 	}
+	~CompressedStringScanState();
 
 public:
 	void Initialize(ColumnSegment &segment, bool initialize_dictionary = true);
@@ -25,7 +26,7 @@ public:
 	                            idx_t scan_count);
 
 private:
-	string_t FetchStringFromDict(int32_t dict_offset, uint16_t string_len);
+	string_t FetchStringFromDict(Vector &result, int32_t dict_offset, uint16_t string_len);
 	uint16_t GetStringLength(sel_t index);
 
 public:
@@ -35,6 +36,7 @@ public:
 	bitpacking_width_t current_width;
 	buffer_ptr<SelectionVector> sel_vec;
 	idx_t sel_vec_size = 0;
+	bool is_fsst_encoded = false;
 
 	//! Start of the block (pointing to the dictionary_header)
 	data_ptr_t baseptr;
@@ -47,6 +49,9 @@ public:
 	idx_t dictionary_size;
 	StringDictionaryContainer dict;
 	idx_t block_size;
+
+	void *decoder = nullptr;
+	vector<unsigned char> decompress_buffer;
 };
 
 } // namespace dict_fsst

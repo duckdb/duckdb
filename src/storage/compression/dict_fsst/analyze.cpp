@@ -49,7 +49,7 @@ idx_t DictFSSTAnalyzeState::RequiredSpace(bool new_string, idx_t string_size) {
 		return DictFSSTCompression::RequiredSpace(current_tuple_count + 1, current_unique_count, current_dict_size,
 		                                          current_width);
 	}
-	auto next_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
+	next_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
 	return DictFSSTCompression::RequiredSpace(current_tuple_count + 1, current_unique_count + 1,
 	                                          current_dict_size + string_size, next_width);
 }

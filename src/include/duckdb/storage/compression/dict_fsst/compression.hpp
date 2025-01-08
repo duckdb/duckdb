@@ -44,6 +44,7 @@ public:
 
 public:
 	DictFSSTCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info);
+	~DictFSSTCompressionCompressState();
 
 public:
 	void CreateEmptySegment(idx_t row_start);
@@ -78,7 +79,7 @@ public:
 	bitpacking_width_t next_width = 0;
 
 	EncodedInputData encoded_input;
-	void *encoder;
+	void *encoder = nullptr;
 };
 
 } // namespace dict_fsst

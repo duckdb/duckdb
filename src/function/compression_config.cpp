@@ -87,6 +87,7 @@ vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(const P
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_FSST, physical_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ZSTD, physical_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ROARING, physical_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_DICT_FSST, physical_type);
 	return result;
 }
 
