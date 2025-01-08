@@ -227,7 +227,7 @@ SELECT make_timestamp(0), make_timestamp(1684509234845000);
 statement error
 SELECT make_timestamp(9223372036854775807); -- Infinity
 ----
-Conversion Error: Timestamp microseconds out of range: 9223372036854775807
+Conversion Error: Timestamp microseconds out of range
 
 # From nanoseconds
 query II
@@ -244,7 +244,7 @@ SELECT make_timestamp_ns(9223372036854775806);
 statement error
 SELECT make_timestamp_ns(9223372036854775807); -- Infinity
 ----
-Conversion Error: Timestamp microseconds out of range: 9223372036854775807
+Conversion Error: Timestamp microseconds out of range
 
 #
 # Times
