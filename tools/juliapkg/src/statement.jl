@@ -84,7 +84,10 @@ end
 
 function bind_parameters(stmt::Stmt, params::DBInterface.NamedStatementParams)
     N = nparameters(stmt)
-    K = keytype(params)
+    if length(params) == 0
+        return # no parameters to bind
+    end
+    K = eltype(keys(params))
     for i in 1:N
         name_ptr = duckdb_parameter_name(stmt.handle, i)
         name = unsafe_string(name_ptr)
