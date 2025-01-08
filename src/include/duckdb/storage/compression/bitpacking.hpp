@@ -18,6 +18,8 @@ enum class BitpackingMode : uint8_t { INVALID, AUTO, CONSTANT, CONSTANT_DELTA, D
 BitpackingMode BitpackingModeFromString(const string &str);
 string BitpackingModeToString(const BitpackingMode &mode);
 
+class Serializer;
+
 struct SerializedBitpackingSegmentState : public ColumnSegmentState {
 public:
 	SerializedBitpackingSegmentState();
