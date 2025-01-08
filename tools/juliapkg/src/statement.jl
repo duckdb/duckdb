@@ -82,7 +82,7 @@ function bind_parameters(stmt::Stmt, params::DBInterface.PositionalStatementPara
     end
 end
 
-function bind_parameters(stmt::Stmt, params::DBInterface.NamedStatementParams)    
+function bind_parameters(stmt::Stmt, params::DBInterface.NamedStatementParams)
     N = nparameters(stmt)
     K = keytype(params)
     for i in 1:N
@@ -104,4 +104,3 @@ function bind_parameters(stmt::Stmt, params::DBInterface.NamedStatementParams)
         end
     end
 end
-
