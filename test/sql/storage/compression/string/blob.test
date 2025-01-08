@@ -12,7 +12,7 @@ foreach enable_fsst_vector true false
 statement ok
 SET enable_fsst_vectors='${enable_fsst_vector}'
 
-foreach compression fsst dictionary
+foreach compression dict_fsst
 
 statement ok
 PRAGMA force_compression='${compression}'

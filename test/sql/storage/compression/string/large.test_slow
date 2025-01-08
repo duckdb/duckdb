@@ -8,7 +8,7 @@ load __TEST_DIR__/test_dictionary.db
 statement ok
 PRAGMA enable_verification
 
-foreach compression fsst dictionary
+foreach compression dict_fsst
 
 foreach enable_fsst_vector true false
 

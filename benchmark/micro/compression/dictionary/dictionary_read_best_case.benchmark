@@ -8,7 +8,7 @@ storage persistent
 
 load
 DROP TABLE IF EXISTS test;
-PRAGMA force_compression='dictionary';
+PRAGMA force_compression='dict_fsst';
 CREATE TABLE test AS SELECT (100 + (i%2))::VARCHAR AS i FROM range(0, 200000000) tbl(i);
 checkpoint;
 

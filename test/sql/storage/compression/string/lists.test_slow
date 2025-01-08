@@ -4,7 +4,7 @@
 
 load __TEST_DIR__/test_string_compression.db
 
-foreach compression fsst dictionary
+foreach compression dict_fsst
 
 foreach enable_fsst_vector true false
 

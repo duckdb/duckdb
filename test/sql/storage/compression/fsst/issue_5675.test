@@ -34,7 +34,7 @@ INSERT INTO TEST values ('33y93uhg3qi3f13hnh8xjrvvbz7iwevroaaif8v5ecfetwnd5yqde9
 
 # Now create our FSST table
 statement ok
-pragma force_compression='fsst';
+pragma force_compression='dict_fsst';
 
 statement ok
 CREATE TABLE TEST2 as SELECT * FROM TEST;
