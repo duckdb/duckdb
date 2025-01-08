@@ -236,7 +236,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		}
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
-		if (Exception::InvalidatesDatabase(error.Type())) {
+		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			auto &db_inst = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_inst, error.RawMessage());
 		}
@@ -584,7 +584,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			}
 		} else if (!Exception::InvalidatesTransaction(error.Type())) {
 			invalidate_transaction = false;
-		} else if (Exception::InvalidatesDatabase(error.Type())) {
+		} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			// fatal exceptions invalidate the entire database
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, error.RawMessage());

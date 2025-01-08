@@ -36,7 +36,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	single_threaded = many_csv_files || !options.parallel;
 	last_file_idx = 0;
 	scanner_idx = 0;
-	running_threads = MaxThreads();
+	running_threads = CSVGlobalState::MaxThreads();
 	current_boundary = file_scans.back()->start_iterator;
 	current_boundary.SetCurrentBoundaryToPosition(single_threaded);
 	if (current_boundary.done && context.client_data->debug_set_max_line_length) {
@@ -59,7 +59,7 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	if (file_scans.front()->file_size == 0) {
 		percentage = 1.0;
 	} else {
-		// for compressed files, readed bytes may greater than files size.
+		// for compressed files, read bytes may greater than files size.
 		for (auto &file : file_scans) {
 			double file_progress;
 			if (!file->buffer_manager) {
@@ -73,7 +73,8 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 				file_progress = static_cast<double>(file->bytes_read);
 			}
 			// This file is an uncompressed file, so we use the more price bytes_read from the scanner
-			percentage += (double(1) / double(total_files)) * std::min(1.0, file_progress / double(file->file_size));
+			percentage += (static_cast<double>(1) / static_cast<double>(total_files)) *
+			              std::min(1.0, file_progress / static_cast<double>(file->file_size));
 		}
 	}
 	return percentage * 100;
@@ -187,7 +188,7 @@ idx_t CSVGlobalState::MaxThreads() const {
 	if (single_threaded || !file_scans.front()->on_disk_file) {
 		return system_threads;
 	}
-	idx_t total_threads = file_scans.front()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
+	const idx_t total_threads = file_scans.front()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
 
 	if (total_threads < system_threads) {
 		return total_threads;
@@ -200,7 +201,7 @@ void CSVGlobalState::DecrementThread() {
 	D_ASSERT(running_threads > 0);
 	running_threads--;
 	if (running_threads == 0) {
-		bool ignore_or_store_errors =
+		const bool ignore_or_store_errors =
 		    bind_data.options.ignore_errors.GetValue() || bind_data.options.store_rejects.GetValue();
 		if (!single_threaded && !ignore_or_store_errors) {
 			// If we are running multithreaded and not ignoring errors, we must run the validator
@@ -224,6 +225,7 @@ bool IsCSVErrorAcceptedReject(CSVErrorType type) {
 	case CSVErrorType::MAXIMUM_LINE_SIZE:
 	case CSVErrorType::UNTERMINATED_QUOTES:
 	case CSVErrorType::INVALID_UNICODE:
+	case CSVErrorType::INVALID_STATE:
 		return true;
 	default:
 		return false;
@@ -244,6 +246,8 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 		return "UNQUOTED VALUE";
 	case CSVErrorType::INVALID_UNICODE:
 		return "INVALID UNICODE";
+	case CSVErrorType::INVALID_STATE:
+		return "INVALID STATE";
 	default:
 		throw InternalException("CSV Error is not valid to be stored in a Rejects Table");
 	}
@@ -308,7 +312,7 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	scan_appender.EndRow();
 }
 
-void CSVGlobalState::FillRejectsTable() {
+void CSVGlobalState::FillRejectsTable() const {
 	auto &options = bind_data.options;
 
 	if (options.store_rejects.GetValue()) {
