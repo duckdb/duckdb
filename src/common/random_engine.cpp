@@ -18,7 +18,7 @@ struct RandomState {
 
 RandomEngine::RandomEngine(int64_t seed) : random_state(make_uniq<RandomState>()) {
 	if (seed < 0) {
-#ifdef __linux__ &&defined(SYS_getrandom)
+#if defined(__linux__) && defined(SYS_getrandom)
 		idx_t random_seed;
 		syscall(SYS_getrandom, &random_seed, sizeof(random_seed), 0);
 		random_state->pcg.seed(random_seed);
