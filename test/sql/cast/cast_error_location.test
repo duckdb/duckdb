@@ -137,13 +137,13 @@ SELECT l::utinyint[] FROM cast_table
 ----
 ^
 
-# struct cast
 statement error
-SELECT int_struct::row(x tinyint) FROM cast_table
+SELECT int_struct::ROW(x TINYINT) FROM cast_table
 ----
-^
+<REGEX>:Binder Error.*STRUCT to STRUCT cast must have at least one matching member.*
 
-# double -> float
+# DOUBLE to FLOAT cast.
+
 statement error
 select dbl::float FROM cast_table
 ----

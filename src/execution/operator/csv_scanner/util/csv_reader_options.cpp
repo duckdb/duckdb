@@ -8,11 +8,11 @@
 
 namespace duckdb {
 
-CSVReaderOptions::CSVReaderOptions(CSVOption<char> single_byte_delimiter,
+CSVReaderOptions::CSVReaderOptions(const CSVOption<char> single_byte_delimiter,
                                    const CSVOption<string> &multi_byte_delimiter) {
 	if (multi_byte_delimiter.GetValue().empty()) {
-		char single_byte_value = single_byte_delimiter.GetValue();
-		string value(1, single_byte_value);
+		const char single_byte_value = single_byte_delimiter.GetValue();
+		const string value(1, single_byte_value);
 		dialect_options.state_machine_options.delimiter = value;
 	} else {
 		dialect_options.state_machine_options.delimiter = multi_byte_delimiter;
@@ -32,7 +32,9 @@ static bool ParseBoolean(const vector<Value> &set, const string &loption) {
 }
 
 static bool ParseBoolean(const Value &value, const string &loption) {
-
+	if (value.IsNull()) {
+		throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", loption);
+	}
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		return ParseBoolean(children, loption);
@@ -62,6 +64,9 @@ static string ParseString(const Value &value, const string &loption) {
 }
 
 static int64_t ParseInteger(const Value &value, const string &loption) {
+	if (value.IsNull()) {
+		throw BinderException("\"%s\" expects a non-null integer value", loption);
+	}
 	if (value.type().id() == LogicalTypeId::LIST) {
 		auto &children = ListValue::GetChildren(value);
 		if (children.size() != 1) {
@@ -224,7 +229,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	if (loption == "auto_detect") {
 		auto_detect = ParseBoolean(value, loption);
 	} else if (loption == "sample_size") {
-		auto sample_size_option = ParseInteger(value, loption);
+		const auto sample_size_option = ParseInteger(value, loption);
 		if (sample_size_option < 1 && sample_size_option != -1) {
 			throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 		}
@@ -245,7 +250,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		if (line_size < 0) {
 			throw BinderException("Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0");
 		}
-		maximum_line_size = NumericCast<idx_t>(line_size);
+		maximum_line_size.Set(NumericCast<idx_t>(line_size));
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, true);
@@ -255,8 +260,8 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	} else if (loption == "ignore_errors") {
 		ignore_errors.Set(ParseBoolean(value, loption));
 	} else if (loption == "buffer_size") {
-		buffer_size = NumericCast<idx_t>(ParseInteger(value, loption));
-		if (buffer_size == 0) {
+		buffer_size_option.Set(NumericCast<idx_t>(ParseInteger(value, loption)));
+		if (buffer_size_option == 0) {
 			throw InvalidInputException("Buffer Size option must be higher than 0");
 		}
 	} else if (loption == "decimal_separator") {
@@ -541,6 +546,25 @@ void CSVReaderOptions::Verify() {
 	if (rejects_limit != 0 && !store_rejects.GetValue()) {
 		throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 	}
+	// Validate CSV Buffer and max_line_size do not conflict.
+	if (buffer_size_option.IsSetByUser() && maximum_line_size.IsSetByUser()) {
+		if (buffer_size_option.GetValue() < maximum_line_size.GetValue()) {
+			throw BinderException("BUFFER_SIZE option was set to %d, while MAX_LINE_SIZE was set to %d. BUFFER_SIZE "
+			                      "must have always be set to value bigger than MAX_LINE_SIZE",
+			                      buffer_size_option.GetValue(), maximum_line_size.GetValue());
+		}
+	} else if (maximum_line_size.IsSetByUser() && maximum_line_size.GetValue() > max_line_size_default) {
+		// If the max line size is set by the user and bigger than we have by default, we make it part of our buffer
+		// size decision.
+		buffer_size_option.Set(CSVBuffer::ROWS_PER_BUFFER * maximum_line_size.GetValue(), false);
+	}
+}
+
+bool GetBooleanValue(const pair<const string, Value> &option) {
+	if (option.second.IsNull()) {
+		throw BinderException("read_csv %s cannot be NULL", option.first);
+	}
+	return BooleanValue::Get(option.second);
 }
 
 void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context) {
@@ -672,9 +696,9 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 				sql_type_list.push_back(std::move(def_type));
 			}
 		} else if (loption == "all_varchar") {
-			all_varchar = BooleanValue::Get(kv.second);
+			all_varchar = GetBooleanValue(kv);
 		} else if (loption == "normalize_names") {
-			normalize_names = BooleanValue::Get(kv.second);
+			normalize_names = GetBooleanValue(kv);
 		} else {
 			SetReadOption(loption, kv.second, name_list);
 		}
@@ -686,7 +710,6 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 		user_defined_parameters.erase(user_defined_parameters.size() - 2);
 	}
 }
-
 //! This function is used to remember options set by the sniffer, for use in ReadCSVRelation
 void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) const {
 	auto &delimiter = dialect_options.state_machine_options.delimiter;
@@ -716,7 +739,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	if (rfc_4180.IsSetByUser()) {
 		named_params["rfc_4180"] = Value(GetRFC4180());
 	}
-	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size));
+	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size.GetValue()));
 	if (dialect_options.skip_rows.IsSetByUser()) {
 		named_params["skip"] = Value::UBIGINT(GetSkipRows());
 	}
@@ -737,7 +760,6 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 		named_params["column_names"] = StringVectorToValue(name_list);
 	}
 	named_params["all_varchar"] = Value::BOOLEAN(all_varchar);
-	named_params["maximum_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size));
 }
 
 } // namespace duckdb
