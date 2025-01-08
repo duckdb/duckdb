@@ -71,7 +71,7 @@ class TestDBConfig(object):
 
     def test_user_agent_default(self, duckdb_cursor):
         con_regular = duckdb.connect(':memory:')
-        regex = re.compile("duckdb/.* python")
+        regex = re.compile("duckdb/.* python/.*")
         # Expands to: SELECT * FROM pragma_user_agent()
         assert regex.match(con_regular.sql("PRAGMA user_agent").fetchone()[0]) is not None
         custom_user_agent = con_regular.sql("SELECT current_setting('custom_user_agent')").fetchone()
