@@ -32,8 +32,8 @@ If no path is given a new in-memory database is created instead.
 The instantiated database should be closed with 'duckdb_close'.
 
 # Arguments
-- `path`: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
-- `out_database`: The result database object.
+- `path`: `Cstring` Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
+- `out_database`: `Ref{duckdb_database}` The result database object.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -48,10 +48,10 @@ Extended version of duckdb_open. Creates a new database or opens an existing dat
 The instantiated database should be closed with 'duckdb_close'.
 
 # Arguments
-- `path`: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
-- `out_database`: The result database object.
-- `config`: (Optional) configuration used to start up the database system.
-- `out_error`: If set and the function returns DuckDBError, this will contain the reason why the start-up failed.
+- `path`: `Cstring` Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
+- `out_database`: `Ref{duckdb_database}` The result database object.
+- `config`: `duckdb_config` (Optional) configuration used to start up the database system.
+- `out_error`: `Ref{Cstring}` If set and the function returns DuckDBError, this will contain the reason why the start-up failed.
 Note that the error must be freed using `duckdb_free`.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
@@ -77,7 +77,7 @@ Note that failing to call `duckdb_close` (in case of e.g. a program crash) will 
 Still, it is recommended to always correctly close a database object after you are done with it.
 
 # Arguments
-- `database`: The database object to shut down.
+- `database`: `Ref{duckdb_database}` The database object to shut down.
 
 Returns: `Nothing` 
 """
@@ -93,8 +93,8 @@ associated with the connection.
 The instantiated connection should be closed using 'duckdb_disconnect'.
 
 # Arguments
-- `database`: The database file to connect to.
-- `out_connection`: The result connection object.
+- `database`: `duckdb_database` The database file to connect to.
+- `out_connection`: `Ref{duckdb_connection}` The result connection object.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -114,7 +114,7 @@ end
 Interrupt running query
 
 # Arguments
-- `connection`: The connection to interrupt
+- `connection`: `duckdb_connection` The connection to interrupt
 
 Returns: `Nothing` 
 """
@@ -128,7 +128,7 @@ end
 Get progress of the running query
 
 # Arguments
-- `connection`: The working connection
+- `connection`: `duckdb_connection` The working connection
 
 Returns: `duckdb_query_progress_type` -1 if no progress or a percentage of the progress
 """
@@ -142,7 +142,7 @@ end
 Closes the specified connection and de-allocates all memory allocated for that connection.
 
 # Arguments
-- `connection`: The connection to close.
+- `connection`: `Ref{duckdb_connection}` The connection to close.
 
 Returns: `Nothing` 
 """
@@ -184,7 +184,7 @@ Note that `duckdb_destroy_config` should always be called on the resulting confi
 `DuckDBError`.
 
 # Arguments
-- `out_config`: The result configuration object.
+- `out_config`: `Ref{duckdb_config}` The result configuration object.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -216,9 +216,9 @@ display configuration options. This will succeed unless `index` is out of range 
 The result name or description MUST NOT be freed.
 
 # Arguments
-- `index`: The index of the configuration option (between 0 and `duckdb_config_count`)
-- `out_name`: A name of the configuration flag.
-- `out_description`: A description of the configuration flag.
+- `index`: `Csize_t` (1-based index) The index of the configuration option (between 0 and `duckdb_config_count`)
+- `out_name`: `Ref{Cstring}` A name of the configuration flag.
+- `out_description`: `Ref{Cstring}` A description of the configuration flag.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -244,9 +244,9 @@ In the source code, configuration options are defined in `config.cpp`.
 This can fail if either the name is invalid, or if the value provided for the option is invalid.
 
 # Arguments
-- `config`: The configuration object to set the option on.
-- `name`: The name of the configuration flag to set.
-- `option`: The value to set the configuration flag to.
+- `config`: `duckdb_config` The configuration object to set the option on.
+- `name`: `Cstring` The name of the configuration flag to set.
+- `option`: `Cstring` The value to set the configuration flag to.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -260,7 +260,7 @@ end
 Destroys the specified configuration object and de-allocates all memory allocated for the object.
 
 # Arguments
-- `config`: The configuration object to destroy.
+- `config`: `Ref{duckdb_config}` The configuration object to destroy.
 
 Returns: `Nothing` 
 """
@@ -285,9 +285,9 @@ Note that after running `duckdb_query`, `duckdb_destroy_result` must be called o
 query fails, otherwise the error stored within the result will not be freed correctly.
 
 # Arguments
-- `connection`: The connection to perform the query in.
-- `query`: The SQL query to run.
-- `out_result`: The query result.
+- `connection`: `duckdb_connection` The connection to perform the query in.
+- `query`: `Cstring` The SQL query to run.
+- `out_result`: `Ref{duckdb_result}` The query result.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -308,7 +308,7 @@ end
 Closes the result and de-allocates all memory allocated for that connection.
 
 # Arguments
-- `result`: The result to destroy.
+- `result`: `Ref{duckdb_result}` The result to destroy.
 
 Returns: `Nothing` 
 """
@@ -325,8 +325,8 @@ automatically be destroyed when the result is destroyed.
 Returns `NULL` if the column is out of range.
 
 # Arguments
-- `result`: The result object to fetch the column name from.
-- `col`: The column index.
+- `result`: `Ref{duckdb_result}` The result object to fetch the column name from.
+- `col`: `idx_t` (1-based index) The column index.
 
 Returns: `Cstring` The column name of the specified column.
 """
@@ -342,8 +342,8 @@ Returns the column type of the specified column.
 Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
 
 # Arguments
-- `result`: The result object to fetch the column type from.
-- `col`: The column index.
+- `result`: `Ref{duckdb_result}` The result object to fetch the column type from.
+- `col`: `idx_t` (1-based index) The column index.
 
 Returns: `DUCKDB_TYPE` The column type of the specified column.
 """
@@ -357,7 +357,7 @@ end
 Returns the statement type of the statement that was executed
 
 # Arguments
-- `result`: The result object to fetch the statement type from.
+- `result`: `duckdb_result` The result object to fetch the statement type from.
 
 Returns: `duckdb_statement_type` duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
 """
@@ -375,8 +375,8 @@ The return type of this call should be destroyed with `duckdb_destroy_logical_ty
 Returns `NULL` if the column is out of range.
 
 # Arguments
-- `result`: The result object to fetch the column type from.
-- `col`: The column index.
+- `result`: `Ref{duckdb_result}` The result object to fetch the column type from.
+- `col`: `idx_t` (1-based index) The column index.
 
 Returns: `duckdb_logical_type` The logical column type of the specified column.
 """
@@ -396,7 +396,7 @@ end
 Returns the number of columns present in a the result object.
 
 # Arguments
-- `result`: The result object.
+- `result`: `Ref{duckdb_result}` The result object.
 
 Returns: `idx_t` The number of columns present in the result object.
 """
@@ -412,7 +412,7 @@ end
 Returns the number of rows present in the result object.
 
 # Arguments
-- `result`: The result object.
+- `result`: `Ref{duckdb_result}` The result object.
 
 Returns: `idx_t` The number of rows present in the result object.
 """
@@ -428,7 +428,7 @@ Returns the number of rows changed by the query stored in the result. This is re
 queries. For other queries the rows_changed will be 0.
 
 # Arguments
-- `result`: The result object.
+- `result`: `Ref{duckdb_result}` The result object.
 
 Returns: `idx_t` The number of rows changed.
 """
@@ -454,8 +454,8 @@ printf(\"Data for row %d: %d\n\", row, data[row]);
 ```
 
 # Arguments
-- `result`: The result object to fetch the column data from.
-- `col`: The column index.
+- `result`: `Ref{duckdb_result}` The result object to fetch the column data from.
+- `col`: `idx_t` (1-based index) The column index.
 
 Returns: `Ptr{Cvoid}` The column data of the specified column.
 """
@@ -487,8 +487,8 @@ if (nullmask[row]) {
 ```
 
 # Arguments
-- `result`: The result object to fetch the nullmask from.
-- `col`: The column index.
+- `result`: `Ref{duckdb_result}` The result object to fetch the nullmask from.
+- `col`: `idx_t` (1-based index) The column index.
 
 Returns: `Ptr{Bool}` The nullmask of the specified column.
 """
@@ -508,7 +508,7 @@ Returns the error message contained within the result. The error is only set if 
 The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_result` is called.
 
 # Arguments
-- `result`: The result object to fetch the error from.
+- `result`: `Ref{duckdb_result}` The result object to fetch the error from.
 
 Returns: `Cstring` The error of the result.
 """
@@ -523,7 +523,7 @@ Returns the result error type contained within the result. The error is only set
 `DuckDBError`.
 
 # Arguments
-- `result`: The result object to fetch the error from.
+- `result`: `Ref{duckdb_result}` The result object to fetch the error from.
 
 Returns: `duckdb_error_type` The error type of the result.
 """
@@ -555,8 +555,8 @@ mixed with the legacy result functions).
 Use `duckdb_result_chunk_count` to figure out how many chunks there are in the result.
 
 # Arguments
-- `result`: The result object to fetch the data chunk from.
-- `chunk_index`: The chunk index to fetch from.
+- `result`: `duckdb_result` The result object to fetch the data chunk from.
+- `chunk_index`: `idx_t` (1-based index) The chunk index to fetch from.
 
 Returns: `duckdb_data_chunk` The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
 """
@@ -582,7 +582,7 @@ end
 Checks if the type of the internal result is StreamQueryResult.
 
 # Arguments
-- `result`: The result object to check.
+- `result`: `duckdb_result` The result object to check.
 
 Returns: `Bool` Whether or not the result object is of the type StreamQueryResult
 """
@@ -602,7 +602,7 @@ end
 Returns the number of data chunks present in the result.
 
 # Arguments
-- `result`: The result object
+- `result`: `duckdb_result` The result object
 
 Returns: `idx_t` Number of data chunks present in the result.
 """
@@ -620,7 +620,7 @@ end
 Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
 
 # Arguments
-- `result`: The result object
+- `result`: `duckdb_result` The result object
 
 Returns: `duckdb_result_type` The return_type
 """
@@ -640,9 +640,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Bool` The boolean value at the specified location, or false if the value cannot be converted.
 """
@@ -660,9 +660,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Int8` The int8_t value at the specified location, or 0 if the value cannot be converted.
 """
@@ -680,9 +680,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Int16` The int16_t value at the specified location, or 0 if the value cannot be converted.
 """
@@ -700,9 +700,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Int32` The int32_t value at the specified location, or 0 if the value cannot be converted.
 """
@@ -720,9 +720,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Int64` The int64_t value at the specified location, or 0 if the value cannot be converted.
 """
@@ -740,9 +740,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_hugeint` The duckdb_hugeint value at the specified location, or 0 if the value cannot be converted.
 """
@@ -767,9 +767,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_uhugeint` The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted.
 """
@@ -794,9 +794,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_decimal` The duckdb_decimal value at the specified location, or 0 if the value cannot be converted.
 """
@@ -821,9 +821,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `UInt8` The uint8_t value at the specified location, or 0 if the value cannot be converted.
 """
@@ -841,9 +841,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `UInt16` The uint16_t value at the specified location, or 0 if the value cannot be converted.
 """
@@ -868,9 +868,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `UInt32` The uint32_t value at the specified location, or 0 if the value cannot be converted.
 """
@@ -895,9 +895,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `UInt64` The uint64_t value at the specified location, or 0 if the value cannot be converted.
 """
@@ -922,9 +922,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Float32` The float value at the specified location, or 0 if the value cannot be converted.
 """
@@ -949,9 +949,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Float64` The double value at the specified location, or 0 if the value cannot be converted.
 """
@@ -976,9 +976,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_date` The duckdb_date value at the specified location, or 0 if the value cannot be converted.
 """
@@ -1003,9 +1003,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_time` The duckdb_time value at the specified location, or 0 if the value cannot be converted.
 """
@@ -1030,9 +1030,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_timestamp` The duckdb_timestamp value at the specified location, or 0 if the value cannot be converted.
 """
@@ -1057,9 +1057,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_interval` The duckdb_interval value at the specified location, or 0 if the value cannot be converted.
 """
@@ -1084,9 +1084,9 @@ end
 **DEPRECATED**: Use duckdb_value_string instead. This function does not work correctly if the string contains null bytes.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Cstring` The text value at the specified location as a null-terminated string, or nullptr if the value cannot be
 converted. The result must be freed with `duckdb_free`.
@@ -1115,9 +1115,9 @@ No support for nested types, and for other complex types.
 The resulting field \"string.data\" must be freed with `duckdb_free.`
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_string` The string value at the specified location. Attempts to cast the result value to string.
 """
@@ -1143,9 +1143,9 @@ end
 null bytes.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Cstring` The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
@@ -1174,9 +1174,9 @@ end
 null bytes.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_string` The char* value at the specified location. ONLY works on VARCHAR columns and does not auto-cast.
 If the column is NOT a VARCHAR column this function will return NULL.
@@ -1204,9 +1204,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `duckdb_blob` The duckdb_blob value at the specified location. Returns a blob with blob.data set to nullptr if the
 value cannot be converted. The resulting field "blob.data" must be freed with `duckdb_free.`
@@ -1232,9 +1232,9 @@ end
 **DEPRECATION NOTICE**: This method is scheduled for removal in a future release.
 
 # Arguments
-- `result`: 
-- `col`: 
-- `row`: 
+- `result`: `Ref{duckdb_result}` 
+- `col`: `idx_t` (1-based index) 
+- `row`: `idx_t` (1-based index) 
 
 Returns: `Bool` Returns true if the value at the specified index is NULL, and false otherwise.
 """
@@ -1259,7 +1259,7 @@ Allocate `size` bytes of memory using the duckdb internal malloc function. Any m
 should be freed using `duckdb_free`.
 
 # Arguments
-- `size`: The number of bytes to allocate.
+- `size`: `Csize_t` The number of bytes to allocate.
 
 Returns: `Ptr{Cvoid}` A pointer to the allocated memory region.
 """
@@ -1274,7 +1274,7 @@ Free a value returned from `duckdb_malloc`, `duckdb_value_varchar`, `duckdb_valu
 `duckdb_value_string`.
 
 # Arguments
-- `ptr`: The memory region to de-allocate.
+- `ptr`: `Ptr{Cvoid}` The memory region to de-allocate.
 
 Returns: `Nothing` 
 """
@@ -1303,7 +1303,7 @@ Whether or not the duckdb_string_t value is inlined.
 This means that the data of the string does not have a separate allocation.
 
 # Arguments
-- `string`: 
+- `string`: `duckdb_string_t` 
 
 Returns: `Bool` 
 """
@@ -1317,7 +1317,7 @@ end
 Get the string length of a string_t
 
 # Arguments
-- `string`: The string to get the length of.
+- `string`: `duckdb_string_t` The string to get the length of.
 
 Returns: `UInt32` The length.
 """
@@ -1331,7 +1331,7 @@ end
 Get a pointer to the string data of a string_t
 
 # Arguments
-- `string`: The string to get the pointer to.
+- `string`: `Ref{duckdb_string_t}` The string to get the pointer to.
 
 Returns: `Cstring` The pointer.
 """
@@ -1351,7 +1351,7 @@ end
 Decompose a `duckdb_date` object into year, month and date (stored as `duckdb_date_struct`).
 
 # Arguments
-- `date`: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
+- `date`: `duckdb_date` The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
 
 Returns: `duckdb_date_struct` The `duckdb_date_struct` with the decomposed elements.
 """
@@ -1365,7 +1365,7 @@ end
 Re-compose a `duckdb_date` from year, month and date (`duckdb_date_struct`).
 
 # Arguments
-- `date`: The year, month and date stored in a `duckdb_date_struct`.
+- `date`: `duckdb_date_struct` The year, month and date stored in a `duckdb_date_struct`.
 
 Returns: `duckdb_date` The `duckdb_date` element.
 """
@@ -1379,7 +1379,7 @@ end
 Test a `duckdb_date` to see if it is a finite value.
 
 # Arguments
-- `date`: The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
+- `date`: `duckdb_date` The date object, as obtained from a `DUCKDB_TYPE_DATE` column.
 
 Returns: `Bool` True if the date is finite, false if it is ±infinity.
 """
@@ -1393,7 +1393,7 @@ end
 Decompose a `duckdb_time` object into hour, minute, second and microsecond (stored as `duckdb_time_struct`).
 
 # Arguments
-- `time`: The time object, as obtained from a `DUCKDB_TYPE_TIME` column.
+- `time`: `duckdb_time` The time object, as obtained from a `DUCKDB_TYPE_TIME` column.
 
 Returns: `duckdb_time_struct` The `duckdb_time_struct` with the decomposed elements.
 """
@@ -1407,8 +1407,8 @@ end
 Create a `duckdb_time_tz` object from micros and a timezone offset.
 
 # Arguments
-- `micros`: The microsecond component of the time.
-- `offset`: The timezone offset component of the time.
+- `micros`: `Int64` The microsecond component of the time.
+- `offset`: `Int32` The timezone offset component of the time.
 
 Returns: `duckdb_time_tz` The `duckdb_time_tz` element.
 """
@@ -1424,7 +1424,7 @@ Decompose a TIME_TZ objects into micros and a timezone offset.
 Use `duckdb_from_time` to further decompose the micros into hour, minute, second and microsecond.
 
 # Arguments
-- `micros`: The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
+- `micros`: `duckdb_time_tz` The time object, as obtained from a `DUCKDB_TYPE_TIME_TZ` column.
 
 Returns: `duckdb_time_tz_struct` 
 """
@@ -1438,7 +1438,7 @@ end
 Re-compose a `duckdb_time` from hour, minute, second and microsecond (`duckdb_time_struct`).
 
 # Arguments
-- `time`: The hour, minute, second and microsecond in a `duckdb_time_struct`.
+- `time`: `duckdb_time_struct` The hour, minute, second and microsecond in a `duckdb_time_struct`.
 
 Returns: `duckdb_time` The `duckdb_time` element.
 """
@@ -1452,7 +1452,7 @@ end
 Decompose a `duckdb_timestamp` object into a `duckdb_timestamp_struct`.
 
 # Arguments
-- `ts`: The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
+- `ts`: `duckdb_timestamp` The ts object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
 
 Returns: `duckdb_timestamp_struct` The `duckdb_timestamp_struct` with the decomposed elements.
 """
@@ -1466,7 +1466,7 @@ end
 Re-compose a `duckdb_timestamp` from a duckdb_timestamp_struct.
 
 # Arguments
-- `ts`: The de-composed elements in a `duckdb_timestamp_struct`.
+- `ts`: `duckdb_timestamp_struct` The de-composed elements in a `duckdb_timestamp_struct`.
 
 Returns: `duckdb_timestamp` The `duckdb_timestamp` element.
 """
@@ -1480,7 +1480,7 @@ end
 Test a `duckdb_timestamp` to see if it is a finite value.
 
 # Arguments
-- `ts`: The duckdb_timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
+- `ts`: `duckdb_timestamp` The duckdb_timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
 
 Returns: `Bool` True if the timestamp is finite, false if it is ±infinity.
 """
@@ -1494,7 +1494,7 @@ end
 Test a `duckdb_timestamp_s` to see if it is a finite value.
 
 # Arguments
-- `ts`: The duckdb_timestamp_s object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column.
+- `ts`: `duckdb_timestamp_s` The duckdb_timestamp_s object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column.
 
 Returns: `Bool` True if the timestamp is finite, false if it is ±infinity.
 """
@@ -1508,7 +1508,7 @@ end
 Test a `duckdb_timestamp_ms` to see if it is a finite value.
 
 # Arguments
-- `ts`: The duckdb_timestamp_ms object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column.
+- `ts`: `duckdb_timestamp_ms` The duckdb_timestamp_ms object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column.
 
 Returns: `Bool` True if the timestamp is finite, false if it is ±infinity.
 """
@@ -1522,7 +1522,7 @@ end
 Test a `duckdb_timestamp_ns` to see if it is a finite value.
 
 # Arguments
-- `ts`: The duckdb_timestamp_ns object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column.
+- `ts`: `duckdb_timestamp_ns` The duckdb_timestamp_ns object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column.
 
 Returns: `Bool` True if the timestamp is finite, false if it is ±infinity.
 """
@@ -1542,7 +1542,7 @@ end
 Converts a duckdb_hugeint object (as obtained from a `DUCKDB_TYPE_HUGEINT` column) into a double.
 
 # Arguments
-- `val`: The hugeint value.
+- `val`: `duckdb_hugeint` The hugeint value.
 
 Returns: `Float64` The converted `double` element.
 """
@@ -1558,7 +1558,7 @@ Converts a double value to a duckdb_hugeint object.
 If the conversion fails because the double value is too big the result will be 0.
 
 # Arguments
-- `val`: The double value.
+- `val`: `Float64` The double value.
 
 Returns: `duckdb_hugeint` The converted `duckdb_hugeint` element.
 """
@@ -1578,7 +1578,7 @@ end
 Converts a duckdb_uhugeint object (as obtained from a `DUCKDB_TYPE_UHUGEINT` column) into a double.
 
 # Arguments
-- `val`: The uhugeint value.
+- `val`: `duckdb_uhugeint` The uhugeint value.
 
 Returns: `Float64` The converted `double` element.
 """
@@ -1594,7 +1594,7 @@ Converts a double value to a duckdb_uhugeint object.
 If the conversion fails because the double value is too big the result will be 0.
 
 # Arguments
-- `val`: The double value.
+- `val`: `Float64` The double value.
 
 Returns: `duckdb_uhugeint` The converted `duckdb_uhugeint` element.
 """
@@ -1616,9 +1616,9 @@ Converts a double value to a duckdb_decimal object.
 If the conversion fails because the double value is too big, or the width/scale are invalid the result will be 0.
 
 # Arguments
-- `val`: The double value.
-- `width`: 
-- `scale`: 
+- `val`: `Float64` The double value.
+- `width`: `UInt8` 
+- `scale`: `UInt8` 
 
 Returns: `duckdb_decimal` The converted `duckdb_decimal` element.
 """
@@ -1632,7 +1632,7 @@ end
 Converts a duckdb_decimal object (as obtained from a `DUCKDB_TYPE_DECIMAL` column) into a double.
 
 # Arguments
-- `val`: The decimal value.
+- `val`: `duckdb_decimal` The decimal value.
 
 Returns: `Float64` The converted `double` element.
 """
@@ -1657,9 +1657,9 @@ Note that after calling `duckdb_prepare`, the prepared statement should always b
 If the prepare fails, `duckdb_prepare_error` can be called to obtain the reason why the prepare failed.
 
 # Arguments
-- `connection`: The connection object
-- `query`: The SQL query to prepare
-- `out_prepared_statement`: The resulting prepared statement object
+- `connection`: `duckdb_connection` The connection object
+- `query`: `Cstring` The SQL query to prepare
+- `out_prepared_statement`: `Ref{duckdb_prepared_statement}` The resulting prepared statement object
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -1680,7 +1680,7 @@ end
 Closes the prepared statement and de-allocates all memory allocated for the statement.
 
 # Arguments
-- `prepared_statement`: The prepared statement to destroy.
+- `prepared_statement`: `Ref{duckdb_prepared_statement}` The prepared statement to destroy.
 
 Returns: `Nothing` 
 """
@@ -1697,7 +1697,7 @@ If the prepared statement has no error message, this returns `nullptr` instead.
 The error message should not be freed. It will be de-allocated when `duckdb_destroy_prepare` is called.
 
 # Arguments
-- `prepared_statement`: The prepared statement to obtain the error from.
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement to obtain the error from.
 
 Returns: `Cstring` The error message, or `nullptr` if there is none.
 """
@@ -1713,7 +1713,7 @@ Returns the number of parameters that can be provided to the given prepared stat
 Returns 0 if the query was not successfully prepared.
 
 # Arguments
-- `prepared_statement`: The prepared statement to obtain the number of parameters for.
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement to obtain the number of parameters for.
 
 Returns: `idx_t` 
 """
@@ -1730,8 +1730,8 @@ The returned string should be freed using `duckdb_free`.
 Returns NULL if the index is out of range for the provided prepared statement.
 
 # Arguments
-- `prepared_statement`: The prepared statement for which to get the parameter name from.
-- `index`: 
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement for which to get the parameter name from.
+- `index`: `idx_t` 
 
 Returns: `Cstring` 
 """
@@ -1753,8 +1753,8 @@ Returns the parameter type for the parameter at the given index.
 Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the statement was not successfully prepared.
 
 # Arguments
-- `prepared_statement`: The prepared statement.
-- `param_idx`: The parameter index.
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement.
+- `param_idx`: `idx_t` The parameter index.
 
 Returns: `DUCKDB_TYPE` The parameter type
 """
@@ -1778,8 +1778,8 @@ Returns `nullptr` if the parameter index is out of range or the statement was no
 The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `prepared_statement`: The prepared statement.
-- `param_idx`: The parameter index.
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement.
+- `param_idx`: `idx_t` The parameter index.
 
 Returns: `duckdb_logical_type` The logical type of the parameter
 """
@@ -1799,7 +1799,7 @@ end
 Clear the params bind to the prepared statement.
 
 # Arguments
-- `prepared_statement`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
 
 Returns: `duckdb_state` 
 """
@@ -1813,7 +1813,7 @@ end
 Returns the statement type of the statement to be executed
 
 # Arguments
-- `statement`: The prepared statement.
+- `statement`: `duckdb_prepared_statement` The prepared statement.
 
 Returns: `duckdb_statement_type` duckdb_statement_type value or DUCKDB_STATEMENT_TYPE_INVALID
 """
@@ -1838,9 +1838,9 @@ end
 Binds a value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `duckdb_value` 
 
 Returns: `duckdb_state` 
 """
@@ -1861,9 +1861,9 @@ end
 Retrieve the index of the parameter for the prepared statement, identified by name
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx_out`: 
-- `name`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx_out`: `Ref{idx_t}` 
+- `name`: `Cstring` 
 
 Returns: `duckdb_state` 
 """
@@ -1884,9 +1884,9 @@ end
 Binds a bool value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `Bool` 
 
 Returns: `duckdb_state` 
 """
@@ -1907,9 +1907,9 @@ end
 Binds an int8_t value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `Int8` 
 
 Returns: `duckdb_state` 
 """
@@ -1930,9 +1930,9 @@ end
 Binds an int16_t value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `Int16` 
 
 Returns: `duckdb_state` 
 """
@@ -1953,9 +1953,9 @@ end
 Binds an int32_t value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `Int32` 
 
 Returns: `duckdb_state` 
 """
@@ -1976,9 +1976,9 @@ end
 Binds an int64_t value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `Int64` 
 
 Returns: `duckdb_state` 
 """
@@ -1999,9 +1999,9 @@ end
 Binds a duckdb_hugeint value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `duckdb_hugeint` 
 
 Returns: `duckdb_state` 
 """
@@ -2022,9 +2022,9 @@ end
 Binds an duckdb_uhugeint value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `duckdb_uhugeint` 
 
 Returns: `duckdb_state` 
 """
@@ -2045,9 +2045,9 @@ end
 Binds a duckdb_decimal value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `duckdb_decimal` 
 
 Returns: `duckdb_state` 
 """
@@ -2068,9 +2068,9 @@ end
 Binds an uint8_t value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `UInt8` 
 
 Returns: `duckdb_state` 
 """
@@ -2091,9 +2091,9 @@ end
 Binds an uint16_t value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `UInt16` 
 
 Returns: `duckdb_state` 
 """
@@ -2114,9 +2114,9 @@ end
 Binds an uint32_t value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `UInt32` 
 
 Returns: `duckdb_state` 
 """
@@ -2137,9 +2137,9 @@ end
 Binds an uint64_t value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `UInt64` 
 
 Returns: `duckdb_state` 
 """
@@ -2160,9 +2160,9 @@ end
 Binds a float value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `Float32` 
 
 Returns: `duckdb_state` 
 """
@@ -2183,9 +2183,9 @@ end
 Binds a double value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `Float64` 
 
 Returns: `duckdb_state` 
 """
@@ -2206,9 +2206,9 @@ end
 Binds a duckdb_date value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `duckdb_date` 
 
 Returns: `duckdb_state` 
 """
@@ -2229,9 +2229,9 @@ end
 Binds a duckdb_time value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `duckdb_time` 
 
 Returns: `duckdb_state` 
 """
@@ -2252,9 +2252,9 @@ end
 Binds a duckdb_timestamp value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `duckdb_timestamp` 
 
 Returns: `duckdb_state` 
 """
@@ -2275,9 +2275,9 @@ end
 Binds a duckdb_timestamp value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `duckdb_timestamp` 
 
 Returns: `duckdb_state` 
 """
@@ -2298,9 +2298,9 @@ end
 Binds a duckdb_interval value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `duckdb_interval` 
 
 Returns: `duckdb_state` 
 """
@@ -2321,9 +2321,9 @@ end
 Binds a null-terminated varchar value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `Cstring` 
 
 Returns: `duckdb_state` 
 """
@@ -2344,10 +2344,10 @@ end
 Binds a varchar value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `val`: 
-- `length`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `val`: `Cstring` 
+- `length`: `idx_t` 
 
 Returns: `duckdb_state` 
 """
@@ -2369,10 +2369,10 @@ end
 Binds a blob value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
-- `data`: 
-- `length`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
+- `data`: `Ptr{Cvoid}` 
+- `length`: `idx_t` 
 
 Returns: `duckdb_state` 
 """
@@ -2394,8 +2394,8 @@ end
 Binds a NULL value to the prepared statement at the specified index.
 
 # Arguments
-- `prepared_statement`: 
-- `param_idx`: 
+- `prepared_statement`: `duckdb_prepared_statement` 
+- `param_idx`: `idx_t` 
 
 Returns: `duckdb_state` 
 """
@@ -2426,8 +2426,8 @@ between calls to this function.
 Note that the result must be freed with `duckdb_destroy_result`.
 
 # Arguments
-- `prepared_statement`: The prepared statement to execute.
-- `out_result`: The query result.
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement to execute.
+- `out_result`: `Ref{duckdb_result}` The query result.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -2455,8 +2455,8 @@ between calls to this function.
 Note that the result must be freed with `duckdb_destroy_result`.
 
 # Arguments
-- `prepared_statement`: The prepared statement to execute.
-- `out_result`: The query result.
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement to execute.
+- `out_result`: `Ref{duckdb_result}` The query result.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -2490,9 +2490,9 @@ Note that after calling `duckdb_extract_statements`, the extracted statements sh
 If the extract fails, `duckdb_extract_statements_error` can be called to obtain the reason why the extract failed.
 
 # Arguments
-- `connection`: The connection object
-- `query`: The SQL query to extract
-- `out_extracted_statements`: The resulting extracted statements object
+- `connection`: `duckdb_connection` The connection object
+- `query`: `Cstring` The SQL query to extract
+- `out_extracted_statements`: `Ref{duckdb_extracted_statements}` The resulting extracted statements object
 
 Returns: `idx_t` The number of extracted statements or 0 on failure.
 """
@@ -2517,10 +2517,10 @@ Note that after calling `duckdb_prepare_extracted_statement`, the prepared state
 If the prepare fails, `duckdb_prepare_error` can be called to obtain the reason why the prepare failed.
 
 # Arguments
-- `connection`: The connection object
-- `extracted_statements`: The extracted statements object
-- `index`: The index of the extracted statement to prepare
-- `out_prepared_statement`: The resulting prepared statement object
+- `connection`: `duckdb_connection` The connection object
+- `extracted_statements`: `duckdb_extracted_statements` The extracted statements object
+- `index`: `idx_t` (1-based index) The index of the extracted statement to prepare
+- `out_prepared_statement`: `Ref{duckdb_prepared_statement}` The resulting prepared statement object
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -2543,7 +2543,7 @@ Returns the error message contained within the extracted statements.
 The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_extracted` is called.
 
 # Arguments
-- `extracted_statements`: The extracted statements to fetch the error from.
+- `extracted_statements`: `duckdb_extracted_statements` The extracted statements to fetch the error from.
 
 Returns: `Cstring` The error of the extracted statements.
 """
@@ -2562,7 +2562,7 @@ end
 De-allocates all memory allocated for the extracted statements.
 
 # Arguments
-- `extracted_statements`: The extracted statements to destroy.
+- `extracted_statements`: `Ref{duckdb_extracted_statements}` The extracted statements to destroy.
 
 Returns: `Nothing` 
 """
@@ -2592,8 +2592,8 @@ Note that after calling `duckdb_pending_prepared`, the pending result should alw
 `duckdb_destroy_pending`, even if this function returns DuckDBError.
 
 # Arguments
-- `prepared_statement`: The prepared statement to execute.
-- `out_result`: The pending query result.
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement to execute.
+- `out_result`: `Ref{duckdb_pending_result}` The pending query result.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -2620,8 +2620,8 @@ Note that after calling `duckdb_pending_prepared_streaming`, the pending result 
 `duckdb_destroy_pending`, even if this function returns DuckDBError.
 
 # Arguments
-- `prepared_statement`: The prepared statement to execute.
-- `out_result`: The pending query result.
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement to execute.
+- `out_result`: `Ref{duckdb_pending_result}` The pending query result.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -2645,7 +2645,7 @@ end
 Closes the pending result and de-allocates all memory allocated for the result.
 
 # Arguments
-- `pending_result`: The pending result to destroy.
+- `pending_result`: `Ref{duckdb_pending_result}` The pending result to destroy.
 
 Returns: `Nothing` 
 """
@@ -2661,7 +2661,7 @@ Returns the error message contained within the pending result.
 The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_pending` is called.
 
 # Arguments
-- `pending_result`: The pending result to fetch the error from.
+- `pending_result`: `duckdb_pending_result` The pending result to fetch the error from.
 
 Returns: `Cstring` The error of the pending result.
 """
@@ -2681,7 +2681,7 @@ If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
 The error message can be obtained by calling duckdb_pending_error on the pending_result.
 
 # Arguments
-- `pending_result`: The pending result to execute a task within.
+- `pending_result`: `duckdb_pending_result` The pending result to execute a task within.
 
 Returns: `duckdb_pending_state` The state of the pending result after the execution.
 """
@@ -2704,7 +2704,7 @@ If this returns DUCKDB_PENDING_ERROR, an error occurred during execution.
 The error message can be obtained by calling duckdb_pending_error on the pending_result.
 
 # Arguments
-- `pending_result`: The pending result.
+- `pending_result`: `duckdb_pending_result` The pending result.
 
 Returns: `duckdb_pending_state` The state of the pending result.
 """
@@ -2728,8 +2728,8 @@ Otherwise, all remaining tasks must be executed first.
 Note that the result must be freed with `duckdb_destroy_result`.
 
 # Arguments
-- `pending_result`: The pending result to execute.
-- `out_result`: The result object.
+- `pending_result`: `duckdb_pending_result` The pending result to execute.
+- `out_result`: `Ref{duckdb_result}` The result object.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -2750,7 +2750,7 @@ Returns whether a duckdb_pending_state is finished executing. For example if `pe
 DUCKDB_PENDING_RESULT_READY, this function will return true.
 
 # Arguments
-- `pending_state`: The pending state on which to decide whether to finish execution.
+- `pending_state`: `duckdb_pending_state` The pending state on which to decide whether to finish execution.
 
 Returns: `Bool` Boolean indicating pending execution should be considered finished.
 """
@@ -2770,7 +2770,7 @@ end
 Destroys the value and de-allocates all memory allocated for that type.
 
 # Arguments
-- `value`: The value to destroy.
+- `value`: `Ref{duckdb_value}` The value to destroy.
 
 Returns: `Nothing` 
 """
@@ -2784,7 +2784,7 @@ end
 Creates a value from a null-terminated string
 
 # Arguments
-- `text`: The null-terminated string
+- `text`: `Cstring` The null-terminated string
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2798,8 +2798,8 @@ end
 Creates a value from a string
 
 # Arguments
-- `text`: The text
-- `length`: The length of the text
+- `text`: `Cstring` The text
+- `length`: `idx_t` The length of the text
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2813,7 +2813,7 @@ end
 Creates a value from a boolean
 
 # Arguments
-- `input`: The boolean value
+- `input`: `Bool` The boolean value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2827,7 +2827,7 @@ end
 Creates a value from a int8_t (a tinyint)
 
 # Arguments
-- `input`: The tinyint value
+- `input`: `Int8` The tinyint value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2841,7 +2841,7 @@ end
 Creates a value from a uint8_t (a utinyint)
 
 # Arguments
-- `input`: The utinyint value
+- `input`: `UInt8` The utinyint value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2855,7 +2855,7 @@ end
 Creates a value from a int16_t (a smallint)
 
 # Arguments
-- `input`: The smallint value
+- `input`: `Int16` The smallint value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2869,7 +2869,7 @@ end
 Creates a value from a uint16_t (a usmallint)
 
 # Arguments
-- `input`: The usmallint value
+- `input`: `UInt16` The usmallint value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2883,7 +2883,7 @@ end
 Creates a value from a int32_t (an integer)
 
 # Arguments
-- `input`: The integer value
+- `input`: `Int32` The integer value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2897,7 +2897,7 @@ end
 Creates a value from a uint32_t (a uinteger)
 
 # Arguments
-- `input`: The uinteger value
+- `input`: `UInt32` The uinteger value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2911,7 +2911,7 @@ end
 Creates a value from a uint64_t (a ubigint)
 
 # Arguments
-- `input`: The ubigint value
+- `input`: `UInt64` The ubigint value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2925,7 +2925,7 @@ end
 Creates a value from an int64
 
 # Arguments
-- `val`: 
+- `val`: `Int64` 
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2939,7 +2939,7 @@ end
 Creates a value from a hugeint
 
 # Arguments
-- `input`: The hugeint value
+- `input`: `duckdb_hugeint` The hugeint value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2953,7 +2953,7 @@ end
 Creates a value from a uhugeint
 
 # Arguments
-- `input`: The uhugeint value
+- `input`: `duckdb_uhugeint` The uhugeint value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2967,7 +2967,7 @@ end
 Creates a VARINT value from a duckdb_varint
 
 # Arguments
-- `input`: The duckdb_varint value
+- `input`: `duckdb_varint` The duckdb_varint value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2981,7 +2981,7 @@ end
 Creates a DECIMAL value from a duckdb_decimal
 
 # Arguments
-- `input`: The duckdb_decimal value
+- `input`: `duckdb_decimal` The duckdb_decimal value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -2995,7 +2995,7 @@ end
 Creates a value from a float
 
 # Arguments
-- `input`: The float value
+- `input`: `Float32` The float value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3009,7 +3009,7 @@ end
 Creates a value from a double
 
 # Arguments
-- `input`: The double value
+- `input`: `Float64` The double value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3023,7 +3023,7 @@ end
 Creates a value from a date
 
 # Arguments
-- `input`: The date value
+- `input`: `duckdb_date` The date value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3037,7 +3037,7 @@ end
 Creates a value from a time
 
 # Arguments
-- `input`: The time value
+- `input`: `duckdb_time` The time value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3052,7 +3052,7 @@ Creates a value from a time_tz.
 Not to be confused with `duckdb_create_time_tz`, which creates a duckdb_time_tz_t.
 
 # Arguments
-- `value`: The time_tz value
+- `value`: `duckdb_time_tz` The time_tz value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3066,7 +3066,7 @@ end
 Creates a TIMESTAMP value from a duckdb_timestamp
 
 # Arguments
-- `input`: The duckdb_timestamp value
+- `input`: `duckdb_timestamp` The duckdb_timestamp value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3080,7 +3080,7 @@ end
 Creates a TIMESTAMP_TZ value from a duckdb_timestamp
 
 # Arguments
-- `input`: The duckdb_timestamp value
+- `input`: `duckdb_timestamp` The duckdb_timestamp value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3094,7 +3094,7 @@ end
 Creates a TIMESTAMP_S value from a duckdb_timestamp_s
 
 # Arguments
-- `input`: The duckdb_timestamp_s value
+- `input`: `duckdb_timestamp_s` The duckdb_timestamp_s value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3108,7 +3108,7 @@ end
 Creates a TIMESTAMP_MS value from a duckdb_timestamp_ms
 
 # Arguments
-- `input`: The duckdb_timestamp_ms value
+- `input`: `duckdb_timestamp_ms` The duckdb_timestamp_ms value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3122,7 +3122,7 @@ end
 Creates a TIMESTAMP_NS value from a duckdb_timestamp_ns
 
 # Arguments
-- `input`: The duckdb_timestamp_ns value
+- `input`: `duckdb_timestamp_ns` The duckdb_timestamp_ns value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3136,7 +3136,7 @@ end
 Creates a value from an interval
 
 # Arguments
-- `input`: The interval value
+- `input`: `duckdb_interval` The interval value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3150,8 +3150,8 @@ end
 Creates a value from a blob
 
 # Arguments
-- `data`: The blob data
-- `length`: The length of the blob data
+- `data`: `Ref{UInt8}` The blob data
+- `length`: `idx_t` The length of the blob data
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3165,7 +3165,7 @@ end
 Creates a BIT value from a duckdb_bit
 
 # Arguments
-- `input`: The duckdb_bit value
+- `input`: `duckdb_bit` The duckdb_bit value
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3179,7 +3179,7 @@ end
 Creates a UUID value from a uhugeint
 
 # Arguments
-- `input`: The duckdb_uhugeint containing the UUID
+- `input`: `duckdb_uhugeint` The duckdb_uhugeint containing the UUID
 
 Returns: `duckdb_value` The value. This must be destroyed with `duckdb_destroy_value`.
 """
@@ -3193,7 +3193,7 @@ end
 Returns the boolean value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a boolean
+- `val`: `duckdb_value` A duckdb_value containing a boolean
 
 Returns: `Bool` A boolean, or false if the value cannot be converted
 """
@@ -3207,7 +3207,7 @@ end
 Returns the int8_t value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a tinyint
+- `val`: `duckdb_value` A duckdb_value containing a tinyint
 
 Returns: `Int8` A int8_t, or MinValue<int8> if the value cannot be converted
 """
@@ -3221,7 +3221,7 @@ end
 Returns the uint8_t value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a utinyint
+- `val`: `duckdb_value` A duckdb_value containing a utinyint
 
 Returns: `UInt8` A uint8_t, or MinValue<uint8> if the value cannot be converted
 """
@@ -3235,7 +3235,7 @@ end
 Returns the int16_t value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a smallint
+- `val`: `duckdb_value` A duckdb_value containing a smallint
 
 Returns: `Int16` A int16_t, or MinValue<int16> if the value cannot be converted
 """
@@ -3249,7 +3249,7 @@ end
 Returns the uint16_t value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a usmallint
+- `val`: `duckdb_value` A duckdb_value containing a usmallint
 
 Returns: `UInt16` A uint16_t, or MinValue<uint16> if the value cannot be converted
 """
@@ -3263,7 +3263,7 @@ end
 Returns the int32_t value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a integer
+- `val`: `duckdb_value` A duckdb_value containing a integer
 
 Returns: `Int32` A int32_t, or MinValue<int32> if the value cannot be converted
 """
@@ -3277,7 +3277,7 @@ end
 Returns the uint32_t value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a uinteger
+- `val`: `duckdb_value` A duckdb_value containing a uinteger
 
 Returns: `UInt32` A uint32_t, or MinValue<uint32> if the value cannot be converted
 """
@@ -3291,7 +3291,7 @@ end
 Returns the int64_t value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a bigint
+- `val`: `duckdb_value` A duckdb_value containing a bigint
 
 Returns: `Int64` A int64_t, or MinValue<int64> if the value cannot be converted
 """
@@ -3305,7 +3305,7 @@ end
 Returns the uint64_t value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a ubigint
+- `val`: `duckdb_value` A duckdb_value containing a ubigint
 
 Returns: `UInt64` A uint64_t, or MinValue<uint64> if the value cannot be converted
 """
@@ -3319,7 +3319,7 @@ end
 Returns the hugeint value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a hugeint
+- `val`: `duckdb_value` A duckdb_value containing a hugeint
 
 Returns: `duckdb_hugeint` A duckdb_hugeint, or MinValue<hugeint> if the value cannot be converted
 """
@@ -3333,7 +3333,7 @@ end
 Returns the uhugeint value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a uhugeint
+- `val`: `duckdb_value` A duckdb_value containing a uhugeint
 
 Returns: `duckdb_uhugeint` A duckdb_uhugeint, or MinValue<uhugeint> if the value cannot be converted
 """
@@ -3348,7 +3348,7 @@ Returns the duckdb_varint value of the given value.
 The `data` field must be destroyed with `duckdb_free`.
 
 # Arguments
-- `val`: A duckdb_value containing a VARINT
+- `val`: `duckdb_value` A duckdb_value containing a VARINT
 
 Returns: `duckdb_varint` A duckdb_varint. The `data` field must be destroyed with `duckdb_free`.
 """
@@ -3362,7 +3362,7 @@ end
 Returns the duckdb_decimal value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a DECIMAL
+- `val`: `duckdb_value` A duckdb_value containing a DECIMAL
 
 Returns: `duckdb_decimal` A duckdb_decimal, or MinValue<decimal> if the value cannot be converted
 """
@@ -3376,7 +3376,7 @@ end
 Returns the float value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a float
+- `val`: `duckdb_value` A duckdb_value containing a float
 
 Returns: `Float32` A float, or NAN if the value cannot be converted
 """
@@ -3390,7 +3390,7 @@ end
 Returns the double value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a double
+- `val`: `duckdb_value` A duckdb_value containing a double
 
 Returns: `Float64` A double, or NAN if the value cannot be converted
 """
@@ -3404,7 +3404,7 @@ end
 Returns the date value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a date
+- `val`: `duckdb_value` A duckdb_value containing a date
 
 Returns: `duckdb_date` A duckdb_date, or MinValue<date> if the value cannot be converted
 """
@@ -3418,7 +3418,7 @@ end
 Returns the time value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a time
+- `val`: `duckdb_value` A duckdb_value containing a time
 
 Returns: `duckdb_time` A duckdb_time, or MinValue<time> if the value cannot be converted
 """
@@ -3432,7 +3432,7 @@ end
 Returns the time_tz value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a time_tz
+- `val`: `duckdb_value` A duckdb_value containing a time_tz
 
 Returns: `duckdb_time_tz` A duckdb_time_tz, or MinValue<time_tz> if the value cannot be converted
 """
@@ -3446,7 +3446,7 @@ end
 Returns the TIMESTAMP value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a TIMESTAMP
+- `val`: `duckdb_value` A duckdb_value containing a TIMESTAMP
 
 Returns: `duckdb_timestamp` A duckdb_timestamp, or MinValue<timestamp> if the value cannot be converted
 """
@@ -3460,7 +3460,7 @@ end
 Returns the TIMESTAMP_TZ value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a TIMESTAMP_TZ
+- `val`: `duckdb_value` A duckdb_value containing a TIMESTAMP_TZ
 
 Returns: `duckdb_timestamp` A duckdb_timestamp, or MinValue<timestamp_tz> if the value cannot be converted
 """
@@ -3474,7 +3474,7 @@ end
 Returns the duckdb_timestamp_s value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a TIMESTAMP_S
+- `val`: `duckdb_value` A duckdb_value containing a TIMESTAMP_S
 
 Returns: `duckdb_timestamp_s` A duckdb_timestamp_s, or MinValue<timestamp_s> if the value cannot be converted
 """
@@ -3488,7 +3488,7 @@ end
 Returns the duckdb_timestamp_ms value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a TIMESTAMP_MS
+- `val`: `duckdb_value` A duckdb_value containing a TIMESTAMP_MS
 
 Returns: `duckdb_timestamp_ms` A duckdb_timestamp_ms, or MinValue<timestamp_ms> if the value cannot be converted
 """
@@ -3502,7 +3502,7 @@ end
 Returns the duckdb_timestamp_ns value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a TIMESTAMP_NS
+- `val`: `duckdb_value` A duckdb_value containing a TIMESTAMP_NS
 
 Returns: `duckdb_timestamp_ns` A duckdb_timestamp_ns, or MinValue<timestamp_ns> if the value cannot be converted
 """
@@ -3516,7 +3516,7 @@ end
 Returns the interval value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a interval
+- `val`: `duckdb_value` A duckdb_value containing a interval
 
 Returns: `duckdb_interval` A duckdb_interval, or MinValue<interval> if the value cannot be converted
 """
@@ -3531,7 +3531,7 @@ Returns the type of the given value. The type is valid as long as the value is n
 The type itself must not be destroyed.
 
 # Arguments
-- `val`: A duckdb_value
+- `val`: `duckdb_value` A duckdb_value
 
 Returns: `duckdb_logical_type` A duckdb_logical_type.
 """
@@ -3545,7 +3545,7 @@ end
 Returns the blob value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a blob
+- `val`: `duckdb_value` A duckdb_value containing a blob
 
 Returns: `duckdb_blob` A duckdb_blob
 """
@@ -3560,7 +3560,7 @@ Returns the duckdb_bit value of the given value.
 The `data` field must be destroyed with `duckdb_free`.
 
 # Arguments
-- `val`: A duckdb_value containing a BIT
+- `val`: `duckdb_value` A duckdb_value containing a BIT
 
 Returns: `duckdb_bit` A duckdb_bit
 """
@@ -3574,7 +3574,7 @@ end
 Returns a duckdb_uhugeint representing the UUID value of the given value.
 
 # Arguments
-- `val`: A duckdb_value containing a UUID
+- `val`: `duckdb_value` A duckdb_value containing a UUID
 
 Returns: `duckdb_uhugeint` A duckdb_uhugeint representing the UUID value
 """
@@ -3589,7 +3589,7 @@ Obtains a string representation of the given value.
 The result must be destroyed with `duckdb_free`.
 
 # Arguments
-- `value`: The value
+- `value`: `duckdb_value` The value
 
 Returns: `Cstring` The string value. This must be destroyed with `duckdb_free`.
 """
@@ -3603,8 +3603,8 @@ end
 Creates a struct value from a type and an array of values. Must be destroyed with `duckdb_destroy_value`.
 
 # Arguments
-- `_type`: The type of the struct
-- `values`: The values for the struct fields
+- `_type`: `duckdb_logical_type` The type of the struct
+- `values`: `Ref{duckdb_value}` The values for the struct fields
 
 Returns: `duckdb_value` The struct value, or nullptr, if any child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 """
@@ -3625,9 +3625,9 @@ Creates a list value from a child (element) type and an array of values of lengt
 Must be destroyed with `duckdb_destroy_value`.
 
 # Arguments
-- `_type`: The type of the list
-- `values`: The values for the list
-- `value_count`: The number of values in the list
+- `_type`: `duckdb_logical_type` The type of the list
+- `values`: `Ref{duckdb_value}` The values for the list
+- `value_count`: `idx_t` The number of values in the list
 
 Returns: `duckdb_value` The list value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 """
@@ -3649,9 +3649,9 @@ Creates an array value from a child (element) type and an array of values of len
 Must be destroyed with `duckdb_destroy_value`.
 
 # Arguments
-- `_type`: The type of the array
-- `values`: The values for the array
-- `value_count`: The number of values in the array
+- `_type`: `duckdb_logical_type` The type of the array
+- `values`: `Ref{duckdb_value}` The values for the array
+- `value_count`: `idx_t` The number of values in the array
 
 Returns: `duckdb_value` The array value, or nullptr, if the child type is `DUCKDB_TYPE_ANY` or `DUCKDB_TYPE_INVALID`.
 """
@@ -3672,7 +3672,7 @@ end
 Returns the number of elements in a MAP value.
 
 # Arguments
-- `value`: The MAP value.
+- `value`: `duckdb_value` The MAP value.
 
 Returns: `idx_t` The number of elements in the map.
 """
@@ -3686,8 +3686,8 @@ end
 Returns the MAP key at index as a duckdb_value.
 
 # Arguments
-- `value`: The MAP value.
-- `index`: The index of the key.
+- `value`: `duckdb_value` The MAP value.
+- `index`: `idx_t` (1-based index) The index of the key.
 
 Returns: `duckdb_value` The key as a duckdb_value.
 """
@@ -3701,8 +3701,8 @@ end
 Returns the MAP value at index as a duckdb_value.
 
 # Arguments
-- `value`: The MAP value.
-- `index`: The index of the value.
+- `value`: `duckdb_value` The MAP value.
+- `index`: `idx_t` (1-based index) The index of the value.
 
 Returns: `duckdb_value` The value as a duckdb_value.
 """
@@ -3716,7 +3716,7 @@ end
 Returns whether the value's type is SQLNULL or not.
 
 # Arguments
-- `value`: The value to check.
+- `value`: `duckdb_value` The value to check.
 
 Returns: `Bool` True, if the value's type is SQLNULL, otherwise false.
 """
@@ -3743,7 +3743,7 @@ end
 Returns the number of elements in a LIST value.
 
 # Arguments
-- `value`: The LIST value.
+- `value`: `duckdb_value` The LIST value.
 
 Returns: `idx_t` The number of elements in the list.
 """
@@ -3757,8 +3757,8 @@ end
 Returns the LIST child at index as a duckdb_value.
 
 # Arguments
-- `value`: The LIST value.
-- `index`: The index of the child.
+- `value`: `duckdb_value` The LIST value.
+- `index`: `idx_t` (1-based index) The index of the child.
 
 Returns: `duckdb_value` The child as a duckdb_value.
 """
@@ -3772,8 +3772,8 @@ end
 Creates an enum value from a type and a value. Must be destroyed with `duckdb_destroy_value`.
 
 # Arguments
-- `_type`: The type of the enum
-- `value`: The value for the enum
+- `_type`: `duckdb_logical_type` The type of the enum
+- `value`: `UInt64` The value for the enum
 
 Returns: `duckdb_value` The enum value, or nullptr.
 """
@@ -3787,7 +3787,7 @@ end
 Returns the enum value of the given value.
 
 # Arguments
-- `value`: A duckdb_value containing an enum
+- `value`: `duckdb_value` A duckdb_value containing an enum
 
 Returns: `UInt64` A uint64_t, or MinValue<uint64> if the value cannot be converted
 """
@@ -3801,8 +3801,8 @@ end
 Returns the STRUCT child at index as a duckdb_value.
 
 # Arguments
-- `value`: The STRUCT value.
-- `index`: The index of the child.
+- `value`: `duckdb_value` The STRUCT value.
+- `index`: `idx_t` (1-based index) The index of the child.
 
 Returns: `duckdb_value` The child as a duckdb_value.
 """
@@ -3826,7 +3826,7 @@ Returns an invalid logical type, if type is: `DUCKDB_TYPE_INVALID`, `DUCKDB_TYPE
 `DUCKDB_TYPE_LIST`, `DUCKDB_TYPE_STRUCT`, `DUCKDB_TYPE_MAP`, `DUCKDB_TYPE_ARRAY`, or `DUCKDB_TYPE_UNION`.
 
 # Arguments
-- `_type`: The primitive type to create.
+- `_type`: `DUCKDB_TYPE` The primitive type to create.
 
 Returns: `duckdb_logical_type` The logical type.
 """
@@ -3841,7 +3841,7 @@ Returns the alias of a duckdb_logical_type, if set, else `nullptr`.
 The result must be destroyed with `duckdb_free`.
 
 # Arguments
-- `_type`: The logical type
+- `_type`: `duckdb_logical_type` The logical type
 
 Returns: `Cstring` The alias or `nullptr`
 """
@@ -3855,8 +3855,8 @@ end
 Sets the alias of a duckdb_logical_type.
 
 # Arguments
-- `_type`: The logical type
-- `alias`: The alias to set
+- `_type`: `duckdb_logical_type` The logical type
+- `alias`: `Cstring` The alias to set
 
 Returns: `Nothing` 
 """
@@ -3871,7 +3871,7 @@ Creates a LIST type from its child type.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `_type`: The child type of the list
+- `_type`: `duckdb_logical_type` The child type of the list
 
 Returns: `duckdb_logical_type` The logical type.
 """
@@ -3886,8 +3886,8 @@ Creates an ARRAY type from its child type.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `_type`: The child type of the array.
-- `array_size`: The number of elements in the array.
+- `_type`: `duckdb_logical_type` The child type of the array.
+- `array_size`: `idx_t` The number of elements in the array.
 
 Returns: `duckdb_logical_type` The logical type.
 """
@@ -3908,8 +3908,8 @@ Creates a MAP type from its key type and value type.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `key_type`: The map's key type.
-- `value_type`: The map's value type.
+- `key_type`: `duckdb_logical_type` The map's key type.
+- `value_type`: `duckdb_logical_type` The map's value type.
 
 Returns: `duckdb_logical_type` The logical type.
 """
@@ -3930,9 +3930,9 @@ Creates a UNION type from the passed arrays.
 The return type must be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `member_types`: The array of union member types.
-- `member_names`: The union member names.
-- `member_count`: The number of union members.
+- `member_types`: `Ref{duckdb_logical_type}` The array of union member types.
+- `member_names`: `Ref{Cstring}` The union member names.
+- `member_count`: `idx_t` The number of union members.
 
 Returns: `duckdb_logical_type` The logical type.
 """
@@ -3954,9 +3954,9 @@ Creates a STRUCT type based on the member types and names.
 The resulting type must be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `member_types`: The array of types of the struct members.
-- `member_names`: The array of names of the struct members.
-- `member_count`: The number of members of the struct.
+- `member_types`: `Ref{duckdb_logical_type}` The array of types of the struct members.
+- `member_names`: `Ref{Cstring}` The array of names of the struct members.
+- `member_count`: `idx_t` The number of members of the struct.
 
 Returns: `duckdb_logical_type` The logical type.
 """
@@ -3978,8 +3978,8 @@ Creates an ENUM type from the passed member name array.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `member_names`: The array of names that the enum should consist of.
-- `member_count`: The number of elements that were specified in the array.
+- `member_names`: `Ref{Cstring}` The array of names that the enum should consist of.
+- `member_count`: `idx_t` The number of elements that were specified in the array.
 
 Returns: `duckdb_logical_type` The logical type.
 """
@@ -4000,8 +4000,8 @@ Creates a DECIMAL type with the specified width and scale.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `width`: The width of the decimal type
-- `scale`: The scale of the decimal type
+- `width`: `UInt8` The width of the decimal type
+- `scale`: `UInt8` The scale of the decimal type
 
 Returns: `duckdb_logical_type` The logical type.
 """
@@ -4015,7 +4015,7 @@ end
 Retrieves the enum `duckdb_type` of a `duckdb_logical_type`.
 
 # Arguments
-- `_type`: The logical type.
+- `_type`: `duckdb_logical_type` The logical type.
 
 Returns: `DUCKDB_TYPE` The `duckdb_type` id.
 """
@@ -4029,7 +4029,7 @@ end
 Retrieves the width of a decimal type.
 
 # Arguments
-- `_type`: The logical type object
+- `_type`: `duckdb_logical_type` The logical type object
 
 Returns: `UInt8` The width of the decimal type
 """
@@ -4043,7 +4043,7 @@ end
 Retrieves the scale of a decimal type.
 
 # Arguments
-- `_type`: The logical type object
+- `_type`: `duckdb_logical_type` The logical type object
 
 Returns: `UInt8` The scale of the decimal type
 """
@@ -4057,7 +4057,7 @@ end
 Retrieves the internal storage type of a decimal type.
 
 # Arguments
-- `_type`: The logical type object
+- `_type`: `duckdb_logical_type` The logical type object
 
 Returns: `DUCKDB_TYPE` The internal type of the decimal type
 """
@@ -4071,7 +4071,7 @@ end
 Retrieves the internal storage type of an enum type.
 
 # Arguments
-- `_type`: The logical type object
+- `_type`: `duckdb_logical_type` The logical type object
 
 Returns: `DUCKDB_TYPE` The internal type of the enum type
 """
@@ -4085,7 +4085,7 @@ end
 Retrieves the dictionary size of the enum type.
 
 # Arguments
-- `_type`: The logical type object
+- `_type`: `duckdb_logical_type` The logical type object
 
 Returns: `UInt32` The dictionary size of the enum type
 """
@@ -4101,8 +4101,8 @@ Retrieves the dictionary value at the specified position from the enum.
 The result must be freed with `duckdb_free`.
 
 # Arguments
-- `_type`: The logical type object
-- `index`: The index in the dictionary
+- `_type`: `duckdb_logical_type` The logical type object
+- `index`: `idx_t` (1-based index) The index in the dictionary
 
 Returns: `Cstring` The string value of the enum type. Must be freed with `duckdb_free`.
 """
@@ -4117,7 +4117,7 @@ Retrieves the child type of the given LIST type. Also accepts MAP types.
 The result must be freed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `_type`: The logical type, either LIST or MAP.
+- `_type`: `duckdb_logical_type` The logical type, either LIST or MAP.
 
 Returns: `duckdb_logical_type` The child type of the LIST or MAP type.
 """
@@ -4133,7 +4133,7 @@ Retrieves the child type of the given ARRAY type.
 The result must be freed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `_type`: The logical type. Must be ARRAY.
+- `_type`: `duckdb_logical_type` The logical type. Must be ARRAY.
 
 Returns: `duckdb_logical_type` The child type of the ARRAY type.
 """
@@ -4147,7 +4147,7 @@ end
 Retrieves the array size of the given array type.
 
 # Arguments
-- `_type`: The logical type object
+- `_type`: `duckdb_logical_type` The logical type object
 
 Returns: `idx_t` The fixed number of elements the values of this array type can store.
 """
@@ -4163,7 +4163,7 @@ Retrieves the key type of the given map type.
 The result must be freed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `_type`: The logical type object
+- `_type`: `duckdb_logical_type` The logical type object
 
 Returns: `duckdb_logical_type` The key type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
 """
@@ -4179,7 +4179,7 @@ Retrieves the value type of the given map type.
 The result must be freed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `_type`: The logical type object
+- `_type`: `duckdb_logical_type` The logical type object
 
 Returns: `duckdb_logical_type` The value type of the map type. Must be destroyed with `duckdb_destroy_logical_type`.
 """
@@ -4193,7 +4193,7 @@ end
 Returns the number of children of a struct type.
 
 # Arguments
-- `_type`: The logical type object
+- `_type`: `duckdb_logical_type` The logical type object
 
 Returns: `idx_t` The number of children of a struct type.
 """
@@ -4209,8 +4209,8 @@ Retrieves the name of the struct child.
 The result must be freed with `duckdb_free`.
 
 # Arguments
-- `_type`: The logical type object
-- `index`: The child index
+- `_type`: `duckdb_logical_type` The logical type object
+- `index`: `idx_t` (1-based index) The child index
 
 Returns: `Cstring` The name of the struct type. Must be freed with `duckdb_free`.
 """
@@ -4226,8 +4226,8 @@ Retrieves the child type of the given struct type at the specified index.
 The result must be freed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `_type`: The logical type object
-- `index`: The child index
+- `_type`: `duckdb_logical_type` The logical type object
+- `index`: `idx_t` (1-based index) The child index
 
 Returns: `duckdb_logical_type` The child type of the struct type. Must be destroyed with `duckdb_destroy_logical_type`.
 """
@@ -4247,7 +4247,7 @@ end
 Returns the number of members that the union type has.
 
 # Arguments
-- `_type`: The logical type (union) object
+- `_type`: `duckdb_logical_type` The logical type (union) object
 
 Returns: `idx_t` The number of members of a union type.
 """
@@ -4263,8 +4263,8 @@ Retrieves the name of the union member.
 The result must be freed with `duckdb_free`.
 
 # Arguments
-- `_type`: The logical type object
-- `index`: The child index
+- `_type`: `duckdb_logical_type` The logical type object
+- `index`: `idx_t` (1-based index) The child index
 
 Returns: `Cstring` The name of the union member. Must be freed with `duckdb_free`.
 """
@@ -4280,8 +4280,8 @@ Retrieves the child type of the given union member at the specified index.
 The result must be freed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `_type`: The logical type object
-- `index`: The child index
+- `_type`: `duckdb_logical_type` The logical type object
+- `index`: `idx_t` (1-based index) The child index
 
 Returns: `duckdb_logical_type` The child type of the union member. Must be destroyed with `duckdb_destroy_logical_type`.
 """
@@ -4301,7 +4301,7 @@ end
 Destroys the logical type and de-allocates all memory allocated for that type.
 
 # Arguments
-- `_type`: The logical type to destroy.
+- `_type`: `Ref{duckdb_logical_type}` The logical type to destroy.
 
 Returns: `Nothing` 
 """
@@ -4316,9 +4316,9 @@ Registers a custom type within the given connection.
 The type must have an alias
 
 # Arguments
-- `con`: The connection to use
-- `_type`: The custom type to register
-- `info`: 
+- `con`: `duckdb_connection` The connection to use
+- `_type`: `duckdb_logical_type` The custom type to register
+- `info`: `duckdb_create_type_info` 
 
 Returns: `duckdb_state` Whether or not the registration was successful.
 """
@@ -4346,8 +4346,8 @@ Creates an empty data chunk with the specified column types.
 The result must be destroyed with `duckdb_destroy_data_chunk`.
 
 # Arguments
-- `types`: An array of column types. Column types can not contain ANY and INVALID types.
-- `column_count`: The number of columns.
+- `types`: `Ref{duckdb_logical_type}` An array of column types. Column types can not contain ANY and INVALID types.
+- `column_count`: `idx_t` The number of columns.
 
 Returns: `duckdb_data_chunk` The data chunk.
 """
@@ -4367,7 +4367,7 @@ end
 Destroys the data chunk and de-allocates all memory allocated for that chunk.
 
 # Arguments
-- `chunk`: The data chunk to destroy.
+- `chunk`: `Ref{duckdb_data_chunk}` The data chunk to destroy.
 
 Returns: `Nothing` 
 """
@@ -4383,7 +4383,7 @@ After calling this method, you must call `duckdb_vector_get_validity` and `duckd
 data and validity pointers
 
 # Arguments
-- `chunk`: The data chunk to reset.
+- `chunk`: `duckdb_data_chunk` The data chunk to reset.
 
 Returns: `Nothing` 
 """
@@ -4397,7 +4397,7 @@ end
 Retrieves the number of columns in a data chunk.
 
 # Arguments
-- `chunk`: The data chunk to get the data from
+- `chunk`: `duckdb_data_chunk` The data chunk to get the data from
 
 Returns: `idx_t` The number of columns in the data chunk
 """
@@ -4414,8 +4414,8 @@ The pointer to the vector is valid for as long as the chunk is alive.
 It does NOT need to be destroyed.
 
 # Arguments
-- `chunk`: The data chunk to get the data from
-- `col_idx`: 
+- `chunk`: `duckdb_data_chunk` The data chunk to get the data from
+- `col_idx`: `idx_t` (1-based index) 
 
 Returns: `duckdb_vector` The vector
 """
@@ -4435,7 +4435,7 @@ end
 Retrieves the current number of tuples in a data chunk.
 
 # Arguments
-- `chunk`: The data chunk to get the data from
+- `chunk`: `duckdb_data_chunk` The data chunk to get the data from
 
 Returns: `idx_t` The number of tuples in the data chunk
 """
@@ -4449,8 +4449,8 @@ end
 Sets the current number of tuples in a data chunk.
 
 # Arguments
-- `chunk`: The data chunk to set the size in
-- `size`: The number of tuples in the data chunk
+- `chunk`: `duckdb_data_chunk` The data chunk to set the size in
+- `size`: `idx_t` The number of tuples in the data chunk
 
 Returns: `Nothing` 
 """
@@ -4472,7 +4472,7 @@ Retrieves the column type of the specified vector.
 The result must be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `vector`: The vector get the data from
+- `vector`: `duckdb_vector` The vector get the data from
 
 Returns: `duckdb_logical_type` The type of the vector
 """
@@ -4489,7 +4489,7 @@ The data pointer can be used to read or write values from the vector.
 How to read or write values depends on the type of the vector.
 
 # Arguments
-- `vector`: The vector to get the data from
+- `vector`: `duckdb_vector` The vector to get the data from
 
 Returns: `Ptr{Cvoid}` The data pointer
 """
@@ -4517,7 +4517,7 @@ bool is_valid = validity_mask[entry_idx] & (1 << idx_in_entry);
 Alternatively, the (slower) duckdb_validity_row_is_valid function can be used.
 
 # Arguments
-- `vector`: The vector to get the data from
+- `vector`: `duckdb_vector` The vector to get the data from
 
 Returns: `Ptr{UInt64}` The pointer to the validity mask, or NULL if no validity mask is present
 """
@@ -4534,7 +4534,7 @@ After this function is called, `duckdb_vector_get_validity` will ALWAYS return n
 This allows NULL values to be written to the vector, regardless of whether a validity mask was present before.
 
 # Arguments
-- `vector`: The vector to alter
+- `vector`: `duckdb_vector` The vector to alter
 
 Returns: `Nothing` 
 """
@@ -4548,9 +4548,9 @@ end
 Assigns a string element in the vector at the specified location.
 
 # Arguments
-- `vector`: The vector to alter
-- `index`: The row position in the vector to assign the string to
-- `str`: The null-terminated string
+- `vector`: `duckdb_vector` The vector to alter
+- `index`: `idx_t` (1-based index) The row position in the vector to assign the string to
+- `str`: `Cstring` The null-terminated string
 
 Returns: `Nothing` 
 """
@@ -4571,10 +4571,10 @@ end
 Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
 
 # Arguments
-- `vector`: The vector to alter
-- `index`: The row position in the vector to assign the string to
-- `str`: The string
-- `str_len`: The length of the string (in bytes)
+- `vector`: `duckdb_vector` The vector to alter
+- `index`: `idx_t` (1-based index) The row position in the vector to assign the string to
+- `str`: `Cstring` The string
+- `str_len`: `idx_t` The length of the string (in bytes)
 
 Returns: `Nothing` 
 """
@@ -4598,7 +4598,7 @@ Retrieves the child vector of a list vector.
 The resulting vector is valid as long as the parent vector is valid.
 
 # Arguments
-- `vector`: The vector
+- `vector`: `duckdb_vector` The vector
 
 Returns: `duckdb_vector` The child vector
 """
@@ -4612,7 +4612,7 @@ end
 Returns the size of the child vector of the list.
 
 # Arguments
-- `vector`: The vector
+- `vector`: `duckdb_vector` The vector
 
 Returns: `idx_t` The size of the child list
 """
@@ -4626,8 +4626,8 @@ end
 Sets the total size of the underlying child-vector of a list vector.
 
 # Arguments
-- `vector`: The list vector.
-- `size`: The size of the child list.
+- `vector`: `duckdb_vector` The list vector.
+- `size`: `idx_t` The size of the child list.
 
 Returns: `duckdb_state` The duckdb state. Returns DuckDBError if the vector is nullptr.
 """
@@ -4644,8 +4644,8 @@ After calling this method, you must call `duckdb_vector_get_validity` and `duckd
 data and validity pointers
 
 # Arguments
-- `vector`: The list vector.
-- `required_capacity`: the total capacity to reserve.
+- `vector`: `duckdb_vector` The list vector.
+- `required_capacity`: `idx_t` the total capacity to reserve.
 
 Returns: `duckdb_state` The duckdb state. Returns DuckDBError if the vector is nullptr.
 """
@@ -4667,8 +4667,8 @@ Retrieves the child vector of a struct vector.
 The resulting vector is valid as long as the parent vector is valid.
 
 # Arguments
-- `vector`: The vector
-- `index`: The child index
+- `vector`: `duckdb_vector` The vector
+- `index`: `idx_t` (1-based index) The child index
 
 Returns: `duckdb_vector` The child vector
 """
@@ -4685,7 +4685,7 @@ The resulting vector is valid as long as the parent vector is valid.
 The resulting vector has the size of the parent vector multiplied by the array size.
 
 # Arguments
-- `vector`: The vector
+- `vector`: `duckdb_vector` The vector
 
 Returns: `duckdb_vector` The child vector
 """
@@ -4705,8 +4705,8 @@ end
 Returns whether or not a row is valid (i.e. not NULL) in the given validity mask.
 
 # Arguments
-- `validity`: The validity mask, as obtained through `duckdb_vector_get_validity`
-- `row`: The row index
+- `validity`: `Ref{UInt64}` The validity mask, as obtained through `duckdb_vector_get_validity`
+- `row`: `idx_t` (1-based index) The row index
 
 Returns: `Bool` true if the row is valid, false otherwise
 """
@@ -4723,9 +4723,9 @@ Note that `duckdb_vector_ensure_validity_writable` should be called before calli
 to ensure that there is a validity mask to write to.
 
 # Arguments
-- `validity`: The validity mask, as obtained through `duckdb_vector_get_validity`.
-- `row`: The row index
-- `valid`: Whether or not to set the row to valid, or invalid
+- `validity`: `Ref{UInt64}` The validity mask, as obtained through `duckdb_vector_get_validity`.
+- `row`: `idx_t` (1-based index) The row index
+- `valid`: `Bool` Whether or not to set the row to valid, or invalid
 
 Returns: `Nothing` 
 """
@@ -4748,8 +4748,8 @@ In a validity mask, sets a specific row to invalid.
 Equivalent to `duckdb_validity_set_row_validity` with valid set to false.
 
 # Arguments
-- `validity`: The validity mask
-- `row`: The row index
+- `validity`: `Ref{UInt64}` The validity mask
+- `row`: `idx_t` (1-based index) The row index
 
 Returns: `Nothing` 
 """
@@ -4765,8 +4765,8 @@ In a validity mask, sets a specific row to valid.
 Equivalent to `duckdb_validity_set_row_validity` with valid set to true.
 
 # Arguments
-- `validity`: The validity mask
-- `row`: The row index
+- `validity`: `Ref{UInt64}` The validity mask
+- `row`: `idx_t` (1-based index) The row index
 
 Returns: `Nothing` 
 """
@@ -4801,7 +4801,7 @@ end
 Destroys the given scalar function object.
 
 # Arguments
-- `scalar_function`: The scalar function to destroy
+- `scalar_function`: `Ref{duckdb_scalar_function}` The scalar function to destroy
 
 Returns: `Nothing` 
 """
@@ -4815,8 +4815,8 @@ end
 Sets the name of the given scalar function.
 
 # Arguments
-- `scalar_function`: The scalar function
-- `name`: The name of the scalar function
+- `scalar_function`: `duckdb_scalar_function` The scalar function
+- `name`: `Cstring` The name of the scalar function
 
 Returns: `Nothing` 
 """
@@ -4837,8 +4837,8 @@ Sets the parameters of the given scalar function to varargs. Does not require ad
 duckdb_scalar_function_add_parameter.
 
 # Arguments
-- `scalar_function`: The scalar function.
-- `_type`: The type of the arguments.
+- `scalar_function`: `duckdb_scalar_function` The scalar function.
+- `_type`: `duckdb_logical_type` The type of the arguments.
 
 Returns: `Nothing` The parameter type. Cannot contain INVALID.
 """
@@ -4859,7 +4859,7 @@ Sets the parameters of the given scalar function to varargs. Does not require ad
 duckdb_scalar_function_add_parameter.
 
 # Arguments
-- `scalar_function`: The scalar function.
+- `scalar_function`: `duckdb_scalar_function` The scalar function.
 
 Returns: `Nothing` 
 """
@@ -4879,7 +4879,7 @@ Sets the Function Stability of the scalar function to VOLATILE, indicating the f
 This limits optimization that can be performed for the function.
 
 # Arguments
-- `scalar_function`: The scalar function.
+- `scalar_function`: `duckdb_scalar_function` The scalar function.
 
 Returns: `Nothing` 
 """
@@ -4893,8 +4893,8 @@ end
 Adds a parameter to the scalar function.
 
 # Arguments
-- `scalar_function`: The scalar function.
-- `_type`: The parameter type. Cannot contain INVALID.
+- `scalar_function`: `duckdb_scalar_function` The scalar function.
+- `_type`: `duckdb_logical_type` The parameter type. Cannot contain INVALID.
 
 Returns: `Nothing` 
 """
@@ -4914,8 +4914,8 @@ end
 Sets the return type of the scalar function.
 
 # Arguments
-- `scalar_function`: The scalar function
-- `_type`: Cannot contain INVALID or ANY.
+- `scalar_function`: `duckdb_scalar_function` The scalar function
+- `_type`: `duckdb_logical_type` Cannot contain INVALID or ANY.
 
 Returns: `Nothing` 
 """
@@ -4935,9 +4935,9 @@ end
 Assigns extra information to the scalar function that can be fetched during binding, etc.
 
 # Arguments
-- `scalar_function`: The scalar function
-- `extra_info`: The extra information
-- `destroy`: The callback that will be called to destroy the bind data (if any)
+- `scalar_function`: `duckdb_scalar_function` The scalar function
+- `extra_info`: `Ref{Cvoid}` The extra information
+- `destroy`: `duckdb_delete_callback` The callback that will be called to destroy the bind data (if any)
 
 Returns: `Nothing` 
 """
@@ -4958,8 +4958,8 @@ end
 Sets the main function of the scalar function.
 
 # Arguments
-- `scalar_function`: The scalar function
-- `_function`: The function
+- `scalar_function`: `duckdb_scalar_function` The scalar function
+- `_function`: `duckdb_scalar_function` The function
 
 Returns: `Nothing` 
 """
@@ -4983,8 +4983,8 @@ The function requires at least a name, a function and a return type.
 If the function is incomplete or a function with this name already exists DuckDBError is returned.
 
 # Arguments
-- `con`: The connection to register it in.
-- `scalar_function`: The function pointer
+- `con`: `duckdb_connection` The connection to register it in.
+- `scalar_function`: `duckdb_scalar_function` The function pointer
 
 Returns: `duckdb_state` Whether or not the registration was successful.
 """
@@ -5004,7 +5004,7 @@ end
 Retrieves the extra info of the function as set in `duckdb_scalar_function_set_extra_info`.
 
 # Arguments
-- `info`: The info object.
+- `info`: `duckdb_function_info` The info object.
 
 Returns: `Ptr{Cvoid}` The extra info.
 """
@@ -5018,8 +5018,8 @@ end
 Report that an error has occurred while executing the scalar function.
 
 # Arguments
-- `info`: The info object.
-- `error`: The error message
+- `info`: `duckdb_function_info` The info object.
+- `error`: `Cstring` The error message
 
 Returns: `Nothing` 
 """
@@ -5035,7 +5035,7 @@ Creates a new empty scalar function set.
 The return value should be destroyed with `duckdb_destroy_scalar_function_set`.
 
 # Arguments
-- `name`: 
+- `name`: `Cstring` 
 
 Returns: `duckdb_scalar_function_set` The scalar function set object.
 """
@@ -5049,7 +5049,7 @@ end
 Destroys the given scalar function set object.
 
 # Arguments
-- `scalar_function_set`: 
+- `scalar_function_set`: `Ref{duckdb_scalar_function_set}` 
 
 Returns: `Nothing` 
 """
@@ -5070,8 +5070,8 @@ Adds the scalar function as a new overload to the scalar function set.
 Returns DuckDBError if the function could not be added, for example if the overload already exists.
 
 # Arguments
-- `set`: The scalar function set
-- `_function`: The function to add
+- `set`: `duckdb_scalar_function_set` The scalar function set
+- `_function`: `duckdb_scalar_function` The function to add
 
 Returns: `duckdb_state` 
 """
@@ -5095,8 +5095,8 @@ The set requires at least a single valid overload.
 If the set is incomplete or a function with this name already exists DuckDBError is returned.
 
 # Arguments
-- `con`: The connection to register it in.
-- `set`: The function set to register
+- `con`: `duckdb_connection` The connection to register it in.
+- `set`: `duckdb_scalar_function_set` The function set to register
 
 Returns: `duckdb_state` Whether or not the registration was successful.
 """
@@ -5137,7 +5137,7 @@ end
 Destroys the given aggregate function object.
 
 # Arguments
-- `aggregate_function`: 
+- `aggregate_function`: `Ref{duckdb_aggregate_function}` 
 
 Returns: `Nothing` 
 """
@@ -5156,8 +5156,8 @@ end
 Sets the name of the given aggregate function.
 
 # Arguments
-- `aggregate_function`: The aggregate function
-- `name`: The name of the aggregate function
+- `aggregate_function`: `duckdb_aggregate_function` The aggregate function
+- `name`: `Cstring` The name of the aggregate function
 
 Returns: `Nothing` 
 """
@@ -5177,8 +5177,8 @@ end
 Adds a parameter to the aggregate function.
 
 # Arguments
-- `aggregate_function`: The aggregate function.
-- `_type`: The parameter type. Cannot contain INVALID.
+- `aggregate_function`: `duckdb_aggregate_function` The aggregate function.
+- `_type`: `duckdb_logical_type` The parameter type. Cannot contain INVALID.
 
 Returns: `Nothing` 
 """
@@ -5198,8 +5198,8 @@ end
 Sets the return type of the aggregate function.
 
 # Arguments
-- `aggregate_function`: The aggregate function.
-- `_type`: The return type. Cannot contain INVALID or ANY.
+- `aggregate_function`: `duckdb_aggregate_function` The aggregate function.
+- `_type`: `duckdb_logical_type` The return type. Cannot contain INVALID or ANY.
 
 Returns: `Nothing` 
 """
@@ -5219,12 +5219,12 @@ end
 Sets the main functions of the aggregate function.
 
 # Arguments
-- `aggregate_function`: The aggregate function
-- `state_size`: state size
-- `state_init`: state init function
-- `update`: update states
-- `combine`: combine states
-- `finalize`: finalize states
+- `aggregate_function`: `duckdb_aggregate_function` The aggregate function
+- `state_size`: `duckdb_aggregate_state_size` state size
+- `state_init`: `duckdb_aggregate_init` state init function
+- `update`: `duckdb_aggregate_update` update states
+- `combine`: `duckdb_aggregate_combine` combine states
+- `finalize`: `duckdb_aggregate_finalize` finalize states
 
 Returns: `Nothing` 
 """
@@ -5255,8 +5255,8 @@ end
 Sets the state destructor callback of the aggregate function (optional)
 
 # Arguments
-- `aggregate_function`: The aggregate function
-- `destroy`: state destroy callback
+- `aggregate_function`: `duckdb_aggregate_function` The aggregate function
+- `destroy`: `duckdb_aggregate_destroy` state destroy callback
 
 Returns: `Nothing` 
 """
@@ -5280,8 +5280,8 @@ The function requires at least a name, functions and a return type.
 If the function is incomplete or a function with this name already exists DuckDBError is returned.
 
 # Arguments
-- `con`: The connection to register it in.
-- `aggregate_function`: 
+- `con`: `duckdb_connection` The connection to register it in.
+- `aggregate_function`: `duckdb_aggregate_function` 
 
 Returns: `duckdb_state` Whether or not the registration was successful.
 """
@@ -5301,7 +5301,7 @@ end
 Sets the NULL handling of the aggregate function to SPECIAL_HANDLING.
 
 # Arguments
-- `aggregate_function`: The aggregate function
+- `aggregate_function`: `duckdb_aggregate_function` The aggregate function
 
 Returns: `Nothing` 
 """
@@ -5320,9 +5320,9 @@ end
 Assigns extra information to the scalar function that can be fetched during binding, etc.
 
 # Arguments
-- `aggregate_function`: The aggregate function
-- `extra_info`: The extra information
-- `destroy`: The callback that will be called to destroy the bind data (if any)
+- `aggregate_function`: `duckdb_aggregate_function` The aggregate function
+- `extra_info`: `Ref{Cvoid}` The extra information
+- `destroy`: `duckdb_delete_callback` The callback that will be called to destroy the bind data (if any)
 
 Returns: `Nothing` 
 """
@@ -5343,7 +5343,7 @@ end
 Retrieves the extra info of the function as set in `duckdb_aggregate_function_set_extra_info`.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_function_info` The info object
 
 Returns: `Ptr{Cvoid}` The extra info
 """
@@ -5357,8 +5357,8 @@ end
 Report that an error has occurred while executing the aggregate function.
 
 # Arguments
-- `info`: The info object
-- `error`: The error message
+- `info`: `duckdb_function_info` The info object
+- `error`: `Cstring` The error message
 
 Returns: `Nothing` 
 """
@@ -5374,7 +5374,7 @@ Creates a new empty aggregate function set.
 The return value should be destroyed with `duckdb_destroy_aggregate_function_set`.
 
 # Arguments
-- `name`: 
+- `name`: `Cstring` 
 
 Returns: `duckdb_aggregate_function_set` The aggregate function set object.
 """
@@ -5388,7 +5388,7 @@ end
 Destroys the given aggregate function set object.
 
 # Arguments
-- `aggregate_function_set`: 
+- `aggregate_function_set`: `Ref{duckdb_aggregate_function_set}` 
 
 Returns: `Nothing` 
 """
@@ -5409,8 +5409,8 @@ Adds the aggregate function as a new overload to the aggregate function set.
 Returns DuckDBError if the function could not be added, for example if the overload already exists.
 
 # Arguments
-- `set`: The aggregate function set
-- `_function`: The function to add
+- `set`: `duckdb_aggregate_function_set` The aggregate function set
+- `_function`: `duckdb_aggregate_function` The function to add
 
 Returns: `duckdb_state` 
 """
@@ -5434,8 +5434,8 @@ The set requires at least a single valid overload.
 If the set is incomplete or a function with this name already exists DuckDBError is returned.
 
 # Arguments
-- `con`: The connection to register it in.
-- `set`: The function set to register
+- `con`: `duckdb_connection` The connection to register it in.
+- `set`: `duckdb_aggregate_function_set` The function set to register
 
 Returns: `duckdb_state` Whether or not the registration was successful.
 """
@@ -5476,7 +5476,7 @@ end
 Destroys the given table function object.
 
 # Arguments
-- `table_function`: The table function to destroy
+- `table_function`: `Ref{duckdb_table_function}` The table function to destroy
 
 Returns: `Nothing` 
 """
@@ -5490,8 +5490,8 @@ end
 Sets the name of the given table function.
 
 # Arguments
-- `table_function`: The table function
-- `name`: The name of the table function
+- `table_function`: `duckdb_table_function` The table function
+- `name`: `Cstring` The name of the table function
 
 Returns: `Nothing` 
 """
@@ -5511,8 +5511,8 @@ end
 Adds a parameter to the table function.
 
 # Arguments
-- `table_function`: The table function.
-- `_type`: The parameter type. Cannot contain INVALID.
+- `table_function`: `duckdb_table_function` The table function.
+- `_type`: `duckdb_logical_type` The parameter type. Cannot contain INVALID.
 
 Returns: `Nothing` 
 """
@@ -5532,9 +5532,9 @@ end
 Adds a named parameter to the table function.
 
 # Arguments
-- `table_function`: The table function.
-- `name`: The parameter name.
-- `_type`: The parameter type. Cannot contain INVALID.
+- `table_function`: `duckdb_table_function` The table function.
+- `name`: `Cstring` The parameter name.
+- `_type`: `duckdb_logical_type` The parameter type. Cannot contain INVALID.
 
 Returns: `Nothing` 
 """
@@ -5555,9 +5555,9 @@ end
 Assigns extra information to the table function that can be fetched during binding, etc.
 
 # Arguments
-- `table_function`: The table function
-- `extra_info`: The extra information
-- `destroy`: The callback that will be called to destroy the bind data (if any)
+- `table_function`: `duckdb_table_function` The table function
+- `extra_info`: `Ref{Cvoid}` The extra information
+- `destroy`: `duckdb_delete_callback` The callback that will be called to destroy the bind data (if any)
 
 Returns: `Nothing` 
 """
@@ -5578,8 +5578,8 @@ end
 Sets the bind function of the table function.
 
 # Arguments
-- `table_function`: The table function
-- `bind`: The bind function
+- `table_function`: `duckdb_table_function` The table function
+- `bind`: `duckdb_table_function_bind` The bind function
 
 Returns: `Nothing` 
 """
@@ -5599,8 +5599,8 @@ end
 Sets the init function of the table function.
 
 # Arguments
-- `table_function`: The table function
-- `init`: The init function
+- `table_function`: `duckdb_table_function` The table function
+- `init`: `duckdb_table_function_init` The init function
 
 Returns: `Nothing` 
 """
@@ -5620,8 +5620,8 @@ end
 Sets the thread-local init function of the table function.
 
 # Arguments
-- `table_function`: The table function
-- `init`: The init function
+- `table_function`: `duckdb_table_function` The table function
+- `init`: `duckdb_table_function_init` The init function
 
 Returns: `Nothing` 
 """
@@ -5641,8 +5641,8 @@ end
 Sets the main function of the table function.
 
 # Arguments
-- `table_function`: The table function
-- `_function`: The function
+- `table_function`: `duckdb_table_function` The table function
+- `_function`: `duckdb_table_function_ptr` The function
 
 Returns: `Nothing` 
 """
@@ -5666,8 +5666,8 @@ the `duckdb_init_get_column_count` and `duckdb_init_get_column_index` functions.
 If this is set to false (the default), the system will expect all columns to be projected.
 
 # Arguments
-- `table_function`: The table function
-- `pushdown`: True if the table function supports projection pushdown, false otherwise.
+- `table_function`: `duckdb_table_function` The table function
+- `pushdown`: `Bool` True if the table function supports projection pushdown, false otherwise.
 
 Returns: `Nothing` 
 """
@@ -5691,8 +5691,8 @@ The function requires at least a name, a bind function, an init function and a m
 If the function is incomplete or a function with this name already exists DuckDBError is returned.
 
 # Arguments
-- `con`: The connection to register it in.
-- `_function`: The function pointer
+- `con`: `duckdb_connection` The connection to register it in.
+- `_function`: `duckdb_table_function` The function pointer
 
 Returns: `duckdb_state` Whether or not the registration was successful.
 """
@@ -5718,7 +5718,7 @@ end
 Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_bind_info` The info object
 
 Returns: `Ptr{Cvoid}` The extra info
 """
@@ -5732,9 +5732,9 @@ end
 Adds a result column to the output of the table function.
 
 # Arguments
-- `info`: The table function's bind info.
-- `name`: The column name.
-- `_type`: The logical column type.
+- `info`: `duckdb_bind_info` The table function's bind info.
+- `name`: `Cstring` The column name.
+- `_type`: `duckdb_logical_type` The logical column type.
 
 Returns: `Nothing` 
 """
@@ -5755,7 +5755,7 @@ end
 Retrieves the number of regular (non-named) parameters to the function.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_bind_info` The info object
 
 Returns: `idx_t` The number of parameters
 """
@@ -5771,8 +5771,8 @@ Retrieves the parameter at the given index.
 The result must be destroyed with `duckdb_destroy_value`.
 
 # Arguments
-- `info`: The info object
-- `index`: The index of the parameter to get
+- `info`: `duckdb_bind_info` The info object
+- `index`: `idx_t` The index of the parameter to get
 
 Returns: `duckdb_value` The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
 """
@@ -5788,8 +5788,8 @@ Retrieves a named parameter with the given name.
 The result must be destroyed with `duckdb_destroy_value`.
 
 # Arguments
-- `info`: The info object
-- `name`: The name of the parameter
+- `info`: `duckdb_bind_info` The info object
+- `name`: `Cstring` The name of the parameter
 
 Returns: `duckdb_value` The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
 """
@@ -5803,9 +5803,9 @@ end
 Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.
 
 # Arguments
-- `info`: The info object
-- `bind_data`: The bind data object.
-- `destroy`: The callback that will be called to destroy the bind data (if any)
+- `info`: `duckdb_bind_info` The info object
+- `bind_data`: `Ref{Cvoid}` The bind data object.
+- `destroy`: `duckdb_delete_callback` The callback that will be called to destroy the bind data (if any)
 
 Returns: `Nothing` 
 """
@@ -5826,9 +5826,9 @@ end
 Sets the cardinality estimate for the table function, used for optimization.
 
 # Arguments
-- `info`: The bind data object.
-- `cardinality`: 
-- `is_exact`: Whether or not the cardinality estimate is exact, or an approximation
+- `info`: `duckdb_bind_info` The bind data object.
+- `cardinality`: `idx_t` 
+- `is_exact`: `Bool` Whether or not the cardinality estimate is exact, or an approximation
 
 Returns: `Nothing` 
 """
@@ -5849,8 +5849,8 @@ end
 Report that an error has occurred while calling bind.
 
 # Arguments
-- `info`: The info object
-- `error`: The error message
+- `info`: `duckdb_bind_info` The info object
+- `error`: `Cstring` The error message
 
 Returns: `Nothing` 
 """
@@ -5870,7 +5870,7 @@ end
 Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_init_info` The info object
 
 Returns: `Ptr{Cvoid}` The extra info
 """
@@ -5887,7 +5887,7 @@ Note that the bind data should be considered as read-only.
 For tracking state, use the init data instead.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_init_info` The info object
 
 Returns: `Ptr{Cvoid}` The bind data object
 """
@@ -5901,9 +5901,9 @@ end
 Sets the user-provided init data in the init object. This object can be retrieved again during execution.
 
 # Arguments
-- `info`: The info object
-- `init_data`: The init data object.
-- `destroy`: The callback that will be called to destroy the init data (if any)
+- `info`: `duckdb_init_info` The info object
+- `init_data`: `Ref{Cvoid}` The init data object.
+- `destroy`: `duckdb_delete_callback` The callback that will be called to destroy the init data (if any)
 
 Returns: `Nothing` 
 """
@@ -5926,7 +5926,7 @@ Returns the number of projected columns.
 This function must be used if projection pushdown is enabled to figure out which columns to emit.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_init_info` The info object
 
 Returns: `idx_t` The number of projected columns.
 """
@@ -5942,10 +5942,10 @@ Returns the column index of the projected column at the specified position.
 This function must be used if projection pushdown is enabled to figure out which columns to emit.
 
 # Arguments
-- `info`: The info object
-- `column_index`: The index at which to get the projected column index, from 0..duckdb_init_get_column_count(info)
+- `info`: `duckdb_init_info` The info object
+- `column_index`: `idx_t` (1-based index) The index at which to get the projected column index, from 0..duckdb_init_get_column_count(info)
 
-Returns: `idx_t` The column index of the projected column.
+Returns: `idx_t` The column index of the projected column. (1-based index)
 """
 function duckdb_init_get_column_index(info, column_index)
     return ccall((:duckdb_init_get_column_index, libduckdb), idx_t, (duckdb_init_info, idx_t), info, column_index - 1) +
@@ -5958,8 +5958,8 @@ end
 Sets how many threads can process this table function in parallel (default: 1)
 
 # Arguments
-- `info`: The info object
-- `max_threads`: The maximum amount of threads that can process this table function
+- `info`: `duckdb_init_info` The info object
+- `max_threads`: `idx_t` The maximum amount of threads that can process this table function
 
 Returns: `Nothing` 
 """
@@ -5973,8 +5973,8 @@ end
 Report that an error has occurred while calling init.
 
 # Arguments
-- `info`: The info object
-- `error`: The error message
+- `info`: `duckdb_init_info` The info object
+- `error`: `Cstring` The error message
 
 Returns: `Nothing` 
 """
@@ -5994,7 +5994,7 @@ end
 Retrieves the extra info of the function as set in `duckdb_table_function_set_extra_info`.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_function_info` The info object
 
 Returns: `Ptr{Cvoid}` The extra info
 """
@@ -6011,7 +6011,7 @@ Note that the bind data should be considered as read-only.
 For tracking state, use the init data instead.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_function_info` The info object
 
 Returns: `Ptr{Cvoid}` The bind data object
 """
@@ -6025,7 +6025,7 @@ end
 Gets the init data set by `duckdb_init_set_init_data` during the init.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_function_info` The info object
 
 Returns: `Ptr{Cvoid}` The init data object
 """
@@ -6039,7 +6039,7 @@ end
 Gets the thread-local init data set by `duckdb_init_set_init_data` during the local_init.
 
 # Arguments
-- `info`: The info object
+- `info`: `duckdb_function_info` The info object
 
 Returns: `Ptr{Cvoid}` The init data object
 """
@@ -6053,8 +6053,8 @@ end
 Report that an error has occurred while executing the function.
 
 # Arguments
-- `info`: The info object
-- `error`: The error message
+- `info`: `duckdb_function_info` The info object
+- `error`: `Cstring` The error message
 
 Returns: `Nothing` 
 """
@@ -6074,10 +6074,10 @@ end
 Add a replacement scan definition to the specified database.
 
 # Arguments
-- `db`: The database object to add the replacement scan to
-- `replacement`: The replacement scan callback
-- `extra_data`: Extra data that is passed back into the specified callback
-- `delete_callback`: The delete callback to call on the extra data, if any
+- `db`: `duckdb_database` The database object to add the replacement scan to
+- `replacement`: `duckdb_replacement_callback` The replacement scan callback
+- `extra_data`: `Ref{Cvoid}` Extra data that is passed back into the specified callback
+- `delete_callback`: `duckdb_delete_callback` The delete callback to call on the extra data, if any
 
 Returns: `Nothing` 
 """
@@ -6100,8 +6100,8 @@ Sets the replacement function name. If this function is called in the replacemen
 the replacement scan is performed. If it is not called, the replacement callback is not performed.
 
 # Arguments
-- `info`: The info object
-- `function_name`: The function name to substitute.
+- `info`: `duckdb_replacement_scan_info` The info object
+- `function_name`: `Cstring` The function name to substitute.
 
 Returns: `Nothing` 
 """
@@ -6121,8 +6121,8 @@ end
 Adds a parameter to the replacement scan function.
 
 # Arguments
-- `info`: The info object
-- `parameter`: The parameter to add.
+- `info`: `duckdb_replacement_scan_info` The info object
+- `parameter`: `duckdb_value` The parameter to add.
 
 Returns: `Nothing` 
 """
@@ -6142,8 +6142,8 @@ end
 Report that an error has occurred while executing the replacement scan.
 
 # Arguments
-- `info`: The info object
-- `error`: The error message
+- `info`: `duckdb_replacement_scan_info` The info object
+- `error`: `Cstring` The error message
 
 Returns: `Nothing` 
 """
@@ -6169,7 +6169,7 @@ end
 Returns the root node of the profiling information. Returns nullptr, if profiling is not enabled.
 
 # Arguments
-- `connection`: A connection object.
+- `connection`: `duckdb_connection` A connection object.
 
 Returns: `duckdb_profiling_info` A profiling information object.
 """
@@ -6185,8 +6185,8 @@ Returns the value of the metric of the current profiling info node. Returns null
  by calling the corresponding function: char *duckdb_get_varchar(duckdb_value value).
 
 # Arguments
-- `info`: A profiling information object.
-- `key`: The name of the requested metric.
+- `info`: `duckdb_profiling_info` A profiling information object.
+- `key`: `Cstring` The name of the requested metric.
 
 Returns: `duckdb_value` The value of the metric. Must be freed with `duckdb_destroy_value`
 """
@@ -6207,7 +6207,7 @@ Returns the key-value metric map of this profiling node as a MAP duckdb_value.
 The individual elements are accessible via the duckdb_value MAP functions.
 
 # Arguments
-- `info`: A profiling information object.
+- `info`: `duckdb_profiling_info` A profiling information object.
 
 Returns: `duckdb_value` The key-value metric map as a MAP duckdb_value.
 """
@@ -6221,7 +6221,7 @@ end
 Returns the number of children in the current profiling info node.
 
 # Arguments
-- `info`: A profiling information object.
+- `info`: `duckdb_profiling_info` A profiling information object.
 
 Returns: `idx_t` The number of children in the current node.
 """
@@ -6235,8 +6235,8 @@ end
 Returns the child node at the specified index.
 
 # Arguments
-- `info`: A profiling information object.
-- `index`: The index of the child node.
+- `info`: `duckdb_profiling_info` A profiling information object.
+- `index`: `idx_t` (1-based index) The index of the child node.
 
 Returns: `duckdb_profiling_info` The child node at the specified index.
 """
@@ -6264,10 +6264,10 @@ Creates an appender object.
 Note that the object must be destroyed with `duckdb_appender_destroy`.
 
 # Arguments
-- `connection`: The connection context to create the appender in.
-- `schema`: The schema of the table to append to, or `nullptr` for the default schema.
-- `table`: The table name to append to.
-- `out_appender`: The resulting appender object.
+- `connection`: `duckdb_connection` The connection context to create the appender in.
+- `schema`: `Cstring` The schema of the table to append to, or `nullptr` for the default schema.
+- `table`: `Cstring` The table name to append to.
+- `out_appender`: `Ref{duckdb_appender}` The resulting appender object.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6291,11 +6291,11 @@ Creates an appender object.
 Note that the object must be destroyed with `duckdb_appender_destroy`.
 
 # Arguments
-- `connection`: The connection context to create the appender in.
-- `catalog`: The catalog of the table to append to, or `nullptr` for the default catalog.
-- `schema`: The schema of the table to append to, or `nullptr` for the default schema.
-- `table`: The table name to append to.
-- `out_appender`: The resulting appender object.
+- `connection`: `duckdb_connection` The connection context to create the appender in.
+- `catalog`: `Cstring` The catalog of the table to append to, or `nullptr` for the default catalog.
+- `schema`: `Cstring` The schema of the table to append to, or `nullptr` for the default schema.
+- `table`: `Cstring` The table name to append to.
+- `out_appender`: `Ref{duckdb_appender}` The resulting appender object.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6319,7 +6319,7 @@ Returns the number of columns that belong to the appender.
 If there is no active column list, then this equals the table's physical columns.
 
 # Arguments
-- `appender`: The appender to get the column count from.
+- `appender`: `duckdb_appender` The appender to get the column count from.
 
 Returns: `idx_t` The number of columns in the data chunks.
 """
@@ -6335,8 +6335,8 @@ Returns the type of the column at the specified index. This is either a type in 
 Note: The resulting type must be destroyed with `duckdb_destroy_logical_type`.
 
 # Arguments
-- `appender`: The appender to get the column type from.
-- `col_idx`: The index of the column to get the type of.
+- `appender`: `duckdb_appender` The appender to get the column type from.
+- `col_idx`: `idx_t` (1-based index) The index of the column to get the type of.
 
 Returns: `duckdb_logical_type` The `duckdb_logical_type` of the column.
 """
@@ -6359,7 +6359,7 @@ If the appender has no error message, this returns `nullptr` instead.
 The error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.
 
 # Arguments
-- `appender`: The appender to get the error from.
+- `appender`: `duckdb_appender` The appender to get the error from.
 
 Returns: `Cstring` The error message, or `nullptr` if there is none.
 """
@@ -6376,7 +6376,7 @@ It is not possible to append more values. Call duckdb_appender_error to obtain t
 duckdb_appender_destroy to destroy the invalidated appender.
 
 # Arguments
-- `appender`: The appender to flush.
+- `appender`: `duckdb_appender` The appender to flush.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6393,7 +6393,7 @@ Call duckdb_appender_error to obtain the error message followed by duckdb_append
 appender.
 
 # Arguments
-- `appender`: The appender to flush and close.
+- `appender`: `duckdb_appender` The appender to flush and close.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6411,7 +6411,7 @@ longer possible to obtain the specific error message with duckdb_appender_error.
 before destroying the appender, if you need insights into the specific error.
 
 # Arguments
-- `appender`: The appender to flush, close and destroy.
+- `appender`: `Ref{duckdb_appender}` The appender to flush, close and destroy.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6427,8 +6427,8 @@ Appends a column to the active column list of the appender. Immediately flushes 
 The active column list specifies all columns that are expected when flushing the data. Any non-active columns are filled with their default values, or NULL.
 
 # Arguments
-- `appender`: The appender to add the column to.
-- `name`: 
+- `appender`: `duckdb_appender` The appender to add the column to.
+- `name`: `Cstring` 
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6442,7 +6442,7 @@ end
 Removes all columns from the active column list of the appender, resetting the appender to treat all columns as active. Immediately flushes all previous data.
 
 # Arguments
-- `appender`: The appender to clear the columns from.
+- `appender`: `duckdb_appender` The appender to clear the columns from.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6456,7 +6456,7 @@ end
 A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
 
 # Arguments
-- `appender`: 
+- `appender`: `duckdb_appender` 
 
 Returns: `duckdb_state` 
 """
@@ -6470,7 +6470,7 @@ end
 Finish the current row of appends. After end_row is called, the next row can be appended.
 
 # Arguments
-- `appender`: The appender.
+- `appender`: `duckdb_appender` The appender.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6484,7 +6484,7 @@ end
 Append a DEFAULT value (NULL if DEFAULT not available for column) to the appender.
 
 # Arguments
-- `appender`: 
+- `appender`: `duckdb_appender` 
 
 Returns: `duckdb_state` 
 """
@@ -6499,10 +6499,10 @@ Append a DEFAULT value, at the specified row and column, (NULL if DEFAULT not av
 The default value of the column must be a constant value. Non-deterministic expressions like nextval('seq') or random() are not supported.
 
 # Arguments
-- `appender`: The appender to get the default value from.
-- `chunk`: The data chunk to append the default value to.
-- `col`: The chunk column index to append the default value to.
-- `row`: The chunk row index to append the default value to.
+- `appender`: `duckdb_appender` The appender to get the default value from.
+- `chunk`: `duckdb_data_chunk` The data chunk to append the default value to.
+- `col`: `idx_t` (1-based index) The chunk column index to append the default value to.
+- `row`: `idx_t` (1-based index) The chunk row index to append the default value to.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6524,8 +6524,8 @@ end
 Append a bool value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `Bool` 
 
 Returns: `duckdb_state` 
 """
@@ -6539,8 +6539,8 @@ end
 Append an int8_t value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `Int8` 
 
 Returns: `duckdb_state` 
 """
@@ -6554,8 +6554,8 @@ end
 Append an int16_t value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `Int16` 
 
 Returns: `duckdb_state` 
 """
@@ -6569,8 +6569,8 @@ end
 Append an int32_t value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `Int32` 
 
 Returns: `duckdb_state` 
 """
@@ -6584,8 +6584,8 @@ end
 Append an int64_t value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `Int64` 
 
 Returns: `duckdb_state` 
 """
@@ -6599,8 +6599,8 @@ end
 Append a duckdb_hugeint value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `duckdb_hugeint` 
 
 Returns: `duckdb_state` 
 """
@@ -6614,8 +6614,8 @@ end
 Append a uint8_t value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `UInt8` 
 
 Returns: `duckdb_state` 
 """
@@ -6629,8 +6629,8 @@ end
 Append a uint16_t value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `UInt16` 
 
 Returns: `duckdb_state` 
 """
@@ -6644,8 +6644,8 @@ end
 Append a uint32_t value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `UInt32` 
 
 Returns: `duckdb_state` 
 """
@@ -6659,8 +6659,8 @@ end
 Append a uint64_t value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `UInt64` 
 
 Returns: `duckdb_state` 
 """
@@ -6674,8 +6674,8 @@ end
 Append a duckdb_uhugeint value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `duckdb_uhugeint` 
 
 Returns: `duckdb_state` 
 """
@@ -6695,8 +6695,8 @@ end
 Append a float value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `Float32` 
 
 Returns: `duckdb_state` 
 """
@@ -6710,8 +6710,8 @@ end
 Append a double value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `Float64` 
 
 Returns: `duckdb_state` 
 """
@@ -6725,8 +6725,8 @@ end
 Append a duckdb_date value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `duckdb_date` 
 
 Returns: `duckdb_state` 
 """
@@ -6740,8 +6740,8 @@ end
 Append a duckdb_time value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `duckdb_time` 
 
 Returns: `duckdb_state` 
 """
@@ -6755,8 +6755,8 @@ end
 Append a duckdb_timestamp value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `duckdb_timestamp` 
 
 Returns: `duckdb_state` 
 """
@@ -6776,8 +6776,8 @@ end
 Append a duckdb_interval value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `duckdb_interval` 
 
 Returns: `duckdb_state` 
 """
@@ -6797,8 +6797,8 @@ end
 Append a varchar value to the appender.
 
 # Arguments
-- `appender`: 
-- `val`: 
+- `appender`: `duckdb_appender` 
+- `val`: `Cstring` 
 
 Returns: `duckdb_state` 
 """
@@ -6812,9 +6812,9 @@ end
 Append a varchar value to the appender.
 
 # Arguments
-- `appender`: 
-- `val`: 
-- `length`: 
+- `appender`: `duckdb_appender` 
+- `val`: `Cstring` 
+- `length`: `idx_t` 
 
 Returns: `duckdb_state` 
 """
@@ -6835,9 +6835,9 @@ end
 Append a blob value to the appender.
 
 # Arguments
-- `appender`: 
-- `data`: 
-- `length`: 
+- `appender`: `duckdb_appender` 
+- `data`: `Ref{Cvoid}` 
+- `length`: `idx_t` 
 
 Returns: `duckdb_state` 
 """
@@ -6858,7 +6858,7 @@ end
 Append a NULL value to the appender (of any type).
 
 # Arguments
-- `appender`: 
+- `appender`: `duckdb_appender` 
 
 Returns: `duckdb_state` 
 """
@@ -6872,8 +6872,8 @@ end
 Append a duckdb_value to the appender.
 
 # Arguments
-- `appender`: 
-- `value`: 
+- `appender`: `duckdb_appender` 
+- `value`: `duckdb_value` 
 
 Returns: `duckdb_state` 
 """
@@ -6888,8 +6888,8 @@ Appends a pre-filled data chunk to the specified appender.
  Attempts casting, if the data chunk types do not match the active appender types.
 
 # Arguments
-- `appender`: The appender to append to.
-- `chunk`: The data chunk to append.
+- `appender`: `duckdb_appender` The appender to append to.
+- `chunk`: `duckdb_data_chunk` The data chunk to append.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6915,10 +6915,10 @@ end
 Creates a table description object. Note that `duckdb_table_description_destroy` should always be called on the resulting table_description, even if the function returns `DuckDBError`.
 
 # Arguments
-- `connection`: The connection context.
-- `schema`: The schema of the table, or `nullptr` for the default schema.
-- `table`: The table name.
-- `out`: The resulting table description object.
+- `connection`: `duckdb_connection` The connection context.
+- `schema`: `Cstring` The schema of the table, or `nullptr` for the default schema.
+- `table`: `Cstring` The table name.
+- `out`: `Ref{duckdb_table_description}` The resulting table description object.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6940,11 +6940,11 @@ end
 Creates a table description object. Note that `duckdb_table_description_destroy` must be called on the resulting table_description, even if the function returns `DuckDBError`.
 
 # Arguments
-- `connection`: The connection context.
-- `catalog`: The catalog (database) name of the table, or `nullptr` for the default catalog.
-- `schema`: The schema of the table, or `nullptr` for the default schema.
-- `table`: The table name.
-- `out`: The resulting table description object.
+- `connection`: `duckdb_connection` The connection context.
+- `catalog`: `Cstring` The catalog (database) name of the table, or `nullptr` for the default catalog.
+- `schema`: `Cstring` The schema of the table, or `nullptr` for the default schema.
+- `table`: `Cstring` The table name.
+- `out`: `Ref{duckdb_table_description}` The resulting table description object.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -6967,7 +6967,7 @@ end
 Destroy the TableDescription object.
 
 # Arguments
-- `table_description`: The table_description to destroy.
+- `table_description`: `Ref{duckdb_table_description}` The table_description to destroy.
 
 Returns: `Nothing` 
 """
@@ -6988,7 +6988,7 @@ If the table_description has no error message, this returns `nullptr` instead.
 The error message should not be freed. It will be de-allocated when `duckdb_table_description_destroy` is called.
 
 # Arguments
-- `table_description`: The table_description to get the error from.
+- `table_description`: `duckdb_table_description` The table_description to get the error from.
 
 Returns: `Cstring` The error message, or `nullptr` if there is none.
 """
@@ -7002,9 +7002,9 @@ end
 Check if the column at 'index' index of the table has a DEFAULT expression.
 
 # Arguments
-- `table_description`: The table_description to query.
-- `index`: The index of the column to query.
-- `out`: The out-parameter used to store the result.
+- `table_description`: `duckdb_table_description` The table_description to query.
+- `index`: `idx_t` (1-based index) The index of the column to query.
+- `out`: `Ref{Bool}` The out-parameter used to store the result.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -7026,8 +7026,8 @@ Obtain the column name at 'index'.
 The out result must be destroyed with `duckdb_free`.
 
 # Arguments
-- `table_description`: The table_description to query.
-- `index`: The index of the column to query.
+- `table_description`: `duckdb_table_description` The table_description to query.
+- `index`: `idx_t` (1-based index) The index of the column to query.
 
 Returns: `Cstring` The column name.
 """
@@ -7060,9 +7060,9 @@ Note that after running `duckdb_query_arrow`, `duckdb_destroy_arrow` must be cal
 query fails, otherwise the error stored within the result will not be freed correctly.
 
 # Arguments
-- `connection`: The connection to perform the query in.
-- `query`: The SQL query to run.
-- `out_result`: The query result.
+- `connection`: `duckdb_connection` The connection to perform the query in.
+- `query`: `Cstring` The SQL query to run.
+- `out_result`: `Ref{duckdb_arrow}` The query result.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -7090,8 +7090,8 @@ Fetch the internal arrow schema from the arrow result. Remember to call release 
 ArrowSchema object.
 
 # Arguments
-- `result`: The result to fetch the schema from.
-- `out_schema`: The output schema.
+- `result`: `duckdb_arrow` The result to fetch the schema from.
+- `out_schema`: `Ref{duckdb_arrow_schema}` The output schema.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -7118,8 +7118,8 @@ Fetch the internal arrow schema from the prepared statement. Remember to call re
 ArrowSchema object.
 
 # Arguments
-- `prepared`: The prepared statement to fetch the schema from.
-- `out_schema`: The output schema.
+- `prepared`: `duckdb_prepared_statement` The prepared statement to fetch the schema from.
+- `out_schema`: `Ref{duckdb_arrow_schema}` The output schema.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -7146,9 +7146,9 @@ Convert a data chunk into an arrow struct array. Remember to call release on the
 ArrowArray object.
 
 # Arguments
-- `result`: The result object the data chunk have been fetched from.
-- `chunk`: The data chunk to convert.
-- `out_array`: The output array.
+- `result`: `duckdb_result` The result object the data chunk have been fetched from.
+- `chunk`: `duckdb_data_chunk` The data chunk to convert.
+- `out_array`: `Ref{duckdb_arrow_array}` The output array.
 
 Returns: `Nothing` 
 """
@@ -7179,8 +7179,8 @@ This function can be called multiple time to get next chunks, which will free th
 So consume the out_array before calling this function again.
 
 # Arguments
-- `result`: The result to fetch the array from.
-- `out_array`: The output array.
+- `result`: `duckdb_arrow` The result to fetch the array from.
+- `out_array`: `Ref{duckdb_arrow_array}` The output array.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -7206,7 +7206,7 @@ end
 Returns the number of columns present in the arrow result object.
 
 # Arguments
-- `result`: The result object.
+- `result`: `duckdb_arrow` The result object.
 
 Returns: `idx_t` The number of columns present in the result object.
 """
@@ -7226,7 +7226,7 @@ end
 Returns the number of rows present in the arrow result object.
 
 # Arguments
-- `result`: The result object.
+- `result`: `duckdb_arrow` The result object.
 
 Returns: `idx_t` The number of rows present in the result object.
 """
@@ -7247,7 +7247,7 @@ Returns the number of rows changed by the query stored in the arrow result. This
 INSERT/UPDATE/DELETE queries. For other queries the rows_changed will be 0.
 
 # Arguments
-- `result`: The result object.
+- `result`: `duckdb_arrow` The result object.
 
 Returns: `idx_t` The number of rows changed.
 """
@@ -7270,7 +7270,7 @@ end
 The error message should not be freed. It will be de-allocated when `duckdb_destroy_arrow` is called.
 
 # Arguments
-- `result`: The result object to fetch the error from.
+- `result`: `duckdb_arrow` The result object to fetch the error from.
 
 Returns: `Cstring` The error of the result.
 """
@@ -7290,7 +7290,7 @@ end
 Closes the result and de-allocates all memory allocated for the arrow result.
 
 # Arguments
-- `result`: The result to destroy.
+- `result`: `Ref{duckdb_arrow}` The result to destroy.
 
 Returns: `Nothing` 
 """
@@ -7310,7 +7310,7 @@ end
 Releases the arrow array stream and de-allocates its memory.
 
 # Arguments
-- `stream_p`: The arrow array stream to destroy.
+- `stream_p`: `Ref{duckdb_arrow_stream}` The arrow array stream to destroy.
 
 Returns: `Nothing` 
 """
@@ -7331,8 +7331,8 @@ Executes the prepared statement with the given bound parameters, and returns an 
 Note that after running `duckdb_execute_prepared_arrow`, `duckdb_destroy_arrow` must be called on the result object.
 
 # Arguments
-- `prepared_statement`: The prepared statement to execute.
-- `out_result`: The query result.
+- `prepared_statement`: `duckdb_prepared_statement` The prepared statement to execute.
+- `out_result`: `Ref{duckdb_arrow}` The query result.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -7358,9 +7358,9 @@ end
 Scans the Arrow stream and creates a view with the given name.
 
 # Arguments
-- `connection`: The connection on which to execute the scan.
-- `table_name`: Name of the temporary view to create.
-- `arrow`: Arrow stream wrapper.
+- `connection`: `duckdb_connection` The connection on which to execute the scan.
+- `table_name`: `Cstring` Name of the temporary view to create.
+- `arrow`: `duckdb_arrow_stream` Arrow stream wrapper.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -7388,11 +7388,11 @@ Scans the Arrow array and creates a view with the given name.
 Note that after running `duckdb_arrow_array_scan`, `duckdb_destroy_arrow_stream` must be called on the out stream.
 
 # Arguments
-- `connection`: The connection on which to execute the scan.
-- `table_name`: Name of the temporary view to create.
-- `arrow_schema`: Arrow schema wrapper.
-- `arrow_array`: Arrow array wrapper.
-- `out_stream`: Output array stream that wraps around the passed schema, for releasing/deleting once done.
+- `connection`: `duckdb_connection` The connection on which to execute the scan.
+- `table_name`: `Cstring` Name of the temporary view to create.
+- `arrow_schema`: `duckdb_arrow_schema` Arrow schema wrapper.
+- `arrow_array`: `duckdb_arrow_array` Arrow array wrapper.
+- `out_stream`: `Ref{duckdb_arrow_stream}` Output array stream that wraps around the passed schema, for releasing/deleting once done.
 
 Returns: `duckdb_state` `DuckDBSuccess` on success or `DuckDBError` on failure.
 """
@@ -7427,8 +7427,8 @@ Execute DuckDB tasks on this thread.
 Will return after `max_tasks` have been executed, or if there are no more tasks present.
 
 # Arguments
-- `database`: The database object to execute tasks for
-- `max_tasks`: The maximum amount of tasks to execute
+- `database`: `duckdb_database` The database object to execute tasks for
+- `max_tasks`: `idx_t` The maximum amount of tasks to execute
 
 Returns: `Nothing` 
 """
@@ -7445,7 +7445,7 @@ Creates a task state that can be used with duckdb_execute_tasks_state to execute
 `duckdb_destroy_state` must be called on the result.
 
 # Arguments
-- `database`: The database object to create the task state for
+- `database`: `duckdb_database` The database object to create the task state for
 
 Returns: `duckdb_task_state` The task state that can be used with duckdb_execute_tasks_state.
 """
@@ -7462,7 +7462,7 @@ The thread will keep on executing tasks forever, until duckdb_finish_execution i
 Multiple threads can share the same duckdb_task_state.
 
 # Arguments
-- `state`: The task state of the executor
+- `state`: `duckdb_task_state` The task state of the executor
 
 Returns: `Nothing` 
 """
@@ -7481,8 +7481,8 @@ max_tasks tasks have been executed or there are no more tasks to be executed.
 Multiple threads can share the same duckdb_task_state.
 
 # Arguments
-- `state`: The task state of the executor
-- `max_tasks`: The maximum amount of tasks to execute
+- `state`: `duckdb_task_state` The task state of the executor
+- `max_tasks`: `idx_t` The maximum amount of tasks to execute
 
 Returns: `idx_t` The amount of tasks that have actually been executed
 """
@@ -7496,7 +7496,7 @@ end
 Finish execution on a specific task.
 
 # Arguments
-- `state`: The task state to finish execution
+- `state`: `duckdb_task_state` The task state to finish execution
 
 Returns: `Nothing` 
 """
@@ -7510,7 +7510,7 @@ end
 Check if the provided duckdb_task_state has finished execution
 
 # Arguments
-- `state`: The task state to inspect
+- `state`: `duckdb_task_state` The task state to inspect
 
 Returns: `Bool` Whether or not duckdb_finish_execution has been called on the task state
 """
@@ -7527,7 +7527,7 @@ Note that this should not be called while there is an active duckdb_execute_task
 on the task state.
 
 # Arguments
-- `state`: The task state to clean up
+- `state`: `duckdb_task_state` The task state to clean up
 
 Returns: `Nothing` 
 """
@@ -7541,7 +7541,7 @@ end
 Returns true if the execution of the current query is finished.
 
 # Arguments
-- `con`: The connection on which to check
+- `con`: `duckdb_connection` The connection on which to check
 
 Returns: `Bool` 
 """
@@ -7573,7 +7573,7 @@ mixed with the legacy result functions or the materialized result functions).
 It is not known beforehand how many chunks will be returned by this result.
 
 # Arguments
-- `result`: The result object to fetch the data chunk from.
+- `result`: `duckdb_result` The result object to fetch the data chunk from.
 
 Returns: `duckdb_data_chunk` The resulting data chunk. Returns `NULL` if the result has an error.
 """
@@ -7595,7 +7595,7 @@ The result must be destroyed with `duckdb_destroy_data_chunk`.
 It is not known beforehand how many chunks will be returned by this result.
 
 # Arguments
-- `result`: The result object to fetch the data chunk from.
+- `result`: `duckdb_result` The result object to fetch the data chunk from.
 
 Returns: `duckdb_data_chunk` The resulting data chunk. Returns `NULL` if the result has an error.
 """
@@ -7628,8 +7628,8 @@ end
 Sets the source type of the cast function.
 
 # Arguments
-- `cast_function`: The cast function object.
-- `source_type`: The source type to set.
+- `cast_function`: `duckdb_cast_function` The cast function object.
+- `source_type`: `duckdb_logical_type` The source type to set.
 
 Returns: `Nothing` 
 """
@@ -7649,8 +7649,8 @@ end
 Sets the target type of the cast function.
 
 # Arguments
-- `cast_function`: The cast function object.
-- `target_type`: The target type to set.
+- `cast_function`: `duckdb_cast_function` The cast function object.
+- `target_type`: `duckdb_logical_type` The target type to set.
 
 Returns: `Nothing` 
 """
@@ -7670,8 +7670,8 @@ end
 Sets the \"cost\" of implicitly casting the source type to the target type using this function.
 
 # Arguments
-- `cast_function`: The cast function object.
-- `cost`: The cost to set.
+- `cast_function`: `duckdb_cast_function` The cast function object.
+- `cost`: `Int64` The cost to set.
 
 Returns: `Nothing` 
 """
@@ -7691,8 +7691,8 @@ end
 Sets the actual cast function to use.
 
 # Arguments
-- `cast_function`: The cast function object.
-- `_function`: The function to set.
+- `cast_function`: `duckdb_cast_function` The cast function object.
+- `_function`: `duckdb_cast_function_ptr` The function to set.
 
 Returns: `Nothing` 
 """
@@ -7712,9 +7712,9 @@ end
 Assigns extra information to the cast function that can be fetched during execution, etc.
 
 # Arguments
-- `cast_function`: 
-- `extra_info`: The extra information
-- `destroy`: The callback that will be called to destroy the extra information (if any)
+- `cast_function`: `duckdb_cast_function` 
+- `extra_info`: `Ref{Cvoid}` The extra information
+- `destroy`: `duckdb_delete_callback` The callback that will be called to destroy the extra information (if any)
 
 Returns: `Nothing` 
 """
@@ -7735,7 +7735,7 @@ end
 Retrieves the extra info of the function as set in `duckdb_cast_function_set_extra_info`.
 
 # Arguments
-- `info`: The info object.
+- `info`: `duckdb_function_info` The info object.
 
 Returns: `Ptr{Cvoid}` The extra info.
 """
@@ -7749,7 +7749,7 @@ end
 Get the cast execution mode from the given function info.
 
 # Arguments
-- `info`: The info object.
+- `info`: `duckdb_function_info` The info object.
 
 Returns: `duckdb_cast_mode` The cast mode.
 """
@@ -7763,8 +7763,8 @@ end
 Report that an error has occurred while executing the cast function.
 
 # Arguments
-- `info`: The info object.
-- `error`: The error message.
+- `info`: `duckdb_function_info` The info object.
+- `error`: `Cstring` The error message.
 
 Returns: `Nothing` 
 """
@@ -7778,10 +7778,10 @@ end
 Report that an error has occurred while executing the cast function, setting the corresponding output row to NULL.
 
 # Arguments
-- `info`: The info object.
-- `error`: The error message.
-- `row`: The index of the row within the output vector to set to NULL.
-- `output`: The output vector.
+- `info`: `duckdb_function_info` The info object.
+- `error`: `Cstring` The error message.
+- `row`: `idx_t` (1-based index) The index of the row within the output vector to set to NULL.
+- `output`: `duckdb_vector` The output vector.
 
 Returns: `Nothing` 
 """
@@ -7803,8 +7803,8 @@ end
 Registers a cast function within the given connection.
 
 # Arguments
-- `con`: The connection to use.
-- `cast_function`: The cast function to register.
+- `con`: `duckdb_connection` The connection to use.
+- `cast_function`: `duckdb_cast_function` The cast function to register.
 
 Returns: `duckdb_state` Whether or not the registration was successful.
 """
@@ -7824,7 +7824,7 @@ end
 Destroys the cast function object.
 
 # Arguments
-- `cast_function`: The cast function object.
+- `cast_function`: `Ref{duckdb_cast_function}` The cast function object.
 
 Returns: `Nothing` 
 """
