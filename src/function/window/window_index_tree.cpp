@@ -56,7 +56,7 @@ idx_t WindowIndexTree::SelectNth(const SubFrames &frames, idx_t n) const {
 	if (mst32) {
 		return mst32->NthElement(mst32->SelectNth(frames, n));
 	} else {
-		return mst64->NthElement(mst32->SelectNth(frames, n));
+		return mst64->NthElement(mst64->SelectNth(frames, n));
 	}
 }
 
