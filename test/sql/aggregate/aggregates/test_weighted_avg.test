@@ -20,6 +20,12 @@ nan
 0.0
 0.0
 
+# test alias 'wavg'
+query R
+SELECT wavg(3, 3)
+----
+3
+
 # test weighted average on real world example
 statement ok
 CREATE TABLE students(name TEXT, grade INTEGER, etcs INTEGER);
