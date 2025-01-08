@@ -23,12 +23,12 @@ class Serializer;
 struct SerializedBitpackingSegmentState : public ColumnSegmentState {
 public:
 	SerializedBitpackingSegmentState();
-	explicit SerializedBitpackingSegmentState(unordered_map<BitpackingMode, idx_t> counts_p);
+	explicit SerializedBitpackingSegmentState(map<BitpackingMode, idx_t> counts_p);
 
 public:
 	void Serialize(Serializer &serializer) const override;
 
-	unordered_map<BitpackingMode, idx_t> counts;
+	map<BitpackingMode, idx_t> counts;
 };
 
 } // namespace duckdb

@@ -70,7 +70,7 @@ public:
 		}
 		return StringUtil::Join(result, ", ");
 	}
-	unordered_map<BitpackingMode, idx_t> counts;
+	map<BitpackingMode, idx_t> counts;
 };
 
 typedef struct {
@@ -977,7 +977,7 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 SerializedBitpackingSegmentState::SerializedBitpackingSegmentState() {
 }
 
-SerializedBitpackingSegmentState::SerializedBitpackingSegmentState(unordered_map<BitpackingMode, idx_t> counts_p) {
+SerializedBitpackingSegmentState::SerializedBitpackingSegmentState(map<BitpackingMode, idx_t> counts_p) {
 	counts = std::move(counts_p);
 }
 
