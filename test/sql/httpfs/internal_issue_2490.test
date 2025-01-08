@@ -7,4 +7,4 @@ require httpfs
 require parquet
 
 statement ok
-FROM 'https://github.com/cwida/duckdb-data/releases/download/v1.0/us+er+da+ta.parquet' LIMIT 1;
+FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/us+er+da+ta.parquet' LIMIT 1;

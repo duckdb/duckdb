@@ -16,7 +16,7 @@ set parquet_metadata_cache=true;
 query II
 explain analyze
 select count(*)
-FROM 'https://github.com/cwida/duckdb-data/releases/download/v1.0/event_baserunning_advance_attempt.parquet'
+FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/event_baserunning_advance_attempt.parquet'
 where game_id > 'WS2197109301';
 ----
 analyzed_plan	<REGEX>:.*2.0 KiB.*
