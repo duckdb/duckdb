@@ -176,10 +176,8 @@ public:
 	//! Collation handling of the function
 	FunctionCollationHandling collation_handling;
 
-	static BaseScalarFunction SetReturnsError(BaseScalarFunction &function) {
-		function.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
-		return function;
-	}
+	static BaseScalarFunction SetReturnsError(BaseScalarFunction &function,
+	                                          FunctionErrors error = FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 
 public:
 	DUCKDB_API hash_t Hash() const;

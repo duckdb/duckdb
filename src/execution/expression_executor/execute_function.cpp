@@ -77,7 +77,12 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 
 	D_ASSERT(expr.function.function);
 	// #ifdef DEBUG
-	expr.function.function(arguments, *state, result);
+	try {
+		expr.function.function(arguments, *state, result);
+	} catch (Exception &e) {
+		auto boop = 0;
+		throw;
+	}
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);

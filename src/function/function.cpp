@@ -83,6 +83,11 @@ BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> argume
 BaseScalarFunction::~BaseScalarFunction() {
 }
 
+BaseScalarFunction BaseScalarFunction::SetReturnsError(BaseScalarFunction &function, FunctionErrors error) {
+	function.errors = error;
+	return function;
+}
+
 string BaseScalarFunction::ToString() const {
 	return Function::CallToString(name, arguments, varargs, return_type);
 }

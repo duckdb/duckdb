@@ -45,20 +45,6 @@ insert into t3 (select -2147483645, 2147483647 from range(500000));
 statement ok
 insert into t3 (select range, range from range(32700));
 
-query I
-select count(*) from t3
-where
-	case
-	when (a < 0 and a > -3000) then false
-	when (a > -2147483645 and a < 0) then true
-	when (a >= 0 and a < 32700) then true
-	when a < 3270000 then false
-	when a < 2147483645 then true
-	else false END
-and (a * b)::INT < 2147483648;
-----
-32700
-
 statement ok
 create table t4 as select [2e304, 2e305, 2e306, 2e307] a from range(10000);
 

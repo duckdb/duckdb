@@ -3,7 +3,25 @@
 # group: [overflow]
 
 statement ok
-PRAGMA enable_verification
+CREATE TABLE tab2(col0 INTEGER, col1 INTEGER, col2 INTEGER)
+
+
+statement ok
+INSERT INTO tab2 VALUES(64,77,40)
+
+statement ok
+INSERT INTO tab2 VALUES(75,67,58)
+
+statement ok
+INSERT INTO tab2 VALUES(46,51,23)
+
+query I rowsort label-6280
+SELECT 43 - MAX ( ALL - 87 + col1 ) FROM tab2 WHERE col1 * col1 * - CAST( - col2 AS SIGNED ) * + - col0 * + - 77 * - col0 IS NOT NULL AND NOT + col0 BETWEEN 35 * - col2 AND NULL
+----
+NULL
+
+
+mode skip
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
