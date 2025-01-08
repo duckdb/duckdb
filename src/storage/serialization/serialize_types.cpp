@@ -5,6 +5,7 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
@@ -12,13 +13,15 @@ namespace duckdb {
 void ExtraTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<ExtraTypeInfoType>(100, "type", type);
 	serializer.WritePropertyWithDefault<string>(101, "alias", alias);
-	serializer.WritePropertyWithDefault<vector<Value>>(102, "modifiers", modifiers, vector<Value>());
+	/* [Deleted] (vector<Value>) "modifiers" */
+	serializer.WritePropertyWithDefault<unique_ptr<ExtensionTypeInfo>>(103, "extension_info", extension_info);
 }
 
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ExtraTypeInfoType>(100, "type");
 	auto alias = deserializer.ReadPropertyWithDefault<string>(101, "alias");
-	auto modifiers = deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(102, "modifiers", vector<Value>());
+	deserializer.ReadDeletedProperty<vector<Value>>(102, "modifiers");
+	auto extension_info = deserializer.ReadPropertyWithDefault<unique_ptr<ExtensionTypeInfo>>(103, "extension_info");
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
@@ -60,7 +63,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 		throw SerializationException("Unsupported type for deserialization of ExtraTypeInfo!");
 	}
 	result->alias = std::move(alias);
-	result->modifiers = std::move(modifiers);
+	result->extension_info = std::move(extension_info);
 	return result;
 }
 
@@ -118,6 +121,18 @@ shared_ptr<ExtraTypeInfo> DecimalTypeInfo::Deserialize(Deserializer &deserialize
 	return std::move(result);
 }
 
+void ExtensionTypeInfo::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<vector<Value>>(100, "modifiers", modifiers);
+	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(101, "properties", properties, unordered_map<string, Value>());
+}
+
+unique_ptr<ExtensionTypeInfo> ExtensionTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ExtensionTypeInfo>(new ExtensionTypeInfo());
+	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "modifiers", result->modifiers);
+	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, Value>>(101, "properties", result->properties, unordered_map<string, Value>());
+	return result;
+}
+
 void IntegerLiteralTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WriteProperty<Value>(200, "constant_value", constant_value);
@@ -167,7 +182,7 @@ void UserTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "user_type_name", user_type_name);
 	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog, string());
 	serializer.WritePropertyWithDefault<string>(202, "schema", schema, string());
-	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_modifiers, vector<Value>());
+	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_modifiers);
 }
 
 shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -175,7 +190,7 @@ shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<string>(200, "user_type_name", result->user_type_name);
 	deserializer.ReadPropertyWithExplicitDefault<string>(201, "catalog", result->catalog, string());
 	deserializer.ReadPropertyWithExplicitDefault<string>(202, "schema", result->schema, string());
-	deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(203, "user_type_modifiers", result->user_type_modifiers, vector<Value>());
+	deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_modifiers", result->user_type_modifiers);
 	return std::move(result);
 }
 

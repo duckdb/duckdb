@@ -193,13 +193,13 @@ void ContainerCompressionState::Reset() {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-RoaringCompressState::RoaringCompressState(ColumnDataCheckpointer &checkpointer,
+RoaringCompressState::RoaringCompressState(ColumnDataCheckpointData &checkpoint_data,
                                            unique_ptr<AnalyzeState> analyze_state_p)
     : CompressionState(analyze_state_p->info), owned_analyze_state(std::move(analyze_state_p)),
       analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()), container_state(),
-      container_metadata(analyze_state.container_metadata), checkpointer(checkpointer),
-      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
-	CreateEmptySegment(checkpointer.GetRowGroup().start);
+      container_metadata(analyze_state.container_metadata), checkpoint_data(checkpoint_data),
+      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
+	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 	total_count = 0;
 	InitializeContainer();
 }
@@ -276,8 +276,8 @@ void RoaringCompressState::InitializeContainer() {
 }
 
 void RoaringCompressState::CreateEmptySegment(idx_t row_start) {
-	auto &db = checkpointer.GetDatabase();
-	auto &type = checkpointer.GetType();
+	auto &db = checkpoint_data.GetDatabase();
+	auto &type = checkpoint_data.GetType();
 
 	auto compressed_segment =
 	    ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(), info.GetBlockSize());
@@ -291,7 +291,7 @@ void RoaringCompressState::CreateEmptySegment(idx_t row_start) {
 }
 
 void RoaringCompressState::FlushSegment() {
-	auto &state = checkpointer.GetCheckpointState();
+	auto &state = checkpoint_data.GetCheckpointState();
 	auto base_ptr = handle.Ptr();
 	// +======================================+
 	// |x|ddddddddddddddd||mmm|               |

@@ -17,7 +17,7 @@ foreach header true false
 statement error
 COPY T1(name) from '${path}' (DELIMITER ',', HEADER ${header} , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
 ----
-Maximum line size of 2097152 bytes exceeded
+Maximum line size of 2000000 bytes exceeded
 
 endloop
 

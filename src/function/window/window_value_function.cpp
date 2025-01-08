@@ -273,22 +273,22 @@ WindowLeadLagExecutor::GetLocalState(const WindowExecutorGlobalState &gstate) co
 void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, WindowExecutorLocalState &lstate,
                                              DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx) const {
 	auto &glstate = gstate.Cast<WindowLeadLagGlobalState>();
-	auto &ignore_nulls = glstate.ignore_nulls;
 	auto &llstate = lstate.Cast<WindowLeadLagLocalState>();
 	auto &cursor = *llstate.cursor;
 
 	WindowInputExpression leadlag_offset(eval_chunk, offset_idx);
 	WindowInputExpression leadlag_default(eval_chunk, default_idx);
 
-	auto partition_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_END]);
 	if (glstate.row_tree) {
+		auto frame_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_BEGIN]);
+		auto frame_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_END]);
+		// TODO: Handle subframes.
 		auto &frames = llstate.frames;
 		frames.resize(1);
 		auto &frame = frames[0];
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
 			// (1) compute the ROW_NUMBER of the own row
-			frame = FrameBounds(partition_begin[i], partition_end[i]);
+			frame = FrameBounds(frame_begin[i], frame_end[i]);
 			const auto own_row = glstate.row_tree->Rank(frame.start, frame.end, row_idx) - 1;
 			// (2) adjust the row number by adding or subtracting an offset
 			auto val_idx = NumericCast<int64_t>(own_row);
@@ -317,6 +317,10 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 		return;
 	}
 
+	auto partition_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_END]);
+
+	auto &ignore_nulls = glstate.ignore_nulls;
 	bool can_shift = ignore_nulls->AllValid();
 	if (wexpr.offset_expr) {
 		can_shift = can_shift && wexpr.offset_expr->IsFoldable();

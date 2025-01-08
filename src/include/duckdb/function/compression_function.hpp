@@ -19,7 +19,7 @@
 namespace duckdb {
 class DatabaseInstance;
 class ColumnData;
-class ColumnDataCheckpointer;
+struct ColumnDataCheckpointData;
 class ColumnSegment;
 class SegmentStatistics;
 class TableFilter;
@@ -152,7 +152,7 @@ typedef idx_t (*compression_final_analyze_t)(AnalyzeState &state);
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-typedef unique_ptr<CompressionState> (*compression_init_compression_t)(ColumnDataCheckpointer &checkpointer,
+typedef unique_ptr<CompressionState> (*compression_init_compression_t)(ColumnDataCheckpointData &checkpoint_data,
                                                                        unique_ptr<AnalyzeState> state);
 typedef void (*compression_compress_data_t)(CompressionState &state, Vector &scan_vector, idx_t count);
 typedef void (*compression_compress_finalize_t)(CompressionState &state);

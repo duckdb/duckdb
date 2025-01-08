@@ -160,8 +160,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		vector<unique_ptr<Expression>> expressions;
 		for (auto &column_id : column_ids) {
 			if (column_id.IsRowIdColumn()) {
-				types.emplace_back(LogicalType::ROW_TYPE);
-				expressions.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
+				types.emplace_back(op.GetRowIdType());
+				// Now how to make that a constant expression.
+				expressions.push_back(make_uniq<BoundConstantExpression>(Value(op.GetRowIdType())));
 			} else {
 				auto col_id = column_id.GetPrimaryIndex();
 				auto type = op.returned_types[col_id];

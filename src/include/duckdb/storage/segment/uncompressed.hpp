@@ -14,7 +14,7 @@ namespace duckdb {
 class DatabaseInstance;
 
 struct UncompressedFunctions {
-	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer,
+	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state);
 	static void Compress(CompressionState &state_p, Vector &data, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);

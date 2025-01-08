@@ -233,7 +233,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithExplicitDefault(211, "default_expr", result->default_expr, unique_ptr<Expression>());
 	deserializer.ReadProperty(212, "exclude_clause", result->exclude_clause);
 	deserializer.ReadProperty(213, "distinct", result->distinct);
-	deserializer.ReadProperty(214, "arg_orders", result->arg_orders);
+	deserializer.ReadPropertyWithExplicitDefault(214, "arg_orders", result->arg_orders, vector<BoundOrderByNode>());
 	return std::move(result);
 }
 

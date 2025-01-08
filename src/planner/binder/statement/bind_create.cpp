@@ -40,6 +40,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/common/extension_type_info.hpp"
 
 namespace duckdb {
 
@@ -195,7 +196,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			if (param.IsQualified()) {
 				throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
 			}
-			dummy_types.emplace_back(LogicalType::SQLNULL);
+			dummy_types.emplace_back(LogicalType::UNKNOWN);
 			dummy_names.push_back(param.GetColumnName());
 		}
 		// default parameters
@@ -253,139 +254,145 @@ static bool IsValidUserType(optional_ptr<CatalogEntry> entry) {
 }
 
 void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
-	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
-		auto child_type = ListType::GetChildType(type);
-		BindLogicalType(child_type, catalog, schema);
+	if (type.id() != LogicalTypeId::USER) {
+		// Recursive types, make sure to bind any nested user types recursively
 		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiersCopy();
-		if (type.id() == LogicalTypeId::LIST) {
+		auto ext_info = type.HasExtensionInfo() ? make_uniq<ExtensionTypeInfo>(*type.GetExtensionInfo()) : nullptr;
+
+		switch (type.id()) {
+		case LogicalTypeId::LIST: {
+			auto child_type = ListType::GetChildType(type);
+			BindLogicalType(child_type, catalog, schema);
 			type = LogicalType::LIST(child_type);
-		} else {
-			D_ASSERT(child_type.id() == LogicalTypeId::STRUCT); // map must be list of structs
-			type = LogicalType::MAP(child_type);
+		} break;
+		case LogicalTypeId::MAP: {
+			auto key_type = MapType::KeyType(type);
+			BindLogicalType(key_type, catalog, schema);
+			auto value_type = MapType::ValueType(type);
+			BindLogicalType(value_type, catalog, schema);
+			type = LogicalType::MAP(key_type, value_type);
+		} break;
+		case LogicalTypeId::ARRAY: {
+			auto child_type = ArrayType::GetChildType(type);
+			auto array_size = ArrayType::GetSize(type);
+			BindLogicalType(child_type, catalog, schema);
+			type = LogicalType::ARRAY(child_type, array_size);
+		} break;
+		case LogicalTypeId::STRUCT: {
+			auto child_types = StructType::GetChildTypes(type);
+			for (auto &child_type : child_types) {
+				BindLogicalType(child_type.second, catalog, schema);
+			}
+			type = LogicalType::STRUCT(child_types);
+		} break;
+		case LogicalTypeId::UNION: {
+			auto member_types = UnionType::CopyMemberTypes(type);
+			for (auto &member_type : member_types) {
+				BindLogicalType(member_type.second, catalog, schema);
+			}
+			type = LogicalType::UNION(member_types);
+		} break;
+		default:
+			break;
 		}
 
+		// Set the alias and extension info back
 		type.SetAlias(alias);
-		type.SetModifiers(modifiers);
-	} else if (type.id() == LogicalTypeId::STRUCT) {
-		auto child_types = StructType::GetChildTypes(type);
-		for (auto &child_type : child_types) {
-			BindLogicalType(child_type.second, catalog, schema);
+		type.SetExtensionInfo(std::move(ext_info));
+
+		return;
+	}
+
+	// User type, bind the user type
+	auto user_type_name = UserType::GetTypeName(type);
+	auto user_type_schema = UserType::GetSchema(type);
+	auto user_type_mods = UserType::GetTypeModifiers(type);
+
+	bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
+
+	if (catalog) {
+		// The search order is:
+		// 1) In the explicitly set schema (my_schema.my_type)
+		// 2) In the same schema as the table
+		// 3) In the same catalog
+		// 4) System catalog
+
+		optional_ptr<CatalogEntry> entry = nullptr;
+		if (!user_type_schema.empty()) {
+			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, user_type_schema, user_type_name,
+			                                 OnEntryNotFound::RETURN_NULL);
 		}
-		// Generate new Struct Type
-		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiersCopy();
-		type = LogicalType::STRUCT(child_types);
-		type.SetAlias(alias);
-		type.SetModifiers(modifiers);
-	} else if (type.id() == LogicalTypeId::ARRAY) {
-		auto child_type = ArrayType::GetChildType(type);
-		auto array_size = ArrayType::GetSize(type);
-		BindLogicalType(child_type, catalog, schema);
-		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiersCopy();
-		type = LogicalType::ARRAY(child_type, array_size);
-		type.SetAlias(alias);
-		type.SetModifiers(modifiers);
-	} else if (type.id() == LogicalTypeId::UNION) {
-		auto member_types = UnionType::CopyMemberTypes(type);
-		for (auto &member_type : member_types) {
-			BindLogicalType(member_type.second, catalog, schema);
+		if (!IsValidUserType(entry)) {
+			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
+			                                 OnEntryNotFound::RETURN_NULL);
 		}
-		// Generate new Union Type
-		auto alias = type.GetAlias();
-		auto modifiers = type.GetModifiersCopy();
-		type = LogicalType::UNION(member_types);
-		type.SetAlias(alias);
-		type.SetModifiers(modifiers);
-	} else if (type.id() == LogicalTypeId::USER) {
-		auto user_type_name = UserType::GetTypeName(type);
-		auto user_type_schema = UserType::GetSchema(type);
-		auto user_type_mods = UserType::GetTypeModifiers(type);
+		if (!IsValidUserType(entry)) {
+			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, INVALID_SCHEMA, user_type_name,
+			                                 OnEntryNotFound::RETURN_NULL);
+		}
+		if (!IsValidUserType(entry)) {
+			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, user_type_name,
+			                                 OnEntryNotFound::THROW_EXCEPTION);
+		}
+		auto &type_entry = entry->Cast<TypeCatalogEntry>();
+		type = type_entry.user_type;
+		user_bind_modifiers_func = type_entry.bind_modifiers;
+	} else {
+		string type_catalog = UserType::GetCatalog(type);
+		string type_schema = UserType::GetSchema(type);
 
-		bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
+		BindSchemaOrCatalog(context, type_catalog, type_schema);
+		auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, type_catalog, type_schema, user_type_name);
+		auto &type_entry = entry->Cast<TypeCatalogEntry>();
+		type = type_entry.user_type;
+		user_bind_modifiers_func = type_entry.bind_modifiers;
+	}
 
-		if (catalog) {
-			// The search order is:
-			// 1) In the explicitly set schema (my_schema.my_type)
-			// 2) In the same schema as the table
-			// 3) In the same catalog
-			// 4) System catalog
+	// Now we bind the inner user type
+	BindLogicalType(type, catalog, schema);
 
-			optional_ptr<CatalogEntry> entry = nullptr;
-			if (!user_type_schema.empty()) {
-				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, user_type_schema, user_type_name,
-				                                 OnEntryNotFound::RETURN_NULL);
-			}
-			if (!IsValidUserType(entry)) {
-				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
-				                                 OnEntryNotFound::RETURN_NULL);
-			}
-			if (!IsValidUserType(entry)) {
-				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, INVALID_SCHEMA, user_type_name,
-				                                 OnEntryNotFound::RETURN_NULL);
-			}
-			if (!IsValidUserType(entry)) {
-				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA,
-				                                 user_type_name, OnEntryNotFound::THROW_EXCEPTION);
-			}
-			auto &type_entry = entry->Cast<TypeCatalogEntry>();
-			type = type_entry.user_type;
-			user_bind_modifiers_func = type_entry.bind_modifiers;
-		} else {
-			string type_catalog = UserType::GetCatalog(type);
-			string type_schema = UserType::GetSchema(type);
+	// Apply the type modifiers (if any)
+	if (user_bind_modifiers_func) {
+		// If an explicit bind_modifiers function was provided, use that to construct the type
+		BindTypeModifiersInput input {context, type, user_type_mods};
+		type = user_bind_modifiers_func(input);
+	} else if (type.HasExtensionInfo()) {
+		auto &ext_info = *type.GetExtensionInfo();
 
-			BindSchemaOrCatalog(context, type_catalog, type_schema);
-			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, type_catalog, type_schema, user_type_name);
-			auto &type_entry = entry->Cast<TypeCatalogEntry>();
-			type = type_entry.user_type;
-			user_bind_modifiers_func = type_entry.bind_modifiers;
+		// If the type already has modifiers, try to replace them with the user-provided ones if they are compatible
+		// This enables registering custom types with "default" type modifiers that can be overridden, without
+		// having to provide a custom bind_modifiers function
+		auto type_mods_size = ext_info.modifiers.size();
+
+		// Are we trying to pass more type modifiers than the type has?
+		if (user_type_mods.size() > type_mods_size) {
+			throw BinderException(
+			    "Cannot apply '%d' type modifier(s) to type '%s' taking at most '%d' type modifier(s)",
+			    user_type_mods.size(), user_type_name, type_mods_size);
 		}
 
-		BindLogicalType(type, catalog, schema);
+		// Deep copy the type so that we can replace the type modifiers
+		type = type.DeepCopy();
 
-		// Apply the type modifiers (if any)
-		if (user_bind_modifiers_func) {
-			// If an explicit bind_modifiers function was provided, use that to set the type modifier
-			BindTypeModifiersInput input {context, type, user_type_mods};
-			type = user_bind_modifiers_func(input);
-		} else if (type.HasModifiers()) {
-			// If the type already has modifiers, try to replace them with the user-provided ones if they are compatible
-			// This enables registering custom types with "default" type modifiers that can be overridden, without
-			// having to provide a custom bind_modifiers function
-			auto type_mods_size = type.GetModifiers()->size();
+		// Re-fetch the type modifiers now that we've deduplicated the ExtraTypeInfo
+		auto &type_mods = type.GetExtensionInfo()->modifiers;
 
-			// Are we trying to pass more type modifiers than the type has?
-			if (user_type_mods.size() > type_mods_size) {
-				throw BinderException(
-				    "Cannot apply '%d' type modifier(s) to type '%s' taking at most '%d' type modifier(s)",
-				    user_type_mods.size(), user_type_name, type_mods_size);
+		// Replace them in order, casting if necessary
+		for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
+			auto &type_mod = type_mods[i];
+			auto user_type_mod = user_type_mods[i];
+			if (type_mod.type() == user_type_mod.type()) {
+				type_mod = std::move(user_type_mod);
+			} else if (user_type_mod.DefaultTryCastAs(type_mod.type())) {
+				type_mod = std::move(user_type_mod);
+			} else {
+				throw BinderException("Cannot apply type modifier '%s' to type '%s', expected value of type '%s'",
+				                      user_type_mod.ToString(), user_type_name, type_mod.type().ToString());
 			}
-
-			// Deep copy the type so that we can replace the type modifiers
-			type = type.DeepCopy();
-
-			// Re-fetch the type modifiers now that we've deduplicated the ExtraTypeInfo
-			auto &type_mods = *type.GetModifiers();
-
-			// Replace them in order, casting if necessary
-			for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
-				auto &type_mod = type_mods[i];
-				auto user_type_mod = user_type_mods[i];
-				if (type_mod.type() == user_type_mod.type()) {
-					type_mod = std::move(user_type_mod);
-				} else if (user_type_mod.DefaultTryCastAs(type_mod.type())) {
-					type_mod = std::move(user_type_mod);
-				} else {
-					throw BinderException("Cannot apply type modifier '%s' to type '%s', expected value of type '%s'",
-					                      user_type_mod.ToString(), user_type_name, type_mod.type().ToString());
-				}
-			}
-		} else if (!user_type_mods.empty()) {
-			// We're trying to pass type modifiers to a type that doesnt have any
-			throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
 		}
+	} else if (!user_type_mods.empty()) {
+		// We're trying to pass type modifiers to a type that doesnt have any
+		throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
 	}
 }
 

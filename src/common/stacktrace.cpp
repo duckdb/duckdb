@@ -21,7 +21,7 @@ static string UnmangleSymbol(string symbol) {
 		}
 	}
 	for (idx_t i = mangle_start; i < symbol.size(); i++) {
-		if (StringUtil::CharacterIsSpace(symbol[i])) {
+		if (StringUtil::CharacterIsSpace(symbol[i]) || symbol[i] == ')' || symbol[i] == '+') {
 			mangle_end = i;
 			break;
 		}
@@ -42,6 +42,45 @@ static string UnmangleSymbol(string symbol) {
 	result += symbol.substr(mangle_end);
 	free(demangle_result);
 	return result;
+}
+
+static string CleanupStackTrace(string symbol) {
+#ifdef __APPLE__
+	// structure of frame pointers is [depth] [library] [pointer] [symbol]
+	// we are only interested in [depth] and [symbol]
+
+	// find the depth
+	idx_t start;
+	for (start = 0; start < symbol.size(); start++) {
+		if (!StringUtil::CharacterIsDigit(symbol[start])) {
+			break;
+		}
+	}
+
+	// now scan forward until we find the frame pointer
+	idx_t frame_end = symbol.size();
+	for (idx_t i = start; i + 1 < symbol.size(); ++i) {
+		if (symbol[i] == '0' && symbol[i + 1] == 'x') {
+			idx_t k;
+			for (k = i + 2; k < symbol.size(); ++k) {
+				if (!StringUtil::CharacterIsHex(symbol[k])) {
+					break;
+				}
+			}
+			frame_end = k;
+			break;
+		}
+	}
+	static constexpr idx_t STACK_TRACE_INDENTATION = 8;
+	if (frame_end == symbol.size() || start >= STACK_TRACE_INDENTATION) {
+		// frame pointer not found - just preserve the original frame
+		return symbol;
+	}
+	idx_t space_count = STACK_TRACE_INDENTATION - start;
+	return symbol.substr(0, start) + string(space_count, ' ') + symbol.substr(frame_end, symbol.size() - frame_end);
+#else
+	return symbol;
+#endif
 }
 
 string StackTrace::GetStacktracePointers(idx_t max_depth) {
@@ -68,7 +107,7 @@ string StackTrace::ResolveStacktraceSymbols(const string &pointers) {
 	string result;
 	char **strs = backtrace_symbols(callstack.get(), NumericCast<int>(frame_count));
 	for (idx_t i = 0; i < frame_count; i++) {
-		result += UnmangleSymbol(strs[i]);
+		result += CleanupStackTrace(UnmangleSymbol(strs[i]));
 		result += "\n";
 	}
 	free(reinterpret_cast<void *>(strs));

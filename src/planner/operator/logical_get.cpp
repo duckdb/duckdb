@@ -17,10 +17,10 @@ LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-                       vector<LogicalType> returned_types, vector<string> returned_names)
+                       vector<LogicalType> returned_types, vector<string> returned_names, LogicalType rowid_type)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
       bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)),
-      extra_info() {
+      extra_info(), rowid_type(std::move(rowid_type)) {
 }
 
 optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
@@ -126,7 +126,7 @@ void LogicalGet::ResolveTypes() {
 	if (projection_ids.empty()) {
 		for (auto &index : column_ids) {
 			if (index.IsRowIdColumn()) {
-				types.emplace_back(LogicalType::ROW_TYPE);
+				types.emplace_back(LogicalType(rowid_type));
 			} else {
 				types.push_back(returned_types[index.GetPrimaryIndex()]);
 			}
@@ -135,7 +135,7 @@ void LogicalGet::ResolveTypes() {
 		for (auto &proj_index : projection_ids) {
 			auto &index = column_ids[proj_index];
 			if (index.IsRowIdColumn()) {
-				types.emplace_back(LogicalType::ROW_TYPE);
+				types.emplace_back(LogicalType(rowid_type));
 			} else {
 				types.push_back(returned_types[index.GetPrimaryIndex()]);
 			}
