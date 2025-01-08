@@ -656,20 +656,34 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-	// initialize the fetch state
-	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
+	// collect all indexed columns
+	unordered_set<column_t> indexed_columns;
+	indexes.Scan([&](Index &index) {
+		auto set = index.GetColumnIdSet();
+		indexed_columns.insert(set.begin(), set.end());
+		return false;
+	});
+
+	// initialize the fetch state with only indexed columns
 	TableScanState state;
 	vector<StorageIndex> column_ids;
-	column_ids.reserve(types.size());
-	for (idx_t i = 0; i < types.size(); i++) {
-		column_ids.emplace_back(i);
+	column_ids.reserve(indexed_columns.size());
+	for (auto &col : indexed_columns) {
+		column_ids.emplace_back(StorageIndex(col));
 	}
+	sort(column_ids.begin(), column_ids.end());
 	state.Initialize(std::move(column_ids));
 	state.table_state.max_row = row_start + total_rows;
 
-	// initialize the fetch chunk
+	// keep track of which columns we fetched
+	auto fetched_columns = vector<bool>(types.size(), false);
+	for (auto &col : indexed_columns) {
+		fetched_columns[col] = true;
+	}
+
+	// initialize a chunk with all columns, but only fetch the indexed ones
 	DataChunk result;
-	result.Initialize(GetAllocator(), types);
+	result.Initialize(GetAllocator(), types, fetched_columns);
 
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	// now iterate over the row ids
