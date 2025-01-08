@@ -550,8 +550,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			column_names[1] = expr.relation_name;
 
 			for (auto &child : struct_children) {
-				if (child.first.empty()) { // UNIONs have a nameless first child with the tag, we can't query that
-					D_ASSERT(col_type.id() == LogicalTypeId::UNION);
+				if (child.first.empty()) { // UNIONS and ROWs have unnamed children, we don't want to bind those
 					continue;
 				}
 				QualifiedColumnName qualified_name(child.first);

@@ -139,3 +139,13 @@ query III
 from (values('asdf'::UNION(a INTEGER, b VARCHAR, c FLOAT))) v(c) select c.*;
 ----
 NULL	asdf	NULL
+
+statement error
+FROM (VALUES (row(1,2))) as t(i) SELECT i.*;
+----
+SELECT list is empty
+
+statement error
+FROM (VALUES (row(1))) as t(i) SELECT i.*;
+----
+SELECT list is empty
