@@ -19,6 +19,7 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 
@@ -219,6 +220,7 @@ void ScanIndex(ClientContext &context, const TableScanBindData &bind_data, Table
 		if (art.Scan(*scan_state, max_count, g_state.row_ids)) {
 			g_state.index_scan = true;
 			if (!g_state.row_ids.empty()) {
+				std::sort(g_state.row_ids.begin(), g_state.row_ids.end());
 				auto row_id_data = (data_ptr_t)&g_state.row_ids[0]; // NOLINT - this is not pretty
 				g_state.row_id_vector = make_uniq<Vector>(LogicalType::ROW_TYPE, row_id_data);
 			}
