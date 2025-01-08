@@ -2,6 +2,8 @@
 # description: GROUP BY nested types (STRUCTs, LISTs)
 # group: [group]
 
+require notmusl
+
 statement ok
 SET default_null_order='nulls_first';
 

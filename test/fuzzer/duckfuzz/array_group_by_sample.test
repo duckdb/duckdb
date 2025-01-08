@@ -2,6 +2,8 @@
 # description: Test allocating enough dummy list_entry_t's during tuple format serialization.
 # group: [duckfuzz]
 
+require notmusl
+
 statement ok
 PRAGMA enable_verification
 
