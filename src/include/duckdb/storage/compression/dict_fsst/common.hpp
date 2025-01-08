@@ -40,6 +40,25 @@ public:
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 };
 
+struct StringData {
+public:
+	explicit StringData(const string_t &string, optional_ptr<const string_t> encoded_string = nullptr)
+	    : string(string), encoded_string(encoded_string) {
+	}
+
+public:
+	const string_t &Get() const {
+		if (encoded_string) {
+			return *encoded_string;
+		}
+		return string;
+	}
+
+public:
+	const string_t &string;
+	optional_ptr<const string_t> encoded_string;
+};
+
 //! Abstract class managing the compression state for size analysis or compression.
 class DictFSSTCompressionState : public CompressionState {
 public:
@@ -53,22 +72,23 @@ protected:
 	// Should verify the State
 	virtual void Verify() = 0;
 	// Performs a lookup of str, storing the result internally
-	virtual optional_idx LookupString(string_t str) = 0;
+	virtual optional_idx LookupString(const string_t &str) = 0;
 	// Add the most recently looked up str to compression state
 	virtual void AddLookup(uint32_t lookup_result) = 0;
 	// Add string to the state that is known to not be seen yet
-	virtual void AddNewString(string_t str) = 0;
+	virtual void AddNewString(const StringData &str) = 0;
 	// Add a null value to the compression state
 	virtual void AddNull() = 0;
 	virtual idx_t RequiredSpace(bool new_string, idx_t string_size) = 0;
 	// Flush the segment to disk if compressing or reset the counters if analyzing
 	virtual void Flush(bool final = false) = 0;
+	virtual void UpdateStats(UnifiedVectorFormat &input, idx_t count) {/* no-op */};
 	// Process the strings of the vector if necessary
 	virtual void EncodeInputStrings(UnifiedVectorFormat &input, idx_t count) = 0;
 	// Encode the dictionary with FSST, return false if we decided not to encode
 	virtual bool EncodeDictionary() = 0;
 	// Retrieve the string given the indices
-	virtual const string_t &GetString(const string_t *strings, idx_t index, idx_t raw_index) = 0;
+	virtual StringData GetString(const string_t *strings, idx_t index, idx_t raw_index) = 0;
 
 private:
 	bool DryAppendToCurrentSegment(bool is_new, UnifiedVectorFormat &vdata, idx_t count, idx_t index, idx_t raw_index);

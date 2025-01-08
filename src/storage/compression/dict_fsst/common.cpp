@@ -48,8 +48,9 @@ DictFSSTCompressionState::~DictFSSTCompressionState() {
 bool DictFSSTCompressionState::DryAppendToCurrentSegment(bool is_new, UnifiedVectorFormat &vdata, idx_t count,
                                                          idx_t index, idx_t raw_index) {
 	auto strings = vdata.GetData<string_t>(vdata);
-	reference<const string_t> str = GetString(strings, index, raw_index);
-	auto required_space = RequiredSpace(is_new, str.get().GetSize());
+	auto string_data = GetString(strings, index, raw_index);
+	auto &str = string_data.Get();
+	auto required_space = RequiredSpace(is_new, str.GetSize());
 
 	auto block_size = info.GetBlockSize();
 
@@ -60,8 +61,8 @@ bool DictFSSTCompressionState::DryAppendToCurrentSegment(bool is_new, UnifiedVec
 			//! Decide whether or not to encode the dictionary
 			if (EncodeDictionary()) {
 				EncodeInputStrings(vdata, count);
-				str = GetString(strings, index, raw_index);
-				required_space = RequiredSpace(is_new, str.get().GetSize());
+				auto encoded_string = GetString(strings, index, raw_index);
+				required_space = RequiredSpace(is_new, encoded_string.Get().GetSize());
 				if (required_space > block_size) {
 					//! Even after encoding the dictionary, we can't add this string
 					return false;
@@ -97,9 +98,10 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		optional_idx lookup_result;
 		auto row_is_valid = vdata.validity.RowIsValid(idx);
 
-		reference<const string_t> str = GetString(data, idx, i);
+		auto string_data = GetString(data, idx, i);
 		if (row_is_valid) {
-			string_size = str.get().GetSize();
+			auto &str = string_data.Get();
+			string_size = str.GetSize();
 			if (string_size >= StringUncompressed::GetStringBlockLimit(info.GetBlockSize())) {
 				// Big strings not implemented for dictionary compression
 				return false;
@@ -124,7 +126,8 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		} else if (lookup_result.IsValid()) {
 			AddLookup(UnsafeNumericCast<uint32_t>(lookup_result.GetIndex()));
 		} else {
-			AddNewString(str);
+			auto string = GetString(data, idx, i);
+			AddNewString(string);
 		}
 
 		Verify();

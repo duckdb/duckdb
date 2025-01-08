@@ -49,15 +49,15 @@ public:
 public:
 	void CreateEmptySegment(idx_t row_start);
 	void Verify() override;
-	optional_idx LookupString(string_t str) override;
-	void AddNewString(string_t str) override;
+	optional_idx LookupString(const string_t &str) override;
+	void AddNewString(const StringData &str) override;
 	void AddNull() override;
 	void AddLookup(uint32_t lookup_result) override;
 	idx_t RequiredSpace(bool new_string, idx_t string_size) override;
 	void Flush(bool final = false) override;
 	void EncodeInputStrings(UnifiedVectorFormat &input, idx_t count) override;
 	bool EncodeDictionary() override;
-	const string_t &GetString(const string_t *strings, idx_t index, idx_t raw_index) override;
+	StringData GetString(const string_t *strings, idx_t index, idx_t raw_index) override;
 	idx_t Finalize();
 
 public:

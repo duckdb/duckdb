@@ -8,11 +8,14 @@ DictFSSTAnalyzeState::DictFSSTAnalyzeState(const CompressionInfo &info)
       current_dict_size(0), current_width(0), next_width(0) {
 }
 
-optional_idx DictFSSTAnalyzeState::LookupString(string_t str) {
+optional_idx DictFSSTAnalyzeState::LookupString(const string_t &str) {
 	return current_set.count(str) ? 1 : optional_idx();
 }
 
-void DictFSSTAnalyzeState::AddNewString(string_t str) {
+void DictFSSTAnalyzeState::AddNewString(const StringData &string_data) {
+	D_ASSERT(!string_data.encoded_string);
+	auto &str = string_data.string;
+
 	current_tuple_count++;
 	current_unique_count++;
 	current_dict_size += str.GetSize();
@@ -40,8 +43,8 @@ bool DictFSSTAnalyzeState::EncodeDictionary() {
 	return false;
 }
 
-const string_t &DictFSSTAnalyzeState::GetString(const string_t *strings, idx_t index, idx_t raw_index) {
-	return strings[index];
+StringData DictFSSTAnalyzeState::GetString(const string_t *strings, idx_t index, idx_t raw_index) {
+	return StringData(strings[index]);
 }
 
 idx_t DictFSSTAnalyzeState::RequiredSpace(bool new_string, idx_t string_size) {
