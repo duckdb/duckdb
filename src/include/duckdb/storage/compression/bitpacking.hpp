@@ -26,7 +26,6 @@ public:
 public:
 	void Serialize(Serializer &serializer) const override;
 
-protected:
 	unordered_map<BitpackingMode, idx_t> counts;
 };
 
