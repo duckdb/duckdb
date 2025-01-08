@@ -1,0 +1,42 @@
+# name: test/sql/parser/triple_backticks.test
+# group: [parser]
+
+query I
+select ``````;
+----
+(empty)
+
+query I
+select 	```1```;
+----
+1
+
+query I
+select 	(```
+1
+```).contains(chr(10));
+----
+true
+
+query I
+select (
+```
+apple
+orange
+banana
+```
+).split(chr(10))
+----
+[, apple, orange, banana, ]
+
+statement error
+```
+test
+test;
+----
+Parser Error: Unterminated triple backtick string literal 
+
+query I
+select ```this string can contain 'single quotes', "double quotes", ", `, '```
+----
+this string can contain 'single quotes', "double quotes", ", `, '

@@ -288,7 +288,7 @@ xdinside		[^"]+
 btick			`
 xbtstart		{btick}{btick}{btick}
 xbtstop			{btick}{btick}{btick}
-xbtdouble		{dquote}{dquote}
+xbtdouble		{xbtstart}{xbtstop}
 xbtinside		([^`]|`[^`]|``[^`])+
 
 /* Unicode escapes */
@@ -743,6 +743,14 @@ other			.
 					startlit();
 				}
 <bt>{xbtstop}	{
+					char	   *ident;
+
+					BEGIN(INITIAL);
+					ident = litbufdup(yyscanner);
+					yylval->str = ident;
+					return SCONST;
+				}
+{xbtdouble}		{
 					char	   *ident;
 
 					BEGIN(INITIAL);
