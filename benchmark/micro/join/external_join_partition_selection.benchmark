@@ -18,7 +18,7 @@ set temp_directory='${BENCHMARK_DIR}/external_join_partition_selection.duckdb.tm
 set memory_limit='500mb';
 
 run
-select sum(c) from probe join build using (c)
+select count(*) from probe join build using (c)
 
 result I
-50000620000000
+20000000

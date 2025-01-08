@@ -1,0 +1,23 @@
+# name: test/sql/storage/optimistic_write/optimistic_write_mixed.test_slow
+# description: Test mix of optimistic writes
+# group: [optimistic_write]
+
+require parquet
+
+statement ok
+copy (select uuid() sw_id, uuid()::varchar sw_system_object, uuid()::varchar source_system_id, uuid()::varchar source_system, uuid()::varchar source_system_object, uuid()::varchar source_system_field_name, random() <= 0.9 as is_primary from range(728478))
+to '__TEST_DIR__/external_ids_generated.parquet';
+
+load __TEST_DIR__/external_ids.db
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+statement ok
+SET threads = 48;
+
+statement ok
+SET preserve_insertion_order = false;
+
+statement ok
+create table external_ids_tbl as from parquet_scan('__TEST_DIR__/external_ids_generated.parquet');

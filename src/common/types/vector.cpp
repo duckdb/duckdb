@@ -54,10 +54,10 @@ UnifiedVectorFormat &UnifiedVectorFormat::operator=(UnifiedVectorFormat &&other)
 	return *this;
 }
 
-Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
+Vector::Vector(LogicalType type_p, bool create_data, bool initialize_to_zero, idx_t capacity)
     : vector_type(VectorType::FLAT_VECTOR), type(std::move(type_p)), data(nullptr), validity(capacity) {
 	if (create_data) {
-		Initialize(zero_data, capacity);
+		Initialize(initialize_to_zero, capacity);
 	}
 }
 
@@ -306,7 +306,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(bool zero_data, idx_t capacity) {
+void Vector::Initialize(bool initialize_to_zero, idx_t capacity) {
 	auxiliary.reset();
 	validity.Reset();
 	auto &type = GetType();
@@ -325,7 +325,7 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 	if (type_size > 0) {
 		buffer = VectorBuffer::CreateStandardVector(type, capacity);
 		data = buffer->GetData();
-		if (zero_data) {
+		if (initialize_to_zero) {
 			memset(data, 0, capacity * type_size);
 		}
 	}
@@ -1374,10 +1374,10 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 }
 
 void Vector::SetVectorType(VectorType vector_type_p) {
-	this->vector_type = vector_type_p;
+	vector_type = vector_type_p;
 	auto physical_type = GetType().InternalType();
-	if (TypeIsConstantSize(physical_type) &&
-	    (GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR)) {
+	auto flat_or_const = GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR;
+	if (TypeIsConstantSize(physical_type) && flat_or_const) {
 		auxiliary.reset();
 	}
 	if (vector_type == VectorType::CONSTANT_VECTOR && physical_type == PhysicalType::STRUCT) {
@@ -1782,23 +1782,29 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	vector.validity.Set(idx, !is_null);
-	if (is_null) {
-		auto &type = vector.GetType();
-		auto internal_type = type.InternalType();
-		if (internal_type == PhysicalType::STRUCT) {
-			// set all child entries to null as well
-			auto &entries = StructVector::GetEntries(vector);
-			for (auto &entry : entries) {
-				FlatVector::SetNull(*entry, idx, is_null);
-			}
-		} else if (internal_type == PhysicalType::ARRAY) {
-			// set the child element in the array to null as well
-			auto &child = ArrayVector::GetEntry(vector);
-			auto array_size = ArrayType::GetSize(type);
-			auto child_offset = idx * array_size;
-			for (idx_t i = 0; i < array_size; i++) {
-				FlatVector::SetNull(child, child_offset + i, is_null);
-			}
+	if (!is_null) {
+		return;
+	}
+
+	auto &type = vector.GetType();
+	auto internal_type = type.InternalType();
+
+	// Set all child entries to NULL.
+	if (internal_type == PhysicalType::STRUCT) {
+		auto &entries = StructVector::GetEntries(vector);
+		for (auto &entry : entries) {
+			FlatVector::SetNull(*entry, idx, is_null);
+		}
+		return;
+	}
+
+	// Set all child entries to NULL.
+	if (internal_type == PhysicalType::ARRAY) {
+		auto &child = ArrayVector::GetEntry(vector);
+		auto array_size = ArrayType::GetSize(type);
+		auto child_offset = idx * array_size;
+		for (idx_t i = 0; i < array_size; i++) {
+			FlatVector::SetNull(child, child_offset + i, is_null);
 		}
 	}
 }

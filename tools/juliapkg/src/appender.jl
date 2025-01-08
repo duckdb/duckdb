@@ -97,7 +97,8 @@ append(appender::Appender, val::FixedDecimal) = append(appender, string(val));
 append(appender::Appender, val::Date) =
     duckdb_append_date(appender.handle, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS);
 # nanosecond to microseconds
-append(appender::Appender, val::Time) = duckdb_append_time(appender.handle, Dates.value(val) / 1000);
+append(appender::Appender, val::Time) = duckdb_append_time(appender.handle, Dates.value(val) ÷ 1000);
+
 # milliseconds to microseconds
 append(appender::Appender, val::DateTime) =
     duckdb_append_timestamp(appender.handle, (Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000);

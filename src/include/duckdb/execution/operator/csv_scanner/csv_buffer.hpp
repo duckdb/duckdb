@@ -55,10 +55,10 @@ public:
 	shared_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number, bool &has_seaked);
 
 	//! Gets the buffer actual size
-	idx_t GetBufferSize();
+	idx_t GetBufferSize() const;
 
 	//! If this buffer is the last buffer of the CSV File
-	bool IsCSVFileLastBuffer();
+	bool IsCSVFileLastBuffer() const;
 
 	//! Allocates internal buffer, sets 'block' and 'handle' variables.
 	void AllocateBuffer(idx_t buffer_size);
@@ -77,13 +77,9 @@ public:
 	}
 
 	//! By default, we use CSV_BUFFER_SIZE to allocate each buffer
-	//! TODO: Should benchmarks other values
-	static constexpr idx_t CSV_BUFFER_SIZE = 32000000; // 32MB
-	//! In case the file has a size < 32MB, we will use this size instead
-	//! This is to avoid mallocing a lot of memory for a small file
-	//! And if it's a compressed file we can't use the actual size of the file
-	static constexpr idx_t CSV_MINIMUM_BUFFER_SIZE = 8000000; // 8MB
-	//! If this is the last buffer of the CSV File
+	static constexpr idx_t ROWS_PER_BUFFER = 16;
+	static constexpr idx_t MIN_ROWS_PER_BUFFER = 4;
+
 	bool last_buffer = false;
 
 private:
