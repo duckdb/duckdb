@@ -202,7 +202,7 @@ public:
 	Executor &GetExecutor();
 
 	//! Return the current logger
-	Logger &GetLogger();
+	Logger &GetLogger() const;
 
 	//! Returns the current query string (if any)
 	const string &GetCurrentQuery();

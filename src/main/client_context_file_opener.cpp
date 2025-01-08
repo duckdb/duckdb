@@ -11,7 +11,7 @@ SettingLookupResult ClientContextFileOpener::TryGetCurrentSetting(const string &
 	return context.TryGetCurrentSetting(key, result);
 }
 
-Logger &ClientContextFileOpener::GetLogger() {
+Logger &ClientContextFileOpener::GetLogger() const {
 	return Logger::Get(context);
 }
 

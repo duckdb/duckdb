@@ -58,7 +58,7 @@ public:
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
-	DUCKDB_API LogManager &GetLogManager();
+	DUCKDB_API LogManager &GetLogManager() const;
 	DUCKDB_API void SetExtensionLoaded(const string &extension_name, ExtensionInstallInfo &install_info);
 
 	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();

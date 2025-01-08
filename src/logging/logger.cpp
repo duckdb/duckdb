@@ -9,23 +9,23 @@
 
 namespace duckdb {
 
-Logger &Logger::Get(DatabaseInstance &db) {
+Logger &Logger::Get(const DatabaseInstance &db) {
 	return db.GetLogManager().GlobalLogger();
 }
 
-Logger &Logger::Get(ThreadContext &thread_context) {
+Logger &Logger::Get(const ThreadContext &thread_context) {
 	return *thread_context.logger;
 }
 
-Logger &Logger::Get(ExecutionContext &execution_context) {
+Logger &Logger::Get(const ExecutionContext &execution_context) {
 	return *execution_context.thread.logger;
 }
 
-Logger &Logger::Get(ClientContext &client_context) {
+Logger &Logger::Get(const ClientContext &client_context) {
 	return client_context.GetLogger();
 }
 
-Logger &Logger::Get(FileOpener &opener) {
+Logger &Logger::Get(const FileOpener &opener) {
 	return opener.GetLogger();
 }
 

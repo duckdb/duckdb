@@ -21,7 +21,7 @@ public:
 	explicit ClientContextFileOpener(ClientContext &context_p) : context(context_p) {
 	}
 
-	Logger &GetLogger() override;
+	Logger &GetLogger() const override;
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) override;
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override;
 

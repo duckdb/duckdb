@@ -532,7 +532,7 @@ const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	return create_api_v1();
 }
 
-LogManager &DatabaseInstance::GetLogManager() {
+LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
 }
 

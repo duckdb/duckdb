@@ -306,7 +306,7 @@ Executor &ClientContext::GetExecutor() {
 	return *active_query->executor;
 }
 
-Logger &ClientContext::GetLogger() {
+Logger &ClientContext::GetLogger() const {
 	return *logger;
 }
 

@@ -50,11 +50,11 @@ public:
 	// Get the Logger to write log messages to. In decreasing order of preference(!) so the ThreadContext getter is the
 	// most preferred way of fetching the logger and the DatabaseInstance getter the least preferred. This has to do
 	// both with logging performance and level of detail of logging context that is provided.
-	static Logger &Get(ThreadContext &thread_context);
-	static Logger &Get(ExecutionContext &execution_context);
-	static Logger &Get(ClientContext &client_context);
-	static Logger &Get(FileOpener &opener);
-	static Logger &Get(DatabaseInstance &db);
+	static Logger &Get(const ThreadContext &thread_context);
+	static Logger &Get(const ExecutionContext &execution_context);
+	static Logger &Get(const ClientContext &client_context);
+	static Logger &Get(const FileOpener &opener);
+	static Logger &Get(const DatabaseInstance &db);
 
 	//! Logger::Log with raw C-String
 	template <class T>

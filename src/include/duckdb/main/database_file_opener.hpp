@@ -21,7 +21,7 @@ public:
 	explicit DatabaseFileOpener(DatabaseInstance &db_p) : db(db_p) {
 	}
 
-	Logger &GetLogger() override {
+	Logger &GetLogger() const override {
 		return Logger::Get(db);
 	}
 
