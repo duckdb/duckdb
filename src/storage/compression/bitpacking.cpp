@@ -57,19 +57,20 @@ string BitpackingModeToString(const BitpackingMode &mode) {
 
 struct BitpackingSegmentState : public CompressedSegmentState {
 
-	BitpackingSegmentState() : CompressedSegmentState(), mode(BitpackingMode::AUTO) {
+	BitpackingSegmentState() : CompressedSegmentState() {
 	}
 
 public:
 	string GetSegmentInfo() const override {
-		string result;
-		if (mode != BitpackingMode::INVALID) {
-			result = "Mode: " + BitpackingModeToString(mode);
+		vector<string> result;
+		for (auto &it : counts) {
+			auto &mode = it.first;
+			auto &count = it.second;
+			result.push_back(StringUtil::Format("%s: %d", EnumUtil::ToString(mode), count));
 		}
-		return result;
+		return StringUtil::Join(result, ", ");
 	}
-
-	BitpackingMode mode;
+	unordered_map<BitpackingMode, idx_t> counts;
 };
 
 typedef struct {
@@ -482,6 +483,10 @@ public:
 		}
 
 		static void WriteMetaData(BitpackingCompressionState<T, WRITE_STATISTICS> *state, BitpackingMode mode) {
+			auto &current_segment = state->current_segment;
+			auto &segment_state = current_segment->GetSegmentState()->template Cast<BitpackingSegmentState>();
+			segment_state.counts[mode]++;
+
 			bitpacking_metadata_t metadata {mode, (uint32_t)(state->data_ptr - state->handle.Ptr())};
 			state->metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
 			Store<bitpacking_metadata_encoded_t>(EncodeMeta(metadata), state->metadata_ptr);
@@ -966,20 +971,53 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 	scan_state.Skip(segment, skip_count);
 }
 
+//===--------------------------------------------------------------------===//
+// Serialization & Cleanup
+//===--------------------------------------------------------------------===//
+SerializedBitpackingSegmentState::SerializedBitpackingSegmentState() {
+}
+
+SerializedBitpackingSegmentState::SerializedBitpackingSegmentState(unordered_map<BitpackingMode, idx_t> counts_p) {
+	counts = std::move(counts_p);
+}
+
+void SerializedBitpackingSegmentState::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty(1, "counts", counts);
+}
+
 template <class T>
 unique_ptr<CompressedSegmentState> BitpackingInitSegment(ColumnSegment &segment, block_id_t block_id,
                                                          optional_ptr<ColumnSegmentState> segment_state) {
-	// segment_state is not used for Bitpacking (no specialized serialize/deserialize methods)
-	// block_id would equal INVALID_BLOCK for a constant value block (not materialized)
-	// auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
-		return nullptr; // auto handle = buffer_manager.Pin(segment.block);
+		// Return an empty bitpacking segment state, we'll populate this during compression
+		return make_uniq<BitpackingSegmentState>();
 	}
 	auto result = make_uniq<BitpackingSegmentState>();
-	// Use scan_state to trigger decoding of the (first group's?) metadata
-	BitpackingScanState<T> scan_state(segment);
-	result->mode = scan_state.current_group.mode;
+	if (segment_state) {
+		auto &serialized_state = segment_state->Cast<SerializedBitpackingSegmentState>();
+		result->counts = std::move(serialized_state.counts);
+	}
 	return std::move(result);
+}
+
+template <class T>
+unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment) {
+	auto &state = segment.GetSegmentState()->Cast<BitpackingSegmentState>();
+	return make_uniq<SerializedBitpackingSegmentState>(state.counts);
+}
+
+template <class T>
+unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer) {
+	auto result = make_uniq<SerializedBitpackingSegmentState>();
+	deserializer.ReadProperty(1, "counts", result->counts);
+	return std::move(result);
+}
+
+void CleanupState(ColumnSegment &segment) {
+	// FIXME: check correctness
+	auto &state = segment.GetSegmentState()->Cast<BitpackingSegmentState>();
+	state.counts.clear();
+	return;
 }
 
 //===--------------------------------------------------------------------===//
@@ -993,9 +1031,9 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 	    BitpackingCompress<T, WRITE_STATISTICS>, BitpackingFinalizeCompress<T, WRITE_STATISTICS>, BitpackingInitScan<T>,
 	    BitpackingScan<T>, BitpackingScanPartial<T>, BitpackingFetchRow<T>, BitpackingSkip<T>);
 	bitpacking.init_segment = BitpackingInitSegment<T>;
-	// bitpacking.serialize_state = BitpackingSerializeState<T>;
-	// bitpacking.deserialize_state = BitpackingDeserializeState<T>;
-	// bitpacking.cleanup_state = ZSTDStorage::CleanupState;
+	bitpacking.serialize_state = SerializeState<T>;
+	bitpacking.deserialize_state = DeserializeState<T>;
+	bitpacking.cleanup_state = CleanupState;
 	return bitpacking;
 }
 
