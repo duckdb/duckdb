@@ -38,7 +38,8 @@ SinkResultType PhysicalArrowCollector::Sink(ExecutionContext &context, DataChunk
 			D_ASSERT(processed < count);
 			auto initial_capacity = MinValue(record_batch_size, count - processed);
 			appender =
-			    make_uniq<ArrowAppender>(types, initial_capacity, properties, extension_type_cast, context.client);
+			    make_uniq<ArrowAppender>(types, initial_capacity, properties,
+			                             ArrowExtensionType::GetExtensionTypes(context.client, types), context.client);
 		}
 
 		// Figure out how much we can still append to this chunk

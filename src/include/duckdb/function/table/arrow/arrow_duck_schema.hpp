@@ -100,7 +100,8 @@ public:
 	ArrowType GetInternalArrowType() const;
 
 	//! This function returns possible extension types to given DuckDB types
-	static unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> GetExtensionTypes(ClientContext& context, const vector<LogicalType> &duckdb_types);
+	static unordered_map<idx_t, const shared_ptr<ArrowExtensionType>>
+	GetExtensionTypes(ClientContext &context, const vector<LogicalType> &duckdb_types);
 
 private:
 	//! Internal type is a type that refers to the actual arrow format

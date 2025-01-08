@@ -421,14 +421,14 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 		auto arrays = arrow_result.ConsumeArrays();
 		for (auto &array : arrays) {
 			ArrowSchema arrow_schema;
-			auto names = arrow_result.names;
+			auto result_names = arrow_result.names;
 			if (to_polars) {
-				QueryResult::DeduplicateColumns(names);
+				QueryResult::DeduplicateColumns(result_names);
 			}
 			ArrowArray data = array->arrow_array;
 			array->arrow_array.release = nullptr;
-			ArrowConverter::ToArrowSchema(&arrow_schema, arrow_result.types, names, arrow_result.client_properties,
-			                              context);
+			ArrowConverter::ToArrowSchema(&arrow_schema, arrow_result.types, result_names,
+			                              arrow_result.client_properties, context);
 			TransformDuckToArrowChunk(arrow_schema, data, batches);
 		}
 	} else {
@@ -440,20 +440,20 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 			{
 				D_ASSERT(py::gil_check());
 				py::gil_scoped_release release;
-				//! FIXME: POPULATE extension_type_cast
-				unordered_map<idx_t, const shared_ptr<ArrowExtensionType>>  extension_type_cast;
-				count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data, extension_type_cast, context);
+				count =
+				    ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data,
+				                          ArrowExtensionType::GetExtensionTypes(context, query_result.types), context);
 			}
 			if (count == 0) {
 				break;
 			}
 			ArrowSchema arrow_schema;
-			auto names = query_result.names;
+			auto result_names = query_result.names;
 			if (to_polars) {
-				QueryResult::DeduplicateColumns(names);
+				QueryResult::DeduplicateColumns(result_names);
 			}
-			ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties,
-			                              context);
+			ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, result_names,
+			                              query_result.client_properties, context);
 			TransformDuckToArrowChunk(arrow_schema, data, batches);
 		}
 	}

@@ -88,7 +88,6 @@ public:
 
 	shared_ptr<ArrowExtensionType> GetType() const;
 
-
 	LogicalTypeId GetLogicalTypeId() const;
 
 	LogicalType GetLogicalType() const;

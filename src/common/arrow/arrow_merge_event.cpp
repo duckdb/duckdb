@@ -17,14 +17,14 @@ ArrowBatchTask::ArrowBatchTask(ArrowQueryResult &result, vector<idx_t> record_ba
 
 void ArrowBatchTask::ProduceRecordBatches() {
 	auto &arrays = result.Arrays();
-	// FIXME: This is wrong
-	unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast;
 	auto arrow_options = executor.context.GetClientProperties();
 	for (auto &index : record_batch_indices) {
 		auto &array = arrays[index];
 		D_ASSERT(array);
-		const idx_t count = ArrowUtil::FetchChunk(scan_state, arrow_options, batch_size, &array->arrow_array,
-		                                          extension_type_cast, event->GetClientContext());
+		const idx_t count =
+		    ArrowUtil::FetchChunk(scan_state, arrow_options, batch_size, &array->arrow_array,
+		                          ArrowExtensionType::GetExtensionTypes(event->GetClientContext(), scan_state.Types()),
+		                          event->GetClientContext());
 		(void)count;
 		D_ASSERT(count != 0);
 	}

@@ -326,7 +326,11 @@ struct ArrowBool8 {
 		auto source_ptr = reinterpret_cast<bool *>(FlatVector::GetData(source));
 		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
 		for (idx_t i = 0; i < count; i++) {
-			result_ptr[i] = source_ptr[i];
+			if (source_ptr[i]) {
+				result_ptr[i] = 1;
+			} else {
+				result_ptr[i] = 0;
+			}
 		}
 	}
 };
