@@ -307,21 +307,11 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
 
 	const auto type = result_vector.GetType().id();
-	auto &formats = date_format_map.GetCandidateFormats(type);
-	idx_t i;
-	{
-		lock_guard<mutex> guard(date_format_map.lock);
-		i = formats.size();
-	}
-
+	auto i = date_format_map.NumberOfFormats(type);
 	for (; i != 0; i--) {
 		StrpTimeFormat format;
-		{
-			lock_guard<mutex> guard(date_format_map.lock);
-			if (i > formats.size()) {
-				continue;
-			}
-			format = formats[i - 1];
+		if (!date_format_map.GetFormatAtIndex(type, i - 1, format)) {
+			continue;
 		}
 
 		bool success;
@@ -337,10 +327,7 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 		}
 
 		if (success) {
-			lock_guard<mutex> guard(date_format_map.lock);
-			while (formats.size() > i) {
-				formats.pop_back();
-			}
+			date_format_map.ShrinkFormatsToSize(type, i);
 			return true;
 		}
 	}
