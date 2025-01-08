@@ -357,6 +357,7 @@ bool ArrowType::IsExtension() const {
 	return type_enum == ArrowTypeEnum::EXTENSION;
 }
 
+
 shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema &schema) {
 	auto format = string(schema.format);
 	// Let's first figure out if this type is an extension type
@@ -373,6 +374,17 @@ LogicalType ArrowExtensionType::GetInternalType() const {
 }
 ArrowType ArrowExtensionType::GetInternalArrowType() const {
 	return ArrowType(internal_type);
+}
+
+unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> ArrowExtensionType::GetExtensionTypes(ClientContext& context, const vector<LogicalType> &duckdb_types) {
+	unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_types;
+	auto &db_config  = DBConfig::GetConfig(context);
+	for (idx_t i = 0; i < duckdb_types.size(); i++) {
+		if (db_config.HasArrowExtension(duckdb_types[i])) {
+			extension_types[i] = db_config.GetArrowExtension(duckdb_types[i]);
+		}
+	}
+	return extension_types;
 }
 
 } // namespace duckdb
