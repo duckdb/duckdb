@@ -43,8 +43,11 @@ void ArrowAppender::Append(DataChunk &input, const idx_t from, const idx_t to, c
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
 		if (root_data[i]->extension_type && root_data[i]->extension_type->duckdb_to_arrow) {
 			Vector input_data(root_data[i]->extension_type->GetInternalType());
-			FlatVector::SetValidity(input_data, FlatVector::Validity(input.data[i]));
-			root_data[i]->extension_type->duckdb_to_arrow(context, input.data[i], input_data, input_size);
+			UnifiedVectorFormat format;
+			input.data[i].ToUnifiedFormat(input_size, format);
+			FlatVector::SetValidity(input_data, format.validity);
+
+			root_data[i]->extension_type->duckdb_to_arrow(context, format.data, input_data, input_size);
 			root_data[i]->append_vector(*root_data[i], input_data, from, to, input_size);
 		} else {
 			root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);

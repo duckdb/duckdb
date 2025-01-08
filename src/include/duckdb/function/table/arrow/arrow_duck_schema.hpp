@@ -21,7 +21,10 @@ struct DBConfig;
 
 struct ArrowArrayScanState;
 
-typedef void (*cast_t)(ClientContext &context, Vector &source, Vector &result, idx_t count);
+typedef void (*cast_arrow_duck_t)(ClientContext &context, Vector &source, Vector &result, idx_t count);
+
+typedef void (*cast_duck_arrow_t)(ClientContext &context, data_ptr_t &source, Vector &result, idx_t count);
+
 enum ArrowTypeEnum { BASE = 0, EXTENSION = 1 };
 
 class ArrowType {
@@ -79,8 +82,8 @@ protected:
 
 class ArrowExtensionType : public ArrowType {
 public:
-	ArrowExtensionType(LogicalType type_p, LogicalType internal_type_p, cast_t arrow_to_duckdb, cast_t duckdb_to_arrow,
-	                   unique_ptr<ArrowTypeInfo> type_info = nullptr)
+	ArrowExtensionType(LogicalType type_p, LogicalType internal_type_p, cast_arrow_duck_t arrow_to_duckdb,
+	                   cast_duck_arrow_t duckdb_to_arrow, unique_ptr<ArrowTypeInfo> type_info = nullptr)
 	    : ArrowType(std::move(type_p), std::move(type_info)), arrow_to_duckdb(arrow_to_duckdb),
 	      duckdb_to_arrow(duckdb_to_arrow), internal_type(std::move(internal_type_p)) {
 		type_enum = EXTENSION;
@@ -91,9 +94,9 @@ public:
 		type_enum = EXTENSION;
 	}
 	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
-	cast_t arrow_to_duckdb = nullptr;
+	cast_arrow_duck_t arrow_to_duckdb = nullptr;
 	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
-	cast_t duckdb_to_arrow = nullptr;
+	cast_duck_arrow_t duckdb_to_arrow = nullptr;
 
 	LogicalType GetInternalType() const;
 

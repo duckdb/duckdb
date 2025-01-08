@@ -79,8 +79,8 @@ public:
 	ArrowTypeExtension(string extension_name, populate_arrow_schema_t populate_arrow_schema, get_type_t get_type,
 	                   shared_ptr<ArrowExtensionType> type);
 	ArrowTypeExtension(string vendor_name, string type_name, populate_arrow_schema_t populate_arrow_schema,
-	                   get_type_t get_type, shared_ptr<ArrowExtensionType> type, cast_t arrow_to_duckdb,
-	                   cast_t duckdb_to_arrow);
+	                   get_type_t get_type, shared_ptr<ArrowExtensionType> type, cast_arrow_duck_t arrow_to_duckdb,
+	                   cast_duck_arrow_t duckdb_to_arrow);
 
 	ArrowTypeExtensionInfo GetInfo() const;
 

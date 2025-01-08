@@ -107,8 +107,8 @@ ArrowTypeExtension::ArrowTypeExtension(string extension_name, populate_arrow_sch
 
 ArrowTypeExtension::ArrowTypeExtension(string vendor_name, string type_name,
                                        populate_arrow_schema_t populate_arrow_schema, get_type_t get_type,
-                                       shared_ptr<ArrowExtensionType> type_p, cast_t arrow_to_duckdb,
-                                       cast_t duckdb_to_arrow)
+                                       shared_ptr<ArrowExtensionType> type_p, cast_arrow_duck_t arrow_to_duckdb,
+                                       cast_duck_arrow_t duckdb_to_arrow)
     : populate_arrow_schema(populate_arrow_schema), get_type(get_type),
       extension_info(ArrowTypeExtensionInfo::ARROW_EXTENSION_NON_CANONICAL, std::move(vendor_name),
                      std::move(type_name), {}),
@@ -322,8 +322,8 @@ struct ArrowBool8 {
 			result_ptr[i] = source_ptr[i];
 		}
 	}
-	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		auto source_ptr = reinterpret_cast<bool *>(FlatVector::GetData(source));
+	static void DuckToArrow(ClientContext &context, data_ptr_t &source, Vector &result, idx_t count) {
+		auto source_ptr = reinterpret_cast<bool *>(source);
 		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
 		for (idx_t i = 0; i < count; i++) {
 			result_ptr[i] = source_ptr[i];
