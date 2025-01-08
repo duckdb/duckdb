@@ -15,7 +15,6 @@ const duckdb_arrow_array = Ptr{Cvoid}
 const duckdb_arrow_schema = Ptr{Cvoid}
 const duckdb_arrow_stream = Ptr{Cvoid}
 const duckdb_bind_info = Ptr{Cvoid}
-const duckdb_bit = Ptr{Cvoid}
 const duckdb_cast_function = Ptr{Cvoid}
 const duckdb_cast_function_ptr = Ptr{Cvoid}
 const duckdb_config = Ptr{Cvoid}
@@ -23,7 +22,6 @@ const duckdb_connection = Ptr{Cvoid}
 const duckdb_create_type_info = Ptr{Cvoid}
 const duckdb_data_chunk = Ptr{Cvoid}
 const duckdb_database = Ptr{Cvoid}
-const duckdb_decimal = Ptr{Cvoid}
 const duckdb_delete_callback = Ptr{Cvoid}
 const duckdb_extracted_statements = Ptr{Cvoid}
 const duckdb_function_info = Ptr{Cvoid}
@@ -284,6 +282,14 @@ struct duckdb_uhugeint
     upper::UInt64
 end
 
+"""
+Decimals are composed of a width and a scale, and are stored in a hugeint
+"""
+struct duckdb_decimal
+    width::UInt8
+    scale::UInt8
+    value::duckdb_hugeint
+end
 struct duckdb_string_t
     length::UInt32
     data::NTuple{STRING_INLINE_LENGTH, UInt8}
@@ -473,6 +479,18 @@ struct duckdb_blob
     length::idx_t
 end
 
+"""
+BITs are composed of a byte pointer and a size.
+BIT byte data has 0 to 7 bits of padding.
+The first byte contains the number of padding bits.
+This number of bits of the second byte are set to 1, starting from the MSB.
+You must free `data` with `duckdb_free`.
+"""
+struct duckdb_bit
+    data::Ref{UInt8}
+    size::idx_t
+end
+
 Base.convert(::Type{duckdb_blob}, val::AbstractArray{UInt8}) = duckdb_blob(val, length(val))
 Base.convert(::Type{duckdb_blob}, val::AbstractString) = duckdb_blob(codeunits(val))
 # %% ----- Conversions ------------------------------
@@ -517,6 +535,7 @@ function Base.convert(::Type{Time}, val::duckdb_time)
         val.micros % 1_000
     )
 end
+
 function Base.convert(::Type{Time}, val::duckdb_time_tz)
     time_tz = duckdb_from_time_tz(val)
     # TODO: how to preserve the offset?
@@ -550,3 +569,7 @@ function Base.convert(::Type{UUID}, val::duckdb_hugeint)
         return UUID(UInt128(hugeint) + base_value + 1)
     end
 end
+
+# DECIMALS
+Base.convert(::Type{Float64}, val::duckdb_decimal) = duckdb_decimal_to_double(val)
+Base.convert(::Type{duckdb_decimal}, val::Float64) = duckdb_double_to_decimal(val)
