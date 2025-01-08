@@ -134,6 +134,11 @@ void DictFSSTCompressionCompressState::Flush(bool final) {
 	auto segment_size = Finalize();
 	append_state = DictionaryAppendState::REGULAR;
 	encoded_input.Reset();
+	if (encoder) {
+		auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+		duckdb_fsst_destroy(fsst_encoder);
+		encoder = nullptr;
+	}
 
 	auto &state = checkpoint_data.GetCheckpointState();
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
