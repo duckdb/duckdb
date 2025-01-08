@@ -32,7 +32,7 @@ struct CSVGlobalState : public GlobalTableFunctionState {
 	//! In case it returns a nullptr it means we are done reading these files.
 	unique_ptr<StringValueScanner> Next(optional_ptr<StringValueScanner> previous_scanner);
 
-	void FillRejectsTable();
+	void FillRejectsTable() const;
 
 	void DecrementThread();
 

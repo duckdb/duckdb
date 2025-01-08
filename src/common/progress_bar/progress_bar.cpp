@@ -130,13 +130,11 @@ void ProgressBar::Update(bool final) {
 		query_progress.percentage = new_percentage;
 	}
 	if (ShouldPrint(final)) {
-#ifndef DUCKDB_DISABLE_PRINT
 		if (final) {
 			FinishProgressBarPrint();
 		} else {
 			PrintProgress(LossyNumericCast<int>(query_progress.percentage.load()));
 		}
-#endif
 	}
 }
 

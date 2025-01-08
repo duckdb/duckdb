@@ -42,6 +42,7 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 			catalog.CreateType(context.client, create_info->Cast<CreateTypeInfo>());
 			break;
 		case CatalogType::MACRO_ENTRY:
+		case CatalogType::TABLE_MACRO_ENTRY:
 			catalog.CreateFunction(context.client, create_info->Cast<CreateMacroInfo>());
 			break;
 		case CatalogType::TABLE_ENTRY: {

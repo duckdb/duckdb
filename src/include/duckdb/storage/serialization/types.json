@@ -1,5 +1,22 @@
 [
   {
+    "class": "ExtensionTypeInfo",
+    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "members": [
+      {
+        "id": 100,
+        "name": "modifiers",
+        "type": "vector<Value>"
+      },
+      {
+        "id": 101,
+        "name": "properties",
+        "type": "unordered_map<string, Value>",
+        "default": "unordered_map<string, Value>()"
+      }
+    ]
+  },
+  {
     "class": "ExtraTypeInfo",
     "class_type": "type",
     "includes": [
@@ -20,7 +37,12 @@
         "id": 102,
         "name": "modifiers",
         "type": "vector<Value>",
-        "default": "vector<Value>()"
+        "deleted": true
+      },
+      {
+        "id": 103,
+        "name": "extension_info",
+        "type": "unique_ptr<ExtensionTypeInfo>"
       }
     ],
     "pointer_type": "shared_ptr"
@@ -146,8 +168,7 @@
       {
         "id": 203,
         "name": "user_type_modifiers",
-        "type": "vector<Value>",
-        "default": "vector<Value>()"
+        "type": "vector<Value>"
       }
     ]
   },

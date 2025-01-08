@@ -560,6 +560,8 @@ def generate_base_class_code(base_class):
         base_class_deserialize += UNSET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type)
 
     for entry in assign_entries:
+        if entry.deleted:
+            continue
         move = False
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
             move = True

@@ -10,21 +10,12 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Extra Type Info
+// Extension Type Info
 //===--------------------------------------------------------------------===//
-ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
-}
-ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(std::move(alias)) {
-}
-ExtraTypeInfo::~ExtraTypeInfo() {
-}
-shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
-	return make_shared_ptr<ExtraTypeInfo>(*this);
-}
 
 static bool CompareModifiers(const vector<Value> &left, const vector<Value> &right) {
 	// Check if the common prefix of the properties is the same for both types
-	auto common_props = MinValue(left.size(), right.size());
+	const auto common_props = MinValue(left.size(), right.size());
 	for (idx_t i = 0; i < common_props; i++) {
 		if (left[i].type() != right[i].type()) {
 			return false;
@@ -34,11 +25,63 @@ static bool CompareModifiers(const vector<Value> &left, const vector<Value> &rig
 		if (left[i].IsNull() || right[i].IsNull()) {
 			continue;
 		}
+
 		if (left[i] != right[i]) {
 			return false;
 		}
 	}
 	return true;
+}
+
+bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> other_p) const {
+	if (other_p == nullptr) {
+		return false;
+	}
+	if (!CompareModifiers(modifiers, other_p->modifiers)) {
+		return false;
+	}
+
+	// Properties are optional, so only compare those present in both
+	for (auto &kv : properties) {
+		auto it = other_p->properties.find(kv.first);
+		if (it == other_p->properties.end()) {
+			continue;
+		}
+		if (kv.second != it->second) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Extra Type Info
+//===--------------------------------------------------------------------===//
+ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
+}
+ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(std::move(alias)) {
+}
+ExtraTypeInfo::~ExtraTypeInfo() {
+}
+
+ExtraTypeInfo::ExtraTypeInfo(const ExtraTypeInfo &other) : type(other.type), alias(other.alias) {
+	if (other.extension_info) {
+		extension_info = make_uniq<ExtensionTypeInfo>(*other.extension_info);
+	}
+}
+
+ExtraTypeInfo &ExtraTypeInfo::operator=(const ExtraTypeInfo &other) {
+	type = other.type;
+	alias = other.alias;
+	if (other.extension_info) {
+		extension_info = make_uniq<ExtensionTypeInfo>(*other.extension_info);
+	}
+	return *this;
+}
+
+shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
+	return shared_ptr<ExtraTypeInfo>(new ExtraTypeInfo(*this));
 }
 
 bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
@@ -54,7 +97,7 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 		if (alias != other_p->alias) {
 			return false;
 		}
-		if (!CompareModifiers(modifiers, other_p->modifiers)) {
+		if (extension_info && !extension_info->Equals(other_p->extension_info.get())) {
 			return false;
 		}
 		return true;
@@ -68,7 +111,7 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (alias != other_p->alias) {
 		return false;
 	}
-	if (!CompareModifiers(modifiers, other_p->modifiers)) {
+	if (extension_info && !extension_info->Equals(other_p->extension_info.get())) {
 		return false;
 	}
 	return EqualsInternal(other_p);

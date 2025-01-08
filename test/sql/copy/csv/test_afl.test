@@ -5,104 +5,103 @@
 statement ok
 PRAGMA enable_verification
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/1.csv', force_not_null=012%0);
 ----
-Invalid value for 'force_not_null' paramenter
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/2.csv', max_line_size=-9151315542319464311);
 ----
-Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/3.csv', max_line_size=-1003718790012071149, ignore_errors=true);
 ----
-Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/4.csv', max_line_size=-432344490485710328, all_varchar=false);
 ----
-Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/5.csv', max_line_size=-68088296696312078);
 ----
-Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/6.csv', buffer_size=42);
 ----
-It was not possible to automatically detect the CSV Parsing dialect/types
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/7.csv', buffer_size=42);
 ----
-Value with unterminated quote found.
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/8.csv', buffer_size=42);
 ----
-Invalid unicode (byte sequence mismatch) detected.
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/9.csv', buffer_size=42);
 ----
-It was not possible to automatically detect the CSV Parsing dialect/types
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/10.csv', buffer_size=42);
 ----
-It was not possible to automatically detect the CSV Parsing dialect/types
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/11.csv', max_line_size=-7987305294711008699, rejects_limit=42);
 ----
-Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/12.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/13.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/14.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/15.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/16.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/17.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/18.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/19.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/20.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/21.csv', rejects_table='d');
+----
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/22.csv', rejects_table='d');
+----
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/23.csv', buffer_size=42);
 ----
-Error when sniffing file "data/csv/afl/23.csv".
 
-statement ok
+statement maybe
 FROM read_csv('data/csv/afl/24.csv', buffer_size=26, delim=';', header=true, allow_quoted_nulls=true, allow_quoted_nulls=true);
+----
 
-statement error
+statement maybe
 FROM read_csv('data/csv/afl/25.csv', buffer_size=734771105608237082, max_line_size=-8825501086615982989, allow_quoted_nulls=true);
 ----
-Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0
 

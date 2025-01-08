@@ -283,7 +283,14 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		binder->can_contain_nulls = true;
 
 		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
-		auto query = binder->BindNode(*query_node);
+		unique_ptr<BoundQueryNode> query;
+		try {
+			query = binder->BindNode(*query_node);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			error.AddQueryLocation(ref);
+			error.Throw();
+		}
 
 		idx_t bind_index = query->GetRootIndex();
 		// string alias;
