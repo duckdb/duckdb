@@ -27,7 +27,8 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	}
 	idx_t cur_file_idx = 0;
 	while (file_scans.back()->start_iterator.done && file_scans.size() < files.size()) {
-		file_scans.emplace_back(make_uniq<CSVFileScan>(context, files[++cur_file_idx], options, cur_file_idx, bind_data,
+		cur_file_idx++;
+		file_scans.emplace_back(make_uniq<CSVFileScan>(context, files[cur_file_idx], options, cur_file_idx, bind_data,
 		                                               column_ids, file_schema, false));
 	}
 	// There are situations where we only support single threaded scanning
