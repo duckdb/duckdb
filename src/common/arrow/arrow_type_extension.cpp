@@ -129,6 +129,10 @@ shared_ptr<ArrowExtensionType> ArrowTypeExtension::GetType(const ArrowSchema &sc
 	return type;
 }
 
+shared_ptr<ArrowExtensionType> ArrowTypeExtension::GetType() const {
+	return type;
+}
+
 LogicalTypeId ArrowTypeExtension::GetLogicalTypeId() const {
 	return type->GetDuckType().id();
 }

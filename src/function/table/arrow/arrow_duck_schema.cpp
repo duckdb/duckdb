@@ -381,7 +381,7 @@ unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> ArrowExtensionType::G
 	auto &db_config  = DBConfig::GetConfig(context);
 	for (idx_t i = 0; i < duckdb_types.size(); i++) {
 		if (db_config.HasArrowExtension(duckdb_types[i])) {
-			extension_types[i] = db_config.GetArrowExtension(duckdb_types[i]);
+			extension_types.insert({i, db_config.GetArrowExtension(duckdb_types[i]).GetType()});
 		}
 	}
 	return extension_types;

@@ -86,6 +86,9 @@ public:
 
 	shared_ptr<ArrowExtensionType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) const;
 
+	shared_ptr<ArrowExtensionType> GetType() const;
+
+
 	LogicalTypeId GetLogicalTypeId() const;
 
 	LogicalType GetLogicalType() const;

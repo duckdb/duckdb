@@ -27,6 +27,7 @@ static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> 
 
 	py::list single_batch;
 	//! FIXME: POPULATE extension_type_cast
+	//client_context -> database -> config
 	unordered_map<idx_t, const shared_ptr<ArrowExtensionType>>  extension_type_cast;
 	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options, extension_type_cast, context);
 	appender.Append(input, 0, input.size(), input.size());
