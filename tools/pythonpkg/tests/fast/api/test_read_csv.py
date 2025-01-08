@@ -605,7 +605,7 @@ class TestReadCSV(object):
             {'rejects_scan': 'my_rejects_scan'},
             {'rejects_table': 'my_rejects_table', 'rejects_limit': 50},
             {'force_not_null': ['one', 'two']},
-            {'buffer_size': 420000},
+            {'buffer_size': 2097153},
             {'decimal': '.'},
             {'allow_quoted_nulls': True},
             {'allow_quoted_nulls': False},
