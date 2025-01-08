@@ -1748,19 +1748,20 @@ FunctionCollationHandling EnumUtil::FromString<FunctionCollationHandling>(const 
 const StringUtil::EnumStringLiteral *GetFunctionErrorsValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FunctionErrors::CANNOT_ERROR), "CANNOT_ERROR" },
-		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_RUNTIME_ERROR), "CAN_THROW_RUNTIME_ERROR" }
+		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_RUNTIME_ERROR), "CAN_THROW_RUNTIME_ERROR" },
+		{ static_cast<uint32_t>(FunctionErrors::CAN_THROW_ERROR_OPTIMIZE_OK), "CAN_THROW_ERROR_OPTIMIZE_OK" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value) {
-	return StringUtil::EnumToString(GetFunctionErrorsValues(), 2, "FunctionErrors", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetFunctionErrorsValues(), 3, "FunctionErrors", static_cast<uint32_t>(value));
 }
 
 template<>
 FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value) {
-	return static_cast<FunctionErrors>(StringUtil::StringToEnum(GetFunctionErrorsValues(), 2, "FunctionErrors", value));
+	return static_cast<FunctionErrors>(StringUtil::StringToEnum(GetFunctionErrorsValues(), 3, "FunctionErrors", value));
 }
 
 const StringUtil::EnumStringLiteral *GetFunctionNullHandlingValues() {
