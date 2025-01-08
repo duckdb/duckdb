@@ -110,7 +110,7 @@ static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "geomean", {"x", nullptr}, {{nullptr, nullptr}}, "exp(avg(ln(x)))"},
 	{DEFAULT_SCHEMA, "geometric_mean", {"x", nullptr}, {{nullptr, nullptr}}, "geomean(x)"},
 
-	{DEFAULT_SCHEMA, "weighted_avg", {"value", "weight", nullptr}, {{nullptr, nullptr}}, "SUM(value * weight) / SUM(weight)"},
+	{DEFAULT_SCHEMA, "weighted_avg", {"value", "weight", nullptr}, {{nullptr, nullptr}}, "SUM(value * weight) / SUM(CASE WHEN value IS NOT NULL THEN weight ELSE 0 END)"},
 	{DEFAULT_SCHEMA, "wavg", {"value", "weight", nullptr}, {{nullptr, nullptr}}, "weighted_avg(value, weight)"},
 
     {DEFAULT_SCHEMA, "list_reverse", {"l", nullptr}, {{nullptr, nullptr}}, "l[:-:-1]"},

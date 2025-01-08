@@ -50,3 +50,23 @@ SELECT name, weighted_avg(grade, etcs) FROM students GROUP BY name ORDER BY name
 ----
 Alice	7.5
 Bob		6.5
+
+# weighted_avg skips rows were the weight is NULL, so adding a row with NULL weight should not change the result
+statement ok
+INSERT INTO students VALUES ('Alice', 42, NULL);
+
+query II
+SELECT name, weighted_avg(grade, etcs) FROM students GROUP BY name ORDER BY name
+----
+Alice	7.5
+Bob		6.5
+
+# weighted_avg skips rows were the value is NULL, so adding a row with NULL value should not change the result
+statement ok
+INSERT INTO students VALUES ('Alice', NULL, 42);
+
+query II
+SELECT name, weighted_avg(grade, etcs) FROM students GROUP BY name ORDER BY name
+----
+Alice	7.5
+Bob		6.5
