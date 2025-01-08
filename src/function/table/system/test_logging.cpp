@@ -13,7 +13,7 @@ struct TestLoggingBindData : public TableFunctionData {
 	bool logging_enabled = true;
 	string log_message = "test_logging test message";
 	string logger = "client_context";
-	LogLevel level = LogLevel::INFO;
+	LogLevel level = LogLevel::L_INFO;
 	string log_type = "";
 };
 

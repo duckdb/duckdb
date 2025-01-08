@@ -17,15 +17,8 @@
 
 namespace duckdb {
 
-enum class LogLevel : uint8_t {
-	TRACE = 10,
-	DEBUGGING = 20, // ToString-ed as DEBUG, but named DEBUGGING due to conflict with DEBUG define
-	INFO = 30,
-	WARN = 40,
-	RECOVERABLE_ERROR =
-	    50, // ToString-ed as ERROR, but named RECOVERABLE_ERROR due to conflict with ERROR define in windows
-	FATAL = 60
-};
+// Note: `L_` prefix is to avoid problems with DEBUG and ERROR macros
+enum class LogLevel : uint8_t { L_TRACE = 10, L_DEBUG = 20, L_INFO = 30, L_WARN = 40, L_ERROR = 50, L_FATAL = 60 };
 
 enum class LogContextScope : uint8_t { DATABASE = 10, CONNECTION = 20, THREAD = 30 };
 
@@ -36,7 +29,7 @@ struct LogConfig {
 	constexpr static const char *STDOUT_STORAGE_NAME = "stdout";
 	constexpr static const char *FILE_STORAGE_NAME = "file";
 
-	constexpr static LogLevel DEFAULT_LOG_LEVEL = LogLevel::INFO;
+	constexpr static LogLevel DEFAULT_LOG_LEVEL = LogLevel::L_INFO;
 	constexpr static const char *DEFAULT_LOG_STORAGE = IN_MEMORY_STORAGE_NAME;
 
 	LogConfig();
