@@ -237,7 +237,7 @@ string FileSystem::NormalizeAbsolutePath(const string &path) {
 }
 
 string FileSystem::PathSeparator(const string &path) {
-	if (StringUtil::StartsWith(path, "file:/")) {
+	if (StringUtil::StartsWith(path, "file:")) {
 		return "/";
 	} else {
 		return "\\";
