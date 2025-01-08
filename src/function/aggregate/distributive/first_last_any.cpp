@@ -217,8 +217,22 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 };
 
 template <class T, bool LAST, bool SKIP_NULLS>
+static void FirstFunctionSimpleUpdate(Vector inputs[], AggregateInputData &aggregate_input_data, idx_t input_count,
+                                      data_ptr_t state, idx_t count) {
+	auto agg_state = reinterpret_cast<FirstState<T> *>(state);
+	if (LAST || !agg_state->is_set) {
+		// For FIRST, this skips looping over the input once the aggregate state has been set
+		// FIXME: for LAST we could loop from the back of the Vector instead
+		AggregateFunction::UnaryUpdate<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>(inputs, aggregate_input_data,
+		                                                                                  input_count, state, count);
+	}
+}
+
+template <class T, bool LAST, bool SKIP_NULLS>
 static AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
-	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST, SKIP_NULLS>>(type, type);
+	auto result = AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST, SKIP_NULLS>>(type, type);
+	result.simple_update = FirstFunctionSimpleUpdate<T, LAST, SKIP_NULLS>;
+	return result;
 }
 
 template <bool LAST, bool SKIP_NULLS>
