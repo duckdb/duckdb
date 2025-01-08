@@ -1,0 +1,46 @@
+# name: test/sql/aggregate/aggregates/test_weighted_avg.test
+# description: Test weighted_avg operator
+# group: [aggregates]
+
+# scalar weighted average with NULLs
+query RRRR
+SELECT weighted_avg(3, 3), weighted_avg(3, NULL), weighted_avg(NULL, 3), weighted_avg(NULL, NULL)
+----
+3
+NULL
+NULL
+NULL
+
+# scalar weighted with zero weight will result in nan
+query RRRR
+SELECT weighted_avg(3, 0), weighted_avg(3, 0.0), weighted_avg(0, 3), weighted_avg(0.0, 3)
+----
+nan
+nan
+0.0
+0.0
+
+# test weighted average on real world example
+statement ok
+CREATE TABLE students(name TEXT, grade INTEGER, etcs INTEGER);
+
+statement ok
+INSERT INTO students VALUES ('Alice', 8, 6), ('Alice', 6, 2), ('Bob', 6, 3), ('Bob', 8, 3), ('Bob', 6, 6);
+
+# Alice: (8*6 + 6*2) / (6 + 2) = 60 / 8 = 7.5
+# Bob: (6*3 + 8*3 + 6*6) / (3 + 3 + 6) = (18 + 24 + 36) / 12 = 78 / 12 = 6.5
+query II
+SELECT name, weighted_avg(grade, etcs) FROM students GROUP BY name ORDER BY name
+----
+Alice	7.5
+Bob		6.5
+
+# adding a entry with weight 0 should not change the result
+statement ok
+INSERT INTO students VALUES ('Alice', 42, 0);
+
+query II
+SELECT name, weighted_avg(grade, etcs) FROM students GROUP BY name ORDER BY name
+----
+Alice	7.5
+Bob		6.5
