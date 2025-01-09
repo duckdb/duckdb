@@ -175,12 +175,12 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		// owning references
 		py::object python_object;
 		// Convert the input datachunk to pyarrow
-		ClientProperties options;
+		//		ClientProperties options;
 
-		if (state.HasContext()) {
-			auto &context = state.GetContext();
-			options = context.GetClientProperties();
-		}
+		//		if (state.HasContext()) {
+		auto &context = state.GetContext();
+		auto options = context.GetClientProperties();
+		//		}
 
 		auto result_validity = FlatVector::Validity(result);
 		SelectionVector selvec(input.size());

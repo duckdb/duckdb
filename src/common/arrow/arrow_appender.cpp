@@ -20,7 +20,7 @@ namespace duckdb {
 
 ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options,
                              unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast)
-    : types(std::move(types_p)) {
+    : types(std::move(types_p)), options(options) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		unique_ptr<ArrowAppendData> entry;
 		bool bitshift_boolean = types[i].id() == LogicalTypeId::BOOLEAN && !options.arrow_lossless_conversion;

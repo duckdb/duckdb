@@ -107,8 +107,4 @@ bool PendingQueryResult::IsExecutionFinished(PendingExecutionResult result) {
 	return (result == PendingExecutionResult::EXECUTION_FINISHED || result == PendingExecutionResult::EXECUTION_ERROR);
 }
 
-ClientContext &PendingQueryResult::GetContext() const {
-	return *context;
-}
-
 } // namespace duckdb

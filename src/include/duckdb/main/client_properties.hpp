@@ -26,7 +26,7 @@ struct ClientProperties {
 	      arrow_use_list_view(arrow_use_list_view_p), produce_arrow_string_view(produce_arrow_string_view_p),
 	      arrow_lossless_conversion(lossless_conversion), client_context(client_context) {
 	}
-	ClientProperties() {};
+
 	string time_zone = "UTC";
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	bool arrow_use_list_view = false;
