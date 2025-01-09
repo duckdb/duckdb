@@ -24,16 +24,8 @@ struct DuckDBLogData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types, vector<string> &names) {
-	bool context_id_only = false;
-	auto context_id_only_settings = input.named_parameters.find("context_id_only");
-	if (context_id_only_settings != input.named_parameters.end()) {
-		context_id_only = context_id_only_settings->second.GetValue<bool>();
-	}
-
-	if (context_id_only) {
-		names.emplace_back("context_id");
-		return_types.emplace_back(LogicalType::UBIGINT);
-	}
+	names.emplace_back("context_id");
+	return_types.emplace_back(LogicalType::UBIGINT);
 
 	names.emplace_back("timestamp");
 	return_types.emplace_back(LogicalType::TIMESTAMP);
@@ -46,20 +38,6 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 
 	names.emplace_back("message");
 	return_types.emplace_back(LogicalType::VARCHAR);
-
-	if (!context_id_only) {
-		names.emplace_back("scope");
-		return_types.emplace_back(LogicalType::VARCHAR);
-
-		names.emplace_back("client_context");
-		return_types.emplace_back(LogicalType::UBIGINT);
-
-		names.emplace_back("transaction_id");
-		return_types.emplace_back(LogicalType::UBIGINT);
-
-		names.emplace_back("thread");
-		return_types.emplace_back(LogicalType::UBIGINT);
-	}
 
 	return nullptr;
 }
@@ -78,37 +56,8 @@ void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 	}
 }
 
-// duckdb_logs is slightly wonky in that it bind_replace's itself with a join between the duckdb_logs and
-// duckdb_log_contexts table functions.
-static unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
-	bool context_id_only = false;
-	auto context_id_only_settings = input.named_parameters.find("context_id_only");
-	if (context_id_only_settings != input.named_parameters.end()) {
-		context_id_only = context_id_only_settings->second.GetValue<bool>();
-	}
-
-	if (!context_id_only) {
-		if (LogManager::Get(context).CanScan()) {
-			string query =
-			    "SELECT * exclude (l.context_id, c.context_id) FROM duckdb_logs(context_id_only=true) as l JOIN "
-			    "duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp;";
-			Parser parser(context.GetParserOptions());
-			parser.ParseQuery(query);
-			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-				throw ParserException("Expected a single SELECT statement");
-			}
-			auto select_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
-			return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
-		}
-	}
-
-	return nullptr;
-}
-
 void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction logs_fun("duckdb_logs", {}, DuckDBLogFunction, DuckDBLogBind, DuckDBLogInit);
-	logs_fun.bind_replace = DuckDBLogBindReplace;
-	logs_fun.named_parameters["context_id_only"] = LogicalType::BOOLEAN;
 	set.AddFunction(logs_fun);
 }
 
