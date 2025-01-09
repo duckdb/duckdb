@@ -176,7 +176,11 @@ bool Timestamp::TryFromTimestampNanos(timestamp_t input, int32_t nanos, timestam
 		return false;
 	}
 
-	return TryAddOperator::Operation(result.value, int64_t(nanos), result.value);
+	if (!TryAddOperator::Operation(result.value, int64_t(nanos), result.value)) {
+		return false;
+	}
+
+	return IsFinite(result);
 }
 
 TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result) {
