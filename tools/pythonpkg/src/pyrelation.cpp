@@ -803,7 +803,7 @@ void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 	if (query_result->HasError()) {
 		query_result->ThrowError();
 	}
-	result = make_uniq<DuckDBPyResult>(std::move(query_result), context);
+	result = make_uniq<DuckDBPyResult>(std::move(query_result));
 }
 
 PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {

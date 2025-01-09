@@ -453,7 +453,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const py::object 
 	}
 	// Set the internal 'result' object
 	if (query_result) {
-		auto py_result = make_uniq<DuckDBPyResult>(std::move(query_result), *con.GetConnection().context);
+		auto py_result = make_uniq<DuckDBPyResult>(std::move(query_result));
 		con.SetResult(make_uniq<DuckDBPyRelation>(std::move(py_result), *con.GetConnection().context));
 	}
 
@@ -650,7 +650,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &que
 
 	// Set the internal 'result' object
 	if (res) {
-		auto py_result = make_uniq<DuckDBPyResult>(std::move(res), *con.GetConnection().context);
+		auto py_result = make_uniq<DuckDBPyResult>(std::move(res));
 		con.SetResult(make_uniq<DuckDBPyRelation>(std::move(py_result), *con.GetConnection().context));
 	}
 	return shared_from_this();
