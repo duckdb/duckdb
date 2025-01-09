@@ -1,5 +1,30 @@
-const STRING_INLINE_LENGTH = 12 # length of the inline string in duckdb_string_t
+"""length of the inline string in duckdb_string_t"""
+const STRING_INLINE_LENGTH = 12 # 
+
+"""
+The number of days between 1970-01-01 (duckdb epoch) and 0000-01-01 (julia epoch)
+
+Can be obtained with:
+
+    Dates.date2epochdays(Date("1970-01-01"))
+
+"""
+const ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS = 719528
+
+
+"""
+The number of milliseconds between 1970-01-01 (duckdb epoch) and 0000-01-01 (julia epoch)
+
+Can be obtained with:
+
+    Dates.datetime2epochms(DateTime("1970-01-01T00:00:00"))
+"""
+const ROUNDING_EPOCH_TO_UNIX_EPOCH_MS = 62167219200000
+
+
+"""DuckDB index type"""
 const idx_t = UInt64 # DuckDB index type
+
 
 const duckdb_aggregate_combine = Ptr{Cvoid}
 const duckdb_aggregate_destroy = Ptr{Cvoid}
@@ -451,9 +476,6 @@ function duckdb_type_to_julia_type(x)
     return JULIA_TYPE_MAP[type_id]
 end
 
-const ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS = 719528
-const ROUNDING_EPOCH_TO_UNIX_EPOCH_MS = 62167219200000
-
 sym(ptr) = ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), ptr)
 sym(ptr::Cstring) = ccall(:jl_symbol, Ref{Symbol}, (Cstring,), ptr)
 
@@ -499,9 +521,9 @@ Base.convert(::Type{duckdb_blob}, val::AbstractString) = duckdb_blob(codeunits(v
 # Fast Conversion without typechecking
 Base.convert(::Type{Int128}, val::duckdb_hugeint) = Int128(val.lower) + Int128(val.upper) << 64
 Base.convert(::Type{UInt128}, val::duckdb_uhugeint) = UInt128(val.lower) + UInt128(val.upper) << 64
-Base.cconvert(::Type{duckdb_hugeint}, x::Int128) =
+Base.convert(::Type{duckdb_hugeint}, x::Int128) =
     duckdb_hugeint((x & 0xFFFF_FFFF_FFFF_FFFF) % UInt64, (x >> 64) % Int64)
-Base.cconvert(::Type{duckdb_uhugeint}, v::UInt128) = duckdb_uhugeint(v % UInt64, (v >> 64) % UInt64)
+Base.convert(::Type{duckdb_uhugeint}, v::UInt128) = duckdb_uhugeint(v % UInt64, (v >> 64) % UInt64)
 
 # DATE & TIME Raw
 Base.convert(::Type{duckdb_date}, val::Integer) = duckdb_date(val)
@@ -519,13 +541,14 @@ Base.convert(::Type{<:Integer}, val::duckdb_timestamp_s) = val.seconds
 Base.convert(::Type{<:Integer}, val::duckdb_timestamp_ms) = val.millis
 Base.convert(::Type{<:Integer}, val::duckdb_timestamp_ns) = val.nanos
 
-function Base.convert(::Type{Date}, val::duckdb_date)
-    return Dates.epochdays2date(val.days + ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
-end
-function Base.convert(::Type{duckdb_date}, val::Date)
-    return duckdb_date(Dates.date2epochdays(val - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS))
-end
 
+Base.convert(::Type{Date}, val::duckdb_date) = Dates.epochdays2date(val.days + ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
+Base.convert(::Type{duckdb_date}, val::Date) =
+    duckdb_date(Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
+
+
+# nanosecond to microseconds
+Base.convert(::Type{duckdb_time}, val::Time) = duckdb_time(Dates.value(val) ÷ 1000)
 function Base.convert(::Type{Time}, val::duckdb_time)
     return Dates.Time(
         val.micros ÷ 3_600_000_000,
@@ -548,6 +571,10 @@ function Base.convert(::Type{Time}, val::duckdb_time_tz)
     )
 end
 
+# milliseconds to microseconds
+Base.convert(::Type{duckdb_timestamp}, val::DateTime) =
+    duckdb_timestamp((Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000)
+
 Base.convert(::Type{Dates.DateTime}, val::duckdb_timestamp_s) =
     Dates.epochms2datetime((val.seconds * 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
 Base.convert(::Type{Dates.DateTime}, val::duckdb_timestamp_ms) =
@@ -557,8 +584,54 @@ Base.convert(::Type{Dates.DateTime}, val::duckdb_timestamp) =
 Base.convert(::Type{Dates.DateTime}, val::duckdb_timestamp_ns) =
     Dates.epochms2datetime((val.nanos ÷ 1_000_000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
 
+# INTERVAL
+# month, day, microsecond
 Base.convert(::Type{Dates.CompoundPeriod}, val::duckdb_interval) =
     Dates.CompoundPeriod(Dates.Month(val.months), Dates.Day(val.days), Dates.Microsecond(val.micros))
+_destruct_period_ms(val::Year) = (Dates.value(val) * 12, 0, 0)
+_destruct_period_ms(val::Month) = (Dates.value(val), 0, 0)
+_destruct_period_ms(val::Week) = (0, Dates.days(val), 0)
+_destruct_period_ms(val::Day) = (0, Dates.days(val), 0)
+_destruct_period_ms(val::Union{Hour, Minute, Second}) = (0, 0, Dates.seconds(val) * 1_000_000)
+_destruct_period_ms(val::Millisecond) = (0, 0, Dates.value(val * 1_000))
+_destruct_period_ms(val::Microsecond) = (0, 0, Dates.value(val))
+Base.convert(::Type{duckdb_interval}, val::Day) = duckdb_interval(0, Dates.value(val), 0)
+Base.convert(::Type{duckdb_interval}, val::Month) = duckdb_interval(Dates.value(val), 0, 0)
+Base.convert(::Type{duckdb_interval}, val::Microsecond) = duckdb_interval(0, 0, Dates.value(val))
+function Base.convert(::Type{duckdb_interval}, val::Dates.Period)
+    m, d, us = _destruct_period_ms(val)
+    return duckdb_interval(m, d, us)
+end
+function Base.convert(::Type{duckdb_interval}, val::Dates.CompoundPeriod)
+    m, d, us = 0, 0, 0
+    for p in val.periods
+        mi, di, usi = _destruct_period_ms(p)
+        m += mi
+        d += di
+        us += usi
+    end
+
+    # Check for overflows
+    US_PER_DAY = 24 * 3600 * 1_000_000
+    DAYS_PER_MONTH = 30
+
+    if us > US_PER_DAY
+        a, b = divrem(us, US_PER_DAY)
+        d += a
+        us = b
+    end
+
+    # In duckdb a month is 30 days
+    if d > DAYS_PER_MONTH
+        a, b = divrem(d, DAYS_PER_MONTH)
+        m += a
+        d = b
+    end
+
+    return duckdb_interval(m, d, us)
+end
+
+
 
 function Base.convert(::Type{UUID}, val::duckdb_hugeint)
     hugeint = convert(Int128, val)
