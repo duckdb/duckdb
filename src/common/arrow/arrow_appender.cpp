@@ -24,7 +24,8 @@ ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_ca
     : types(std::move(types_p)), context(context) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		unique_ptr<ArrowAppendData> entry;
-		if (extension_type_cast.find(i) != extension_type_cast.end()) {
+		bool bitshift_boolean = types[i].id() == LogicalTypeId::BOOLEAN && !options.arrow_lossless_conversion;
+		if (extension_type_cast.find(i) != extension_type_cast.end() && !bitshift_boolean) {
 			entry = InitializeChild(types[i], initial_capacity, options, extension_type_cast[i]);
 		} else {
 			entry = InitializeChild(types[i], initial_capacity, options);
