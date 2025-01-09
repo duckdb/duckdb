@@ -953,6 +953,32 @@ bool IndexScanPercentageSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &con
 }
 
 //===----------------------------------------------------------------------===//
+// Log Query Path
+//===----------------------------------------------------------------------===//
+void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &client_data = ClientData::Get(context);
+	auto path = input.ToString();
+	if (path.empty()) {
+		// empty path: clean up query writer
+		client_data.log_query_writer = nullptr;
+	} else {
+		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
+		                                                             BufferedFileWriter::DEFAULT_OPEN_FLAGS);
+	}
+}
+
+void LogQueryPathSetting::ResetLocal(ClientContext &context) {
+	auto &client_data = ClientData::Get(context);
+	// TODO: verify that this does the right thing
+	client_data.log_query_writer = std::move(ClientData(context).log_query_writer);
+}
+
+Value LogQueryPathSetting::GetSetting(const ClientContext &context) {
+	auto &client_data = ClientData::Get(context);
+	return client_data.log_query_writer ? Value(client_data.log_query_writer->path) : Value();
+}
+
+//===----------------------------------------------------------------------===//
 // Max Memory
 //===----------------------------------------------------------------------===//
 void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

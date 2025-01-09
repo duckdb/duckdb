@@ -201,6 +201,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	}
 
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
+	LogQueryInternal(lock, query);
 	active_query->query = query;
 
 	query_progress.Initialize();
@@ -912,6 +913,28 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	}
 	D_ASSERT(active_query->IsOpenResult(*pending));
 	return pending;
+}
+
+void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
+	if (!client_data->log_query_writer) {
+#ifdef DUCKDB_FORCE_QUERY_LOG
+		try {
+			string log_path(DUCKDB_FORCE_QUERY_LOG);
+			client_data->log_query_writer =
+			    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path,
+			                                  BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data->file_opener.get());
+		} catch (...) {
+			return;
+		}
+#else
+		return;
+#endif
+	}
+	// log query path is set: log the query
+	client_data->log_query_writer->WriteData(const_data_ptr_cast(query.c_str()), query.size());
+	client_data->log_query_writer->WriteData(const_data_ptr_cast("\n"), 1);
+	client_data->log_query_writer->Flush();
+	client_data->log_query_writer->Sync();
 }
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {

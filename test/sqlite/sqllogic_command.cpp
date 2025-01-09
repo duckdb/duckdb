@@ -376,6 +376,10 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	runner.config->options = runner.con->context->db->config.options;
 	auto client_config = runner.con->context->config;
 	auto catalog_search_paths = runner.con->context->client_data->catalog_search_path->GetSetPaths();
+	string low_query_writer_path;
+	if (runner.con->context->client_data->log_query_writer) {
+		low_query_writer_path = runner.con->context->client_data->log_query_writer->path;
+	}
 
 	runner.LoadDatabase(runner.dbpath, load_extensions);
 
@@ -384,6 +388,10 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	runner.con->BeginTransaction();
 	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths, CatalogSetPathType::SET_SCHEMAS);
 	runner.con->Commit();
+	if (!low_query_writer_path.empty()) {
+		runner.con->context->client_data->log_query_writer = make_uniq<BufferedFileWriter>(
+		    FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path, 1 << 1 | 1 << 5);
+	}
 }
 
 void ReconnectCommand::ExecuteInternal(ExecuteContext &context) const {

@@ -44,6 +44,9 @@ struct ClientData {
 	//! The set of bound prepared statements that belong to this client
 	case_insensitive_map_t<shared_ptr<PreparedStatementData>> prepared_statements;
 
+	//! The writer used to log queries (if logging is enabled) TODO unify with new logger infra
+	unique_ptr<BufferedFileWriter> log_query_writer;
+
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	unique_ptr<RandomEngine> random_engine;
 

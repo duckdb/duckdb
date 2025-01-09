@@ -793,6 +793,17 @@ struct LockConfigurationSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LogQueryPathSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "log_query_path";
+	static constexpr const char *Description =
+	    "Specifies the path to which queries should be logged (default: NULL, queries are not logged)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct LoggingLevel {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "logging_level";

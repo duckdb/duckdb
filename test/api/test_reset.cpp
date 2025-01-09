@@ -153,6 +153,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "allow_unredacted_secrets",   // cant change this while db is running
 	    "enable_object_cache",
 	    "streaming_buffer_size",
+	    "log_query_path",
 	    "password",
 	    "username",
 	    "user",
