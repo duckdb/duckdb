@@ -1,7 +1,4 @@
 #include "duckdb/common/arrow/arrow_appender.hpp"
-
-#include <fmt/core.h>
-
 #include "duckdb/common/arrow/arrow_buffer.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/array.hpp"

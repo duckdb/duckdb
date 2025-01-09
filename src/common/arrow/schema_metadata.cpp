@@ -1,5 +1,3 @@
-#include <utility>
-
 #include "duckdb/common/arrow/schema_metadata.hpp"
 
 namespace duckdb {

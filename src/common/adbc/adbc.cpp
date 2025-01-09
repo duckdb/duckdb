@@ -822,7 +822,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		auto arrow_wrapper = new duckdb::ArrowResultWrapper();
 		arrow_wrapper->result =
 		    duckdb::unique_ptr_cast<duckdb::QueryResult, duckdb::MaterializedQueryResult>(std::move(query_result));
-		arrow_wrapper->context = reinterpret_cast<duckdb::Connection *>(wrapper->connection)->context.get();
 		wrapper->result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
 	} else if (has_stream) {
 		// A stream was bound to the statement, use that to bind parameters
