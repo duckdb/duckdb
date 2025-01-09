@@ -35,6 +35,14 @@ public:
 		auto &other = other_p.Cast<TableScanBindData>();
 		return &other.table == &table && row_ids == other.row_ids;
 	}
+	unique_ptr<FunctionData> Copy() const override {
+		auto bind_data = make_uniq<TableScanBindData>(table);
+		bind_data->is_index_scan = is_index_scan;
+		bind_data->is_create_index = is_create_index;
+		bind_data->row_ids = row_ids;
+		bind_data->column_ids = column_ids;
+		return std::move(bind_data);
+	}
 };
 
 //! The table scan function represents a sequential scan over one of DuckDB's base tables.

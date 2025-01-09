@@ -6,10 +6,40 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
 
 LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {}
+
+idx_t LateMaterialization::GetOrInsertRowId(LogicalGet &get) {
+	auto &column_ids = get.GetMutableColumnIds();
+	// check if it is already projected
+	for(idx_t i = 0; i < column_ids.size(); ++i) {
+		if (column_ids[i].IsRowIdColumn()) {
+			// already projected - return the id
+			return i;
+		}
+	}
+	// row id is not yet projected - push it and return the new index
+	column_ids.push_back(ColumnIndex(COLUMN_IDENTIFIER_ROW_ID));
+	if (!get.projection_ids.empty()) {
+		get.projection_ids.push_back(column_ids.size() - 1);
+	}
+	if (!get.types.empty()) {
+		get.types.push_back(get.GetRowIdType());
+	}
+	return column_ids.size() - 1;
+}
+
+unique_ptr<LogicalGet> LateMaterialization::ConstructLHS(LogicalGet &get) {
+	// we need to construct a new scan of the same table
+	auto table_index = optimizer.binder.GenerateTableIndex();
+	auto new_get = make_uniq<LogicalGet>(table_index, get.function, get.bind_data->Copy(), get.returned_types, get.names, get.GetRowIdType());
+	new_get->GetMutableColumnIds() = get.GetColumnIds();
+	new_get->projection_ids = get.projection_ids;
+	return new_get;
+}
 
 ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op) {
 	// traverse down until we reach the LogicalGet
@@ -22,30 +52,17 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 	}
 	// we have reached the logical get - now we need to push the row-id column (if it is not yet projected out)
 	auto &get = child.get().Cast<LogicalGet>();
-	auto &column_ids = get.GetMutableColumnIds();
-	// check if it is already projected
-	optional_idx row_id_idx;
-	for(idx_t i = 0; i < column_ids.size(); ++i) {
-		if (column_ids[i].IsRowIdColumn()) {
-			row_id_idx = i;
-			break;
-		}
-	}
-	if (!row_id_idx.IsValid()) {
-		// row id is not yet projected - push it
-		row_id_idx = column_ids.size();
-		column_ids.push_back(ColumnIndex(COLUMN_IDENTIFIER_ROW_ID));
-	}
+	auto row_id_idx = GetOrInsertRowId(get);
+
 	// the row id has been projected - now project it up the stack
-	ColumnBinding row_id_binding(get.table_index, row_id_idx.GetIndex());
+	ColumnBinding row_id_binding(get.table_index, row_id_idx);
 	for(idx_t i = stack.size(); i > 0; i--) {
 		auto &op = stack[i - 1].get();
 		switch(op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &proj = op.Cast<LogicalProjection>();
 			// push a projection of the row-id column
-			// FIXME: get.GetRowIdType()
-			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(LogicalType::ROW_TYPE, row_id_binding));
+			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>("rowid", get.GetRowIdType(), row_id_binding));
 			// modify the row-id-binding to push to the new projection
 			row_id_binding = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
 			break;
@@ -116,17 +133,18 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		// we need all of the columns to compute the root node anyway (Top-N/Limit/etc)
 		return false;
 	}
-	if (!get.projection_ids.empty()) {
-		// FIXME: not supporting projection_ids just yet
-		return false;
-	}
 	// we benefit from late materialization
 	// we need to transform this plan into a semi-join with the row-id
 	// we need to ensure the operator returns exactly the same column bindings as before
 
-	// construct the LHS
-	// this is essentially the old LogicalGet, but with rowid added
-
+	// construct the LHS from the LogicalGet
+	auto lhs = ConstructLHS(get);
+	// insert the row-id column on the left hand side
+	auto &lhs_get = *lhs;
+	auto lhs_index = lhs_get.table_index;
+	auto lhs_columns = lhs_get.GetColumnIds().size();
+	auto lhs_row_idx = GetOrInsertRowId(lhs_get);
+	ColumnBinding lhs_binding(lhs_index, lhs_row_idx);
 
 	// construct the RHS for the join
 	// this is essentially the old pipeline, but with the `rowid` column added
@@ -134,10 +152,35 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	// we don't do that here yet though - we do this in a later step using the RemoveUnusedColumns optimizer
 	auto rhs_binding = ConstructRHS(op);
 
-	// finally we run the RemoveUnusedColumns optimizer to prune the (now) unused columns from the RHS
+	// construct a semi join between the lhs and rhs
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
+	join->children.push_back(std::move(lhs));
+	join->children.push_back(std::move(op));
+	JoinCondition condition;
+	condition.comparison = ExpressionType::COMPARE_EQUAL;
+	condition.left = make_uniq<BoundColumnRefExpression>("rowid", get.GetRowIdType(), lhs_binding);
+	condition.right = make_uniq<BoundColumnRefExpression>("rowid", get.GetRowIdType(), rhs_binding);
+	join->conditions.push_back(std::move(condition));
 
-	// finally construct the semi-join
-	throw InternalException("FIXME: Late materialization");
+	// push a projection that removes the row id again from the lhs
+	auto proj_index = optimizer.binder.GenerateTableIndex();
+	vector<unique_ptr<Expression>> proj_list;
+	for(idx_t i = 0; i < lhs_columns; i++) {
+		auto &column_id = lhs_get.GetColumnIds()[i];
+		auto is_row_id = column_id.IsRowIdColumn();
+		auto column_name = is_row_id ? "rowid" : lhs_get.names[column_id.GetPrimaryIndex()];
+		auto &column_type = is_row_id ? lhs_get.GetRowIdType() : lhs_get.returned_types[column_id.GetPrimaryIndex()];
+		proj_list.push_back(make_uniq<BoundColumnRefExpression>(column_name, column_type, ColumnBinding(lhs_index, i)));
+	}
+	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(proj_list));
+	proj->children.push_back(std::move(join));
+
+	// run the RemoveUnusedColumns optimizer to prune the (now) unused columns from the RHS
+	// RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
+	// unused_optimizer.VisitOperator(*proj);
+
+	// we have constructed the final operator - finished
+	op = std::move(proj);
 	return true;
 }
 

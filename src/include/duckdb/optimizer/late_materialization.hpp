@@ -13,6 +13,7 @@
 
 namespace duckdb {
 class LogicalOperator;
+class LogicalGet;
 class Optimizer;
 
 //! Transform
@@ -25,7 +26,9 @@ public:
 private:
 	bool TryLateMaterialization(unique_ptr<LogicalOperator> &op);
 
+	unique_ptr<LogicalGet> ConstructLHS(LogicalGet &get);
 	ColumnBinding ConstructRHS(unique_ptr<LogicalOperator> &op);
+	idx_t GetOrInsertRowId(LogicalGet &get);
 
 private:
 	Optimizer &optimizer;

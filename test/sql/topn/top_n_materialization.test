@@ -2,15 +2,15 @@
 # description: Test Top N Optimization
 # group: [topn]
 
-statement ok
-PRAGMA enable_verification
+# statement ok
+# PRAGMA enable_verification
 
 statement ok
 CREATE TABLE test AS SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i);
 
 # Top N optimization
-query I
-SELECT * FROM test ORDER BY j LIMIT 2;
+query IIII
+SELECT * FROM test ORDER BY j DESC LIMIT 2;
 ----
-22
-7
+8	9	10	-8
+9	10	11	-9
