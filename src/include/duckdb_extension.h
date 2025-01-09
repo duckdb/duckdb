@@ -527,6 +527,15 @@ typedef struct {
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
 #endif
 
+// Exposing the instance cache
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_instance_cache (*duckdb_create_instance_cache)();
+	duckdb_state (*duckdb_get_or_create_from_cache)(duckdb_instance_cache instance_cache, const char *path,
+	                                                duckdb_database *out_database, duckdb_config config,
+	                                                char **out_error);
+	void (*duckdb_destroy_instance_cache)(duckdb_instance_cache *instance_cache);
+#endif
+
 // New append functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
@@ -946,6 +955,11 @@ typedef struct {
 #define duckdb_arrow_scan                 duckdb_ext_api.duckdb_arrow_scan
 #define duckdb_arrow_array_scan           duckdb_ext_api.duckdb_arrow_array_scan
 #define duckdb_stream_fetch_chunk         duckdb_ext_api.duckdb_stream_fetch_chunk
+
+// Version unstable_instance_cache
+#define duckdb_create_instance_cache    duckdb_ext_api.duckdb_create_instance_cache
+#define duckdb_get_or_create_from_cache duckdb_ext_api.duckdb_get_or_create_from_cache
+#define duckdb_destroy_instance_cache   duckdb_ext_api.duckdb_destroy_instance_cache
 
 // Version unstable_new_append_functions
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
