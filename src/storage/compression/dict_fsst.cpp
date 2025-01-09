@@ -100,7 +100,9 @@ unique_ptr<CompressionState> DictFSSTCompressionStorage::InitCompression(ColumnD
 
 void DictFSSTCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = state_p.Cast<DictFSSTCompressionCompressState>();
-	state.UpdateState(scan_vector, count);
+	auto res = state.UpdateState(scan_vector, count);
+	(void)(res);
+	D_ASSERT(res);
 }
 
 void DictFSSTCompressionStorage::FinalizeCompress(CompressionState &state_p) {

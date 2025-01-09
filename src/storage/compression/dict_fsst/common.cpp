@@ -102,6 +102,7 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		if (row_is_valid) {
 			auto &str = string_data.Get();
 			string_size = str.GetSize();
+			// FIXME: compressing can actually end up making the result larger..
 			if (string_size >= StringUncompressed::GetStringBlockLimit(info.GetBlockSize())) {
 				// Big strings not implemented for dictionary compression
 				return false;
