@@ -1,5 +1,5 @@
 """length of the inline string in duckdb_string_t"""
-const STRING_INLINE_LENGTH = 12 # 
+const STRING_INLINE_LENGTH = 12
 
 """
 The number of days between 1970-01-01 (duckdb epoch) and 0000-01-01 (julia epoch)
