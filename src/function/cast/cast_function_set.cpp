@@ -150,6 +150,10 @@ public:
 			}
 		}
 
+		auto leq = target_type_entry->first == target;
+		auto req = target == target_type_entry->first;
+		D_ASSERT(leq || req);
+
 		return &target_type_entry->second;
 	}
 

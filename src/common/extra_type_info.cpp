@@ -12,46 +12,67 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Extension Type Info
 //===--------------------------------------------------------------------===//
+//
+// Extension type info never take part in equality checks, unless both have the same type.
+//
+bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> lhs, optional_ptr<ExtensionTypeInfo> rhs) {
+	// Either both are null, or both are the same, so they are equal
+	if (lhs.get() == rhs.get()) {
+		return true;
+	}
+	// If one is null, then we cant compare them
+	if (lhs == nullptr || rhs == nullptr) {
+		return true;
+	}
 
-static bool CompareModifiers(const vector<Value> &left, const vector<Value> &right) {
-	// Check if the common prefix of the properties is the same for both types
-	const auto common_props = MinValue(left.size(), right.size());
-	for (idx_t i = 0; i < common_props; i++) {
-		if (left[i].type() != right[i].type()) {
+	// Both are not null, so we can compare them
+	D_ASSERT(lhs != nullptr && rhs != nullptr);
+
+	// Compare modifiers
+	const auto &lhs_mods = lhs->modifiers;
+	const auto &rhs_mods = rhs->modifiers;
+	const auto common_mods = MinValue(lhs_mods.size(), rhs_mods.size());
+	for (idx_t i = 0; i < common_mods; i++) {
+		// If the types are not strictly equal, they are not equal
+		auto &lhs_val = lhs_mods[i].value;
+		auto &rhs_val = rhs_mods[i].value;
+
+		if (lhs_val.type() != rhs_val.type()) {
 			return false;
 		}
-		// Special case for nulls:
-		// For type modifiers, NULL is equivalent to ANY
-		if (left[i].IsNull() || right[i].IsNull()) {
+
+		// If both are null, its fine
+		if (lhs_val.IsNull() && rhs_val.IsNull()) {
 			continue;
 		}
 
-		if (left[i] != right[i]) {
+		// If one is null, the other must be null too
+		if (lhs_val.IsNull() != rhs_val.IsNull()) {
 			return false;
 		}
-	}
-	return true;
-}
 
-bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> other_p) const {
-	if (other_p == nullptr) {
-		return false;
-	}
-	if (!CompareModifiers(modifiers, other_p->modifiers)) {
-		return false;
+		if (lhs_val != rhs_val) {
+			return false;
+		}
 	}
 
 	// Properties are optional, so only compare those present in both
-	for (auto &kv : properties) {
-		auto it = other_p->properties.find(kv.first);
-		if (it == other_p->properties.end()) {
+	const auto &lhs_props = lhs->properties;
+	const auto &rhs_props = rhs->properties;
+
+	for (const auto &kv : lhs_props) {
+		auto it = rhs_props.find(kv.first);
+		if (it == rhs_props.end()) {
+			// Continue
 			continue;
 		}
 		if (kv.second != it->second) {
+			// Mismatch!
 			return false;
 		}
 	}
 
+	// All ok!
 	return true;
 }
 
@@ -91,13 +112,16 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 			if (!alias.empty()) {
 				return false;
 			}
+			if (extension_info) {
+				return false;
+			}
 			//! We only need to compare aliases when both types have them in this case
 			return true;
 		}
 		if (alias != other_p->alias) {
 			return false;
 		}
-		if (extension_info && !extension_info->Equals(other_p->extension_info.get())) {
+		if (!ExtensionTypeInfo::Equals(extension_info, other_p->extension_info)) {
 			return false;
 		}
 		return true;
@@ -111,7 +135,7 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (alias != other_p->alias) {
 		return false;
 	}
-	if (extension_info && !extension_info->Equals(other_p->extension_info.get())) {
+	if (!ExtensionTypeInfo::Equals(extension_info, other_p->extension_info)) {
 		return false;
 	}
 	return EqualsInternal(other_p);
