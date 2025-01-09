@@ -755,6 +755,12 @@ def create_duckdb_c_ext_h(file, ext_api_version, function_groups, api_struct_def
 // Place in global scope of any C/C++ file that needs to access the extension API
 #define DUCKDB_EXTENSION_EXTERN extern {DUCKDB_EXT_API_STRUCT_TYPENAME} {DUCKDB_EXT_API_VAR_NAME};
 
+#ifdef _WIN32
+#define DUCKDB_CAPI_ENTRY_VISIBILITY __declspec(dllexport)
+#else
+#define DUCKDB_CAPI_ENTRY_VISIBILITY __attribute__((visibility("default")))
+#endif
+
 """
     # Add the entrypoint macros
     duckdb_ext_h += COMMENT_HEADER("Entrypoint Macros")
@@ -767,7 +773,7 @@ def create_duckdb_c_ext_h(file, ext_api_version, function_groups, api_struct_def
 #define DUCKDB_EXTENSION_ENTRYPOINT\
 	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)(duckdb_connection connection, duckdb_extension_info info, struct duckdb_extension_access *access);\
 	    DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN\
-	    DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api)(\
+	    DUCKDB_CAPI_ENTRY_VISIBILITY DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api)(\
 	    duckdb_extension_info info, struct duckdb_extension_access *access) {\
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);\
 		duckdb_database *db = access->get_database(info);\
@@ -787,7 +793,7 @@ def create_duckdb_c_ext_h(file, ext_api_version, function_groups, api_struct_def
 	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)(\
 	    duckdb_extension_info info, struct duckdb_extension_access *access);\
 	    DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN\
-	    DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api)(\
+	    DUCKDB_CAPI_ENTRY_VISIBILITY DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api)(\
 	    duckdb_extension_info info, struct duckdb_extension_access *access) {\
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);\
 		return DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME,_init_c_api_internal)(info, access);\

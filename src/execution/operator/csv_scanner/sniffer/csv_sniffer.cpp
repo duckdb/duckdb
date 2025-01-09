@@ -205,15 +205,8 @@ SnifferResult CSVSniffer::SniffCSV(const bool force_match) {
 		buffer_manager->ResetBufferManager();
 	}
 	buffer_manager->sniffing = false;
-	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors.GetValue()) {
-		for (auto &error_vector : best_candidate->error_handler->errors) {
-			for (auto &error : error_vector.second) {
-				if (error.type == MAXIMUM_LINE_SIZE) {
-					// If it's a maximum line size error, we can do it now.
-					error_handler->Error(error);
-				}
-			}
-		}
+	if (best_candidate->error_handler->AnyErrors() && !options.ignore_errors.GetValue()) {
+		best_candidate->error_handler->ErrorIfTypeExists(MAXIMUM_LINE_SIZE);
 	}
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// We are done, Set the CSV Options in the reference. Construct and return the result.
