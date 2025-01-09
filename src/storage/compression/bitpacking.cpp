@@ -1012,13 +1012,6 @@ unique_ptr<ColumnSegmentState> BitpackingDeserializeState(Deserializer &deserial
 	return std::move(result);
 }
 
-void BitpackingCleanupState(ColumnSegment &segment) {
-	// FIXME: check correctness
-	auto &state = segment.GetSegmentState()->Cast<BitpackingSegmentState>();
-	state.counts.clear();
-	return;
-}
-
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
@@ -1032,7 +1025,6 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 	bitpacking.init_segment = BitpackingInitSegment;
 	bitpacking.serialize_state = BitpackingSerializeState;
 	bitpacking.deserialize_state = BitpackingDeserializeState;
-	bitpacking.cleanup_state = BitpackingCleanupState;
 	return bitpacking;
 }
 
