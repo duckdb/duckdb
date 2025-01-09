@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/fsst/fsst_compression_ratio.test_slow
+# name: test/sql/storage/compression/dict_fsst/fsst_compression_ratio.test_slow
 # description: Assert fsst compression ratio is within reasonable margins
-# group: [fsst]
+# group: [dict_fsst]
 
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db

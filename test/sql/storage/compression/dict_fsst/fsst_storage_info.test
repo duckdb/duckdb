@@ -1,12 +1,12 @@
-# name: test/sql/storage/compression/dictionary/dictionary_storage_info.test
-# description: Test storage with Dictionary compression
-# group: [dictionary]
+# name: test/sql/storage/compression/dict_fsst/fsst_storage_info.test
+# description: Test storage with fsst compression
+# group: [dict_fsst]
 
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db
 
 statement ok
-PRAGMA force_compression = 'dict_fsst'
+PRAGMA force_compression = 'fsst'
 
 statement ok
 CREATE TABLE test (a VARCHAR, b VARCHAR);
@@ -20,4 +20,4 @@ CHECKPOINT
 query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-DICT_FSST
+FSST

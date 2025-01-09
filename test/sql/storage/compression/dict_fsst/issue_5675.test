@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/fsst/issue_5675.test
+# name: test/sql/storage/compression/dict_fsst/issue_5675.test
 # description: fix for issue #5675
-# group: [fsst]
+# group: [dict_fsst]
 
 load __TEST_DIR__/issue_5675.db
 

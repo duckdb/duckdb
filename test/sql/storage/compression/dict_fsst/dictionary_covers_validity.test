@@ -1,5 +1,5 @@
-# name: test/sql/storage/compression/dictionary/dictionary_covers_validity.test
-# group: [dictionary]
+# name: test/sql/storage/compression/dict_fsst/dictionary_covers_validity.test
+# group: [dict_fsst]
 
 load __TEST_DIR__/dictionary_covers_validity
 

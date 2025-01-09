@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/dictionary/force_dictionary.test
+# name: test/sql/storage/compression/dict_fsst/force_dictionary.test
 # description: Test forcing dictionary encoding as the compression scheme
-# group: [dictionary]
+# group: [dict_fsst]
 
 require vector_size 2048
 

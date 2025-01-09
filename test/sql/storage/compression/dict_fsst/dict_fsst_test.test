@@ -1,5 +1,5 @@
-# name: test/sql/storage/compression/dictionary/dict_fsst_test.test
-# group: [dictionary]
+# name: test/sql/storage/compression/dict_fsst/dict_fsst_test.test
+# group: [dict_fsst]
 
 load __TEST_DIR__/dict_fsst_test
 

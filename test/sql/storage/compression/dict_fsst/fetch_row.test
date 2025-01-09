@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/dictionary/fetch_row.test
+# name: test/sql/storage/compression/dict_fsst/fetch_row.test
 # description: Test storage with Dictionary compression
-# group: [dictionary]
+# group: [dict_fsst]
 
 require block_size 262144
 

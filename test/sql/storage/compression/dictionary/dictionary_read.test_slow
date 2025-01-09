@@ -1,0 +1,26 @@
+# name: test/sql/storage/compression/dictionary/dictionary_read.test_slow
+# group: [dictionary]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+load test/sql/storage/compression/dictionary/dictionary.db readonly
+
+query I
+select count(street) from tbl;
+----
+400000
+
+query I nosort res
+select street from tbl;
+----
+
+query I
+SELECT compression FROM pragma_storage_info('tbl') WHERE compression != 'Dictionary';
+----
+
+# Verify that the compression method is deprecated
+statement error
+pragma force_compression='dictionary'
+----
+deprecated

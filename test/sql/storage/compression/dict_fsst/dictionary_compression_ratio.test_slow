@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/dictionary/dictionary_compression_ratio.test_slow
+# name: test/sql/storage/compression/dict_fsst/dictionary_compression_ratio.test_slow
 # description: Assert dictionary compression ratio is within reasonable margins
-# group: [dictionary]
+# group: [dict_fsst]
 
 load __TEST_DIR__/test_dictionary.db
 

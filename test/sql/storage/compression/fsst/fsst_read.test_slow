@@ -1,0 +1,26 @@
+# name: test/sql/storage/compression/fsst/fsst_read.test_slow
+# group: [fsst]
+
+# The database is written with a vector size of 2048.
+require vector_size 2048
+
+load test/sql/storage/compression/fsst/fsst.db readonly
+
+query I
+select count(temperature) from tmp;
+----
+400000
+
+query I nosort res
+select temperature from tbl;
+----
+
+query I
+SELECT compression FROM pragma_storage_info('tbl') WHERE compression != 'Fsst';
+----
+
+# Verify that the compression method is deprecated
+statement error
+pragma force_compression='fsst'
+----
+deprecated
