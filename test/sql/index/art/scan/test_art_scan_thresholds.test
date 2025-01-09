@@ -25,20 +25,20 @@ INSERT INTO integers SELECT 43 FROM range(10000);
 statement ok
 CREATE INDEX idx ON integers(i);
 
-# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
-
-statement ok
-SELECT i FROM integers WHERE i = 42;
+query II
+EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 42;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 statement ok
 SET index_scan_percentage = 0.000001;
 
 # Use one as the maximum count, with the matching keys exceeding that maximum.
 
-# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
-
-statement ok
-SELECT i FROM integers WHERE i = 42;
+query II
+EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 42;
+----
+analyzed_plan	<REGEX>:.*Type: Sequence Scan.*
 
 # Let's also test more than STANDARD_VECTOR_SIZE values.
 
@@ -48,7 +48,7 @@ SET index_scan_max_count = 4000;
 statement ok
 INSERT INTO integers SELECT 4242 FROM range(4000);
 
-# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
-
-statement ok
-SELECT i FROM integers WHERE i = 4242;
+query II
+EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 4242;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*

@@ -20,7 +20,10 @@ SET index_scan_percentage = 1.0;
 statement ok
 SET index_scan_max_count = 0;
 
-# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
+query II
+EXPLAIN ANALYZE SELECT COUNT(i) FROM integers WHERE i = 42;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query I
 SELECT COUNT(i) FROM integers WHERE i = 42;

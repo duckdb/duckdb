@@ -17,15 +17,18 @@ statement ok
 CREATE TABLE test(a INTEGER, b INTEGER, c VARCHAR(10));
 
 statement ok
-CREATE INDEX i_index ON test(a)
+CREATE INDEX i_index ON test(a);
 
 statement ok
-INSERT INTO test VALUES (42, 88, 'hello');
+INSERT INTO test SELECT range, 88, 'hello' FROM range(10000);
 
-# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
+query II
+EXPLAIN ANALYZE SELECT a, b, c FROM db1.test WHERE a = 42;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query III
-SELECT a, b, c FROM db1.test WHERE a = 42
+SELECT a, b, c FROM db1.test WHERE a = 42;
 ----
 42	88	hello
 
@@ -36,19 +39,22 @@ statement ok
 USE memory
 
 query III
-SELECT * FROM test WHERE a=42
+SELECT * FROM test WHERE a = 42;
 ----
 42	88	hello
 
+# FIXME: We do not yet copy indexes.
+# See issue 14909.
+
 query II
-explain SELECT * FROM test WHERE a=42
+EXPLAIN ANALYZE SELECT * FROM test WHERE a = 42;
 ----
-physical_plan	<!REGEX>:.*INDEX_SCAN.*
+analyzed_plan	<REGEX>:.*Type: Sequence Scan.*
 
 statement ok
-DROP INDEX i_index
+DROP INDEX i_index;
 
 query II
-explain SELECT * FROM test WHERE a=42
+EXPLAIN ANALYZE SELECT * FROM test WHERE a = 42;
 ----
-physical_plan	<!REGEX>:.*INDEX_SCAN.*
+analyzed_plan	<REGEX>:.*Type: Sequence Scan.*

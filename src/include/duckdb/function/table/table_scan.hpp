@@ -17,11 +17,15 @@ class DuckTableEntry;
 class TableCatalogEntry;
 
 struct TableScanBindData : public TableFunctionData {
-	explicit TableScanBindData(DuckTableEntry &table) : table(table), is_create_index(false) {
+	explicit TableScanBindData(DuckTableEntry &table) : table(table), is_index_scan(false), is_create_index(false) {
 	}
 
 	//! The table to scan.
 	DuckTableEntry &table;
+	//! The old purpose of this field has been deprecated.
+	//! We now use it to express an index scan in the ANALYZE call.
+	//! I.e., we const-cast the bind data and set this to true, if we opt for an index scan.
+	bool is_index_scan;
 	//! Whether or not the table scan is for index creation.
 	bool is_create_index;
 

@@ -103,8 +103,6 @@ public:
 	idx_t next_batch_index;
 	//! The total scanned row IDs.
 	unsafe_vector<row_t> row_ids;
-	//! A Vector holding the total scanned row IDs. Used for slicing.
-	unique_ptr<Vector> row_id_vector;
 	//! The column IDs of the to-be-scanned columns.
 	vector<StorageIndex> column_ids;
 	//! True, if no more row IDs must be scanned.
@@ -150,15 +148,15 @@ public:
 		}
 
 		if (scan_count != 0) {
-			D_ASSERT(row_id_vector);
-			Vector local_row_id_vector(*row_id_vector, offset, offset + scan_count);
+			auto row_id_data = (data_ptr_t)&row_ids[0 + offset]; // NOLINT - this is not pretty
+			Vector local_vector(LogicalType::ROW_TYPE, row_id_data);
 
 			if (CanRemoveFilterColumns()) {
 				l_state.all_columns.Reset();
-				storage.Fetch(tx, l_state.all_columns, column_ids, local_row_id_vector, scan_count, fetch_state);
+				storage.Fetch(tx, l_state.all_columns, column_ids, local_vector, scan_count, fetch_state);
 				output.ReferenceColumns(l_state.all_columns, projection_ids);
 			} else {
-				storage.Fetch(tx, output, column_ids, local_row_id_vector, scan_count, fetch_state);
+				storage.Fetch(tx, output, column_ids, local_vector, scan_count, fetch_state);
 			}
 		}
 
@@ -175,7 +173,14 @@ public:
 	}
 
 	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const override {
-		return 100;
+		auto total_rows = row_ids.size();
+		if (total_rows == 0) {
+			return 100;
+		}
+
+		auto scanned_rows = next_batch_index * STANDARD_VECTOR_SIZE;
+		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
+		return percentage > 100 ? 100 : percentage;
 	}
 
 	OperatorPartitionData TableScanGetPartitionData(ClientContext &context,
@@ -249,9 +254,9 @@ public:
 	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const override {
 		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 		auto &storage = bind_data.table.GetStorage();
-		idx_t total_rows = storage.GetTotalRows();
+		auto total_rows = storage.GetTotalRows();
 
-		// The table is empty, smaller than the standard vector size, or this is an index scan.
+		// The table is empty or smaller than the standard vector size.
 		if (total_rows == 0) {
 			return 100;
 		}
@@ -314,8 +319,6 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	if (!row_ids.empty()) {
 		std::sort(row_ids.begin(), row_ids.end());
 		g_state->row_ids = std::move(row_ids);
-		auto row_id_data = (data_ptr_t)&g_state->row_ids[0]; // NOLINT - this is not pretty
-		g_state->row_id_vector = make_uniq<Vector>(LogicalType::ROW_TYPE, row_id_data);
 	}
 	g_state->finished = g_state->row_ids.empty() ? true : false;
 
@@ -338,11 +341,17 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 
 	g_state->table_scan_state.Initialize(g_state->column_ids, input.filters.get());
 	local_storage.InitializeScan(storage, g_state->table_scan_state.local_state, input.filters);
+
+	// Const-cast to indicate an index scan.
+	// We need this information in the bind data so that we can access it during ANALYZE.
+	auto &no_const_bind_data = bind_data.CastNoConst<TableScanBindData>();
+	no_const_bind_data.is_index_scan = true;
+
 	return std::move(g_state);
 }
 
 bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInput &input, TableFilterSet &filter_set,
-                  idx_t max_count, bool &index_scan, unsafe_vector<row_t> &row_ids) {
+                  idx_t max_count, unsafe_vector<row_t> &row_ids) {
 	// FIXME: No support for index scans on compound ARTs.
 	// See note above on multi-filter support.
 	if (art.unbound_expressions.size() > 1) {
@@ -391,7 +400,6 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 
 	// Check if we can use an index scan, and already retrieve the matching row ids.
 	if (art.Scan(*scan_state, max_count, row_ids)) {
-		index_scan = true;
 		return true;
 	}
 	row_ids.clear();
@@ -441,7 +449,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	unsafe_vector<row_t> row_ids;
 
 	info->GetIndexes().BindAndScan<ART>(context, *info, [&](ART &art) {
-		return TryScanIndex(art, column_list, input, filter_set, max_count, index_scan, row_ids);
+		index_scan = TryScanIndex(art, column_list, input, filter_set, max_count, row_ids);
+		return index_scan;
 	});
 
 	if (!index_scan) {
@@ -512,6 +521,7 @@ InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput
 	InsertionOrderPreservingMap<string> result;
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	result["Table"] = bind_data.table.name;
+	result["Type"] = bind_data.is_index_scan ? "Index Scan" : "Sequence Scan";
 	return result;
 }
 
@@ -521,7 +531,7 @@ static void TableScanSerialize(Serializer &serializer, const optional_ptr<Functi
 	serializer.WriteProperty(100, "catalog", bind_data.table.schema.catalog.GetName());
 	serializer.WriteProperty(101, "schema", bind_data.table.schema.name);
 	serializer.WriteProperty(102, "table", bind_data.table.name);
-	serializer.WritePropertyWithDefault(103, "is_index_scan", false);
+	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
 	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
 	serializer.WritePropertyWithDefault(105, "result_ids", unsafe_vector<row_t>());
 }
@@ -536,7 +546,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}
 	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
-	deserializer.ReadDeletedProperty<bool>(103, "is_index_scan");
+	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
 	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
 	deserializer.ReadDeletedProperty<unsafe_vector<row_t>>(105, "result_ids");
 	return std::move(result);

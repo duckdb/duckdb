@@ -14,19 +14,25 @@ INSERT INTO integers VALUES (1), (2), (4);
 statement ok
 CREATE INDEX i_index ON integers(i);
 
-# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
+query II
+EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 2;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query I
-SELECT i FROM integers WHERE i = 2
+SELECT i FROM integers WHERE i = 2;
 ----
 2
 
 statement ok
-PREPARE v1 AS SELECT * FROM integers WHERE i = $1
+PREPARE v1 AS SELECT * FROM integers WHERE i = $1;
 
-# FIXME PR15410: Verify that EXPLAIN ANALYZE yields the index scan.
+query II
+EXPLAIN ANALYZE EXECUTE v1(2);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query I
-EXECUTE v1(2)
+EXECUTE v1(2);
 ----
 2
