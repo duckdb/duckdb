@@ -230,7 +230,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// try to use late materialization
 	RunOptimizer(OptimizerType::LATE_MATERIALIZATION, [&]() {
-		LateMaterialization late_materialization;
+		LateMaterialization late_materialization(*this);
 		plan = late_materialization.Optimize(std::move(plan));
 	});
 

@@ -1,0 +1,16 @@
+# name: test/sql/topn/top_n_materialization.test
+# description: Test Top N Optimization
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test AS SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i);
+
+# Top N optimization
+query I
+SELECT * FROM test ORDER BY j LIMIT 2;
+----
+22
+7
