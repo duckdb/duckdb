@@ -91,10 +91,6 @@ struct DuckDBLogContextFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct DuckDBLogCombinedFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct DuckDBIndexesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

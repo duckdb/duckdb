@@ -5,6 +5,6 @@
 name FileOpener NopLogger
 group logger
 
-# Note: this will call the Logger, but logging is disabled so this will call the NopLogger 100000000 times in a tight inner loop
+# Note: this will call the Logger, but logging is disabled so this will call the NopLogger
 run
 SELECT write_log('hello world', scope := 'file_opener') from range(0,50000000);

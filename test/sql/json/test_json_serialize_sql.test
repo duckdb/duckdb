@@ -9,7 +9,7 @@ SELECT json_serialize_sql('SELECT 1 + 2 FROM tbl1');
 
 # Example with skip_null and skip_empty
 statement ok
-SELECT json_serialize_sql('SELECT *, 1 + 2' || 'FROM tbl1', skip_null := true, skip_empty := true);
+SELECT json_serialize_sql('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_empty := true);
 
 # Example with subquery
 statement ok
