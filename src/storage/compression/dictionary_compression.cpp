@@ -100,14 +100,20 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	scan_state.ScanToFlatVector(result, result_idx, NumericCast<idx_t>(row_id), 1);
 }
 
+unique_ptr<AnalyzeState> InitAnalyze(ColumnData &col_data, PhysicalType type) {
+	// This compression type is deprecated
+	return nullptr;
+}
+
 } // namespace dictionary
 
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type) {
-	auto res = CompressionFunction(CompressionType::COMPRESSION_DICTIONARY, data_type, nullptr, nullptr, nullptr,
-	                               nullptr, nullptr, nullptr, dictionary::DictionaryCompressionStorage::StringInitScan,
+	auto res = CompressionFunction(CompressionType::COMPRESSION_DICTIONARY, data_type, dictionary::InitAnalyze, nullptr,
+	                               nullptr, nullptr, nullptr, nullptr,
+	                               dictionary::DictionaryCompressionStorage::StringInitScan,
 	                               dictionary::DictionaryCompressionStorage::StringScan,
 	                               dictionary::DictionaryCompressionStorage::StringScanPartial<false>,
 	                               dictionary::DictionaryCompressionStorage::StringFetchRow,
