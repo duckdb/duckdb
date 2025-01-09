@@ -208,8 +208,6 @@ jobs:
             run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
 
     env:
-      DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-      AWS_DEFAULT_REGION: us-east-1
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       GEN: ninja
       DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}

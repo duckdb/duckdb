@@ -179,7 +179,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	MainHeader main_header;
 	main_header.version_number = VERSION_NUMBER;
-	memset(main_header.flags, 0, sizeof(uint64_t) * 4);
+	memset(main_header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
@@ -265,7 +265,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	// compute the checksum
 	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
-	auto computed_checksum = Checksum(block.buffer, block.size);
+	auto computed_checksum = Checksum(block.buffer, block.Size());
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
@@ -277,7 +277,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location) const {
 	// compute the checksum and write it to the start of the buffer (if not temp buffer)
-	uint64_t checksum = Checksum(block.buffer, block.size);
+	uint64_t checksum = Checksum(block.buffer, block.Size());
 	Store<uint64_t>(checksum, block.InternalBuffer());
 	// now write the buffer
 	block.Write(*handle, location);

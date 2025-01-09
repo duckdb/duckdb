@@ -19,7 +19,7 @@ public:
 		// and set the return type in the list_data chunk, which will contain the evaluated expression results
 		vector<LogicalType> list_data_types;
 		for (auto &exp : select_list) {
-			D_ASSERT(exp->type == ExpressionType::BOUND_UNNEST);
+			D_ASSERT(exp->GetExpressionType() == ExpressionType::BOUND_UNNEST);
 			auto &bue = exp->Cast<BoundUnnestExpression>();
 			list_data_types.push_back(bue.child->return_type);
 			executor.AddExpression(*bue.child.get());

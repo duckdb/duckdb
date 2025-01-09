@@ -179,7 +179,7 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			throw BinderException(arguments[i]->query_location,
+			throw BinderException(arguments[i]->GetQueryLocation(),
 			                      "Cannot combine types of %s and %s - an explicit cast is required",
 			                      child_type.ToString(), arg_type.ToString());
 		}

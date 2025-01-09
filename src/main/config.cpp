@@ -548,8 +548,9 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	} else if (unit == "tib") {
 		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
 	} else {
-		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
-		                      "MiB, GiB, TiB for 1024^i unites)");
+		throw ParserException("Unknown unit for memory_limit: '%s' (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                      "MiB, GiB, TiB for 1024^i units)",
+		                      unit);
 	}
 	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }

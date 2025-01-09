@@ -16,6 +16,7 @@
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"

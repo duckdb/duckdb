@@ -48,7 +48,7 @@ FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) {
 string InFilter::ToString(const string &column_name) {
 	string in_list;
 	for (auto &val : values) {
-		if (in_list.empty()) {
+		if (!in_list.empty()) {
 			in_list += ", ";
 		}
 		in_list += val.ToSQLString();

@@ -45,7 +45,7 @@ BinderException BinderException::NoMatchingFunction(const string &name, const ve
 }
 
 BinderException BinderException::Unsupported(ParsedExpression &expr, const string &message) {
-	auto extra_info = Exception::InitializeExtraInfo("UNSUPPORTED", expr.query_location);
+	auto extra_info = Exception::InitializeExtraInfo("UNSUPPORTED", expr.GetQueryLocation());
 	return BinderException(message, extra_info);
 }
 

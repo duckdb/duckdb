@@ -1,0 +1,39 @@
+# name: test/sql/sample/table_samples/sample_stores_rows_from_later_on.test_slow
+# description: Test sampling of larger relations
+# group: [table_samples]
+
+require vector_size 2048
+
+require noforcestorage
+
+load __TEST_DIR__/test_sample_conversion.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t1 as select 1 a from range(200000);
+
+loop i 1 4805
+
+statement ok
+INSERT INTO t1 VALUES(${i} + 1);
+
+restart
+
+endloop
+
+query I
+select count(*) from duckdb_table_sample('t1');
+----
+2048
+
+query I
+select count(*) from duckdb_table_sample('t1') where a > 1;
+----
+48
+
+query I
+select count(*) from (select (floor(range/200000))::INT a from range(204800) using sample reservoir (1%)) t1 where a >= 1;
+----
+48

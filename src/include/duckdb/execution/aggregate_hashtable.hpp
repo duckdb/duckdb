@@ -94,6 +94,10 @@ public:
 	void SetRadixBits(idx_t radix_bits);
 	//! Get the radix bits for this HT
 	idx_t GetRadixBits() const;
+	//! Get the total amount of data sunk into this HT
+	idx_t GetSinkCount() const;
+	//! Skips lookups from here on out
+	void SkipLookups();
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
@@ -158,6 +162,11 @@ private:
 	idx_t hash_offset;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
+
+	//! How many tuples went into this HT (before de-duplication)
+	idx_t sink_count;
+	//! If true, we just append, skipping HT lookups
+	bool skip_lookups;
 
 	//! The active arena allocator used by the aggregates for their internal state
 	shared_ptr<ArenaAllocator> aggregate_allocator;

@@ -41,7 +41,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      idx_t initial_capacity, idx_t radix_bits)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
-      radix_bits(radix_bits), count(0), capacity(0), aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)) {
+      radix_bits(radix_bits), count(0), capacity(0), skip_lookups(false),
+      aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)) {
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
@@ -130,6 +131,9 @@ void GroupedAggregateHashTable::Abandon() {
 	// Start over
 	ClearPointerTable();
 	count = 0;
+
+	// Resetting the id ensures the dict state is reset properly when needed
+	state.dict_state.dictionary_id = string();
 }
 
 void GroupedAggregateHashTable::Repartition() {
@@ -204,6 +208,9 @@ idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
 
 void GroupedAggregateHashTable::Verify() {
 #ifdef DEBUG
+	if (skip_lookups) {
+		return;
+	}
 	idx_t total_count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
 		const auto &entry = entries[i];
@@ -228,6 +235,14 @@ void GroupedAggregateHashTable::SetRadixBits(idx_t radix_bits_p) {
 
 idx_t GroupedAggregateHashTable::GetRadixBits() const {
 	return radix_bits;
+}
+
+idx_t GroupedAggregateHashTable::GetSinkCount() const {
+	return sink_count;
+}
+
+void GroupedAggregateHashTable::SkipLookups() {
+	skip_lookups = true;
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
@@ -458,6 +473,8 @@ optional_idx GroupedAggregateHashTable::TryAddCompressedGroups(DataChunk &groups
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter) {
+	sink_count += groups.size();
+
 	// check if we can use an optimized path that utilizes compressed vectors
 	auto result = TryAddCompressedGroups(groups, payload, filter);
 	if (result.IsValid()) {
@@ -563,23 +580,6 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	}
 	D_ASSERT(capacity - Count() >= chunk_size); // we need to be able to fit at least one vector of data
 
-	group_hashes_v.Flatten(chunk_size);
-	const auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
-
-	addresses_v.Flatten(chunk_size);
-	const auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
-
-	// Compute the entry in the table based on the hash using a modulo,
-	// and precompute the hash salts for faster comparison below
-	const auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
-	const auto hash_salts = FlatVector::GetData<hash_t>(state.hash_salts);
-	for (idx_t r = 0; r < chunk_size; r++) {
-		const auto &hash = hashes[r];
-		ht_offsets[r] = ApplyBitMask(hash);
-		D_ASSERT(ht_offsets[r] == hash % capacity);
-		hash_salts[r] = ht_entry_t::ExtractSalt(hash);
-	}
-
 	// we start out with all entries [0, 1, 2, ..., chunk_size]
 	const SelectionVector *sel_vector = FlatVector::IncrementalSelectionVector();
 
@@ -600,6 +600,49 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		state.group_data = make_unsafe_uniq_array_uninitialized<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
 	}
 	TupleDataCollection::GetVectorData(state.partitioned_append_state.chunk_state, state.group_data.get());
+
+	group_hashes_v.Flatten(chunk_size);
+	const auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
+
+	addresses_v.Flatten(chunk_size);
+	const auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
+
+	if (skip_lookups) {
+		// Just appending now
+		partitioned_data->AppendUnified(state.partitioned_append_state, state.group_chunk,
+		                                *FlatVector::IncrementalSelectionVector(), chunk_size);
+		RowOperations::InitializeStates(layout, state.partitioned_append_state.chunk_state.row_locations,
+		                                *FlatVector::IncrementalSelectionVector(), chunk_size);
+
+		const auto row_locations =
+		    FlatVector::GetData<data_ptr_t>(state.partitioned_append_state.chunk_state.row_locations);
+		const auto &row_sel = state.partitioned_append_state.reverse_partition_sel;
+		for (idx_t i = 0; i < chunk_size; i++) {
+			const auto &row_idx = row_sel[i];
+			const auto &row_location = row_locations[row_idx];
+			addresses[i] = row_location;
+		}
+		count += chunk_size;
+		return chunk_size;
+	}
+
+	// Compute the entry in the table based on the hash using a modulo,
+	// and precompute the hash salts for faster comparison below
+	const auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
+	const auto hash_salts = FlatVector::GetData<hash_t>(state.hash_salts);
+
+	// We also compute the occupied count, which is essentially useless.
+	// However, this loop is branchless, while the main lookup loop below is not.
+	// So, by doing the lookups here, we better amortize cache misses.
+	idx_t occupied_count = 0;
+	for (idx_t r = 0; r < chunk_size; r++) {
+		const auto &hash = hashes[r];
+		auto &ht_offset = ht_offsets[r];
+		ht_offset = ApplyBitMask(hash);
+		occupied_count += entries[ht_offset].IsOccupied(); // Lookup
+		D_ASSERT(ht_offset == hash % capacity);
+		hash_salts[r] = ht_entry_t::ExtractSalt(hash);
+	}
 
 	idx_t new_group_count = 0;
 	idx_t remaining_entries = chunk_size;
@@ -637,6 +680,13 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 				throw InternalException("Maximum inner iteration count reached in GroupedAggregateHashTable");
 			}
 		}
+
+		if (DUCKDB_UNLIKELY(occupied_count > new_entry_count + need_compare_count)) {
+			// We use the useless occupied_count we summed above here so the variable is used,
+			// and the compiler cannot optimize away the vectorized lookups above. This should never be triggered.
+			throw InternalException("Internal validation failed in GroupedAggregateHashTable");
+		}
+		occupied_count = 0; // Have to set to 0 for next iterations
 
 		if (new_entry_count != 0) {
 			// Append everything that belongs to an empty group

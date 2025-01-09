@@ -365,7 +365,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	for (auto &group_idx : grouping_set) {
 		// Retrieve the expression containing the index in the input chunk
 		auto &group = op.groups[group_idx];
-		D_ASSERT(group->type == ExpressionType::BOUND_REF);
+		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
 		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.index]);
@@ -464,8 +464,21 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
 		// 'Reset' the HT without taking its data, we can just keep appending to the same collection
 		// This only works because we never resize the HT
-		ht.Abandon();
 		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
+		ht.Abandon();
+
+		// Once we've inserted more than SKIP_LOOKUP_THRESHOLD tuples,
+		// and more than UNIQUE_PERCENTAGE_THRESHOLD were unique,
+		// we set the HT to skip doing lookups, which makes it blindly append data to the HT.
+		// This speeds up adding data, at the cost of no longer de-duplicating.
+		// The data will be de-duplicated later anyway
+		static constexpr idx_t SKIP_LOOKUP_THRESHOLD = 262144;
+		static constexpr double UNIQUE_PERCENTAGE_THRESHOLD = 0.95;
+		const auto unique_percentage =
+		    static_cast<double>(ht.GetPartitionedData().Count()) / static_cast<double>(ht.GetSinkCount());
+		if (ht.GetSinkCount() > SKIP_LOOKUP_THRESHOLD && unique_percentage > UNIQUE_PERCENTAGE_THRESHOLD) {
+			ht.SkipLookups();
+		}
 	}
 
 	// Check if we need to repartition

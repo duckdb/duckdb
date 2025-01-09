@@ -161,23 +161,26 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	// first check if either side is a bound column ref
 	// any column ref involved in a comparison will not be null after the comparison
 	bool compare_distinct = IsCompareDistinct(comparison_type);
-	if (!compare_distinct && left.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (!compare_distinct && left.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).binding);
 	}
-	if (!compare_distinct && right.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (!compare_distinct && right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
 	}
 	// check if this is a comparison between a constant and a column ref
 	optional_ptr<BoundConstantExpression> constant;
 	optional_ptr<BoundColumnRefExpression> columnref;
-	if (left.type == ExpressionType::VALUE_CONSTANT && right.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
+	    right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		constant = &left.Cast<BoundConstantExpression>();
 		columnref = &right.Cast<BoundColumnRefExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
-	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::VALUE_CONSTANT) {
+	} else if (left.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+	           right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		columnref = &left.Cast<BoundColumnRefExpression>();
 		constant = &right.Cast<BoundConstantExpression>();
-	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::BOUND_COLUMN_REF) {
+	} else if (left.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+	           right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		// comparison between two column refs
 		auto &left_column_ref = left.Cast<BoundColumnRefExpression>();
 		auto &right_column_ref = right.Cast<BoundColumnRefExpression>();
@@ -213,7 +216,7 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
 	}
 	case ExpressionClass::BOUND_COMPARISON: {
 		auto &comparison = condition.Cast<BoundComparisonExpression>();
-		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.type);
+		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.GetExpressionType());
 		break;
 	}
 	default:

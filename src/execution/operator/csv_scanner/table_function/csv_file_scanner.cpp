@@ -60,7 +60,7 @@ void CSVFileScan::SetStart() {
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
-                         const idx_t file_idx_p, const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids,
+                         idx_t file_idx_p, const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids,
                          CSVSchema &file_schema, bool per_file_single_threaded)
     : file_path(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
@@ -159,7 +159,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const 
 	// Sniff it (We only really care about dialect detection, if types or number of columns are different this will
 	// error out during scanning)
 	auto &state_machine_cache = CSVStateMachineCache::Get(context);
-	if (options.auto_detect && options.dialect_options.num_cols == 0) {
+	// We sniff file if it has not been sniffed yet and either auto-detect is on, or union by name is on
+	if ((options.auto_detect || options.file_options.union_by_name) && options.dialect_options.num_cols == 0) {
 		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {

@@ -67,7 +67,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
                              const unique_ptr<ColumnSegmentState> segment_state_p)
 
     : SegmentBase<ColumnSegment>(start, count), db(db), type(type), type_size(GetTypeIdSize(type.InternalType())),
-      segment_type(segment_type), function(function_p), stats(std::move(statistics)), block(std::move(block_p)),
+      segment_type(segment_type), stats(std::move(statistics)), block(std::move(block_p)), function(function_p),
       block_id(block_id_p), offset(offset), segment_size(segment_size_p) {
 
 	if (function.get().init_segment) {
@@ -81,8 +81,8 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
 
     : SegmentBase<ColumnSegment>(start, other.count.load()), db(other.db), type(std::move(other.type)),
-      type_size(other.type_size), segment_type(other.segment_type), function(other.function),
-      stats(std::move(other.stats)), block(std::move(other.block)), block_id(other.block_id), offset(other.offset),
+      type_size(other.type_size), segment_type(other.segment_type), stats(std::move(other.stats)),
+      block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
       segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
@@ -228,8 +228,12 @@ void ColumnSegment::ConvertToPersistent(optional_ptr<BlockManager> block_manager
 	offset = 0;
 
 	if (block_id == INVALID_BLOCK) {
-		// constant block: reset the block buffer
+		// constant block: no need to write anything to disk besides the stats
+		// set up the compression function to constant
 		D_ASSERT(stats.statistics.IsConstant());
+		auto &config = DBConfig::GetConfig(db);
+		function = *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
+		// reset the block buffer
 		block.reset();
 	} else {
 		D_ASSERT(!stats.statistics.IsConstant());
@@ -548,6 +552,10 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection");
 	}
+}
+
+const CompressionFunction &ColumnSegment::GetCompressionFunction() {
+	return function.get();
 }
 
 } // namespace duckdb

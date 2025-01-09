@@ -124,6 +124,7 @@ public:
 
 	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
+	unique_ptr<BlockingSample> GetSample();
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
 	AttachedDatabase &GetAttached();

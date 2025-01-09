@@ -46,7 +46,7 @@ static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate 
 	// figure out the columns we are grouping by
 	for (auto &group_expr : op.groups) {
 		// only support bound reference here
-		if (group_expr->type != ExpressionType::BOUND_REF) {
+		if (group_expr->GetExpressionType() != ExpressionType::BOUND_REF) {
 			return false;
 		}
 		auto &ref = group_expr->Cast<BoundReferenceExpression>();
@@ -64,7 +64,7 @@ static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate 
 			for (auto &partition_col : partition_columns) {
 				// we only support bound reference here
 				auto &expr = projection.select_list[partition_col];
-				if (expr->type != ExpressionType::BOUND_REF) {
+				if (expr->GetExpressionType() != ExpressionType::BOUND_REF) {
 					return false;
 				}
 				auto &ref = expr->Cast<BoundReferenceExpression>();

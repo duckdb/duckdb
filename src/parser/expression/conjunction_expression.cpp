@@ -26,7 +26,7 @@ ConjunctionExpression::ConjunctionExpression(ExpressionType type, unique_ptr<Par
 }
 
 void ConjunctionExpression::AddExpression(unique_ptr<ParsedExpression> expr) {
-	if (expr->type == type) {
+	if (expr->GetExpressionType() == type) {
 		// expr is a conjunction of the same type: merge the expression lists together
 		auto &other = expr->Cast<ConjunctionExpression>();
 		for (auto &child : other.children) {

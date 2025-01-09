@@ -176,7 +176,11 @@ bool Timestamp::TryFromTimestampNanos(timestamp_t input, int32_t nanos, timestam
 		return false;
 	}
 
-	return TryAddOperator::Operation(result.value, int64_t(nanos), result.value);
+	if (!TryAddOperator::Operation(result.value, int64_t(nanos), result.value)) {
+		return false;
+	}
+
+	return IsFinite(result);
 }
 
 TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result) {
@@ -455,6 +459,11 @@ int64_t Timestamp::GetEpochNanoSeconds(timestamp_t timestamp) {
 		throw ConversionException("Could not convert Timestamp(US) to Timestamp(NS)");
 	}
 	return result;
+}
+
+int64_t Timestamp::GetEpochNanoSeconds(timestamp_ns_t timestamp) {
+	D_ASSERT(Timestamp::IsFinite(timestamp));
+	return timestamp.value;
 }
 
 int64_t Timestamp::GetEpochRounded(timestamp_t input, int64_t power_of_ten) {

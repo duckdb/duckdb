@@ -12,6 +12,7 @@
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/extension_type_info.hpp"
 
 using namespace duckdb;
 
@@ -256,7 +257,9 @@ struct BoundedType {
 	static LogicalType Get(int32_t max_val) {
 		auto type = LogicalType(LogicalTypeId::INTEGER);
 		type.SetAlias("BOUNDED");
-		type.SetModifiers({Value::INTEGER(max_val)});
+		auto info = make_uniq<ExtensionTypeInfo>();
+		info->modifiers.emplace_back(Value::INTEGER(max_val));
+		type.SetExtensionInfo(std::move(info));
 		return type;
 	}
 
@@ -264,16 +267,17 @@ struct BoundedType {
 		auto type = LogicalType(LogicalTypeId::INTEGER);
 		type.SetAlias("BOUNDED");
 		// By default we set a NULL max value to indicate that it can be any value
-		type.SetModifiers({Value(LogicalType::INTEGER)});
+		auto info = make_uniq<ExtensionTypeInfo>();
+		info->modifiers.emplace_back(Value(LogicalTypeId::INTEGER));
+		type.SetExtensionInfo(std::move(info));
 		return type;
 	}
 
 	static int32_t GetMaxValue(const LogicalType &type) {
-		auto mods_ptr = type.GetModifiers();
-		if (!mods_ptr) {
+		if (!type.HasExtensionInfo()) {
 			throw InvalidInputException("BOUNDED type must have a max value");
 		}
-		auto &mods = *mods_ptr;
+		auto &mods = type.GetExtensionInfo()->modifiers;
 		if (mods[0].IsNull()) {
 			throw InvalidInputException("BOUNDED type must have a max value");
 		}
@@ -432,26 +436,32 @@ struct MinMaxType {
 
 		auto type = LogicalType(LogicalTypeId::INTEGER);
 		type.SetAlias("MINMAX");
-		type.SetModifiers({Value::INTEGER(min_val), Value::INTEGER(max_val)});
+		auto info = make_uniq<ExtensionTypeInfo>();
+		info->modifiers.emplace_back(Value::INTEGER(min_val));
+		info->modifiers.emplace_back(Value::INTEGER(max_val));
+		type.SetExtensionInfo(std::move(info));
 		return type;
 	}
 
 	static int32_t GetMinValue(const LogicalType &type) {
-		D_ASSERT(type.HasModifiers());
-		auto &mods = *type.GetModifiers();
+		D_ASSERT(type.HasExtensionInfo());
+		auto &mods = type.GetExtensionInfo()->modifiers;
 		return mods[0].GetValue<int32_t>();
 	}
 
 	static int32_t GetMaxValue(const LogicalType &type) {
-		D_ASSERT(type.HasModifiers());
-		auto &mods = *type.GetModifiers();
+		D_ASSERT(type.HasExtensionInfo());
+		auto &mods = type.GetExtensionInfo()->modifiers;
 		return mods[1].GetValue<int32_t>();
 	}
 
 	static LogicalType Get(int32_t min_val, int32_t max_val) {
 		auto type = LogicalType(LogicalTypeId::INTEGER);
 		type.SetAlias("MINMAX");
-		type.SetModifiers({Value::INTEGER(min_val), Value::INTEGER(max_val)});
+		auto info = make_uniq<ExtensionTypeInfo>();
+		info->modifiers.emplace_back(Value::INTEGER(min_val));
+		info->modifiers.emplace_back(Value::INTEGER(max_val));
+		type.SetExtensionInfo(std::move(info));
 		return type;
 	}
 

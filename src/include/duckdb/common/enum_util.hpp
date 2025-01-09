@@ -102,6 +102,8 @@ enum class CompressedMaterializationDirection : uint8_t;
 
 enum class CompressionType : uint8_t;
 
+enum class CompressionValidity : uint8_t;
+
 enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
@@ -281,6 +283,8 @@ enum class ResultModifierType : uint8_t;
 enum class SampleMethod : uint8_t;
 
 enum class SampleType : uint8_t;
+
+enum class SamplingState : uint8_t;
 
 enum class ScanType : uint8_t;
 
@@ -481,6 +485,9 @@ const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMate
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
+
+template<>
+const char* EnumUtil::ToChars<CompressionValidity>(CompressionValidity value);
 
 template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
@@ -753,6 +760,9 @@ template<>
 const char* EnumUtil::ToChars<SampleType>(SampleType value);
 
 template<>
+const char* EnumUtil::ToChars<SamplingState>(SamplingState value);
+
+template<>
 const char* EnumUtil::ToChars<ScanType>(ScanType value);
 
 template<>
@@ -998,6 +1008,9 @@ CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializatio
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);
+
+template<>
+CompressionValidity EnumUtil::FromString<CompressionValidity>(const char *value);
 
 template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
@@ -1268,6 +1281,9 @@ SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
 
 template<>
 SampleType EnumUtil::FromString<SampleType>(const char *value);
+
+template<>
+SamplingState EnumUtil::FromString<SamplingState>(const char *value);
 
 template<>
 ScanType EnumUtil::FromString<ScanType>(const char *value);

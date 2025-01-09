@@ -1035,4 +1035,10 @@ def test_decimal_sep(shell):
     result.check_stdout("10.5")
     result.check_stdout("current decimal separator")
 
+def test_prepared_statement(shell):
+    test = ShellTest(shell).statement("select ?")
+    result = test.run()
+    result.check_stderr("Prepared statement parameters cannot be used directly")
+
+
 # fmt: on

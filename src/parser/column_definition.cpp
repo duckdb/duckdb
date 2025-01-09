@@ -123,7 +123,7 @@ bool ColumnDefinition::Generated() const {
 //===--------------------------------------------------------------------===//
 
 static void VerifyColumnRefs(ParsedExpression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &column_ref = expr.Cast<ColumnRefExpression>();
 		if (column_ref.IsQualified()) {
 			throw ParserException(
@@ -135,13 +135,13 @@ static void VerifyColumnRefs(ParsedExpression &expr) {
 }
 
 static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &dependencies) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto columnref = expr.Cast<ColumnRefExpression>();
 		auto &name = columnref.GetColumnName();
 		dependencies.push_back(name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		if (expr.type == ExpressionType::LAMBDA) {
+		if (expr.GetExpressionType() == ExpressionType::LAMBDA) {
 			throw NotImplementedException("Lambda functions are currently not supported in generated columns.");
 		}
 		InnerGetListOfDependencies((ParsedExpression &)child, dependencies);

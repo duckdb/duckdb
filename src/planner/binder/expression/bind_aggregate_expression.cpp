@@ -90,7 +90,7 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 
 static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
 	D_ASSERT(fractions.get());
-	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(fractions->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*fractions);
 
 	if (!bound->IsFoldable()) {
@@ -157,7 +157,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// Bind the ORDER BYs, if any
 	if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 		for (auto &order : aggr.order_bys->orders) {
-			if (order.expression->type == ExpressionType::VALUE_CONSTANT) {
+			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
 				if (!const_expr.value.type().IsIntegral()) {
 					auto &config = ClientConfig::GetConfig(context);
@@ -313,7 +313,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// now create a column reference referring to the aggregate
 	auto colref = make_uniq<BoundColumnRefExpression>(
-	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
+	    aggr.GetAlias().empty() ? node.aggregates[aggr_index]->ToString() : aggr.GetAlias(),
 	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(std::move(colref));

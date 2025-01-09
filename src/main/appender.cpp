@@ -373,6 +373,28 @@ void BaseAppender::Append(Value value) { // NOLINT: template stuff
 	AppendValue(value);
 }
 
+void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t col, idx_t row) {
+	if (col >= target.ColumnCount()) {
+		throw InvalidInputException("Too many appends for chunk!");
+	}
+	if (row >= target.GetCapacity()) {
+		throw InvalidInputException("Too many rows for chunk!");
+	}
+
+	if (value.type() == target.GetTypes()[col]) {
+		target.SetValue(col, row, value);
+	} else {
+		Value new_value;
+		string error_msg;
+		if (value.DefaultTryCastAs(target.GetTypes()[col], new_value, &error_msg)) {
+			target.SetValue(col, row, new_value);
+		} else {
+			throw InvalidInputException("type mismatch in Append, expected %s, got %s for column %d",
+			                            target.GetTypes()[col], value.type(), col);
+		}
+	}
+}
+
 template <>
 void BaseAppender::Append(std::nullptr_t value) {
 	if (column >= chunk.ColumnCount()) {
@@ -464,15 +486,32 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void Appender::AppendDefault() {
-	auto index = column_ids.empty() ? column : column_ids[column].index;
+	auto value = GetDefaultValue(column);
+	Append(value);
+}
+
+void duckdb::Appender::AppendDefault(DataChunk &chunk, idx_t col, idx_t row) {
+	auto value = GetDefaultValue(col);
+	Append(chunk, value, col, row);
+}
+
+Value Appender::GetDefaultValue(idx_t column) {
+	auto index = column;
+
+	if (!column_ids.empty()) {
+		if (column >= column_ids.size()) {
+			throw InvalidInputException("Column index out of bounds");
+		}
+		index = column_ids[column].index;
+	}
+
 	auto it = default_values.find(index);
 	if (it == default_values.end()) {
 		auto &name = description->columns[index].Name();
 		throw NotImplementedException(
 		    "AppendDefault is not supported for column \"%s\": not a foldable default expressions.", name);
 	}
-	auto &value = it->second;
-	Append(value);
+	return it->second;
 }
 
 void Appender::AddColumn(const string &name) {

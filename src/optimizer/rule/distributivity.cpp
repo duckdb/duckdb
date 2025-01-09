@@ -15,7 +15,7 @@ DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewr
 }
 
 void DistributivityRule::AddExpressionSet(Expression &expr, expression_set_t &set) {
-	if (expr.type == ExpressionType::CONJUNCTION_AND) {
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &and_expr = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : and_expr.children) {
 			set.insert(*child);
@@ -29,7 +29,7 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
                                                              Expression &expr) {
 	auto &child = conj.children[idx];
 	unique_ptr<Expression> result;
-	if (child->type == ExpressionType::CONJUNCTION_AND) {
+	if (child->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		// AND, remove expression from the list
 		auto &and_expr = child->Cast<BoundConjunctionExpression>();
 		for (idx_t i = 0; i < and_expr.children.size(); i++) {

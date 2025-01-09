@@ -1,0 +1,30 @@
+# name: test/sql/window/test_leadlag_orderby.test
+# description: Test secondary ordering of LEAD/LAG
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query IIIII
+SELECT 
+	i,
+	(i * 29) % 11 AS outside,
+	i // 2 AS inside,
+	lead(i ORDER BY inside DESC, i) OVER w,
+	lag(i ORDER BY inside DESC, i) OVER w,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY outside
+)
+ORDER BY inside DESC, i
+----
+8	1	4	0	NULL
+9	8	4	7	8
+6	9	3	7	9
+7	5	3	5	8
+4	6	2	5	7
+5	2	2	0	8
+2	3	1	0	5
+3	10	1	0	2
+0	0	0	NULL	NULL
+1	7	0	NULL	0

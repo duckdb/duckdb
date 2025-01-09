@@ -9,7 +9,8 @@
 namespace duckdb {
 
 struct RandomLocalState : public FunctionLocalState {
-	explicit RandomLocalState(uint32_t seed) : random_engine(seed) {
+	explicit RandomLocalState(uint64_t seed) : random_engine(0) {
+		random_engine.SetSeed(seed);
 	}
 
 	RandomEngine random_engine;
@@ -30,7 +31,7 @@ static unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &stat
                                                            FunctionData *bind_data) {
 	auto &random_engine = RandomEngine::Get(state.GetContext());
 	lock_guard<mutex> guard(random_engine.lock);
-	return make_uniq<RandomLocalState>(random_engine.NextRandomInteger());
+	return make_uniq<RandomLocalState>(random_engine.NextRandomInteger64());
 }
 
 ScalarFunction RandomFun::GetFunction() {

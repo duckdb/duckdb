@@ -45,7 +45,7 @@ public:
 	            const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids, CSVSchema &file_schema);
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
-	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, const idx_t file_idx,
+	CSVFileScan(ClientContext &context, const string &file_path, const CSVReaderOptions &options, idx_t file_idx,
 	            const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids, CSVSchema &file_schema,
 	            bool per_file_single_threaded);
 

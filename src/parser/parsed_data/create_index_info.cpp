@@ -40,7 +40,7 @@ vector<string> CreateIndexInfo::ExpressionsToList() const {
 		// We need to remove them to reproduce the original query.
 		RemoveTableQualificationRecursive(copy, table);
 		bool add_parenthesis = true;
-		if (copy->type == ExpressionType::COLUMN_REF) {
+		if (copy->GetExpressionType() == ExpressionType::COLUMN_REF) {
 			auto &column_ref = copy->Cast<ColumnRefExpression>();
 			if (!column_ref.IsQualified()) {
 				// Only not qualified references like (col1, col2) don't need parenthesis.
