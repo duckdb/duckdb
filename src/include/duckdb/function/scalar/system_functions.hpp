@@ -20,6 +20,7 @@ struct FinalizeFun {
 	static constexpr const char *Parameters = "col0";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -29,6 +30,7 @@ struct CombineFun {
 	static constexpr const char *Parameters = "col0,col1";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
