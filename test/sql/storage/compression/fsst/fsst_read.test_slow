@@ -7,16 +7,16 @@ require vector_size 2048
 load test/sql/storage/compression/fsst/fsst.db readonly
 
 query I
-select count(temperature) from tmp;
+select count(street) from tbl;
 ----
-400000
+397527
 
 query I nosort res
-select temperature from tbl;
+select street from tbl;
 ----
 
 query I
-SELECT compression FROM pragma_storage_info('tbl') WHERE compression != 'Fsst';
+SELECT compression FROM pragma_storage_info('tbl') WHERE segment_type == 'VARCHAR' AND compression != 'FSST';
 ----
 
 # Verify that the compression method is deprecated

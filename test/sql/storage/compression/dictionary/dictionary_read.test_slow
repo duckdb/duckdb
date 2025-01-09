@@ -9,14 +9,14 @@ load test/sql/storage/compression/dictionary/dictionary.db readonly
 query I
 select count(street) from tbl;
 ----
-400000
+397527
 
 query I nosort res
 select street from tbl;
 ----
 
 query I
-SELECT compression FROM pragma_storage_info('tbl') WHERE compression != 'Dictionary';
+SELECT compression FROM pragma_storage_info('tbl') WHERE segment_type == 'VARCHAR' AND compression != 'Dictionary';
 ----
 
 # Verify that the compression method is deprecated
