@@ -313,9 +313,15 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	unordered_map<uint32_t, idx_t> field_id_to_column_index;
 	auto &column_readers = reader.root_reader->Cast<StructColumnReader>().child_readers;
 	for (idx_t column_index = 0; column_index < column_readers.size(); column_index++) {
-		auto &column_schema = column_readers[column_index]->Schema();
+		auto &column_reader = *column_readers[column_index];
+		auto &column_schema = column_reader.Schema();
 		if (column_schema.__isset.field_id) {
 			field_id_to_column_index[column_schema.field_id] = column_index;
+		} else if (column_reader.GetParentSchema()) {
+			auto &parent_column_schema = *column_reader.GetParentSchema();
+			if (parent_column_schema.__isset.field_id) {
+				field_id_to_column_index[parent_column_schema.field_id] = column_index;
+			}
 		}
 	}
 
