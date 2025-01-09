@@ -162,7 +162,7 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 		idx_t pos;
 		bool special;
 		date_t dummy_value;
-		return Date::TryConvertDate(value_ptr, value_size, pos, dummy_value, special, true);
+		return Date::TryConvertDate(value_ptr, value_size, pos, dummy_value, special, true) == DateCastResult::SUCCESS;
 	}
 	case LogicalTypeId::TIMESTAMP: {
 		timestamp_t dummy_value;

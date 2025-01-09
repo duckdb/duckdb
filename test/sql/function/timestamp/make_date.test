@@ -307,3 +307,9 @@ SELECT
 ;
 ----
 12:41:46.123456	NULL	NULL	NULL
+
+# Overflow
+statement error
+SELECT make_timestamp(294247, 1, 10, 4, 0, 54.775807);
+----
+Conversion Error: Date and time not in timestamp range

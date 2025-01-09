@@ -588,4 +588,4 @@ select 'epoch'::timestamptz;
 statement error
 SELECT TIMESTAMPTZ '294247-01-10 04:00:54.7758';
 ----
-Unable to convert ICU date to timestamp
+Conversion Error: ICU date overflows timestamp range
