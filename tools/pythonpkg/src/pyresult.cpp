@@ -25,8 +25,7 @@
 
 namespace duckdb {
 
-DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p)
-    : result(std::move(result_p)) {
+DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::move(result_p)) {
 	if (!result) {
 		throw InternalException("PyResult created without a result object");
 	}
@@ -441,7 +440,8 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 				D_ASSERT(py::gil_check());
 				py::gil_scoped_release release;
 				count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data,
-				                              ArrowExtensionType::GetExtensionTypes(*query_result.client_properties.client_context, query_result.types));
+				                              ArrowExtensionType::GetExtensionTypes(
+				                                  *query_result.client_properties.client_context, query_result.types));
 			}
 			if (count == 0) {
 				break;
@@ -464,9 +464,7 @@ ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
-	auto context_ptr = result->client_properties.client_context;
-	ResultArrowArrayStreamWrapper *result_stream =
-	    new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch, *context_ptr);
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
 	// The 'result_stream' is part of the 'private_data' of the ArrowArrayStream and its lifetime is bound to that of
 	// the ArrowArrayStream.
 	return result_stream->stream;

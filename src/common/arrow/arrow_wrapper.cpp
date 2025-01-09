@@ -131,9 +131,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	idx_t result_count;
 	ErrorData error;
-
 	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count, error,
-	                              ArrowExtensionType::GetExtensionTypes(my_stream->context, my_stream->column_types))) {
+	                              my_stream->extension_types)) {
 		D_ASSERT(error.HasError());
 		my_stream->last_error = error;
 		return -1;
@@ -162,9 +161,8 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	return my_stream->last_error.Message().c_str();
 }
 
-ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p,
-                                                             ClientContext &context)
-    : result(std::move(result_p)), scan_state(make_uniq<QueryResultChunkScanState>(*result)), context(context) {
+ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
+    : result(std::move(result_p)), scan_state(make_uniq<QueryResultChunkScanState>(*result)) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
 	//! Ceil Approx_Batch_Size/STANDARD_VECTOR_SIZE
@@ -177,6 +175,8 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_next = ResultArrowArrayStreamWrapper::MyStreamGetNext;
 	stream.release = ResultArrowArrayStreamWrapper::MyStreamRelease;
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
+
+	extension_types = ArrowExtensionType::GetExtensionTypes(*result->client_properties.client_context, result->types);
 }
 
 } // namespace duckdb

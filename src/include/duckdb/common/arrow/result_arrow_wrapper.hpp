@@ -15,7 +15,7 @@
 namespace duckdb {
 class ResultArrowArrayStreamWrapper {
 public:
-	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result, idx_t batch_size, ClientContext &context);
+	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result, idx_t batch_size);
 
 public:
 	ArrowArrayStream stream;
@@ -25,7 +25,7 @@ public:
 	vector<LogicalType> column_types;
 	vector<string> column_names;
 	unique_ptr<ChunkScanState> scan_state;
-	ClientContext &context;
+	unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_types;
 
 private:
 	static int MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);
