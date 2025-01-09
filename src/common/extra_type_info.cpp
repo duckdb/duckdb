@@ -12,9 +12,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Extension Type Info
 //===--------------------------------------------------------------------===//
-//
-// Extension type info never take part in equality checks, unless both have the same type.
-//
+
 bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> lhs, optional_ptr<ExtensionTypeInfo> rhs) {
 	// Either both are null, or both are the same, so they are equal
 	if (lhs.get() == rhs.get()) {
