@@ -36,6 +36,8 @@ public:
 	//! Main logger functions
 	void Log(const char *log_type, LogLevel log_level, const char *log_message);
 	void Log(LogLevel log_level, const char *log_message);
+	void Log(const char *log_type, LogLevel log_level, const string_t &log_message);
+	void Log(LogLevel log_level, const string_t &log_message);
 	void Log(const char *log_type, LogLevel log_level, std::function<string()> callback);
 	void Log(LogLevel log_level, std::function<string()> callback);
 
@@ -66,6 +68,10 @@ public:
 		Logger::Get(log_context_source).Log(log_type, log_level, log_message.c_str());
 	}
 	template <class T>
+	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, const string_t &log_message) {
+		Logger::Get(log_context_source).Log(log_type, log_level, log_message);
+	}
+	template <class T>
 	static void Log(T &log_context_source, LogLevel log_level, const char *log_message) {
 		Logger::Get(log_context_source).Log(log_level, log_message);
 	}
@@ -73,6 +79,11 @@ public:
 	static void Log(T &log_context_source, LogLevel log_level, const string &log_message) {
 		Logger::Get(log_context_source).Log(log_level, log_message.c_str());
 	}
+	template <class T>
+	static void Log(T &log_context_source, LogLevel log_level, const string_t &log_message) {
+		Logger::Get(log_context_source).Log(log_level, log_message);
+	}
+
 	//! Logger::Log with callback
 	template <class T>
 	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, std::function<string()> callback) {

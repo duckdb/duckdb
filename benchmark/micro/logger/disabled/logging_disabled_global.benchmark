@@ -7,7 +7,4 @@ group case
 
 # Note: this will call the Logger, but logging is disabled so this will call the NopLogger 100000000 times in a tight inner loop
 run
-SELECT sum(value) FROM test_logging(50000000, enable_logging=true, log_message='hello world', logger='global');
-
-result I
-1249999975000000
+SELECT write_log('hello world', scope := 'database') from range(0,50000000);

@@ -3,6 +3,8 @@
 #include "duckdb.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/logger.hpp"
+#include "duckdb/main/extension_util.hpp"
+#include "duckdb/function/table_function.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -152,6 +154,48 @@ TEST_CASE("Test logging", "[logging][.]") {
 		test_logging(level, "", "default");
 		test_logging(level, "", "custom_type,default");
 	}
+}
 
-	// TODO: test thread-local logger
+struct TestLoggingData : public LocalTableFunctionState {
+	explicit TestLoggingData(ExecutionContext &context_p) : context(context_p) {};
+	ExecutionContext &context;
+};
+
+static duckdb::unique_ptr<LocalTableFunctionState>
+TestLoggingInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *global_state) {
+	return make_uniq<TestLoggingData>(context);
+}
+
+static duckdb::unique_ptr<FunctionData> TestLoggingBind(ClientContext &context, TableFunctionBindInput &input,
+                                                        duckdb::vector<LogicalType> &return_types,
+                                                        duckdb::vector<string> &names) {
+	names.emplace_back("value");
+	return_types.emplace_back(LogicalType::INTEGER);
+
+	return make_uniq<TableFunctionData>();
+}
+
+static void TestLoggingFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &local_state = data_p.local_state->Cast<TestLoggingData>();
+	Logger::Warn(local_state.context, "thread_logger");
+	output.SetCardinality(0);
+}
+
+// This test the thread context logger
+TEST_CASE("Test thread context logger", "[logging][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	duckdb::TableFunction tf("test_thread_logger", {}, TestLoggingFunction, TestLoggingBind, nullptr,
+	                         TestLoggingInitLocal);
+	ExtensionUtil::RegisterFunction(*db.instance, tf);
+
+	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
+
+	// Run our dummy table function to call the thread local logger
+	REQUIRE_NO_FAIL(con.Query("FROM test_thread_logger()"));
+
+	auto res = con.Query("SELECT scope, message, from duckdb_logs where starts_with(message, 'thread_logger')");
+	REQUIRE(CHECK_COLUMN(res, 0, {"THREAD"}));
+	REQUIRE(CHECK_COLUMN(res, 1, {"thread_logger"}));
 }

@@ -7,7 +7,4 @@ group case
 
 # Note: this will NOT call any logger code, it's simply for reference for the other benchmarks
 run
-SELECT sum(value) FROM test_logging(50000000, enable_logging=false, log_message='hello world');
-
-result I
-1249999975000000
+SELECT write_log('hello world', scope := 'database', disable_logging := true) from range(0,50000000);

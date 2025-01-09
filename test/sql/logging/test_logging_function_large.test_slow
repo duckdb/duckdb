@@ -17,16 +17,13 @@ set logging_level='debug';
 loop i 0 10000
 
 statement ok
-FROM test_logging(25, log_message='hi_global', logger='global')
+SELECT write_log('hi_global', level := 'info', scope := 'database') from range(0,25);
 
 statement ok
-FROM test_logging(25, log_message='hi_client', logger='client_context')
+SELECT write_log('hi_client', level := 'info', scope := 'connection') from range(0,25);
 
 statement ok
-FROM test_logging(25, log_message='hi_thread', logger='thread_local')
-
-statement ok
-FROM test_logging(25, log_message='hi_file', logger='file_opener')
+SELECT write_log('hi_file', level := 'info', scope := 'file_opener') from range(0,25);
 
 endloop
 
@@ -36,4 +33,3 @@ SELECT count(*), message FROM duckdb_logs where starts_with(message, 'hi_') grou
 250000	hi_client
 250000	hi_file
 250000	hi_global
-250000	hi_thread

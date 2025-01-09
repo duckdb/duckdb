@@ -41,6 +41,20 @@ void Logger::Log(LogLevel log_level, const char *log_message) {
 	}
 }
 
+void Logger::Log(const char *log_type, LogLevel log_level, const string_t &log_message) {
+	if (ShouldLog(log_type, log_level)) {
+		auto string_copy = log_message.GetString();
+		WriteLog(log_type, log_level, string_copy.c_str());
+	}
+}
+
+void Logger::Log(LogLevel log_level, const string_t &log_message) {
+	if (ShouldLog(log_level)) {
+		auto string_copy = log_message.GetString();
+		WriteLog(log_level, string_copy.c_str());
+	}
+}
+
 void Logger::Log(const char *log_type, LogLevel log_level, std::function<string()> callback) { // NOLINT
 	if (ShouldLog(log_type, log_level)) {
 		auto string = callback();
@@ -65,6 +79,9 @@ bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	if (config.level > log_level) {
 		return false;
 	}
+
+	// TODO: improve these: they are currently fairly expensive due to requiring allocations when looking up const char*
+	//       also, we would ideally do prefix matching, not string matching here
 	if (config.mode == LogMode::ENABLE_SELECTED) {
 		return config.enabled_log_types.find(log_type) != config.enabled_log_types.end();
 	}

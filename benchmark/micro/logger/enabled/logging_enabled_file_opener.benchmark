@@ -11,13 +11,10 @@ set logging_storage='memory';
 set logging_level='debug'
 
 run
-SELECT sum(value) FROM test_logging(1000000, enable_logging=true, log_message='hello world', logger='file_opener', log_type='duckdb.SomeName.SomeOtherName.BlaBla');
+SELECT write_log('hello world', level := 'warn', scope := 'file_opener', log_type := 'duckdb.SomeName.SomeOtherName.BlaBla' ) from range(0,1000000);
 
 cleanup
 set enable_logging=false;
 set logging_storage='stdout';
 set logging_storage='memory';
 set enable_logging=true;
-
-result I
-499999500000

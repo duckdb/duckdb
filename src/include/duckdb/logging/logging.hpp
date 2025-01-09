@@ -44,6 +44,7 @@ struct LogConfig {
 	LogMode mode;
 	LogLevel level;
 	string storage;
+
 	unordered_set<string> enabled_log_types;
 	unordered_set<string> disabled_log_types;
 

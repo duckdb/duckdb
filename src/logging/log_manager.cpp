@@ -41,7 +41,6 @@ RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &cont
 }
 
 Logger &LogManager::GlobalLogger() {
-	unique_lock<mutex> lck(lock);
 	return *global_logger;
 }
 

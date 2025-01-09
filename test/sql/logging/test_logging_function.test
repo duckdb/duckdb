@@ -15,16 +15,13 @@ statement ok
 set logging_level='info';
 
 statement ok
-FROM test_logging(3, log_message='hello from the global_log', logger='global', level='info', log_type='global_type')
+SELECT write_log('hello from the global log scope', level := 'info', scope := 'database', log_type := 'global_type' ) from range(0,3);
 
 statement ok
-FROM test_logging(3, log_message='hello from the client_context', logger='client_context', level='info', log_type='client_context_type')
+SELECT write_log('hello from the connection log scope', level := 'info', scope := 'connection', log_type := 'client_context_type' ) from range(0,3);
 
 statement ok
-FROM test_logging(3, log_message='hello from the thread_context', logger='thread_local', level='info', log_type='thread_type')
-
-statement ok
-FROM test_logging(3, log_message='hello from the file_opener', logger='file_opener', level='info', log_type='opener_type')
+SELECT write_log('hello from the file_opener log scope', level := 'info', scope := 'file_opener', log_type := 'opener_type' ) from range(0,3);
 
 statement ok
 from duckdb_logs
@@ -32,15 +29,12 @@ from duckdb_logs
 query IIII
 SELECT * EXCLUDE (timestamp, client_context, transaction_id, thread) FROM duckdb_logs where starts_with(message, 'hello from the') order by timestamp
 ----
-global_type	INFO	hello from the global_log	DATABASE
-global_type	INFO	hello from the global_log	DATABASE
-global_type	INFO	hello from the global_log	DATABASE
-client_context_type	INFO	hello from the client_context	CONNECTION
-client_context_type	INFO	hello from the client_context	CONNECTION
-client_context_type	INFO	hello from the client_context	CONNECTION
-thread_type	INFO	hello from the thread_context	THREAD
-thread_type	INFO	hello from the thread_context	THREAD
-thread_type	INFO	hello from the thread_context	THREAD
-opener_type	INFO	hello from the file_opener	CONNECTION
-opener_type	INFO	hello from the file_opener	CONNECTION
-opener_type	INFO	hello from the file_opener	CONNECTION
+global_type	INFO	hello from the global log scope	DATABASE
+global_type	INFO	hello from the global log scope	DATABASE
+global_type	INFO	hello from the global log scope	DATABASE
+client_context_type	INFO	hello from the connection log scope	CONNECTION
+client_context_type	INFO	hello from the connection log scope	CONNECTION
+client_context_type	INFO	hello from the connection log scope	CONNECTION
+opener_type	INFO	hello from the file_opener log scope	CONNECTION
+opener_type	INFO	hello from the file_opener log scope	CONNECTION
+opener_type	INFO	hello from the file_opener log scope	CONNECTION

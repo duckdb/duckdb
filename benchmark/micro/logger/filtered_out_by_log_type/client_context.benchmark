@@ -12,9 +12,5 @@ set logging_level='debug';
 set logging_mode='disable_selected';
 set disabled_log_types='duckdb.SomeName.SomeOtherName.BlaBla';
 
-# Note: this will call the Logger, but logging is disabled so this will call the NopLogger 100000000 times in a tight inner loop
 run
-SELECT sum(value) FROM test_logging(50000000, enable_logging=true, log_message='hello world', logger='client_context', log_type='duckdb.SomeName.SomeOtherName.BlaBla');
-
-result I
-1249999975000000
+SELECT write_log('hello world', level := 'warn', scope := 'connection', log_type := 'duckdb.SomeName.SomeOtherName.BlaBla' ) from range(0,10000000);
