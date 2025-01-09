@@ -21,7 +21,12 @@ RandomEngine::RandomEngine(int64_t seed) : random_state(make_uniq<RandomState>()
 	if (seed < 0) {
 #ifdef __linux__
 		idx_t random_seed;
-		syscall(SYS_getrandom, &random_seed, sizeof(random_seed), 0);
+		auto result = syscall(SYS_getrandom, &random_seed, sizeof(random_seed), 0);
+		if (result == -1) {
+			// Something went wrong with the syscall, we use chrono
+			const auto now = std::chrono::high_resolution_clock::now();
+			random_seed = now.time_since_epoch().count();
+		}
 		random_state->pcg.seed(random_seed);
 #else
 		random_state->pcg.seed(pcg_extras::seed_seq_from<std::random_device>());
