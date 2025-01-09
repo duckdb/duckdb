@@ -11,6 +11,7 @@
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/chunk_scan_state/query_result.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
