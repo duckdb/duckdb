@@ -122,7 +122,7 @@ TEST_CASE("Test move children", "[arrow]") {
 			ArrowSchema schema;
 			vector<LogicalType> single_type {res_types[i]};
 			vector<string> single_name {res_names[i]};
-			ArrowConverter::ToArrowSchema(&schema, single_type, single_name, res_properties, *conn.context);
+			ArrowConverter::ToArrowSchema(&schema, single_type, single_name, res_properties);
 
 			if (i == 0) {
 				AssertExpectedResult<string>(&schema, children[i], "a");

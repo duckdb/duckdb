@@ -72,7 +72,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	if (!my_stream->column_types.empty()) {
 		try {
 			ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-			                              my_stream->result->client_properties, my_stream->context);
+			                              my_stream->result->client_properties);
 		} catch (std::runtime_error &e) {
 			my_stream->last_error = ErrorData(e);
 			return -1;
@@ -98,7 +98,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 	try {
 		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-		                              my_stream->result->client_properties, my_stream->context);
+		                              my_stream->result->client_properties);
 	} catch (std::runtime_error &e) {
 		my_stream->last_error = ErrorData(e);
 		return -1;
@@ -133,8 +133,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	ErrorData error;
 
 	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count, error,
-	                              ArrowExtensionType::GetExtensionTypes(my_stream->context, my_stream->column_types),
-	                              my_stream->context)) {
+	                              ArrowExtensionType::GetExtensionTypes(my_stream->context, my_stream->column_types))) {
 		D_ASSERT(error.HasError());
 		my_stream->last_error = error;
 		return -1;

@@ -20,14 +20,13 @@ class ClientContext;
 
 class ArrowQueryResult : public QueryResult {
 public:
-	static constexpr const QueryResultType TYPE = QueryResultType::ARROW_RESULT;
+	static constexpr QueryResultType TYPE = QueryResultType::ARROW_RESULT;
 
 public:
 	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API ArrowQueryResult(StatementType statement_type, StatementProperties properties, vector<string> names_p,
-	                            vector<LogicalType> types_p, ClientProperties client_properties, idx_t batch_size,
-	                            ClientContext &client_context);
+	                            vector<LogicalType> types_p, ClientProperties client_properties, idx_t batch_size);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit ArrowQueryResult(ErrorData error);
 

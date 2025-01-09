@@ -205,7 +205,7 @@ public:
 	//! Fetch a list of table names that are required for a given query
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
 
-	DUCKDB_API ClientProperties GetClientProperties() const;
+	DUCKDB_API ClientProperties GetClientProperties();
 
 	//! Returns true if execution of the current query is finished
 	DUCKDB_API bool ExecutionIsFinished();

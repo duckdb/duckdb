@@ -19,9 +19,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options,
-                             unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast,
-                             ClientContext &context)
-    : types(std::move(types_p)), context(context) {
+                             unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast)
+    : types(std::move(types_p)) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		unique_ptr<ArrowAppendData> entry;
 		bool bitshift_boolean = types[i].id() == LogicalTypeId::BOOLEAN && !options.arrow_lossless_conversion;
@@ -48,7 +47,7 @@ void ArrowAppender::Append(DataChunk &input, const idx_t from, const idx_t to, c
 			input.data[i].ToUnifiedFormat(input_size, format);
 			FlatVector::SetValidity(input_data, format.validity);
 
-			root_data[i]->extension_type->duckdb_to_arrow(context, format.data, input_data, input_size);
+			root_data[i]->extension_type->duckdb_to_arrow(*options.client_context, format.data, input_data, input_size);
 			root_data[i]->append_vector(*root_data[i], input_data, from, to, input_size);
 		} else {
 			root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);

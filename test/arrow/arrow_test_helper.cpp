@@ -35,7 +35,7 @@ static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientPr
 	unordered_map<idx_t, const duckdb::shared_ptr<ArrowExtensionType>> extension_type_cast;
 	if (big) {
 		// Combine all chunks into a single ArrowArray
-		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, properties, extension_type_cast, *res.context);
+		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, properties, extension_type_cast);
 		idx_t count = 0;
 		while (true) {
 			auto chunk = res.Fetch();
@@ -53,7 +53,7 @@ static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientPr
 		if (!chunk || chunk->size() == 0) {
 			return 0;
 		}
-		ArrowConverter::ToArrowArray(*chunk, out, properties, extension_type_cast, *res.context);
+		ArrowConverter::ToArrowArray(*chunk, out, properties, extension_type_cast);
 	}
 	return 0;
 }
@@ -130,7 +130,7 @@ void ArrowTestFactory::GetSchema(ArrowArrayStream *factory_ptr, ArrowSchema &sch
 }
 
 void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
-	ArrowConverter::ToArrowSchema(out, types, names, options, context);
+	ArrowConverter::ToArrowSchema(out, types, names, options);
 }
 
 unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector<Value> &params) {

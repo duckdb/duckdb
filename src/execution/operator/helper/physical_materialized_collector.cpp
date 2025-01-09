@@ -53,7 +53,7 @@ unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState
 		gstate.collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	}
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(gstate.collection),
-	                                                 gstate.context->GetClientProperties(), *gstate.context);
+	                                                 gstate.context->GetClientProperties());
 	return std::move(result);
 }
 

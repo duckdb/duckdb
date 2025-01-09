@@ -62,7 +62,7 @@ private:
 class ArrowTypeExtension;
 
 typedef void (*populate_arrow_schema_t)(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-                                        const LogicalType &type, const ClientContext &context,
+                                        const LogicalType &type, ClientContext &context,
                                         const ArrowTypeExtension &extension);
 
 typedef shared_ptr<ArrowExtensionType> (*get_type_t)(const ArrowSchema &schema,
@@ -95,7 +95,7 @@ public:
 	bool HasType() const;
 
 	static void PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-	                                const LogicalType &duckdb_type, const ClientContext &context,
+	                                const LogicalType &duckdb_type, ClientContext &context,
 	                                const ArrowTypeExtension &extension);
 
 	//! (Optional) Callback to a function that sets up the arrow schema production

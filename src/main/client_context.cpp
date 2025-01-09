@@ -936,7 +936,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		vector<string> names;
 		auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
 		return make_uniq<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, std::move(names),
-		                                          std::move(collection), GetClientProperties(), *this);
+		                                          std::move(collection), GetClientProperties());
 	}
 
 	unique_ptr<QueryResult> result;
@@ -1343,15 +1343,19 @@ ParserOptions ClientContext::GetParserOptions() const {
 	return options;
 }
 
-ClientProperties ClientContext::GetClientProperties() const {
+ClientProperties ClientContext::GetClientProperties() {
 	string timezone = "UTC";
 	Value result;
 
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
-	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views, db->config.options.arrow_lossless_conversion};
+	return {timezone,
+	        db->config.options.arrow_offset_size,
+	        db->config.options.arrow_use_list_view,
+	        db->config.options.produce_arrow_string_views,
+	        db->config.options.arrow_lossless_conversion,
+	        this};
 }
 
 bool ClientContext::ExecutionIsFinished() {

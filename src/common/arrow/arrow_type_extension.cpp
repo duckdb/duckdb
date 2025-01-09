@@ -146,7 +146,7 @@ bool ArrowTypeExtension::HasType() const {
 }
 
 void ArrowTypeExtension::PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
-                                             const LogicalType &duckdb_type, const ClientContext &context,
+                                             const LogicalType &duckdb_type, ClientContext &context,
                                              const ArrowTypeExtension &extension) {
 	if (extension.populate_arrow_schema) {
 		extension.populate_arrow_schema(root_holder, child, duckdb_type, context, extension);
@@ -238,7 +238,7 @@ struct ArrowJson {
 	}
 
 	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
-	                           const ClientContext &context, const ArrowTypeExtension &extension) {
+	                           ClientContext &context, const ArrowTypeExtension &extension) {
 		const ArrowSchemaMetadata schema_metadata =
 		    ArrowSchemaMetadata::ArrowCanonicalType(extension.GetInfo().GetExtensionName());
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
@@ -271,7 +271,7 @@ struct ArrowBit {
 	}
 
 	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
-	                           const ClientContext &context, const ArrowTypeExtension &extension) {
+	                           ClientContext &context, const ArrowTypeExtension &extension) {
 		const ArrowSchemaMetadata schema_metadata = ArrowSchemaMetadata::NonCanonicalType(
 		    extension.GetInfo().GetTypeName(), extension.GetInfo().GetVendorName());
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
@@ -300,7 +300,7 @@ struct ArrowVarint {
 	}
 
 	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
-	                           const ClientContext &context, const ArrowTypeExtension &extension) {
+	                           ClientContext &context, const ArrowTypeExtension &extension) {
 		const ArrowSchemaMetadata schema_metadata = ArrowSchemaMetadata::NonCanonicalType(
 		    extension.GetInfo().GetTypeName(), extension.GetInfo().GetVendorName());
 		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());

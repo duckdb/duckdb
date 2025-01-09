@@ -23,8 +23,7 @@ void ArrowBatchTask::ProduceRecordBatches() {
 		D_ASSERT(array);
 		const idx_t count =
 		    ArrowUtil::FetchChunk(scan_state, arrow_options, batch_size, &array->arrow_array,
-		                          ArrowExtensionType::GetExtensionTypes(event->GetClientContext(), scan_state.Types()),
-		                          event->GetClientContext());
+		                          ArrowExtensionType::GetExtensionTypes(event->GetClientContext(), scan_state.Types()));
 		(void)count;
 		D_ASSERT(count != 0);
 	}

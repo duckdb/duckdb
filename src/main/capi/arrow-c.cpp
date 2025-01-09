@@ -30,7 +30,7 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	try {
 		ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
-		                              wrapper->result->client_properties, *wrapper->context);
+		                              wrapper->result->client_properties);
 	} catch (...) {
 		return DuckDBError;
 	}
@@ -72,8 +72,7 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 		D_ASSERT(!result_schema->release);
 	}
 
-	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties,
-	                              *wrapper->statement->context);
+	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties);
 	return DuckDBSuccess;
 }
 
@@ -92,7 +91,7 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	// FIXME: This is wrong
 	duckdb::unordered_map<idx_t, const duckdb::shared_ptr<duckdb::ArrowExtensionType>> extension_type_cast;
 	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             wrapper->result->client_properties, extension_type_cast, *wrapper->context);
+	                             wrapper->result->client_properties, extension_type_cast);
 	return DuckDBSuccess;
 }
 
@@ -105,8 +104,7 @@ void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, du
 	// FIXME: This is wrong
 	duckdb::unordered_map<idx_t, const duckdb::shared_ptr<duckdb::ArrowExtensionType>> extension_type_cast;
 	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             result_data.result->client_properties, extension_type_cast,
-	                             *result_data.result->context);
+	                             result_data.result->client_properties, extension_type_cast);
 }
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {

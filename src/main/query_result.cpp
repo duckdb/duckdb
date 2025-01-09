@@ -55,14 +55,14 @@ idx_t BaseQueryResult::ColumnCount() {
 }
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-                         vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p,
-                         optional_ptr<ClientContext> context)
+                         vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p)
     : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
-      client_properties(std::move(client_properties_p)), context(context) {
+      client_properties(std::move(client_properties_p)) {
 }
 
 QueryResult::QueryResult(QueryResultType type, ErrorData error)
-    : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false) {
+    : BaseQueryResult(type, std::move(error)),
+      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, nullptr) {
 }
 
 QueryResult::~QueryResult() {

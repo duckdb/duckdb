@@ -13,13 +13,12 @@
 
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
-
+#include "duckdb/main/client_context.hpp"
 namespace duckdb {
 
 void ArrowConverter::ToArrowArray(DataChunk &input, ArrowArray *out_array, ClientProperties options,
-                                  unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast,
-                                  ClientContext &context) {
-	ArrowAppender appender(input.GetTypes(), input.size(), std::move(options), extension_type_cast, context);
+                                  unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast) {
+	ArrowAppender appender(input.GetTypes(), input.size(), std::move(options), extension_type_cast);
 	appender.Append(input, 0, input.size(), input.size());
 	*out_array = appender.Finalize();
 }
@@ -59,10 +58,10 @@ void InitializeChild(ArrowSchema &child, DuckDBArrowSchemaHolder &root_holder, c
 }
 
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    const ClientProperties &options, ClientContext &context);
+                    ClientProperties &options, ClientContext &context);
 
 void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                       const ClientProperties &options, ClientContext &context) {
+                       ClientProperties &options, ClientContext &context) {
 	child.format = "+m";
 	//! Map has one child which is a struct
 	child.n_children = 1;
@@ -88,7 +87,7 @@ bool SetArrowExtension(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 }
 
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    const ClientProperties &options, ClientContext &context) {
+                    ClientProperties &options, ClientContext &context) {
 	if (type.HasAlias()) {
 		// If it is a json type, we only export it as json if arrow_lossless_conversion = True
 		if (!(type.IsJSONType() && !options.arrow_lossless_conversion)) {
@@ -374,8 +373,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 }
 
 void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
-                                   const vector<string> &names, const ClientProperties &options,
-                                   ClientContext &context) {
+                                   const vector<string> &names, ClientProperties &options) {
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
 	const idx_t column_count = types.size();
@@ -403,7 +401,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 		root_holder->owned_column_names.push_back(AddName(names[col_idx]));
 		auto &child = root_holder->children[col_idx];
 		InitializeChild(child, *root_holder, names[col_idx]);
-		SetArrowFormat(*root_holder, child, types[col_idx], options, context);
+		SetArrowFormat(*root_holder, child, types[col_idx], options, *options.client_context);
 	}
 
 	// Release ownership to caller
