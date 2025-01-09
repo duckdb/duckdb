@@ -268,3 +268,12 @@ ORDER BY filename
 ----
 5	3	2	1	multifile1.parquet
 1	4	5	NULL	multifile2.parquet
+
+# issue 15504
+statement ok
+COPY (select 1 as id, list_value('a', 'b', 'c') as arr, { key: 1, v1: 'a', v2: 'b' } as s) TO '__TEST_DIR__/15504.parquet' (field_ids { 'id': 0, 'arr': 1, 's': 2 });
+
+query III
+SELECT * FROM read_parquet('__TEST_DIR__/15504.parquet', schema=map { 0: { name: 'id', type: 'int32', default_value: NULL }, 1: { name: 'arr', type: 'varchar[]', default_value: NULL }, 2: { name: 's', type: 'STRUCT(key INT, v1 TEXT, v2 TEXT)', default_value: NULL } });
+----
+1	[a, b, c]	{'key': 1, 'v1': a, 'v2': b}

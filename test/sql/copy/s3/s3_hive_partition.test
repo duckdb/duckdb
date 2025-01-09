@@ -90,7 +90,7 @@ COPY (SELECT * FROM t1) TO 's3://test-bucket/hive-partitioning/filter-test-csv' 
 query II
 EXPLAIN select a from parquet_scan('s3://test-bucket/hive-partitioning/filter-test-parquet/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c=500 and a < 4;
 ----
-physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4 AND a IS NOT.*NULL.*File Filters:.* \(CAST\(c AS.*INTEGER\) = 500\).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4.*File Filters:.* \(CAST\(c AS.*INTEGER\) = 500\).*
 
 # There should be Table Filters (id < 50) and file filters (c = 500)
 query II

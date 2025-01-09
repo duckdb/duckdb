@@ -157,7 +157,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type) {
-	return CompressionFunction(
+	auto res = CompressionFunction(
 	    CompressionType::COMPRESSION_DICTIONARY, data_type, DictionaryCompressionStorage ::StringInitAnalyze,
 	    DictionaryCompressionStorage::StringAnalyze, DictionaryCompressionStorage::StringFinalAnalyze,
 	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
@@ -165,6 +165,8 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial<false>,
 	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
 	    UncompressedStringStorage::StringInitSegment);
+	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
+	return res;
 }
 
 bool DictionaryCompressionFun::TypeIsSupported(const PhysicalType physical_type) {

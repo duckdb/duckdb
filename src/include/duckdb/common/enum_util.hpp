@@ -102,6 +102,8 @@ enum class CompressedMaterializationDirection : uint8_t;
 
 enum class CompressionType : uint8_t;
 
+enum class CompressionValidity : uint8_t;
+
 enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
@@ -483,6 +485,9 @@ const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMate
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
+
+template<>
+const char* EnumUtil::ToChars<CompressionValidity>(CompressionValidity value);
 
 template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
@@ -1003,6 +1008,9 @@ CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializatio
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);
+
+template<>
+CompressionValidity EnumUtil::FromString<CompressionValidity>(const char *value);
 
 template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
