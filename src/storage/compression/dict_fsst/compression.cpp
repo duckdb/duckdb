@@ -259,11 +259,12 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 		auto &size = compressed_sizes[i];
 		offset += size;
 		// Skip index 0, reserved for NULL
-		index_buffer[i + 1] = offset;
+		uint32_t dictionary_index = UnsafeNumericCast<uint32_t>(i + 1);
+		index_buffer[dictionary_index] = offset;
 		auto dest = current_end_ptr - offset;
 		memcpy(dest, start, size);
 		string_t dictionary_string((const char *)dest, UnsafeNumericCast<uint32_t>(size)); // NOLINT
-		current_string_map.insert({dictionary_string, i});
+		current_string_map.insert({dictionary_string, dictionary_index});
 	}
 	current_dictionary.size = offset;
 	current_dictionary.end -= symbol_table_size;

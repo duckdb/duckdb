@@ -1,0 +1,41 @@
+# name: test/sql/storage/compression/dictionary/dict_fsst_test.test
+# group: [dictionary]
+
+load __TEST_DIR__/dict_fsst_test
+
+statement ok
+pragma force_compression='uncompressed';
+
+statement ok
+create table uncompressed_data as
+select
+	i, repeat(
+		(i % 200)::INTEGER::VARCHAR,
+		2047 // len((i % 200)::INTEGER::VARCHAR)
+	) a
+from range(20000) t(i);
+
+statement ok
+checkpoint;
+
+query I nosort expected_result
+select * from uncompressed_data order by i;
+----
+
+statement ok
+pragma force_compression='dict_fsst';
+
+statement ok
+create table compressed_data as select * from uncompressed_data;
+
+statement ok
+checkpoint;
+
+query I
+select count(distinct a) from compressed_data;
+----
+199
+
+query I nosort expected_result
+select * from compressed_data order by i;
+----
