@@ -428,7 +428,7 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 			ArrowArray data = array->arrow_array;
 			array->arrow_array.release = nullptr;
 			ArrowConverter::ToArrowSchema(&arrow_schema, arrow_result.types, result_names,
-			                              arrow_result.client_properties, context);
+			                              arrow_result.client_properties);
 			TransformDuckToArrowChunk(arrow_schema, data, batches);
 		}
 	} else {
@@ -440,9 +440,8 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 			{
 				D_ASSERT(py::gil_check());
 				py::gil_scoped_release release;
-				count =
-				    ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data,
-				                          ArrowExtensionType::GetExtensionTypes(context, query_result.types), context);
+				count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data,
+				                              ArrowExtensionType::GetExtensionTypes(context, query_result.types));
 			}
 			if (count == 0) {
 				break;
@@ -453,12 +452,12 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 				QueryResult::DeduplicateColumns(result_names);
 			}
 			ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, result_names,
-			                              query_result.client_properties, context);
+			                              query_result.client_properties);
 			TransformDuckToArrowChunk(arrow_schema, data, batches);
 		}
 	}
 
-	return pyarrow::ToArrowTable(result->types, names, std::move(batches), result->client_properties, context);
+	return pyarrow::ToArrowTable(result->types, names, std::move(batches), result->client_properties);
 }
 
 ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {

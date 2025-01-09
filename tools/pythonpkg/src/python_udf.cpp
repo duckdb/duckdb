@@ -21,21 +21,19 @@
 namespace duckdb {
 
 static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> &names, DataChunk &input,
-                                     const ClientProperties &options, ClientContext &context) {
+                                     ClientProperties &options, ClientContext &context) {
 	ArrowSchema schema;
-	ArrowConverter::ToArrowSchema(&schema, types, names, options, context);
+	ArrowConverter::ToArrowSchema(&schema, types, names, options);
 
 	py::list single_batch;
-	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options, ArrowExtensionType::GetExtensionTypes(context, types),
-	                       context);
+	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options, ArrowExtensionType::GetExtensionTypes(context, types));
 	appender.Append(input, 0, input.size(), input.size());
 	auto array = appender.Finalize();
 	TransformDuckToArrowChunk(schema, array, single_batch);
 	return single_batch;
 }
 
-static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientProperties &options,
-                                                 ClientContext &context) {
+static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, ClientProperties &options, ClientContext &context) {
 	auto types = input.GetTypes();
 	vector<string> names;
 	names.reserve(types.size());
@@ -43,8 +41,7 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientP
 		names.push_back(StringUtil::Format("c%d", i));
 	}
 
-	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options, context), options,
-	                             context);
+	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options, context), options);
 }
 
 // If these types are arrow canonical extensions, we must check if they are registered.
