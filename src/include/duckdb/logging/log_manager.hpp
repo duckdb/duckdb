@@ -29,29 +29,31 @@ public:
 	~LogManager();
 	void Initialize();
 
-	static LogManager &Get(ClientContext &context);
+	DUCKDB_API static LogManager &Get(ClientContext &context);
 	unique_ptr<Logger> CreateLogger(LoggingContext context, bool thread_safe = true, bool mutable_settings = false);
 
 	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
 
+	DUCKDB_API bool RegisterLogStorage(const string &name, shared_ptr<LogStorage> storage);
+
 	//! The global logger can be used whe
-	Logger &GlobalLogger();
+	DUCKDB_API Logger &GlobalLogger();
 
 	//! Flush everything
-	void Flush();
+	DUCKDB_API void Flush();
 
 	//! Get a shared_ptr to the log storage (For example, to scan it)
-	shared_ptr<LogStorage> GetLogStorage();
-	bool CanScan();
+	DUCKDB_API shared_ptr<LogStorage> GetLogStorage();
+	DUCKDB_API bool CanScan();
 
-	void SetEnableLogging(bool enable);
-	void SetLogMode(LogMode mode);
-	void SetLogLevel(LogLevel level);
-	void SetEnabledLogTypes(unordered_set<string> &enabled_log_types);
-	void SetDisabledLogTypes(unordered_set<string> &disabled_log_types);
-	void SetLogStorage(DatabaseInstance &db, const string &storage_name);
+	DUCKDB_API void SetEnableLogging(bool enable);
+	DUCKDB_API void SetLogMode(LogMode mode);
+	DUCKDB_API void SetLogLevel(LogLevel level);
+	DUCKDB_API void SetEnabledLogTypes(unordered_set<string> &enabled_log_types);
+	DUCKDB_API void SetDisabledLogTypes(unordered_set<string> &disabled_log_types);
+	DUCKDB_API void SetLogStorage(DatabaseInstance &db, const string &storage_name);
 
-	LogConfig GetConfig();
+	DUCKDB_API LogConfig GetConfig();
 
 protected:
 	RegisteredLoggingContext RegisterLoggingContextInternal(LoggingContext &context);
@@ -70,6 +72,9 @@ protected:
 	shared_ptr<LogStorage> log_storage;
 
 	idx_t next_registered_logging_context_index = 0;
+
+	// Any additional LogStorages registered (by extensions for example)
+	case_insensitive_map_t<shared_ptr<LogStorage>> registered_log_storages;
 };
 
 } // namespace duckdb

@@ -5,6 +5,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/logging/log_storage.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -198,4 +199,32 @@ TEST_CASE("Test thread context logger", "[logging][.]") {
 	auto res = con.Query("SELECT scope, message, from duckdb_logs where starts_with(message, 'thread_logger')");
 	REQUIRE(CHECK_COLUMN(res, 0, {"THREAD"}));
 	REQUIRE(CHECK_COLUMN(res, 1, {"thread_logger"}));
+}
+
+// Testing pluggable log storage
+class MyLogStorage : public LogStorage {
+public:
+	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
+	                   const RegisteredLoggingContext &context) override {
+		log_store.insert(log_message);
+	};
+	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override {};
+	void Flush() override {};
+
+	unordered_set<string> log_store;
+};
+
+TEST_CASE("Test pluggable log storage", "[logging][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto log_storage = make_shared_ptr<MyLogStorage>();
+	db.instance->GetLogManager().RegisterLogStorage("my_log_storage", log_storage);
+
+	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
+	REQUIRE_NO_FAIL(con.Query("set logging_storage='my_log_storage';"));
+
+	REQUIRE_NO_FAIL(con.Query("select write_log('HELLO, BRO');"));
+
+	REQUIRE(log_storage->log_store.find("HELLO, BRO") != log_storage->log_store.end());
 }

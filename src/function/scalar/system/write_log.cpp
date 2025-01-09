@@ -19,7 +19,7 @@ struct WriteLogBindData : FunctionData {
 
 	//! Output
 	idx_t output_col = DConstants::INVALID_INDEX;
-	LogicalType output_type;
+	LogicalType return_type;
 
 	explicit WriteLogBindData() {};
 	explicit WriteLogBindData(const WriteLogBindData &other) {
@@ -31,7 +31,7 @@ struct WriteLogBindData : FunctionData {
 		context = other.context;
 
 		output_col = other.output_col;
-		output_type = other.output_type;
+		return_type = other.return_type;
 	}
 
 public:
@@ -95,10 +95,10 @@ unique_ptr<FunctionData> WriteLogBind(ClientContext &context, ScalarFunction &bo
 				throw BinderException("write_log: 'log_type' argument must be a string");
 			}
 			result->type = StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "output") {
-			result->output_type = arg->return_type;
+		} else if (arg->alias == "return_value") {
+			result->return_type = arg->return_type;
 			result->output_col = i;
-			bound_function.return_type = result->output_type;
+			bound_function.return_type = result->return_type;
 		} else {
 			throw BinderException(StringUtil::Format("write_log: Unknown argument '%s'", arg->alias));
 		}

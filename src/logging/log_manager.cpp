@@ -29,6 +29,14 @@ RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &cont
 	return RegisterLoggingContextInternal(context);
 }
 
+bool LogManager::RegisterLogStorage(const string &name, shared_ptr<LogStorage> storage) {
+	if (registered_log_storages.find(name) != registered_log_storages.end()) {
+		return false;
+	}
+	registered_log_storages.insert({name, std::move(storage)});
+	return true;
+}
+
 Logger &LogManager::GlobalLogger() {
 	return *global_logger;
 }
@@ -129,13 +137,14 @@ void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name)
 
 	if (storage_name_to_lower == LogConfig::IN_MEMORY_STORAGE_NAME) {
 		log_storage = make_shared_ptr<InMemoryLogStorage>(db);
-		config.storage = storage_name_to_lower;
 	} else if (storage_name_to_lower == LogConfig::STDOUT_STORAGE_NAME) {
 		log_storage = make_shared_ptr<StdOutLogStorage>();
-		config.storage = storage_name_to_lower;
 	} else if (storage_name_to_lower == LogConfig::FILE_STORAGE_NAME) {
 		throw NotImplementedException("File log storage is not yet implemented");
+	} else if (registered_log_storages.find(storage_name_to_lower) != registered_log_storages.end()) {
+		log_storage = registered_log_storages[storage_name_to_lower];
 	}
+	config.storage = storage_name_to_lower;
 }
 
 LogConfig LogManager::GetConfig() {

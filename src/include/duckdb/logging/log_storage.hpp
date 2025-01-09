@@ -41,26 +41,26 @@ public:
 // Interface for writing log entries
 class LogStorage {
 public:
-	explicit LogStorage() {
+	DUCKDB_API explicit LogStorage() {
 	}
-	virtual ~LogStorage() = default;
+	DUCKDB_API virtual ~LogStorage() = default;
 
 	//! WRITING
-	virtual void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
-	                           const RegisteredLoggingContext &context) = 0;
-	virtual void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) = 0;
-	virtual void Flush() = 0;
+	DUCKDB_API virtual void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
+	                                      const string &log_message, const RegisteredLoggingContext &context) = 0;
+	DUCKDB_API virtual void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) = 0;
+	DUCKDB_API virtual void Flush() = 0;
 
 	//! READING (OPTIONAL)
-	virtual bool CanScan() {
+	DUCKDB_API virtual bool CanScan() {
 		return false;
 	}
-	virtual unique_ptr<LogStorageScanState> CreateScanEntriesState() const;
-	virtual bool ScanEntries(LogStorageScanState &state, DataChunk &result) const;
-	virtual void InitializeScanEntries(LogStorageScanState &state) const;
-	virtual unique_ptr<LogStorageScanState> CreateScanContextsState() const;
-	virtual bool ScanContexts(LogStorageScanState &state, DataChunk &result) const;
-	virtual void InitializeScanContexts(LogStorageScanState &state) const;
+	DUCKDB_API virtual unique_ptr<LogStorageScanState> CreateScanEntriesState() const;
+	DUCKDB_API virtual bool ScanEntries(LogStorageScanState &state, DataChunk &result) const;
+	DUCKDB_API virtual void InitializeScanEntries(LogStorageScanState &state) const;
+	DUCKDB_API virtual unique_ptr<LogStorageScanState> CreateScanContextsState() const;
+	DUCKDB_API virtual bool ScanContexts(LogStorageScanState &state, DataChunk &result) const;
+	DUCKDB_API virtual void InitializeScanContexts(LogStorageScanState &state) const;
 };
 
 class StdOutLogStorage : public LogStorage {

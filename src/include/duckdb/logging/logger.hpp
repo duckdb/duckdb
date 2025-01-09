@@ -28,35 +28,35 @@ class ExecutionContext;
 //! Main logging interface
 class Logger {
 public:
-	explicit Logger(LogManager &manager) : manager(manager) {
+	DUCKDB_API explicit Logger(LogManager &manager) : manager(manager) {
 	}
 
-	virtual ~Logger() = default;
+	DUCKDB_API virtual ~Logger() = default;
 
 	//! Main logger functions
-	void Log(const char *log_type, LogLevel log_level, const char *log_message);
-	void Log(LogLevel log_level, const char *log_message);
-	void Log(const char *log_type, LogLevel log_level, const string_t &log_message);
-	void Log(LogLevel log_level, const string_t &log_message);
-	void Log(const char *log_type, LogLevel log_level, std::function<string()> callback);
-	void Log(LogLevel log_level, std::function<string()> callback);
+	DUCKDB_API void Log(const char *log_type, LogLevel log_level, const char *log_message);
+	DUCKDB_API void Log(LogLevel log_level, const char *log_message);
+	DUCKDB_API void Log(const char *log_type, LogLevel log_level, const string_t &log_message);
+	DUCKDB_API void Log(LogLevel log_level, const string_t &log_message);
+	DUCKDB_API void Log(const char *log_type, LogLevel log_level, std::function<string()> callback);
+	DUCKDB_API void Log(LogLevel log_level, std::function<string()> callback);
 
 	// Main interface for subclasses
-	virtual bool ShouldLog(const char *log_type, LogLevel log_level) = 0;
-	virtual bool ShouldLog(LogLevel log_level) = 0;
-	virtual void WriteLog(const char *log_type, LogLevel log_level, const char *message) = 0;
-	virtual void WriteLog(LogLevel log_level, const char *message) = 0;
+	DUCKDB_API virtual bool ShouldLog(const char *log_type, LogLevel log_level) = 0;
+	DUCKDB_API virtual bool ShouldLog(LogLevel log_level) = 0;
+	DUCKDB_API virtual void WriteLog(const char *log_type, LogLevel log_level, const char *message) = 0;
+	DUCKDB_API virtual void WriteLog(LogLevel log_level, const char *message) = 0;
 
-	virtual void Flush() = 0;
+	DUCKDB_API virtual void Flush() = 0;
 
 	// Get the Logger to write log messages to. In decreasing order of preference(!) so the ThreadContext getter is the
 	// most preferred way of fetching the logger and the DatabaseInstance getter the least preferred. This has to do
 	// both with logging performance and level of detail of logging context that is provided.
-	static Logger &Get(const ThreadContext &thread_context);
-	static Logger &Get(const ExecutionContext &execution_context);
-	static Logger &Get(const ClientContext &client_context);
-	static Logger &Get(const FileOpener &opener);
-	static Logger &Get(const DatabaseInstance &db);
+	DUCKDB_API static Logger &Get(const ThreadContext &thread_context);
+	DUCKDB_API static Logger &Get(const ExecutionContext &execution_context);
+	DUCKDB_API static Logger &Get(const ClientContext &client_context);
+	DUCKDB_API static Logger &Get(const FileOpener &opener);
+	DUCKDB_API static Logger &Get(const DatabaseInstance &db);
 
 	//! Logger::Log with raw C-String
 	template <class T>
@@ -161,14 +161,14 @@ public:
 		Get(log_context_source).Flush();
 	}
 
-	virtual bool IsThreadSafe() = 0;
-	virtual bool IsMutable() {
+	DUCKDB_API virtual bool IsThreadSafe() = 0;
+	DUCKDB_API virtual bool IsMutable() {
 		return false;
 	};
-	virtual void UpdateConfig(LogConfig &new_config) {
+	DUCKDB_API virtual void UpdateConfig(LogConfig &new_config) {
 		throw InternalException("Cannot update the config of this logger!");
 	}
-	virtual const LogConfig &GetConfig() const = 0;
+	DUCKDB_API virtual const LogConfig &GetConfig() const = 0;
 
 protected:
 	LogManager &manager;

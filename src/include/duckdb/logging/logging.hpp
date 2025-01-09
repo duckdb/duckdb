@@ -41,11 +41,13 @@ struct LogConfig {
 
 	LogConfig();
 
-	static LogConfig Create(bool enabled, LogLevel level);
-	static LogConfig CreateFromEnabled(bool enabled, LogLevel level, unordered_set<string> &enabled_log_types);
-	static LogConfig CreateFromDisabled(bool enabled, LogLevel level, unordered_set<string> &disabled_log_types);
+	DUCKDB_API static LogConfig Create(bool enabled, LogLevel level);
+	DUCKDB_API static LogConfig CreateFromEnabled(bool enabled, LogLevel level,
+	                                              unordered_set<string> &enabled_log_types);
+	DUCKDB_API static LogConfig CreateFromDisabled(bool enabled, LogLevel level,
+	                                               unordered_set<string> &disabled_log_types);
 
-	bool IsConsistent() const;
+	DUCKDB_API bool IsConsistent() const;
 
 	bool enabled;
 	LogMode mode;
