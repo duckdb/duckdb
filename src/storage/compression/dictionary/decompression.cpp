@@ -117,8 +117,6 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, current_width);
 
 	result.Dictionary(*(dictionary), dictionary_size, *sel_vec, scan_count);
-	// FIXME: this assumes the type is VectorType::DICTIONARY
-	// this could fail if the result is a ConstantVector instead.
 	DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
 }
 

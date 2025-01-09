@@ -48,7 +48,7 @@ struct DuckDBExtensionLoadState {
 
 	//! This is the duckdb_database struct that will be passed to the extension during initialization. Note that the
 	//! extension does not need to free it.
-	unique_ptr<DatabaseData> database_data;
+	unique_ptr<DatabaseWrapper> database_data;
 
 	//! The function pointer struct passed to the extension. The extension is expected to copy this struct during
 	//! initialization
@@ -88,8 +88,8 @@ struct ExtensionAccess {
 
 		try {
 			// Create the duckdb_database
-			load_state.database_data = make_uniq<DatabaseData>();
-			load_state.database_data->database = make_uniq<DuckDB>(load_state.db);
+			load_state.database_data = make_uniq<DatabaseWrapper>();
+			load_state.database_data->database = make_shared_ptr<DuckDB>(load_state.db);
 			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
 		} catch (std::exception &ex) {
 			load_state.error_data = ErrorData(ex);

@@ -10,11 +10,16 @@ namespace duckdb {
 class EmptyValidityCompression {
 public:
 	struct EmptyValidityCompressionState : public CompressionState {
+	public:
 		explicit EmptyValidityCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 		    : CompressionState(info),
 		      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY)),
 		      checkpoint_data(checkpoint_data) {
 		}
+		~EmptyValidityCompressionState() override {
+		}
+
+	public:
 		optional_ptr<CompressionFunction> function;
 		ColumnDataCheckpointData &checkpoint_data;
 		idx_t count = 0;
@@ -35,8 +40,7 @@ public:
 public:
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state_p) {
-		auto res = make_uniq<EmptyValidityCompressionState>(checkpoint_data, state_p->info);
-		return res;
+		return make_uniq<EmptyValidityCompressionState>(checkpoint_data, state_p->info);
 	}
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 		auto &state = state_p.Cast<EmptyValidityCompressionState>();
