@@ -95,6 +95,18 @@ def examples_to_line(example_list):
     return "\\2".join([sanitize_string(example) for example in example_list])
 
 
+def categories_from_json(json_record):
+    if 'categories' in json_record:
+        category_line = ','.join([category.strip() for category in json_record['categories'].split(',')])
+    else:
+        category_line = ''
+    return category_line
+
+
+def get_category_line(variants):
+    return "\\1".join([categories_from_json(variant) for variant in variants])
+
+
 def sanitize_string(text):
     return text.replace('\\', '\\\\').replace('"', '\\"')
 
@@ -136,10 +148,12 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
             parameter_line = get_parameter_line(entry['variants'])
             description_line = get_description_line(entry['variants'])
             example_line = get_example_line(entry['variants'])
+            category_line = get_category_line(entry['variants'])
         else:
             parameter_line = entry['parameters'] if 'parameters' in entry else ''
             description_line = sanitize_string(entry['description'])
             example_line = example_from_json(entry)
+            category_line = categories_from_json(entry)
         if 'extra_functions' in entry:
             for func_text in entry['extra_functions']:
                 function_text += '\n	' + func_text
@@ -149,6 +163,7 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
 	static constexpr const char *Parameters = "{PARAMETERS}";
 	static constexpr const char *Description = "{DESCRIPTION}";
 	static constexpr const char *Example = "{EXAMPLE}";
+	static constexpr const char *Categories = "{CATEGORIES}";
 
 	{FUNCTION}
 };
@@ -160,6 +175,7 @@ def create_header_file(root, include_dir, path, all_function_list, function_type
             .replace('{PARAMETERS}', parameter_line)
             .replace('{DESCRIPTION}', description_line)
             .replace('{EXAMPLE}', example_line)
+            .replace('{CATEGORIES}', category_line)
             .replace('{FUNCTION}', function_text)
         )
         alias_count = 1

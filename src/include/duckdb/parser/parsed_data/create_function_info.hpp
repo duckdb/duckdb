@@ -22,6 +22,8 @@ struct FunctionDescription {
 	string description;
 	//! Examples (if any)
 	vector<string> examples;
+	//! Categories (if any)
+	vector<string> categories;
 };
 
 struct CreateFunctionInfo : public CreateInfo {
