@@ -178,6 +178,7 @@ protected:
 class ThreadSafeLogger : public Logger {
 public:
 	explicit ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager);
+	explicit ThreadSafeLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager);
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
@@ -204,6 +205,7 @@ protected:
 class ThreadLocalLogger : public Logger {
 public:
 	explicit ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager);
+	explicit ThreadLocalLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager);
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
@@ -228,6 +230,7 @@ protected:
 class MutableLogger : public Logger {
 public:
 	explicit MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager);
+	explicit MutableLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager);
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;

@@ -7,37 +7,26 @@
 namespace duckdb {
 
 unique_ptr<Logger> LogManager::CreateLogger(LoggingContext context, bool thread_safe, bool mutable_settings) {
-	// Make a copy of the config holding the lock
-	LogConfig config_copy;
-	{
-		unique_lock<mutex> lck(lock);
-		config_copy = config;
-	}
+	unique_lock<mutex> lck(lock);
+
+	auto registered_logging_context = RegisterLoggingContextInternal(context);
 
 	if (mutable_settings) {
-		return make_uniq<MutableLogger>(config_copy, context, *this);
+		return make_uniq<MutableLogger>(config, registered_logging_context, *this);
 	}
-	if (!config_copy.enabled) {
+	if (!config.enabled) {
 		return make_uniq<NopLogger>(*this);
 	}
 	if (!thread_safe) {
 		// TODO: implement ThreadLocalLogger and return it here
 	}
-	return make_uniq<ThreadSafeLogger>(config_copy, context, *this);
+	return make_uniq<ThreadSafeLogger>(config, registered_logging_context, *this);
 }
 
 RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 
-	RegisteredLoggingContext result = {next_registered_logging_context_index, context};
-
-	next_registered_logging_context_index += 1;
-
-	if (next_registered_logging_context_index == NumericLimits<idx_t>::Maximum()) {
-		throw InternalException("Ran out of available log context ids.");
-	}
-
-	return result;
+	return RegisterLoggingContextInternal(context);
 }
 
 Logger &LogManager::GlobalLogger() {
@@ -73,6 +62,18 @@ void LogManager::Initialize() {
 
 LogManager &LogManager::Get(ClientContext &context) {
 	return context.db->GetLogManager();
+}
+
+RegisteredLoggingContext LogManager::RegisterLoggingContextInternal(LoggingContext &context) {
+	RegisteredLoggingContext result = {next_registered_logging_context_index, context};
+
+	next_registered_logging_context_index += 1;
+
+	if (next_registered_logging_context_index == NumericLimits<idx_t>::Maximum()) {
+		throw InternalException("Ran out of available log context ids.");
+	}
+
+	return result;
 }
 
 void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogLevel log_level, const char *log_message,

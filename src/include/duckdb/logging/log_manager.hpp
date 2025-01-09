@@ -54,6 +54,8 @@ public:
 	LogConfig GetConfig();
 
 protected:
+	RegisteredLoggingContext RegisterLoggingContextInternal(LoggingContext &context);
+
 	// This is to be called by the Loggers only, it does not verify log_level and log_type
 	void WriteLogEntry(timestamp_t, const char *log_type, LogLevel log_level, const char *log_message,
 	                   const RegisteredLoggingContext &context);

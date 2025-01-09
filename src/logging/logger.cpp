@@ -70,10 +70,15 @@ void Logger::Log(LogLevel log_level, std::function<string()> callback) { // NOLI
 }
 
 ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-    : Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
+    : ThreadSafeLogger(config_p, manager.RegisterLoggingContext(context_p), manager) {
+}
+
+ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager)
+    : Logger(manager), config(config_p), context(std::move(context_p)) {
 	// NopLogger should be used instead
 	D_ASSERT(config_p.enabled);
 }
+
 
 bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	if (config.level > log_level) {
@@ -110,7 +115,11 @@ void ThreadSafeLogger::Flush() {
 }
 
 ThreadLocalLogger::ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-    : Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
+	: ThreadLocalLogger(config_p, manager.RegisterLoggingContext(context_p), manager) {
+}
+
+ThreadLocalLogger::ThreadLocalLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager)
+    : Logger(manager), config(config_p), context(std::move(context_p)) {
 	// NopLogger should be used instead
 	D_ASSERT(config_p.enabled);
 }
@@ -136,7 +145,11 @@ void ThreadLocalLogger::Flush() {
 }
 
 MutableLogger::MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-    : Logger(manager), config(config_p), context(manager.RegisterLoggingContext(context_p)) {
+	: MutableLogger(config_p, manager.RegisterLoggingContext(context_p), manager) {
+}
+
+MutableLogger::MutableLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager)
+    : Logger(manager), config(config_p), context(std::move(context_p)) {
 	enabled = config.enabled;
 	level = config.level;
 	mode = config.mode;
