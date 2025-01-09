@@ -669,7 +669,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 	vector<StorageIndex> column_ids;
 	column_ids.reserve(indexed_columns.size());
 	for (auto &col : indexed_columns) {
-		column_ids.emplace_back(StorageIndex(col));
+		column_ids.emplace_back(col);
 	}
 	sort(column_ids.begin(), column_ids.end());
 	state.Initialize(std::move(column_ids));

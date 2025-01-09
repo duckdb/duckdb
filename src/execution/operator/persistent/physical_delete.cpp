@@ -64,17 +64,37 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &transaction = DuckTransaction::Get(context.client, table.db);
 	auto &row_ids = chunk.data[row_id_index];
 
-	vector<StorageIndex> column_ids;
-	for (idx_t i = 0; i < table.ColumnCount(); i++) {
-		column_ids.emplace_back(i);
-	};
-	auto fetch_state = ColumnFetchState();
-
 	lock_guard<mutex> delete_guard(g_state.delete_lock);
 	if (!return_chunk && !g_state.has_unique_indexes) {
 		g_state.deleted_count += table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
 		return SinkResultType::NEED_MORE_INPUT;
 	}
+
+	vector<StorageIndex> column_ids;
+	if (return_chunk) {
+		// Fetch all columns.
+		for (idx_t i = 0; i < table.ColumnCount(); i++) {
+			column_ids.emplace_back(i);
+		};
+	} else if (g_state.has_unique_indexes) {
+		// Fetch only the required columns for updating the delete indexes.
+		auto &local_storage = LocalStorage::Get(context.client, table.db);
+		auto storage = local_storage.GetStorage(table);
+		unordered_set<column_t> indexed_columns;
+		storage->delete_indexes.Scan([&](Index &index) {
+			if (!index.IsBound() || !index.IsUnique()) {
+				return false;
+			}
+			auto set = index.GetColumnIdSet();
+			indexed_columns.insert(set.begin(), set.end());
+			return false;
+		});
+		for (auto &col : indexed_columns) {
+			column_ids.emplace_back(col);
+		}
+		sort(column_ids.begin(), column_ids.end());
+	}
+	auto fetch_state = ColumnFetchState();
 
 	// Fetch the to-be-deleted chunk.
 	l_state.delete_chunk.Reset();
