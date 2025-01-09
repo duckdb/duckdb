@@ -55,7 +55,17 @@ env:
   CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || 'cp37-*' }}
 
 jobs:
-# This is just a sanity check of Python 3.10 running with Arrow
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+    - uses: astral-sh/ruff-action@v3
+      with:
+        src: tools/pythonpkg
+  # This is just a sanity check of Python 3.10 running with Arrow
   linux-python3-10:
     name: Python 3.10 Linux
     runs-on: ubuntu-20.04

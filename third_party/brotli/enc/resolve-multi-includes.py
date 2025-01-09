@@ -18,7 +18,7 @@ for filename in os.listdir('.'):
     for line in file_lines:
         if '#include' in line and '_inc.h' in line:
             match = re.search(r'#include\s+"(.+)".*', line).group(1)
-            include = open(match, 'r').readlines();
+            include = open(match, 'r').readlines()
             out.write(''.join(include))
             continue
         out.write(line)

@@ -36,7 +36,7 @@ def gh_api(suburl, full_url=''):
     next_link = None
     try:
         resp = urllib.request.urlopen(req)
-        if not resp.getheader("Link") is None:
+        if resp.getheader("Link") is not None:
             link_data = extract(resp.getheader("Link"))
             if "next" in link_data:
                 next_link = link_data["next"]

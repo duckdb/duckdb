@@ -120,7 +120,7 @@ for hpp_file in hpp_files:
                 else:
                     enum_members.append((key, strings))
 
-            if not file_path in enum_path_set:
+            if file_path not in enum_path_set:
                 enum_path_set.add(file_path)
                 enum_paths.append(file_path)
 
