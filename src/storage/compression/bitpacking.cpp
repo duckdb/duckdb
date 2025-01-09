@@ -987,7 +987,6 @@ void SerializedBitpackingSegmentState::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(1, "counts", counts);
 }
 
-template <class T>
 unique_ptr<CompressedSegmentState> BitpackingInitSegment(ColumnSegment &segment, block_id_t block_id,
                                                          optional_ptr<ColumnSegmentState> segment_state) {
 	if (block_id == INVALID_BLOCK) {
@@ -1002,20 +1001,18 @@ unique_ptr<CompressedSegmentState> BitpackingInitSegment(ColumnSegment &segment,
 	return std::move(result);
 }
 
-template <class T>
-unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment) {
+unique_ptr<ColumnSegmentState> BitpackingSerializeState(ColumnSegment &segment) {
 	auto &state = segment.GetSegmentState()->Cast<BitpackingSegmentState>();
 	return make_uniq<SerializedBitpackingSegmentState>(state.counts);
 }
 
-template <class T>
-unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer) {
+unique_ptr<ColumnSegmentState> BitpackingDeserializeState(Deserializer &deserializer) {
 	auto result = make_uniq<SerializedBitpackingSegmentState>();
 	deserializer.ReadProperty(1, "counts", result->counts);
 	return std::move(result);
 }
 
-void CleanupState(ColumnSegment &segment) {
+void BitpackingCleanupState(ColumnSegment &segment) {
 	// FIXME: check correctness
 	auto &state = segment.GetSegmentState()->Cast<BitpackingSegmentState>();
 	state.counts.clear();
@@ -1032,10 +1029,10 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 	    BitpackingFinalAnalyze<T>, BitpackingInitCompression<T, WRITE_STATISTICS>,
 	    BitpackingCompress<T, WRITE_STATISTICS>, BitpackingFinalizeCompress<T, WRITE_STATISTICS>, BitpackingInitScan<T>,
 	    BitpackingScan<T>, BitpackingScanPartial<T>, BitpackingFetchRow<T>, BitpackingSkip<T>);
-	bitpacking.init_segment = BitpackingInitSegment<T>;
-	bitpacking.serialize_state = SerializeState<T>;
-	bitpacking.deserialize_state = DeserializeState<T>;
-	bitpacking.cleanup_state = CleanupState;
+	bitpacking.init_segment = BitpackingInitSegment;
+	bitpacking.serialize_state = BitpackingSerializeState;
+	bitpacking.deserialize_state = BitpackingDeserializeState;
+	bitpacking.cleanup_state = BitpackingCleanupState;
 	return bitpacking;
 }
 
