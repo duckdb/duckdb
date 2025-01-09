@@ -13,8 +13,7 @@
     DBInterface.close!(con)
 
     # if we add this configuration flag, nulls should come last
-    config =
-        DuckDB.Config(; default_null_order = "nulls_first", custom_user_agent = "Julia")
+    config = DuckDB.Config(; default_null_order = "nulls_first", custom_user_agent = "Julia")
     con = DBInterface.connect(DuckDB.DB, ":memory:", config)
 
     # NULL should come last now
@@ -54,8 +53,7 @@
     DBInterface.close!(config)
 
 
-    config_dict =
-        Dict([:default_null_order => "nulls_first", :custom_user_agent => "Julia"])
+    config_dict = Dict([:default_null_order => "nulls_first", :custom_user_agent => "Julia"])
     con = DBInterface.connect(DuckDB.DB, ":memory:", config_dict)
     # NULL should come last now
     results = DBInterface.execute(con, "SELECT 42 a UNION ALL SELECT NULL ORDER BY a")
