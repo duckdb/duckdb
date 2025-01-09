@@ -195,7 +195,6 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 		append_state = DictionaryAppendState::NOT_ENCODED;
 		return false;
 	}
-	append_state = DictionaryAppendState::ENCODED;
 
 	vector<size_t> fsst_string_sizes;
 	vector<unsigned char *> fsst_string_ptrs;
@@ -230,6 +229,21 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 	if (res != string_count) {
 		throw FatalException("FSST compression failed to compress all dictionary strings");
 	}
+
+	idx_t new_size = 0;
+	for (idx_t i = 0; i < string_count; i++) {
+		new_size += compressed_sizes[i];
+	}
+	if (new_size > current_dictionary.size + 4096) {
+		// The dictionary does not compress well enough to use FSST
+		// continue filling the remaining bytes without encoding
+		duckdb_fsst_destroy(fsst_encoder);
+		encoder = nullptr;
+		append_state = DictionaryAppendState::NOT_ENCODED;
+		return false;
+	}
+
+	append_state = DictionaryAppendState::ENCODED;
 
 	// Write the exported symbol table to the end of the segment
 	unsigned char fsst_serialized_symbol_table[sizeof(duckdb_fsst_decoder_t)];

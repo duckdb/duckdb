@@ -92,6 +92,7 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		EncodeInputStrings(vdata, count);
 	}
 
+	auto string_block_limit = StringUncompressed::GetStringBlockLimit(info.GetBlockSize());
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		idx_t string_size = 0;
@@ -102,10 +103,15 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		if (row_is_valid) {
 			auto &str = string_data.Get();
 			string_size = str.GetSize();
-			// FIXME: compressing can actually end up making the result larger..
-			if (string_size >= StringUncompressed::GetStringBlockLimit(info.GetBlockSize())) {
-				// Big strings not implemented for dictionary compression
-				return false;
+			if (!string_data.encoded_string) {
+				if (string_size >= string_block_limit / 2) {
+					// This string could potentially expand by 2x when encoded by FSST
+					return false;
+				}
+			} else {
+				if (string_size >= string_block_limit) {
+					throw FatalException("Encoded string expanded by more than 2x somehow!?");
+				}
 			}
 			lookup_result = LookupString(str);
 		}
