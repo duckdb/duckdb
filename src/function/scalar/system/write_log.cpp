@@ -11,7 +11,7 @@ struct WriteLogBindData : FunctionData {
 	//! Config
 	bool disable_logging = false;
 	string scope;
-	LogLevel level = LogLevel::L_INFO;
+	LogLevel level = LogLevel::LOG_INFO;
 	string type;
 
 	//! Context

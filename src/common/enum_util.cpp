@@ -2024,12 +2024,12 @@ LogContextScope EnumUtil::FromString<LogContextScope>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetLogLevelValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(LogLevel::L_TRACE), "TRACE" },
-		{ static_cast<uint32_t>(LogLevel::L_DEBUG), "DEBUG" },
-		{ static_cast<uint32_t>(LogLevel::L_INFO), "INFO" },
-		{ static_cast<uint32_t>(LogLevel::L_WARN), "WARN" },
-		{ static_cast<uint32_t>(LogLevel::L_ERROR), "ERROR" },
-		{ static_cast<uint32_t>(LogLevel::L_FATAL), "FATAL" }
+		{ static_cast<uint32_t>(LogLevel::LOG_TRACE), "TRACE" },
+		{ static_cast<uint32_t>(LogLevel::LOG_DEBUG), "DEBUG" },
+		{ static_cast<uint32_t>(LogLevel::LOG_INFO), "INFO" },
+		{ static_cast<uint32_t>(LogLevel::LOG_WARN), "WARN" },
+		{ static_cast<uint32_t>(LogLevel::LOG_ERROR), "ERROR" },
+		{ static_cast<uint32_t>(LogLevel::LOG_FATAL), "FATAL" }
 	};
 	return values;
 }

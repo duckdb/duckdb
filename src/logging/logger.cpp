@@ -79,7 +79,6 @@ ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, RegisteredLoggingContext
 	D_ASSERT(config_p.enabled);
 }
 
-
 bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	if (config.level > log_level) {
 		return false;
@@ -115,7 +114,7 @@ void ThreadSafeLogger::Flush() {
 }
 
 ThreadLocalLogger::ThreadLocalLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-	: ThreadLocalLogger(config_p, manager.RegisterLoggingContext(context_p), manager) {
+    : ThreadLocalLogger(config_p, manager.RegisterLoggingContext(context_p), manager) {
 }
 
 ThreadLocalLogger::ThreadLocalLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager)
@@ -145,7 +144,7 @@ void ThreadLocalLogger::Flush() {
 }
 
 MutableLogger::MutableLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
-	: MutableLogger(config_p, manager.RegisterLoggingContext(context_p), manager) {
+    : MutableLogger(config_p, manager.RegisterLoggingContext(context_p), manager) {
 }
 
 MutableLogger::MutableLogger(LogConfig &config_p, RegisteredLoggingContext context_p, LogManager &manager)

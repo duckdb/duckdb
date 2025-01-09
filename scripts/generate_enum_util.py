@@ -40,12 +40,12 @@ overrides = {
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},
     "LogLevel": {
-        "L_TRACE": "TRACE",
-        "L_DEBUG": "DEBUG",
-        "L_INFO": "INFO",
-        "L_WARN": "WARN",
-        "L_ERROR": "ERROR",
-        "L_FATAL": "FATAL",
+        "LOG_TRACE": "TRACE",
+        "LOG_DEBUG": "DEBUG",
+        "LOG_INFO": "INFO",
+        "LOG_WARN": "WARN",
+        "LOG_ERROR": "ERROR",
+        "LOG_FATAL": "FATAL",
     },
 }
 

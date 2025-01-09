@@ -109,51 +109,51 @@ public:
 	//! Templates wrapping Logging::Log(..., LoggingLevel, ....)
 	template <class T, typename... ARGS>
 	static void Trace(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::L_TRACE, params...);
+		Log(log_context_source, LogLevel::LOG_TRACE, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Trace(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::L_TRACE, params...);
+		Log(log_type, log_context_source, LogLevel::LOG_TRACE, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Debug(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::L_DEBUG, params...);
+		Log(log_context_source, LogLevel::LOG_DEBUG, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Debug(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::L_DEBUG, params...);
+		Log(log_type, log_context_source, LogLevel::LOG_DEBUG, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Info(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::L_INFO, params...);
+		Log(log_context_source, LogLevel::LOG_INFO, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Info(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::L_INFO, params...);
+		Log(log_type, log_context_source, LogLevel::LOG_INFO, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Warn(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::L_WARN, params...);
+		Log(log_context_source, LogLevel::LOG_WARN, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Warn(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::L_WARN, params...);
+		Log(log_type, log_context_source, LogLevel::LOG_WARN, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Error(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::L_ERROR, params...);
+		Log(log_context_source, LogLevel::LOG_ERROR, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Error(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::L_ERROR, params...);
+		Log(log_type, log_context_source, LogLevel::LOG_ERROR, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Fatal(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::L_FATAL, params...);
+		Log(log_context_source, LogLevel::LOG_FATAL, params...);
 	}
 	template <class T, typename... ARGS>
 	static void Fatal(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::L_FATAL, params...);
+		Log(log_type, log_context_source, LogLevel::LOG_FATAL, params...);
 	}
 
 	template <class T>
