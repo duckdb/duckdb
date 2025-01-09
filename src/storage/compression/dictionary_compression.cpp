@@ -118,7 +118,6 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	                               dictionary::DictionaryCompressionStorage::StringScanPartial<false>,
 	                               dictionary::DictionaryCompressionStorage::StringFetchRow,
 	                               UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment);
-	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
 	return res;
 }
 
