@@ -86,6 +86,7 @@
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -859,6 +860,7 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALPRD), "COMPRESSION_ALPRD" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "COMPRESSION_ZSTD" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "COMPRESSION_ROARING" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "COMPRESSION_EMPTY" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
 	};
 	return values;
@@ -866,12 +868,30 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value) {
-	return StringUtil::EnumToString(GetCompressionTypeValues(), 15, "CompressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCompressionTypeValues(), 16, "CompressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value) {
-	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 15, "CompressionType", value));
+	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 16, "CompressionType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCompressionValidityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CompressionValidity::REQUIRES_VALIDITY), "REQUIRES_VALIDITY" },
+		{ static_cast<uint32_t>(CompressionValidity::NO_VALIDITY_REQUIRED), "NO_VALIDITY_REQUIRED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CompressionValidity>(CompressionValidity value) {
+	return StringUtil::EnumToString(GetCompressionValidityValues(), 2, "CompressionValidity", static_cast<uint32_t>(value));
+}
+
+template<>
+CompressionValidity EnumUtil::FromString<CompressionValidity>(const char *value) {
+	return static_cast<CompressionValidity>(StringUtil::StringToEnum(GetCompressionValidityValues(), 2, "CompressionValidity", value));
 }
 
 const StringUtil::EnumStringLiteral *GetConflictManagerModeValues() {

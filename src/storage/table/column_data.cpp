@@ -63,6 +63,16 @@ bool ColumnData::HasUpdates() const {
 	return updates.get();
 }
 
+bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
+	if (!updates) {
+		return false;
+	}
+	if (updates->HasUpdates(start_row, end_row)) {
+		return true;
+	}
+	return false;
+}
+
 void ColumnData::ClearUpdates() {
 	lock_guard<mutex> update_guard(update_lock);
 	updates.reset();
