@@ -601,7 +601,7 @@ public:
 	}
 };
 
-void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
+bool JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
                                           const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx) const {
 	// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
 	// first scan the entire vector at the probe side
@@ -633,7 +633,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	// not dense and that the range does not contain NULL
 	// i.e. if we have the values [0, 1, 2, 3, 4] - the min/max is fully equivalent to the OR filter
 	if (FilterCombiner::ContainsNull(in_list) || FilterCombiner::IsDenseRange(in_list)) {
-		return;
+		return false;
 	}
 
 	// generate the OR filter
@@ -642,6 +642,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	// the IN-list is expensive to execute otherwise
 	auto filter = make_uniq<OptionalFilter>(std::move(or_filter));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+	return true;
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
@@ -679,7 +680,10 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 			}
 			// if the HT is small we can generate a complete "OR" filter
 			if (ht.Count() > 1 && ht.Count() <= dynamic_or_filter_threshold) {
-				PushInFilter(info, ht, op, filter_idx, filter_col_idx);
+				if (PushInFilter(info, ht, op, filter_idx, filter_col_idx)) {
+					// No need to push anything else.
+					continue;
+				}
 			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {

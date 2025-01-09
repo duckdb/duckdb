@@ -373,8 +373,8 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	active_operator = phys_op;
 
 	if (!settings.empty()) {
-		auto &info = GetOperatorInfo(*active_operator);
 		if (ProfilingInfo::Enabled(settings, MetricsType::EXTRA_INFO)) {
+			auto &info = GetOperatorInfo(*active_operator);
 			auto params = active_operator->ParamsToString();
 			info.extra_info = params;
 		}

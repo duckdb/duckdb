@@ -20,6 +20,10 @@
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
@@ -392,18 +396,44 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 
 	ColumnBinding binding(0, storage_index.GetIndex());
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
-	auto filter_expr = filter->second->ToExpression(*bound_ref);
-	auto scan_state = art.TryInitializeScan(*index_expr, *filter_expr);
-	if (!scan_state) {
-		return false;
+	vector<unique_ptr<Expression>> filter_expressions;
+
+	// Special-handling of IN filters.
+	// They are all on the same column, so we can split them.
+	if (filter->second->filter_type == TableFilterType::OPTIONAL_FILTER) {
+		auto &optional_filter = filter->second->Cast<OptionalFilter>();
+		auto &child = optional_filter.child_filter;
+		D_ASSERT(child);
+
+		if (child->filter_type == TableFilterType::IN_FILTER) {
+			auto &in_filter = child->Cast<InFilter>();
+			for (const auto &value : in_filter.values) {
+				auto bound_constant = make_uniq<BoundConstantExpression>(value);
+				auto filter_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+				                                                        bound_ref->Copy(), std::move(bound_constant));
+				filter_expressions.push_back(std::move(filter_expr));
+			}
+		}
 	}
 
-	// Check if we can use an index scan, and already retrieve the matching row ids.
-	if (art.Scan(*scan_state, max_count, row_ids)) {
-		return true;
+	if (filter_expressions.empty()) {
+		auto filter_expr = filter->second->ToExpression(*bound_ref);
+		filter_expressions.push_back(std::move(filter_expr));
 	}
-	row_ids.clear();
-	return false;
+
+	for (const auto &filter_expr : filter_expressions) {
+		auto scan_state = art.TryInitializeScan(*index_expr, *filter_expr);
+		if (!scan_state) {
+			return false;
+		}
+
+		// Check if we can use an index scan, and already retrieve the matching row ids.
+		if (!art.Scan(*scan_state, max_count, row_ids)) {
+			row_ids.clear();
+			return false;
+		}
+	}
+	return true;
 }
 
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
