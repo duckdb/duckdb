@@ -1,5 +1,3 @@
-#include "duckdb/storage/compression/dictionary/analyze.hpp"
-#include "duckdb/storage/compression/dictionary/compression.hpp"
 #include "duckdb/storage/compression/dictionary/decompression.hpp"
 
 #include "duckdb/common/bitpacking.hpp"
@@ -49,15 +47,6 @@ namespace duckdb {
 namespace dictionary {
 
 struct DictionaryCompressionStorage {
-	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
-	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
-	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
-
-	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
-	                                                    unique_ptr<AnalyzeState> state);
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
-	static void FinalizeCompress(CompressionState &state_p);
-
 	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
 	template <bool ALLOW_DICT_VECTORS>
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
@@ -66,49 +55,6 @@ struct DictionaryCompressionStorage {
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
 };
-
-//===--------------------------------------------------------------------===//
-// Analyze
-//===--------------------------------------------------------------------===//
-unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
-	return make_uniq<DictionaryCompressionAnalyzeState>(info);
-}
-
-bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = state_p.Cast<DictionaryCompressionAnalyzeState>();
-	return state.analyze_state->UpdateState(input, count);
-}
-
-idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &analyze_state = state_p.Cast<DictionaryCompressionAnalyzeState>();
-	auto &state = *analyze_state.analyze_state;
-
-	auto width = BitpackingPrimitives::MinimumBitWidth(state.current_unique_count + 1);
-	auto req_space = DictionaryCompression::RequiredSpace(state.current_tuple_count, state.current_unique_count,
-	                                                      state.current_dict_size, width);
-
-	const auto total_space = state.segment_count * state.info.GetBlockSize() + req_space;
-	return LossyNumericCast<idx_t>(DictionaryCompression::MINIMUM_COMPRESSION_RATIO * float(total_space));
-}
-
-//===--------------------------------------------------------------------===//
-// Compress
-//===--------------------------------------------------------------------===//
-unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
-                                                                           unique_ptr<AnalyzeState> state) {
-	return make_uniq<DictionaryCompressionCompressState>(checkpoint_data, state->info);
-}
-
-void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = state_p.Cast<DictionaryCompressionCompressState>();
-	state.UpdateState(scan_vector, count);
-}
-
-void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
-	auto &state = state_p.Cast<DictionaryCompressionCompressState>();
-	state.Flush(true);
-}
 
 //===--------------------------------------------------------------------===//
 // Scan
@@ -160,16 +106,12 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type) {
-	auto res = CompressionFunction(
-	    CompressionType::COMPRESSION_DICTIONARY, data_type, dictionary::DictionaryCompressionStorage::StringInitAnalyze,
-	    dictionary::DictionaryCompressionStorage::StringAnalyze,
-	    dictionary::DictionaryCompressionStorage::StringFinalAnalyze,
-	    dictionary::DictionaryCompressionStorage::InitCompression, dictionary::DictionaryCompressionStorage::Compress,
-	    dictionary::DictionaryCompressionStorage::FinalizeCompress,
-	    dictionary::DictionaryCompressionStorage::StringInitScan, dictionary::DictionaryCompressionStorage::StringScan,
-	    dictionary::DictionaryCompressionStorage::StringScanPartial<false>,
-	    dictionary::DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
-	    UncompressedStringStorage::StringInitSegment);
+	auto res = CompressionFunction(CompressionType::COMPRESSION_DICTIONARY, data_type, nullptr, nullptr, nullptr,
+	                               nullptr, nullptr, nullptr, dictionary::DictionaryCompressionStorage::StringInitScan,
+	                               dictionary::DictionaryCompressionStorage::StringScan,
+	                               dictionary::DictionaryCompressionStorage::StringScanPartial<false>,
+	                               dictionary::DictionaryCompressionStorage::StringFetchRow,
+	                               UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment);
 	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
 	return res;
 }
