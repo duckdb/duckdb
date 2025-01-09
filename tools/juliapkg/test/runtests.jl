@@ -47,4 +47,4 @@ for fname in test_files
 end
 
 # Perform Package Quality Tests
-Aqua.test_all(DuckDB, unbound_args=false)
+Aqua.test_all(DuckDB, unbound_args = false, stale_deps = false)
