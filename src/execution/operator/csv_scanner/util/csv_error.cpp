@@ -1,7 +1,10 @@
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/string_util.hpp"
-
+#include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
+#include "duckdb/main/appender.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -41,11 +44,11 @@ void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
 	}
 }
 
-void CSVErrorHandler::Error(CSVError csv_error, bool force_error) {
+void CSVErrorHandler::Error(const CSVError &csv_error, bool force_error) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if ((ignore_errors && !force_error) || (PrintLineNumber(csv_error) && !CanGetLine(csv_error.GetBoundaryIndex()))) {
 		// We store this error, we can't throw it now, or we are ignoring it
-		errors[csv_error.error_info].push_back(std::move(csv_error));
+		errors.push_back(csv_error);
 		return;
 	}
 	// Otherwise we can throw directly
@@ -58,10 +61,19 @@ void CSVErrorHandler::ErrorIfNeeded() {
 		// Nothing to error
 		return;
 	}
-	CSVError first_error = errors.begin()->second[0];
 
-	if (CanGetLine(first_error.error_info.boundary_idx)) {
-		ThrowError(first_error);
+	if (CanGetLine(errors[0].error_info.boundary_idx)) {
+		ThrowError(errors[0]);
+	}
+}
+
+void CSVErrorHandler::ErrorIfTypeExists(CSVErrorType error_type) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	for (auto &error : errors) {
+		if (error.type == error_type) {
+			// If it's a maximum line size error, we can do it now.
+			ThrowError(error);
+		}
 	}
 }
 
@@ -82,6 +94,131 @@ void CSVErrorHandler::NewMaxLineSize(idx_t scan_line_size) {
 bool CSVErrorHandler::AnyErrors() {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	return !errors.empty();
+}
+
+bool CSVErrorHandler::HasError(const CSVErrorType error_type) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	for (const auto &er : errors) {
+		if (er.type == error_type) {
+			return true;
+		}
+	}
+	return false;
+}
+
+idx_t CSVErrorHandler::GetSize() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	return errors.size();
+}
+
+bool IsCSVErrorAcceptedReject(CSVErrorType type) {
+	switch (type) {
+	case CSVErrorType::INVALID_STATE:
+	case CSVErrorType::CAST_ERROR:
+	case CSVErrorType::TOO_MANY_COLUMNS:
+	case CSVErrorType::TOO_FEW_COLUMNS:
+	case CSVErrorType::MAXIMUM_LINE_SIZE:
+	case CSVErrorType::UNTERMINATED_QUOTES:
+	case CSVErrorType::INVALID_UNICODE:
+		return true;
+	default:
+		return false;
+	}
+}
+string CSVErrorTypeToEnum(CSVErrorType type) {
+	switch (type) {
+	case CSVErrorType::CAST_ERROR:
+		return "CAST";
+	case CSVErrorType::TOO_FEW_COLUMNS:
+		return "MISSING COLUMNS";
+	case CSVErrorType::TOO_MANY_COLUMNS:
+		return "TOO MANY COLUMNS";
+	case CSVErrorType::MAXIMUM_LINE_SIZE:
+		return "LINE SIZE OVER MAXIMUM";
+	case CSVErrorType::UNTERMINATED_QUOTES:
+		return "UNQUOTED VALUE";
+	case CSVErrorType::INVALID_UNICODE:
+		return "INVALID UNICODE";
+	case CSVErrorType::INVALID_STATE:
+		return "INVALID STATE";
+	default:
+		throw InternalException("CSV Error is not valid to be stored in a Rejects Table");
+	}
+}
+
+void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const idx_t file_idx, const idx_t scan_idx,
+                                       const CSVFileScan &file, CSVRejectsTable &rejects, const ReadCSVData &bind_data,
+                                       const idx_t limit) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	// We first insert the file into the file scans table
+	for (auto &error : file.error_handler->errors) {
+		if (!IsCSVErrorAcceptedReject(error.type)) {
+			continue;
+		}
+		// short circuit if we already have too many rejects
+		if (limit == 0 || rejects.count < limit) {
+			if (limit != 0 && rejects.count >= limit) {
+				break;
+			}
+			rejects.count++;
+			const auto row_line = file.error_handler->GetLineInternal(error.error_info);
+			const auto col_idx = error.column_idx;
+			// Add the row to the rejects table
+			errors_appender.BeginRow();
+			// 1. Scan ID
+			errors_appender.Append(scan_idx);
+			// 2. File ID
+			errors_appender.Append(file_idx);
+			// 3. Row Line
+			errors_appender.Append(row_line);
+			// 4. Byte Position of the row error
+			errors_appender.Append(error.row_byte_position + 1);
+			// 5. Byte Position where error occurred
+			if (!error.byte_position.IsValid()) {
+				// This means this error comes from a flush, and we don't support this yet, so we give it
+				// a null
+				errors_appender.Append(Value());
+			} else {
+				errors_appender.Append(error.byte_position.GetIndex() + 1);
+			}
+			// 6. Column Index
+			if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
+				errors_appender.Append(Value());
+			} else {
+				errors_appender.Append(col_idx + 1);
+			}
+			// 7. Column Name (If Applicable)
+			switch (error.type) {
+			case CSVErrorType::TOO_MANY_COLUMNS:
+			case CSVErrorType::MAXIMUM_LINE_SIZE:
+				errors_appender.Append(Value());
+				break;
+			case CSVErrorType::TOO_FEW_COLUMNS:
+				D_ASSERT(bind_data.return_names.size() > col_idx + 1);
+				errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
+				break;
+			default:
+				errors_appender.Append(string_t(bind_data.return_names[col_idx]));
+			}
+			// 8. Error Type
+			errors_appender.Append(string_t(CSVErrorTypeToEnum(error.type)));
+			// 9. Original CSV Line
+			errors_appender.Append(string_t(error.csv_row));
+			// 10. Full Error Message
+			errors_appender.Append(string_t(error.error_message));
+			errors_appender.EndRow();
+		}
+	}
+}
+
+idx_t CSVErrorHandler::GetMaxLineLength() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	return max_line_length;
+}
+
+void CSVErrorHandler::DontPrintErrorLine() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	print_line = false;
 }
 
 void CSVErrorHandler::SetIgnoreErrors(bool ignore_errors_p) {
@@ -115,7 +252,6 @@ CSVError CSVError::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_
 		auto it = sql_types_per_column.find(names[i]);
 		if (it != sql_types_per_column.end()) {
 			sql_types_per_column.erase(names[i]);
-			continue;
 		}
 	}
 	if (sql_types_per_column.empty()) {
@@ -165,20 +301,34 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_nam
 	                how_to_fix_it.str(), current_path);
 }
 
-CSVError CSVError::LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
-                                 string &csv_row, idx_t byte_position, const string &current_path) {
+CSVError CSVError::LineSizeError(const CSVReaderOptions &options, LinesPerBoundary error_info, string &csv_row,
+                                 idx_t byte_position, const string &current_path) {
 	std::ostringstream error;
-	error << "Maximum line size of " << options.maximum_line_size << " bytes exceeded. ";
-	error << "Actual Size:" << actual_size << " bytes." << '\n';
+	error << "Maximum line size of " << options.maximum_line_size.GetValue() << " bytes exceeded. ";
+	error << "Actual Size:" << csv_row.size() << " bytes." << '\n';
 
 	std::ostringstream how_to_fix_it;
-	how_to_fix_it << "Possible Solution: Change the maximum length size, e.g., max_line_size=" << actual_size + 1
+	how_to_fix_it << "Possible Solution: Change the maximum length size, e.g., max_line_size=" << csv_row.size() + 2
 	              << "\n";
 
 	return CSVError(error.str(), MAXIMUM_LINE_SIZE, 0, csv_row, error_info, byte_position, byte_position, options,
 	                how_to_fix_it.str(), current_path);
 }
 
+CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
+                                string &csv_row, idx_t row_byte_position, optional_idx byte_position,
+                                const string &current_path) {
+	std::ostringstream error;
+	error << "The CSV Parser state machine reached an invalid state.\nThis can happen when is not possible to parse "
+	         "your CSV File with the given options, or the CSV File is not RFC 4180 compliant ";
+
+	std::ostringstream how_to_fix_it;
+	how_to_fix_it << "Possible fixes:" << '\n';
+	how_to_fix_it << "* Enable scanning files that are not RFC 4180 compliant (rfc_4180=false)." << '\n';
+
+	return CSVError(error.str(), INVALID_STATE, current_column, csv_row, error_info, row_byte_position, byte_position,
+	                options, how_to_fix_it.str(), current_path);
+}
 CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
                                        const idx_t column_count, const string &delimiter) {
 	std::ostringstream error;
@@ -228,6 +378,7 @@ CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const ve
 	if (!options.null_padding) {
 		error << "* Enable null padding (null_padding=true) to pad missing columns with NULL values" << '\n';
 	}
+
 	return CSVError(error.str(), SNIFFING, {});
 }
 
@@ -286,7 +437,14 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	}
 	error << "* Check you are using the correct file compression, otherwise set it (e.g., compression = \'zstd\')"
 	      << '\n';
+	error << "* Be sure that the maximum line size is set to an appropriate value, otherwise set it (e.g., "
+	         "max_line_size=10000000)"
+	      << "\n";
 
+	if (options.dialect_options.state_machine_options.rfc_4180.GetValue() != false ||
+	    !options.dialect_options.state_machine_options.rfc_4180.IsSetByUser()) {
+		error << "* Enable scanning files that are not RFC 4180 compliant (rfc_4180=false). " << '\n';
+	}
 	return CSVError(error.str(), SNIFFING, {});
 }
 
@@ -329,12 +487,13 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	}
 	// How many columns were expected and how many were found
 	error << "Expected Number of Columns: " << options.dialect_options.num_cols << " Found: " << actual_columns + 1;
+	idx_t byte_pos = byte_position.GetIndex() == 0 ? 0 : byte_position.GetIndex() - 1;
 	if (actual_columns >= options.dialect_options.num_cols) {
-		return CSVError(error.str(), TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
-		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_MANY_COLUMNS, actual_columns, csv_row, error_info, row_byte_position, byte_pos,
+		                options, how_to_fix_it.str(), current_path);
 	} else {
-		return CSVError(error.str(), TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, row_byte_position,
-		                byte_position.GetIndex() - 1, options, how_to_fix_it.str(), current_path);
+		return CSVError(error.str(), TOO_FEW_COLUMNS, actual_columns, csv_row, error_info, row_byte_position, byte_pos,
+		                options, how_to_fix_it.str(), current_path);
 	}
 }
 

@@ -30,13 +30,13 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 	if (extra_list && index < extra_list->size()) {
 		alias = extra_list->at(index)->ToString();
 	} else {
-		if (!expr.alias.empty()) {
-			alias = expr.alias;
+		if (!expr.GetAlias().empty()) {
+			alias = expr.GetAlias();
 		}
 	}
 	auto result = make_uniq<BoundConstantExpression>(Value::UBIGINT(index));
-	result->alias = std::move(alias);
-	result->query_location = expr.query_location;
+	result->SetAlias(std::move(alias));
+	result->SetQueryLocation(expr.GetQueryLocation());
 	return std::move(result);
 }
 
@@ -51,7 +51,7 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 }
 
 optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) const {
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::CONSTANT: {
 		auto &constant = expr.Cast<ConstantExpression>();
 		// ORDER BY a constant
@@ -112,8 +112,8 @@ unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr) {
 	child_list_t<Value> values;
 	values.push_back(make_pair("index", Value::UBIGINT(index.GetIndex())));
 	auto result = make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
-	result->alias = std::move(expr.alias);
-	result->query_location = expr.query_location;
+	result->SetAlias(expr.GetAlias());
+	result->SetQueryLocation(expr.GetQueryLocation());
 	return std::move(result);
 }
 
@@ -123,7 +123,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// if there is no matching entry in the SELECT list already, we add the expression to the SELECT list and refer the
 	// new expression the new entry will then be bound later during the binding of the SELECT list we also don't do type
 	// resolution here: this only happens after the SELECT list has been bound
-	switch (expr->expression_class) {
+	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::CONSTANT: {
 		// ORDER BY constant
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)

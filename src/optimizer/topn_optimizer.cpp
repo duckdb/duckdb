@@ -51,7 +51,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		// only supported for integral types currently
 		return;
 	}
-	if (op.orders[0].expression->type != ExpressionType::BOUND_COLUMN_REF) {
+	if (op.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		// we can only pushdown on ORDER BY [col] currently
 		return;
 	}

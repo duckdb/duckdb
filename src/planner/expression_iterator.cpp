@@ -22,7 +22,7 @@ void ExpressionIterator::EnumerateChildren(Expression &expr, const std::function
 
 void ExpressionIterator::EnumerateChildren(Expression &expr,
                                            const std::function<void(unique_ptr<Expression> &child)> &callback) {
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE: {
 		auto &aggr_expr = expr.Cast<BoundAggregateExpression>();
 		for (auto &child : aggr_expr.children) {

@@ -13,3 +13,11 @@ statement error
 from read_json('data/json/multi_file_hang/*.json', sample_size=1, maximum_sample_files=1)
 ----
 Invalid Input Error: JSON transform error
+
+# the fuzzer also detected a single file hang, because we tried not to error here
+# we cannot ignore errors of this kind when the data is not newline-delimited
+# because we wouldn't know how to continue
+statement error
+SELECT * FROM read_json('data/json/fuzzer_hang.json', ignore_errors=true);
+----
+Invalid Input Error

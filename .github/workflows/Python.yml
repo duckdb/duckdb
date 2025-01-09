@@ -141,15 +141,7 @@ jobs:
       - uses: ./duckdb/.github/actions/build_extensions_dockerized
         with:
           vcpkg_target_triplet: x64-linux
-          deploy_as: linux_amd64_gcc4
           duckdb_arch: linux_amd64_gcc4
-          treat_warn_as_error: 0
-          s3_id: ${{ secrets.S3_ID }}
-          s3_key: ${{ secrets.S3_KEY }}
-          aarch64_cross_compile: 1
-          run_tests: 0 # Cannot run tests here due to cross-compiling
-          run_autoload_tests: 0
-          ninja: 1
 
       - uses: actions/upload-artifact@v4
         with:

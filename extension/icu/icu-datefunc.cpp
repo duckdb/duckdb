@@ -148,7 +148,7 @@ int32_t ICUDateFunc::ExtractField(icu::Calendar *calendar, UCalendarDateFields f
 	return result;
 }
 
-int64_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date) {
+int32_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date) {
 	const int64_t millis = end_date.value / Interval::MICROS_PER_MSEC;
 	const auto when = UDate(millis);
 	UErrorCode status = U_ZERO_ERROR;

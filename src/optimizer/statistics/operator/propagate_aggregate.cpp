@@ -29,7 +29,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	}
 	// check if all aggregates are COUNT(*)
 	for (auto &aggr_ref : aggr.expressions) {
-		if (aggr_ref->expression_class != ExpressionClass::BOUND_AGGREGATE) {
+		if (aggr_ref->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
 			// not an aggregate
 			return;
 		}
@@ -59,7 +59,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	vector<unique_ptr<Expression>> count_results;
 	for (idx_t aggregate_index = 0; aggregate_index < aggr.expressions.size(); ++aggregate_index) {
 		auto count_result = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(count)));
-		count_result->alias = aggr.expressions[aggregate_index]->GetName();
+		count_result->SetAlias(aggr.expressions[aggregate_index]->GetName());
 		count_results.push_back(std::move(count_result));
 
 		types.push_back(LogicalType::BIGINT);

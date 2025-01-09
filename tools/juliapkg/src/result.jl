@@ -83,63 +83,18 @@ function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::U
     return Base.codeunits(convert_string(column_data, val, idx))
 end
 
-function convert_date(column_data::ColumnConversionData, val::Int32)::Date
-    return Dates.epochdays2date(val + ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
-end
+convert_date(column_data::ColumnConversionData, val) = convert(Date, val)
+convert_time(column_data::ColumnConversionData, val) = convert(Time, val)
+convert_time_tz(column_data::ColumnConversionData, val) = convert(Time, convert(duckdb_time_tz, val))
+convert_timestamp(column_data::ColumnConversionData, val) = convert(DateTime, convert(duckdb_timestamp, val))
+convert_timestamp_s(column_data::ColumnConversionData, val) = convert(DateTime, convert(duckdb_timestamp_s, val))
+convert_timestamp_ms(column_data::ColumnConversionData, val) = convert(DateTime, convert(duckdb_timestamp_ms, val))
+convert_timestamp_ns(column_data::ColumnConversionData, val) = convert(DateTime, convert(duckdb_timestamp_ns, val))
+convert_interval(column_data::ColumnConversionData, val::duckdb_interval) = convert(Dates.CompoundPeriod, val)
+convert_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint) = convert(Int128, val)
+convert_uhugeint(column_data::ColumnConversionData, val::duckdb_uhugeint) = convert(UInt128, val)
+convert_uuid(column_data::ColumnConversionData, val::duckdb_hugeint) = convert(UUID, val)
 
-function convert_time(column_data::ColumnConversionData, val::Int64)::Time
-    return Dates.Time(Dates.Nanosecond(val * 1000))
-end
-
-function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
-    time_tz = duckdb_from_time_tz(val)
-    # TODO: how to preserve the offset?
-    return Dates.Time(
-        time_tz.time.hour,
-        time_tz.time.min,
-        time_tz.time.sec,
-        time_tz.time.micros ÷ 1000,
-        time_tz.time.micros % 1000
-    )
-end
-
-function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val ÷ 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
-end
-
-function convert_timestamp_s(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val * 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
-end
-
-function convert_timestamp_ms(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
-end
-
-function convert_timestamp_ns(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val ÷ 1000000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
-end
-
-function convert_interval(column_data::ColumnConversionData, val::duckdb_interval)::Dates.CompoundPeriod
-    return Dates.CompoundPeriod(Dates.Month(val.months), Dates.Day(val.days), Dates.Microsecond(val.micros))
-end
-
-function convert_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint)::Int128
-    return Int128(val.lower) + Int128(val.upper) << 64
-end
-
-function convert_uhugeint(column_data::ColumnConversionData, val::duckdb_uhugeint)::UInt128
-    return UInt128(val.lower) + UInt128(val.upper) << 64
-end
-
-function convert_uuid(column_data::ColumnConversionData, val::duckdb_hugeint)::UUID
-    hugeint = convert_hugeint(column_data, val)
-    base_value = Int128(170141183460469231731687303715884105727)
-    if hugeint < 0
-        return UUID(UInt128(hugeint + base_value + 1))
-    else
-        return UUID(UInt128(hugeint) + base_value + 1)
-    end
-end
 
 function convert_enum(column_data::ColumnConversionData, val)::String
     return column_data.conversion_data[val + 1]

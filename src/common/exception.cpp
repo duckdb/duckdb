@@ -66,7 +66,6 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 
 bool Exception::InvalidatesDatabase(ExceptionType exception_type) {
 	switch (exception_type) {
-	case ExceptionType::INTERNAL:
 	case ExceptionType::FATAL:
 		return true;
 	default:
@@ -169,11 +168,11 @@ ExceptionType Exception::StringToExceptionType(const string &type) {
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const Expression &expr) {
-	return InitializeExtraInfo(expr.query_location);
+	return InitializeExtraInfo(expr.GetQueryLocation());
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const ParsedExpression &expr) {
-	return InitializeExtraInfo(expr.query_location);
+	return InitializeExtraInfo(expr.GetQueryLocation());
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const QueryErrorContext &error_context) {

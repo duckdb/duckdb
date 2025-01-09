@@ -188,7 +188,7 @@ struct ArrowLargeBufferSizeSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_large_buffer_size";
 	static constexpr const char *Description =
-	    "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
+	    "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -211,7 +211,7 @@ struct ArrowOutputListViewSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_output_list_view";
 	static constexpr const char *Description =
-	    "If export to arrow format should use ListView as the physical layout for LIST columns";
+	    "Whether export to Arrow format should use ListView as the physical layout for LIST columns";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -1030,7 +1030,7 @@ struct ProduceArrowStringViewSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "produce_arrow_string_view";
 	static constexpr const char *Description =
-	    "If strings should be produced by DuckDB in Utf8View format instead of Utf8";
+	    "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

@@ -42,6 +42,13 @@ bool BoundFunctionExpression::IsFoldable() const {
 	return function.stability == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
 }
 
+bool BoundFunctionExpression::CanThrow() const {
+	if (function.errors == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+		return true;
+	}
+	return Expression::CanThrow();
+}
+
 string BoundFunctionExpression::ToString() const {
 	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(), function.name,
 	                                                                         is_operator);

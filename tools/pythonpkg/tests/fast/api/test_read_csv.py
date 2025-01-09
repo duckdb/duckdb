@@ -491,9 +491,8 @@ class TestReadCSV(object):
         with pytest.raises(duckdb.InvalidInputException, match="read_csv only accepts 'names' as a list of strings"):
             rel = con.read_csv(file, names=True)
 
-        # Excessive columns is fine, just doesn't have any effect past the number of provided columns
-        rel = con.read_csv(file, names=['a', 'b', 'c', 'd', 'e'])
-        assert rel.columns == ['a', 'b', 'c', 'd']
+        with pytest.raises(duckdb.InvalidInputException, match="not possible to detect the CSV Header"):
+            rel = con.read_csv(file, names=['a', 'b', 'c', 'd', 'e'])
 
         # Duplicates are not okay
         with pytest.raises(duckdb.BinderException, match="names must have unique values"):
@@ -606,7 +605,7 @@ class TestReadCSV(object):
             {'rejects_scan': 'my_rejects_scan'},
             {'rejects_table': 'my_rejects_table', 'rejects_limit': 50},
             {'force_not_null': ['one', 'two']},
-            {'buffer_size': 420000},
+            {'buffer_size': 2097153},
             {'decimal': '.'},
             {'allow_quoted_nulls': True},
             {'allow_quoted_nulls': False},
@@ -614,7 +613,7 @@ class TestReadCSV(object):
             {'filename': 'test'},
             {'hive_partitioning': True},
             {'hive_partitioning': False},
-            # {'union_by_name': True},
+            {'union_by_name': True},
             {'union_by_name': False},
             {'hive_types_autocast': False},
             {'hive_types_autocast': True},
@@ -631,3 +630,25 @@ class TestReadCSV(object):
         else:
             rel = duckdb_cursor.read_csv(file, **options)
             res = rel.fetchall()
+
+    def test_read_comment(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one|two|three|four\n1|2|3|4#|5|6\n#bla\n1|2|3|4\n')
+
+        con = duckdb.connect()
+        rel = con.read_csv(str(file1), columns={'a': 'VARCHAR'}, auto_detect=False, header=False, comment='#')
+        assert rel.fetchall() == [('one|two|three|four',), ('1|2|3|4',), ('1|2|3|4',)]
+
+    def test_union_by_name(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one|two|three|four\n1|2|3|4')
+
+        file1 = tmp_path / "file2.csv"
+        file1.write_text('two|three|four|five\n2|3|4|5')
+
+        con = duckdb.connect()
+
+        file_path = tmp_path / "file*.csv"
+        rel = con.read_csv(file_path, union_by_name=True)
+        assert rel.columns == ['one', 'two', 'three', 'four', 'five']
+        assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]

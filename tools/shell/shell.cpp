@@ -1772,6 +1772,17 @@ int ShellState::ExecuteSQL(const char *zSql, /* SQL to be evaluated */
 					zSql++;
 				continue;
 			}
+			if (sqlite3_bind_parameter_count(pStmt) != 0) {
+				zSql = zLeftover;
+				while (IsSpace(zSql[0]))
+					zSql++;
+				if (pzErrMsg) {
+					*pzErrMsg = strdup("Prepared statement parameters cannot be used directly\nTo use prepared "
+					                   "statement parameters, use PREPARE to prepare a statement, followed by EXECUTE");
+				}
+				sqlite3_finalize(pStmt);
+				continue;
+			}
 			zStmtSql = sqlite3_sql(pStmt);
 			if (zStmtSql == 0)
 				zStmtSql = "";

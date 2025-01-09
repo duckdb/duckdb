@@ -206,15 +206,7 @@ jobs:
       - uses: ./duckdb/.github/actions/build_extensions_dockerized
         with:
           vcpkg_target_triplet: x64-linux
-          deploy_as: linux_amd64
           duckdb_arch: linux_amd64
-          treat_warn_as_error: 0
-          s3_id: ${{ secrets.S3_ID }}
-          s3_key: ${{ secrets.S3_KEY }}
-          aarch64_cross_compile: 1
-          run_tests: 0 # Cannot run tests here due to cross-compiling
-          run_autoload_tests: 0
-          ninja: 1
 
       - uses: actions/upload-artifact@v4
         with:
@@ -232,6 +224,44 @@ jobs:
       duckdb_arch: linux_amd64
       duckdb_sha: ${{ github.sha }}
 
+ linux-extensions-64-musl:
+    # Builds extensions for linux_amd64_musl
+    name: Linux Extensions (musl + x64)
+    runs-on: ubuntu-latest
+    needs: linux-extensions-64
+    strategy:
+      matrix:
+        duckdb_arch: [linux_amd64_musl]
+        vcpkg_triplet: [x64-linux]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: 'duckdb'
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - uses: ./duckdb/.github/actions/build_extensions_dockerized
+        with:
+          vcpkg_target_triplet: x64-linux
+          duckdb_arch: linux_amd64_musl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-extensions-64-musl
+          path: |
+            build/release/extension/*/*.duckdb_extension
+
+ upload-linux-extensions-64-musl:
+    name: Upload Linux Extensions (musl + x64)
+    needs: linux-extensions-64-musl
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: linux-extensions-64-musl
+      duckdb_arch: linux_amd64_musl
+      duckdb_sha: ${{ github.sha }}
+
  upload-linux-extensions-64-aarch64:
     name: Upload Linux Extensions (aarch64)
     needs: linux-extensions-64-aarch64
@@ -247,7 +277,6 @@ jobs:
     name: Linux Extensions (aarch64)
     runs-on: ubuntu-latest
     needs: linux-extensions-64
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
 
     steps:
       - uses: actions/checkout@v3
@@ -259,15 +288,7 @@ jobs:
       - uses: ./duckdb/.github/actions/build_extensions_dockerized
         with:
           vcpkg_target_triplet: arm64-linux
-          deploy_as: linux_arm64
           duckdb_arch: linux_arm64
-          treat_warn_as_error: 0
-          s3_id: ${{ secrets.S3_ID }}
-          s3_key: ${{ secrets.S3_KEY }}
-          aarch64_cross_compile: 1
-          run_tests: 0 # Cannot run tests here due to cross-compiling
-          run_autoload_tests: 0
-          ninja: 1
 
       - uses: actions/upload-artifact@v4
         with:

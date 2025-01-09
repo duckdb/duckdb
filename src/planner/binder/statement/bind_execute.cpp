@@ -35,7 +35,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
 	for (auto &pair : mapped_named_values) {
-		bool is_literal = pair.second->type == ExpressionType::VALUE_CONSTANT;
+		bool is_literal = pair.second->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
 
 		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
 		auto bound_expr = cbinder.Bind(pair.second);

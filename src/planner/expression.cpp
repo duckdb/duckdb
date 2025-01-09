@@ -104,7 +104,7 @@ bool Expression::HasSubquery() const {
 }
 
 hash_t Expression::Hash() const {
-	hash_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+	hash_t hash = duckdb::Hash<uint32_t>(static_cast<uint32_t>(type));
 	hash = CombineHash(hash, return_type.Hash());
 	ExpressionIterator::EnumerateChildren(*this,
 	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });

@@ -117,6 +117,11 @@ public:
 	//! Returns true, if the table has a primary key, else false.
 	bool HasPrimaryKey() const;
 
+	//! Returns the rowid type of this table
+	virtual LogicalType GetRowIdType() const {
+		return LogicalType::ROW_TYPE;
+	}
+
 protected:
 	//! A list of columns that are part of this table
 	ColumnList columns;

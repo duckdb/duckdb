@@ -243,7 +243,7 @@ void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 }
 
 static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (colref.column_names.back() == info.old_name) {
 			colref.column_names.back() = info.new_name;
