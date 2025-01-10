@@ -2,15 +2,68 @@
 # description: Test Top N Optimization
 # group: [topn]
 
-# statement ok
-# PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET disabled_optimizers='expression_rewriter,filter_pullup,filter_pushdown,empty_result_pullup,cte_filter_pusher,regex_range,in_clause,join_order,deliminator,unnest_rewriter,unused_columns,statistics_propagation,common_subexpressions,common_aggregate,column_lifetime,limit_pushdown,build_side_probe_side,compressed_materialization,duplicate_groups,reorder_filter,sampling_pushdown,join_filter_pushdown,extension,materialized_cte,sum_rewriter'
 
 statement ok
 CREATE TABLE test AS SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i);
 
+statement ok
+SET explain_output='optimized_only'
+
 # Top N optimization
+# this gets turned into a row-id join
+query II
+explain SELECT * FROM test ORDER BY j DESC LIMIT 2;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
 query IIII
 SELECT * FROM test ORDER BY j DESC LIMIT 2;
 ----
-8	9	10	-8
 9	10	11	-9
+8	9	10	-8
+
+query II
+explain SELECT * FROM test ORDER BY j, i LIMIT 2;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query IIII
+SELECT * FROM test ORDER BY j, i LIMIT 2;
+----
+0	1	2	0
+1	2	3	-1
+
+# this does not, we cannot remove any columns by turning it into a row-id join
+query II
+explain SELECT i FROM test ORDER BY i LIMIT 2;
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# limit + offset
+query II
+explain SELECT * FROM test LIMIT 2 OFFSET 2;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query IIII
+SELECT * FROM test LIMIT 2 OFFSET 2;
+----
+2	3	4	-2
+3	4	5	-3
+
+# sample
+query II
+explain SELECT * FROM test USING SAMPLE 2 ROWS
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+# we can only use joins when
+query II
+explain SELECT * FROM test USING SAMPLE 10%
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*

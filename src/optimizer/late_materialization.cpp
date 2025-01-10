@@ -77,6 +77,17 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 	return row_id_binding;
 }
 
+void ReplaceReferences(Expression &expr, idx_t new_table_index) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
+		bound_column_ref.binding.table_index = new_table_index;
+	}
+
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+		ReplaceReferences(child, new_table_index);
+	});
+}
+
 bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op) {
 	// check if we can benefit from late materialization
 	// we need to see how many columns we require in the pipeline versus how many columns we emit in the scan
@@ -146,6 +157,25 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	auto lhs_row_idx = GetOrInsertRowId(lhs_get);
 	ColumnBinding lhs_binding(lhs_index, lhs_row_idx);
 
+	auto &row_id_type = get.GetRowIdType();
+
+	// we need to re-order again at the end
+	vector<BoundOrderByNode> final_orders;
+	if (op->type == LogicalOperatorType::LOGICAL_TOP_N) {
+		// for top-n we need to re-order by the top-n conditions
+		auto &top_n = op->Cast<LogicalTopN>();
+		for(auto &order : top_n.orders) {
+			auto expr = order.expression->Copy();
+			ReplaceReferences(*expr, lhs_index);
+
+			final_orders.emplace_back(order.type, order.null_order, std::move(expr));
+		}
+	} else {
+		// for limit/sample we order by row-id
+		auto row_id_expr = make_uniq<BoundColumnRefExpression>("rowid", row_id_type, lhs_binding);
+		final_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(row_id_expr));
+	}
+
 	// construct the RHS for the join
 	// this is essentially the old pipeline, but with the `rowid` column added
 	// note that the purpose of this optimization is to remove columns from the RHS
@@ -158,8 +188,8 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	join->children.push_back(std::move(op));
 	JoinCondition condition;
 	condition.comparison = ExpressionType::COMPARE_EQUAL;
-	condition.left = make_uniq<BoundColumnRefExpression>("rowid", get.GetRowIdType(), lhs_binding);
-	condition.right = make_uniq<BoundColumnRefExpression>("rowid", get.GetRowIdType(), rhs_binding);
+	condition.left = make_uniq<BoundColumnRefExpression>("rowid", row_id_type, lhs_binding);
+	condition.right = make_uniq<BoundColumnRefExpression>("rowid", row_id_type, rhs_binding);
 	join->conditions.push_back(std::move(condition));
 
 	// push a projection that removes the row id again from the lhs
@@ -169,11 +199,14 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		auto &column_id = lhs_get.GetColumnIds()[i];
 		auto is_row_id = column_id.IsRowIdColumn();
 		auto column_name = is_row_id ? "rowid" : lhs_get.names[column_id.GetPrimaryIndex()];
-		auto &column_type = is_row_id ? lhs_get.GetRowIdType() : lhs_get.returned_types[column_id.GetPrimaryIndex()];
+		auto &column_type = is_row_id ? row_id_type : lhs_get.returned_types[column_id.GetPrimaryIndex()];
 		proj_list.push_back(make_uniq<BoundColumnRefExpression>(column_name, column_type, ColumnBinding(lhs_index, i)));
 	}
+	auto order = make_uniq<LogicalOrder>(std::move(final_orders));
+	order->children.push_back(std::move(join));
+
 	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(proj_list));
-	proj->children.push_back(std::move(join));
+	proj->children.push_back(std::move(order));
 
 	// run the RemoveUnusedColumns optimizer to prune the (now) unused columns from the RHS
 	// RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
@@ -212,7 +245,7 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 	}
 	case LogicalOperatorType::LOGICAL_SAMPLE: {
 		auto &sample = op->Cast<LogicalSample>();
-		if (!sample.sample_options->is_percentage) {
+		if (sample.sample_options->is_percentage) {
 			break;
 		}
 		if (sample.sample_options->sample_size.GetValue<uint64_t>() > max_row_count) {
