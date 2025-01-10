@@ -10,6 +10,7 @@
 
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -34,7 +35,7 @@ public:
 
 	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
 
-	DUCKDB_API bool RegisterLogStorage(const string &name, shared_ptr<LogStorage> storage);
+	DUCKDB_API bool RegisterLogStorage(const string &name, shared_ptr<LogStorage> &storage);
 
 	//! The global logger can be used whe
 	DUCKDB_API Logger &GlobalLogger();

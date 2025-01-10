@@ -29,7 +29,7 @@ RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &cont
 	return RegisterLoggingContextInternal(context);
 }
 
-bool LogManager::RegisterLogStorage(const string &name, shared_ptr<LogStorage> storage) {
+bool LogManager::RegisterLogStorage(const string &name, shared_ptr<LogStorage> &storage) {
 	if (registered_log_storages.find(name) != registered_log_storages.end()) {
 		return false;
 	}

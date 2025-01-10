@@ -218,13 +218,15 @@ TEST_CASE("Test pluggable log storage", "[logging][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	auto log_storage = make_shared_ptr<MyLogStorage>();
-	db.instance->GetLogManager().RegisterLogStorage("my_log_storage", log_storage);
+	auto my_log_storage = make_shared_ptr<MyLogStorage>();
+
+	duckdb::shared_ptr<LogStorage> base_ptr = my_log_storage;
+	db.instance->GetLogManager().RegisterLogStorage("my_log_storage", base_ptr);
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
 	REQUIRE_NO_FAIL(con.Query("set logging_storage='my_log_storage';"));
 
 	REQUIRE_NO_FAIL(con.Query("select write_log('HELLO, BRO');"));
 
-	REQUIRE(log_storage->log_store.find("HELLO, BRO") != log_storage->log_store.end());
+	REQUIRE(my_log_storage->log_store.find("HELLO, BRO") != my_log_storage->log_store.end());
 }
