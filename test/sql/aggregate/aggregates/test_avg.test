@@ -80,3 +80,38 @@ query III
 SELECT AVG(i), AVG(j), AVG(k) FROM vals;
 ----
 NULL	NULL	NULL
+
+# Temporal values
+statement ok
+CREATE OR REPLACE TABLE timestamps AS 
+	SELECT range AS ts
+	FROM range('2024-11-01'::DATE, '2024-12-01'::DATE, INTERVAL 1 DAY)
+
+query I
+SELECT AVG(ts::DATE) 
+FROM timestamps
+----
+2024-11-15 12:00:00
+
+query I
+SELECT AVG(ts) 
+FROM timestamps
+----
+2024-11-15 12:00:00
+
+query I
+SELECT AVG(ts::TIMESTAMPTZ) 
+FROM timestamps
+----
+2024-11-15 12:00:00+00
+
+statement ok
+CREATE OR REPLACE TABLE times AS 
+	SELECT range AS ts
+	FROM range('2024-11-01'::DATE, '2024-11-02'::DATE, INTERVAL 7 MINUTES)
+
+query I
+SELECT AVG(ts::TIME) 
+FROM times
+----
+11:57:30
