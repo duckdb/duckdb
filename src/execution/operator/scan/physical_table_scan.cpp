@@ -27,9 +27,12 @@ public:
 		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
 		}
+
 		if (op.function.init_global) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op),
+			auto filters = table_filters ? *table_filters : GetTableFilters(op);
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
 			                             op.extra_info.sample_options);
+
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
 				max_threads = global_state->MaxThreads();
@@ -92,23 +95,24 @@ unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientCont
 SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSourceInput &input) const {
 	D_ASSERT(!column_ids.empty());
-	auto &gstate = input.global_state.Cast<TableScanGlobalSourceState>();
-	auto &state = input.local_state.Cast<TableScanLocalSourceState>();
+	auto &g_state = input.global_state.Cast<TableScanGlobalSourceState>();
+	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
 
-	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
+
 	if (function.function) {
 		function.function(context.client, data, chunk);
-	} else {
-		if (gstate.in_out_final) {
-			function.in_out_function_final(context, data, chunk);
-		}
-		function.in_out_function(context, data, gstate.input_chunk, chunk);
-		if (chunk.size() == 0 && function.in_out_function_final) {
-			function.in_out_function_final(context, data, chunk);
-			gstate.in_out_final = true;
-		}
+		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
+	if (g_state.in_out_final) {
+		function.in_out_function_final(context, data, chunk);
+	}
+	function.in_out_function(context, data, g_state.input_chunk, chunk);
+	if (chunk.size() == 0 && function.in_out_function_final) {
+		function.in_out_function_final(context, data, chunk);
+		g_state.in_out_final = true;
+	}
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
