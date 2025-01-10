@@ -406,9 +406,9 @@ struct TrimFun {
 struct UnbinFun {
 	static constexpr const char *Name = "unbin";
 	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Converts a value from binary representation to a blob";
+	static constexpr const char *Description = "Converts a value from binary representation to a blob.";
 	static constexpr const char *Example = "unbin('0110')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string,blob";
 
 	static ScalarFunction GetFunction();
 };
@@ -422,9 +422,9 @@ struct FromBinaryFun {
 struct UnhexFun {
 	static constexpr const char *Name = "unhex";
 	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Converts a value from hexadecimal representation to a blob";
+	static constexpr const char *Description = "Converts a value from hexadecimal representation to a blob.";
 	static constexpr const char *Example = "unhex('2A')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string,blob";
 
 	static ScalarFunction GetFunction();
 };
