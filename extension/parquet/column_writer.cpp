@@ -6,6 +6,7 @@
 #include "parquet_dlba_encoder.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
+#include "parquet_bss_encoder.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_writer.hpp"
 #ifndef DUCKDB_AMALGAMATION
@@ -1074,7 +1075,8 @@ public:
 	explicit StandardWriterPageState(const idx_t total_value_count, const idx_t total_string_size,
 	                                 Encoding::type encoding_p, const unordered_map<T, uint32_t> &dictionary_p)
 	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dlba_initialized(false),
-	      dlba_encoder(total_value_count, total_string_size), dictionary(dictionary_p), dict_written_value(false),
+	      dlba_encoder(total_value_count, total_string_size), bss_encoder(total_value_count, sizeof(T)),
+	      dictionary(dictionary_p), dict_written_value(false),
 	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(dict_bit_width) {
 	}
 	duckdb_parquet::Encoding::type encoding;
@@ -1084,6 +1086,8 @@ public:
 
 	bool dlba_initialized;
 	DlbaEncoder dlba_encoder;
+
+	BssEncoder bss_encoder;
 
 	const unordered_map<T, uint32_t> &dictionary;
 	bool dict_written_value;
@@ -1180,6 +1184,25 @@ idx_t GetDlbaStringSize(const string_t &src_value) {
 
 } // namespace dlba_encoder
 
+namespace bss_encoder {
+
+template <class T>
+void WriteValue(BssEncoder &encoder, const T &value) {
+	throw InternalException("Can't write type to BYTE_STREAM_SPLIT column");
+}
+
+template <>
+void WriteValue(BssEncoder &encoder, const float &value) {
+	encoder.WriteValue(value);
+}
+
+template <>
+void WriteValue(BssEncoder &encoder, const double &value) {
+	encoder.WriteValue(value);
+}
+
+} // namespace bss_encoder
+
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public BasicColumnWriter {
 public:
@@ -1229,6 +1252,10 @@ public:
 				dlba_encoder::BeginWrite<string_t>(page_state.dlba_encoder, temp_writer, string_t(""));
 			}
 			page_state.dlba_encoder.FinishWrite(temp_writer);
+			break;
+		case Encoding::BYTE_STREAM_SPLIT:
+			page_state.bss_encoder.FinishWrite(temp_writer);
+			break;
 		case Encoding::PLAIN:
 			break;
 		default:
@@ -1287,13 +1314,18 @@ public:
 			switch (type) {
 			case Type::type::INT32:
 			case Type::type::INT64:
-				// Virtually always better than PLAIN for integrals
+				// Virtually always better than PLAIN for integral
 				state.encoding = Encoding::DELTA_BINARY_PACKED;
 				break;
-			case Type::type::BYTE_ARRAY:
-				// Virtually always better than PLAIN for strings
-				state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
-				break;
+			// case Type::type::BYTE_ARRAY:
+			// 	// Virtually always better than PLAIN for string
+			// 	state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
+			// 	break;
+			// case Type::type::FLOAT:
+			// case Type::type::DOUBLE:
+			// 	// Virtually always better than PLAIN for float/double
+			// 	state.encoding = Encoding::BYTE_STREAM_SPLIT;
+			// 	break;
 			default:
 				state.encoding = Encoding::PLAIN;
 			}
@@ -1394,6 +1426,17 @@ public:
 				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 				OP::template HandleStats<SRC, TGT>(stats, target_value);
 				dlba_encoder::WriteValue(page_state.dlba_encoder, temp_writer, target_value);
+			}
+			break;
+		}
+		case Encoding::BYTE_STREAM_SPLIT: {
+			for (idx_t r = chunk_start; r < chunk_end; r++) {
+				if (!mask.RowIsValid(r)) {
+					continue;
+				}
+				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				bss_encoder::WriteValue(page_state.bss_encoder, target_value);
 			}
 			break;
 		}

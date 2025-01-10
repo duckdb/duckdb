@@ -15,9 +15,11 @@ namespace duckdb {
 
 class DlbaEncoder {
 public:
-	DlbaEncoder(const idx_t total_value_count_p, const idx_t total_string_size_p)
-	    : dbp_encoder(total_value_count_p), buffer(Allocator::DefaultAllocator().Allocate(total_string_size_p)),
-	      stream(buffer.get(), buffer.GetSize()) {
+	DlbaEncoder(const idx_t total_value_count_p, const idx_t total_string_size_p) : dbp_encoder(total_value_count_p) {
+		if (total_string_size_p != 0) {
+			buffer = Allocator::DefaultAllocator().Allocate(total_string_size_p);
+			stream = MemoryStream(buffer.get(), buffer.GetSize());
+		}
 	}
 
 public:
