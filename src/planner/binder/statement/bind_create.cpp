@@ -308,7 +308,7 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 	auto user_type_schema = UserType::GetSchema(type);
 	auto user_type_mods = UserType::GetTypeModifiers(type);
 
-	bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
+	bind_logical_type_function_t user_bind_modifiers_func = nullptr;
 
 	if (catalog) {
 		// The search order is:
@@ -336,7 +336,7 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 		}
 		auto &type_entry = entry->Cast<TypeCatalogEntry>();
 		type = type_entry.user_type;
-		user_bind_modifiers_func = type_entry.bind_modifiers;
+		user_bind_modifiers_func = type_entry.bind_function;
 	} else {
 		string type_catalog = UserType::GetCatalog(type);
 		string type_schema = UserType::GetSchema(type);
@@ -345,7 +345,7 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 		auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, type_catalog, type_schema, user_type_name);
 		auto &type_entry = entry->Cast<TypeCatalogEntry>();
 		type = type_entry.user_type;
-		user_bind_modifiers_func = type_entry.bind_modifiers;
+		user_bind_modifiers_func = type_entry.bind_function;
 	}
 
 	// Now we bind the inner user type
@@ -354,45 +354,13 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 	// Apply the type modifiers (if any)
 	if (user_bind_modifiers_func) {
 		// If an explicit bind_modifiers function was provided, use that to construct the type
-		BindTypeModifiersInput input {context, type, user_type_mods};
+
+		BindLogicalTypeInput input {context, type, user_type_mods};
 		type = user_bind_modifiers_func(input);
-	} else if (type.HasExtensionInfo()) {
-		auto &ext_info = *type.GetExtensionInfo();
-
-		// If the type already has modifiers, try to replace them with the user-provided ones if they are compatible
-		// This enables registering custom types with "default" type modifiers that can be overridden, without
-		// having to provide a custom bind_modifiers function
-		auto type_mods_size = ext_info.modifiers.size();
-
-		// Are we trying to pass more type modifiers than the type has?
-		if (user_type_mods.size() > type_mods_size) {
-			throw BinderException(
-			    "Cannot apply '%d' type modifier(s) to type '%s' taking at most '%d' type modifier(s)",
-			    user_type_mods.size(), user_type_name, type_mods_size);
+	} else {
+		if (!user_type_mods.empty()) {
+			throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
 		}
-
-		// Deep copy the type so that we can replace the type modifiers
-		type = type.DeepCopy();
-
-		// Re-fetch the type modifiers now that we've deduplicated the ExtraTypeInfo
-		auto &type_mods = type.GetExtensionInfo()->modifiers;
-
-		// Replace them in order, casting if necessary
-		for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
-			auto &type_mod = type_mods[i];
-			auto user_type_mod = user_type_mods[i];
-			if (type_mod.type() == user_type_mod.type()) {
-				type_mod = std::move(user_type_mod);
-			} else if (user_type_mod.DefaultTryCastAs(type_mod.type())) {
-				type_mod = std::move(user_type_mod);
-			} else {
-				throw BinderException("Cannot apply type modifier '%s' to type '%s', expected value of type '%s'",
-				                      user_type_mod.ToString(), user_type_name, type_mod.type().ToString());
-			}
-		}
-	} else if (!user_type_mods.empty()) {
-		// We're trying to pass type modifiers to a type that doesnt have any
-		throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
 	}
 }
 
