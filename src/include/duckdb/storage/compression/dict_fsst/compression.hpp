@@ -80,6 +80,7 @@ public:
 
 	EncodedInputData encoded_input;
 	void *encoder = nullptr;
+	idx_t symbol_table_size = DConstants::INVALID_INDEX;
 };
 
 } // namespace dict_fsst

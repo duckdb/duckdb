@@ -186,7 +186,11 @@ void DictFSSTCompressionCompressState::EncodeInputStrings(UnifiedVectorFormat &i
 	for (idx_t i = 0; i < count; i++) {
 		uint32_t size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
 		string_t encoded_string((const char *)compressed_ptrs[i], size); // NOLINT;
-		strings.push_back(heap.AddBlob(std::move(encoded_string)));
+		if (!encoded_string.IsInlined()) {
+			strings.push_back(heap.AddBlob(std::move(encoded_string)));
+		} else {
+			strings.push_back(encoded_string);
+		}
 	}
 }
 
@@ -247,7 +251,7 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 
 	// Write the exported symbol table to the end of the segment
 	unsigned char fsst_serialized_symbol_table[sizeof(duckdb_fsst_decoder_t)];
-	auto symbol_table_size = duckdb_fsst_export(fsst_encoder, fsst_serialized_symbol_table);
+	symbol_table_size = duckdb_fsst_export(fsst_encoder, fsst_serialized_symbol_table);
 	current_end_ptr -= symbol_table_size;
 	memcpy(current_end_ptr, (void *)fsst_serialized_symbol_table, symbol_table_size);
 
@@ -298,7 +302,7 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 	auto total_size = DictFSSTCompression::DICTIONARY_HEADER_SIZE + compressed_selection_buffer_size +
 	                  index_buffer_size + current_dictionary.size;
 	if (is_fsst_encoded) {
-		total_size += sizeof(duckdb_fsst_encoder_t);
+		total_size += symbol_table_size;
 	}
 
 	// calculate ptr and offsets
@@ -339,13 +343,21 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 	auto new_dictionary_offset = index_buffer_offset + index_buffer_size;
 	idx_t bytes_to_move = current_dictionary.size;
 	if (is_fsst_encoded) {
+		D_ASSERT(symbol_table_size != DConstants::INVALID_INDEX);
 		// Also move the symbol table located directly behind the dictionary
-		bytes_to_move += sizeof(duckdb_fsst_encoder_t);
+		bytes_to_move += symbol_table_size;
 	}
 	memmove(base_ptr + new_dictionary_offset, base_ptr + current_dictionary.end - current_dictionary.size,
 	        bytes_to_move);
 	current_dictionary.end -= space_left;
-	D_ASSERT(current_dictionary.end == total_size);
+#ifdef DEBUG
+	if (is_fsst_encoded) {
+		D_ASSERT(current_dictionary.end + symbol_table_size == total_size);
+	} else {
+		D_ASSERT(current_dictionary.end == total_size);
+	}
+
+#endif
 
 	// Write the new dictionary with the updated "end".
 	DictFSSTCompression::SetDictionary(*current_segment, handle, current_dictionary);
