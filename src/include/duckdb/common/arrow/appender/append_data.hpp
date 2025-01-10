@@ -6,6 +6,7 @@
 #include "duckdb/common/arrow/arrow_buffer.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/common/array.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 

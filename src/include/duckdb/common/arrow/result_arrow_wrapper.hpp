@@ -11,6 +11,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/chunk_scan_state.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 class ResultArrowArrayStreamWrapper {
