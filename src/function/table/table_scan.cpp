@@ -24,6 +24,7 @@
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 
 namespace duckdb {
 
@@ -354,6 +355,58 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	return std::move(g_state);
 }
 
+void ExtractInFilter(unique_ptr<TableFilter> &filter, BoundColumnRefExpression &bound_ref,
+                     unique_ptr<vector<unique_ptr<Expression>>> &filter_expressions) {
+	// Special-handling of IN filters.
+	// They are part of a CONJUNCTION_AND.
+	if (filter->filter_type != TableFilterType::CONJUNCTION_AND) {
+		return;
+	}
+
+	auto &and_filter = filter->Cast<ConjunctionAndFilter>();
+	auto &children = and_filter.child_filters;
+	if (children.empty()) {
+		return;
+	}
+	if (children[0]->filter_type != TableFilterType::OPTIONAL_FILTER) {
+		return;
+	}
+
+	auto &optional_filter = children[0]->Cast<OptionalFilter>();
+	auto &child = optional_filter.child_filter;
+	if (child->filter_type != TableFilterType::IN_FILTER) {
+		return;
+	}
+
+	auto &in_filter = child->Cast<InFilter>();
+	if (!in_filter.origin_is_hash_join) {
+		return;
+	}
+
+	// They are all on the same column, so we can split them.
+	for (const auto &value : in_filter.values) {
+		auto bound_constant = make_uniq<BoundConstantExpression>(value);
+		auto filter_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
+		                                                        std::move(bound_constant));
+		filter_expressions->push_back(std::move(filter_expr));
+	}
+}
+
+unique_ptr<vector<unique_ptr<Expression>>> ExtractFilters(const ColumnDefinition &col, unique_ptr<TableFilter> &filter,
+                                                          idx_t storage_idx) {
+	ColumnBinding binding(0, storage_idx);
+	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
+
+	auto filter_expressions = make_uniq<vector<unique_ptr<Expression>>>();
+	ExtractInFilter(filter, *bound_ref, filter_expressions);
+
+	if (filter_expressions->empty()) {
+		auto filter_expr = filter->ToExpression(*bound_ref);
+		filter_expressions->push_back(std::move(filter_expr));
+	}
+	return filter_expressions;
+}
+
 bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInput &input, TableFilterSet &filter_set,
                   idx_t max_count, unsafe_vector<row_t> &row_ids) {
 	// FIXME: No support for index scans on compound ARTs.
@@ -394,34 +447,8 @@ bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInpu
 		return false;
 	}
 
-	ColumnBinding binding(0, storage_index.GetIndex());
-	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
-	vector<unique_ptr<Expression>> filter_expressions;
-
-	// Special-handling of IN filters.
-	// They are all on the same column, so we can split them.
-	if (filter->second->filter_type == TableFilterType::OPTIONAL_FILTER) {
-		auto &optional_filter = filter->second->Cast<OptionalFilter>();
-		auto &child = optional_filter.child_filter;
-		D_ASSERT(child);
-
-		if (child->filter_type == TableFilterType::IN_FILTER) {
-			auto &in_filter = child->Cast<InFilter>();
-			for (const auto &value : in_filter.values) {
-				auto bound_constant = make_uniq<BoundConstantExpression>(value);
-				auto filter_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-				                                                        bound_ref->Copy(), std::move(bound_constant));
-				filter_expressions.push_back(std::move(filter_expr));
-			}
-		}
-	}
-
-	if (filter_expressions.empty()) {
-		auto filter_expr = filter->second->ToExpression(*bound_ref);
-		filter_expressions.push_back(std::move(filter_expr));
-	}
-
-	for (const auto &filter_expr : filter_expressions) {
+	auto filter_expressions = ExtractFilters(col, filter->second, storage_index.GetIndex());
+	for (const auto &filter_expr : *filter_expressions) {
 		auto scan_state = art.TryInitializeScan(*index_expr, *filter_expr);
 		if (!scan_state) {
 			return false;
@@ -443,6 +470,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	auto &table = bind_data.table;
 	auto &storage = table.GetStorage();
 
+	// Can't index scan without filters.
 	if (!input.filters) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}

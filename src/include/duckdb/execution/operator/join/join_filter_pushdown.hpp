@@ -73,7 +73,7 @@ public:
 	                               const PhysicalOperator &op) const;
 
 private:
-	bool PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
+	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
 	                  idx_t filter_idx, idx_t filter_col_idx) const;
 };
 
