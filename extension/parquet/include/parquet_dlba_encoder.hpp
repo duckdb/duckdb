@@ -16,7 +16,8 @@ namespace duckdb {
 class DlbaEncoder {
 public:
 	DlbaEncoder(const idx_t total_value_count_p, const idx_t total_string_size_p)
-	    : dbp_encoder(total_value_count_p), buffer(Allocator::DefaultAllocator().Allocate(total_string_size_p + 1)),
+	    : dbp_encoder(total_value_count_p), total_string_size(total_string_size_p),
+	      buffer(Allocator::DefaultAllocator().Allocate(total_string_size + 1)),
 	      stream(make_unsafe_uniq<MemoryStream>(buffer.get(), buffer.GetSize())) {
 	}
 
@@ -32,13 +33,14 @@ public:
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		D_ASSERT(stream->GetPosition() + 1 == buffer.GetSize());
+		D_ASSERT(stream->GetPosition() == total_string_size);
 		dbp_encoder.FinishWrite(writer);
-		writer.WriteData(buffer.get(), stream->GetPosition());
+		writer.WriteData(buffer.get(), total_string_size);
 	}
 
 private:
 	DbpEncoder dbp_encoder;
+	const idx_t total_string_size;
 	AllocatedData buffer;
 	unsafe_unique_ptr<MemoryStream> stream;
 };
