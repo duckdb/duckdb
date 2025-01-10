@@ -7,7 +7,7 @@ require parquet
 require tpch
 
 statement ok
-call dbgen(sf=0.1);
+call dbgen(sf=0.01);
 
 statement ok
 create view doubles as

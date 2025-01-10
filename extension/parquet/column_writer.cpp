@@ -1069,13 +1069,13 @@ public:
 	duckdb_parquet::Encoding::type encoding;
 };
 
-template <class T>
+template <class SRC, class TGT>
 class StandardWriterPageState : public ColumnWriterPageState {
 public:
 	explicit StandardWriterPageState(const idx_t total_value_count, const idx_t total_string_size,
-	                                 Encoding::type encoding_p, const unordered_map<T, uint32_t> &dictionary_p)
+	                                 Encoding::type encoding_p, const unordered_map<SRC, uint32_t> &dictionary_p)
 	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dlba_initialized(false),
-	      dlba_encoder(total_value_count, total_string_size), bss_encoder(total_value_count, sizeof(T)),
+	      dlba_encoder(total_value_count, total_string_size), bss_encoder(total_value_count, sizeof(TGT)),
 	      dictionary(dictionary_p), dict_written_value(false),
 	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(dict_bit_width) {
 	}
@@ -1089,7 +1089,7 @@ public:
 
 	BssEncoder bss_encoder;
 
-	const unordered_map<T, uint32_t> &dictionary;
+	const unordered_map<SRC, uint32_t> &dictionary;
 	bool dict_written_value;
 	uint32_t dict_bit_width;
 	RleBpEncoder dict_encoder;
@@ -1223,13 +1223,13 @@ public:
 	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 
-		auto result = make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.total_string_size,
-		                                                      state.encoding, state.dictionary);
+		auto result = make_uniq<StandardWriterPageState<SRC, TGT>>(state.total_value_count, state.total_string_size,
+		                                                           state.encoding, state.dictionary);
 		return std::move(result);
 	}
 
 	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
-		auto &page_state = state_p->Cast<StandardWriterPageState<SRC>>();
+		auto &page_state = state_p->Cast<StandardWriterPageState<SRC, TGT>>();
 		switch (page_state.encoding) {
 		case Encoding::DELTA_BINARY_PACKED:
 			if (!page_state.dbp_initialized) {
@@ -1311,21 +1311,19 @@ public:
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		if (state.dictionary.size() == 0 || state.dictionary.size() > writer.DictionarySizeLimit()) {
+			// If we aren't doing dictionary encoding, the following encodings are virtually always better than PLAIN
 			switch (type) {
 			case Type::type::INT32:
 			case Type::type::INT64:
-				// Virtually always better than PLAIN for integral
 				state.encoding = Encoding::DELTA_BINARY_PACKED;
 				break;
-			// case Type::type::BYTE_ARRAY:
-			// 	// Virtually always better than PLAIN for string
-			// 	state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
-			// 	break;
-			// case Type::type::FLOAT:
-			// case Type::type::DOUBLE:
-			// 	// Virtually always better than PLAIN for float/double
-			// 	state.encoding = Encoding::BYTE_STREAM_SPLIT;
-			// 	break;
+			case Type::type::BYTE_ARRAY:
+				state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
+				break;
+			case Type::type::FLOAT:
+			case Type::type::DOUBLE:
+				state.encoding = Encoding::BYTE_STREAM_SPLIT;
+				break;
 			default:
 				state.encoding = Encoding::PLAIN;
 			}
@@ -1349,7 +1347,7 @@ public:
 
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &page_state = page_state_p->Cast<StandardWriterPageState<SRC>>();
+		auto &page_state = page_state_p->Cast<StandardWriterPageState<SRC, TGT>>();
 
 		const auto &mask = FlatVector::Validity(input_column);
 		const auto *data_ptr = FlatVector::GetData<SRC>(input_column);
