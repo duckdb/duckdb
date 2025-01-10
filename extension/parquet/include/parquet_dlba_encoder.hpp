@@ -16,24 +16,23 @@ namespace duckdb {
 class DlbaEncoder {
 public:
 	DlbaEncoder(const idx_t total_value_count_p, const idx_t total_string_size_p)
-	    : dbp_encoder(total_value_count_p),
-	      buffer(Allocator::DefaultAllocator().Allocate(MaxValue<idx_t>(total_string_size_p, 1))),
-	      stream(buffer.get(), buffer.GetSize()) {
+	    : dbp_encoder(total_value_count_p), buffer(Allocator::DefaultAllocator().Allocate(total_string_size_p + 1)),
+	      stream(make_unsafe_uniq<MemoryStream>(buffer.get(), buffer.GetSize())) {
 	}
 
 public:
 	void BeginWrite(WriteStream &writer, const string_t &first_value) {
 		dbp_encoder.BeginWrite(writer, UnsafeNumericCast<int64_t>(first_value.GetSize()));
-		stream.WriteData(const_data_ptr_cast(first_value.GetData()), first_value.GetSize());
+		stream->WriteData(const_data_ptr_cast(first_value.GetData()), first_value.GetSize());
 	}
 
 	void WriteValue(WriteStream &writer, const string_t &value) {
 		dbp_encoder.WriteValue(writer, UnsafeNumericCast<int64_t>(value.GetSize()));
-		stream.WriteData(const_data_ptr_cast(value.GetData()), value.GetSize());
+		stream->WriteData(const_data_ptr_cast(value.GetData()), value.GetSize());
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		D_ASSERT(stream.GetPosition() == buffer.GetSize());
+		D_ASSERT(stream->GetPosition() + 1 == buffer.GetSize());
 		dbp_encoder.FinishWrite(writer);
 		writer.WriteData(buffer.get(), buffer.GetSize());
 	}
@@ -41,7 +40,7 @@ public:
 private:
 	DbpEncoder dbp_encoder;
 	AllocatedData buffer;
-	MemoryStream stream;
+	unsafe_unique_ptr<MemoryStream> stream;
 };
 
 } // namespace duckdb
