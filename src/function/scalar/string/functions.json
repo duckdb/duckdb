@@ -45,6 +45,7 @@
         "description": "Concatenates two lists.",
         "example": "list_concat([2, 3], [4, 5, 6])",
         "type": "scalar_function",
+        "categories": ["string","list","blob"],
         "struct": "ConcatOperatorFun"
     },
     {
@@ -131,9 +132,24 @@
     },
     {
         "name": "octet_length",
-        "parameters": "blob",
-        "description": "Number of bytes in blob.",
-        "example": "octet_length('\\xAA\\xBB'::BLOB)",
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "blob", "type": "BLOB"}
+                ],
+                "description": "Number of bytes in blob.",
+                "example": "octet_length('\\xAA\\xBB'::BLOB)",
+                "categories": ["blob"]
+            },
+            {
+                "parameters": [
+                    {"name": "bitstring", "type": "BIT"}
+                ],
+                "description": "Returns the number of bytes in the bitstring.",
+                "example": "octet_length('1101011'::BITSTRING)",
+                "categories": ["bitstring"]
+            }
+        ],
         "type": "scalar_function_set"
     },
     {

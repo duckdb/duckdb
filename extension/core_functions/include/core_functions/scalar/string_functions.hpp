@@ -141,10 +141,10 @@ struct MismatchesFun {
 
 struct HexFun {
 	static constexpr const char *Name = "hex";
-	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Converts the value to hexadecimal representation";
-	static constexpr const char *Example = "hex(42)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "string::VARCHAR\1blob::BLOB\1value::ANY";
+	static constexpr const char *Description = "Converts the string to hexadecimal representation.\1Converts blob to VARCHAR using hexadecimal encoding.\1Converts the value to hexadecimal representation.";
+	static constexpr const char *Example = "hex('Hello')\1hex('\\xAA\\xBB'::BLOB)\1hex(42)";
+	static constexpr const char *Categories = "string\1blob\1numeric";
 
 	static ScalarFunctionSet GetFunctions();
 };

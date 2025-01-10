@@ -100,7 +100,7 @@ struct ConcatOperatorFun {
 	static constexpr const char *Parameters = "list1,list2";
 	static constexpr const char *Description = "Concatenates two lists.";
 	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6])";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string,list,blob";
 
 	static ScalarFunction GetFunction();
 };
@@ -199,10 +199,10 @@ struct BitLengthFun {
 
 struct OctetLengthFun {
 	static constexpr const char *Name = "octet_length";
-	static constexpr const char *Parameters = "blob";
-	static constexpr const char *Description = "Number of bytes in blob.";
-	static constexpr const char *Example = "octet_length('\\xAA\\xBB'::BLOB)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Parameters = "blob::BLOB\1bitstring::BIT";
+	static constexpr const char *Description = "Number of bytes in blob.\1Returns the number of bytes in the bitstring.";
+	static constexpr const char *Example = "octet_length('\\xAA\\xBB'::BLOB)\1octet_length('1101011'::BITSTRING)";
+	static constexpr const char *Categories = "blob\1bitstring";
 
 	static ScalarFunctionSet GetFunctions();
 };

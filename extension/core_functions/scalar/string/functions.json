@@ -77,9 +77,32 @@
     },
     {
         "name": "hex",
-        "parameters": "value",
-        "description": "Converts the value to hexadecimal representation",
-        "example": "hex(42)",
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"}
+                ],
+                "description": "Converts the string to hexadecimal representation.",
+                "example": "hex('Hello')",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "blob", "type": "BLOB"}
+                ],
+                "description": "Converts blob to VARCHAR using hexadecimal encoding.",
+                "example": "hex('\\xAA\\xBB'::BLOB)",
+                "categories": ["blob"]
+            },
+            {
+                "parameters": [
+                    {"name": "value", "type": "ANY"}
+                ],
+                "description": "Converts the value to hexadecimal representation.",
+                "example": "hex(42)",
+                "categories": ["numeric"]
+            }
+        ],
         "type": "scalar_function_set",
         "aliases": ["to_hex"]
     },
@@ -267,17 +290,19 @@
     {
         "name": "unbin",
         "parameters": "value",
-        "description": "Converts a value from binary representation to a blob",
+        "description": "Converts a value from binary representation to a blob.",
         "example": "unbin('0110')",
         "type": "scalar_function",
+        "categories": ["string", "blob"],
         "aliases": ["from_binary"]
     },
     {
         "name": "unhex",
         "parameters": "value",
-        "description": "Converts a value from hexadecimal representation to a blob",
+        "description": "Converts a value from hexadecimal representation to a blob.",
         "example": "unhex('2A')",
         "type": "scalar_function",
+        "categories": ["string", "blob"],
         "aliases": ["from_hex"]
     },
     {

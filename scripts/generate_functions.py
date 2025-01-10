@@ -95,16 +95,16 @@ def examples_to_line(example_list):
     return "\\2".join([sanitize_string(example) for example in example_list])
 
 
+def get_category_line(variants):
+    return "\\1".join([categories_from_json(variant) for variant in variants])
+
+
 def categories_from_json(json_record):
     if 'categories' in json_record:
-        category_line = ','.join([category.strip() for category in json_record['categories'].split(',')])
+        category_line = ','.join([category.strip() for category in json_record['categories']])
     else:
         category_line = ''
     return category_line
-
-
-def get_category_line(variants):
-    return "\\1".join([categories_from_json(variant) for variant in variants])
 
 
 def sanitize_string(text):
