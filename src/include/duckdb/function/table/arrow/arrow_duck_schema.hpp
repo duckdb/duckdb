@@ -40,7 +40,7 @@ public:
 
 	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
 	cast_arrow_duck_t arrow_to_duckdb = nullptr;
-	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
+	//! (Optional) Callback to function that converts a DuckDB Vector to an Arrow Array
 	cast_duck_arrow_t duckdb_to_arrow = nullptr;
 
 	LogicalType GetInternalType() const;
