@@ -71,7 +71,7 @@ public:
 public:
 	LogicalType GetDuckType(bool use_dictionary = false) const;
 
-	void SetDictionary(shared_ptr<ArrowType> dictionary);
+	void SetDictionary(unique_ptr<ArrowType> dictionary);
 	bool HasDictionary() const;
 	const ArrowType &GetDictionary() const;
 
@@ -84,14 +84,14 @@ public:
 	}
 	void ThrowIfInvalid() const;
 
-	static shared_ptr<ArrowType> GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format);
+	static unique_ptr<ArrowType> GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format);
 
-	static shared_ptr<ArrowType> GetTypeFromSchema(DBConfig &config, ArrowSchema &schema);
+	static unique_ptr<ArrowType> GetTypeFromSchema(DBConfig &config, ArrowSchema &schema);
 
-	static shared_ptr<ArrowType> CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
+	static unique_ptr<ArrowType> CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
 	                                            bool view);
 
-	static shared_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
+	static unique_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
 
 	bool HasExtension() const;
 
@@ -101,7 +101,7 @@ public:
 protected:
 	LogicalType type;
 	//! Hold the optional type if the array is a dictionary
-	shared_ptr<ArrowType> dictionary_type;
+	unique_ptr<ArrowType> dictionary_type;
 	//! Is run-end-encoded
 	bool run_end_encoded = false;
 	unique_ptr<ArrowTypeInfo> type_info;

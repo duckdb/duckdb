@@ -17,7 +17,7 @@ const arrow_column_map_t &ArrowTableType::GetColumns() const {
 	return arrow_convert_data;
 }
 
-void ArrowType::SetDictionary(shared_ptr<ArrowType> dictionary) {
+void ArrowType::SetDictionary(unique_ptr<ArrowType> dictionary) {
 	D_ASSERT(!this->dictionary_type);
 	dictionary_type = std::move(dictionary);
 }
@@ -56,31 +56,31 @@ void ArrowType::ThrowIfInvalid() const {
 	}
 }
 
-shared_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format) {
+unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format) {
 	if (format == "n") {
-		return make_shared_ptr<ArrowType>(LogicalType::SQLNULL);
+		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
-		return make_shared_ptr<ArrowType>(LogicalType::BOOLEAN);
+		return make_uniq<ArrowType>(LogicalType::BOOLEAN);
 	} else if (format == "c") {
-		return make_shared_ptr<ArrowType>(LogicalType::TINYINT);
+		return make_uniq<ArrowType>(LogicalType::TINYINT);
 	} else if (format == "s") {
-		return make_shared_ptr<ArrowType>(LogicalType::SMALLINT);
+		return make_uniq<ArrowType>(LogicalType::SMALLINT);
 	} else if (format == "i") {
-		return make_shared_ptr<ArrowType>(LogicalType::INTEGER);
+		return make_uniq<ArrowType>(LogicalType::INTEGER);
 	} else if (format == "l") {
-		return make_shared_ptr<ArrowType>(LogicalType::BIGINT);
+		return make_uniq<ArrowType>(LogicalType::BIGINT);
 	} else if (format == "C") {
-		return make_shared_ptr<ArrowType>(LogicalType::UTINYINT);
+		return make_uniq<ArrowType>(LogicalType::UTINYINT);
 	} else if (format == "S") {
-		return make_shared_ptr<ArrowType>(LogicalType::USMALLINT);
+		return make_uniq<ArrowType>(LogicalType::USMALLINT);
 	} else if (format == "I") {
-		return make_shared_ptr<ArrowType>(LogicalType::UINTEGER);
+		return make_uniq<ArrowType>(LogicalType::UINTEGER);
 	} else if (format == "L") {
-		return make_shared_ptr<ArrowType>(LogicalType::UBIGINT);
+		return make_uniq<ArrowType>(LogicalType::UBIGINT);
 	} else if (format == "f") {
-		return make_shared_ptr<ArrowType>(LogicalType::FLOAT);
+		return make_uniq<ArrowType>(LogicalType::FLOAT);
 	} else if (format == "g") {
-		return make_shared_ptr<ArrowType>(LogicalType::DOUBLE);
+		return make_uniq<ArrowType>(LogicalType::DOUBLE);
 	} else if (format[0] == 'd') { //! this can be either decimal128 or decimal 256 (e.g., d:38,0)
 		auto extra_info = StringUtil::Split(format, ':');
 		if (extra_info.size() != 2) {
@@ -105,72 +105,63 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 		if (width > 38 || bitwidth > 128) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
-		return make_shared_ptr<ArrowType>(
-		    LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)));
+		return make_uniq<ArrowType>(LogicalType::DECIMAL(NumericCast<uint8_t>(width), NumericCast<uint8_t>(scale)));
 	} else if (format == "u") {
-		return make_shared_ptr<ArrowType>(LogicalType::VARCHAR,
-		                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+		return make_uniq<ArrowType>(LogicalType::VARCHAR, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 	} else if (format == "U") {
-		return make_shared_ptr<ArrowType>(LogicalType::VARCHAR,
-		                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+		return make_uniq<ArrowType>(LogicalType::VARCHAR,
+		                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
 	} else if (format == "vu") {
-		return make_shared_ptr<ArrowType>(LogicalType::VARCHAR,
-		                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
+		return make_uniq<ArrowType>(LogicalType::VARCHAR, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
 	} else if (format == "tsn:") {
-		return make_shared_ptr<ArrowType>(LogicalTypeId::TIMESTAMP_NS);
+		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_NS);
 	} else if (format == "tsu:") {
-		return make_shared_ptr<ArrowType>(LogicalTypeId::TIMESTAMP);
+		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP);
 	} else if (format == "tsm:") {
-		return make_shared_ptr<ArrowType>(LogicalTypeId::TIMESTAMP_MS);
+		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_MS);
 	} else if (format == "tss:") {
-		return make_shared_ptr<ArrowType>(LogicalTypeId::TIMESTAMP_SEC);
+		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_SEC);
 	} else if (format == "tdD") {
-		return make_shared_ptr<ArrowType>(LogicalType::DATE, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::DAYS));
+		return make_uniq<ArrowType>(LogicalType::DATE, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::DAYS));
 	} else if (format == "tdm") {
-		return make_shared_ptr<ArrowType>(LogicalType::DATE,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
+		return make_uniq<ArrowType>(LogicalType::DATE, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
 	} else if (format == "tts") {
-		return make_shared_ptr<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS));
+		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS));
 	} else if (format == "ttm") {
-		return make_shared_ptr<ArrowType>(LogicalType::TIME,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
+		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
 	} else if (format == "ttu") {
-		return make_shared_ptr<ArrowType>(LogicalType::TIME,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
+		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
 	} else if (format == "ttn") {
-		return make_shared_ptr<ArrowType>(LogicalType::TIME,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
+		return make_uniq<ArrowType>(LogicalType::TIME, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
 	} else if (format == "tDs") {
-		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS));
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::SECONDS));
 	} else if (format == "tDm") {
-		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
+		return make_uniq<ArrowType>(LogicalType::INTERVAL,
+		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MILLISECONDS));
 	} else if (format == "tDu") {
-		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
+		return make_uniq<ArrowType>(LogicalType::INTERVAL,
+		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS));
 	} else if (format == "tDn") {
-		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
+		return make_uniq<ArrowType>(LogicalType::INTERVAL,
+		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS));
 	} else if (format == "tiD") {
-		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::DAYS));
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::DAYS));
 	} else if (format == "tiM") {
-		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MONTHS));
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MONTHS));
 	} else if (format == "tin") {
-		return make_shared_ptr<ArrowType>(LogicalType::INTERVAL,
-		                                  make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MONTH_DAY_NANO));
+		return make_uniq<ArrowType>(LogicalType::INTERVAL,
+		                            make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MONTH_DAY_NANO));
 	} else if (format == "z") {
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL);
-		return make_shared_ptr<ArrowType>(LogicalType::BLOB, std::move(type_info));
+		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format == "Z") {
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE);
-		return make_shared_ptr<ArrowType>(LogicalType::BLOB, std::move(type_info));
+		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 'w') {
 		string parameters = format.substr(format.find(':') + 1);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		auto type_info = make_uniq<ArrowStringInfo>(fixed_size);
-		return make_shared_ptr<ArrowType>(LogicalType::BLOB, std::move(type_info));
+		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
 		// TODO right now we just get the UTC value. We probably want to support this properly in the future
@@ -186,7 +177,7 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 		} else {
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
-		return make_shared_ptr<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
+		return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
 	}
 	if (format == "+l") {
 		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::NORMAL, false);
@@ -282,7 +273,7 @@ shared_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 	throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 }
 
-shared_ptr<ArrowType> ArrowType::CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
+unique_ptr<ArrowType> ArrowType::CreateListType(DBConfig &config, ArrowSchema &child, ArrowVariableSizeType size_type,
                                                 bool view) {
 	auto child_type = GetArrowLogicalType(config, child);
 
@@ -350,7 +341,7 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	}
 }
 
-shared_ptr<ArrowType> ArrowType::GetArrowLogicalType(DBConfig &config, ArrowSchema &schema) {
+unique_ptr<ArrowType> ArrowType::GetArrowLogicalType(DBConfig &config, ArrowSchema &schema) {
 	auto arrow_type = ArrowType::GetTypeFromSchema(config, schema);
 	if (schema.dictionary) {
 		auto dictionary = GetArrowLogicalType(config, *schema.dictionary);
@@ -363,7 +354,7 @@ bool ArrowType::HasExtension() const {
 	return extension_data.get() != nullptr;
 }
 
-shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema &schema) {
+unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema &schema) {
 	auto format = string(schema.format);
 	// Let's first figure out if this type is an extension type
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
