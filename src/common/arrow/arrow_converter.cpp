@@ -16,8 +16,9 @@
 #include "duckdb/main/client_context.hpp"
 namespace duckdb {
 
-void ArrowConverter::ToArrowArray(DataChunk &input, ArrowArray *out_array, ClientProperties options,
-                                  unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast) {
+void ArrowConverter::ToArrowArray(
+    DataChunk &input, ArrowArray *out_array, ClientProperties options,
+    const unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> &extension_type_cast) {
 	ArrowAppender appender(input.GetTypes(), input.size(), std::move(options), extension_type_cast);
 	appender.Append(input, 0, input.size(), input.size());
 	*out_array = appender.Finalize();

@@ -304,7 +304,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 
 unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &type, const idx_t capacity,
                                                            ClientProperties &options,
-                                                           shared_ptr<ArrowExtensionType> extension_type) {
+                                                           const shared_ptr<ArrowExtensionType> &extension_type) {
 	auto result = make_uniq<ArrowAppendData>(options);
 	LogicalType array_type = type;
 	if (extension_type) {
