@@ -102,6 +102,8 @@ enum class CompressedMaterializationDirection : uint8_t;
 
 enum class CompressionType : uint8_t;
 
+enum class CompressionValidity : uint8_t;
+
 enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
@@ -113,6 +115,8 @@ enum class CopyOverwriteMode : uint8_t;
 enum class CopyToType : uint8_t;
 
 enum class DataFileType : uint8_t;
+
+enum class DateCastResult : uint8_t;
 
 enum class DatePartSpecifier : uint8_t;
 
@@ -485,6 +489,9 @@ template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
 
 template<>
+const char* EnumUtil::ToChars<CompressionValidity>(CompressionValidity value);
+
+template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
 
 template<>
@@ -501,6 +508,9 @@ const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
+
+template<>
+const char* EnumUtil::ToChars<DateCastResult>(DateCastResult value);
 
 template<>
 const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value);
@@ -1005,6 +1015,9 @@ template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);
 
 template<>
+CompressionValidity EnumUtil::FromString<CompressionValidity>(const char *value);
+
+template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
 
 template<>
@@ -1021,6 +1034,9 @@ CopyToType EnumUtil::FromString<CopyToType>(const char *value);
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
+
+template<>
+DateCastResult EnumUtil::FromString<DateCastResult>(const char *value);
 
 template<>
 DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value);

@@ -101,17 +101,21 @@ bool BoundWindowExpression::PartitionsAreEquivalent(const BoundWindowExpression 
 	return true;
 }
 
-idx_t BoundWindowExpression::GetSharedOrders(const BoundWindowExpression &other) const {
-	const auto overlap = MinValue<idx_t>(orders.size(), other.orders.size());
+idx_t BoundWindowExpression::GetSharedOrders(const vector<BoundOrderByNode> &lhs, const vector<BoundOrderByNode> &rhs) {
+	const auto overlap = MinValue<idx_t>(lhs.size(), rhs.size());
 
 	idx_t result = 0;
 	for (; result < overlap; ++result) {
-		if (!orders[result].Equals(other.orders[result])) {
-			return false;
+		if (!lhs.at(result).Equals(rhs.at(result))) {
+			return 0;
 		}
 	}
 
 	return result;
+}
+
+idx_t BoundWindowExpression::GetSharedOrders(const BoundWindowExpression &other) const {
+	return GetSharedOrders(orders, other.orders);
 }
 
 bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other) const {

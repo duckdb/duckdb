@@ -261,8 +261,7 @@ void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &s
 		const auto type = candidate_types.back();
 		Vector result_vector(type, vec_count);
 		if (date_format_map.HasFormats(type)) {
-			auto &formats = date_format_map.GetCandidateFormats(type);
-			if (EliminateCandidateFormats(vec_count, string_vector, result_vector, formats)) {
+			if (EliminateCandidateFormats(vec_count, string_vector, result_vector, date_format_map)) {
 				return;
 			} else {
 				candidate_types.pop_back();
@@ -304,12 +303,17 @@ bool TryParse(Vector &string_vector, StrpTimeFormat &format, const idx_t count) 
 }
 
 bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector &string_vector,
-                                                  const Vector &result_vector, vector<StrpTimeFormat> &formats) {
+                                                  const Vector &result_vector, DateFormatMap &date_format_map) {
 	D_ASSERT(descriptions.size() == 1 && descriptions[0].type == LogicalTypeId::VARCHAR);
+
 	const auto type = result_vector.GetType().id();
-	for (idx_t i = formats.size(); i != 0; i--) {
-		const idx_t actual_index = i - 1;
-		auto &format = formats[actual_index];
+	auto i = date_format_map.NumberOfFormats(type);
+	for (; i != 0; i--) {
+		StrpTimeFormat format;
+		if (!date_format_map.GetFormatAtIndex(type, i - 1, format)) {
+			continue;
+		}
+
 		bool success;
 		switch (type) {
 		case LogicalTypeId::DATE:
@@ -321,13 +325,13 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 		default:
 			throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(type));
 		}
+
 		if (success) {
-			while (formats.size() > i) {
-				formats.pop_back();
-			}
+			date_format_map.ShrinkFormatsToSize(type, i);
 			return true;
 		}
 	}
+
 	return false;
 }
 
@@ -531,14 +535,12 @@ static LogicalType StructureToTypeArray(ClientContext &context, const JSONStruct
 	                                                        depth + 1, null_type));
 }
 
-static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node);
-
 static void MergeNodeArray(JSONStructureNode &merged, const JSONStructureDescription &child_desc) {
 	D_ASSERT(child_desc.type == LogicalTypeId::LIST);
 	auto &merged_desc = merged.GetOrCreateDescription(LogicalTypeId::LIST);
 	auto &merged_child = merged_desc.GetOrCreateChild();
 	for (auto &list_child : child_desc.children) {
-		MergeNodes(merged_child, list_child);
+		JSONStructure::MergeNodes(merged_child, list_child);
 	}
 }
 
@@ -548,7 +550,7 @@ static void MergeNodeObject(JSONStructureNode &merged, const JSONStructureDescri
 	for (auto &struct_child : child_desc.children) {
 		const auto &struct_child_key = *struct_child.key;
 		auto &merged_child = merged_desc.GetOrCreateChild(struct_child_key.c_str(), struct_child_key.length());
-		MergeNodes(merged_child, struct_child);
+		JSONStructure::MergeNodes(merged_child, struct_child);
 	}
 }
 
@@ -570,7 +572,7 @@ static void MergeNodeVal(JSONStructureNode &merged, const JSONStructureDescripti
 	merged.initialized = true;
 }
 
-static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node) {
+void JSONStructure::MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node) {
 	merged.count += node.count;
 	merged.null_count += node.null_count;
 	for (const auto &child_desc : node.descriptions) {
@@ -695,7 +697,7 @@ static LogicalType GetMergedType(ClientContext &context, const JSONStructureNode
 	auto &desc = node.descriptions[0];
 	JSONStructureNode merged;
 	for (const auto &child : desc.children) {
-		MergeNodes(merged, child);
+		JSONStructure::MergeNodes(merged, child);
 	}
 	return JSONStructure::StructureToType(context, merged, max_depth, field_appearance_threshold,
 	                                      map_inference_threshold, depth + 1, null_type);

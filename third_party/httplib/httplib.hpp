@@ -237,7 +237,6 @@ using socket_t = int;
 #include <map>
 #include <memory>
 #include <mutex>
-#include <random>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -246,9 +245,8 @@ using socket_t = int;
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
-
 #include "duckdb/common/re2_regex.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 #ifdef _WIN32
@@ -4646,19 +4644,10 @@ inline std::string make_multipart_data_boundary() {
   static const char data[] =
       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-  // std::random_device might actually be deterministic on some
-  // platforms, but due to lack of support in the c++ standard library,
-  // doing better requires either some ugly hacks or breaking portability.
-  std::random_device seed_gen;
-
-  // Request 128 bits of entropy for initialization
-  std::seed_seq seed_sequence{seed_gen(), seed_gen(), seed_gen(), seed_gen()};
-  std::mt19937 engine(seed_sequence);
-
   std::string result = "--cpp-httplib-multipart-data-";
-
+  duckdb::RandomEngine engine;
   for (auto i = 0; i < 16; i++) {
-    result += data[engine() % (sizeof(data) - 1)];
+    result += data[engine.NextRandomInteger32(0,sizeof(data) - 1)];
   }
 
   return result;

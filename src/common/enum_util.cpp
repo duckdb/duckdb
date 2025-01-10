@@ -73,6 +73,7 @@
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
@@ -86,6 +87,7 @@
 #include "duckdb/execution/operator/csv_scanner/quote_rules.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -859,6 +861,7 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ALPRD), "COMPRESSION_ALPRD" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "COMPRESSION_ZSTD" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "COMPRESSION_ROARING" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "COMPRESSION_EMPTY" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
 	};
 	return values;
@@ -866,12 +869,30 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value) {
-	return StringUtil::EnumToString(GetCompressionTypeValues(), 15, "CompressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCompressionTypeValues(), 16, "CompressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value) {
-	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 15, "CompressionType", value));
+	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 16, "CompressionType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCompressionValidityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CompressionValidity::REQUIRES_VALIDITY), "REQUIRES_VALIDITY" },
+		{ static_cast<uint32_t>(CompressionValidity::NO_VALIDITY_REQUIRED), "NO_VALIDITY_REQUIRED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CompressionValidity>(CompressionValidity value) {
+	return StringUtil::EnumToString(GetCompressionValidityValues(), 2, "CompressionValidity", static_cast<uint32_t>(value));
+}
+
+template<>
+CompressionValidity EnumUtil::FromString<CompressionValidity>(const char *value) {
+	return static_cast<CompressionValidity>(StringUtil::StringToEnum(GetCompressionValidityValues(), 2, "CompressionValidity", value));
 }
 
 const StringUtil::EnumStringLiteral *GetConflictManagerModeValues() {
@@ -987,6 +1008,25 @@ const char* EnumUtil::ToChars<DataFileType>(DataFileType value) {
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value) {
 	return static_cast<DataFileType>(StringUtil::StringToEnum(GetDataFileTypeValues(), 4, "DataFileType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDateCastResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DateCastResult::SUCCESS), "SUCCESS" },
+		{ static_cast<uint32_t>(DateCastResult::ERROR_INCORRECT_FORMAT), "ERROR_INCORRECT_FORMAT" },
+		{ static_cast<uint32_t>(DateCastResult::ERROR_RANGE), "ERROR_RANGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DateCastResult>(DateCastResult value) {
+	return StringUtil::EnumToString(GetDateCastResultValues(), 3, "DateCastResult", static_cast<uint32_t>(value));
+}
+
+template<>
+DateCastResult EnumUtil::FromString<DateCastResult>(const char *value) {
+	return static_cast<DateCastResult>(StringUtil::StringToEnum(GetDateCastResultValues(), 3, "DateCastResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDatePartSpecifierValues() {
@@ -3860,19 +3900,20 @@ const StringUtil::EnumStringLiteral *GetTimestampCastResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TimestampCastResult::SUCCESS), "SUCCESS" },
 		{ static_cast<uint32_t>(TimestampCastResult::ERROR_INCORRECT_FORMAT), "ERROR_INCORRECT_FORMAT" },
-		{ static_cast<uint32_t>(TimestampCastResult::ERROR_NON_UTC_TIMEZONE), "ERROR_NON_UTC_TIMEZONE" }
+		{ static_cast<uint32_t>(TimestampCastResult::ERROR_NON_UTC_TIMEZONE), "ERROR_NON_UTC_TIMEZONE" },
+		{ static_cast<uint32_t>(TimestampCastResult::ERROR_RANGE), "ERROR_RANGE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value) {
-	return StringUtil::EnumToString(GetTimestampCastResultValues(), 3, "TimestampCastResult", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTimestampCastResultValues(), 4, "TimestampCastResult", static_cast<uint32_t>(value));
 }
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value) {
-	return static_cast<TimestampCastResult>(StringUtil::StringToEnum(GetTimestampCastResultValues(), 3, "TimestampCastResult", value));
+	return static_cast<TimestampCastResult>(StringUtil::StringToEnum(GetTimestampCastResultValues(), 4, "TimestampCastResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {
