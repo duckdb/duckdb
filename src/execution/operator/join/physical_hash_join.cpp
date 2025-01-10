@@ -2,6 +2,7 @@
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/execution/bloom_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -203,6 +204,10 @@ public:
 
 	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
+
+	//! Bloom-filter pushing key-summary to the probe side.
+	bool skip_bloom_filter = false;
+	unique_ptr<BloomFilter> bloom_filter;
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {

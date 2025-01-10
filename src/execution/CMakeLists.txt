@@ -11,6 +11,7 @@ add_library_unity(
   adaptive_filter.cpp
   aggregate_hashtable.cpp
   base_aggregate_hashtable.cpp
+  bloom_filter.cpp
   column_binding_resolver.cpp
   expression_executor.cpp
   expression_executor_state.cpp
