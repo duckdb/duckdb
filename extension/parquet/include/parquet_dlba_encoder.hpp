@@ -34,7 +34,7 @@ public:
 	void FinishWrite(WriteStream &writer) {
 		D_ASSERT(stream->GetPosition() + 1 == buffer.GetSize());
 		dbp_encoder.FinishWrite(writer);
-		writer.WriteData(buffer.get(), buffer.GetSize());
+		writer.WriteData(buffer.get(), stream->GetPosition());
 	}
 
 private:
