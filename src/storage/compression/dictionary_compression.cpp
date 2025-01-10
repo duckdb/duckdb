@@ -70,7 +70,6 @@ struct DictionaryCompressionStorage {
 // Analyze
 //===--------------------------------------------------------------------===//
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return nullptr;
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<DictionaryCompressionAnalyzeState>(info);
 }
