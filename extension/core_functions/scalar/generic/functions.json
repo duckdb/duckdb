@@ -119,5 +119,12 @@
         "description": "Whether or not the provided value is the histogram \"other\" bin (used for values not belonging to any provided bin)",
         "example": "is_histogram_other_bin(v)",
         "type": "scalar_function"
+    },
+    {
+        "name": "try",
+        "parameters": "expr",
+        "description": "Performs the expr expression, returning the result or NULL if the expression would error",
+        "example": "try(cast(definitely_integers as INTEGER))",
+        "type": "scalar_function"
     }
 ]

@@ -10,6 +10,7 @@ add_library_unity(
   least.cpp
   stats.cpp
   typeof.cpp
+  try.cpp
   system_functions.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_generic>

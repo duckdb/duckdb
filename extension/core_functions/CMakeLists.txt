@@ -77,6 +77,7 @@ set(CORE_FUNCTION_FILES
     scalar/union/union_value.cpp
     scalar/union/union_tag.cpp
     scalar/generic/alias.cpp
+    scalar/generic/try.cpp
     scalar/generic/typeof.cpp
     scalar/generic/stats.cpp
     scalar/generic/binning.cpp

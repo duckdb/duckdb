@@ -372,6 +372,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(TranslateFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TrimFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TruncFun),
+	DUCKDB_SCALAR_FUNCTION(TryFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentTransactionIdFun),
 	DUCKDB_SCALAR_FUNCTION(TypeOfFun),
 	DUCKDB_SCALAR_FUNCTION(UnbinFun),
