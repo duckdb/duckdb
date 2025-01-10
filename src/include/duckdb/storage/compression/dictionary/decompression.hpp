@@ -3,7 +3,6 @@
 #include "duckdb/storage/compression/dictionary/common.hpp"
 
 namespace duckdb {
-namespace dictionary {
 
 //===--------------------------------------------------------------------===//
 // Scan
@@ -48,5 +47,4 @@ public:
 	idx_t block_size;
 };
 
-} // namespace dictionary
 } // namespace duckdb
