@@ -117,7 +117,7 @@ bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp
 timestamp_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
 	timestamp_t result;
 	if (!TryGetTime(calendar, micros, result)) {
-		throw ConversionException("Unable to convert ICU date to timestamp");
+		throw ConversionException("ICU date overflows timestamp range");
 	}
 	return result;
 }

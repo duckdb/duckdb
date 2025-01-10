@@ -116,6 +116,8 @@ enum class CopyToType : uint8_t;
 
 enum class DataFileType : uint8_t;
 
+enum class DateCastResult : uint8_t;
+
 enum class DatePartSpecifier : uint8_t;
 
 enum class DebugInitialize : uint8_t;
@@ -506,6 +508,9 @@ const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
+
+template<>
+const char* EnumUtil::ToChars<DateCastResult>(DateCastResult value);
 
 template<>
 const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value);
@@ -1029,6 +1034,9 @@ CopyToType EnumUtil::FromString<CopyToType>(const char *value);
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
+
+template<>
+DateCastResult EnumUtil::FromString<DateCastResult>(const char *value);
 
 template<>
 DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value);

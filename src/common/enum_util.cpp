@@ -73,6 +73,7 @@
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
@@ -1007,6 +1008,25 @@ const char* EnumUtil::ToChars<DataFileType>(DataFileType value) {
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value) {
 	return static_cast<DataFileType>(StringUtil::StringToEnum(GetDataFileTypeValues(), 4, "DataFileType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDateCastResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DateCastResult::SUCCESS), "SUCCESS" },
+		{ static_cast<uint32_t>(DateCastResult::ERROR_INCORRECT_FORMAT), "ERROR_INCORRECT_FORMAT" },
+		{ static_cast<uint32_t>(DateCastResult::ERROR_RANGE), "ERROR_RANGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DateCastResult>(DateCastResult value) {
+	return StringUtil::EnumToString(GetDateCastResultValues(), 3, "DateCastResult", static_cast<uint32_t>(value));
+}
+
+template<>
+DateCastResult EnumUtil::FromString<DateCastResult>(const char *value) {
+	return static_cast<DateCastResult>(StringUtil::StringToEnum(GetDateCastResultValues(), 3, "DateCastResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDatePartSpecifierValues() {
@@ -3880,19 +3900,20 @@ const StringUtil::EnumStringLiteral *GetTimestampCastResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TimestampCastResult::SUCCESS), "SUCCESS" },
 		{ static_cast<uint32_t>(TimestampCastResult::ERROR_INCORRECT_FORMAT), "ERROR_INCORRECT_FORMAT" },
-		{ static_cast<uint32_t>(TimestampCastResult::ERROR_NON_UTC_TIMEZONE), "ERROR_NON_UTC_TIMEZONE" }
+		{ static_cast<uint32_t>(TimestampCastResult::ERROR_NON_UTC_TIMEZONE), "ERROR_NON_UTC_TIMEZONE" },
+		{ static_cast<uint32_t>(TimestampCastResult::ERROR_RANGE), "ERROR_RANGE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value) {
-	return StringUtil::EnumToString(GetTimestampCastResultValues(), 3, "TimestampCastResult", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTimestampCastResultValues(), 4, "TimestampCastResult", static_cast<uint32_t>(value));
 }
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value) {
-	return static_cast<TimestampCastResult>(StringUtil::StringToEnum(GetTimestampCastResultValues(), 3, "TimestampCastResult", value));
+	return static_cast<TimestampCastResult>(StringUtil::StringToEnum(GetTimestampCastResultValues(), 4, "TimestampCastResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {
