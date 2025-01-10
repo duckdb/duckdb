@@ -75,6 +75,8 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 	case ExpressionType::OPERATOR_COALESCE: {
 		return ResolveCoalesceType(op, children);
 	}
+	case ExpressionType::OPERATOR_TRY:
+		return ExpressionBinder::GetExpressionReturnType(*children[0]);
 	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);
 	default:

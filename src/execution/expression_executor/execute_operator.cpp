@@ -19,8 +19,8 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
-	if (expr.GetExpressionType() == ExpressionType::COMPARE_IN ||
-	    expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) {
+	auto expression_type = expr.GetExpressionType();
+	if (expression_type == ExpressionType::COMPARE_IN || expression_type == ExpressionType::COMPARE_NOT_IN) {
 		if (expr.children.size() < 2) {
 			throw InvalidInputException("IN needs at least two children");
 		}
@@ -54,14 +54,14 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				intermediate.Reference(new_result);
 			}
 		}
-		if (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) {
+		if (expression_type == ExpressionType::COMPARE_NOT_IN) {
 			// NOT IN: invert result
 			VectorOperations::Not(intermediate, result, count);
 		} else {
 			// directly use the result
 			result.Reference(intermediate);
 		}
-	} else if (expr.GetExpressionType() == ExpressionType::OPERATOR_COALESCE) {
+	} else if (expression_type == ExpressionType::OPERATOR_COALESCE) {
 		SelectionVector sel_a(count);
 		SelectionVector sel_b(count);
 		SelectionVector slice_sel(count);
@@ -111,6 +111,8 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		} else if (count == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
+	} else if (expression_type == ExpressionType::OPERATOR_TRY) {
+		Execute(*expr.children[0], state->child_states[0].get(), sel, count, result);
 	} else if (expr.children.size() == 1) {
 		state->intermediate_chunk.Reset();
 		auto &child = state->intermediate_chunk.data[0];
