@@ -38,8 +38,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
-            GIT_TAG f743d4b3c2faecda15498d0219a1727ad6d62b5b
-            APPLY_PATCHES
+            GIT_TAG b3050f35c6e99fa35465230493eeab14a78a0409
             )
 endif()
 
@@ -48,7 +47,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(azure
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
-            GIT_TAG 88011ee6ef66f223badc9beb04d4723651ac6623
+            GIT_TAG e707cf361d76358743969cddf3acf97cfc87677b
             )
 endif()
 
@@ -84,8 +83,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
-            APPLY_PATCHES
+            GIT_TAG 3060b30309d82f1059c928de7280286fcf800545
             )
 endif()
 
@@ -106,8 +104,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG 03eaed75f0ec5500609b7a97aa05468493b229d1
-            APPLY_PATCHES
+            GIT_TAG dc0957a3755ea058b047bf6381f5b2894b848e1f
             )
 endif()
 
@@ -135,8 +132,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlite
-        GIT_TAG d5d62657702d33cb44a46cddc7ffc4b67bf7e961
-        APPLY_PATCHES
+        GIT_TAG 1f4b805588018ca775ac68a0b152add8ca833dcd
         )
 
 duckdb_extension_load(sqlsmith
@@ -161,8 +157,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-mysql
-            GIT_TAG f2a15013fb4559e1591e977c1c023aa0a369c6f3
-            APPLY_PATCHES
+            GIT_TAG 94b1ec6d6abce189b6dbb68beb14acb41d611fe4
             )
 endif()
 
