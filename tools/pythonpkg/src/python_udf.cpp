@@ -128,6 +128,7 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 
 	VectorOperations::Cast(context, result.data[0], out, count);
 	out.Flatten(count);
+	out.Verify(count);
 }
 
 static string NullHandlingError() {

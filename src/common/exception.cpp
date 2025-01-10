@@ -66,7 +66,6 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 
 bool Exception::InvalidatesDatabase(ExceptionType exception_type) {
 	switch (exception_type) {
-	case ExceptionType::INTERNAL:
 	case ExceptionType::FATAL:
 		return true;
 	default:
