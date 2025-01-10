@@ -1,0 +1,52 @@
+diff --git a/duckdb b/duckdb
+index 1f98600..691a106 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit 1f98600c2cf8722a6d2f2d805bb4af5e701319fc
++Subproject commit 691a106f0e09f5bbe7d8330ebf263d3ddd882c24
+diff --git a/src/arrow_scan_ipc.cpp b/src/arrow_scan_ipc.cpp
+index a60d255..929a0f5 100644
+--- a/src/arrow_scan_ipc.cpp
++++ b/src/arrow_scan_ipc.cpp
+@@ -71,9 +71,11 @@ unique_ptr<FunctionData> ArrowIPCTableFunction::ArrowScanBind(
+     if (!schema.release) {
+       throw InvalidInputException("arrow_scan: released schema passed");
+     }
+-    auto arrow_type = GetArrowLogicalType(schema);
++    auto arrow_type =
++        ArrowType::GetArrowLogicalType(DBConfig::GetConfig(context), schema);
+     if (schema.dictionary) {
+-      auto dictionary_type = GetArrowLogicalType(*schema.dictionary);
++      auto dictionary_type = ArrowType::GetArrowLogicalType(
++          DBConfig::GetConfig(context), *schema.dictionary);
+       return_types.emplace_back(dictionary_type->GetDuckType());
+       arrow_type->SetDictionary(std::move(dictionary_type));
+     } else {
+diff --git a/src/arrow_to_ipc.cpp b/src/arrow_to_ipc.cpp
+index c316d85..24cd8a6 100644
+--- a/src/arrow_to_ipc.cpp
++++ b/src/arrow_to_ipc.cpp
+@@ -76,9 +76,9 @@ ToArrowIPCFunction::Bind(ClientContext &context, TableFunctionBindInput &input,
+ 
+   // Create the Arrow schema
+   ArrowSchema schema;
++  auto properties = context.GetClientProperties();
+   ArrowConverter::ToArrowSchema(&schema, input.input_table_types,
+-                                input.input_table_names,
+-                                context.GetClientProperties());
++                                input.input_table_names, properties);
+   result->schema = arrow::ImportSchema(&schema).ValueOrDie();
+ 
+   return std::move(result);
+@@ -118,7 +118,9 @@ OperatorResultType ToArrowIPCFunction::Function(ExecutionContext &context,
+     if (!local_state.appender) {
+       local_state.appender =
+           make_uniq<ArrowAppender>(input.GetTypes(), data.chunk_size,
+-                                   context.client.GetClientProperties());
++                                   context.client.GetClientProperties(),
++                                   ArrowTypeExtensionData::GetExtensionTypes(
++                                       context.client, input.GetTypes()));
+     }
+ 
+     // Append input chunk
