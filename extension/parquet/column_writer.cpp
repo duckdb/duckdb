@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "geo_parquet.hpp"
 #include "parquet_dbp_encoder.hpp"
+#include "parquet_dlba_encoder.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_statistics.hpp"
@@ -1059,8 +1060,9 @@ public:
 	}
 	~StandardColumnWriterState() override = default;
 
-	// analysis state for integer values for DELTA_BINARY_PACKED
+	// analysis state for integer values for DELTA_BINARY_PACKED/DELTA_LENGTH_BYTE_ARRAY
 	idx_t total_value_count = 0;
+	idx_t total_string_size = 0;
 
 	unordered_map<T, uint32_t> dictionary;
 	duckdb_parquet::Encoding::type encoding;
@@ -1069,16 +1071,19 @@ public:
 template <class T>
 class StandardWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StandardWriterPageState(const idx_t total_value_count, Encoding::type encoding_p,
-	                                 const unordered_map<T, uint32_t> &dictionary_p)
-	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dictionary(dictionary_p),
-	      dict_written_value(false), dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())),
-	      dict_encoder(dict_bit_width) {
+	explicit StandardWriterPageState(const idx_t total_value_count, const idx_t total_string_size,
+	                                 Encoding::type encoding_p, const unordered_map<T, uint32_t> &dictionary_p)
+	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dlba_initialized(false),
+	      dlba_encoder(total_value_count, total_string_size), dictionary(dictionary_p), dict_written_value(false),
+	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(dict_bit_width) {
 	}
 	duckdb_parquet::Encoding::type encoding;
 
 	bool dbp_initialized;
 	DbpEncoder dbp_encoder;
+
+	bool dlba_initialized;
+	DlbaEncoder dlba_encoder;
 
 	const unordered_map<T, uint32_t> &dictionary;
 	bool dict_written_value;
@@ -1087,6 +1092,7 @@ public:
 };
 
 namespace dbp_encoder {
+
 template <class T>
 void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const T &first_value) {
 	throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
@@ -1139,6 +1145,41 @@ void WriteValue(DbpEncoder &encoder, WriteStream &writer, const uint32_t &value)
 
 } // namespace dbp_encoder
 
+namespace dlba_encoder {
+
+template <class T>
+void BeginWrite(DlbaEncoder &encoder, WriteStream &writer, const T &first_value) {
+	throw InternalException("Can't write type to DELTA_LENGTH_BYTE_ARRAY column");
+}
+
+template <>
+void BeginWrite(DlbaEncoder &encoder, WriteStream &writer, const string_t &first_value) {
+	encoder.BeginWrite(writer, first_value);
+}
+
+template <class T>
+void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const T &value) {
+	throw InternalException("Can't write type to DELTA_LENGTH_BYTE_ARRAY column");
+}
+
+template <>
+void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const string_t &value) {
+	encoder.WriteValue(writer, value);
+}
+
+// helpers to get size from strings
+template <class SRC>
+static constexpr idx_t GetDlbaStringSize(const SRC &src_value) {
+	return 0;
+}
+
+template <>
+idx_t GetDlbaStringSize(const string_t &src_value) {
+	return src_value.GetSize();
+}
+
+} // namespace dlba_encoder
+
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public BasicColumnWriter {
 public:
@@ -1159,8 +1200,8 @@ public:
 	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 
-		auto result =
-		    make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.encoding, state.dictionary);
+		auto result = make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.total_string_size,
+		                                                      state.encoding, state.dictionary);
 		return std::move(result);
 	}
 
@@ -1182,8 +1223,12 @@ public:
 				return;
 			}
 			page_state.dict_encoder.FinishWrite(temp_writer);
-
 			break;
+		case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+			if (!page_state.dlba_initialized) {
+				dlba_encoder::BeginWrite<string_t>(page_state.dlba_encoder, temp_writer, string_t(""));
+			}
+			page_state.dlba_encoder.FinishWrite(temp_writer);
 		case Encoding::PLAIN:
 			break;
 		default:
@@ -1220,14 +1265,15 @@ public:
 				continue;
 			}
 			if (validity.RowIsValid(vector_index)) {
+				const auto &src_value = data_ptr[vector_index];
 				if (state.dictionary.size() <= writer.DictionarySizeLimit()) {
-					const auto &src_value = data_ptr[vector_index];
 					if (state.dictionary.find(src_value) == state.dictionary.end()) {
 						state.dictionary[src_value] = new_value_index;
 						new_value_index++;
 					}
 				}
 				state.total_value_count++;
+				state.total_string_size += dlba_encoder::GetDlbaStringSize(src_value);
 			}
 			vector_index++;
 		}
@@ -1238,9 +1284,19 @@ public:
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		if (state.dictionary.size() == 0 || state.dictionary.size() > writer.DictionarySizeLimit()) {
-			// special handling for int column: dpb, otherwise plain
-			state.encoding = (type == Type::type::INT32 || type == Type::type::INT64) ? Encoding::DELTA_BINARY_PACKED
-			                                                                          : Encoding::PLAIN;
+			switch (type) {
+			case Type::type::INT32:
+			case Type::type::INT64:
+				// Virtually always better than PLAIN for integrals
+				state.encoding = Encoding::DELTA_BINARY_PACKED;
+				break;
+			case Type::type::BYTE_ARRAY:
+				// Virtually always better than PLAIN for strings
+				state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
+				break;
+			default:
+				state.encoding = Encoding::PLAIN;
+			}
 			state.dictionary.clear();
 		}
 	}
@@ -1287,7 +1343,6 @@ public:
 			}
 			break;
 		}
-
 		case Encoding::DELTA_BINARY_PACKED: {
 			idx_t r = chunk_start;
 			if (!page_state.dbp_initialized) {
@@ -1312,6 +1367,33 @@ public:
 				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 				OP::template HandleStats<SRC, TGT>(stats, target_value);
 				dbp_encoder::WriteValue(page_state.dbp_encoder, temp_writer, target_value);
+			}
+			break;
+		}
+		case Encoding::DELTA_LENGTH_BYTE_ARRAY: {
+			idx_t r = chunk_start;
+			if (!page_state.dlba_initialized) {
+				// find first non-null value
+				for (; r < chunk_end; r++) {
+					if (!mask.RowIsValid(r)) {
+						continue;
+					}
+					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+					OP::template HandleStats<SRC, TGT>(stats, target_value);
+					dlba_encoder::BeginWrite(page_state.dlba_encoder, temp_writer, target_value);
+					page_state.dlba_initialized = true;
+					r++; // skip over
+					break;
+				}
+			}
+
+			for (; r < chunk_end; r++) {
+				if (!mask.RowIsValid(r)) {
+					continue;
+				}
+				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				dlba_encoder::WriteValue(page_state.dlba_encoder, temp_writer, target_value);
 			}
 			break;
 		}
