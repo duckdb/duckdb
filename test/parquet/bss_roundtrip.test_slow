@@ -1,0 +1,52 @@
+# name: test/parquet/bss_roundtrip.test_slow
+# description: Test BYTE_STREAM_SPLIT roundtrip
+# group: [parquet]
+
+require parquet
+
+require tpch
+
+statement ok
+call dbgen(sf=0.1);
+
+statement ok
+create view doubles as
+select l_quantity::double l_quantity,
+       l_extendedprice::double l_extendedprice,
+       l_discount::double l_discount,
+       l_tax::double l_tax,
+from lineitem
+
+query IIII nosort q0
+from doubles
+----
+
+
+statement ok
+copy doubles to '__TEST_DIR__/bss.parquet';
+
+query IIII nosort q0
+from '__TEST_DIR__/bss.parquet';
+----
+
+
+statement ok
+create view floats as
+select l_quantity::float l_quantity,
+       l_extendedprice::float l_extendedprice,
+       l_discount::float l_discount,
+       l_tax::float l_tax,
+from lineitem
+
+query IIII nosort q1
+from floats
+----
+
+
+statement ok
+copy floats to '__TEST_DIR__/bss.parquet';
+
+query IIII nosort q1
+from '__TEST_DIR__/bss.parquet';
+----
+
