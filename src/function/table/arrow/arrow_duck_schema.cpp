@@ -301,6 +301,9 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		return dictionary_type->GetDuckType();
 	}
 	if (!use_dictionary) {
+		if (extension_data) {
+			return extension_data->GetDuckDBType();
+		}
 		return type;
 	}
 	// Dictionaries can exist in arbitrarily nested schemas
@@ -339,6 +342,9 @@ LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 		return LogicalType::UNION(std::move(new_children));
 	}
 	default: {
+		if (extension_data) {
+			return extension_data->GetDuckDBType();
+		}
 		return type;
 	}
 	}
@@ -353,38 +359,40 @@ shared_ptr<ArrowType> ArrowType::GetArrowLogicalType(DBConfig &config, ArrowSche
 	return arrow_type;
 }
 
-bool ArrowType::IsExtension() const {
-	return type_enum == ArrowTypeEnum::EXTENSION;
+bool ArrowType::HasExtension() const {
+	return extension_data.get() != nullptr;
 }
 
 shared_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema &schema) {
 	auto format = string(schema.format);
 	// Let's first figure out if this type is an extension type
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
+	auto arrow_type = GetTypeFromFormat(config, schema, format);
 	if (schema_metadata.HasExtension()) {
 		auto extension_info = schema_metadata.GetExtensionInfo(string(format));
-		return config.GetArrowExtension(extension_info).GetType(schema, schema_metadata);
+		arrow_type->extension_data = config.GetArrowExtension(extension_info).GetTypeExtension();
 	}
-	return GetTypeFromFormat(config, schema, format);
+	return arrow_type;
 }
 
-LogicalType ArrowExtensionType::GetInternalType() const {
+LogicalType ArrowTypeExtensionData::GetInternalType() const {
 	return internal_type;
 }
-ArrowType ArrowExtensionType::GetInternalArrowType() const {
-	return ArrowType(internal_type);
-}
 
-unordered_map<idx_t, const shared_ptr<ArrowExtensionType>>
-ArrowExtensionType::GetExtensionTypes(ClientContext &context, const vector<LogicalType> &duckdb_types) {
-	unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_types;
-	auto &db_config = DBConfig::GetConfig(context);
+unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>>
+ArrowTypeExtensionData::GetExtensionTypes(ClientContext &context, const vector<LogicalType> &duckdb_types) {
+	unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_types;
+	const auto &db_config = DBConfig::GetConfig(context);
 	for (idx_t i = 0; i < duckdb_types.size(); i++) {
 		if (db_config.HasArrowExtension(duckdb_types[i])) {
-			extension_types.insert({i, db_config.GetArrowExtension(duckdb_types[i]).GetType()});
+			extension_types.insert({i, db_config.GetArrowExtension(duckdb_types[i]).GetTypeExtension()});
 		}
 	}
 	return extension_types;
+}
+
+LogicalType ArrowTypeExtensionData::GetDuckDBType() const {
+	return duckdb_type;
 }
 
 } // namespace duckdb

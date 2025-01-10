@@ -29,7 +29,7 @@ public:
 	//! If the arrow extension is set
 	bool HasExtension() const;
 
-	ArrowTypeExtensionInfo GetExtensionInfo(string format);
+	ArrowExtensionMetadata GetExtensionInfo(string format);
 	//! Get the extension name if set, otherwise returns empty
 	string GetExtensionName() const;
 	//! Key for encode of the extension type name

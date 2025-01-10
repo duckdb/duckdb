@@ -21,9 +21,9 @@ void ArrowBatchTask::ProduceRecordBatches() {
 	for (auto &index : record_batch_indices) {
 		auto &array = arrays[index];
 		D_ASSERT(array);
-		const idx_t count =
-		    ArrowUtil::FetchChunk(scan_state, arrow_options, batch_size, &array->arrow_array,
-		                          ArrowExtensionType::GetExtensionTypes(event->GetClientContext(), scan_state.Types()));
+		const idx_t count = ArrowUtil::FetchChunk(
+		    scan_state, arrow_options, batch_size, &array->arrow_array,
+		    ArrowTypeExtensionData::GetExtensionTypes(event->GetClientContext(), scan_state.Types()));
 		(void)count;
 		D_ASSERT(count != 0);
 	}

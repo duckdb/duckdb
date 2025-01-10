@@ -26,7 +26,8 @@ static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> 
 	ArrowConverter::ToArrowSchema(&schema, types, names, options);
 
 	py::list single_batch;
-	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options, ArrowExtensionType::GetExtensionTypes(context, types));
+	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options,
+	                       ArrowTypeExtensionData::GetExtensionTypes(context, types));
 	appender.Append(input, 0, input.size(), input.size());
 	auto array = appender.Finalize();
 	TransformDuckToArrowChunk(schema, array, single_batch);

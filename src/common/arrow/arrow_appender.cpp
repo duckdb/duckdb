@@ -16,7 +16,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options,
-                             unordered_map<idx_t, const shared_ptr<ArrowExtensionType>> extension_type_cast)
+                             unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_type_cast)
     : types(std::move(types_p)), options(options) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		unique_ptr<ArrowAppendData> entry;
@@ -38,13 +38,13 @@ void ArrowAppender::Append(DataChunk &input, const idx_t from, const idx_t to, c
 	D_ASSERT(types == input.GetTypes());
 	D_ASSERT(to >= from);
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
-		if (root_data[i]->extension_type && root_data[i]->extension_type->duckdb_to_arrow) {
-			Vector input_data(root_data[i]->extension_type->GetInternalType());
+		if (root_data[i]->extension_data && root_data[i]->extension_data->duckdb_to_arrow) {
+			Vector input_data(root_data[i]->extension_data->GetInternalType());
 			UnifiedVectorFormat format;
 			input.data[i].ToUnifiedFormat(input_size, format);
 			FlatVector::SetValidity(input_data, format.validity);
 
-			root_data[i]->extension_type->duckdb_to_arrow(*options.client_context, format.data, input_data, input_size);
+			root_data[i]->extension_data->duckdb_to_arrow(*options.client_context, format.data, input_data, input_size);
 			root_data[i]->append_vector(*root_data[i], input_data, from, to, input_size);
 		} else {
 			root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
@@ -304,14 +304,14 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 
 unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &type, const idx_t capacity,
                                                            ClientProperties &options,
-                                                           const shared_ptr<ArrowExtensionType> &extension_type) {
+                                                           const shared_ptr<ArrowTypeExtensionData> &extension_type) {
 	auto result = make_uniq<ArrowAppendData>(options);
 	LogicalType array_type = type;
 	if (extension_type) {
 		array_type = extension_type->GetInternalType();
 	}
 	InitializeFunctionPointers(*result, array_type);
-	result->extension_type = extension_type;
+	result->extension_data = extension_type;
 
 	const auto byte_count = (capacity + 7) / 8;
 	result->GetValidityBuffer().reserve(byte_count);

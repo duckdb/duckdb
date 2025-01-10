@@ -19,12 +19,12 @@ class ArrowSchemaMetadata;
 struct DuckDBArrowSchemaHolder;
 
 struct DBConfig;
-struct ArrowTypeExtensionInfo {
+struct ArrowExtensionMetadata {
 public:
-	ArrowTypeExtensionInfo() {
+	ArrowExtensionMetadata() {
 	}
 
-	ArrowTypeExtensionInfo(string extension_name, string vendor_name, string type_name, string arrow_format);
+	ArrowExtensionMetadata(string extension_name, string vendor_name, string type_name, string arrow_format);
 
 	hash_t GetHash() const;
 
@@ -42,7 +42,7 @@ public:
 
 	bool IsCanonical() const;
 
-	bool operator==(const ArrowTypeExtensionInfo &other) const;
+	bool operator==(const ArrowExtensionMetadata &other) const;
 
 	//! Arrow Extension for non-canonical types.
 	static constexpr const char *ARROW_EXTENSION_NON_CANONICAL = "arrow.opaque";
@@ -65,28 +65,28 @@ typedef void (*populate_arrow_schema_t)(DuckDBArrowSchemaHolder &root_holder, Ar
                                         const LogicalType &type, ClientContext &context,
                                         const ArrowTypeExtension &extension);
 
-typedef shared_ptr<ArrowExtensionType> (*get_type_t)(const ArrowSchema &schema,
-                                                     const ArrowSchemaMetadata &schema_metadata);
+typedef shared_ptr<ArrowType> (*get_type_t)(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata);
 
 class ArrowTypeExtension {
 public:
 	ArrowTypeExtension() {};
 	//! We either have simple extensions where we only return one type
-	ArrowTypeExtension(string extension_name, string arrow_format, shared_ptr<ArrowExtensionType> type);
-	ArrowTypeExtension(string vendor_name, string type_name, string arrow_format, shared_ptr<ArrowExtensionType> type);
+	ArrowTypeExtension(string extension_name, string arrow_format, shared_ptr<ArrowTypeExtensionData> type);
+	ArrowTypeExtension(string vendor_name, string type_name, string arrow_format,
+	                   shared_ptr<ArrowTypeExtensionData> type);
 
 	//! We have complex extensions, where we can return multiple types, hence we must have callback functions to do so
 	ArrowTypeExtension(string extension_name, populate_arrow_schema_t populate_arrow_schema, get_type_t get_type,
-	                   shared_ptr<ArrowExtensionType> type);
+	                   shared_ptr<ArrowTypeExtensionData> type);
 	ArrowTypeExtension(string vendor_name, string type_name, populate_arrow_schema_t populate_arrow_schema,
-	                   get_type_t get_type, shared_ptr<ArrowExtensionType> type, cast_arrow_duck_t arrow_to_duckdb,
+	                   get_type_t get_type, shared_ptr<ArrowTypeExtensionData> type, cast_arrow_duck_t arrow_to_duckdb,
 	                   cast_duck_arrow_t duckdb_to_arrow);
 
-	ArrowTypeExtensionInfo GetInfo() const;
+	ArrowExtensionMetadata GetInfo() const;
 
-	shared_ptr<ArrowExtensionType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) const;
+	shared_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) const;
 
-	shared_ptr<ArrowExtensionType> GetType() const;
+	shared_ptr<ArrowTypeExtensionData> GetTypeExtension() const;
 
 	LogicalTypeId GetLogicalTypeId() const;
 
@@ -105,13 +105,13 @@ public:
 
 private:
 	//! Extension Info from Arrow
-	ArrowTypeExtensionInfo extension_info;
-	//! Arrow Type
-	shared_ptr<ArrowExtensionType> type;
+	ArrowExtensionMetadata extension_metadata;
+	//! Arrow Extension Type
+	shared_ptr<ArrowTypeExtensionData> type_extension;
 };
 
 struct HashArrowTypeExtension {
-	size_t operator()(ArrowTypeExtensionInfo const &arrow_extension_info) const noexcept {
+	size_t operator()(ArrowExtensionMetadata const &arrow_extension_info) const noexcept {
 		return arrow_extension_info.GetHash();
 	}
 };
@@ -137,8 +137,8 @@ struct ArrowTypeExtensionSet {
 	ArrowTypeExtensionSet() {};
 	static void Initialize(const DBConfig &config);
 	std::mutex lock;
-	unordered_map<ArrowTypeExtensionInfo, ArrowTypeExtension, HashArrowTypeExtension> type_extensions;
-	unordered_map<TypeInfo, vector<ArrowTypeExtensionInfo>, HashTypeInfo> type_to_info;
+	unordered_map<ArrowExtensionMetadata, ArrowTypeExtension, HashArrowTypeExtension> type_extensions;
+	unordered_map<TypeInfo, vector<ArrowExtensionMetadata>, HashTypeInfo> type_to_info;
 };
 
 } // namespace duckdb

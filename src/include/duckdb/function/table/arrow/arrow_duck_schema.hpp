@@ -25,7 +25,37 @@ typedef void (*cast_arrow_duck_t)(ClientContext &context, Vector &source, Vector
 
 typedef void (*cast_duck_arrow_t)(ClientContext &context, data_ptr_t &source, Vector &result, idx_t count);
 
-enum ArrowTypeEnum { BASE = 0, EXTENSION = 1 };
+class ArrowTypeExtensionData {
+public:
+	explicit ArrowTypeExtensionData(const LogicalType &duckdb_type, const LogicalType &internal_type_p,
+	                                cast_arrow_duck_t arrow_to_duckdb = nullptr,
+	                                cast_duck_arrow_t duckdb_to_arrow = nullptr)
+	    : arrow_to_duckdb(arrow_to_duckdb), duckdb_to_arrow(duckdb_to_arrow), duckdb_type(duckdb_type),
+	      internal_type(internal_type_p) {
+	}
+
+	explicit ArrowTypeExtensionData(const LogicalType &duckdb_type)
+	    : duckdb_type(duckdb_type), internal_type(duckdb_type) {
+	}
+
+	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
+	cast_arrow_duck_t arrow_to_duckdb = nullptr;
+	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
+	cast_duck_arrow_t duckdb_to_arrow = nullptr;
+
+	LogicalType GetInternalType() const;
+
+	//! This function returns possible extension types to given DuckDB types
+	static unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>>
+	GetExtensionTypes(ClientContext &context, const vector<LogicalType> &duckdb_types);
+	LogicalType GetDuckDBType() const;
+
+private:
+	//! Original DuckDB Type (e.g., UHUGEINT)
+	LogicalType duckdb_type;
+	//! Internal type is a type that refers to the produced duckdb vector when consuming the arrow format
+	LogicalType internal_type;
+};
 
 class ArrowType {
 public:
@@ -63,11 +93,12 @@ public:
 
 	static shared_ptr<ArrowType> GetArrowLogicalType(DBConfig &config, ArrowSchema &schema);
 
-	bool IsExtension() const;
+	bool HasExtension() const;
+
+	//! The Arrow Type Extension data, if any
+	shared_ptr<ArrowTypeExtensionData> extension_data;
 
 protected:
-	ArrowTypeEnum type_enum = BASE;
-
 	LogicalType type;
 	//! Hold the optional type if the array is a dictionary
 	shared_ptr<ArrowType> dictionary_type;
@@ -78,37 +109,6 @@ protected:
 	string error_message;
 	//! In case of an error do we throw not implemented?
 	bool not_implemented = false;
-};
-
-class ArrowExtensionType : public ArrowType {
-public:
-	ArrowExtensionType(LogicalType type_p, LogicalType internal_type_p, cast_arrow_duck_t arrow_to_duckdb,
-	                   cast_duck_arrow_t duckdb_to_arrow, unique_ptr<ArrowTypeInfo> type_info = nullptr)
-	    : ArrowType(std::move(type_p), std::move(type_info)), arrow_to_duckdb(arrow_to_duckdb),
-	      duckdb_to_arrow(duckdb_to_arrow), internal_type(std::move(internal_type_p)) {
-		type_enum = EXTENSION;
-	}
-
-	explicit ArrowExtensionType(const LogicalType &type_p, unique_ptr<ArrowTypeInfo> type_info = nullptr)
-	    : ArrowType(type_p, std::move(type_info)), internal_type(type_p) {
-		type_enum = EXTENSION;
-	}
-	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
-	cast_arrow_duck_t arrow_to_duckdb = nullptr;
-	//! (Optional) Callback to function that converts an Arrow Array to a DuckDB Vector
-	cast_duck_arrow_t duckdb_to_arrow = nullptr;
-
-	LogicalType GetInternalType() const;
-
-	ArrowType GetInternalArrowType() const;
-
-	//! This function returns possible extension types to given DuckDB types
-	static unordered_map<idx_t, const shared_ptr<ArrowExtensionType>>
-	GetExtensionTypes(ClientContext &context, const vector<LogicalType> &duckdb_types);
-
-private:
-	//! Internal type is a type that refers to the actual arrow format
-	LogicalType internal_type;
 };
 
 using arrow_column_map_t = unordered_map<idx_t, shared_ptr<ArrowType>>;

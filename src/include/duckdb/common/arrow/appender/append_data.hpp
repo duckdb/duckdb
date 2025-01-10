@@ -61,7 +61,7 @@ struct ArrowAppendData {
 	initialize_t initialize = nullptr;
 	append_vector_t append_vector = nullptr;
 	//! Arrow Extension Type information
-	shared_ptr<ArrowExtensionType> extension_type = nullptr;
+	shared_ptr<ArrowTypeExtensionData> extension_data = nullptr;
 	finalize_t finalize = nullptr;
 
 	//! child data (if any)

@@ -32,7 +32,7 @@ int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream,
 static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientProperties properties,
                                 struct ArrowArray *out) {
 	auto &types = res.types;
-	unordered_map<idx_t, const duckdb::shared_ptr<ArrowExtensionType>> extension_type_cast;
+	unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
 	if (big) {
 		// Combine all chunks into a single ArrowArray
 		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, properties, extension_type_cast);

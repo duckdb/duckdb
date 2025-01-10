@@ -56,7 +56,7 @@ ArrowSchemaMetadata ArrowSchemaMetadata::ArrowCanonicalType(const string &extens
 
 ArrowSchemaMetadata ArrowSchemaMetadata::NonCanonicalType(const string &type_name, const string &vendor_name) {
 	ArrowSchemaMetadata metadata;
-	metadata.AddOption(ARROW_EXTENSION_NAME, ArrowTypeExtensionInfo::ARROW_EXTENSION_NON_CANONICAL);
+	metadata.AddOption(ARROW_EXTENSION_NAME, ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL);
 	// We have to set the metadata key with type_name and vendor_name.
 	metadata.extension_metadata_map["vendor_name"] = vendor_name;
 	metadata.extension_metadata_map["type_name"] = type_name;
@@ -69,7 +69,7 @@ bool ArrowSchemaMetadata::HasExtension() const {
 	return !arrow_extension.empty();
 }
 
-ArrowTypeExtensionInfo ArrowSchemaMetadata::GetExtensionInfo(string format) {
+ArrowExtensionMetadata ArrowSchemaMetadata::GetExtensionInfo(string format) {
 	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map["vendor_name"],
 	        extension_metadata_map["type_name"], std::move(format)};
 }

@@ -440,7 +440,7 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 				D_ASSERT(py::gil_check());
 				py::gil_scoped_release release;
 				count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data,
-				                              ArrowExtensionType::GetExtensionTypes(
+				                              ArrowTypeExtensionData::GetExtensionTypes(
 				                                  *query_result.client_properties.client_context, query_result.types));
 			}
 			if (count == 0) {

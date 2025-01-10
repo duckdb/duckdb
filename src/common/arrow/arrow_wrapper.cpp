@@ -177,7 +177,8 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.release = ResultArrowArrayStreamWrapper::MyStreamRelease;
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 
-	extension_types = ArrowExtensionType::GetExtensionTypes(*result->client_properties.client_context, result->types);
+	extension_types =
+	    ArrowTypeExtensionData::GetExtensionTypes(*result->client_properties.client_context, result->types);
 }
 
 } // namespace duckdb
