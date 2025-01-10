@@ -58,7 +58,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/cte/materialized/materialized_cte_modifiers.test',  # problems connected to auto installing tpcds from remote
                 'test/sql/tpcds/dsdgen_readonly.test',  # problems connected to auto installing tpcds from remote
                 'test/sql/tpcds/tpcds_sf0.test',  # problems connected to auto installing tpcds from remote
-                'test/sql/optimizer/plan/test_filter_pushdown_materialized_cte.test', # probkems connected to auto installing tpcds from remote
+                'test/sql/optimizer/plan/test_filter_pushdown_materialized_cte.test',  # problems connected to auto installing tpcds from remote
                 'test/sql/explain/test_explain_analyze.test',  # unknown problem with changes in API
             ]
         )
