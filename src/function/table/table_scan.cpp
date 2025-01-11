@@ -355,31 +355,17 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	return std::move(g_state);
 }
 
-void ExtractInFilter(unique_ptr<TableFilter> &filter, BoundColumnRefExpression &bound_ref,
-                     unique_ptr<vector<unique_ptr<Expression>>> &filter_expressions) {
-	// Special-handling of IN filters.
-	// They are part of a CONJUNCTION_AND.
-	if (filter->filter_type != TableFilterType::CONJUNCTION_AND) {
-		return;
-	}
-
-	auto &and_filter = filter->Cast<ConjunctionAndFilter>();
-	auto &children = and_filter.child_filters;
-	if (children.empty()) {
-		return;
-	}
-	if (children[0]->filter_type != TableFilterType::OPTIONAL_FILTER) {
-		return;
-	}
-
-	auto &optional_filter = children[0]->Cast<OptionalFilter>();
+void ExtractOptionalFilter(TableFilter &filter, BoundColumnRefExpression &bound_ref,
+                           unique_ptr<vector<unique_ptr<Expression>>> &filter_expressions, bool origin_is_hash_join) {
+	// FIXME: match without the need for origin_is_hash_join.
+	auto &optional_filter = filter.Cast<OptionalFilter>();
 	auto &child = optional_filter.child_filter;
 	if (child->filter_type != TableFilterType::IN_FILTER) {
 		return;
 	}
 
 	auto &in_filter = child->Cast<InFilter>();
-	if (!in_filter.origin_is_hash_join) {
+	if (!in_filter.origin_is_hash_join && origin_is_hash_join) {
 		return;
 	}
 
@@ -396,10 +382,31 @@ unique_ptr<vector<unique_ptr<Expression>>> ExtractFilters(const ColumnDefinition
                                                           idx_t storage_idx) {
 	ColumnBinding binding(0, storage_idx);
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
-
 	auto filter_expressions = make_uniq<vector<unique_ptr<Expression>>>();
-	ExtractInFilter(filter, *bound_ref, filter_expressions);
 
+	switch (filter->filter_type) {
+	case TableFilterType::OPTIONAL_FILTER:
+		// Conventional IN filter.
+		ExtractOptionalFilter(*filter, *bound_ref, filter_expressions, false);
+		break;
+	case TableFilterType::CONJUNCTION_AND: {
+		// Dynamic filter pushed down via a hash join.
+		auto &and_filter = filter->Cast<ConjunctionAndFilter>();
+		auto &children = and_filter.child_filters;
+		if (children.empty()) {
+			break;
+		}
+		if (children[0]->filter_type != TableFilterType::OPTIONAL_FILTER) {
+			break;
+		}
+		ExtractOptionalFilter(*children[0], *bound_ref, filter_expressions, true);
+		break;
+	}
+	default:
+		break;
+	}
+
+	// Attempt matching the top-level filter to the index expression.
 	if (filter_expressions->empty()) {
 		auto filter_expr = filter->ToExpression(*bound_ref);
 		filter_expressions->push_back(std::move(filter_expr));

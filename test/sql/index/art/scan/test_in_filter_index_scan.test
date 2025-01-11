@@ -1,0 +1,19 @@
+# name: test/sql/index/art/scan/test_in_filter_index_scan.test
+# description: Test using an index scan for IN filter pushdown.
+# group: [scan]
+
+statement ok
+CREATE TABLE tbl AS SELECT range AS i FROM range(500000);
+
+statement ok
+ALTER TABLE tbl ADD PRIMARY KEY(i);
+
+query II
+EXPLAIN ANALYZE DELETE FROM tbl WHERE i IN (2, 42, 100, 101);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+499996
