@@ -11,7 +11,6 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -71,7 +70,8 @@ public:
 	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
 		D_ASSERT(bind_data_p);
 		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-		max_threads = bind_data.table.GetStorage().MaxThreads(context);
+		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+		max_threads = duck_table.GetStorage().MaxThreads(context);
 	}
 
 	//! The maximum number of threads for this table scan.
@@ -130,8 +130,9 @@ public:
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &bind_data = data_p.bind_data->Cast<TableScanBindData>();
-		auto &tx = DuckTransaction::Get(context, bind_data.table.catalog);
-		auto &storage = bind_data.table.GetStorage();
+		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+		auto &tx = DuckTransaction::Get(context, duck_table.catalog);
+		auto &storage = duck_table.GetStorage();
 		auto &l_state = data_p.local_state->Cast<IndexScanLocalState>();
 
 		auto row_id_count = row_ids.size();
@@ -216,7 +217,8 @@ public:
 
 		l_state->scan_state.Initialize(std::move(storage_ids), input.filters.get(), input.sample_options.get());
 
-		auto &storage = bind_data.table.GetStorage();
+		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+		auto &storage = duck_table.GetStorage();
 		storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
@@ -228,8 +230,9 @@ public:
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &bind_data = data_p.bind_data->Cast<TableScanBindData>();
-		auto &tx = DuckTransaction::Get(context, bind_data.table.catalog);
-		auto &storage = bind_data.table.GetStorage();
+		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+		auto &tx = DuckTransaction::Get(context, duck_table.catalog);
+		auto &storage = duck_table.GetStorage();
 
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
@@ -258,7 +261,8 @@ public:
 
 	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const override {
 		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-		auto &storage = bind_data.table.GetStorage();
+		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+		auto &storage = duck_table.GetStorage();
 		auto total_rows = storage.GetTotalRows();
 
 		// The table is empty or smaller than the standard vector size.
@@ -306,7 +310,8 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
 	}
 
 	g_state->projection_ids = input.projection_ids;
-	const auto &columns = bind_data.table.GetColumns();
+	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
 		if (col_idx.IsRowIdColumn()) {
 			g_state->scanned_types.emplace_back(LogicalType::ROW_TYPE);
@@ -327,14 +332,15 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	}
 	g_state->finished = g_state->row_ids.empty() ? true : false;
 
-	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
+	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
 	g_state->table_scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
 
 	if (input.CanRemoveFilterColumns()) {
 		g_state->projection_ids = input.projection_ids;
 	}
 
-	const auto &columns = bind_data.table.GetColumns();
+	const auto &columns = duck_table.GetColumns();
 	for (const auto &col_idx : input.column_indexes) {
 		g_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
 		if (col_idx.IsRowIdColumn()) {
@@ -467,8 +473,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	D_ASSERT(input.bind_data);
 
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	auto &table = bind_data.table;
-	auto &storage = table.GetStorage();
+	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+	auto &storage = duck_table.GetStorage();
 
 	// Can't index scan without filters.
 	if (!input.filters) {
@@ -502,7 +508,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	auto total_rows_from_percentage = LossyNumericCast<idx_t>(double(total_rows) * scan_percentage);
 	auto max_count = MaxValue(scan_max_count, total_rows_from_percentage);
 
-	auto &column_list = table.GetColumns();
+	auto &column_list = duck_table.GetColumns();
 	bool index_scan = false;
 	unsafe_vector<row_t> row_ids;
 
@@ -520,13 +526,14 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
                                                       column_t column_id) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
+	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
 
 	// Don't emit statistics for tables with outstanding transaction-local data.
-	if (local_storage.Find(bind_data.table.GetStorage())) {
+	if (local_storage.Find(duck_table.GetStorage())) {
 		return nullptr;
 	}
-	return bind_data.table.GetStatistics(context, column_id);
+	return duck_table.GetStatistics(context, column_id);
 }
 
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -552,7 +559,8 @@ OperatorPartitionData TableScanGetPartitionData(ClientContext &context, TableFun
 vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	vector<PartitionStatistics> result;
-	auto &storage = bind_data.table.GetStorage();
+	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+	auto &storage = duck_table.GetStorage();
 	return storage.GetPartitionStats(context);
 }
 
@@ -568,10 +576,11 @@ void TableScanDependency(LogicalDependencyList &entries, const FunctionData *bin
 
 unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
-	auto &storage = bind_data.table.GetStorage();
+	auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
+	auto &local_storage = LocalStorage::Get(context, duck_table.catalog);
+	auto &storage = duck_table.GetStorage();
 	idx_t table_rows = storage.GetTotalRows();
-	idx_t estimated_cardinality = table_rows + local_storage.AddedRows(bind_data.table.GetStorage());
+	idx_t estimated_cardinality = table_rows + local_storage.AddedRows(duck_table.GetStorage());
 	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
 }
 

@@ -26,8 +26,10 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
@@ -302,6 +304,14 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, 
 
 optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIndexInfo &info) {
 	return CreateIndex(GetCatalogTransaction(context), info);
+}
+
+unique_ptr<LogicalOperator> Catalog::BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+                                                     unique_ptr<LogicalOperator> plan) {
+	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
+	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
+	IndexBinder index_binder(binder, binder.context);
+	return index_binder.BindCreateIndex(binder.context, std::move(create_index_info), table, std::move(plan), nullptr);
 }
 
 unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
