@@ -1,7 +1,16 @@
 diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
-index 2394b43..449f244 100644
+index 2394b43..ab66331 100644
 --- a/spatial/src/spatial/gdal/functions/st_read.cpp
 +++ b/spatial/src/spatial/gdal/functions/st_read.cpp
+@@ -88,7 +88,7 @@ struct GdalScanLocalState : ArrowScanLocalState {
+ 	// We trust GDAL to produce valid WKB
+ 	core::WKBReader wkb_reader;
+ 	explicit GdalScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk, ClientContext &context)
+-	    : ArrowScanLocalState(std::move(current_chunk)), arena(BufferAllocator::Get(context)), wkb_reader(arena) {
++	    : ArrowScanLocalState(std::move(current_chunk), context), arena(BufferAllocator::Get(context)), wkb_reader(arena) {
+ 	}
+ };
+ 
 @@ -295,7 +295,8 @@ unique_ptr<FunctionData> GdalTableFunction::Bind(ClientContext &context, TableFu
  		                         ':',    'e',  'x',  't',  'e',    'n',  's',  'i',  'o', 'n', ':', 'n', 'a',
  		                         'm',    'e',  '\a', '\0', '\0',   '\0', 'o',  'g',  'c', '.', 'w', 'k', 'b'};
