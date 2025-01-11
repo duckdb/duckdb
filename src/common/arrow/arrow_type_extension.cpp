@@ -321,8 +321,11 @@ struct ArrowBool8 {
 			result_ptr[i] = source_ptr[i];
 		}
 	}
-	static void DuckToArrow(ClientContext &context, data_ptr_t &source, Vector &result, idx_t count) {
-		auto source_ptr = reinterpret_cast<bool *>(source);
+	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+		UnifiedVectorFormat format;
+		source.ToUnifiedFormat(count, format);
+		FlatVector::SetValidity(result, format.validity);
+		auto source_ptr = reinterpret_cast<bool *>(format.data);
 		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
 		for (idx_t i = 0; i < count; i++) {
 			result_ptr[i] = static_cast<int8_t>(source_ptr[i]);

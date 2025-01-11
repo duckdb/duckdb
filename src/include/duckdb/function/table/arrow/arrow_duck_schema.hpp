@@ -23,7 +23,7 @@ struct ArrowArrayScanState;
 
 typedef void (*cast_arrow_duck_t)(ClientContext &context, Vector &source, Vector &result, idx_t count);
 
-typedef void (*cast_duck_arrow_t)(ClientContext &context, data_ptr_t &source, Vector &result, idx_t count);
+typedef void (*cast_duck_arrow_t)(ClientContext &context, Vector &source, Vector &result, idx_t count);
 
 class ArrowTypeExtensionData {
 public:
