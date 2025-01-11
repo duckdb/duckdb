@@ -112,7 +112,34 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	} else if (expression_type == ExpressionType::OPERATOR_TRY) {
-		Execute(*expr.children[0], state->child_states[0].get(), sel, count, result);
+		auto &child_state = *state->child_states[0];
+		try {
+			Execute(*expr.children[0], &child_state, sel, count, result);
+			return;
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			auto error_type = error.Type();
+			if (error_type != ExceptionType::INVALID_INPUT && error_type != ExceptionType::CONVERSION) {
+				throw;
+			}
+		}
+		SelectionVector selvec(1);
+		Vector intermediate(result.GetType(), 1);
+		for (idx_t i = 0; i < count; i++) {
+			selvec.set_index(0, sel ? sel->get_index(i) : i);
+			Value val;
+			try {
+				Execute(*expr.children[0], &child_state, &selvec, 1, intermediate);
+				val = intermediate.GetValue(0);
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				auto error_type = error.Type();
+				if (error_type != ExceptionType::INVALID_INPUT && error_type != ExceptionType::CONVERSION) {
+					throw;
+				}
+			}
+			result.SetValue(i, val);
+		}
 	} else if (expr.children.size() == 1) {
 		state->intermediate_chunk.Reset();
 		auto &child = state->intermediate_chunk.data[0];

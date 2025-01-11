@@ -1,0 +1,16 @@
+# name: test/sql/error/test_try_expression.test
+# group: [error]
+
+query I
+with cte as (
+	select * from (VALUES
+		('123'),
+		('test'),
+		('235')
+	) t(a)
+)
+select try(a::INTEGER) from cte
+----
+123
+NULL
+235
