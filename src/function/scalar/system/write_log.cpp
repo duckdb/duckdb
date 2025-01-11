@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/system_functions.hpp"
-#include "duckdb/function/scalar/system_functions.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "utf8proc.hpp"
 
@@ -22,7 +23,7 @@ struct WriteLogBindData : FunctionData {
 	LogicalType return_type;
 
 	explicit WriteLogBindData() {};
-	explicit WriteLogBindData(const WriteLogBindData &other) {
+	WriteLogBindData(const WriteLogBindData &other) {
 		disable_logging = other.disable_logging;
 		scope = other.scope;
 		level = other.level;
