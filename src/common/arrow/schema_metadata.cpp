@@ -66,7 +66,10 @@ ArrowSchemaMetadata ArrowSchemaMetadata::NonCanonicalType(const string &type_nam
 
 bool ArrowSchemaMetadata::HasExtension() const {
 	auto arrow_extension = GetOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME);
-	return !arrow_extension.empty();
+	if (arrow_extension.empty()) {
+		return !StringUtil::StartsWith(arrow_extension, "ogc");
+	}
+	return true;
 }
 
 ArrowExtensionMetadata ArrowSchemaMetadata::GetExtensionInfo(string format) {
