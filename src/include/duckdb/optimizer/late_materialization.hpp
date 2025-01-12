@@ -30,6 +30,8 @@ private:
 	ColumnBinding ConstructRHS(unique_ptr<LogicalOperator> &op);
 	idx_t GetOrInsertRowId(LogicalGet &get);
 
+	void ReplaceTableReferences(Expression &expr, idx_t new_table_index);
+
 private:
 	Optimizer &optimizer;
 	//! The max row count for which we will consider late materialization

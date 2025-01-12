@@ -10,12 +10,13 @@
 
 namespace duckdb {
 
-LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {}
+LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {
+}
 
 idx_t LateMaterialization::GetOrInsertRowId(LogicalGet &get) {
 	auto &column_ids = get.GetMutableColumnIds();
 	// check if it is already projected
-	for(idx_t i = 0; i < column_ids.size(); ++i) {
+	for (idx_t i = 0; i < column_ids.size(); ++i) {
 		if (column_ids[i].IsRowIdColumn()) {
 			// already projected - return the id
 			return i;
@@ -35,7 +36,8 @@ idx_t LateMaterialization::GetOrInsertRowId(LogicalGet &get) {
 unique_ptr<LogicalGet> LateMaterialization::ConstructLHS(LogicalGet &get) {
 	// we need to construct a new scan of the same table
 	auto table_index = optimizer.binder.GenerateTableIndex();
-	auto new_get = make_uniq<LogicalGet>(table_index, get.function, get.bind_data->Copy(), get.returned_types, get.names, get.GetRowIdType());
+	auto new_get = make_uniq<LogicalGet>(table_index, get.function, get.bind_data->Copy(), get.returned_types,
+	                                     get.names, get.GetRowIdType());
 	new_get->GetMutableColumnIds() = get.GetColumnIds();
 	new_get->projection_ids = get.projection_ids;
 	return new_get;
@@ -45,7 +47,7 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 	// traverse down until we reach the LogicalGet
 	vector<reference<LogicalOperator>> stack;
 	reference<LogicalOperator> child = *op->children[0];
-	while(child.get().type != LogicalOperatorType::LOGICAL_GET) {
+	while (child.get().type != LogicalOperatorType::LOGICAL_GET) {
 		stack.push_back(child);
 		D_ASSERT(child.get().children.size() == 1);
 		child = *child.get().children[0];
@@ -54,15 +56,24 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 	auto &get = child.get().Cast<LogicalGet>();
 	auto row_id_idx = GetOrInsertRowId(get);
 
+	auto new_index = optimizer.binder.GenerateTableIndex();
+	get.table_index = new_index;
+
 	// the row id has been projected - now project it up the stack
-	ColumnBinding row_id_binding(get.table_index, row_id_idx);
-	for(idx_t i = stack.size(); i > 0; i--) {
+	ColumnBinding row_id_binding(new_index, row_id_idx);
+	for (idx_t i = stack.size(); i > 0; i--) {
 		auto &op = stack[i - 1].get();
-		switch(op.type) {
+		if (row_id_binding.table_index == new_index) {
+			for (auto &expr : op.expressions) {
+				ReplaceTableReferences(*expr, new_index);
+			}
+		}
+		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &proj = op.Cast<LogicalProjection>();
 			// push a projection of the row-id column
-			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>("rowid", get.GetRowIdType(), row_id_binding));
+			proj.expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>("rowid", get.GetRowIdType(), row_id_binding));
 			// modify the row-id-binding to push to the new projection
 			row_id_binding = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
 			break;
@@ -74,18 +85,24 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 			throw InternalException("Unsupported logical operator in LateMaterialization::ConstructRHS");
 		}
 	}
+	if (row_id_binding.table_index == new_index && op->type == LogicalOperatorType::LOGICAL_TOP_N) {
+		auto &top_n = op->Cast<LogicalTopN>();
+		;
+		for (auto &order : top_n.orders) {
+			ReplaceTableReferences(*order.expression, new_index);
+		}
+	}
 	return row_id_binding;
 }
 
-void ReplaceReferences(Expression &expr, idx_t new_table_index) {
+void LateMaterialization::ReplaceTableReferences(Expression &expr, idx_t new_table_index) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
 		bound_column_ref.binding.table_index = new_table_index;
 	}
 
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
-		ReplaceReferences(child, new_table_index);
-	});
+	ExpressionIterator::EnumerateChildren(expr,
+	                                      [&](Expression &child) { ReplaceTableReferences(child, new_table_index); });
 }
 
 bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op) {
@@ -99,15 +116,15 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	// visit the expressions for each operator in the chain
 	VisitOperatorExpressions(*op);
 	reference<LogicalOperator> child = *op->children[0];
-	while(child.get().type != LogicalOperatorType::LOGICAL_GET) {
-		switch(child.get().type) {
+	while (child.get().type != LogicalOperatorType::LOGICAL_GET) {
+		switch (child.get().type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			// recurse into the child node - but ONLY visit expressions that are referenced
 			auto &proj = child.get().Cast<LogicalProjection>();
 
 			// figure out which projection expressions we are currently referencing
 			set<idx_t> referenced_columns;
-			for(auto &entry : column_references) {
+			for (auto &entry : column_references) {
 				auto &column_binding = entry.first;
 				if (column_binding.table_index == proj.table_index) {
 					referenced_columns.insert(column_binding.column_index);
@@ -115,7 +132,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 			}
 			// clear the list of referenced expressions and visit those columns
 			column_references.clear();
-			for(auto &col_idx : referenced_columns) {
+			for (auto &col_idx : referenced_columns) {
 				VisitExpression(&proj.expressions[col_idx]);
 			}
 			// continue into child
@@ -148,6 +165,10 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	// we need to transform this plan into a semi-join with the row-id
 	// we need to ensure the operator returns exactly the same column bindings as before
 
+	// the final table index emitted must be the table index of the original get
+	// this ensures any upstream operators that refer to the original get will keep on referring to the correct columns
+	auto final_index = get.table_index;
+
 	// construct the LHS from the LogicalGet
 	auto lhs = ConstructLHS(get);
 	// insert the row-id column on the left hand side
@@ -164,9 +185,9 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	if (op->type == LogicalOperatorType::LOGICAL_TOP_N) {
 		// for top-n we need to re-order by the top-n conditions
 		auto &top_n = op->Cast<LogicalTopN>();
-		for(auto &order : top_n.orders) {
+		for (auto &order : top_n.orders) {
 			auto expr = order.expression->Copy();
-			ReplaceReferences(*expr, lhs_index);
+			ReplaceTableReferences(*expr, lhs_index);
 
 			final_orders.emplace_back(order.type, order.null_order, std::move(expr));
 		}
@@ -193,9 +214,10 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	join->conditions.push_back(std::move(condition));
 
 	// push a projection that removes the row id again from the lhs
-	auto proj_index = optimizer.binder.GenerateTableIndex();
+	// this is the final projection - so it should have the final table index
+	auto proj_index = final_index;
 	vector<unique_ptr<Expression>> proj_list;
-	for(idx_t i = 0; i < lhs_columns; i++) {
+	for (idx_t i = 0; i < lhs_columns; i++) {
 		auto &column_id = lhs_get.GetColumnIds()[i];
 		auto is_row_id = column_id.IsRowIdColumn();
 		auto column_name = is_row_id ? "rowid" : lhs_get.names[column_id.GetPrimaryIndex()];
