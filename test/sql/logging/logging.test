@@ -39,6 +39,11 @@ set logging_storage='stdout';
 statement ok
 set logging_storage='memory';
 
+statement error
+set logging_storage='quack';
+----
+Invalid Input Error: Log storage 'quack' is not yet registered
+
 # Storage is now cleared because switching storage will clear it
 query IIIII
 SELECT * EXCLUDE (timestamp, client_context, transaction_id) FROM duckdb_logs
