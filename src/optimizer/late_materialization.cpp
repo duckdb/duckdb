@@ -231,8 +231,8 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	proj->children.push_back(std::move(order));
 
 	// run the RemoveUnusedColumns optimizer to prune the (now) unused columns from the RHS
-	// RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
-	// unused_optimizer.VisitOperator(*proj);
+	RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
+	unused_optimizer.VisitOperator(*proj);
 
 	// we have constructed the final operator - finished
 	op = std::move(proj);
