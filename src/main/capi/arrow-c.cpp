@@ -52,11 +52,11 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 	for (idx_t i = 0; i < count; i++) {
 		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of
 		// 'AdbcStatementGetParameterSchema'
-		auto type = LogicalType::SQLNULL;
+		const auto type = LogicalType::SQLNULL;
 
 		// FIXME: we don't support named parameters yet, but when we do, this needs to be updated
 		auto name = std::to_string(i);
-		prepared_types.push_back(std::move(type));
+		prepared_types.push_back(type);
 		prepared_names.push_back(name);
 	}
 
@@ -87,8 +87,10 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
+	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
+	    *wrapper->result->client_properties.client_context, wrapper->result->types);
 	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             wrapper->result->client_properties);
+	                             wrapper->result->client_properties, extension_type_cast);
 	return DuckDBSuccess;
 }
 
@@ -98,8 +100,11 @@ void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, du
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
+	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
+	    *result_data.result->client_properties.client_context, result_data.result->types);
+
 	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             result_data.result->client_properties);
+	                             result_data.result->client_properties, extension_type_cast);
 }
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {
