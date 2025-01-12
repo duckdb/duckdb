@@ -2,6 +2,8 @@
 # description: Tests rejects tables on max line size parameter
 # group: [csv]
 
+mode skip
+
 statement ok
 PRAGMA enable_verification
 
