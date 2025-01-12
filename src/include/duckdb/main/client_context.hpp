@@ -56,7 +56,7 @@ class RegisteredStateManager;
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
 	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
-	//! Whether or not a stream result should be allowed
+	//! Whether a stream result should be allowed
 	bool allow_stream_result = false;
 };
 
@@ -205,7 +205,7 @@ public:
 	//! Fetch a list of table names that are required for a given query
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
 
-	DUCKDB_API ClientProperties GetClientProperties() const;
+	DUCKDB_API ClientProperties GetClientProperties();
 
 	//! Returns true if execution of the current query is finished
 	DUCKDB_API bool ExecutionIsFinished();
