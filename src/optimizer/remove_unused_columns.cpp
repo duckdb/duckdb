@@ -279,6 +279,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// Now set the projection cols by matching the "selection vector" that excludes filter columns
 				// with the "selection vector" that includes filter columns
 				idx_t col_idx = 0;
+				get.projection_ids.clear();
 				for (auto proj_sel_idx : proj_sel) {
 					for (; col_idx < col_sel.size(); col_idx++) {
 						if (proj_sel_idx == col_sel[col_idx]) {

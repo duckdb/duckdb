@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SET disabled_optimizers='expression_rewriter,filter_pullup,filter_pushdown,empty_result_pullup,cte_filter_pusher,regex_range,in_clause,join_order,deliminator,unnest_rewriter,unused_columns,statistics_propagation,common_subexpressions,common_aggregate,column_lifetime,limit_pushdown,build_side_probe_side,compressed_materialization,duplicate_groups,reorder_filter,sampling_pushdown,join_filter_pushdown,extension,materialized_cte,sum_rewriter'
+SET disabled_optimizers='join_filter_pushdown'
 
 statement ok
 CREATE TABLE test AS SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i);
