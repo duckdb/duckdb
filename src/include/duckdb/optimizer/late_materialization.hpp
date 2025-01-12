@@ -30,6 +30,7 @@ private:
 	ColumnBinding ConstructRHS(unique_ptr<LogicalOperator> &op);
 	idx_t GetOrInsertRowId(LogicalGet &get);
 
+	void ReplaceTopLevelTableIndex(LogicalOperator &op, idx_t new_index);
 	void ReplaceTableReferences(Expression &expr, idx_t new_table_index);
 
 private:

@@ -59,11 +59,19 @@ explain SELECT * FROM test USING SAMPLE 2 ROWS
 ----
 logical_opt	<REGEX>:.*COMPARISON_JOIN.*
 
-# we can only use joins when
+# we can only use joins when we are sampling rows
 query II
 explain SELECT * FROM test USING SAMPLE 10%
 ----
 logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# filter after top-n
+query IIII
+SELECT * FROM (
+	SELECT * FROM test ORDER BY j DESC LIMIT 2
+) WHERE i=8
+----
+8	9	10	-8
 
 # now with varchar columns
 statement ok

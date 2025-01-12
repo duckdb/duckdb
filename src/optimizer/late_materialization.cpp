@@ -56,18 +56,10 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 	auto &get = child.get().Cast<LogicalGet>();
 	auto row_id_idx = GetOrInsertRowId(get);
 
-	auto new_index = optimizer.binder.GenerateTableIndex();
-	get.table_index = new_index;
-
 	// the row id has been projected - now project it up the stack
-	ColumnBinding row_id_binding(new_index, row_id_idx);
+	ColumnBinding row_id_binding(get.table_index, row_id_idx);
 	for (idx_t i = stack.size(); i > 0; i--) {
 		auto &op = stack[i - 1].get();
-		if (row_id_binding.table_index == new_index) {
-			for (auto &expr : op.expressions) {
-				ReplaceTableReferences(*expr, new_index);
-			}
-		}
 		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &proj = op.Cast<LogicalProjection>();
@@ -85,14 +77,49 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 			throw InternalException("Unsupported logical operator in LateMaterialization::ConstructRHS");
 		}
 	}
-	if (row_id_binding.table_index == new_index && op->type == LogicalOperatorType::LOGICAL_TOP_N) {
-		auto &top_n = op->Cast<LogicalTopN>();
-		;
-		for (auto &order : top_n.orders) {
-			ReplaceTableReferences(*order.expression, new_index);
+	return row_id_binding;
+}
+
+void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t new_index) {
+	reference<LogicalOperator> current_op = root;
+	while(true) {
+		auto &op = current_op.get();
+		switch(op.type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			// reached a projection - modify the table index and return
+			auto &proj = op.Cast<LogicalProjection>();
+			proj.table_index = new_index;
+			return;
+		}
+		case LogicalOperatorType::LOGICAL_GET: {
+			// reached the root get - modify the table index and return
+			auto &get = op.Cast<LogicalGet>();
+			get.table_index = new_index;
+			return;
+		}
+		case LogicalOperatorType::LOGICAL_TOP_N: {
+			// visit the expressions of the operator and continue into the child node
+			auto &top_n = op.Cast<LogicalTopN>();
+			for(auto &order : top_n.orders) {
+				ReplaceTableReferences(*order.expression, new_index);
+			}
+			current_op = *op.children[0];
+			break;
+		}
+		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_SAMPLE:
+		case LogicalOperatorType::LOGICAL_LIMIT: {
+			// visit the expressions of the operator and continue into the child node
+			for(auto &expr : op.expressions) {
+				ReplaceTableReferences(*expr, new_index);
+			}
+			current_op = *op.children[0];
+			break;
+		}
+		default:
+			throw InternalException("Unsupported operator type in LateMaterialization::ReplaceTopLevelTableIndex");
 		}
 	}
-	return row_id_binding;
 }
 
 void LateMaterialization::ReplaceTableReferences(Expression &expr, idx_t new_table_index) {
@@ -165,10 +192,6 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	// we need to transform this plan into a semi-join with the row-id
 	// we need to ensure the operator returns exactly the same column bindings as before
 
-	// the final table index emitted must be the table index of the original get
-	// this ensures any upstream operators that refer to the original get will keep on referring to the correct columns
-	auto final_index = get.table_index;
-
 	// construct the LHS from the LogicalGet
 	auto lhs = ConstructLHS(get);
 	// insert the row-id column on the left hand side
@@ -202,6 +225,14 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	// note that the purpose of this optimization is to remove columns from the RHS
 	// we don't do that here yet though - we do this in a later step using the RemoveUnusedColumns optimizer
 	auto rhs_binding = ConstructRHS(op);
+
+	// the final table index emitted must be the table index of the original operator
+	// this ensures any upstream operators that refer to the original get will keep on referring to the correct columns
+	auto final_index = rhs_binding.table_index;
+
+	// we need to replace any references to "rhs_binding.table_index" in the rhs to a new table index
+	rhs_binding.table_index = optimizer.binder.GenerateTableIndex();
+	ReplaceTopLevelTableIndex(*op, rhs_binding.table_index);
 
 	// construct a semi join between the lhs and rhs
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::SEMI);
