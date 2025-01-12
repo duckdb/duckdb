@@ -499,3 +499,49 @@ TEST_CASE("Test PK violation in the C API appender", "[capi]") {
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->row_count() == 0);
 }
+
+TEST_CASE("Test DataChunk write BLOB", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_BLOB);
+	REQUIRE(type);
+	REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_BLOB);
+	duckdb_logical_type types[] = {type};
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_data_chunk_set_size(chunk, 1);
+	duckdb_vector vector = duckdb_data_chunk_get_vector(chunk, 0);
+	auto column_type = duckdb_vector_get_column_type(vector);
+	REQUIRE(duckdb_get_type_id(column_type) == DUCKDB_TYPE_BLOB);
+	duckdb_destroy_logical_type(&column_type);
+	uint8_t bytes[] = {0x80, 0x00, 0x01, 0x2a};
+	duckdb_vector_assign_string_element_len(vector, 0, (const char *)bytes, 4);
+	auto string_data = (duckdb_string_t *)duckdb_vector_get_data(vector);
+	REQUIRE(string_data[0].value.inlined.length == 4);
+	REQUIRE(string_data[0].value.inlined.inlined[0] == (char)0x80);
+	REQUIRE(string_data[0].value.inlined.inlined[1] == (char)0x00);
+	REQUIRE(string_data[0].value.inlined.inlined[2] == (char)0x01);
+	REQUIRE(string_data[0].value.inlined.inlined[3] == (char)0x2a);
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_logical_type(&type);
+}
+
+TEST_CASE("Test DataChunk write VARINT", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARINT);
+	REQUIRE(type);
+	REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_VARINT);
+	duckdb_logical_type types[] = {type};
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_data_chunk_set_size(chunk, 1);
+	duckdb_vector vector = duckdb_data_chunk_get_vector(chunk, 0);
+	auto column_type = duckdb_vector_get_column_type(vector);
+	REQUIRE(duckdb_get_type_id(column_type) == DUCKDB_TYPE_VARINT);
+	duckdb_destroy_logical_type(&column_type);
+	uint8_t bytes[] = {0x80, 0x00, 0x01, 0x2a}; // VARINT 42
+	duckdb_vector_assign_string_element_len(vector, 0, (const char *)bytes, 4);
+	auto string_data = (duckdb_string_t *)duckdb_vector_get_data(vector);
+	REQUIRE(string_data[0].value.inlined.length == 4);
+	REQUIRE(string_data[0].value.inlined.inlined[0] == (char)0x80);
+	REQUIRE(string_data[0].value.inlined.inlined[1] == (char)0x00);
+	REQUIRE(string_data[0].value.inlined.inlined[2] == (char)0x01);
+	REQUIRE(string_data[0].value.inlined.inlined[3] == (char)0x2a);
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_logical_type(&type);
+}
