@@ -80,6 +80,8 @@ public:
 	atomic<bool> interrupted;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
+	//! The logger to be used by this ClientContext
+	unique_ptr<Logger> logger;
 	//! The client configuration
 	ClientConfig config;
 	//! The set of client-specific data
@@ -198,6 +200,9 @@ public:
 
 	//! Returns the current executor
 	Executor &GetExecutor();
+
+	//! Return the current logger
+	Logger &GetLogger() const;
 
 	//! Returns the current query string (if any)
 	const string &GetCurrentQuery();

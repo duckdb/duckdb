@@ -36,6 +36,7 @@
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 
@@ -279,6 +280,8 @@ struct DBConfigOptions {
 	unordered_set<string> allowed_paths;
 	//! Directories that are explicitly allowed, even if enable_external_access is false
 	set<string> allowed_directories;
+	//! The log configuration
+	LogConfig log_config = LogConfig();
 
 	bool operator==(const DBConfigOptions &other) const;
 };

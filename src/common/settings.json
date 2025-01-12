@@ -273,6 +273,14 @@
         "custom_implementation": true
     },
     {
+        "name": "disabled_log_types",
+        "description": "Sets the list of disabled loggers",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "DisabledLogTypes",
+        "custom_implementation": true
+    },
+    {
         "name": "disabled_optimizers",
         "description": "DEBUG SETTING: disable a specific set of optimizers (comma separated)",
         "type": "VARCHAR",
@@ -326,6 +334,14 @@
         "struct": "EnableHTTPMetadataCacheSetting"
     },
     {
+        "name": "enable_logging",
+        "description": "Enables the logger",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "struct": "EnableLogging",
+        "custom_implementation": true
+    },
+    {
         "name": "enable_macro_dependencies",
         "description": "Enable created MACROs to create dependencies on the referenced objects (such as tables)",
         "type": "BOOLEAN",
@@ -368,6 +384,14 @@
         "description": "Enable created VIEWs to create dependencies on the referenced objects (such as tables)",
         "type": "BOOLEAN",
         "scope": "global"
+    },
+    {
+        "name": "enabled_log_types",
+        "description": "Sets the list of enabled loggers",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "EnabledLogTypes",
+        "custom_implementation": true
     },
     {
         "name": "errors_as_json",
@@ -503,6 +527,30 @@
         "description": "Specifies the path to which queries should be logged (default: NULL, queries are not logged)",
         "type": "VARCHAR",
         "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "logging_level",
+        "description": "The log level which will be recorded in the log",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingLevel",
+        "custom_implementation": true
+    },
+    {
+        "name": "logging_mode",
+        "description": "Enables the logger",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingMode",
+        "custom_implementation": true
+    },
+    {
+        "name": "logging_storage",
+        "description": "Set the logging storage (memory/stdout/file)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingStorage",
         "custom_implementation": true
     },
     {

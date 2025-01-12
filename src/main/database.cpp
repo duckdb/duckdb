@@ -27,6 +27,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/storage/compression/empty_validity.hpp"
+#include "duckdb/logging/logger.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -73,7 +74,12 @@ DatabaseInstance::~DatabaseInstance() {
 	object_cache.reset();
 	scheduler.reset();
 	db_manager.reset();
+
+	// stop the log manager, after this point Logger calls are unsafe.
+	log_manager.reset();
+
 	buffer_manager.reset();
+
 	// flush allocations and disable the background thread
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
@@ -287,6 +293,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	} else {
 		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
+
+	log_manager = make_shared_ptr<LogManager>(*this, LogConfig());
+	log_manager->Initialize();
+
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
@@ -499,6 +509,7 @@ void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallIn
 	for (auto &callback : callbacks) {
 		callback->OnExtensionLoaded(*this, name);
 	}
+	Logger::Info("duckdb.Extensions.ExtensionLoaded", *this, name);
 }
 
 SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
@@ -522,6 +533,10 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	D_ASSERT(create_api_v1);
 	return create_api_v1();
+}
+
+LogManager &DatabaseInstance::GetLogManager() const {
+	return *log_manager;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {
