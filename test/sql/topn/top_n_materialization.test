@@ -6,9 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SET disabled_optimizers='join_filter_pushdown'
-
-statement ok
 CREATE TABLE test AS SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i);
 
 statement ok
@@ -67,3 +64,13 @@ query II
 explain SELECT * FROM test USING SAMPLE 10%
 ----
 logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# now with varchar columns
+statement ok
+CREATE OR REPLACE TABLE test AS SELECT printf('%02d', i) i, printf('%02d', i + 1) AS j, printf('%02d', i + 2) AS k, printf('%02d', -i) AS l FROM range(10) t(i);
+
+query IIII
+SELECT * FROM test ORDER BY j DESC LIMIT 2;
+----
+09	10	11	-9
+08	09	10	-8
