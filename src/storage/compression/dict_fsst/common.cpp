@@ -78,6 +78,7 @@ bool DictFSSTCompressionState::DryAppendToCurrentSegment(bool is_new, UnifiedVec
 		return required_space <= block_size;
 	}
 	};
+	throw InternalException("Unhandled DictionaryAppendState");
 }
 
 bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
