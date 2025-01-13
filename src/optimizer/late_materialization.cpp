@@ -343,6 +343,18 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	return true;
 }
 
+bool LateMaterialization::OptimizeLargeLimit(LogicalOperator &child) {
+	// we only support large limits if the only
+	reference<LogicalOperator> current_op = child;
+	while (current_op.get().type != LogicalOperatorType::LOGICAL_GET) {
+		if (current_op.get().type != LogicalOperatorType::LOGICAL_PROJECTION) {
+			return false;
+		}
+		current_op = *current_op.get().children[0];
+	}
+	return true;
+}
+
 unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOperator> op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_LIMIT: {
@@ -351,7 +363,12 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 			break;
 		}
 		if (limit.limit_val.GetConstantValue() > max_row_count) {
-			break;
+			// for large limits - we may still want to do this optimization if the limit is consecutive
+			// this is the case if there are only projections/get below the limit
+			// if the row-ids are not consecutive doing the join can worsen performance
+			if (!OptimizeLargeLimit(*limit.children[0])) {
+				break;
+			}
 		}
 		if (TryLateMaterialization(op)) {
 			return std::move(op);
