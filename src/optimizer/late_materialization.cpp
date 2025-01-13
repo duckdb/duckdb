@@ -82,9 +82,9 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 
 void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t new_index) {
 	reference<LogicalOperator> current_op = root;
-	while(true) {
+	while (true) {
 		auto &op = current_op.get();
-		switch(op.type) {
+		switch (op.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			// reached a projection - modify the table index and return
 			auto &proj = op.Cast<LogicalProjection>();
@@ -100,7 +100,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t
 		case LogicalOperatorType::LOGICAL_TOP_N: {
 			// visit the expressions of the operator and continue into the child node
 			auto &top_n = op.Cast<LogicalTopN>();
-			for(auto &order : top_n.orders) {
+			for (auto &order : top_n.orders) {
 				ReplaceTableReferences(*order.expression, new_index);
 			}
 			current_op = *op.children[0];
@@ -110,7 +110,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t
 		case LogicalOperatorType::LOGICAL_SAMPLE:
 		case LogicalOperatorType::LOGICAL_LIMIT: {
 			// visit the expressions of the operator and continue into the child node
-			for(auto &expr : op.expressions) {
+			for (auto &expr : op.expressions) {
 				ReplaceTableReferences(*expr, new_index);
 			}
 			current_op = *op.children[0];
@@ -149,7 +149,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 			// recurse into the child node - but ONLY visit expressions that are referenced
 			auto &proj = child.get().Cast<LogicalProjection>();
 
-			for(auto &expr : proj.expressions) {
+			for (auto &expr : proj.expressions) {
 				if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
 					// FIXME: for now we only support direct projections
 					return false;
