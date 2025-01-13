@@ -5,6 +5,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -240,14 +241,19 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 			}
 		}
 
+		auto &checkpoint_state = checkpoint_states[i];
+		auto &col_data = checkpoint_state.get().column_data;
 		if (!chosen_state) {
-			auto &checkpoint_state = checkpoint_states[i];
-			auto &col_data = checkpoint_state.get().column_data;
 			throw FatalException("No suitable compression/storage method found to store column of type %s",
 			                     col_data.type.ToString());
 		}
 		D_ASSERT(compression_idx != DConstants::INVALID_INDEX);
-		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), *functions[compression_idx]);
+
+		auto &best_function = *functions[compression_idx];
+		Logger::Info(db, "FinalAnalyze(%s) result for %s.%s.%d(%s): %d", EnumUtil::ToString(best_function.type),
+		             col_data.info.GetSchemaName(), col_data.info.GetTableName(), col_data.column_index,
+		             col_data.type.ToString(), best_score);
+		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
 	}
 	return result;
 }

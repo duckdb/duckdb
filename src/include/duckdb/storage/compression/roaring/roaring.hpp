@@ -244,7 +244,9 @@ public:
 	//! Flushed analyze data
 
 	//! The space used by the current segment
-	idx_t space_used = 0;
+	idx_t data_size = 0;
+	idx_t metadata_size = 0;
+
 	//! The total amount of segments to write
 	idx_t segment_count = 0;
 	//! The amount of values in the current segment;
