@@ -14,6 +14,7 @@ namespace dict_fsst {
 struct DictFSSTAnalyzeState : public DictFSSTCompressionState {
 public:
 	explicit DictFSSTAnalyzeState(const CompressionInfo &info);
+	~DictFSSTAnalyzeState();
 
 public:
 	optional_idx LookupString(const string_t &str) override;
@@ -33,7 +34,8 @@ public:
 	idx_t current_unique_count;
 	idx_t current_dict_size;
 	StringHeap heap;
-	string_set_t current_set;
+	//! string -> string_length
+	string_map_t<uint32_t> current_string_map;
 	bitpacking_width_t current_width;
 	bitpacking_width_t next_width;
 };

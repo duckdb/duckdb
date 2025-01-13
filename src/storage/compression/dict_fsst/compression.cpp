@@ -238,7 +238,7 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 	for (idx_t i = 0; i < string_count; i++) {
 		new_size += compressed_sizes[i];
 	}
-	if (new_size > current_dictionary.size + 4096) {
+	if (new_size > current_dictionary.size + DICTIONARY_ENCODE_THRESHOLD) {
 		// The dictionary does not compress well enough to use FSST
 		// continue filling the remaining bytes without encoding
 		duckdb_fsst_destroy(fsst_encoder);

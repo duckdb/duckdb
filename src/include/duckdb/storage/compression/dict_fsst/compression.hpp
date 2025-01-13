@@ -76,8 +76,6 @@ public:
 	bitpacking_width_t next_width = 0;
 
 	EncodedInputData encoded_input;
-	void *encoder = nullptr;
-	idx_t symbol_table_size = DConstants::INVALID_INDEX;
 };
 
 } // namespace dict_fsst

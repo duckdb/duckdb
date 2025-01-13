@@ -99,6 +99,8 @@ private:
 protected:
 	//! Keep track of the append state for the current segment
 	DictionaryAppendState append_state = DictionaryAppendState::REGULAR;
+	void *encoder = nullptr;
+	idx_t symbol_table_size = DConstants::INVALID_INDEX;
 };
 
 } // namespace dict_fsst
