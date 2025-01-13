@@ -32,6 +32,8 @@ private:
 
 	void ReplaceTopLevelTableIndex(LogicalOperator &op, idx_t new_index);
 	void ReplaceTableReferences(Expression &expr, idx_t new_table_index);
+	unique_ptr<Expression> GetExpression(LogicalOperator &op, idx_t column_index);
+	void ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &expr);
 
 private:
 	Optimizer &optimizer;

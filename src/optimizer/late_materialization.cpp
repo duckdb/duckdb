@@ -132,6 +132,36 @@ void LateMaterialization::ReplaceTableReferences(Expression &expr, idx_t new_tab
 	                                      [&](Expression &child) { ReplaceTableReferences(child, new_table_index); });
 }
 
+unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, idx_t column_index) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op.Cast<LogicalGet>();
+		auto &column_id = get.GetColumnIds()[column_index];
+		auto is_row_id = column_id.IsRowIdColumn();
+		auto column_name = is_row_id ? "rowid" : get.names[column_id.GetPrimaryIndex()];
+		auto &column_type = is_row_id ? get.GetRowIdType() : get.returned_types[column_id.GetPrimaryIndex()];
+		auto expr =
+		    make_uniq<BoundColumnRefExpression>(column_name, column_type, ColumnBinding(get.table_index, column_index));
+		return std::move(expr);
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		return op.expressions[column_index]->Copy();
+	default:
+		throw InternalException("Unsupported operator type for LateMaterialization::GetExpression");
+	}
+}
+
+void LateMaterialization::ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &expr) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
+		expr = GetExpression(next_op, bound_column_ref.binding.column_index);
+		return;
+	}
+
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionReferences(next_op, child); });
+}
+
 bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op) {
 	// check if we can benefit from late materialization
 	// we need to see how many columns we require in the pipeline versus how many columns we emit in the scan
@@ -141,6 +171,8 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	// and we can only do it for scans that support the row-id pushdown (currently only DuckDB table scans)
 
 	// visit the expressions for each operator in the chain
+	vector<reference<LogicalOperator>> source_operators;
+
 	VisitOperatorExpressions(*op);
 	reference<LogicalOperator> child = *op->children[0];
 	while (child.get().type != LogicalOperatorType::LOGICAL_GET) {
@@ -148,10 +180,11 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			// recurse into the child node - but ONLY visit expressions that are referenced
 			auto &proj = child.get().Cast<LogicalProjection>();
+			source_operators.push_back(child);
 
 			for (auto &expr : proj.expressions) {
-				if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
-					// FIXME: for now we only support direct projections
+				if (expr->IsVolatile()) {
+					// we cannot do this optimization if any of the columns are volatile
 					return false;
 				}
 			}
@@ -210,15 +243,38 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 
 	auto &row_id_type = get.GetRowIdType();
 
+	// after constructing the LHS but before constructing the RHS we construct the final projections/orders
+	// - we do this before constructing the RHS because that alter the original plan
+	vector<unique_ptr<Expression>> final_proj_list;
+	// construct the final projection list from either (1) the root projection, or (2) the logical get
+	if (!source_operators.empty()) {
+		// construct the columns from the root projection
+		auto &root_proj = source_operators[0].get();
+		for (auto &expr : root_proj.expressions) {
+			final_proj_list.push_back(expr->Copy());
+		}
+		// now we need to "flatten" the projection list by traversing the set of projections and inlining them
+		for (idx_t i = 0; i < source_operators.size(); i++) {
+			auto &next_operator = i + 1 < source_operators.size() ? source_operators[i + 1].get() : lhs_get;
+			for (auto &expr : final_proj_list) {
+				ReplaceExpressionReferences(next_operator, expr);
+			}
+		}
+	} else {
+		// if we have no projection directly construct the columns from the root get
+		for (idx_t i = 0; i < lhs_columns; i++) {
+			final_proj_list.push_back(GetExpression(lhs_get, i));
+		}
+	}
+
 	// we need to re-order again at the end
 	vector<BoundOrderByNode> final_orders;
-	if (op->type == LogicalOperatorType::LOGICAL_TOP_N) {
+	auto root_type = op->type;
+	if (root_type == LogicalOperatorType::LOGICAL_TOP_N) {
 		// for top-n we need to re-order by the top-n conditions
 		auto &top_n = op->Cast<LogicalTopN>();
 		for (auto &order : top_n.orders) {
 			auto expr = order.expression->Copy();
-			ReplaceTableReferences(*expr, lhs_index);
-
 			final_orders.emplace_back(order.type, order.null_order, std::move(expr));
 		}
 	} else {
@@ -254,26 +310,33 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	// push a projection that removes the row id again from the lhs
 	// this is the final projection - so it should have the final table index
 	auto proj_index = final_index;
-	vector<unique_ptr<Expression>> proj_list;
-	for (idx_t i = 0; i < lhs_columns; i++) {
-		auto &column_id = lhs_get.GetColumnIds()[i];
-		auto is_row_id = column_id.IsRowIdColumn();
-		auto column_name = is_row_id ? "rowid" : lhs_get.names[column_id.GetPrimaryIndex()];
-		auto &column_type = is_row_id ? row_id_type : lhs_get.returned_types[column_id.GetPrimaryIndex()];
-		proj_list.push_back(make_uniq<BoundColumnRefExpression>(column_name, column_type, ColumnBinding(lhs_index, i)));
+	if (root_type == LogicalOperatorType::LOGICAL_TOP_N) {
+		// for top-n we need to order on expressions, so we need to order AFTER the final projection
+		auto proj = make_uniq<LogicalProjection>(proj_index, std::move(final_proj_list));
+		proj->children.push_back(std::move(join));
+
+		for (auto &order : final_orders) {
+			ReplaceTableReferences(*order.expression, proj_index);
+		}
+		auto order = make_uniq<LogicalOrder>(std::move(final_orders));
+		order->children.push_back(std::move(proj));
+
+		op = std::move(order);
+	} else {
+		// for limit/sample we order on row-id, so we need to order BEFORE the final projection
+		// because the final projection removes row-ids
+		auto order = make_uniq<LogicalOrder>(std::move(final_orders));
+		order->children.push_back(std::move(join));
+
+		auto proj = make_uniq<LogicalProjection>(proj_index, std::move(final_proj_list));
+		proj->children.push_back(std::move(order));
+
+		op = std::move(proj);
 	}
-	auto order = make_uniq<LogicalOrder>(std::move(final_orders));
-	order->children.push_back(std::move(join));
 
-	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(proj_list));
-	proj->children.push_back(std::move(order));
-
-	// run the RemoveUnusedColumns optimizer to prune the (now) unused columns from the RHS
+	// run the RemoveUnusedColumns optimizer to prune the (now) unused columns the plan
 	RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
-	unused_optimizer.VisitOperator(*proj);
-
-	// we have constructed the final operator - finished
-	op = std::move(proj);
+	unused_optimizer.VisitOperator(*op);
 	return true;
 }
 
