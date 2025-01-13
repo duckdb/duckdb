@@ -20,7 +20,7 @@ public:
 public:
 	explicit OptionalFilter(unique_ptr<TableFilter> filter = nullptr);
 
-	// Optional child filters.
+	//! Optional child filters.
 	unique_ptr<TableFilter> child_filter;
 
 public:

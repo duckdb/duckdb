@@ -12,7 +12,6 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
-class BoundColumnRefExpression;
 
 class ConjunctionFilter : public TableFilter {
 public:

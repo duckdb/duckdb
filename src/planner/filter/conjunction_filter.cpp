@@ -82,14 +82,13 @@ void ConjunctionAndFilter::ExtractInFilterValues(vector<Value> &values) {
 	optional_ptr<InFilter> in_filter;
 	vector<reference<ConstantFilter>> comparisons;
 	for (idx_t i = 0; i < child_filters.size(); i++) {
-		auto &child = child_filters[i];
-		if (child->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-			auto &comparison = child->Cast<ConstantFilter>();
+		if (child_filters[i]->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+			auto &comparison = child_filters[i]->Cast<ConstantFilter>();
 			comparisons.push_back(comparison);
 			continue;
 		}
 		if (child_filters[i]->filter_type == TableFilterType::OPTIONAL_FILTER) {
-			in_filter = InFilter::ExtractFromOptional(*child);
+			in_filter = InFilter::ExtractFromOptional(*child_filters[i]);
 			continue;
 		}
 		return;
