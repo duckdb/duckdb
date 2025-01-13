@@ -22,76 +22,46 @@ BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_posit
 BloomFilter::~BloomFilter() {
 }
 
-static inline void HashesToBloomFilterIndexes(const Vector &hashes, Vector& indexes, size_t shift, size_t bloom_filter_size, const SelectionVector *rsel, idx_t count) {
+inline void BloomFilter::SetBloomBitsForHashes(size_t shift, Vector &hashes, const SelectionVector *rsel, idx_t count) {
     D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
+    const size_t bloom_filter_size = Bit::BitLength(bloom_filter);
 
     if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-        indexes.SetVectorType(VectorType::CONSTANT_VECTOR);
-
-        auto ldata = ConstantVector::GetData<hash_t>(hashes);
-		auto indexes_data = ConstantVector::GetData<uint32_t>(indexes);
-		*indexes_data = (*ldata >> shift) % bloom_filter_size;
+        auto hash = ConstantVector::GetData<hash_t>(hashes);
+		auto bloom_idx = (*hash >> shift) % bloom_filter_size; // TODO: rotation would be a bit nicer because it allows us to generate more values. But C++20 in stdlib.
+        Bit::SetBit(bloom_filter, bloom_idx, 0x1);
     } else {
-        indexes.SetVectorType(VectorType::FLAT_VECTOR);
-
         UnifiedVectorFormat idata;
-		indexes.ToUnifiedFormat(count, idata);
+		hashes.ToUnifiedFormat(count, idata);
 
         if (!idata.validity.AllValid()) {
             for (idx_t i = 0; i < count; i++) {
                 auto ridx = rsel->get_index(i);
 			    auto idx = idata.sel->get_index(ridx);
                 if (idata.validity.RowIsValid(idx)) {
-                    FlatVector::GetData<uint32_t>(indexes)[ridx] = UnifiedVectorFormat::GetData<hash_t>(idata)[idx];
+                    auto hash = UnifiedVectorFormat::GetData<hash_t>(idata)[idx];
+                    auto bloom_idx = (hash >> shift) % bloom_filter_size;
+                    Bit::SetBit(bloom_filter, bloom_idx, 0x1);
                 }
             }
         } else {
             for (idx_t i = 0; i < count; i++) {
                 auto ridx = rsel->get_index(i);
 			    auto idx = idata.sel->get_index(ridx);
-                FlatVector::GetData<uint32_t>(indexes)[ridx] = UnifiedVectorFormat::GetData<hash_t>(idata)[idx];
-            }
-        }
-    }
-}
-
-static inline void SetBloomFilterBitsAtIndexes(bitstring_t &bloom_filter, Vector &indexes, const SelectionVector *rsel, idx_t count) {
-    D_ASSERT(indexes.GetType().id() == LogicalType::UINTEGER);
-
-    if (indexes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-        if (!ConstantVector::IsNull(indexes)) {
-            auto idx = ConstantVector::GetData<uint32_t>(indexes);
-            Bit::SetBit(bloom_filter, *idx, 0x1);
-        }
-    } else {
-        UnifiedVectorFormat idata;
-		indexes.ToUnifiedFormat(count, idata);
-        
-        if (!idata.validity.AllValid()) {
-            for (idx_t i = 0; i < count; i++) {
-                auto ridx = rsel->get_index(i);
-			    auto idx = idata.sel->get_index(ridx);
-                if (idata.validity.RowIsValid(idx)) {
-                    Bit::SetBit(bloom_filter, UnifiedVectorFormat::GetData<uint32_t>(idata)[idx], 0x1);
-                }
-            }
-        } else {
-            for (idx_t i = 0; i < count; i++) {
-                auto ridx = rsel->get_index(i);
-			    auto idx = idata.sel->get_index(ridx);
-                Bit::SetBit(bloom_filter, UnifiedVectorFormat::GetData<uint32_t>(idata)[idx], 0x1);
+                auto hash = UnifiedVectorFormat::GetData<hash_t>(idata)[idx];
+                auto bloom_idx = (hash >> shift) % bloom_filter_size;
+                Bit::SetBit(bloom_filter, bloom_idx, 0x1);
             }
         }
     }
 }
 
 void BloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector *rsel, idx_t count) {
+    // Rotate hash by a couple of bits to produce a new "hash value".
+    // With this trick, keys have to be hashed only once.
     for (idx_t i = 0; i < num_hash_functions; i++) {
         auto shift = i * 6;
-        Vector bloom_bit_idxs(LogicalType::UINTEGER);
-        
-        HashesToBloomFilterIndexes(hashes, bloom_bit_idxs, shift, Bit::BitLength(bloom_filter), rsel, count);
-        SetBloomFilterBitsAtIndexes(bloom_filter, bloom_bit_idxs, rsel, count);
+        SetBloomBitsForHashes(shift, hashes, rsel, count);
     }
 }
 

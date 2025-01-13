@@ -41,6 +41,8 @@ private:
 	// Perform the exact same has function as the hash table, so we can re-use the hash values for probing the HT.
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
+	void SetBloomBitsForHashes(size_t shift, Vector &hashes, const SelectionVector *rsel, idx_t count);
+
 	int num_hash_functions;
 	bitstring_t bloom_filter;
 };
