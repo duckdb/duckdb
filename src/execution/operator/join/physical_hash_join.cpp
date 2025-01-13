@@ -886,8 +886,8 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 			if (state.scan_structure.count != 0) {
 				Vector hashes(LogicalType::HASH);
 				sink.hash_table->Hash(state.lhs_join_keys, *current_sel, state.scan_structure.count, hashes);
-				size_t sel_rows = sink.bloom_filter->Probe(state.lhs_join_keys, current_sel, state.scan_structure.count, state.scan_structure.sel_vector, hashes);
-				state.scan_structure.count = sel_rows;
+				//size_t sel_rows = sink.bloom_filter->Probe(state.lhs_join_keys, current_sel, state.scan_structure.count, state.scan_structure.sel_vector, hashes);
+				//state.scan_structure.count = sel_rows;
 				if (state.scan_structure.count != 0) {
 					sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state, current_sel, hashes);
 				}
