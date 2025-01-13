@@ -1,15 +1,13 @@
 #include "duckdb/planner/filter/in_filter.hpp"
+
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
 
 namespace duckdb {
 
-InFilter::InFilter(vector<Value> values_p) : InFilter(std::move(values_p), false) {
-}
-
-InFilter::InFilter(vector<Value> values_p, bool origin_is_hash_join)
-    : TableFilter(TableFilterType::IN_FILTER), values(std::move(values_p)), origin_is_hash_join(origin_is_hash_join) {
+InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FILTER), values(std::move(values_p)) {
 	for (auto &val : values) {
 		if (val.IsNull()) {
 			throw InternalException("InFilter constant cannot be NULL - use IsNullFilter instead");
@@ -23,6 +21,15 @@ InFilter::InFilter(vector<Value> values_p, bool origin_is_hash_join)
 	if (values.empty()) {
 		throw InternalException("InFilter constants cannot be empty");
 	}
+}
+
+optional_ptr<InFilter> InFilter::ExtractFromOptional(TableFilter &filter) {
+	auto &optional_filter = filter.Cast<OptionalFilter>();
+	auto &child = optional_filter.child_filter;
+	if (!child || child->filter_type != TableFilterType::IN_FILTER) {
+		return nullptr;
+	}
+	return child->Cast<InFilter>();
 }
 
 FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) {
@@ -74,11 +81,11 @@ bool InFilter::Equals(const TableFilter &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<InFilter>();
-	return other.values == values && other.origin_is_hash_join == origin_is_hash_join;
+	return other.values == values;
 }
 
 unique_ptr<TableFilter> InFilter::Copy() const {
-	return make_uniq<InFilter>(values, origin_is_hash_join);
+	return make_uniq<InFilter>(values);
 }
 
 } // namespace duckdb

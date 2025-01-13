@@ -1,7 +1,14 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
 
 namespace duckdb {
+
+void ConjunctionFilter::ExtractInFilterValues(vector<Value> &values) {
+	throw InternalException("cannot extract IN filter values of ConjunctionFilter");
+}
 
 ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_OR) {
 }
@@ -64,6 +71,47 @@ unique_ptr<Expression> ConjunctionOrFilter::ToExpression(const Expression &colum
 }
 
 ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_AND) {
+}
+
+void ConjunctionAndFilter::ExtractInFilterValues(vector<Value> &values) {
+	if (child_filters.empty()) {
+		return;
+	}
+
+	// Extract the IN filter and the comparisons.
+	optional_ptr<InFilter> in_filter;
+	vector<reference<ConstantFilter>> comparisons;
+	for (idx_t i = 0; i < child_filters.size(); i++) {
+		auto &child = child_filters[i];
+		if (child->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+			auto &comparison = child->Cast<ConstantFilter>();
+			comparisons.push_back(comparison);
+			continue;
+		}
+		if (child_filters[i]->filter_type == TableFilterType::OPTIONAL_FILTER) {
+			in_filter = InFilter::ExtractFromOptional(*child);
+			continue;
+		}
+		return;
+	}
+	if (!in_filter) {
+		return;
+	}
+
+	// Extract all qualifying values.
+	for (idx_t val_idx = 0; val_idx < in_filter->values.size(); val_idx++) {
+		auto &in_value = in_filter->values[val_idx];
+		bool qualifies = true;
+		for (idx_t comp_idx = 0; comp_idx < comparisons.size(); comp_idx++) {
+			if (!comparisons[comp_idx].get().Compare(in_value)) {
+				qualifies = false;
+				break;
+			}
+		}
+		if (qualifies) {
+			values.push_back(in_value);
+		}
+	}
 }
 
 FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stats) {

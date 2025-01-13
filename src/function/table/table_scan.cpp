@@ -24,6 +24,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/common/types/value_map.hpp"
 
 namespace duckdb {
 
@@ -361,26 +362,21 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	return std::move(g_state);
 }
 
-void ExtractOptionalFilter(TableFilter &filter, BoundColumnRefExpression &bound_ref,
-                           unique_ptr<vector<unique_ptr<Expression>>> &filter_expressions, bool origin_is_hash_join) {
-	// FIXME: match without the need for origin_is_hash_join.
-	auto &optional_filter = filter.Cast<OptionalFilter>();
-	auto &child = optional_filter.child_filter;
-	if (child->filter_type != TableFilterType::IN_FILTER) {
-		return;
-	}
-
-	auto &in_filter = child->Cast<InFilter>();
-	if (!in_filter.origin_is_hash_join && origin_is_hash_join) {
-		return;
-	}
+void ExtractExpressionsFromValues(vector<Value> &values, BoundColumnRefExpression &bound_ref,
+                                  unique_ptr<vector<unique_ptr<Expression>>> &expressions) {
+	// Ensure that we never push duplicates.
+	value_set_t unique_values;
 
 	// They are all on the same column, so we can split them.
-	for (const auto &value : in_filter.values) {
+	for (const auto &value : values) {
+		if (unique_values.find(value) != unique_values.end()) {
+			continue;
+		}
 		auto bound_constant = make_uniq<BoundConstantExpression>(value);
 		auto filter_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
 		                                                        std::move(bound_constant));
-		filter_expressions->push_back(std::move(filter_expr));
+		expressions->push_back(std::move(filter_expr));
+		unique_values.insert(value);
 	}
 }
 
@@ -388,24 +384,22 @@ unique_ptr<vector<unique_ptr<Expression>>> ExtractFilters(const ColumnDefinition
                                                           idx_t storage_idx) {
 	ColumnBinding binding(0, storage_idx);
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
-	auto filter_expressions = make_uniq<vector<unique_ptr<Expression>>>();
+	auto expressions = make_uniq<vector<unique_ptr<Expression>>>();
 
 	switch (filter->filter_type) {
-	case TableFilterType::OPTIONAL_FILTER:
-		// Conventional IN filter.
-		ExtractOptionalFilter(*filter, *bound_ref, filter_expressions, false);
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto in_filter = InFilter::ExtractFromOptional(*filter);
+		if (!in_filter) {
+			break;
+		}
+		ExtractExpressionsFromValues(in_filter->values, *bound_ref, expressions);
 		break;
+	}
 	case TableFilterType::CONJUNCTION_AND: {
-		// Dynamic filter pushed down via a hash join.
-		auto &and_filter = filter->Cast<ConjunctionAndFilter>();
-		auto &children = and_filter.child_filters;
-		if (children.empty()) {
-			break;
-		}
-		if (children[0]->filter_type != TableFilterType::OPTIONAL_FILTER) {
-			break;
-		}
-		ExtractOptionalFilter(*children[0], *bound_ref, filter_expressions, true);
+		vector<Value> values;
+		auto &conjunction_and_filter = filter->Cast<ConjunctionAndFilter>();
+		conjunction_and_filter.ExtractInFilterValues(values);
+		ExtractExpressionsFromValues(values, *bound_ref, expressions);
 		break;
 	}
 	default:
@@ -413,11 +407,11 @@ unique_ptr<vector<unique_ptr<Expression>>> ExtractFilters(const ColumnDefinition
 	}
 
 	// Attempt matching the top-level filter to the index expression.
-	if (filter_expressions->empty()) {
+	if (expressions->empty()) {
 		auto filter_expr = filter->ToExpression(*bound_ref);
-		filter_expressions->push_back(std::move(filter_expr));
+		expressions->push_back(std::move(filter_expr));
 	}
-	return filter_expressions;
+	return expressions;
 }
 
 bool TryScanIndex(ART &art, const ColumnList &column_list, TableFunctionInitInput &input, TableFilterSet &filter_set,

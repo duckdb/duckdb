@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class BoundColumnRefExpression;
 
 class ConjunctionFilter : public TableFilter {
 public:
@@ -25,6 +26,7 @@ public:
 	vector<unique_ptr<TableFilter>> child_filters;
 
 public:
+	virtual void ExtractInFilterValues(vector<Value> &values);
 	bool Equals(const TableFilter &other) const override {
 		return TableFilter::Equals(other);
 	}
@@ -53,6 +55,7 @@ public:
 	ConjunctionAndFilter();
 
 public:
+	void ExtractInFilterValues(vector<Value> &values) override;
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
 	bool Equals(const TableFilter &other) const override;
