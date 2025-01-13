@@ -15,7 +15,10 @@ BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_posit
 	size_t approx_size_64 = approx_size + (64 - approx_size % 64);
     num_hash_functions = std::ceil(approx_size / expected_cardinality * 0.693147);
 
-    bloom_filter = std::move(duckdb::string_t(approx_size_64 / 8));
+    data_buffer.resize(approx_size_64 / 8);
+    // TODO: using a duckdb bitstring allows us to inline small bloom-filters into a stack variable.
+    // BUT: we might not want to construct small bloom-filters because we have the IN-list optimization, so we just get an unnecessary branch because of that?
+    bloom_filter = std::move(duckdb::string_t(data_buffer.data(), data_buffer.size()));
     Bit::SetEmptyBitString(bloom_filter, approx_size_64);
 }
 

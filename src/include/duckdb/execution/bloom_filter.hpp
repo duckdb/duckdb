@@ -44,6 +44,7 @@ private:
 	void SetBloomBitsForHashes(size_t shift, Vector &hashes, const SelectionVector *rsel, idx_t count);
 
 	int num_hash_functions;
+	std::vector<char> data_buffer;
 	bitstring_t bloom_filter;
 };
 
