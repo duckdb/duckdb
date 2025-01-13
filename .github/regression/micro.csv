@@ -17,7 +17,6 @@ benchmark/tpch/pivot/lineitem_pivot_shipdate.benchmark
 benchmark/micro/logger/disabled/logging_disabled_global.benchmark
 benchmark/micro/logger/disabled/logging_disabled_client_context.benchmark
 benchmark/micro/logger/disabled/logging_disabled_reference.benchmark
-benchmark/micro/logger/disabled/logging_disabled_thread_local.benchmark
 benchmark/micro/logger/disabled/logging_disabled_file_opener.benchmark
 benchmark/micro/logger/enabled/logging_enabled_client_context.benchmark
 benchmark/micro/logger/enabled/logging_enabled_global.benchmark
