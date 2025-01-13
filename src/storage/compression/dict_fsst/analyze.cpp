@@ -28,7 +28,7 @@ void DictFSSTAnalyzeState::AddNewString(const StringData &string_data) {
 	current_unique_count++;
 	current_dict_size += str.GetSize();
 
-	uint32_t string_length = string_data.string.GetSize();
+	uint32_t string_length = UnsafeNumericCast<uint32_t>(string_data.string.GetSize());
 	if (append_state == DictionaryAppendState::ENCODED) {
 		//! Optimistic assumption about the compressed length;
 		string_length /= 2;
@@ -102,8 +102,8 @@ bool DictFSSTAnalyzeState::EncodeDictionary() {
 	}
 
 	for (idx_t i = 0; i < string_count; i++) {
-		auto size = compressed_sizes[i];
-		auto uncompressed_str = string_t((const char *)fsst_string_ptrs[i], fsst_string_sizes[i]);
+		uint32_t size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
+		auto uncompressed_str = string_t((const char *)fsst_string_ptrs[i], (uint32_t)fsst_string_sizes[i]); // NOLINT
 		current_string_map[uncompressed_str] = size;
 	}
 	current_dict_size = new_size;
