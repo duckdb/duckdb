@@ -17,11 +17,13 @@ vector<string> ListCompressionTypes(void) {
 }
 
 bool CompressionTypeIsDeprecated(CompressionType compression_type) {
-	const bool is_patas = compression_type == CompressionType::COMPRESSION_PATAS;
-	const bool is_chimp = compression_type == CompressionType::COMPRESSION_CHIMP;
-	const bool is_dict = compression_type == CompressionType::COMPRESSION_DICTIONARY;
-	const bool is_fsst = compression_type == CompressionType::COMPRESSION_FSST;
-	return (is_patas || is_chimp || is_dict || is_fsst);
+	vector<CompressionType> types({CompressionType::COMPRESSION_PATAS, CompressionType::COMPRESSION_CHIMP});
+	for (auto &type : types) {
+		if (type == compression_type) {
+			return true;
+		}
+	}
+	return false;
 }
 
 CompressionType CompressionTypeFromString(const string &str) {
