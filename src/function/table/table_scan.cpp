@@ -85,7 +85,7 @@ public:
 	virtual unique_ptr<LocalTableFunctionState> InitLocalState(ExecutionContext &context,
 	                                                           TableFunctionInitInput &input) = 0;
 	virtual void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) = 0;
-	virtual double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) = 0;
+	virtual double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const = 0;
 	virtual OperatorPartitionData TableScanGetPartitionData(ClientContext &context,
 	                                                        TableFunctionGetPartitionInput &input) = 0;
 
@@ -105,7 +105,7 @@ public:
 
 	//! The batch index of the next Sink.
 	//! Also determines the offset of the next chunk. I.e., offset = next_batch_index * STANDARD_VECTOR_SIZE.
-	idx_t next_batch_index;
+	atomic<idx_t> next_batch_index;
 	//! The total scanned row IDs.
 	unsafe_vector<row_t> row_ids;
 	//! The column IDs of the to-be-scanned columns.
@@ -178,17 +178,13 @@ public:
 		}
 	}
 
-	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) override {
+	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const override {
 		auto total_rows = row_ids.size();
 		if (total_rows == 0) {
 			return 100;
 		}
 
-		idx_t scanned_rows;
-		{
-			lock_guard<mutex> l(index_scan_lock);
-			scanned_rows = next_batch_index * STANDARD_VECTOR_SIZE;
-		}
+		auto scanned_rows = next_batch_index * STANDARD_VECTOR_SIZE;
 		auto percentage = 100 * (static_cast<double>(scanned_rows) / static_cast<double>(total_rows));
 		return percentage > 100 ? 100 : percentage;
 	}
@@ -263,7 +259,7 @@ public:
 		} while (true);
 	}
 
-	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) override {
+	double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) const override {
 		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 		auto &storage = duck_table.GetStorage();
