@@ -17,7 +17,7 @@ public:
 	}
 	explicit CompressedStringScanState(BufferHandle &handle_p) : StringScanState(), owned_handle(), handle(handle_p) {
 	}
-	~CompressedStringScanState();
+	~CompressedStringScanState() override;
 
 public:
 	void Initialize(ColumnSegment &segment, bool initialize_dictionary = true);

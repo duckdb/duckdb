@@ -41,7 +41,7 @@ public:
 struct DictFSSTCompressionCompressState : public DictFSSTCompressionState {
 public:
 	DictFSSTCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info);
-	~DictFSSTCompressionCompressState();
+	~DictFSSTCompressionCompressState() override;
 
 public:
 	void CreateEmptySegment(idx_t row_start);

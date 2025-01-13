@@ -11,7 +11,7 @@ DictFSSTAnalyzeState::DictFSSTAnalyzeState(const CompressionInfo &info)
 
 DictFSSTAnalyzeState::~DictFSSTAnalyzeState() {
 	if (encoder) {
-		auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+		auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 		duckdb_fsst_destroy(fsst_encoder);
 	}
 }
@@ -72,8 +72,9 @@ bool DictFSSTAnalyzeState::EncodeDictionary() {
 
 	// Create the encoder
 	auto string_count = current_string_map.size();
-	encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
-	auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+	encoder =
+	    reinterpret_cast<void *>(duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0));
+	auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 
 	size_t output_buffer_size = 7 + 2 * current_dict_size; // size as specified in fsst.h
 	auto compressed_ptrs = vector<unsigned char *>(string_count, nullptr);

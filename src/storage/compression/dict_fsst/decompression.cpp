@@ -6,7 +6,7 @@ namespace duckdb {
 namespace dict_fsst {
 
 CompressedStringScanState::~CompressedStringScanState() {
-	delete (duckdb_fsst_decoder_t *)(decoder);
+	delete reinterpret_cast<duckdb_fsst_decoder_t *>(decoder);
 }
 
 uint16_t CompressedStringScanState::GetStringLength(sel_t index) {
@@ -59,7 +59,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	if (is_fsst_encoded) {
 		decoder = new duckdb_fsst_decoder_t;
 		auto symbol_table_location = baseptr + dict.end;
-		auto ret = duckdb_fsst_import((duckdb_fsst_decoder_t *)decoder, symbol_table_location);
+		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), symbol_table_location);
 		(void)(ret);
 		D_ASSERT(ret != 0); // FIXME: the old code set the decoder to nullptr instead, why???
 

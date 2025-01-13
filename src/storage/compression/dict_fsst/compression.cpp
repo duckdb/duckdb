@@ -15,7 +15,7 @@ DictFSSTCompressionCompressState::DictFSSTCompressionCompressState(ColumnDataChe
 
 DictFSSTCompressionCompressState::~DictFSSTCompressionCompressState() {
 	if (encoder) {
-		auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+		auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 		duckdb_fsst_destroy(fsst_encoder);
 	}
 }
@@ -141,7 +141,7 @@ void DictFSSTCompressionCompressState::Flush(bool final) {
 	append_state = DictionaryAppendState::REGULAR;
 	encoded_input.Reset();
 	if (encoder) {
-		auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+		auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 		duckdb_fsst_destroy(fsst_encoder);
 		encoder = nullptr;
 	}
@@ -159,7 +159,7 @@ void DictFSSTCompressionCompressState::EncodeInputStrings(UnifiedVectorFormat &i
 
 	encoded_input.Reset();
 	D_ASSERT(encoder);
-	auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+	auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 
 	vector<size_t> fsst_string_sizes;
 	vector<unsigned char *> fsst_string_ptrs;
@@ -193,7 +193,7 @@ void DictFSSTCompressionCompressState::EncodeInputStrings(UnifiedVectorFormat &i
 		uint32_t size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
 		string_t encoded_string((const char *)compressed_ptrs[i], size); // NOLINT;
 		if (!encoded_string.IsInlined()) {
-			strings.push_back(heap.AddBlob(std::move(encoded_string)));
+			strings.push_back(heap.AddBlob(encoded_string));
 		} else {
 			strings.push_back(encoded_string);
 		}
@@ -224,8 +224,9 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 
 	// Create the encoder
 	auto string_count = index_buffer.size() - 1;
-	encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
-	auto fsst_encoder = (duckdb_fsst_encoder_t *)(encoder);
+	encoder =
+	    reinterpret_cast<void *>(duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0));
+	auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 
 	size_t output_buffer_size = 7 + 2 * current_dictionary.size; // size as specified in fsst.h
 	auto compressed_ptrs = vector<unsigned char *>(string_count, nullptr);

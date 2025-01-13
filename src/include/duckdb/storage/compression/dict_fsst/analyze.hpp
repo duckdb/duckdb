@@ -14,7 +14,7 @@ namespace dict_fsst {
 struct DictFSSTAnalyzeState : public DictFSSTCompressionState {
 public:
 	explicit DictFSSTAnalyzeState(const CompressionInfo &info);
-	~DictFSSTAnalyzeState();
+	~DictFSSTAnalyzeState() override;
 
 public:
 	optional_idx LookupString(const string_t &str) override;
