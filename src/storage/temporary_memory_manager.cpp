@@ -8,15 +8,6 @@
 
 namespace duckdb {
 
-#define POLICY_WEIGHTED_COST   0
-#define POLICY_UNWEIGHTED_COST 0
-#define POLICY_EQUALITY        1
-#define POLICY_EQUITY          0
-
-#if POLICY_WEIGHTED_COST + POLICY_UNWEIGHTED_COST + POLICY_EQUALITY + POLICY_EQUITY != 1
-#error "Multiple policies defined!"
-#endif
-
 TemporaryMemoryState::TemporaryMemoryState(TemporaryMemoryManager &temporary_memory_manager_p,
                                            idx_t minimum_reservation_p)
     : temporary_memory_manager(temporary_memory_manager_p), remaining_size(0),
@@ -199,11 +190,7 @@ static void ComputeDerivatives(const vector<reference<const TemporaryMemoryState
 		auto &state = states[i].get();
 		const auto resd = static_cast<double>(res[i]);
 		const auto sizd = static_cast<double>(MaxValue<idx_t>(state.GetRemainingSize(), 1));
-#if POLICY_UNWEIGHTED_COST
-		const auto pend = 1.0;
-#else
 		const auto pend = static_cast<double>(state.GetMaterializationPenalty());
-#endif
 		prod_res *= resd;
 		prod_siz *= sizd;
 		mat_cost += pend * (1 - resd / sizd); // Materialization cost: sum of (1 - throughput)
@@ -255,28 +242,6 @@ idx_t TemporaryMemoryManager::ComputeReservation(const TemporaryMemoryState &tem
 		return res[state_index.GetIndex()];
 	}
 	const auto free_memory = memory_limit - sum_of_initial_res;
-
-#if POLICY_EQUALITY || POLICY_EQUITY
-	const auto idx = state_index.GetIndex();
-	auto &current_state = states[idx].get();
-	const auto initial_state_reservation = ComputeInitialReservation(current_state);
-#if POLICY_EQUALITY
-	const auto desired = memory_limit / active_states.size();
-#elif POLICY_EQUITY
-	const auto desired =
-	    LossyNumericCast<idx_t>(static_cast<double>(current_state.GetRemainingSize()) /
-	                            static_cast<double>(remaining_size) * static_cast<double>(memory_limit));
-#endif
-	auto upper_bound = LossyNumericCast<idx_t>(MAXIMUM_FREE_MEMORY_RATIO *
-	                                           static_cast<double>(initial_state_reservation + free_memory));
-	// Update upper bound
-	upper_bound = MinValue(upper_bound, desired);
-	auto state_reservation = MinValue(res[idx], upper_bound);
-	// But make sure it's never less than the initial reservation
-	state_reservation = MaxValue(state_reservation, initial_state_reservation);
-	// Simple policy, just return
-	return state_reservation;
-#endif
 
 	// Distribute memory in OPTIMIZATION_ITERATIONS
 	idx_t remaining_memory = free_memory;
