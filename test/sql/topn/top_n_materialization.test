@@ -73,6 +73,13 @@ SELECT * FROM (
 ----
 8	9	10	-8
 
+query I
+SELECT l FROM (
+	SELECT * FROM test ORDER BY j DESC LIMIT 2
+) WHERE k=10
+----
+-8
+
 # now with varchar columns
 statement ok
 CREATE OR REPLACE TABLE test AS SELECT printf('%02d', i) i, printf('%02d', i + 1) AS j, printf('%02d', i + 2) AS k, printf('%02d', -i) AS l FROM range(10) t(i);

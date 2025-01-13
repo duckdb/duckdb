@@ -149,6 +149,13 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 			// recurse into the child node - but ONLY visit expressions that are referenced
 			auto &proj = child.get().Cast<LogicalProjection>();
 
+			for(auto &expr : proj.expressions) {
+				if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+					// FIXME: for now we only support direct projections
+					return false;
+				}
+			}
+
 			// figure out which projection expressions we are currently referencing
 			set<idx_t> referenced_columns;
 			for (auto &entry : column_references) {
