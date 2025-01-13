@@ -17,6 +17,15 @@ copy (select range i from range(20000)) to '__TEST_DIR__/encoding_compatibility.
 ----
 Binder Error
 
+# defaults to V1
+statement ok
+copy (select range i from range(20000)) to '__TEST_DIR__/encoding_compatibility.parquet'
+
+query I
+select encodings from parquet_metadata('__TEST_DIR__/encoding_compatibility.parquet')
+----
+PLAIN
+
 # we do PLAIN if we can't do dictionary for V1
 statement ok
 copy (select range i from range(20000)) to '__TEST_DIR__/encoding_compatibility.parquet' (encoding_compatibility v1)
