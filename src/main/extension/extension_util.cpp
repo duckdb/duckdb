@@ -184,7 +184,7 @@ TableFunctionCatalogEntry &ExtensionUtil::GetTableFunction(DatabaseInstance &db,
 }
 
 void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type,
-                                 bind_type_modifiers_function_t bind_modifiers) {
+                                 bind_logical_type_function_t bind_modifiers) {
 	D_ASSERT(!type_name.empty());
 	CreateTypeInfo info(std::move(type_name), std::move(type), bind_modifiers);
 	info.temporary = true;

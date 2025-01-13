@@ -7,6 +7,12 @@ require block_size 262144
 load __TEST_DIR__/test_zstd_compression_ratio.db
 
 statement ok
+set enable_logging=true;
+
+statement ok
+set logging_level='info';
+
+statement ok
 PRAGMA force_compression='zstd'
 
 statement ok
@@ -30,6 +36,12 @@ create table test_compressed as (
 statement ok
 checkpoint
 
+# We analyzed the ZSTD compressed data to be 230.8 Mb
+query I
+SELECT message FROM duckdb_logs where message.starts_with('FinalAnalyze') and message.contains('test_compressed') and message.contains('VARCHAR') order by timestamp;
+----
+FinalAnalyze(COMPRESSION_ZSTD) result for main.test_compressed.0(VARCHAR): 230801376
+
 statement ok
 PRAGMA force_compression='uncompressed'
 
@@ -49,6 +61,12 @@ CREATE TABLE test_uncompressed as (
 
 statement ok
 checkpoint
+
+# The Uncompressed data to would have been 462.4 Mb
+query I
+SELECT message FROM duckdb_logs where message.starts_with('FinalAnalyze') and message.contains('test_uncompressed') and message.contains('VARCHAR') order by timestamp;
+----
+FinalAnalyze(COMPRESSION_UNCOMPRESSED) result for main.test_uncompressed.0(VARCHAR): 462400000
 
 query I
 SELECT compression FROM pragma_storage_info('test_compressed') WHERE segment_type != 'VALIDITY' AND compression != 'ZSTD';
@@ -70,6 +88,7 @@ CREATE TYPE test_result AS UNION (
     )
 );
 
+# This roughly aligns with comparing Uncompressed/ZSTD FinalAnalyze results (which is ~2x)
 statement ok
 set variable min_ratio = 1.8;
 set variable max_ratio = 2.5;

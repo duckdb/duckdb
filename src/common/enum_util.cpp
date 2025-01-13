@@ -98,6 +98,7 @@
 #include "duckdb/function/table/arrow/enum/arrow_type_info_type.hpp"
 #include "duckdb/function/table/arrow/enum/arrow_variable_size_type.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/logging/logging.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/client_properties.hpp"
@@ -2062,6 +2063,66 @@ const char* EnumUtil::ToChars<LoadType>(LoadType value) {
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value) {
 	return static_cast<LoadType>(StringUtil::StringToEnum(GetLoadTypeValues(), 3, "LoadType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogContextScopeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogContextScope::DATABASE), "DATABASE" },
+		{ static_cast<uint32_t>(LogContextScope::CONNECTION), "CONNECTION" },
+		{ static_cast<uint32_t>(LogContextScope::THREAD), "THREAD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogContextScope>(LogContextScope value) {
+	return StringUtil::EnumToString(GetLogContextScopeValues(), 3, "LogContextScope", static_cast<uint32_t>(value));
+}
+
+template<>
+LogContextScope EnumUtil::FromString<LogContextScope>(const char *value) {
+	return static_cast<LogContextScope>(StringUtil::StringToEnum(GetLogContextScopeValues(), 3, "LogContextScope", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogLevelValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogLevel::LOG_TRACE), "TRACE" },
+		{ static_cast<uint32_t>(LogLevel::LOG_DEBUG), "DEBUG" },
+		{ static_cast<uint32_t>(LogLevel::LOG_INFO), "INFO" },
+		{ static_cast<uint32_t>(LogLevel::LOG_WARN), "WARN" },
+		{ static_cast<uint32_t>(LogLevel::LOG_ERROR), "ERROR" },
+		{ static_cast<uint32_t>(LogLevel::LOG_FATAL), "FATAL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogLevel>(LogLevel value) {
+	return StringUtil::EnumToString(GetLogLevelValues(), 6, "LogLevel", static_cast<uint32_t>(value));
+}
+
+template<>
+LogLevel EnumUtil::FromString<LogLevel>(const char *value) {
+	return static_cast<LogLevel>(StringUtil::StringToEnum(GetLogLevelValues(), 6, "LogLevel", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogMode::LEVEL_ONLY), "LEVEL_ONLY" },
+		{ static_cast<uint32_t>(LogMode::DISABLE_SELECTED), "DISABLE_SELECTED" },
+		{ static_cast<uint32_t>(LogMode::ENABLE_SELECTED), "ENABLE_SELECTED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogMode>(LogMode value) {
+	return StringUtil::EnumToString(GetLogModeValues(), 3, "LogMode", static_cast<uint32_t>(value));
+}
+
+template<>
+LogMode EnumUtil::FromString<LogMode>(const char *value) {
+	return static_cast<LogMode>(StringUtil::StringToEnum(GetLogModeValues(), 3, "LogMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {

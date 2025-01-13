@@ -637,11 +637,14 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	}
 
 	// generate the OR filter
-	auto or_filter = make_uniq<InFilter>(std::move(in_list));
+	auto in_filter = make_uniq<InFilter>(std::move(in_list));
+	in_filter->origin_is_hash_join = true;
+
 	// we push the OR filter as an OptionalFilter so that we can use it for zonemap pruning only
 	// the IN-list is expensive to execute otherwise
-	auto filter = make_uniq<OptionalFilter>(std::move(or_filter));
+	auto filter = make_uniq<OptionalFilter>(std::move(in_filter));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+	return;
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
