@@ -102,9 +102,7 @@ bool DictFSSTAnalyzeState::EncodeDictionary() {
 	}
 
 	for (idx_t i = 0; i < string_count; i++) {
-		auto &start = compressed_ptrs[i];
-		auto &size = compressed_sizes[i];
-
+		auto size = compressed_sizes[i];
 		auto uncompressed_str = string_t((const char *)fsst_string_ptrs[i], fsst_string_sizes[i]);
 		current_string_map[uncompressed_str] = size;
 	}
@@ -119,16 +117,39 @@ StringData DictFSSTAnalyzeState::GetString(const string_t *strings, idx_t index,
 }
 
 idx_t DictFSSTAnalyzeState::RequiredSpace(bool new_string, idx_t string_size) {
-	if (!new_string) {
-		return DictFSSTCompression::RequiredSpace(current_tuple_count + 1, current_unique_count, current_dict_size,
-		                                          current_width);
+	idx_t required_space = 0;
+	if (append_state == DictionaryAppendState::ENCODED) {
+		required_space += symbol_table_size;
 	}
-	next_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
-	return DictFSSTCompression::RequiredSpace(current_tuple_count + 1, current_unique_count + 1,
-	                                          current_dict_size + string_size, next_width);
+
+	if (!new_string) {
+		required_space += DictFSSTCompression::RequiredSpace(current_tuple_count + 1, current_unique_count,
+		                                                     current_dict_size, current_width);
+	} else {
+		next_width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
+		required_space += DictFSSTCompression::RequiredSpace(current_tuple_count + 1, current_unique_count + 1,
+		                                                     current_dict_size + string_size, next_width);
+	}
+	return required_space;
 }
 
 void DictFSSTAnalyzeState::Flush(bool final) {
+	if (!current_tuple_count) {
+		D_ASSERT(!current_unique_count);
+		D_ASSERT(!current_dict_size);
+		D_ASSERT(current_string_map.empty());
+		return;
+	}
+	idx_t required_space = 0;
+	if (append_state == DictionaryAppendState::ENCODED) {
+		required_space += symbol_table_size;
+	}
+	auto width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 1);
+	required_space +=
+	    DictFSSTCompression::RequiredSpace(current_tuple_count, current_unique_count, current_dict_size, width);
+
+	total_space += required_space;
+
 	segment_count++;
 	current_tuple_count = 0;
 	current_unique_count = 0;
@@ -136,6 +157,7 @@ void DictFSSTAnalyzeState::Flush(bool final) {
 	current_string_map.clear();
 	heap.Destroy();
 }
+
 void DictFSSTAnalyzeState::Verify() {
 }
 

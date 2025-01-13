@@ -67,6 +67,10 @@ bool DictFSSTCompressionState::DryAppendToCurrentSegment(bool is_new, UnifiedVec
 					//! Even after encoding the dictionary, we can't add this string
 					return false;
 				}
+			} else {
+				if (required_space > block_size) {
+					return false;
+				}
 			}
 		}
 		return true;
@@ -93,7 +97,7 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		EncodeInputStrings(vdata, count);
 	}
 
-	auto string_block_limit = StringUncompressed::GetStringBlockLimit(info.GetBlockSize());
+	auto string_block_limit = 16384;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		idx_t string_size = 0;

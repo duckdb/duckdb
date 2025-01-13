@@ -199,7 +199,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto symtable_size = num_blocks * sizeof(duckdb_fsst_decoder_t);
 	auto estimated_size = estimated_base_size + symtable_size;
 
-	return LossyNumericCast<idx_t>(estimated_size * MINIMUM_COMPRESSION_RATIO);
+	return LossyNumericCast<idx_t>(estimated_size * MINIMUM_COMPRESSION_RATIO) * 5;
 }
 
 //===--------------------------------------------------------------------===//

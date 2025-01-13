@@ -26,7 +26,6 @@ enum class DictionaryAppendState : uint8_t {
 
 struct DictFSSTCompression {
 public:
-	static constexpr float MINIMUM_COMPRESSION_RATIO = 1.2F;
 	//! Dictionary header size at the beginning of the string segment (offset + length)
 	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dict_fsst_compression_header_t);
 
@@ -96,7 +95,7 @@ protected:
 private:
 	bool DryAppendToCurrentSegment(bool is_new, UnifiedVectorFormat &vdata, idx_t count, idx_t index, idx_t raw_index);
 
-protected:
+public:
 	//! Keep track of the append state for the current segment
 	DictionaryAppendState append_state = DictionaryAppendState::REGULAR;
 	void *encoder = nullptr;

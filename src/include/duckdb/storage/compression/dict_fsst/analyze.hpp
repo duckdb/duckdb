@@ -38,6 +38,8 @@ public:
 	string_map_t<uint32_t> current_string_map;
 	bitpacking_width_t current_width;
 	bitpacking_width_t next_width;
+
+	idx_t total_space = 0;
 };
 
 struct DictFSSTCompressionAnalyzeState : public AnalyzeState {

@@ -81,13 +81,9 @@ bool DictFSSTCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &in
 idx_t DictFSSTCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto &analyze_state = state_p.Cast<DictFSSTCompressionAnalyzeState>();
 	auto &state = *analyze_state.analyze_state;
+	state.Flush();
 
-	auto width = BitpackingPrimitives::MinimumBitWidth(state.current_unique_count + 1);
-	auto req_space = DictFSSTCompression::RequiredSpace(state.current_tuple_count, state.current_unique_count,
-	                                                    state.current_dict_size, width);
-
-	const auto total_space = state.segment_count * state.info.GetBlockSize() + req_space;
-	return LossyNumericCast<idx_t>(DictFSSTCompression::MINIMUM_COMPRESSION_RATIO * float(total_space));
+	return state.total_space;
 }
 
 //===--------------------------------------------------------------------===//

@@ -118,14 +118,20 @@ void DictFSSTCompressionCompressState::AddLookup(uint32_t lookup_result) {
 }
 
 idx_t DictFSSTCompressionCompressState::RequiredSpace(bool new_string, idx_t string_size) {
+	idx_t required_space = 0;
+	if (append_state == DictionaryAppendState::ENCODED) {
+		required_space += symbol_table_size;
+	}
 
 	if (!new_string) {
-		return DictFSSTCompression::RequiredSpace(current_segment->count.load() + 1, index_buffer.size(),
-		                                          current_dictionary.size, current_width);
+		required_space += DictFSSTCompression::RequiredSpace(current_segment->count.load() + 1, index_buffer.size(),
+		                                                     current_dictionary.size, current_width);
+	} else {
+		next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
+		required_space += DictFSSTCompression::RequiredSpace(current_segment->count.load() + 1, index_buffer.size() + 1,
+		                                                     current_dictionary.size + string_size, next_width);
 	}
-	next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
-	return DictFSSTCompression::RequiredSpace(current_segment->count.load() + 1, index_buffer.size() + 1,
-	                                          current_dictionary.size + string_size, next_width);
+	return required_space;
 }
 
 void DictFSSTCompressionCompressState::Flush(bool final) {
