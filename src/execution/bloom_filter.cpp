@@ -19,7 +19,7 @@ BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_posit
     // TODO: using a duckdb bitstring allows us to inline small bloom-filters into a stack variable.
     // BUT: we might not want to construct small bloom-filters because we have the IN-list optimization, so we just get an unnecessary branch because of that?
     bloom_filter = std::move(duckdb::string_t(data_buffer.data(), data_buffer.size()));
-    Bit::SetEmptyBitString(bloom_filter, approx_size_64);
+    Bit::SetEmptyBitString(bloom_filter, approx_size_64);  // This is probably not necessary.
 }
 
 BloomFilter::~BloomFilter() {
