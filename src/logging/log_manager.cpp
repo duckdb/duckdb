@@ -143,6 +143,8 @@ void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name)
 		throw NotImplementedException("File log storage is not yet implemented");
 	} else if (registered_log_storages.find(storage_name_to_lower) != registered_log_storages.end()) {
 		log_storage = registered_log_storages[storage_name_to_lower];
+	} else {
+		throw InvalidInputException("Log storage '%s' is not yet registered", storage_name);
 	}
 	config.storage = storage_name_to_lower;
 }
