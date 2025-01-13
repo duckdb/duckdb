@@ -40,9 +40,6 @@ public:
 //===--------------------------------------------------------------------===//
 struct DictFSSTCompressionCompressState : public DictFSSTCompressionState {
 public:
-	static constexpr idx_t DICTIONARY_ENCODE_THRESHOLD = 4096;
-
-public:
 	DictFSSTCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info);
 	~DictFSSTCompressionCompressState();
 

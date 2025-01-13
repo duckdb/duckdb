@@ -62,6 +62,9 @@ public:
 //! Abstract class managing the compression state for size analysis or compression.
 class DictFSSTCompressionState : public CompressionState {
 public:
+	static constexpr idx_t DICTIONARY_ENCODE_THRESHOLD = 4096;
+
+public:
 	explicit DictFSSTCompressionState(const CompressionInfo &info);
 	~DictFSSTCompressionState() override;
 

@@ -40,6 +40,7 @@ void DictFSSTAnalyzeState::EncodeInputStrings(UnifiedVectorFormat &input, idx_t 
 }
 
 bool DictFSSTAnalyzeState::EncodeDictionary() {
+	append_state = DictionaryAppendState::NOT_ENCODED;
 	return false;
 }
 
