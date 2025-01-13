@@ -183,9 +183,8 @@ public:
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
-	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, BloomFilter& bloom_filter);
-	//! Get list of hashes appearing in the hash table. Has to be called after Finalize()
-	void GetHashes(Vector &hashes);
+	//! Optionally builds a Bloom-filter with the hash-keys.
+	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, optional_ptr<BloomFilter> bloom_filter);
 	//! Pre-compute hashes for the given keys.
 	static void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 	//! Probe the HT with the given input chunk, resulting in the given result
