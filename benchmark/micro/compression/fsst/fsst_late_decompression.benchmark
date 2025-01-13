@@ -8,7 +8,7 @@ storage persistent
 
 load
 DROP TABLE IF EXISTS test;
-PRAGMA force_compression='dict_fsst';
+PRAGMA force_compression='fsst';
 CREATE TABLE test AS SELECT i as id, (100 + (i%2))::VARCHAR AS value FROM range(0, 50000000) tbl(i);
 checkpoint;
 SET enable_fsst_vectors=false;

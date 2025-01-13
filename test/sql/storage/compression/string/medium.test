@@ -5,7 +5,7 @@
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db
 
-foreach compression dict_fsst
+foreach compression fsst dictionary dict_fsst
 
 foreach enable_fsst_vector true false
 

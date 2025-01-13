@@ -8,7 +8,7 @@ storage persistent
 require_reinit
 
 load
-PRAGMA force_compression='dict_fsst';
+PRAGMA force_compression='fsst';
 
 run
 CREATE TABLE test_compressed AS SELECT (100 + (i%1000))::VARCHAR AS i FROM range(0, 2500000) tbl(i);

@@ -8,7 +8,7 @@ storage persistent
 require_reinit
 
 load
-PRAGMA force_compression='dict_fsst';
+PRAGMA force_compression='dictionary';
 DROP TABLE IF EXISTS test;
 
 run
