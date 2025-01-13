@@ -1311,21 +1311,26 @@ public:
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		if (state.dictionary.size() == 0 || state.dictionary.size() > writer.DictionarySizeLimit()) {
-			// If we aren't doing dictionary encoding, the following encodings are virtually always better than PLAIN
-			switch (type) {
-			case Type::type::INT32:
-			case Type::type::INT64:
-				state.encoding = Encoding::DELTA_BINARY_PACKED;
-				break;
-			case Type::type::BYTE_ARRAY:
-				state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
-				break;
-			case Type::type::FLOAT:
-			case Type::type::DOUBLE:
-				state.encoding = Encoding::BYTE_STREAM_SPLIT;
-				break;
-			default:
+			if (writer.GetEncodingCompatibility() == ParquetEncodingCompatibility::V1) {
+				// Can't do the cool stuff for V1
 				state.encoding = Encoding::PLAIN;
+			} else {
+				// If we aren't doing dictionary encoding, these encodings are virtually always better than PLAIN
+				switch (type) {
+				case Type::type::INT32:
+				case Type::type::INT64:
+					state.encoding = Encoding::DELTA_BINARY_PACKED;
+					break;
+				case Type::type::BYTE_ARRAY:
+					state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
+					break;
+				case Type::type::FLOAT:
+				case Type::type::DOUBLE:
+					state.encoding = Encoding::BYTE_STREAM_SPLIT;
+					break;
+				default:
+					state.encoding = Encoding::PLAIN;
+				}
 			}
 			state.dictionary.clear();
 		}

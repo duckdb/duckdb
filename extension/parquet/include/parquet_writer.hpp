@@ -68,13 +68,19 @@ struct ParquetBloomFilterEntry {
 	idx_t column_idx;
 };
 
+enum class ParquetEncodingCompatibility : uint8_t {
+	V1 = 1, //! Excludes DELTA_BINARY_PACKED, DELTA_LENGTH_BYTE_ARRAY, BYTE_STREAM_SPLIT
+	V2 = 2, //! Includes the encodings above
+};
+
 class ParquetWriter {
 public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, idx_t dictionary_size_limit,
-	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl);
+	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl,
+	              ParquetEncodingCompatibility encoding_compatibility);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -117,6 +123,9 @@ public:
 		lock_guard<mutex> glock(lock);
 		return file_meta_data.row_groups.size();
 	}
+	ParquetEncodingCompatibility GetEncodingCompatibility() const {
+		return encoding_compatibility;
+	}
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
@@ -140,6 +149,7 @@ private:
 	int64_t compression_level;
 	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;
+	ParquetEncodingCompatibility encoding_compatibility;
 
 	unique_ptr<BufferedFileWriter> writer;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
