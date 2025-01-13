@@ -130,7 +130,7 @@ struct DeltaMultiFileReader : public MultiFileReader {
 	void FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
 	                  const string &filename, const vector<string> &local_names,
 	                  const vector<LogicalType> &global_types, const vector<string> &global_names,
-	                  const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+	                  const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
 	                  ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) override;
 
 	//! Override the FinalizeChunk method
