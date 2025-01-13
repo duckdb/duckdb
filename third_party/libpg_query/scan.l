@@ -895,6 +895,12 @@ other			.
 						nchars = slashstar - yytext;
 					}
 
+					/* for PGQ it is confusing if + or * is glued to an arrow (<-> -> <-) or end of it (-> > -) */
+					char* prefix_first = yytext + (yytext[0] == '<'); /* skip: reduces prefix possibilities to (-> > -) */
+					char* prefix_last = yytext + nchars - (1 + (yytext[nchars-1] == '*' || yytext[nchars-1] == '+'));
+					if ((prefix_last == prefix_first+1 && *prefix_first == '-' && *prefix_last == '>') || 
+					    (prefix_last == prefix_first && (*prefix_first == '-' || *prefix_first == '>'))) nchars = 1;  /* break it up */
+
 					/*
 					 * For SQL compatibility, '+' and '-' cannot be the
 					 * last char of a multi-char operator unless the operator

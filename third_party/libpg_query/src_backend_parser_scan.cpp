@@ -2435,6 +2435,12 @@ YY_RULE_SETUP
 						nchars = slashstar - yytext;
 					}
 
+					/* for PGQ it is confusing if + or * is glued to an arrow (<-> -> <-) or end of it (-> > -) */
+					char* prefix_first = yytext + (yytext[0] == '<'); /* skip: reduces prefix possibilities to (-> > -) */
+					char* prefix_last = yytext + nchars - (1 + (yytext[nchars-1] == '*' || yytext[nchars-1] == '+'));
+					if ((prefix_last == prefix_first+1 && *prefix_first == '-' && *prefix_last == '>') || 
+					    (prefix_last == prefix_first && (*prefix_first == '-' || *prefix_first == '>'))) nchars = 1;  /* break it up */
+
 					/*
 					 * For SQL compatibility, '+' and '-' cannot be the
 					 * last char of a multi-char operator unless the operator
@@ -2532,7 +2538,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 74:
 YY_RULE_SETUP
-#line 993 "third_party/libpg_query/scan.l"
+#line 999 "third_party/libpg_query/scan.l"
 {
 					SET_YYLLOC();
 					yylval->ival = atol(yytext + 1);
@@ -2541,7 +2547,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 75:
 YY_RULE_SETUP
-#line 999 "third_party/libpg_query/scan.l"
+#line 1005 "third_party/libpg_query/scan.l"
 {
 					SET_YYLLOC();
 					yylval->ival = atol(yytext + 1);
@@ -2550,7 +2556,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 76:
 YY_RULE_SETUP
-#line 1005 "third_party/libpg_query/scan.l"
+#line 1011 "third_party/libpg_query/scan.l"
 {
 					SET_YYLLOC();
 					return process_integer_literal(yytext, yylval);
@@ -2558,7 +2564,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 77:
 YY_RULE_SETUP
-#line 1009 "third_party/libpg_query/scan.l"
+#line 1015 "third_party/libpg_query/scan.l"
 {
 					SET_YYLLOC();
 					yylval->str = pstrdup(yytext);
@@ -2567,7 +2573,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 78:
 YY_RULE_SETUP
-#line 1014 "third_party/libpg_query/scan.l"
+#line 1020 "third_party/libpg_query/scan.l"
 {
 					/* throw back the .., and treat as integer */
 					yyless(yyleng - 2);
@@ -2577,7 +2583,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 79:
 YY_RULE_SETUP
-#line 1020 "third_party/libpg_query/scan.l"
+#line 1026 "third_party/libpg_query/scan.l"
 {
 					SET_YYLLOC();
 					yylval->str = pstrdup(yytext);
@@ -2586,7 +2592,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 80:
 YY_RULE_SETUP
-#line 1025 "third_party/libpg_query/scan.l"
+#line 1031 "third_party/libpg_query/scan.l"
 {
 					/*
 					 * throw back the [Ee], and treat as {decimal}.  Note
@@ -2602,7 +2608,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 81:
 YY_RULE_SETUP
-#line 1037 "third_party/libpg_query/scan.l"
+#line 1043 "third_party/libpg_query/scan.l"
 {
 					/* throw back the [Ee][+-], and proceed as above */
 					yyless(yyleng - 2);
@@ -2613,7 +2619,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 82:
 YY_RULE_SETUP
-#line 1046 "third_party/libpg_query/scan.l"
+#line 1052 "third_party/libpg_query/scan.l"
 {
 					const PGScanKeyword *keyword;
 					char	   *ident;
@@ -2649,14 +2655,14 @@ YY_RULE_SETUP
 	YY_BREAK
 case 83:
 YY_RULE_SETUP
-#line 1079 "third_party/libpg_query/scan.l"
+#line 1085 "third_party/libpg_query/scan.l"
 {
 					SET_YYLLOC();
 					return yytext[0];
 				}
 	YY_BREAK
 case YY_STATE_EOF(INITIAL):
-#line 1084 "third_party/libpg_query/scan.l"
+#line 1090 "third_party/libpg_query/scan.l"
 {
 					SET_YYLLOC();
 					yyterminate();
@@ -2664,10 +2670,10 @@ case YY_STATE_EOF(INITIAL):
 	YY_BREAK
 case 84:
 YY_RULE_SETUP
-#line 1089 "third_party/libpg_query/scan.l"
+#line 1095 "third_party/libpg_query/scan.l"
 YY_FATAL_ERROR( "flex scanner jammed" );
 	YY_BREAK
-#line 2676 "third_party/libpg_query/src_backend_parser_scan.cpp"
+#line 2682 "third_party/libpg_query/src_backend_parser_scan.cpp"
 
 	case YY_END_OF_BUFFER:
 		{
@@ -3792,7 +3798,7 @@ static int yy_flex_strlen (const char * s , yyscan_t yyscanner)
 
 #define YYTABLES_NAME "yytables"
 
-#line 1089 "third_party/libpg_query/scan.l"
+#line 1095 "third_party/libpg_query/scan.l"
 
 
 /* LCOV_EXCL_STOP */
