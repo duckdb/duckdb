@@ -506,7 +506,7 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto &type_pair = child_types[i];
 		auto column = MultiFileReaderColumnDefinition(type_pair.first, type_pair.second);
-		auto &column_reader = *column_readers[column_index];
+		auto &column_reader = *child_readers[i];
 		auto &column_schema = column_reader.Schema();
 
 		if (column_schema.__isset.field_id) {
@@ -514,7 +514,7 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 		} else if (column_reader.GetParentSchema()) {
 			auto &parent_column_schema = *column_reader.GetParentSchema();
 			if (parent_column_schema.__isset.field_id) {
-				field_id_to_column_index[parent_column_schema.field_id] = column_index;
+				column.identifier = Value::INTEGER(parent_column_schema.field_id);
 			}
 		}
 		columns.emplace_back(std::move(column));
