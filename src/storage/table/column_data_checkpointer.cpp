@@ -1,9 +1,11 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -239,14 +241,19 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 			}
 		}
 
+		auto &checkpoint_state = checkpoint_states[i];
+		auto &col_data = checkpoint_state.get().column_data;
 		if (!chosen_state) {
-			auto &checkpoint_state = checkpoint_states[i];
-			auto &col_data = checkpoint_state.get().column_data;
 			throw FatalException("No suitable compression/storage method found to store column of type %s",
 			                     col_data.type.ToString());
 		}
 		D_ASSERT(compression_idx != DConstants::INVALID_INDEX);
-		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), *functions[compression_idx]);
+
+		auto &best_function = *functions[compression_idx];
+		Logger::Info(db, "FinalAnalyze(%s) result for %s.%s.%d(%s): %d", EnumUtil::ToString(best_function.type),
+		             col_data.info.GetSchemaName(), col_data.info.GetTableName(), col_data.column_index,
+		             col_data.type.ToString(), best_score);
+		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
 	}
 	return result;
 }
@@ -273,11 +280,32 @@ void ColumnDataCheckpointer::DropSegments() {
 	}
 }
 
+bool ColumnDataCheckpointer::ValidityCoveredByBasedata(vector<CheckpointAnalyzeResult> &result) {
+	if (result.size() != 2) {
+		return false;
+	}
+	if (!has_changes[0]) {
+		// The base data had no changes so it will not be rewritten
+		return false;
+	}
+	auto &base = result[0];
+	D_ASSERT(base.function);
+	return base.function->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
+}
+
 void ColumnDataCheckpointer::WriteToDisk() {
 	DropSegments();
 
 	// Analyze the candidate functions to select one of them to use for compression
 	auto analyze_result = DetectBestCompressionMethod();
+	if (ValidityCoveredByBasedata(analyze_result)) {
+		D_ASSERT(analyze_result.size() == 2);
+		auto &validity = analyze_result[1];
+		auto &config = DBConfig::GetConfig(db);
+		// Override the function to the COMPRESSION_EMPTY
+		// turning the compression+final compress steps into a no-op, saving a single empty segment
+		validity.function = config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT);
+	}
 
 	// Initialize the compression for the selected function
 	D_ASSERT(analyze_result.size() == checkpoint_states.size());
@@ -328,13 +356,12 @@ bool ColumnDataCheckpointer::HasChanges(ColumnData &col_data) {
 		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
-		} else {
-			// persistent segment; check if there were any updates or deletions in this segment
-			idx_t start_row_idx = segment->start - row_group.start;
-			idx_t end_row_idx = start_row_idx + segment->count;
-			if (col_data.updates && col_data.updates->HasUpdates(start_row_idx, end_row_idx)) {
-				return true;
-			}
+		}
+		// persistent segment; check if there were any updates or deletions in this segment
+		idx_t start_row_idx = segment->start - row_group.start;
+		idx_t end_row_idx = start_row_idx + segment->count;
+		if (col_data.HasChanges(start_row_idx, end_row_idx)) {
+			return true;
 		}
 	}
 	return false;

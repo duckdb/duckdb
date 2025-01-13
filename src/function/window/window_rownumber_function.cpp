@@ -79,6 +79,10 @@ void WindowRowNumberLocalState::Finalize(WindowExecutorGlobalState &gstate, Coll
 WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, ClientContext &context,
                                                  WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, context, shared) {
+
+	for (const auto &order : wexpr.arg_orders) {
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
+	}
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowRowNumberExecutor::GetGlobalState(const idx_t payload_count,

@@ -5,7 +5,11 @@
 
 namespace duckdb {
 
-InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FILTER), values(std::move(values_p)) {
+InFilter::InFilter(vector<Value> values_p) : InFilter(std::move(values_p), false) {
+}
+
+InFilter::InFilter(vector<Value> values_p, bool origin_is_hash_join)
+    : TableFilter(TableFilterType::IN_FILTER), values(std::move(values_p)), origin_is_hash_join(origin_is_hash_join) {
 	for (auto &val : values) {
 		if (val.IsNull()) {
 			throw InternalException("InFilter constant cannot be NULL - use IsNullFilter instead");
@@ -70,11 +74,11 @@ bool InFilter::Equals(const TableFilter &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<InFilter>();
-	return other.values == values;
+	return other.values == values && other.origin_is_hash_join == origin_is_hash_join;
 }
 
 unique_ptr<TableFilter> InFilter::Copy() const {
-	return make_uniq<InFilter>(values);
+	return make_uniq<InFilter>(values, origin_is_hash_join);
 }
 
 } // namespace duckdb

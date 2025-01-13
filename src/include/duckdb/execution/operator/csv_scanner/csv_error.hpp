@@ -17,9 +17,12 @@
 #include "duckdb/execution/operator/csv_scanner/header_value.hpp"
 
 namespace duckdb {
+class InternalAppender;
+class CSVFileScan;
+class CSVRejectsTable;
+struct ReadCSVData;
 
 //! Object that holds information on how many lines each csv batch read.
-
 class LinesPerBoundary {
 public:
 	LinesPerBoundary();
@@ -27,13 +30,6 @@ public:
 
 	idx_t boundary_idx = 0;
 	idx_t lines_in_batch = 0;
-
-	bool operator<(const LinesPerBoundary &other) const {
-		if (boundary_idx < other.boundary_idx) {
-			return true;
-		}
-		return lines_in_batch < other.lines_in_batch;
-	}
 };
 
 enum CSVErrorType : uint8_t {
@@ -63,8 +59,8 @@ public:
 	                          idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
 	                          optional_idx byte_position, LogicalTypeId type, const string &current_path);
 	//! Produces error for when the line size exceeds the maximum line size option
-	static CSVError LineSizeError(const CSVReaderOptions &options, idx_t actual_size, LinesPerBoundary error_info,
-	                              string &csv_row, idx_t byte_position, const string &current_path);
+	static CSVError LineSizeError(const CSVReaderOptions &options, LinesPerBoundary error_info, string &csv_row,
+	                              idx_t byte_position, const string &current_path);
 	//! Produces error for when the state machine reaches an invalid state
 	static CSVError InvalidState(const CSVReaderOptions &options, idx_t current_column, LinesPerBoundary error_info,
 	                             string &csv_row, idx_t row_byte_position, optional_idx byte_position,
@@ -121,26 +117,27 @@ class CSVErrorHandler {
 public:
 	explicit CSVErrorHandler(bool ignore_errors = false);
 	//! Throws the error
-	void Error(CSVError csv_error, bool force_error = false);
+	void Error(const CSVError &csv_error, bool force_error = false);
 	//! If we have a cached error, and we can now error, we error.
 	void ErrorIfNeeded();
+	//! Throws an error if a given type exists
+	void ErrorIfTypeExists(CSVErrorType error_type);
 	//! Inserts a finished error info
 	void Insert(idx_t boundary_idx, idx_t rows);
 	idx_t GetLine(const LinesPerBoundary &error_info);
 	void NewMaxLineSize(idx_t scan_line_size);
 	//! Returns true if there are any errors
 	bool AnyErrors();
-	//! Set of errors
-	map<LinesPerBoundary, vector<CSVError>> errors;
+	bool HasError(CSVErrorType error_type);
+	idx_t GetMaxLineLength();
 
-	idx_t GetMaxLineLength() const {
-		return max_line_length;
-	}
-	void DontPrintErrorLine() {
-		print_line = false;
-	}
+	void DontPrintErrorLine();
 
 	void SetIgnoreErrors(bool ignore_errors);
+	idx_t GetSize();
+
+	void FillRejectsTable(InternalAppender &errors_appender, idx_t file_idx, idx_t scan_idx, const CSVFileScan &file,
+	                      CSVRejectsTable &rejects, const ReadCSVData &bind_data, idx_t limit);
 
 private:
 	//! Private methods should always be locked by parent method.
@@ -159,6 +156,8 @@ private:
 	idx_t max_line_length = 0;
 	bool ignore_errors = false;
 	bool print_line = true;
+	//! Set of errors
+	vector<CSVError> errors;
 };
 
 } // namespace duckdb

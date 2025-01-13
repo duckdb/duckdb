@@ -584,3 +584,8 @@ select 'epoch'::timestamptz;
 ----
 1969-12-31 16:00:00-08
 
+# This is expected behaviour (ICU precision)
+statement error
+SELECT TIMESTAMPTZ '294247-01-10 04:00:54.7758';
+----
+Conversion Error: ICU date overflows timestamp range

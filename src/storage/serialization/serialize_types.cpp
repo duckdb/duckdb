@@ -122,13 +122,13 @@ shared_ptr<ExtraTypeInfo> DecimalTypeInfo::Deserialize(Deserializer &deserialize
 }
 
 void ExtensionTypeInfo::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<Value>>(100, "modifiers", modifiers);
+	serializer.WritePropertyWithDefault<vector<LogicalTypeModifier>>(100, "modifiers", modifiers);
 	serializer.WritePropertyWithDefault<unordered_map<string, Value>>(101, "properties", properties, unordered_map<string, Value>());
 }
 
 unique_ptr<ExtensionTypeInfo> ExtensionTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ExtensionTypeInfo>(new ExtensionTypeInfo());
-	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "modifiers", result->modifiers);
+	deserializer.ReadPropertyWithDefault<vector<LogicalTypeModifier>>(100, "modifiers", result->modifiers);
 	deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, Value>>(101, "properties", result->properties, unordered_map<string, Value>());
 	return result;
 }
@@ -153,6 +153,18 @@ shared_ptr<ExtraTypeInfo> ListTypeInfo::Deserialize(Deserializer &deserializer) 
 	auto result = duckdb::shared_ptr<ListTypeInfo>(new ListTypeInfo());
 	deserializer.ReadProperty<LogicalType>(200, "child_type", result->child_type);
 	return std::move(result);
+}
+
+void LogicalTypeModifier::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<Value>(100, "value", value);
+	serializer.WritePropertyWithDefault<string>(101, "label", label);
+}
+
+LogicalTypeModifier LogicalTypeModifier::Deserialize(Deserializer &deserializer) {
+	auto value = deserializer.ReadProperty<Value>(100, "value");
+	LogicalTypeModifier result(value);
+	deserializer.ReadPropertyWithDefault<string>(101, "label", result.label);
+	return result;
 }
 
 void StringTypeInfo::Serialize(Serializer &serializer) const {

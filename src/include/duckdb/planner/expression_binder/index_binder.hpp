@@ -30,6 +30,8 @@ public:
 	                                            TableCatalogEntry &table_entry, unique_ptr<LogicalOperator> plan,
 	                                            unique_ptr<AlterTableInfo> alter_table_info);
 
+	static void InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const string &schema);
+
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
