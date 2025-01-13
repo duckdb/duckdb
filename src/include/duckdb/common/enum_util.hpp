@@ -116,6 +116,8 @@ enum class CopyToType : uint8_t;
 
 enum class DataFileType : uint8_t;
 
+enum class DateCastResult : uint8_t;
+
 enum class DatePartSpecifier : uint8_t;
 
 enum class DebugInitialize : uint8_t;
@@ -201,6 +203,12 @@ enum class KeywordCategory : uint8_t;
 enum class LimitNodeType : uint8_t;
 
 enum class LoadType : uint8_t;
+
+enum class LogContextScope : uint8_t;
+
+enum class LogLevel : uint8_t;
+
+enum class LogMode : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
 
@@ -508,6 +516,9 @@ template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
 
 template<>
+const char* EnumUtil::ToChars<DateCastResult>(DateCastResult value);
+
+template<>
 const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value);
 
 template<>
@@ -635,6 +646,15 @@ const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
 
 template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
+
+template<>
+const char* EnumUtil::ToChars<LogContextScope>(LogContextScope value);
+
+template<>
+const char* EnumUtil::ToChars<LogLevel>(LogLevel value);
+
+template<>
+const char* EnumUtil::ToChars<LogMode>(LogMode value);
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
@@ -1031,6 +1051,9 @@ template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
 
 template<>
+DateCastResult EnumUtil::FromString<DateCastResult>(const char *value);
+
+template<>
 DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value);
 
 template<>
@@ -1158,6 +1181,15 @@ LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
 
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
+
+template<>
+LogContextScope EnumUtil::FromString<LogContextScope>(const char *value);
+
+template<>
+LogLevel EnumUtil::FromString<LogLevel>(const char *value);
+
+template<>
+LogMode EnumUtil::FromString<LogMode>(const char *value);
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);

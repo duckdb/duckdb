@@ -1,4 +1,6 @@
 #include "duckdb/function/window/window_constant_aggregator.hpp"
+
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/window/window_aggregate_states.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -126,13 +128,7 @@ bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) 
 	}
 
 	// 	DISTINCT aggregation cannot be handled by constant aggregation
-	//	TODO: Use a hash table
 	if (wexpr.distinct) {
-		return false;
-	}
-
-	// 	ORDER BY arguments cannot be handled by constant aggregation
-	if (!wexpr.arg_orders.empty()) {
 		return false;
 	}
 
@@ -185,8 +181,15 @@ bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) 
 	return true;
 }
 
-WindowConstantAggregator::WindowConstantAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
-    : WindowAggregator(wexpr) {
+BoundWindowExpression &WindowConstantAggregator::RebindAggregate(ClientContext &context, BoundWindowExpression &wexpr) {
+	FunctionBinder::BindSortedAggregate(context, wexpr);
+
+	return wexpr;
+}
+
+WindowConstantAggregator::WindowConstantAggregator(BoundWindowExpression &wexpr, WindowSharedExpressions &shared,
+                                                   ClientContext &context)
+    : WindowAggregator(RebindAggregate(context, wexpr)) {
 
 	// We only need these values for Sink
 	for (auto &child : wexpr.children) {
