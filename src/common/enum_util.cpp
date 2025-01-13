@@ -139,6 +139,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/compression/dict_fsst/common.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
@@ -862,6 +863,7 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ZSTD), "COMPRESSION_ZSTD" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_ROARING), "COMPRESSION_ROARING" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_EMPTY), "COMPRESSION_EMPTY" },
+		{ static_cast<uint32_t>(CompressionType::COMPRESSION_DICT_FSST), "COMPRESSION_DICT_FSST" },
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_COUNT), "COMPRESSION_COUNT" }
 	};
 	return values;
@@ -869,12 +871,12 @@ const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value) {
-	return StringUtil::EnumToString(GetCompressionTypeValues(), 16, "CompressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCompressionTypeValues(), 17, "CompressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value) {
-	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 16, "CompressionType", value));
+	return static_cast<CompressionType>(StringUtil::StringToEnum(GetCompressionTypeValues(), 17, "CompressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCompressionValidityValues() {
@@ -1164,6 +1166,25 @@ const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value) {
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value) {
 	return static_cast<DestroyBufferUpon>(StringUtil::StringToEnum(GetDestroyBufferUponValues(), 3, "DestroyBufferUpon", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDictionaryAppendStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DictionaryAppendState::REGULAR), "REGULAR" },
+		{ static_cast<uint32_t>(DictionaryAppendState::ENCODED), "ENCODED" },
+		{ static_cast<uint32_t>(DictionaryAppendState::NOT_ENCODED), "NOT_ENCODED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DictionaryAppendState>(DictionaryAppendState value) {
+	return StringUtil::EnumToString(GetDictionaryAppendStateValues(), 3, "DictionaryAppendState", static_cast<uint32_t>(value));
+}
+
+template<>
+DictionaryAppendState EnumUtil::FromString<DictionaryAppendState>(const char *value) {
+	return static_cast<DictionaryAppendState>(StringUtil::StringToEnum(GetDictionaryAppendStateValues(), 3, "DictionaryAppendState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDistinctTypeValues() {
