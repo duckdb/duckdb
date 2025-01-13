@@ -10,7 +10,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
-
 namespace duckdb {
 
 LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {
