@@ -29,7 +29,7 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t 
 
 	auto str_ptr = char_ptr_cast(dict_pos);
 	if (is_fsst_encoded) {
-		return FSSTPrimitives::DecompressValue(decoder, *dictionary, str_ptr, string_len, decompress_buffer);
+		return FSSTPrimitives::DecompressValue(decoder, result, str_ptr, string_len, decompress_buffer);
 	} else {
 		// FIXME: the Vector doesn't seem to take ownership of the non-inlined string data???
 		return string_t(str_ptr, string_len);
