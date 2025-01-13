@@ -10,6 +10,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -222,7 +223,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	}
 	auto &get = child.get().Cast<LogicalGet>();
 	auto table = get.GetTable();
-	if (!table) {
+	if (!table || !table->IsDuckTable()) {
 		// we can only do the late-materialization optimization for DuckDB tables currently
 		return false;
 	}
