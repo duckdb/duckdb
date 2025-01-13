@@ -11,7 +11,7 @@ SET threads=1;
 
 # we cast range to double because we compress integers now which messes up the test
 statement ok
-CREATE TABLE test_5209 AS SELECT range::DOUBLE FROM range(10000);
+CREATE TABLE test_5209 AS SELECT hash(range)::DOUBLE FROM range(10000);
 
 statement ok
 COPY test_5209 TO '__TEST_DIR__/test_5209.parquet' (ROW_GROUP_SIZE 1000);

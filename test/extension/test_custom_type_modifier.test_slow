@@ -173,13 +173,10 @@ SELECT * FROM minmax_table WHERE i = 50;
 ----
 50
 
-statement ok
-PRAGMA explain_output='optimized_only'
-
 query II
-EXPLAIN SELECT * FROM minmax_table WHERE i = 50;
+EXPLAIN ANALYZE SELECT * FROM minmax_table WHERE i = 50;
 ----
-logical_opt	<REGEX>:.*INDEX_SCAN.*
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 # Check the typename in the catalog
 query I
