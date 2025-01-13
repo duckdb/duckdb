@@ -881,8 +881,15 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 			                               state.probe_state, input, *sink.probe_spill, state.spill_state,
 			                               state.spill_chunk);
 		} else {
-			//sink.bloom_filter->Probe();
-			sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state);
+			const SelectionVector *current_sel;
+			sink.hash_table->InitializeScanStructure(state.scan_structure, state.lhs_join_keys, state.join_key_state, current_sel);
+			if (state.scan_structure.count != 0) {
+				Vector hashes(LogicalType::HASH);
+				sink.hash_table->Hash(state.lhs_join_keys, *current_sel, state.scan_structure.count, hashes);
+				//size_t removed_rows = sink.bloom_filter->Probe(state.lhs_join_keys, state.scan_structure.sel_vector, state.scan_structure.count, hashes);
+				//state.scan_structure.count -= removed_rows;
+				sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state, current_sel, hashes);
+			}
 		}
 	}
 
@@ -1281,7 +1288,11 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	// Perform the probe
 	auto precomputed_hashes = &lhs_probe_chunk.data.back();  // TODO here we have the precomputed hashes.
 	//sink.bloom_filter->Probe(precomputed_hashes);
-	sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, precomputed_hashes);
+	const SelectionVector *current_sel;
+	sink.hash_table->InitializeScanStructure(scan_structure, lhs_join_keys, join_key_state, current_sel);
+	if (scan_structure.count != 0) {
+		sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, current_sel, precomputed_hashes);
+	}
 	scan_structure.Next(lhs_join_keys, lhs_output, chunk);
 }
 

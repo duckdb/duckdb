@@ -185,10 +185,12 @@ public:
 	//! ever called.
 	//! Optionally builds a Bloom-filter with the hash-keys.
 	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, optional_ptr<BloomFilter> bloom_filter);
+	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                             const SelectionVector *&current_sel);
 	//! Pre-compute hashes for the given keys.
 	static void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 	//! Probe the HT with the given input chunk, resulting in the given result
-	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
+	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state, const SelectionVector *current_sel,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
@@ -290,9 +292,6 @@ public:
 	} correlated_mark_join_info;
 
 private:
-	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-	                             const SelectionVector *&current_sel);
-
 	bool UseSalt() const;
 
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the

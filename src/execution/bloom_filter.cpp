@@ -25,8 +25,9 @@ BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_posit
 BloomFilter::~BloomFilter() {
 }
 
-inline void BloomFilter::SetBloomBitsForHashes(size_t shift, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+inline void BloomFilter::SetBloomBitsForHashes(size_t shift, Vector &hashes, const SelectionVector &rsel, idx_t count) {
     D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
+
     const size_t bloom_filter_size = Bit::BitLength(bloom_filter);
 
     if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -39,7 +40,7 @@ inline void BloomFilter::SetBloomBitsForHashes(size_t shift, Vector &hashes, con
 
         if (!idata.validity.AllValid()) {
             for (idx_t i = 0; i < count; i++) {
-                auto ridx = rsel->get_index(i);
+                auto ridx = rsel.get_index(i);
 			    auto idx = idata.sel->get_index(ridx);
                 if (idata.validity.RowIsValid(idx)) {
                     auto hash = UnifiedVectorFormat::GetData<hash_t>(idata)[idx];
@@ -49,7 +50,7 @@ inline void BloomFilter::SetBloomBitsForHashes(size_t shift, Vector &hashes, con
             }
         } else {
             for (idx_t i = 0; i < count; i++) {
-                auto ridx = rsel->get_index(i);
+                auto ridx = rsel.get_index(i);
 			    auto idx = idata.sel->get_index(ridx);
                 auto hash = UnifiedVectorFormat::GetData<hash_t>(idata)[idx];
                 auto bloom_idx = (hash >> shift) % bloom_filter_size;
@@ -59,7 +60,7 @@ inline void BloomFilter::SetBloomBitsForHashes(size_t shift, Vector &hashes, con
     }
 }
 
-void BloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector *rsel, idx_t count) {
+void BloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &rsel, idx_t count) {
     // Rotate hash by a couple of bits to produce a new "hash value".
     // With this trick, keys have to be hashed only once.
     for (idx_t i = 0; i < num_hash_functions; i++) {

@@ -726,7 +726,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
 		const SelectionVector sel;  // Default selection vector because we read from a continuous data sink.
-		bloom_filter->BuildWithPrecomputedHashes(hashes, &sel, count);
+		bloom_filter->BuildWithPrecomputedHashes(hashes, sel, count);
 	} while (iterator.Next());
 }
 
@@ -748,9 +748,7 @@ void JoinHashTable::InitializeScanStructure(ScanStructure &scan_structure, DataC
 }
 
 void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-                          ProbeState &probe_state, optional_ptr<Vector> precomputed_hashes) {
-	const SelectionVector *current_sel;
-	InitializeScanStructure(scan_structure, keys, key_state, current_sel);
+                          ProbeState &probe_state, const SelectionVector *current_sel, optional_ptr<Vector> precomputed_hashes) {
 	if (scan_structure.count == 0) {
 		return;
 	}
