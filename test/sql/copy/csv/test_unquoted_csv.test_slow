@@ -5,10 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
-statement error
+statement ok
 FROM read_csv('data/csv/click_mini.tsv.gz')
-----
-Value with unterminated quote found.
 
 statement ok
 FROM read_csv('data/csv/click_mini.tsv.gz', quote = '')

@@ -58,7 +58,7 @@ void CSVBuffer::AllocateBuffer(idx_t buffer_size) {
 	block = handle.GetBlockHandle();
 }
 
-idx_t CSVBuffer::GetBufferSize() {
+idx_t CSVBuffer::GetBufferSize() const {
 	return actual_buffer_size;
 }
 
@@ -87,7 +87,7 @@ void CSVBuffer::Unpin() {
 	}
 }
 
-bool CSVBuffer::IsCSVFileLastBuffer() {
+bool CSVBuffer::IsCSVFileLastBuffer() const {
 	return last_buffer;
 }
 

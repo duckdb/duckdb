@@ -51,7 +51,19 @@ string DialectCandidates::Print() {
 		auto escape_candidate = escape_candidates_map[i];
 		for (idx_t j = 0; j < quote_candidate.size(); j++) {
 			for (idx_t k = 0; k < escape_candidate.size(); k++) {
-				search_space << "[\'" << quote_candidate[j] << "\',\'" << escape_candidate[k] << "\']";
+				search_space << "[\'";
+				if (quote_candidate[j] == '\0') {
+					search_space << "(no quote)";
+				} else {
+					search_space << quote_candidate[j];
+				}
+				search_space << "\',\'";
+				if (escape_candidate[k] == '\0') {
+					search_space << "(no escape)";
+				} else {
+					search_space << escape_candidate[k];
+				}
+				search_space << "\']";
 				if (k < escape_candidate.size() - 1) {
 					search_space << ",";
 				}
@@ -362,7 +374,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding) || quoted) &&
 	    !invalid_padding && comments_are_acceptable) {
-		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size()) {
+		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size() &&
+		    consistent_rows <= best_consistent_rows) {
 			// We have a candidate that fits our requirements better
 			if (candidates.front()->ever_quoted || !scanner->ever_quoted) {
 				return;

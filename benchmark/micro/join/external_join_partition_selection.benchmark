@@ -1,5 +1,5 @@
 # name: benchmark/micro/join/external_join_partition_selection.benchmark
-# description: Test that the external hash join partition selection
+# description: Test that the external hash join partition selection selects the large partition last
 # group: [join]
 
 name External Join Partition Selection
@@ -18,7 +18,7 @@ set temp_directory='${BENCHMARK_DIR}/external_join_partition_selection.duckdb.tm
 set memory_limit='500mb';
 
 run
-select sum(c) from probe join build using (c)
+select count(*) from probe join build using (c)
 
 result I
-50000620000000
+20000000

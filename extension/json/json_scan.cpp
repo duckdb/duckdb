@@ -253,7 +253,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
 	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
-	result->state.date_format_map = gstate.state.bind_data.date_format_map;
+	result->state.date_format_map = gstate.state.bind_data.date_format_map.Copy();
 	result->state.transform_options = gstate.state.transform_options;
 	result->state.transform_options.date_format_map = &result->state.date_format_map;
 

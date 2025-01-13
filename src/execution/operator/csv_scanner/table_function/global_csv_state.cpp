@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
-
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
@@ -28,7 +27,8 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	}
 	idx_t cur_file_idx = 0;
 	while (file_scans.back()->start_iterator.done && file_scans.size() < files.size()) {
-		file_scans.emplace_back(make_uniq<CSVFileScan>(context, files[++cur_file_idx], options, cur_file_idx, bind_data,
+		cur_file_idx++;
+		file_scans.emplace_back(make_uniq<CSVFileScan>(context, files[cur_file_idx], options, cur_file_idx, bind_data,
 		                                               column_ids, file_schema, false));
 	}
 	// There are situations where we only support single threaded scanning
@@ -36,9 +36,9 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 	single_threaded = many_csv_files || !options.parallel;
 	last_file_idx = 0;
 	scanner_idx = 0;
-	running_threads = MaxThreads();
+	running_threads = CSVGlobalState::MaxThreads();
 	current_boundary = file_scans.back()->start_iterator;
-	current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+	current_boundary.SetCurrentBoundaryToPosition(single_threaded, options);
 	if (current_boundary.done && context.client_data->debug_set_max_line_length) {
 		context.client_data->debug_max_line_length = current_boundary.pos.buffer_pos;
 	}
@@ -59,7 +59,7 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	if (file_scans.front()->file_size == 0) {
 		percentage = 1.0;
 	} else {
-		// for compressed files, readed bytes may greater than files size.
+		// for compressed files, read bytes may greater than files size.
 		for (auto &file : file_scans) {
 			double file_progress;
 			if (!file->buffer_manager) {
@@ -73,7 +73,8 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 				file_progress = static_cast<double>(file->bytes_read);
 			}
 			// This file is an uncompressed file, so we use the more price bytes_read from the scanner
-			percentage += (double(1) / double(total_files)) * std::min(1.0, file_progress / double(file->file_size));
+			percentage += (static_cast<double>(1) / static_cast<double>(total_files)) *
+			              std::min(1.0, file_progress / static_cast<double>(file->file_size));
 		}
 	}
 	return percentage * 100;
@@ -87,6 +88,15 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 		                 previous_scanner->GetValidationLine());
 	}
 	if (single_threaded) {
+		{
+			lock_guard<mutex> parallel_lock(main_mutex);
+			if (previous_scanner) {
+				// Cleanup previous scanner.
+				previous_scanner->buffer_tracker.reset();
+				current_buffer_in_use.reset();
+				previous_scanner->csv_file_scan->Finish();
+			}
+		}
 		idx_t cur_idx;
 		bool empty_file = false;
 		do {
@@ -108,19 +118,16 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			auto file_scan = make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
 			                                              bind_data, column_ids, file_schema, true);
 			empty_file = file_scan->file_size == 0;
+
 			if (!empty_file) {
 				lock_guard<mutex> parallel_lock(main_mutex);
 				file_scans.emplace_back(std::move(file_scan));
 				auto current_file = file_scans.back();
 				current_boundary = current_file->start_iterator;
-				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+				current_boundary.SetCurrentBoundaryToPosition(single_threaded, bind_data.options);
 				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
 				                                                        current_boundary.GetBufferIdx());
-				if (previous_scanner) {
-					previous_scanner->buffer_tracker.reset();
-					current_buffer_in_use.reset();
-					previous_scanner->csv_file_scan->Finish();
-				}
+
 				return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
 				                                     current_file->state_machine, current_file->error_handler,
 				                                     current_file, false, current_boundary);
@@ -151,7 +158,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 	csv_scanner->buffer_tracker = current_buffer_in_use;
 
 	// We then produce the next boundary
-	if (!current_boundary.Next(*current_file.buffer_manager)) {
+	if (!current_boundary.Next(*current_file.buffer_manager, bind_data.options)) {
 		// This means we are done scanning the current file
 		do {
 			auto current_file_idx = file_scans.back()->file_idx + 1;
@@ -162,7 +169,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				                                                     column_ids, file_schema, false));
 				// And re-start the boundary-iterator
 				current_boundary = file_scans.back()->start_iterator;
-				current_boundary.SetCurrentBoundaryToPosition(single_threaded);
+				current_boundary.SetCurrentBoundaryToPosition(single_threaded, bind_data.options);
 				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
 				                                                        current_boundary.GetBufferIdx());
 			} else {
@@ -178,11 +185,11 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 
 idx_t CSVGlobalState::MaxThreads() const {
 	// We initialize max one thread per our set bytes per thread limit
-	if (single_threaded) {
+	if (single_threaded || !file_scans.front()->on_disk_file) {
 		return system_threads;
 	}
-	idx_t total_threads = file_scans.front()->file_size / CSVIterator::BYTES_PER_THREAD + 1;
-
+	const idx_t bytes_per_thread = CSVIterator::BytesPerThread(file_scans.front()->options);
+	const idx_t total_threads = file_scans.front()->file_size / bytes_per_thread + 1;
 	if (total_threads < system_threads) {
 		return total_threads;
 	}
@@ -194,7 +201,7 @@ void CSVGlobalState::DecrementThread() {
 	D_ASSERT(running_threads > 0);
 	running_threads--;
 	if (running_threads == 0) {
-		bool ignore_or_store_errors =
+		const bool ignore_or_store_errors =
 		    bind_data.options.ignore_errors.GetValue() || bind_data.options.store_rejects.GetValue();
 		if (!single_threaded && !ignore_or_store_errors) {
 			// If we are running multithreaded and not ignoring errors, we must run the validator
@@ -207,39 +214,6 @@ void CSVGlobalState::DecrementThread() {
 		if (context.client_data->debug_set_max_line_length) {
 			context.client_data->debug_max_line_length = file_scans[0]->error_handler->GetMaxLineLength();
 		}
-	}
-}
-
-bool IsCSVErrorAcceptedReject(CSVErrorType type) {
-	switch (type) {
-	case CSVErrorType::CAST_ERROR:
-	case CSVErrorType::TOO_MANY_COLUMNS:
-	case CSVErrorType::TOO_FEW_COLUMNS:
-	case CSVErrorType::MAXIMUM_LINE_SIZE:
-	case CSVErrorType::UNTERMINATED_QUOTES:
-	case CSVErrorType::INVALID_UNICODE:
-		return true;
-	default:
-		return false;
-	}
-}
-
-string CSVErrorTypeToEnum(CSVErrorType type) {
-	switch (type) {
-	case CSVErrorType::CAST_ERROR:
-		return "CAST";
-	case CSVErrorType::TOO_FEW_COLUMNS:
-		return "MISSING COLUMNS";
-	case CSVErrorType::TOO_MANY_COLUMNS:
-		return "TOO MANY COLUMNS";
-	case CSVErrorType::MAXIMUM_LINE_SIZE:
-		return "LINE SIZE OVER MAXIMUM";
-	case CSVErrorType::UNTERMINATED_QUOTES:
-		return "UNQUOTED VALUE";
-	case CSVErrorType::INVALID_UNICODE:
-		return "INVALID UNICODE";
-	default:
-		throw InternalException("CSV Error is not valid to be stored in a Rejects Table");
 	}
 }
 
@@ -306,7 +280,7 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	scan_appender.EndRow();
 }
 
-void CSVGlobalState::FillRejectsTable() {
+void CSVGlobalState::FillRejectsTable() const {
 	auto &options = bind_data.options;
 
 	if (options.store_rejects.GetValue()) {
@@ -320,70 +294,10 @@ void CSVGlobalState::FillRejectsTable() {
 		InternalAppender scans_appender(context, scans_table);
 		idx_t scan_idx = context.transaction.GetActiveQuery();
 		for (auto &file : file_scans) {
-			idx_t file_idx = rejects->GetCurrentFileIndex(scan_idx);
+			const idx_t file_idx = rejects->GetCurrentFileIndex(scan_idx);
 			auto file_name = file->file_path;
-			auto &errors = file->error_handler->errors;
-			// We first insert the file into the file scans table
-			for (auto &error_vector : errors) {
-				for (auto &error : error_vector.second) {
-					if (!IsCSVErrorAcceptedReject(error.type)) {
-						continue;
-					}
-					// short circuit if we already have too many rejects
-					if (limit == 0 || rejects->count < limit) {
-						if (limit != 0 && rejects->count >= limit) {
-							break;
-						}
-						rejects->count++;
-						auto row_line = file->error_handler->GetLine(error.error_info);
-						auto col_idx = error.column_idx;
-						// Add the row to the rejects table
-						errors_appender.BeginRow();
-						// 1. Scan Id
-						errors_appender.Append(scan_idx);
-						// 2. File Id
-						errors_appender.Append(file_idx);
-						// 3. Row Line
-						errors_appender.Append(row_line);
-						// 4. Byte Position of the row error
-						errors_appender.Append(error.row_byte_position + 1);
-						// 5. Byte Position where error occurred
-						if (!error.byte_position.IsValid()) {
-							// This means this error comes from a flush, and we don't support this yet, so we give it
-							// a null
-							errors_appender.Append(Value());
-						} else {
-							errors_appender.Append(error.byte_position.GetIndex() + 1);
-						}
-						// 6. Column Index
-						if (error.type == CSVErrorType::MAXIMUM_LINE_SIZE) {
-							errors_appender.Append(Value());
-						} else {
-							errors_appender.Append(col_idx + 1);
-						}
-						// 7. Column Name (If Applicable)
-						switch (error.type) {
-						case CSVErrorType::TOO_MANY_COLUMNS:
-						case CSVErrorType::MAXIMUM_LINE_SIZE:
-							errors_appender.Append(Value());
-							break;
-						case CSVErrorType::TOO_FEW_COLUMNS:
-							D_ASSERT(bind_data.return_names.size() > col_idx + 1);
-							errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
-							break;
-						default:
-							errors_appender.Append(string_t(bind_data.return_names[col_idx]));
-						}
-						// 8. Error Type
-						errors_appender.Append(string_t(CSVErrorTypeToEnum(error.type)));
-						// 9. Original CSV Line
-						errors_appender.Append(string_t(error.csv_row));
-						// 10. Full Error Message
-						errors_appender.Append(string_t(error.error_message));
-						errors_appender.EndRow();
-					}
-				}
-			}
+			file->error_handler->FillRejectsTable(errors_appender, file_idx, scan_idx, *file, *rejects, bind_data,
+			                                      limit);
 			if (rejects->count != 0) {
 				rejects->count = 0;
 				FillScanErrorTable(scans_appender, scan_idx, file_idx, *file);

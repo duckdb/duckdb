@@ -2,6 +2,9 @@
 # description: basic tests for the hive partition auto detection
 # group: [partitioned]
 
+statement ok
+PRAGMA enable_verification
+
 # create a table
 statement ok
 CREATE TABLE t AS SELECT i%2 AS year, i%3 AS month, i%4 AS c, i%5 AS d FROM RANGE(0,20) tbl(i);

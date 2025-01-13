@@ -441,7 +441,12 @@ typedef struct {
 	void *internal_data;
 } duckdb_result;
 
-//! A database object. Should be closed with `duckdb_close`.
+//! A database instance cache object. Must be destroyed with `duckdb_destroy_instance_cache`.
+typedef struct _duckdb_instance_cache {
+	void *internal_ptr;
+} * duckdb_instance_cache;
+
+//! A database object. Must be closed with `duckdb_close`.
 typedef struct _duckdb_database {
 	void *internal_ptr;
 } * duckdb_database;
@@ -670,6 +675,8 @@ struct duckdb_extension_access {
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
+#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
+
 //===--------------------------------------------------------------------===//
 // Functions
 //===--------------------------------------------------------------------===//
@@ -679,11 +686,43 @@ struct duckdb_extension_access {
 //===--------------------------------------------------------------------===//
 
 /*!
+Creates a new database instance cache.
+The instance cache is necessary if a client/program (re)opens multiple databases to the same file within the same
+process. Must be destroyed with 'duckdb_destroy_instance_cache'.
+
+* @return The database instance cache.
+*/
+DUCKDB_API duckdb_instance_cache duckdb_create_instance_cache();
+
+/*!
+Creates a new database instance in the instance cache, or retrieves an existing database instance.
+Must be closed with 'duckdb_close'.
+
+* @param instance_cache The instance cache in which to create the database, or from which to take the database.
+* @param path Path to the database file on disk. Both `nullptr` and `:memory:` open or retrieve an in-memory database.
+* @param out_database The resulting cached database.
+* @param config (Optional) configuration used to create the database.
+* @param out_error If set and the function returns `DuckDBError`, this contains the error message.
+Note that the error message must be freed using `duckdb_free`.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_get_or_create_from_cache(duckdb_instance_cache instance_cache, const char *path,
+                                                        duckdb_database *out_database, duckdb_config config,
+                                                        char **out_error);
+
+/*!
+Destroys an existing database instance cache and de-allocates its memory.
+
+* @param instance_cache The instance cache to destroy.
+*/
+DUCKDB_API void duckdb_destroy_instance_cache(duckdb_instance_cache *instance_cache);
+
+/*!
 Creates a new database or opens an existing database file stored at the given path.
 If no path is given a new in-memory database is created instead.
-The instantiated database should be closed with 'duckdb_close'.
+The database must be closed with 'duckdb_close'.
 
-* @param path Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
+* @param path Path to the database file on disk. Both `nullptr` and `:memory:` open an in-memory database.
 * @param out_database The result database object.
 * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
@@ -691,13 +730,13 @@ DUCKDB_API duckdb_state duckdb_open(const char *path, duckdb_database *out_datab
 
 /*!
 Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.
-The instantiated database should be closed with 'duckdb_close'.
+The database must be closed with 'duckdb_close'.
 
-* @param path Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
+* @param path Path to the database file on disk. Both `nullptr` and `:memory:` open an in-memory database.
 * @param out_database The result database object.
-* @param config (Optional) configuration used to start up the database system.
-* @param out_error If set and the function returns DuckDBError, this will contain the reason why the start-up failed.
-Note that the error must be freed using `duckdb_free`.
+* @param config (Optional) configuration used to start up the database.
+* @param out_error If set and the function returns `DuckDBError`, this contains the error message.
+Note that the error message must be freed using `duckdb_free`.
 * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_open_ext(const char *path, duckdb_database *out_database, duckdb_config config,
@@ -4498,6 +4537,8 @@ Destroys the cast function object.
 * @param cast_function The cast function object.
 */
 DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
+
+#endif
 
 #ifdef __cplusplus
 }

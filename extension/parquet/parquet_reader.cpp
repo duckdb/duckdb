@@ -418,9 +418,10 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		if (is_repeated) {
 			result_type = LogicalType::LIST(result_type);
-			return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                   std::move(result));
+			result = make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                     std::move(result));
 		}
+		result->SetParentSchema(s_ele);
 		return result;
 	} else { // leaf node
 		if (!s_ele.__isset.type) {
@@ -505,8 +506,16 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		auto &type_pair = child_types[i];
 		auto column = MultiFileReaderColumnDefinition(type_pair.first, type_pair.second);
-		if (child_readers[i]->Schema().__isset.field_id) {
-			column.identifier = Value::INTEGER(child_readers[i]->Schema().field_id);
+		auto &column_reader = *column_readers[column_index];
+		auto &column_schema = column_reader.Schema();
+
+		if (column_schema.__isset.field_id) {
+			column.identifier = Value::INTEGER(column_schema.field_id);
+		} else if (column_reader.GetParentSchema()) {
+			auto &parent_column_schema = *column_reader.GetParentSchema();
+			if (parent_column_schema.__isset.field_id) {
+				field_id_to_column_index[parent_column_schema.field_id] = column_index;
+			}
 		}
 		columns.emplace_back(std::move(column));
 	}

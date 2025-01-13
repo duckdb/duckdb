@@ -16,9 +16,9 @@
 namespace duckdb {
 
 Binding::Binding(BindingType binding_type, BindingAlias alias_p, vector<LogicalType> coltypes, vector<string> colnames,
-                 idx_t index)
+                 idx_t index, LogicalType rowid_type)
     : binding_type(binding_type), alias(std::move(alias_p)), index(index), types(std::move(coltypes)),
-      names(std::move(colnames)) {
+      names(std::move(colnames)), rowid_type(std::move(rowid_type)) {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
@@ -115,7 +115,8 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
                            vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
                            bool add_row_id)
-    : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
+    : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index,
+              (add_row_id && entry) ? entry->Cast<TableCatalogEntry>().GetRowIdType() : LogicalType::ROW_TYPE),
       bound_column_ids(bound_column_ids), entry(entry) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
@@ -238,7 +239,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	// fetch the type of the column
 	LogicalType col_type;
 	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
-		col_type = LogicalType::ROW_TYPE;
+		col_type = LogicalType(rowid_type);
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[column_index];

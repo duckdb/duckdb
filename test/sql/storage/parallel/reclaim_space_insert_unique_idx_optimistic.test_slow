@@ -19,8 +19,19 @@ INSERT INTO integers2 VALUES (9999999);
 statement ok
 CREATE UNIQUE INDEX idx ON integers2(i);
 
+# For smaller block sizes (16KB) the total blocks increase (to twice the original amount) in the first
+# iteration, and then stay constant.
 statement ok
-CREATE TABLE blocks AS SELECT total_blocks, used_blocks FROM pragma_database_size();
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+
+statement ok
+CREATE TYPE test_result AS UNION (
+	ok BOOL,
+	err STRUCT(
+		old BIGINT,
+		allowed_max DECIMAL(21,1),
+		actual BIGINT)
+);
 
 loop i 0 10
 
@@ -43,10 +54,29 @@ INSERT INTO integers2 SELECT * FROM integers WHERE i <= 9999998;
 statement ok
 ROLLBACK
 
-endloop
+# Ensure that the total blocks don't exceed the total blocks after the first iteration by more than 1.2.
 
 query I
-SELECT current.total_blocks < blocks.total_blocks + 4
-FROM pragma_database_size() AS current, blocks;
+SELECT
+	CASE WHEN ${i} = 0 THEN True::test_result
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.4 THEN True::test_result
+	ELSE {
+		'old': total_blocks_tbl.total_blocks,
+		'allowed_max': total_blocks_tbl.total_blocks * 1.4,
+		'actual': current.total_blocks
+	}::test_result
+	END
+FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
-1
+true
+
+# Adjust the total_blocks_tbl once to the count after the first iteration.
+
+statement ok
+UPDATE total_blocks_tbl SET total_blocks = (
+	SELECT
+		CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		ELSE (total_blocks)END
+	);
+
+endloop

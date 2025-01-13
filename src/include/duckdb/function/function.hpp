@@ -13,6 +13,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/enums/function_errors.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -43,6 +44,7 @@ enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_H
 //!                            but the result might change across queries (e.g. NOW(), CURRENT_TIME)
 //! VOLATILE                -> the result of this function might change per row (e.g. RANDOM())
 enum class FunctionStability : uint8_t { CONSISTENT = 0, VOLATILE = 1, CONSISTENT_WITHIN_QUERY = 2 };
+
 //! How to handle collations
 //! PROPAGATE_COLLATIONS        -> this function combines collation from its inputs and emits them again (default)
 //! PUSH_COMBINABLE_COLLATIONS  -> combinable collations are executed for the input arguments
@@ -159,7 +161,8 @@ public:
 	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                              FunctionStability stability,
 	                              LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                              FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	                              FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                              FunctionErrors errors = FunctionErrors::CANNOT_ERROR);
 	DUCKDB_API ~BaseScalarFunction() override;
 
 	//! Return type of the function
@@ -168,8 +171,15 @@ public:
 	FunctionStability stability;
 	//! How this function handles NULL values
 	FunctionNullHandling null_handling;
+	//! Whether or not this function can throw an error
+	FunctionErrors errors;
 	//! Collation handling of the function
 	FunctionCollationHandling collation_handling;
+
+	static BaseScalarFunction SetReturnsError(BaseScalarFunction &function) {
+		function.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+		return function;
+	}
 
 public:
 	DUCKDB_API hash_t Hash() const;

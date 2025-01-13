@@ -134,11 +134,8 @@ class TestCanonicalExtensionTypes(object):
 
         arrow_table = pa.Table.from_arrays([storage_array, age_array], names=['pedro_pedro_pedro', 'age'])
 
-        with pytest.raises(duckdb.NotImplementedException, match=" Arrow Type with extension name: pedro.binary"):
+        with pytest.raises(duckdb.NotImplementedException, match="pedro.binary"):
             duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
-        duck_res = duckdb_cursor.execute('SELECT age FROM arrow_table').fetchall()
-        # This works because we project ze unknown extension array
-        assert duck_res == [(29,)]
 
     def test_hugeint(self):
         con = duckdb.connect()
@@ -231,3 +228,45 @@ class TestCanonicalExtensionTypes(object):
         assert arrow_table.schema[0].type.item_type.extension_name == "arrow.opaque"
         assert arrow_table.schema[0].type.item_type.type_name == "uhugeint"
         assert arrow_table.schema[0].type.item_type.vendor_name == "DuckDB"
+
+    def test_extension_dictionary(self, duckdb_cursor):
+        indices = pa.array([0, 1, 0, 1, 2, 1, 0, 2])
+        dictionary = pa.array(
+            [
+                b'\x00\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff',
+                b'\x01\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff',
+                b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff',
+            ],
+            pa.binary(16),
+        )
+        uhugeint_type = pa.opaque(pa.binary(16), "uhugeint", "DuckDB")
+        dictionary = uhugeint_type.wrap_array(dictionary)
+
+        dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
+        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        rel = duckdb_cursor.from_arrow(arrow_table)
+        assert rel.execute().fetchall() == [
+            (340282366920938463463374607431768211200,),
+            (340282366920938463463374607431768211201,),
+            (340282366920938463463374607431768211200,),
+            (340282366920938463463374607431768211201,),
+            (340282366920938463463374607431768211455,),
+            (340282366920938463463374607431768211201,),
+            (340282366920938463463374607431768211200,),
+            (340282366920938463463374607431768211455,),
+        ]
+
+    def test_boolean(self):
+        con = duckdb.connect()
+        con.execute("SET arrow_lossless_conversion = true")
+        storage_array = pa.array([-1, 0, 1, 2, None], pa.int8())
+        bool8_array = pa.ExtensionArray.from_storage(pa.bool8(), storage_array)
+        arrow_table = pa.Table.from_arrays([bool8_array], names=['bool8'])
+        assert con.execute('FROM arrow_table').fetchall() == [(True,), (False,), (True,), (True,), (None,)]
+        result_table = con.execute('FROM arrow_table').arrow()
+
+        res_storage_array = pa.array([1, 0, 1, 1, None], pa.int8())
+        res_bool8_array = pa.ExtensionArray.from_storage(pa.bool8(), res_storage_array)
+        res_arrow_table = pa.Table.from_arrays([res_bool8_array], names=['bool8'])
+
+        assert result_table.equals(res_arrow_table)

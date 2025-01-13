@@ -188,7 +188,7 @@ struct ArrowLargeBufferSizeSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_large_buffer_size";
 	static constexpr const char *Description =
-	    "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
+	    "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -211,7 +211,7 @@ struct ArrowOutputListViewSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_output_list_view";
 	static constexpr const char *Description =
-	    "If export to arrow format should use ListView as the physical layout for LIST columns";
+	    "Whether export to Arrow format should use ListView as the physical layout for LIST columns";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -429,6 +429,16 @@ struct DisabledFilesystemsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DisabledLogTypes {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "disabled_log_types";
+	static constexpr const char *Description = "Sets the list of disabled loggers";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DisabledOptimizersSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "disabled_optimizers";
@@ -505,6 +515,16 @@ struct EnableHTTPMetadataCacheSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct EnableLogging {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_logging";
+	static constexpr const char *Description = "Enables the logger";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableMacroDependenciesSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_macro_dependencies";
@@ -567,6 +587,16 @@ struct EnableViewDependenciesSetting {
 	static constexpr const char *Description =
 	    "Enable created VIEWs to create dependencies on the referenced objects (such as tables)";
 	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct EnabledLogTypes {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "enabled_log_types";
+	static constexpr const char *Description = "Sets the list of enabled loggers";
+	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
@@ -774,6 +804,36 @@ struct LogQueryPathSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LoggingLevel {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "logging_level";
+	static constexpr const char *Description = "The log level which will be recorded in the log";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct LoggingMode {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "logging_mode";
+	static constexpr const char *Description = "Enables the logger";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct LoggingStorage {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "logging_storage";
+	static constexpr const char *Description = "Set the logging storage (memory/stdout/file)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct MaxExpressionDepthSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "max_expression_depth";
@@ -970,7 +1030,7 @@ struct ProduceArrowStringViewSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "produce_arrow_string_view";
 	static constexpr const char *Description =
-	    "If strings should be produced by DuckDB in Utf8View format instead of Utf8";
+	    "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

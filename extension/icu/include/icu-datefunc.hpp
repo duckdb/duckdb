@@ -62,7 +62,7 @@ struct ICUDateFunc {
 	//! Extracts the field from the calendar
 	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field);
 	//! Subtracts the field of the given date from the calendar
-	static int64_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
+	static int32_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
 	//! Adds the timestamp and the interval using the calendar
 	static timestamp_t Add(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval);
 	//! Subtracts the interval from the timestamp using the calendar

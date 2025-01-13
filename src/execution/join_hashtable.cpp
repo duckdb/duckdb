@@ -1528,18 +1528,28 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 
 	// Create vector with unfinished partition indices
 	auto &partitions = sink_collection->GetPartitions();
+	auto min_partition_size = NumericLimits<idx_t>::Maximum();
 	vector<idx_t> partition_indices;
 	partition_indices.reserve(num_partitions);
 	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-		if (!completed_partitions.RowIsValidUnsafe(partition_idx)) {
-			partition_indices.push_back(partition_idx);
+		if (completed_partitions.RowIsValidUnsafe(partition_idx)) {
+			continue;
 		}
+		partition_indices.push_back(partition_idx);
+		// Keep track of min partition size
+		const auto size =
+		    partitions[partition_idx]->SizeInBytes() + PointerTableSize(partitions[partition_idx]->Count());
+		min_partition_size = MinValue(min_partition_size, size);
 	}
+
 	// Sort partitions by size, from small to large
-	std::sort(partition_indices.begin(), partition_indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
+	std::stable_sort(partition_indices.begin(), partition_indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
 		const auto lhs_size = partitions[lhs]->SizeInBytes() + PointerTableSize(partitions[lhs]->Count());
 		const auto rhs_size = partitions[rhs]->SizeInBytes() + PointerTableSize(partitions[rhs]->Count());
-		return lhs_size < rhs_size;
+		// We divide by min_partition_size, effectively rouding everything down to a multiple of min_partition_size
+		// Makes it so minor differences in partition sizes don't mess up the original order
+		// Retaining as much of the original order as possible reduces I/O (partition idx determines eviction queue idx)
+		return lhs_size / min_partition_size < rhs_size / min_partition_size;
 	});
 
 	// Determine which partitions should go next

@@ -92,7 +92,7 @@
     },
     {
         "name": "arrow_large_buffer_size",
-        "description": "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
+        "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
         "scope": "global",
         "internal_setting": "arrow_offset_size",
@@ -109,7 +109,7 @@
     },
     {
         "name": "arrow_output_list_view",
-        "description": "If export to arrow format should use ListView as the physical layout for LIST columns",
+        "description": "Whether export to Arrow format should use ListView as the physical layout for LIST columns",
         "type": "BOOLEAN",
         "internal_setting": "arrow_use_list_view",
         "scope": "global"
@@ -273,6 +273,14 @@
         "custom_implementation": true
     },
     {
+        "name": "disabled_log_types",
+        "description": "Sets the list of disabled loggers",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "DisabledLogTypes",
+        "custom_implementation": true
+    },
+    {
         "name": "disabled_optimizers",
         "description": "DEBUG SETTING: disable a specific set of optimizers (comma separated)",
         "type": "VARCHAR",
@@ -326,6 +334,14 @@
         "struct": "EnableHTTPMetadataCacheSetting"
     },
     {
+        "name": "enable_logging",
+        "description": "Enables the logger",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "struct": "EnableLogging",
+        "custom_implementation": true
+    },
+    {
         "name": "enable_macro_dependencies",
         "description": "Enable created MACROs to create dependencies on the referenced objects (such as tables)",
         "type": "BOOLEAN",
@@ -368,6 +384,14 @@
         "description": "Enable created VIEWs to create dependencies on the referenced objects (such as tables)",
         "type": "BOOLEAN",
         "scope": "global"
+    },
+    {
+        "name": "enabled_log_types",
+        "description": "Sets the list of enabled loggers",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "EnabledLogTypes",
+        "custom_implementation": true
     },
     {
         "name": "errors_as_json",
@@ -506,6 +530,30 @@
         "custom_implementation": true
     },
     {
+        "name": "logging_level",
+        "description": "The log level which will be recorded in the log",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingLevel",
+        "custom_implementation": true
+    },
+    {
+        "name": "logging_mode",
+        "description": "Enables the logger",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingMode",
+        "custom_implementation": true
+    },
+    {
+        "name": "logging_storage",
+        "description": "Set the logging storage (memory/stdout/file)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "struct": "LoggingStorage",
+        "custom_implementation": true
+    },
+    {
         "name": "max_expression_depth",
         "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
         "type": "UBIGINT",
@@ -628,7 +676,7 @@
     },
     {
         "name": "produce_arrow_string_view",
-        "description": "If strings should be produced by DuckDB in Utf8View format instead of Utf8",
+        "description": "Whether strings should be produced by DuckDB in Utf8View format instead of Utf8",
         "type": "BOOLEAN",
         "scope": "global",
         "internal_setting": "produce_arrow_string_views"
