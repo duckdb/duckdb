@@ -85,7 +85,7 @@ struct TableFunctionData : public FunctionData {
 
 	DUCKDB_API ~TableFunctionData() override;
 
-	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const override;
+	DUCKDB_API unique_ptr<FunctionData> Copy() const override;
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
 };
 

@@ -7,6 +7,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
