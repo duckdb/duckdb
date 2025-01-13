@@ -28,7 +28,8 @@
       {
         "id": 105,
         "name": "identifier",
-        "type": "Value"
+        "type": "Value",
+        "default": "Value()"
       }
     ],
     "pointer_type": "none"
