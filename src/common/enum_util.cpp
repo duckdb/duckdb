@@ -140,7 +140,6 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
-#include "duckdb/storage/compression/dict_fsst/common.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
@@ -1167,25 +1166,6 @@ const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value) {
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value) {
 	return static_cast<DestroyBufferUpon>(StringUtil::StringToEnum(GetDestroyBufferUponValues(), 3, "DestroyBufferUpon", value));
-}
-
-const StringUtil::EnumStringLiteral *GetDictionaryAppendStateValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(DictionaryAppendState::REGULAR), "REGULAR" },
-		{ static_cast<uint32_t>(DictionaryAppendState::ENCODED), "ENCODED" },
-		{ static_cast<uint32_t>(DictionaryAppendState::NOT_ENCODED), "NOT_ENCODED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<DictionaryAppendState>(DictionaryAppendState value) {
-	return StringUtil::EnumToString(GetDictionaryAppendStateValues(), 3, "DictionaryAppendState", static_cast<uint32_t>(value));
-}
-
-template<>
-DictionaryAppendState EnumUtil::FromString<DictionaryAppendState>(const char *value) {
-	return static_cast<DictionaryAppendState>(StringUtil::StringToEnum(GetDictionaryAppendStateValues(), 3, "DictionaryAppendState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDistinctTypeValues() {
