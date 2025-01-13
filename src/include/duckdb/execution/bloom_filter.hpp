@@ -34,14 +34,16 @@ public:
 	//! Both Bloom-filters need to have the same number of bits.
 	void Merge(BloomFilter &other);
 
-	// maybe we can just adjust the current selection vector?
-	//void Probe(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state, optional_ptr<Vector> precomputed_hashes = nullptr);
+	//! Probes the Bloom-filter and adjusts the selection vector accordingly.
+	size_t Probe(DataChunk &keys, const SelectionVector *&current_sel, idx_t count, SelectionVector sel, optional_ptr<Vector> precomputed_hashes = nullptr);
 
 private:
 	// Perform the exact same has function as the hash table, so we can re-use the hash values for probing the HT.
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 	void SetBloomBitsForHashes(size_t shift, Vector &hashes, const SelectionVector &rsel, idx_t count);
+
+	size_t ProbeInternal(size_t shift, Vector &hashes, const SelectionVector *&current_sel, idx_t current_sel_count, SelectionVector &sel);
 
 	int num_hash_functions;
 	std::vector<char> data_buffer;
