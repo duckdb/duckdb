@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/execution/bloom_filter.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -182,7 +183,11 @@ public:
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
-	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel);
+	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, BloomFilter& bloom_filter);
+	//! Get list of hashes appearing in the hash table. Has to be called after Finalize()
+	void GetHashes(Vector &hashes);
+	//! Pre-compute hashes for the given keys.
+	static void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
@@ -288,7 +293,6 @@ public:
 private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             const SelectionVector *&current_sel);
-	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 	bool UseSalt() const;
 
@@ -391,7 +395,7 @@ public:
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
 	}
 
-	//! Get total size of HT if all partitions would be built
+	//! Get total size in bytes of HT if all partitions would be built
 	idx_t GetTotalSize(const vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
 	                   idx_t &max_partition_count) const;
 	idx_t GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,

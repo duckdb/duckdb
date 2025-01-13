@@ -432,7 +432,7 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
+		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, *sink.bloom_filter);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -458,8 +458,11 @@ public:
 
 		vector<shared_ptr<Task>> finalize_tasks;
 		auto &ht = *sink.hash_table;
+		const auto row_count = ht.GetDataCollection().Count();
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
 		const auto num_threads = NumericCast<idx_t>(sink.num_threads);
+
+		sink.bloom_filter = make_uniq<BloomFilter>(row_count, 0.01);
 
 		// If the data is very skewed (many of the exact same key), our finalize will become slow,
 		// due to completely slamming the same atomic using compare-and-swaps.
@@ -627,7 +630,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count, build_idx,
 	                       build_vector, *FlatVector::IncrementalSelectionVector(), nullptr);
 
-	// generate the OR-clause - note that we only need to consider unique values here (so we use a seT)
+	// generate the OR-clause - note that we only need to consider unique values here (so we use a set)
 	value_set_t unique_ht_values;
 	for (idx_t k = 0; k < key_count; k++) {
 		unique_ht_values.insert(build_vector.GetValue(k));
@@ -873,10 +876,12 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 
 		// perform the actual probe
 		if (sink.external) {
+			//sink.bloom_filter->Probe();
 			sink.hash_table->ProbeAndSpill(state.scan_structure, state.lhs_join_keys, state.join_key_state,
 			                               state.probe_state, input, *sink.probe_spill, state.spill_state,
 			                               state.spill_chunk);
 		} else {
+			//sink.bloom_filter->Probe();
 			sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state);
 		}
 	}
@@ -1231,7 +1236,7 @@ void HashJoinLocalSourceState::ExternalBuild(HashJoinGlobalSinkState &sink, Hash
 	D_ASSERT(local_stage == HashJoinSourceStage::BUILD);
 
 	auto &ht = *sink.hash_table;
-	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true);
+	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true, *sink.bloom_filter);
 
 	auto guard = gstate.Lock();
 	gstate.build_chunk_done += build_chunk_idx_to - build_chunk_idx_from;
@@ -1274,7 +1279,8 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	}
 
 	// Perform the probe
-	auto precomputed_hashes = &lhs_probe_chunk.data.back();
+	auto precomputed_hashes = &lhs_probe_chunk.data.back();  // TODO here we have the precomputed hashes.
+	//sink.bloom_filter->Probe(precomputed_hashes);
 	sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, precomputed_hashes);
 	scan_structure.Next(lhs_join_keys, lhs_output, chunk);
 }

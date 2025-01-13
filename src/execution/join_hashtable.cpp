@@ -4,6 +4,7 @@
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/execution/bloom_filter.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -312,13 +313,13 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 	if (count == keys.size()) {
 		// no null values are filtered: use regular hash functions
 		VectorOperations::Hash(keys.data[0], hashes, keys.size());
-		for (idx_t i = 1; i < equality_types.size(); i++) {
+		for (idx_t i = 1; i < keys.ColumnCount(); i++) {
 			VectorOperations::CombineHash(hashes, keys.data[i], keys.size());
 		}
 	} else {
 		// null values were filtered: use selection vector
 		VectorOperations::Hash(keys.data[0], hashes, sel, count);
-		for (idx_t i = 1; i < equality_types.size(); i++) {
+		for (idx_t i = 1; i < keys.ColumnCount(); i++) {
 			VectorOperations::CombineHash(hashes, keys.data[i], sel, count);
 		}
 	}
@@ -705,7 +706,7 @@ void JoinHashTable::InitializePointerTable() {
 	bitmask = capacity - 1;
 }
 
-void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel) {
+void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, BloomFilter& bloom_filter) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
@@ -725,6 +726,8 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
+		const SelectionVector sel;  // Default selection vector because we read from a continuous data sink.
+		bloom_filter.BuildWithPrecomputedHashes(hashes, &sel, count);
 	} while (iterator.Next());
 }
 
