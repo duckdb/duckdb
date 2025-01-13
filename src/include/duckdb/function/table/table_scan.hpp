@@ -38,7 +38,6 @@ public:
 		auto bind_data = make_uniq<TableScanBindData>(table);
 		bind_data->is_index_scan = is_index_scan;
 		bind_data->is_create_index = is_create_index;
-		bind_data->row_ids = row_ids;
 		bind_data->column_ids = column_ids;
 		return std::move(bind_data);
 	}
