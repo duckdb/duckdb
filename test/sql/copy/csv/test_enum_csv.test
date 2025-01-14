@@ -1,0 +1,15 @@
+# name: test/sql/copy/csv/test_enum_csv.test
+# description: Test reading a CSV file with an enum type
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')
+
+query I
+FROM read_csv('data/csv/enum_type.csv', types=[mood])
+----
+
+

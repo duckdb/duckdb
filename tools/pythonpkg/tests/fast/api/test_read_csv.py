@@ -639,6 +639,15 @@ class TestReadCSV(object):
         rel = con.read_csv(str(file1), columns={'a': 'VARCHAR'}, auto_detect=False, header=False, comment='#')
         assert rel.fetchall() == [('one|two|three|four',), ('1|2|3|4',), ('1|2|3|4',)]
 
+    def test_read_enum(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('happy\nsad\nangry\nhappy\n')
+
+        con = duckdb.connect()
+        con.execute("CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')")
+        rel = con.read_csv(str(file1), dtype = ['mood'], header = False)
+        assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
+
     def test_union_by_name(self, tmp_path):
         file1 = tmp_path / "file1.csv"
         file1.write_text('one|two|three|four\n1|2|3|4')
@@ -652,3 +661,11 @@ class TestReadCSV(object):
         rel = con.read_csv(file_path, union_by_name=True)
         assert rel.columns == ['one', 'two', 'three', 'four', 'five']
         assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]
+
+
+# con = duckdb.connect()
+# con.execute("CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')")
+# rel = con.read_csv(str('/Users/holanda/Documents/Projects/duckdb/data/csv/enum_type.csv'), dtype = ['mood'])
+# print(rel.fetchall())
+# assert rel.fetchall() == [('sad',), ('happy',), ('angry',)]
+
