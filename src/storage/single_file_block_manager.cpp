@@ -4,6 +4,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -164,6 +165,10 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 	return result;
 }
 
+static void AddStorageVersion(AttachedDatabase &db, const uint64_t version) {
+	db.tags["storage_version"] = std::to_string(version);
+}
+
 void SingleFileBlockManager::CreateNewDatabase() {
 	auto flags = GetFileFlags(true);
 
@@ -177,9 +182,8 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	MainHeader main_header;
 	main_header.version_number = VERSION_NUMBER;
-	D_ASSERT(main_header.version_number >= VERSION_NUMBER_LOWER);
-	D_ASSERT(main_header.version_number <= VERSION_NUMBER_UPPER);
 	memset(main_header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
+	AddStorageVersion(db, main_header.version_number);
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
@@ -235,7 +239,8 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	MainHeader::CheckMagicBytes(*handle);
 	// otherwise, we check the metadata of the file
 	ReadAndChecksum(header_buffer, 0);
-	DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);
+	MainHeader main_header = DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);
+	AddStorageVersion(db, main_header.version_number);
 
 	// read the database headers from disk
 	DatabaseHeader h1;
