@@ -146,7 +146,7 @@ class U_I18N_API OlsonTimeZone: public BasicTimeZone {
     /**
      * Returns true if the two TimeZone objects are equal.
      */
-    virtual UBool operator==(const TimeZone& other) const;
+    virtual Ubool operator==(const TimeZone& other) const;
 
     /**
      * TimeZone API.

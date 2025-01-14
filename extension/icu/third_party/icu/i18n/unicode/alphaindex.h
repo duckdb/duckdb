@@ -660,13 +660,13 @@ private:
      * No Equality operators.
      * @internal
      */
-     virtual UBool operator==(const AlphabeticIndex& other) const;
+     virtual Ubool operator==(const AlphabeticIndex& other) const;
 
     /**
      * Inequality operator.
      * @internal
      */
-     virtual UBool operator!=(const AlphabeticIndex& other) const;
+     virtual bool operator!=(const AlphabeticIndex& other) const;
 
      // Common initialization, for use from all constructors.
      void init(const Locale *locale, UErrorCode &status);

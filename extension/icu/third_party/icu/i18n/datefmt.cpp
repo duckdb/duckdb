@@ -82,7 +82,7 @@ public:
     virtual int32_t hashCode() const {
         return (int32_t)(37u * (uint32_t)LocaleCacheKey<DateFmtBestPattern>::hashCode() + (uint32_t)fSkeleton.hashCode());
     }
-    virtual UBool operator==(const CacheKeyBase &other) const {
+    virtual Ubool operator==(const CacheKeyBase &other) const {
        // reflexive
        if (this == &other) { 	
            return TRUE;

@@ -56,7 +56,7 @@ class U_COMMON_API CacheKeyBase : public UObject {
    /**
     * Equality operator.
     */
-   virtual UBool operator == (const CacheKeyBase &other) const = 0;
+   virtual bool operator == (const CacheKeyBase &other) const = 0;
 
    /**
     * Create a new object for this key. Called by cache on cache miss.

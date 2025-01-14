@@ -113,12 +113,12 @@ public:
      * equal if they are of the same size and all elements are equal,
      * as compared using this object's comparer.
      */
-    UBool operator==(const UVector& other);
+    Ubool operator==(const UVector& other);
 
     /**
      * Equivalent to !operator==()
      */
-    inline UBool operator!=(const UVector& other);
+    inline bool operator!=(const UVector& other);
 
     //------------------------------------------------------------
     // java.util.Vector API
@@ -382,7 +382,7 @@ inline void* UVector::operator[](int32_t index) const {
     return elementAt(index);
 }
 
-inline UBool UVector::operator!=(const UVector& other) {
+inline bool UVector::operator!=(const UVector& other) {
     return !operator==(other);
 }
 

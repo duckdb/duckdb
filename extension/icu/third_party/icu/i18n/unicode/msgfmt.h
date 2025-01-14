@@ -429,7 +429,7 @@ public:
      * @return       true if the given Format objects are semantically equal.
      * @stable ICU 2.0
      */
-    virtual UBool operator==(const Format& other) const;
+    virtual Ubool operator==(const Format& other) const;
 
     /**
      * Sets the locale to be used for creating argument Format objects.
@@ -1088,7 +1088,7 @@ private:
      */
     class U_I18N_API DummyFormat : public Format {
     public:
-        virtual UBool operator==(const Format&) const;
+        virtual Ubool operator==(const Format&) const;
         virtual DummyFormat* clone() const;
         virtual UnicodeString& format(const Formattable& obj,
                               UnicodeString& appendTo,

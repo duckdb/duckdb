@@ -153,7 +153,7 @@ public:
     * @return Returns TRUE if two collation keys are different, FALSE otherwise.
     * @stable ICU 2.0
     */
-    UBool                   operator!=(const CollationKey& source) const;
+    bool                   operator!=(const CollationKey& source) const;
 
 
     /**

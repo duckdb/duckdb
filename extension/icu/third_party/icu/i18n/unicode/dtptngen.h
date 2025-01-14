@@ -113,7 +113,7 @@ public:
       * @return         true if other is semantically equal to this.
       * @stable ICU 3.8
       */
-    UBool operator==(const DateTimePatternGenerator& other) const;
+    Ubool operator==(const DateTimePatternGenerator& other) const;
 
     /**
      * Return true if another object is semantically unequal to this one.
@@ -122,7 +122,7 @@ public:
      * @return         true if other is semantically unequal to this.
      * @stable ICU 3.8
      */
-    UBool operator!=(const DateTimePatternGenerator& other) const;
+    bool operator!=(const DateTimePatternGenerator& other) const;
 
     /**
      * Utility to return a unique skeleton from a given pattern. For example,

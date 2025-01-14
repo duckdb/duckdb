@@ -44,7 +44,7 @@
 // public:
 //     WholeStringBreakIterator() : BreakIterator(), length(0) {}
 //     ~WholeStringBreakIterator() U_OVERRIDE;
-//     UBool operator==(const BreakIterator&) const U_OVERRIDE;
+//     Ubool operator==(const BreakIterator&) const U_OVERRIDE;
 //     WholeStringBreakIterator *clone() const U_OVERRIDE;
 //     static UClassID U_EXPORT2 getStaticClassID();
 //     UClassID getDynamicClassID() const U_OVERRIDE;

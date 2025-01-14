@@ -172,7 +172,7 @@ public:
      * @return        TRUE if the two field positions are not equal, FALSE otherwise.
      * @stable ICU 2.0
      */
-    UBool              operator!=(const FieldPosition& that) const;
+    bool              operator!=(const FieldPosition& that) const;
 
     /**
      * Clone this object.

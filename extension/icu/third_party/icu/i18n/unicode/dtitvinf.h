@@ -214,7 +214,7 @@ public:
      * @return         true if other is semantically equal to this.
      * @stable ICU 4.0
      */
-    virtual UBool operator==(const DateIntervalInfo& other) const;
+    virtual Ubool operator==(const DateIntervalInfo& other) const;
 
     /**
      * Return true if another object is semantically unequal to this one.
@@ -223,7 +223,7 @@ public:
      * @return         true if other is semantically unequal to this.
      * @stable ICU 4.0
      */
-    UBool operator!=(const DateIntervalInfo& other) const;
+    bool operator!=(const DateIntervalInfo& other) const;
 
 
 

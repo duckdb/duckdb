@@ -77,14 +77,14 @@ class U_I18N_API MeasureUnit: public UObject {
      * to the given object.
      * @stable ICU 3.0
      */
-    virtual UBool operator==(const UObject& other) const;
+    virtual Ubool operator==(const UObject& other) const;
 
     /**
      * Inequality operator.  Return true if this object is not equal
      * to the given object.
      * @stable ICU 53
      */
-    UBool operator!=(const UObject& other) const {
+    bool operator!=(const UObject& other) const {
         return !(*this == other);
     }
 

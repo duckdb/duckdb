@@ -909,7 +909,7 @@ class U_I18N_API DecimalFormat : public NumberFormat {
      * @return         true if the given Format objects are semantically equal.
      * @stable ICU 2.0
      */
-    UBool operator==(const Format& other) const U_OVERRIDE;
+    Ubool operator==(const Format& other) const U_OVERRIDE;
 
 
     using NumberFormat::format;

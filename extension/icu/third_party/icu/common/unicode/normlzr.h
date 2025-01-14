@@ -584,7 +584,7 @@ public:
    * @return comparison result
    * @deprecated ICU 56 Use Normalizer2 instead.
    */
-  UBool        operator==(const Normalizer& that) const;
+  bool        operator==(const Normalizer& that) const;
 
   /**
    * Returns FALSE when both iterators refer to the same character in the same
@@ -594,7 +594,7 @@ public:
    * @return comparison result
    * @deprecated ICU 56 Use Normalizer2 instead.
    */
-  inline UBool        operator!=(const Normalizer& that) const;
+  inline bool        operator!=(const Normalizer& that) const;
 
   /**
    * Returns a pointer to a new Normalizer that is a clone of this one.

@@ -1869,7 +1869,7 @@ UBool MessageFormat::equalFormats(const void* left, const void* right) {
 }
 
 
-UBool MessageFormat::DummyFormat::operator==(const Format&) const {
+bool MessageFormat::DummyFormat::operator==(const Format&) const {
     return TRUE;
 }
 

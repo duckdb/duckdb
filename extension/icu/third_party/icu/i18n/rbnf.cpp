@@ -99,8 +99,8 @@ public:
         return NULL;
     }
 
-    virtual UBool operator==(const LocalizationInfo* rhs) const;
-    inline  UBool operator!=(const LocalizationInfo* rhs) const { return !operator==(rhs); }
+    virtual Ubool operator==(const LocalizationInfo* rhs) const;
+    inline  bool operator!=(const LocalizationInfo* rhs) const { return !operator==(rhs); }
 
     virtual int32_t getNumberOfRuleSets(void) const = 0;
     virtual const UChar* getRuleSetName(int32_t index) const = 0;

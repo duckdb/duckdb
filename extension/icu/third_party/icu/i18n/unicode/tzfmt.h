@@ -299,7 +299,7 @@ public:
      *                Objects of different subclasses are considered unequal.
      * @stable ICU 50
      */
-    virtual UBool operator==(const Format& other) const;
+    virtual Ubool operator==(const Format& other) const;
 
     /**
      * Clone this object polymorphically. The caller is responsible

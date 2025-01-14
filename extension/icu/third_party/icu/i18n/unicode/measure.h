@@ -87,7 +87,7 @@ class U_I18N_API Measure: public UObject {
      * to the given object.
      * @stable ICU 3.0
      */
-    UBool operator==(const UObject& other) const;
+    Ubool operator==(const UObject& other) const;
 
     /**
      * Return a reference to the numeric value of this object.  The

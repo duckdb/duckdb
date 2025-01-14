@@ -329,7 +329,7 @@ public:
      * @return      True if the two locale keys are the same, false otherwise.
      * @stable ICU 2.0
      */
-    UBool   operator==(const    Locale&     other) const;
+    bool   operator==(const    Locale&     other) const;
 
     /**
      * Checks if two locale keys are not the same.
@@ -339,7 +339,7 @@ public:
      *              otherwise.
      * @stable ICU 2.0
      */
-    inline UBool   operator!=(const    Locale&     other) const;
+    inline bool   operator!=(const    Locale&     other) const;
 
     /**
      * Clone this object.

@@ -636,13 +636,13 @@ Collator::Collator(const Collator &other)
 {
 }
 
-UBool Collator::operator==(const Collator& other) const
+bool Collator::operator==(const Collator& other) const
 {
     // Subclasses: Call this method and then add more specific checks.
     return typeid(*this) == typeid(other);
 }
 
-UBool Collator::operator!=(const Collator& other) const
+bool Collator::operator!=(const Collator& other) const
 {
     return (UBool)!(*this == other);
 }
