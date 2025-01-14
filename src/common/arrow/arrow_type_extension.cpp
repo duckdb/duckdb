@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/config.hpp"
@@ -207,7 +209,7 @@ ArrowTypeExtension GetArrowExtensionInternal(
 }
 ArrowTypeExtension DBConfig::GetArrowExtension(ArrowExtensionMetadata info) const {
 	lock_guard<mutex> l(arrow_extensions->lock);
-	return GetArrowExtensionInternal(arrow_extensions->type_extensions, info);
+	return GetArrowExtensionInternal(arrow_extensions->type_extensions, std::move(info));
 }
 
 ArrowTypeExtension DBConfig::GetArrowExtension(const LogicalType &type) const {
