@@ -10,11 +10,7 @@ CompressedStringScanState::~CompressedStringScanState() {
 }
 
 uint16_t CompressedStringScanState::GetStringLength(sel_t index) {
-	if (index == 0) {
-		return 0;
-	} else {
-		return UnsafeNumericCast<uint16_t>(index_buffer_ptr[index] - index_buffer_ptr[index - 1]);
-	}
+	return UnsafeNumericCast<uint16_t>(index_buffer_ptr[index]);
 }
 
 string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t dict_offset, uint16_t string_len) {
@@ -79,9 +75,11 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	D_ASSERT(index_buffer_count >= 1);
 	validity.SetInvalid(0);
 
+	int32_t offset = 0;
 	for (uint32_t i = 0; i < index_buffer_count; i++) {
 		auto str_len = GetStringLength(i);
-		dict_child_data[i] = FetchStringFromDict(*dictionary, UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);
+		offset += str_len;
+		dict_child_data[i] = FetchStringFromDict(*dictionary, offset, str_len);
 	}
 }
 
@@ -119,17 +117,22 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		}
 	} else {
 		// This path is taken for fetch, where we don't want to decompress the full dictionary
-		for (idx_t i = 0; i < scan_count; i++) {
-			// Lookup dict offset in index buffer
-			auto string_number = sel_vec->get_index(i + start_offset);
-			if (string_number == 0) {
-				validity.SetInvalid(result_offset + i);
-			}
-			auto dict_offset = index_buffer_ptr[string_number];
-			auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_number));
-			result_data[result_offset + i] =
-			    FetchStringFromDict(result, UnsafeNumericCast<int32_t>(dict_offset), str_len);
+		D_ASSERT(scan_count == 1);
+
+		// Lookup dict offset in index buffer
+		auto string_number = sel_vec->get_index(start_offset);
+		if (string_number == 0) {
+			validity.SetInvalid(result_offset);
 		}
+
+		int32_t offset = 0;
+		for (idx_t i = 0; i < string_number; i++) {
+			offset += index_buffer_ptr[i];
+		}
+		offset += index_buffer_ptr[string_number];
+
+		auto str_len = index_buffer_ptr[string_number];
+		result_data[result_offset] = FetchStringFromDict(result, offset, str_len);
 	}
 }
 

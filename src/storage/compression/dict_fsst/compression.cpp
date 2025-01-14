@@ -92,7 +92,7 @@ void DictFSSTCompressionCompressState::AddNewString(const StringData &string_dat
 #endif
 
 	// Update buffers and map
-	index_buffer.push_back(current_dictionary.size);
+	index_buffer.push_back(str.GetSize());
 	selection_buffer.push_back(UnsafeNumericCast<uint32_t>(index_buffer.size() - 1));
 	if (str.IsInlined()) {
 		current_string_map.insert({str, index_buffer.size() - 1});
@@ -209,18 +209,17 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 
 	vector<size_t> fsst_string_sizes;
 	vector<unsigned char *> fsst_string_ptrs;
-	data_ptr_t last_start = current_end_ptr;
 	//! We could use the 'current_string_map' but this won't be in-order
 	// and we want to preserve the order of the dictionary after rewriting
 
 	// Skip index 0, that's reserved for NULL
+	uint32_t offset = 0;
 	for (idx_t i = 1; i < index_buffer.size(); i++) {
-		auto offset = index_buffer[i];
+		auto length = index_buffer[i];
+		offset += length;
 		auto start = current_end_ptr - offset;
-		size_t size = UnsafeNumericCast<size_t>(last_start - start);
-		fsst_string_sizes.push_back(size);
+		fsst_string_sizes.push_back(length);
 		fsst_string_ptrs.push_back((unsigned char *)start); // NOLINT
-		last_start = start;
 	}
 
 	// Create the encoder
@@ -265,14 +264,14 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 
 	// Rewrite the dictionary
 	current_string_map.clear();
-	uint32_t offset = 0;
+	offset = 0;
 	for (idx_t i = 0; i < string_count; i++) {
 		auto &start = compressed_ptrs[i];
 		auto &size = compressed_sizes[i];
 		offset += size;
 		// Skip index 0, reserved for NULL
 		uint32_t dictionary_index = UnsafeNumericCast<uint32_t>(i + 1);
-		index_buffer[dictionary_index] = offset;
+		index_buffer[dictionary_index] = size;
 		auto dest = current_end_ptr - offset;
 		memcpy(dest, start, size);
 		string_t dictionary_string((const char *)dest, UnsafeNumericCast<uint32_t>(size)); // NOLINT
