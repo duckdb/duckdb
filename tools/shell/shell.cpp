@@ -4572,39 +4572,53 @@ static char *find_home_dir(int clearFlag) {
 	return home_dir;
 }
 
+string ShellState::GetDefaultDuckDBRC() {
+	auto home_dir = find_home_dir(0);
+	if (!home_dir) {
+		return string();
+	}
+	return string(home_dir) + "/.duckdbrc";
+}
+
 /*
 ** Read input from the file given by sqliterc_override.  Or if that
 ** parameter is NULL, take input from ~/.duckdbrc
 **
 ** Returns the number of errors.
 */
-void ShellState::ProcessDuckDBRC(const char *sqliterc_override) {
-	const char *sqliterc = sqliterc_override;
-	char *zBuf = nullptr;
+
+void ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 	FILE *inSaved = in;
 	int savedLineno = lineno;
 
-	if (!sqliterc) {
-		auto home_dir = find_home_dir(0);
-		if (!home_dir) {
+	in = fopen(file.c_str(), "rb");
+	if (in) {
+		if (stdin_is_interactive && is_duckdb_rc) {
+			utf8_printf(stderr, "-- Loading resources from %s\n", file.c_str());
+		}
+		ProcessInput();
+		fclose(in);
+	} else if (!is_duckdb_rc) {
+		utf8_printf(stderr, "Failed to read file \"%s\"\n", file.c_str());
+	}
+	in = inSaved;
+	lineno = savedLineno;
+}
+
+void ShellState::ProcessDuckDBRC(const char *file) {
+	string path;
+	if (!file) {
+		// use default .duckdbrc path
+		path = ShellState::GetDefaultDuckDBRC();
+		if (path.empty()) {
+			// could not find home directory - return
 			raw_printf(stderr, "-- warning: cannot find home directory;"
 			                   " cannot read ~/.duckdbrc\n");
 			return;
 		}
-		zBuf = sqlite3_mprintf("%s/.duckdbrc", home_dir);
-		sqliterc = zBuf;
+		file = path.c_str();
 	}
-	in = fopen(sqliterc, "rb");
-	if (in) {
-		if (stdin_is_interactive) {
-			utf8_printf(stderr, "-- Loading resources from %s\n", sqliterc);
-		}
-		ProcessInput();
-		fclose(in);
-	}
-	in = inSaved;
-	lineno = savedLineno;
-	sqlite3_free(zBuf);
+	ProcessFile(file, true);
 }
 
 /*
@@ -4972,7 +4986,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				break;
 			}
 			z = cmdline_option_value(argc, argv, ++i);
-			data.ProcessDuckDBRC(z);
+			data.ProcessFile(string(z));
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = false;
