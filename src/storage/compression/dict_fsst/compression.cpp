@@ -144,6 +144,7 @@ void DictFSSTCompressionCompressState::Flush(bool final) {
 		auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 		duckdb_fsst_destroy(fsst_encoder);
 		encoder = nullptr;
+		symbol_table_size = DConstants::INVALID_INDEX;
 	}
 
 	auto &state = checkpoint_data.GetCheckpointState();

@@ -156,6 +156,15 @@ void DictFSSTAnalyzeState::Flush(bool final) {
 	current_unique_count = 0;
 	current_dict_size = 0;
 	current_string_map.clear();
+
+	if (append_state == DictionaryAppendState::ENCODED) {
+		auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
+		duckdb_fsst_destroy(fsst_encoder);
+		encoder = nullptr;
+		symbol_table_size = DConstants::INVALID_INDEX;
+	}
+	append_state = DictionaryAppendState::REGULAR;
+
 	heap.Destroy();
 }
 
