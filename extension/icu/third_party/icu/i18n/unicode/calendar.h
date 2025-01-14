@@ -451,7 +451,7 @@ public:
      *              otherwise.
      * @stable ICU 2.0
      */
-    virtual Ubool operator==(const Calendar& that) const;
+    virtual bool operator==(const Calendar& that) const;
 
     /**
      * Compares the inequality of two Calendar objects.

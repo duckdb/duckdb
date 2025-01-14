@@ -145,7 +145,7 @@ public:
         }
     }
 
-    virtual Ubool operator==(const NFSubstitution& rhs) const;
+    virtual bool operator==(const NFSubstitution& rhs) const;
 
     virtual void doSubstitution(int64_t number, UnicodeString& toInsertInto, int32_t pos, int32_t recursionCount, UErrorCode& status) const;
     virtual void doSubstitution(double number, UnicodeString& toInsertInto, int32_t pos, int32_t recursionCount, UErrorCode& status) const;
@@ -213,7 +213,7 @@ public:
         UErrorCode& status);
     virtual ~FractionalPartSubstitution();
 
-    virtual Ubool operator==(const NFSubstitution& rhs) const;
+    virtual bool operator==(const NFSubstitution& rhs) const;
 
     virtual void doSubstitution(double number, UnicodeString& toInsertInto, int32_t pos, int32_t recursionCount, UErrorCode& status) const;
     virtual void doSubstitution(int64_t /*number*/, UnicodeString& /*toInsertInto*/, int32_t /*_pos*/, int32_t /*recursionCount*/, UErrorCode& /*status*/) const {}
@@ -285,7 +285,7 @@ public:
     }
     virtual ~NumeratorSubstitution();
 
-    virtual Ubool operator==(const NFSubstitution& rhs) const;
+    virtual bool operator==(const NFSubstitution& rhs) const;
 
     virtual int64_t transformNumber(int64_t number) const { return number * ldenominator; }
     virtual double transformNumber(double number) const { return uprv_round(number * denominator); }
@@ -515,7 +515,7 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(NFSubstitution)
  * @param The substitution to compare this one to
  * @return true if the two substitutions are functionally equivalent
  */
-UBool
+bool
 NFSubstitution::operator==(const NFSubstitution& rhs) const
 {
   // compare class and all of the fields all substitutions have
@@ -1195,7 +1195,7 @@ FractionalPartSubstitution::doParse(const UnicodeString& text,
     }
 }
 
-UBool
+bool
 FractionalPartSubstitution::operator==(const NFSubstitution& rhs) const
 {
   return NFSubstitution::operator==(rhs) &&
@@ -1325,7 +1325,7 @@ NumeratorSubstitution::doParse(const UnicodeString& text,
     return TRUE;
 }
 
-UBool
+bool
 NumeratorSubstitution::operator==(const NFSubstitution& rhs) const
 {
     return NFSubstitution::operator==(rhs) &&

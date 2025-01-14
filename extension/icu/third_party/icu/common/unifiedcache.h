@@ -83,7 +83,7 @@ class U_COMMON_API CacheKeyBase : public UObject {
    /**
     * Inequality operator.
     */
-   UBool operator != (const CacheKeyBase &other) const {
+   bool operator != (const CacheKeyBase &other) const {
        return !(*this == other);
    }
  private:
@@ -123,7 +123,7 @@ class CacheKey : public CacheKeyBase {
    /**
     * Two objects are equal if they are of the same type.
     */
-   virtual UBool operator == (const CacheKeyBase &other) const {
+   virtual bool operator == (const CacheKeyBase &other) const {
        return typeid(*this) == typeid(other);
    }
 };
@@ -144,7 +144,7 @@ class LocaleCacheKey : public CacheKey<T> {
    virtual int32_t hashCode() const {
        return (int32_t)(37u * (uint32_t)CacheKey<T>::hashCode() + (uint32_t)fLoc.hashCode());
    }
-   virtual UBool operator == (const CacheKeyBase &other) const {
+   virtual bool operator == (const CacheKeyBase &other) const {
        // reflexive
        if (this == &other) {
            return TRUE;

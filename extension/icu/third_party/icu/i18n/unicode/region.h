@@ -81,7 +81,7 @@ public:
      * Returns true if the two regions are equal.
      * @stable ICU 51
      */
-    Ubool operator==(const Region &that) const;
+    bool operator==(const Region &that) const;
 
     /**
      * Returns true if the two regions are NOT equal; that is, if operator ==() returns false.

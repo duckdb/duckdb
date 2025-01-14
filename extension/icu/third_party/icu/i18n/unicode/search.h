@@ -272,7 +272,7 @@
 //      *         attributes. FALSE otherwise.
 //      * @stable ICU 2.0
 //      */
-//     virtual Ubool operator==(const SearchIterator &that) const;
+//     virtual bool operator==(const SearchIterator &that) const;
 
 //     /**
 //      * Not-equal operator.

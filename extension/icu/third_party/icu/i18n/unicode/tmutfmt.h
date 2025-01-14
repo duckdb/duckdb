@@ -236,7 +236,7 @@ private:
     friend struct TimeUnitFormatReadSink;
 };
 
-inline UBool
+inline bool
 TimeUnitFormat::operator!=(const Format& other) const  {
     return !operator==(other);
 }

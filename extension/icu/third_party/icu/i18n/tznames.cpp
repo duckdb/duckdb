@@ -219,7 +219,7 @@ TimeZoneNamesDelegate::~TimeZoneNamesDelegate() {
     umtx_unlock(&gTimeZoneNamesLock);
 }
 
-UBool
+bool
 TimeZoneNamesDelegate::operator==(const TimeZoneNames& other) const {
     if (this == &other) {
         return TRUE;

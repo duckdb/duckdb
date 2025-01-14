@@ -255,7 +255,7 @@ public:
      * @return         true if another object is semantically equal to this one.
      * @stable ICU 2.0
      */
-    Ubool operator==(const DecimalFormatSymbols& other) const;
+    bool operator==(const DecimalFormatSymbols& other) const;
 
     /**
      * Return true if another object is semantically unequal to this one.

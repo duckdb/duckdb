@@ -142,7 +142,7 @@ public:
      * @return Return TRUE if the given Format objects are semantically equal.
      * @stable ICU 50
      */
-    virtual Ubool operator==(const TimeZoneNames& other) const = 0;
+    virtual bool operator==(const TimeZoneNames& other) const = 0;
 
     /**
      * Return true if the given TimeZoneNames objects are not semantically

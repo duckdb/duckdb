@@ -251,7 +251,7 @@ public:
      * @return TRUE if other is the same as this.
      * @stable ICU 2.0
      */
-    virtual Ubool operator==(const Collator& other) const;
+    virtual bool operator==(const Collator& other) const;
 
     /**
      * Returns true if "other" is not the same as "this".

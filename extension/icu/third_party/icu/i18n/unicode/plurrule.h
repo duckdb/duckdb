@@ -484,7 +484,7 @@ public:
      *              PluralRules; false otherwise.
      * @stable ICU 4.0
      */
-    virtual Ubool operator==(const PluralRules& other) const;
+    virtual bool operator==(const PluralRules& other) const;
 
     /**
      * Compares the inequality of two PluralRules objects.

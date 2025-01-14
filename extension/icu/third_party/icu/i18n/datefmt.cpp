@@ -82,7 +82,7 @@ public:
     virtual int32_t hashCode() const {
         return (int32_t)(37u * (uint32_t)LocaleCacheKey<DateFmtBestPattern>::hashCode() + (uint32_t)fSkeleton.hashCode());
     }
-    virtual Ubool operator==(const CacheKeyBase &other) const {
+    virtual bool operator==(const CacheKeyBase &other) const {
        // reflexive
        if (this == &other) { 	
            return TRUE;
@@ -174,7 +174,7 @@ DateFormat::~DateFormat()
 
 //----------------------------------------------------------------------
 
-UBool
+bool
 DateFormat::operator==(const Format& other) const
 {
     // This protected comparison operator should only be called by subclasses

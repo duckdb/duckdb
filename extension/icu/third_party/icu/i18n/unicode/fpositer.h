@@ -84,7 +84,7 @@ public:
      * equal array of run values.
      * @stable ICU 4.4
      */
-    Ubool operator==(const FieldPositionIterator&) const;
+    bool operator==(const FieldPositionIterator&) const;
 
     /**
      * Returns the complement of the result of operator==

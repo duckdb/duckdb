@@ -1153,7 +1153,7 @@ private:
     friend void U_CALLCONV locale_available_init();
 };
 
-inline UBool
+inline bool
 Locale::operator!=(const    Locale&     other) const
 {
     return !operator==(other);

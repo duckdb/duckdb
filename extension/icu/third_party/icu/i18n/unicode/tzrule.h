@@ -56,7 +56,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically equal.
      * @stable ICU 3.8
      */
-    virtual Ubool operator==(const TimeZoneRule& that) const;
+    virtual bool operator==(const TimeZoneRule& that) const;
 
     /**
      * Return true if the given <code>TimeZoneRule</code> objects are semantically unequal. Objects
@@ -247,7 +247,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically equal.
      * @stable ICU 3.8
      */
-    virtual Ubool operator==(const TimeZoneRule& that) const;
+    virtual bool operator==(const TimeZoneRule& that) const;
 
     /**
      * Return true if the given <code>TimeZoneRule</code> objects are semantically unequal. Objects
@@ -458,7 +458,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically equal.
      * @stable ICU 3.8
      */
-    virtual Ubool operator==(const TimeZoneRule& that) const;
+    virtual bool operator==(const TimeZoneRule& that) const;
 
     /**
      * Return true if the given <code>TimeZoneRule</code> objects are semantically unequal. Objects
@@ -674,7 +674,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically equal.
      * @stable ICU 3.8
      */
-    virtual Ubool operator==(const TimeZoneRule& that) const;
+    virtual bool operator==(const TimeZoneRule& that) const;
 
     /**
      * Return true if the given <code>TimeZoneRule</code> objects are semantically unequal. Objects

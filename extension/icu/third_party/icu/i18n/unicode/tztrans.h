@@ -86,7 +86,7 @@ public:
      * @return  true if the given TimeZoneTransition objects are semantically equal.
      * @stable ICU 3.8
      */
-    Ubool operator==(const TimeZoneTransition& that) const;
+    bool operator==(const TimeZoneTransition& that) const;
 
     /**
      * Return true if the given TimeZoneTransition objects are semantically unequal. Objects

@@ -72,7 +72,7 @@ public:
       *semantically equal.
      * @stable ICU 3.8
      */
-    virtual Ubool operator==(const TimeZone& that) const;
+    virtual bool operator==(const TimeZone& that) const;
 
     /**
      * Return true if the given <code>TimeZone</code> objects are

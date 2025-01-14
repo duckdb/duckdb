@@ -192,7 +192,7 @@ ParsePosition::operator=(const ParsePosition& copy)
   return *this;
 }
 
-inline UBool
+inline bool
 ParsePosition::operator==(const ParsePosition& copy) const
 {
   if(index != copy.index || errorIndex != copy.errorIndex)
@@ -201,7 +201,7 @@ ParsePosition::operator==(const ParsePosition& copy) const
   return TRUE;
 }
 
-inline UBool
+inline bool
 ParsePosition::operator!=(const ParsePosition& copy) const
 {
   return !operator==(copy);

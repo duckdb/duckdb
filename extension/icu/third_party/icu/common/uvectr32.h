@@ -86,7 +86,7 @@ public:
      * equal if they are of the same size and all elements are equal,
      * as compared using this object's comparer.
      */
-    Ubool operator==(const UVector32& other);
+    bool operator==(const UVector32& other);
 
     /**
      * Equivalent to !operator==()

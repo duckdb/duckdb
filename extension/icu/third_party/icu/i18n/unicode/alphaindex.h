@@ -660,7 +660,7 @@ private:
      * No Equality operators.
      * @internal
      */
-     virtual Ubool operator==(const AlphabeticIndex& other) const;
+     virtual bool operator==(const AlphabeticIndex& other) const;
 
     /**
      * Inequality operator.

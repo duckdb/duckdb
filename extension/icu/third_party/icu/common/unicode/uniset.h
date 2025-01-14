@@ -487,7 +487,7 @@ public:
      * @return <tt>true</tt> if the specified set is equal to this set.
      * @stable ICU 2.0
      */
-    virtual Ubool operator==(const UnicodeSet& o) const;
+    virtual bool operator==(const UnicodeSet& o) const;
 
     /**
      * Compares the specified object with this set for equality.  Returns

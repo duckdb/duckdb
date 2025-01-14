@@ -777,7 +777,7 @@ private:
 //-------------------------------------------------------------------------
 
 #ifndef U_HIDE_DEPRECATED_API
-inline UBool
+inline bool
 Normalizer::operator!= (const Normalizer& other) const
 { return ! operator==(other); }
 

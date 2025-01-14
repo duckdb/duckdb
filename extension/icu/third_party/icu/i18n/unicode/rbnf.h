@@ -707,7 +707,7 @@ public:
    * @return        true if the given Format objects are semantically equal.
    * @stable ICU 2.6
    */
-  virtual Ubool operator==(const Format& other) const;
+  virtual bool operator==(const Format& other) const;
 
 //-----------------------------------------------------------------------
 // public API functions

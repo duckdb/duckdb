@@ -134,7 +134,7 @@ public:
     UnicodeString& appendTo(UnicodeString& string) const;
     UnicodeString& appendFieldTo(int32_t field, UnicodeString& string) const;
     UChar getFirstChar() const;
-    inline Ubool operator==(const SkeletonFields& other) const;
+    inline bool operator==(const SkeletonFields& other) const;
     inline bool operator!=(const SkeletonFields& other) const;
 
 private:

@@ -253,7 +253,7 @@
 //      * same class, have the same behavior, and iterate over the same text.
 //      *  @stable ICU 2.0
 //      */
-//     virtual Ubool operator==(const BreakIterator& that) const;
+//     virtual bool operator==(const BreakIterator& that) const;
 
 //     /**
 //      * Not-equal operator.  If operator== returns TRUE, this returns FALSE,

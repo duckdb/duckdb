@@ -235,7 +235,7 @@ public:
     TZDBTimeZoneNames(const Locale& locale);
     virtual ~TZDBTimeZoneNames();
 
-    virtual Ubool operator==(const TimeZoneNames& other) const;
+    virtual bool operator==(const TimeZoneNames& other) const;
     virtual TZDBTimeZoneNames* clone() const;
 
     StringEnumeration* getAvailableMetaZoneIDs(UErrorCode& status) const;

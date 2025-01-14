@@ -147,7 +147,7 @@ class U_I18N_API MeasureFormat : public Format {
      * Return true if given Format objects are semantically equal.
      * @stable ICU 53
      */
-    virtual Ubool operator==(const Format &other) const;
+    virtual bool operator==(const Format &other) const;
 
     /**
      * Clones this object polymorphically.

@@ -174,7 +174,7 @@ public:
      * @return         true if other is semantically equal to this.
      * @stable ICU 2.0
      */
-    Ubool operator==(const DateFormatSymbols& other) const;
+    bool operator==(const DateFormatSymbols& other) const;
 
     /**
      * Return true if another object is semantically unequal to this one.

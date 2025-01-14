@@ -297,7 +297,7 @@
 //      *         while looking for the same pattern.
 //      * @stable ICU 2.0
 //      */
-//     virtual Ubool operator==(const SearchIterator &that) const;
+//     virtual bool operator==(const SearchIterator &that) const;
 
 //     // public get and set methods ----------------------------------------
 

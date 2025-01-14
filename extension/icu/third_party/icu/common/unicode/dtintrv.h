@@ -109,7 +109,7 @@ public:
      * @return TRUE if the two DateIntervals are the same
      * @stable ICU 4.0
      */
-    virtual Ubool operator==(const DateInterval& other) const;
+    virtual bool operator==(const DateInterval& other) const;
 
     /**
      * Non-equality operator
@@ -151,7 +151,7 @@ DateInterval::getToDate() const {
 }
 
 
-inline UBool 
+inline bool
 DateInterval::operator!=(const DateInterval& other) const { 
     return ( !operator==(other) );
 }

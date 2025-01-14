@@ -262,7 +262,7 @@ protected:
     // UObject &operator=(const UObject &other) { return *this; }
 
     // comparison operators
-    virtual inline Ubool operator==(const UObject &other) const { return this==&other; }
+    virtual inline bool operator==(const UObject &other) const { return this==&other; }
     inline bool operator!=(const UObject &other) const { return !operator==(other); }
 
     // clone() commented out from the base class:

@@ -389,7 +389,7 @@ MessageFormat::operator=(const MessageFormat& that)
     return *this;
 }
 
-UBool
+bool
 MessageFormat::operator==(const Format& rhs) const
 {
     if (this == &rhs) return TRUE;

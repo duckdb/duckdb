@@ -445,7 +445,7 @@ public:
      *              otherwise.
      * @stable ICU 2.0
      */
-    virtual Ubool operator==(const TimeZone& that) const;
+    virtual bool operator==(const TimeZone& that) const;
 
     /**
      * Returns true if the two TimeZones are NOT equal; that is, if operator==() returns

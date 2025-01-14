@@ -434,7 +434,7 @@ public:
       * @return         true if other is semantically equal to this.
       * @stable ICU 4.0
       */
-    virtual Ubool operator==(const Format& other) const;
+    virtual bool operator==(const Format& other) const;
 
     /**
      * Return true if another object is semantically unequal to this one.

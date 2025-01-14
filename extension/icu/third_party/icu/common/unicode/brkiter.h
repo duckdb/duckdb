@@ -123,7 +123,7 @@
 //      * object, and styles are not considered.
 //      * @stable ICU 2.0
 //      */
-//     virtual Ubool operator==(const BreakIterator&) const = 0;
+//     virtual bool operator==(const BreakIterator&) const = 0;
 
 //     /**
 //      * Returns the complement of the result of operator==

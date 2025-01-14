@@ -223,7 +223,7 @@ public:
      * @return true if arguments is the same as this object.
      * @stable ICU 2.0
      */
-    virtual Ubool operator==(const Collator& other) const;
+    virtual bool operator==(const Collator& other) const;
 
     /**
      * Makes a copy of this object.

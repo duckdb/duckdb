@@ -40,7 +40,7 @@ public:
 
     ~NFRuleSet();
 
-    Ubool operator==(const NFRuleSet& rhs) const;
+    bool operator==(const NFRuleSet& rhs) const;
     bool operator!=(const NFRuleSet& rhs) const { return !operator==(rhs); }
 
     UBool isPublic() const { return fIsPublic; }
