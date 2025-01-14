@@ -258,15 +258,15 @@
 /*==========================================================================*/
 
 /** The ICU boolean type @stable ICU 2.0 */
-typedef int8_t UBool;
+typedef bool UBool;
 
 #ifndef TRUE
 /** The TRUE value of a UBool @stable ICU 2.0 */
-#   define TRUE  1
+#   define TRUE  true
 #endif
 #ifndef FALSE
 /** The FALSE value of a UBool @stable ICU 2.0 */
-#   define FALSE 0
+#   define FALSE false
 #endif
 
 
