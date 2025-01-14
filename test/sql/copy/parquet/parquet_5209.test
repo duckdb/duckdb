@@ -13,7 +13,7 @@ statement ok
 CREATE TABLE test_5209 AS SELECT range FROM range(10000);
 
 statement ok
-COPY test_5209 TO '__TEST_DIR__/test_5209.parquet' (ROW_GROUP_SIZE 1000, ENCODING_COMPATIBILITY 'V1');
+COPY test_5209 TO '__TEST_DIR__/test_5209.parquet' (ROW_GROUP_SIZE 1000, PARQUET_VERSION 'V1');
 
 query III
 SELECT SUM(total_compressed_size) > 10000,
