@@ -1480,11 +1480,17 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	const optional_idx compression_level = SerializeCompressionLevel(bind_data.compression_level);
 	D_ASSERT(DeserializeCompressionLevel(compression_level) == bind_data.compression_level);
 	serializer.WritePropertyWithDefault(109, "compression_level", compression_level);
-	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file);
-	serializer.WriteProperty(111, "debug_use_openssl", bind_data.debug_use_openssl);
-	serializer.WriteProperty(112, "dictionary_size_limit", bind_data.dictionary_size_limit);
-	serializer.WriteProperty(113, "bloom_filter_false_positive_ratio", bind_data.bloom_filter_false_positive_ratio);
-	serializer.WriteProperty(114, "parquet_version", bind_data.parquet_version);
+	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file,
+	                                    ParquetWriteBindData().row_groups_per_file);
+	serializer.WritePropertyWithDefault(111, "debug_use_openssl", bind_data.debug_use_openssl,
+	                                    ParquetWriteBindData().debug_use_openssl);
+	serializer.WritePropertyWithDefault(112, "dictionary_size_limit", bind_data.dictionary_size_limit,
+	                                    ParquetWriteBindData().dictionary_size_limit);
+	serializer.WritePropertyWithDefault(113, "bloom_filter_false_positive_ratio",
+	                                    bind_data.bloom_filter_false_positive_ratio,
+	                                    ParquetWriteBindData().bloom_filter_false_positive_ratio);
+	serializer.WritePropertyWithDefault(114, "parquet_version", bind_data.parquet_version,
+	                                    ParquetWriteBindData().parquet_version);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
