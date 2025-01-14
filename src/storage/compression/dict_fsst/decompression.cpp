@@ -106,15 +106,30 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), src, decompress_count, current_width);
 
-	for (idx_t i = 0; i < scan_count; i++) {
-		// Lookup dict offset in index buffer
-		auto string_number = sel_vec->get_index(i + start_offset);
-		if (string_number == 0) {
-			validity.SetInvalid(result_offset + i);
+	if (dictionary) {
+		// We have prepared the full dictionary, we can reference these strings directly
+		auto dictionary_values = FlatVector::GetData<string_t>(*dictionary);
+		for (idx_t i = 0; i < scan_count; i++) {
+			// Lookup dict offset in index buffer
+			auto string_number = sel_vec->get_index(i + start_offset);
+			if (string_number == 0) {
+				validity.SetInvalid(result_offset + i);
+			}
+			result_data[result_offset + i] = dictionary_values[string_number];
 		}
-		auto dict_offset = index_buffer_ptr[string_number];
-		auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_number));
-		result_data[result_offset + i] = FetchStringFromDict(result, UnsafeNumericCast<int32_t>(dict_offset), str_len);
+	} else {
+		// This path is taken for fetch, where we don't want to decompress the full dictionary
+		for (idx_t i = 0; i < scan_count; i++) {
+			// Lookup dict offset in index buffer
+			auto string_number = sel_vec->get_index(i + start_offset);
+			if (string_number == 0) {
+				validity.SetInvalid(result_offset + i);
+			}
+			auto dict_offset = index_buffer_ptr[string_number];
+			auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_number));
+			result_data[result_offset + i] =
+			    FetchStringFromDict(result, UnsafeNumericCast<int32_t>(dict_offset), str_len);
+		}
 	}
 }
 

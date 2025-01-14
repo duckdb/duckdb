@@ -24,7 +24,7 @@ SELECT
 		WHEN 0 THEN 'aaaa'
 		WHEN 1 THEN 'bbbb'
 		WHEN 2 THEN 'cccc'
-		WHEN 3 THEN 'dddd'
+		WHEN 3 THEN 'this is not an inlined string'
 		WHEN 4 THEN NULL
 	END AS b
 FROM range(10_000) t(x);
@@ -48,5 +48,5 @@ select distinct b from test order by a % 5;
 aaaa
 bbbb
 cccc
-dddd
+this is not an inlined string
 NULL
