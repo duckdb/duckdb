@@ -6,6 +6,7 @@
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -69,9 +70,10 @@ void BloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVect
     // Rotate hash by a couple of bits to produce a new "hash value".
     // With this trick, keys have to be hashed only once.
     for (idx_t i = 0; i < num_hash_functions; i++) {
-        auto shift = i * 1;
-        SetBloomBitsForHashes(shift, hashes, rsel, count);
+        SetBloomBitsForHashes(i, hashes, rsel, count);
+        std::cout << "Bloom-filter after inserting " << count << " rows in round " << i << " of " << num_hash_functions << ": " << Bit::ToString(bloom_filter) << std::endl;
     }
+    std::cout << "-----" << std::endl;
 }
 
 void BloomFilter::Merge(BloomFilter &other) {
@@ -150,14 +152,12 @@ size_t BloomFilter::Probe(DataChunk &keys, const SelectionVector *&current_sel, 
 
     for (idx_t i = 0; i < num_hash_functions; i++) {
         sel_out_count = ProbeInternal(i, *precomputed_hashes, current_sel, sel_out_count, sel);
-        if (sel_out_count != count ) {
-             return sel_out_count;
-        }
         if (sel_out_count == 0) {
+            std::cout << "Pruned all rows with bloom-filter" << std::endl;
             return 0;
         }
     }
-
+    std::cout << "Pruned " << (count - sel_out_count) << " rows with Bloom-filter" << std::endl;
     return sel_out_count;
 }
 

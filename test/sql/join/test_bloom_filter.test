@@ -20,6 +20,8 @@ statement ok
 CREATE TABLE t_probe (b INTEGER, c INTEGER);
 
 
+
+
 ###
 # Query with distinct keys on build side and duplicate keys on probe side.
 
@@ -42,6 +44,8 @@ TRUNCATE t_build;
 
 statement ok
 TRUNCATE t_probe;
+
+
 
 
 ###
@@ -67,6 +71,8 @@ statement ok
 TRUNCATE t_probe;
 
 
+
+
 ###
 # Query with duplicate keys on the build side and duplicate keys on probe side.
 
@@ -85,6 +91,33 @@ SELECT a, b.b, c FROM t_probe p JOIN t_build b ON b.b = p.b ORDER BY ALL;
 12	1	20
 13	2	30
 13	2	40
+
+statement ok
+TRUNCATE t_build;
+
+statement ok
+TRUNCATE t_probe;
+
+
+
+
+###
+# Failing test case.
+
+statement ok
+INSERT INTO t_build VALUES (11, 1), (12, 1), (13, 2), (14, 3)
+
+statement ok
+INSERT INTO t_probe VALUES (1, 10), (2, 20), (3, 30)
+
+# simple cross product + join condition
+query III
+SELECT a, b.b, c FROM t_probe p JOIN t_build b ON b.b = p.b ORDER BY ALL;
+----
+11	1	10
+12	1	10
+13	2	20
+14	3	30
 
 statement ok
 TRUNCATE t_build;
