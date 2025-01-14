@@ -1311,7 +1311,7 @@ public:
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		if (state.dictionary.size() == 0 || state.dictionary.size() > writer.DictionarySizeLimit()) {
-			if (writer.GetEncodingCompatibility() == ParquetEncodingCompatibility::V1) {
+			if (writer.GetParquetVersion() == ParquetVersion::V1) {
 				// Can't do the cool stuff for V1
 				state.encoding = Encoding::PLAIN;
 			} else {
