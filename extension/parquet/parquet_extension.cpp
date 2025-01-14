@@ -1477,10 +1477,10 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                                                         bind_data.encryption_config, nullptr);
 
 	// 108 was dictionary_compression_ratio_threshold, but was deleted
-	const auto compression_level = SerializeCompressionLevel(bind_data.compression_level);
+	const optional_idx compression_level = SerializeCompressionLevel(bind_data.compression_level);
 	D_ASSERT(DeserializeCompressionLevel(compression_level) == bind_data.compression_level);
-	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
-	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
+	serializer.WritePropertyWithDefault(109, "compression_level", compression_level);
+	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file);
 	serializer.WriteProperty(111, "debug_use_openssl", bind_data.debug_use_openssl);
 	serializer.WriteProperty(112, "dictionary_size_limit", bind_data.dictionary_size_limit);
 	serializer.WriteProperty(113, "bloom_filter_false_positive_ratio", bind_data.bloom_filter_false_positive_ratio);
