@@ -372,7 +372,7 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 			}
 		}
 		if (TryLateMaterialization(op)) {
-			return std::move(op);
+			return op;
 		}
 		break;
 	}
@@ -383,7 +383,7 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 		}
 		// for the top-n we need to visit the order elements
 		if (TryLateMaterialization(op)) {
-			return std::move(op);
+			return op;
 		}
 		break;
 	}
@@ -396,7 +396,7 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 			break;
 		}
 		if (TryLateMaterialization(op)) {
-			return std::move(op);
+			return op;
 		}
 		break;
 	}
