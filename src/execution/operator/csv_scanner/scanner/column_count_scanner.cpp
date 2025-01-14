@@ -141,12 +141,17 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 			cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
+				if (states.IsQuotedCurrent() && !states.IsUnquoted()) {
+					// We are finishing our file on a quoted value that is never unquoted, straight to jail.
+					result.error = true;
+					return;
+				}
 				if (states.EmptyLine() || states.NewRow() || states.IsCurrentNewRow() || states.IsNotSet()) {
 					return;
 				}
 				// This means we reached the end of the file, we must add a last line if there is any to be added
 				if (result.comment) {
-					// If it's a comment we add the last line via unsetcomment
+					// If it's a comment we add the last line via unset comment
 					result.UnsetComment(result, NumericLimits<idx_t>::Maximum());
 				} else {
 					// OW, we do a regular AddRow

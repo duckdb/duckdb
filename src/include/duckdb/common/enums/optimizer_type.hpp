@@ -40,7 +40,8 @@ enum class OptimizerType : uint32_t {
 	JOIN_FILTER_PUSHDOWN,
 	EXTENSION,
 	MATERIALIZED_CTE,
-	SUM_REWRITER
+	SUM_REWRITER,
+	LATE_MATERIALIZATION
 };
 
 string OptimizerTypeToString(OptimizerType type);

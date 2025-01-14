@@ -203,6 +203,8 @@ typedef unique_ptr<ColumnSegmentState> (*compression_deserialize_state_t)(Deseri
 //! Function prototype for cleaning up the segment state when the column data is dropped
 typedef void (*compression_cleanup_state_t)(ColumnSegment &segment);
 
+enum class CompressionValidity : uint8_t { REQUIRES_VALIDITY, NO_VALIDITY_REQUIRED };
+
 class CompressionFunction {
 public:
 	CompressionFunction(CompressionType type, PhysicalType data_type, compression_init_analyze_t init_analyze,
@@ -297,6 +299,10 @@ public:
 	compression_deserialize_state_t deserialize_state;
 	//! Cleanup the segment state (optional)
 	compression_cleanup_state_t cleanup_state;
+
+	//! Whether the validity mask should be separately compressed
+	//! or this compression function can also be used to decompress the validity
+	CompressionValidity validity = CompressionValidity::REQUIRES_VALIDITY;
 };
 
 //! The set of compression functions

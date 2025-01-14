@@ -55,9 +55,9 @@ env:
   CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || 'cp37-*' }}
 
 jobs:
-#  This is just a sanity check of Python 3.9 running with Arrow
-   linux-python3-9:
-    name: Python 3.9 Linux
+# This is just a sanity check of Python 3.10 running with Arrow
+  linux-python3-10:
+    name: Python 3.10 Linux
     runs-on: ubuntu-20.04
 
     env:
@@ -68,7 +68,7 @@ jobs:
       CIBW_BEFORE_ALL: 'cd {project} && ./scripts/install_spark_in_cibuildwheels_linux_container.sh'
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -116,15 +116,15 @@ jobs:
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
 
-   manylinux-extensions-x64:
+  manylinux-extensions-x64:
     name: Linux Extensions (linux_amd64_gcc4)
+    needs: linux-python3-10
     runs-on: ubuntu-latest
     strategy:
       matrix:
         duckdb_arch: [linux_amd64_gcc4]
         vcpkg_triplet: [x64-linux]
-    needs: linux-python3-9
-
+  
     env:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
@@ -149,7 +149,7 @@ jobs:
           path: |
             build/release/extension/*/*.duckdb_extension
 
-   upload-linux-extensions-gcc4:
+  upload-linux-extensions-gcc4:
     ## TODO: Add a if: github.ref == main, for now this is explicitly missing to be able to test on PR, expected is this should fail due to missing secrets
     name: Upload Linux Extensions (gcc4)
     needs: manylinux-extensions-x64
@@ -160,8 +160,9 @@ jobs:
       duckdb_arch: linux_amd64_gcc4
       duckdb_sha: ${{ github.sha }}
 
-   linux-python3:
+  linux-python3:
     name: Python 3 Linux
+    needs: manylinux-extensions-x64
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -187,7 +188,6 @@ jobs:
             python_build: 'cp311-*'
           - isRelease: false
             arch: aarch64
-    needs: manylinux-extensions-x64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64 cp37-musllinux* cp38-musllinux*'
@@ -201,7 +201,7 @@ jobs:
       CIBW_ENVIRONMENT: 'OVERRIDE_GIT_DESCRIBE=${{ inputs.override_git_describe }}'
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
@@ -221,7 +221,7 @@ jobs:
         fi
 
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v2
+      uses: docker/setup-qemu-action@v3
       if: ${{ matrix.arch == 'aarch64' }}
 
     - uses: actions/setup-python@v5
@@ -276,14 +276,14 @@ jobs:
         ./scripts/upload-assets-to-staging.sh github_release duckdb_python_src.tar.gz
         ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
-   osx-python3:
+  osx-python3:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
       name: Python 3 OSX
+      needs: linux-python3-10
       runs-on: macos-latest
       strategy:
        matrix:
         python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
-      needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
@@ -292,7 +292,7 @@ jobs:
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -346,8 +346,9 @@ jobs:
         run: |
           ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
-   win-python3:
+  win-python3:
       name: Python 3 Windows
+      needs: linux-python3-10
       runs-on: windows-2019
       strategy:
        matrix:
@@ -359,14 +360,13 @@ jobs:
             python_build: 'cp39-*'
           - isRelease: false
             python_build: 'cp311-*'
-      needs: linux-python3-9
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
         DUCKDB_BUILD_UNITY: 1
 
       steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -425,18 +425,18 @@ jobs:
         run: |
           ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
-   linux-release-cleanup:
+  linux-release-cleanup:
      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
-     runs-on: ubuntu-20.04
      needs: twine-upload
+     runs-on: ubuntu-20.04
      env:
        PYPI_CLEANUP_USERNAME: 'mytherin'
        PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}
        PYPI_CLEANUP_OTP: ${{secrets.PYPI_CLEANUP_OTP}}
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
          ref: ${{ inputs.git_ref }}
@@ -454,7 +454,7 @@ jobs:
        if: ${{ github.ref == 'refs/heads/main' && github.repository == 'duckdb/duckdb' }}
        run: python3 scripts/pypi_cleanup.py
 
-   twine-upload:
+  twine-upload:
     needs:
       - osx-python3
       - win-python3

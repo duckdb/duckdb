@@ -1,0 +1,17 @@
+# name: benchmark/micro/logger/filtered_out_by_log_type/reference.benchmark
+# description: Logger disabled benchmark without Logger calls (for reference)
+# group: [filtered_out_by_log_type]
+
+name Disabled logger reference
+group case
+
+load
+set enable_logging=true;
+set logging_storage='memory';
+set logging_level='debug';
+set logging_mode='disable_selected';
+set disabled_log_types='duckdb.SomeName.SomeOtherName.BlaBla';
+
+# Note: this will NOT call any logger code, it's simply for reference for the other benchmarks
+run
+SELECT write_log('hello world', disable_logging := true, level := 'warn', scope := 'database', log_type := 'duckdb.SomeName.SomeOtherName.BlaBla' ) from range(0,10000000);

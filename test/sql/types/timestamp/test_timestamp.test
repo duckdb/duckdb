@@ -158,4 +158,4 @@ SELECT TIMESTAMP '100000-01-01 00:00:01.5'::VARCHAR
 statement error
 SELECT CAST(REPEAT('1992-02-02 ', 100000) AS TIMESTAMP);
 ----
-Conversion Error: timestamp field value out of range
+Conversion Error: invalid timestamp field format

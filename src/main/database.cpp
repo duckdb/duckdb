@@ -26,6 +26,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/storage/compression/empty_validity.hpp"
+#include "duckdb/logging/logger.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -37,6 +39,8 @@ DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	encoding_functions = make_uniq<EncodingFunctionSet>();
 	encoding_functions->Initialize(*this);
+	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
+	arrow_extensions->Initialize(*this);
 	cast_functions = make_uniq<CastFunctionSet>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
 	index_types = make_uniq<IndexTypeSet>();
@@ -64,13 +68,20 @@ DatabaseInstance::DatabaseInstance() {
 
 DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
-	GetDatabaseManager().ResetDatabases(scheduler);
+	if (db_manager) {
+		db_manager->ResetDatabases(scheduler);
+	}
 	// destroy child elements
 	connection_manager.reset();
 	object_cache.reset();
 	scheduler.reset();
 	db_manager.reset();
+
+	// stop the log manager, after this point Logger calls are unsafe.
+	log_manager.reset();
+
 	buffer_manager.reset();
+
 	// flush allocations and disable the background thread
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
@@ -284,6 +295,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	} else {
 		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
+
+	log_manager = make_shared_ptr<LogManager>(*this, LogConfig());
+	log_manager->Initialize();
+
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
@@ -496,6 +511,7 @@ void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallIn
 	for (auto &callback : callbacks) {
 		callback->OnExtensionLoaded(*this, name);
 	}
+	Logger::Info("duckdb.Extensions.ExtensionLoaded", *this, name);
 }
 
 SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
@@ -519,6 +535,10 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	D_ASSERT(create_api_v1);
 	return create_api_v1();
+}
+
+LogManager &DatabaseInstance::GetLogManager() const {
+	return *log_manager;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {
