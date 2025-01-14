@@ -1,0 +1,103 @@
+name: Bundle Static Libraries
+on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+  repository_dispatch:
+  push:
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/BundleStaticLibs.yml'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/BundleStaticLibs.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+
+jobs:
+  bundle-osx-static-libs:
+    name: OSX static libs
+    strategy:
+      matrix:
+        include:
+          - version: "macos-13"
+            architecture: "amd64"
+          - version: "macos-14"
+            architecture: "arm64"
+    runs-on: ${{ matrix.version }}
+    env:
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        run: make
+
+      - name: Bundle static library
+        shell: bash
+        run: make bundle-library-o
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          python scripts/amalgamation.py
+          zip -j static-lib-osx-${{ matrix.architecture }}.zip src/include/duckdb.h build/release/libduckdb_bundle.a
+          ./scripts/upload-assets-to-staging.sh github_release static-lib-osx-${{ matrix.architecture }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duckdb-static-lib-osx-${{ matrix.architecture }}
+          path: |
+            static-lib-osx-${{ matrix.architecture }}.zip

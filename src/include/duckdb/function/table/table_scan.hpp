@@ -17,11 +17,11 @@ class DuckTableEntry;
 class TableCatalogEntry;
 
 struct TableScanBindData : public TableFunctionData {
-	explicit TableScanBindData(DuckTableEntry &table) : table(table), is_index_scan(false), is_create_index(false) {
+	explicit TableScanBindData(TableCatalogEntry &table) : table(table), is_index_scan(false), is_create_index(false) {
 	}
 
 	//! The table to scan.
-	DuckTableEntry &table;
+	TableCatalogEntry &table;
 	//! The old purpose of this field has been deprecated.
 	//! We now use it to express an index scan in the ANALYZE call.
 	//! I.e., we const-cast the bind data and set this to true, if we opt for an index scan.
@@ -33,6 +33,13 @@ public:
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<TableScanBindData>();
 		return &other.table == &table;
+	}
+	unique_ptr<FunctionData> Copy() const override {
+		auto bind_data = make_uniq<TableScanBindData>(table);
+		bind_data->is_index_scan = is_index_scan;
+		bind_data->is_create_index = is_create_index;
+		bind_data->column_ids = column_ids;
+		return std::move(bind_data);
 	}
 };
 

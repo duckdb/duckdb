@@ -34,4 +34,4 @@ COPY test FROM '__TEST_DIR__/test.csv' (max_line_size 10485770);
 
 # also in the read_csv call
 statement ok
-INSERT INTO test SELECT * FROM read_csv_auto('__TEST_DIR__/test.csv', max_line_size=204857600);
+INSERT INTO test SELECT * FROM read_csv_auto('__TEST_DIR__/test.csv', max_line_size=10485770);
