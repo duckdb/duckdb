@@ -87,7 +87,17 @@ TabCompletion Linenoise::TabComplete() const {
 	buf[pos] = '\0';
 	completionCallback(buf, &lc);
 	buf[pos] = prev_char;
-	result.completions.reserve(lc.len);
+	if (lc.len == 0) {
+		// no completions found - return
+		return result;
+	}
+	result.completions.reserve(lc.len + 1);
+	// add the original text as the first completion
+	Completion original;
+	original.completion = buf;
+	original.cursor_pos = pos;
+	result.completions.emplace_back(std::move(original));
+	// then add the remaining completions
 	for (idx_t i = 0; i < lc.len; i++) {
 		Completion c;
 		c.completion = lc.cvec[i];
@@ -115,7 +125,7 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 	} else {
 		bool stop = false;
 		bool accept_completion = false;
-		idx_t i = 0;
+		idx_t i = 1;
 
 		while (!stop) {
 			/* Show completion or original buffer */
