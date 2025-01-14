@@ -56,6 +56,7 @@ class CompressionInfo;
 class EncryptionUtil;
 
 struct CompressionFunctionSet;
+struct DatabaseCacheEntry;
 struct DBConfig;
 
 enum class CheckpointAbort : uint8_t {
@@ -331,6 +332,8 @@ public:
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
+	//! Reference to the database cache entry (if any)
+	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
