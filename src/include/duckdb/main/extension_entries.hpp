@@ -526,6 +526,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"sqlite_scan", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlsmith", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqrt", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"start_ui", "motherduck", CatalogType::TABLE_FUNCTION_ENTRY},
     {"st_area", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_area_spheroid", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_asgeojson", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
