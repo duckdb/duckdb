@@ -26,7 +26,7 @@ BloomFilter::~BloomFilter() {
 }
 
 inline size_t HashToIndex(hash_t hash, size_t bloom_filter_size, size_t i) {
-    return (hash >> (i * 2)) % bloom_filter_size;  // TODO: rotation would be a bit nicer because it allows us to generate more values. But C++20 in stdlib.
+    return (hash >> (i * 1)) % bloom_filter_size;  // TODO: rotation would be a bit nicer because it allows us to generate more values. But C++20 in stdlib.
 }
 
 inline void BloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const SelectionVector &rsel, idx_t count) {
@@ -44,22 +44,22 @@ inline void BloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const
 
         if (!u_hashes.validity.AllValid()) {
             for (idx_t i = 0; i < count; i++) {
-                auto ridx = rsel.get_index(i);
-			    auto idx = u_hashes.sel->get_index(ridx);
-                if (u_hashes.validity.RowIsValid(idx)) {
-                    auto hash = UnifiedVectorFormat::GetData<hash_t>(u_hashes)[idx];
+                auto key_idx = rsel.get_index(i);
+			    auto hash_idx = u_hashes.sel->get_index(key_idx);
+                if (u_hashes.validity.RowIsValid(hash_idx)) {
+                    auto hash = UnifiedVectorFormat::GetData<hash_t>(u_hashes)[hash_idx];
                     auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
-                    Bit::SetBit(bloom_filter, bloom_idx, 0x1);
+                    Bit::SetBit(bloom_filter, bloom_idx, true);
                 }
             }
         } else {
             for (idx_t i = 0; i < count; i++) {
-                auto ridx = rsel.get_index(i);
-			    auto idx = u_hashes.sel->get_index(ridx);
+                auto key_idx = rsel.get_index(i);
+			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
-                auto hash = hashes[idx];
+                auto hash = hashes[hash_idx];
                 auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
-                Bit::SetBit(bloom_filter, bloom_idx, 0x1);
+                Bit::SetBit(bloom_filter, bloom_idx, true);
             }
         }
     }
@@ -93,8 +93,11 @@ inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, const Selec
 		auto bloom_idx = HashToIndex(*hash, bloom_filter_size, fni);
 
         if (Bit::GetBit(bloom_filter, bloom_idx)) {
-            // TODO: we need to set the whole 'out' vector to zero.
-            return current_sel_count; // ??
+            // All constant elements match. No need to modify the selection vector.
+            return current_sel_count;
+        } else {
+            // TODO: we need to set the whole 'out' vector to zero?
+            return 0;
         }
     } else {
         UnifiedVectorFormat u_hashes;
