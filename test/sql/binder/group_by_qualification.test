@@ -1,0 +1,30 @@
+# name: test/sql/binder/group_by_qualification.test
+# description: Issue #8740 - Error when not using fully qualified field name on select AND group by
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA IF NOT EXISTS prd;
+
+statement ok
+CREATE TABLE prd.ad_stats_v(event_date DATE, app VARCHAR, country VARCHAR, platform VARCHAR);
+
+# mix of column, table.column, schema.table.column qualifications
+statement ok
+select event_date, country
+FROM prd.ad_stats_v
+GROUP by event_date, prd.ad_stats_v.country
+order by country
+
+statement ok
+select event_date, ad_stats_v.country
+FROM prd.ad_stats_v
+GROUP by event_date, prd.ad_stats_v.country
+order by ad_stats_v.country
+
+statement ok
+select event_date, prd.ad_stats_v.country
+FROM prd.ad_stats_v
+GROUP by event_date, prd.ad_stats_v.country;

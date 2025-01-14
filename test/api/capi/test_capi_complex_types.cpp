@@ -397,8 +397,41 @@ TEST_CASE("duckdb_create_value", "[capi]") {
 
 	{
 		auto val = duckdb_create_timestamp({1});
+		REQUIRE(duckdb_get_timestamp(nullptr).micros == 0);
 		auto result = duckdb_get_timestamp(val);
 		REQUIRE(result.micros == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_timestamp_tz({1});
+		REQUIRE(duckdb_get_timestamp_tz(nullptr).micros == 0);
+		auto result = duckdb_get_timestamp_tz(val);
+		REQUIRE(result.micros == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_timestamp_s({1});
+		REQUIRE(duckdb_get_timestamp_s(nullptr).seconds == 0);
+		auto result = duckdb_get_timestamp_s(val);
+		REQUIRE(result.seconds == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_timestamp_ms({1});
+		REQUIRE(duckdb_get_timestamp_ms(nullptr).millis == 0);
+		auto result = duckdb_get_timestamp_ms(val);
+		REQUIRE(result.millis == 1);
+		duckdb_destroy_value(&val);
+	}
+
+	{
+		auto val = duckdb_create_timestamp_ns({1});
+		REQUIRE(duckdb_get_timestamp_ns(nullptr).nanos == 0);
+		auto result = duckdb_get_timestamp_ns(val);
+		REQUIRE(result.nanos == 1);
 		duckdb_destroy_value(&val);
 	}
 
@@ -608,6 +641,82 @@ TEST_CASE("Test Infinite Dates", "[capi]") {
 		ts = result->Fetch<duckdb_timestamp>(2, 0);
 		REQUIRE(!duckdb_is_finite_timestamp(ts));
 		REQUIRE(ts.micros > 0);
+	}
+
+	{
+		auto result = tester.Query("SELECT '-infinity'::TIMESTAMPTZ, 'epoch'::TIMESTAMPTZ, 'infinity'::TIMESTAMPTZ");
+		REQUIRE(NO_FAIL(*result));
+		REQUIRE(result->ColumnCount() == 3);
+		REQUIRE(result->ErrorMessage() == nullptr);
+
+		auto ts = result->Fetch<duckdb_timestamp>(0, 0);
+		REQUIRE(!duckdb_is_finite_timestamp(ts));
+		REQUIRE(ts.micros < 0);
+
+		ts = result->Fetch<duckdb_timestamp>(1, 0);
+		REQUIRE(duckdb_is_finite_timestamp(ts));
+		REQUIRE(ts.micros == 0);
+
+		ts = result->Fetch<duckdb_timestamp>(2, 0);
+		REQUIRE(!duckdb_is_finite_timestamp(ts));
+		REQUIRE(ts.micros > 0);
+	}
+
+	{
+		auto result = tester.Query("SELECT '-infinity'::TIMESTAMP_S, 'epoch'::TIMESTAMP_S, 'infinity'::TIMESTAMP_S");
+		REQUIRE(NO_FAIL(*result));
+		REQUIRE(result->ColumnCount() == 3);
+		REQUIRE(result->ErrorMessage() == nullptr);
+
+		auto ts = result->Fetch<duckdb_timestamp_s>(0, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_s(ts));
+		REQUIRE(ts.seconds < 0);
+
+		ts = result->Fetch<duckdb_timestamp_s>(1, 0);
+		REQUIRE(duckdb_is_finite_timestamp_s(ts));
+		REQUIRE(ts.seconds == 0);
+
+		ts = result->Fetch<duckdb_timestamp_s>(2, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_s(ts));
+		REQUIRE(ts.seconds > 0);
+	}
+
+	{
+		auto result = tester.Query("SELECT '-infinity'::TIMESTAMP_MS, 'epoch'::TIMESTAMP_MS, 'infinity'::TIMESTAMP_MS");
+		REQUIRE(NO_FAIL(*result));
+		REQUIRE(result->ColumnCount() == 3);
+		REQUIRE(result->ErrorMessage() == nullptr);
+
+		auto ts = result->Fetch<duckdb_timestamp_ms>(0, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_ms(ts));
+		REQUIRE(ts.millis < 0);
+
+		ts = result->Fetch<duckdb_timestamp_ms>(1, 0);
+		REQUIRE(duckdb_is_finite_timestamp_ms(ts));
+		REQUIRE(ts.millis == 0);
+
+		ts = result->Fetch<duckdb_timestamp_ms>(2, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_ms(ts));
+		REQUIRE(ts.millis > 0);
+	}
+
+	{
+		auto result = tester.Query("SELECT '-infinity'::TIMESTAMP_NS, 'epoch'::TIMESTAMP_NS, 'infinity'::TIMESTAMP_NS");
+		REQUIRE(NO_FAIL(*result));
+		REQUIRE(result->ColumnCount() == 3);
+		REQUIRE(result->ErrorMessage() == nullptr);
+
+		auto ts = result->Fetch<duckdb_timestamp_ns>(0, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_ns(ts));
+		REQUIRE(ts.nanos < 0);
+
+		ts = result->Fetch<duckdb_timestamp_ns>(1, 0);
+		REQUIRE(duckdb_is_finite_timestamp_ns(ts));
+		REQUIRE(ts.nanos == 0);
+
+		ts = result->Fetch<duckdb_timestamp_ns>(2, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_ns(ts));
+		REQUIRE(ts.nanos > 0);
 	}
 }
 

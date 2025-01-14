@@ -233,15 +233,15 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	vdata.sel = FlatVector::IncrementalSelectionVector();
 	vdata.data = data_ptr_cast(append_offsets.get());
 
+	// append the child vector
+	if (child_count > 0) {
+		child_column->Append(ListStats::GetChildStats(stats), state.child_appends[1], child_vector, child_count);
+	}
 	// append the list offsets
 	ColumnData::AppendData(stats, state, vdata, count);
 	// append the validity data
 	vdata.validity = append_mask;
 	validity.AppendData(stats, state.child_appends[0], vdata, count);
-	// append the child vector
-	if (child_count > 0) {
-		child_column->Append(ListStats::GetChildStats(stats), state.child_appends[1], child_vector, child_count);
-	}
 }
 
 void ListColumnData::RevertAppend(row_t start_row) {

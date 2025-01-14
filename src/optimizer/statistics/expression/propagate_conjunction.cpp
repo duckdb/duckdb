@@ -9,7 +9,7 @@ namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundConjunctionExpression &expr,
                                                                      unique_ptr<Expression> &expr_ptr) {
-	auto is_and = expr.type == ExpressionType::CONJUNCTION_AND;
+	auto is_and = expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND;
 	for (idx_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
 		auto &child = expr.children[expr_idx];
 		auto stats = PropagateExpression(child);

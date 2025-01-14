@@ -1,0 +1,56 @@
+diff --git a/spatial/include/spatial/core/index/rtree/rtree_index.hpp b/spatial/include/spatial/core/index/rtree/rtree_index.hpp
+index 32e7312..643c433 100644
+--- a/spatial/include/spatial/core/index/rtree/rtree_index.hpp
++++ b/spatial/include/spatial/core/index/rtree/rtree_index.hpp
+@@ -43,10 +43,7 @@ public:
+ public:
+ 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
+ 	ErrorData Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+-	//! Verify that data can be appended to the index without a constraint violation
+-	void VerifyAppend(DataChunk &chunk) override;
+-	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
+-	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) override;
++
+ 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
+ 	void CommitDrop(IndexLock &index_lock) override;
+ 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
+@@ -64,9 +61,6 @@ public:
+ 	//! Traverses an RTreeIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
+ 
+-	//! Performs constraint checking for a chunk of input data
+-	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) override;
+-
+ 	//! Returns the string representation of the RTreeIndex, or only traverses and verifies the index
+ 	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
+ 
+diff --git a/spatial/src/spatial/core/index/rtree/rtree_index.cpp b/spatial/src/spatial/core/index/rtree/rtree_index.cpp
+index 0ac2eeb..b1893d7 100644
+--- a/spatial/src/spatial/core/index/rtree/rtree_index.cpp
++++ b/spatial/src/spatial/core/index/rtree/rtree_index.cpp
+@@ -203,14 +203,6 @@ ErrorData RTreeIndex::Append(IndexLock &lock, DataChunk &appended_data, Vector &
+ 	return Insert(lock, expr_chunk, row_identifiers);
+ }
+ 
+-void RTreeIndex::VerifyAppend(DataChunk &chunk) {
+-	// There is nothing to verify here as we dont support constraints anyway
+-}
+-
+-void RTreeIndex::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
+-	// There is nothing to verify here as we dont support constraints anyway
+-}
+-
+ void RTreeIndex::Delete(IndexLock &lock, DataChunk &input, Vector &rowid_vec) {
+ 	const auto count = input.size();
+ 
+@@ -291,10 +283,6 @@ bool RTreeIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ void RTreeIndex::Vacuum(IndexLock &state) {
+ }
+ 
+-void RTreeIndex::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) {
+-	throw NotImplementedException("RTreeIndex::CheckConstraintsForChunk() not implemented");
+-}
+-
+ string RTreeIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+ 	throw NotImplementedException("RTreeIndex::VerifyAndToString() not implemented");
+ }

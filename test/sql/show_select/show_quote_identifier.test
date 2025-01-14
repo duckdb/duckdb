@@ -1,0 +1,14 @@
+# name: test/sql/show_select/show_quote_identifier.test
+# description: Test show with a quote in an identifier
+# group: [show_select]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE "s1"".tbl"(i INT);
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE "s1"".tbl")
+----
+i	INTEGER

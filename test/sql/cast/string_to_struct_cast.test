@@ -13,7 +13,7 @@ SELECT '{key_A:0}'::STRUCT(key_A INT);
 ----
 {'key_A': 0}
 
-query I 
+query I
 SELECT '{key_A: 2, key_B: 46, key_C: -3000}'::STRUCT(key_A INT, key_B INT, key_C INT);
 ----
 {'key_A': 2, 'key_B': 46, 'key_C': -3000}
@@ -33,7 +33,7 @@ select (struct_pack(key_A=>'42'::double, key_B=>'DuckDB'::string)::VARCHAR)::STR
 ----
 {'key_A': 42, 'key_B': DuckDB}
 
-query I 
+query I
 SELECT '{🦆: Quack, 🦤: ....}'::STRUCT(🦆 VARCHAR, 🦤 VARCHAR);
 ----
 {'🦆': Quack, '🦤': ....}
@@ -81,7 +81,7 @@ statement ok
 CREATE TABLE tbl2(col VARCHAR);
 
 statement ok
-INSERT INTO tbl2 (VALUES ('{a:1, b:"hello, world"}')); 
+INSERT INTO tbl2 (VALUES ('{a:1, b:"hello, world"}'));
 
 query I
 SELECT col::STRUCT(a INT, b VARCHAR) FROM tbl2;
@@ -136,7 +136,7 @@ SELECT '{key_A: [[{a: 5, b: 900}, {a:3, b:34}], [{a:2, b: 0}]], key_B: [Hello, W
 
 #               Unordered casting
 # ---------------------------------------------------
-query I 
+query I
 SELECT '{key_B: 2, key_A: 46}'::STRUCT(key_A INT, key_B INT);
 ----
 {'key_A': 46, 'key_B': 2}
@@ -277,22 +277,22 @@ SELECT '{}'::STRUCT(a INT, b VARCHAR);
 
 #               Try Cast
 # ---------------------------------------------------
-query I 
+query I
 SELECT TRY_CAST('{key_B: "hello", key_Z: 2, key_A: 46}' AS STRUCT(key_A INT, key_B VARCHAR));
 ----
 NULL
 
-query I 
+query I
 SELECT TRY_CAST('{key_B: "hello", key_Z: 2, key_A: 46}' AS STRUCT(key_A INT, key_B VARCHAR, key_C INT));
 ----
 NULL
 
-query I 
+query I
 SELECT TRY_CAST('{key_B: "hello", key_A: 46}' AS STRUCT(key_A INT, key_B INT));
 ----
 {'key_A': 46, 'key_B': NULL}
 
-query I 
+query I
 SELECT TRY_CAST('{a:4, b:''Ducky'', c:''🦆''}' AS STRUCT(a INT, b DOUBLE, c VARCHAR));
 ----
 {'a': 4, 'b': NULL, 'c': 🦆}

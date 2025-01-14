@@ -26,9 +26,9 @@ with cte as (select 42 AS a) FROM (SUMMARIZE TABLE cte)
 statement error
 with cte as (select 42 AS a) (DESCRIBE TABLE cte)
 ----
-not allowed
+Parser Error: exprLocation NOT IMPLEMENTED
 
 statement error
 (DESCRIBE TABLE cte) ORDER BY 1
 ----
-not allowed
+Parser Error: exprLocation NOT IMPLEMENTED

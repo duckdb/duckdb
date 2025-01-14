@@ -15,7 +15,7 @@ INSERT INTO test_structs VALUES ({'a': 1, 'b': true}), ({'a': 2, 'b': false}), (
 query II
 EXPLAIN SELECT * FROM test_structs WHERE i.a < 2;
 ----
-physical_plan	<REGEX>:.*Filters:.*i\.a<2 AND i\.a IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*i\.a<2.*
 
 query I
 SELECT * FROM test_structs WHERE i.a < 2;
@@ -26,7 +26,7 @@ SELECT * FROM test_structs WHERE i.a < 2;
 query II
 EXPLAIN SELECT * FROM test_structs WHERE i.a > 2;
 ----
-physical_plan	<REGEX>:.*Filters:.*i\.a>2 AND i\.a IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*i\.a>2.*
 
 query I
 SELECT * FROM test_structs WHERE i.a > 2;
@@ -37,7 +37,7 @@ SELECT * FROM test_structs WHERE i.a > 2;
 query II
 EXPLAIN SELECT * FROM test_structs WHERE i.A < 2;
 ----
-physical_plan	<REGEX>:.*Filters:.*i\.A<2 AND i\.A IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*i\.A<2.*
 
 query I
 SELECT * FROM test_structs WHERE i.A < 2;
@@ -78,7 +78,7 @@ INSERT INTO string_structs VALUES ({'a': 'foo', 'b': 'bar'}), ({'a': 'baz', 'b':
 query II
 EXPLAIN SELECT * FROM string_structs WHERE s.a = 'foo';
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.a='foo' AND s\.a IS NOT.*NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.a='foo'.*
 
 query I
 SELECT * FROM string_structs WHERE s.a = 'foo';
@@ -99,12 +99,12 @@ restart
 query II
 EXPLAIN SELECT * FROM large_structs WHERE i.a > 150000;
 ----
-physical_plan	<REGEX>:.*Filters:.*i\.a>150000 AND i\.a IS NOT.*NULL.*
+physical_plan	<REGEX>:.*Filters:.*i\.a>150000.*
 
 query II
 EXPLAIN SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM large_structs WHERE i.a > 150000;
 ----
-physical_plan	<REGEX>:.*Filters:.*i\.a>150000 AND i\.a IS NOT.*NULL.*
+physical_plan	<REGEX>:.*Filters:.*i\.a>150000.*
 
 query III
 SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM large_structs WHERE i.a > 150000;
@@ -128,7 +128,7 @@ INSERT INTO nested_structs VALUES
 query II
 EXPLAIN SELECT * FROM nested_structs WHERE s.a.b < 2;
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.a\.b<2 AND s\.a\.b IS NOT.*NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.a\.b<2.*
 
 query I
 SELECT * FROM nested_structs WHERE s.a.b < 2;
@@ -138,7 +138,7 @@ SELECT * FROM nested_structs WHERE s.a.b < 2;
 query II
 EXPLAIN SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.a.*\.c IS.*NOT NULL AND s\.d\.e=5 AND.*s\.d\.e IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.d\.e=5.*
 
 query I
 SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
@@ -148,7 +148,7 @@ SELECT * FROM nested_structs WHERE s.a.c = true AND s.d.e = 5;
 query II
 EXPLAIN SELECT * FROM nested_structs WHERE s.d.f = 'bar';
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.d\.f='bar' AND s\.d\.f IS.*NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.d\.f='bar'.*
 
 query I
 SELECT * FROM nested_structs WHERE s.d.f = 'bar';
@@ -165,7 +165,7 @@ COPY (FROM test_structs) TO '__TEST_DIR__/test_structs.parquet' (FORMAT PARQUET)
 query II
 EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.a < 2;
 ----
-physical_plan	<REGEX>:.*Filters:.*i\.a<2 AND i\.a IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*i\.a<2.*
 
 query I
 SELECT * FROM read_parquet('__TEST_DIR__/test_structs.parquet') WHERE i.a < 2;
@@ -192,7 +192,7 @@ COPY (FROM string_structs) TO '__TEST_DIR__/string_structs.parquet' (FORMAT PARQ
 query II
 EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/string_structs.parquet') WHERE s.a = 'foo';
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.a='foo' AND s\.a IS NOT.*NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.a='foo'.*
 
 query I
 SELECT * FROM read_parquet('__TEST_DIR__/string_structs.parquet') WHERE s.a = 'foo';
@@ -207,7 +207,7 @@ COPY (FROM nested_structs) TO '__TEST_DIR__/nested_structs.parquet' (FORMAT PARQ
 query II
 EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.b < 2;
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.a\.b<2 AND s\.a\.b IS NOT.*NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.a\.b<2.*
 
 query I
 SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.b < 2;
@@ -217,7 +217,7 @@ SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.b < 
 query II
 EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.a\.c IS.*NOT NULL AND s\.d\.e=5 AND.*s\.d\.e IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.a\.c=true AND s\.d\.e=5.*
 
 query I
 SELECT * FROM read_parquet('__TEST_DIR__/nested_structs.parquet') WHERE s.a.c = true AND s.d.e = 5;
@@ -232,7 +232,7 @@ COPY (SELECT {'i': n} as s FROM generate_series(100000) as t(n)) TO '__TEST_DIR_
 query II
 EXPLAIN SELECT * FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;
 ----
-physical_plan	<REGEX>:.*Filters:.*s\.i>=500 AND s\.i<5000 AND.*s\.i IS NOT NULL.*
+physical_plan	<REGEX>:.*Filters:.*s\.i>=500 AND s\.i<5000.*
 
 query II
 SELECT min(s.i), max(s.i) FROM read_parquet('__TEST_DIR__/large.parquet') WHERE s.i >= 500 AND s.i < 5000;

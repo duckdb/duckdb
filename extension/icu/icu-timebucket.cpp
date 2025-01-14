@@ -631,7 +631,10 @@ struct ICUTimeBucket : public ICUDateFunc {
 		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketOriginFunction, Bind));
 		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR},
 		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		for (auto &func : set.functions) {
+			BaseScalarFunction::SetReturnsError(func);
+		}
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 };
 

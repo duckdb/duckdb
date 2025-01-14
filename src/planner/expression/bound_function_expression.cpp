@@ -5,7 +5,7 @@
 #include "duckdb/function/function_serialization.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/core_functions/lambda_functions.hpp"
+#include "duckdb/function/lambda_functions.hpp"
 
 namespace duckdb {
 
@@ -40,6 +40,13 @@ bool BoundFunctionExpression::IsFoldable() const {
 		}
 	}
 	return function.stability == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
+}
+
+bool BoundFunctionExpression::CanThrow() const {
+	if (function.errors == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+		return true;
+	}
+	return Expression::CanThrow();
 }
 
 string BoundFunctionExpression::ToString() const {

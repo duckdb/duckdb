@@ -45,8 +45,6 @@ public:
 	//! Whether or not we should preserve insertion order for executing the given sink
 	static bool PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan);
 
-	static bool HasEquality(vector<JoinCondition> &conds, idx_t &range_count);
-
 protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);
 

@@ -1,0 +1,45 @@
+# name: test/issues/general/test_13542.test
+# description: Correlated subquery related? Failed to bind column reference "once_state2" [35.0] (bindings: {#[1.0], #[33.0]})
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table stuff (
+      ts timestamp,
+      item_id int,
+      type text
+    );
+
+query III
+with
+    unique_items as (
+       select distinct item_id from stuff
+    ),
+    state_stuff as (
+      select
+        item_id,
+        exists (select 1 from stuff c where s.item_id = c.item_id
+                and type = 'state1') as once_state1,
+        exists (select 1 from stuff c where s.item_id = c.item_id
+                and type = 'state2') as once_state2
+      from unique_items s)
+    select * from state_stuff;
+----
+
+query III
+with
+    unique_items as (
+       select distinct item_id from stuff
+    ),
+    state_stuff as (
+      select
+        item_id,
+        exists (select 1 from stuff c where s.item_id = c.item_id
+                and type = 'state1') as once_state1,
+        exists (select 1 from stuff c where s.item_id = c.item_id
+                and type = 'state2') as once_state2
+      from unique_items s)
+    select * from state_stuff where not once_state2;
+----

@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/default/default_schemas.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/constants.hpp"
@@ -123,13 +124,17 @@ vector<CatalogSearchEntry> CatalogSearchEntry::ParseList(const string &input) {
 	return result;
 }
 
-CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : context(context_p) {
-	Reset();
+CatalogSearchPath::CatalogSearchPath(ClientContext &context_p, vector<CatalogSearchEntry> entries)
+    : context(context_p) {
+	SetPathsInternal(std::move(entries));
+}
+
+CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : CatalogSearchPath(context_p, {}) {
 }
 
 void CatalogSearchPath::Reset() {
 	vector<CatalogSearchEntry> empty;
-	SetPaths(empty);
+	SetPathsInternal(empty);
 }
 
 string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
@@ -176,8 +181,7 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 			                       new_paths[0].catalog);
 		}
 	}
-	this->set_paths = std::move(new_paths);
-	SetPaths(set_paths);
+	SetPathsInternal(std::move(new_paths));
 }
 
 void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type) {
@@ -202,6 +206,9 @@ string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
 }
 
 string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
+		return SYSTEM_CATALOG;
+	}
 	for (auto &path : paths) {
 		if (path.catalog == TEMP_CATALOG) {
 			continue;
@@ -214,13 +221,17 @@ string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 }
 
 vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) {
-	vector<string> schemas;
-	for (auto &path : paths) {
-		if (StringUtil::CIEquals(path.schema, schema)) {
-			schemas.push_back(path.catalog);
+	vector<string> catalogs;
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
+		catalogs.push_back(SYSTEM_CATALOG);
+	} else {
+		for (auto &path : paths) {
+			if (StringUtil::CIEquals(path.schema, schema)) {
+				catalogs.push_back(path.catalog);
+			}
 		}
 	}
-	return schemas;
+	return catalogs;
 }
 
 vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) {
@@ -239,12 +250,14 @@ const CatalogSearchEntry &CatalogSearchPath::GetDefault() {
 	return paths[1];
 }
 
-void CatalogSearchPath::SetPaths(vector<CatalogSearchEntry> new_paths) {
+void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
+	this->set_paths = std::move(new_paths);
+
 	paths.clear();
-	paths.reserve(new_paths.size() + 3);
+	paths.reserve(set_paths.size() + 3);
 	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
-	for (auto &path : new_paths) {
-		paths.push_back(std::move(path));
+	for (auto &path : set_paths) {
+		paths.push_back(path);
 	}
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);

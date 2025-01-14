@@ -33,6 +33,8 @@ public:
 	    : query_graph(query_graph), query_graph_manager(query_graph_manager), cost_model(cost_model) {
 	}
 
+	static constexpr idx_t THRESHOLD_TO_SWAP_TO_APPROXIMATE = 12;
+
 	//! Perform the join order solving
 	void SolveJoinOrder();
 	void InitLeafPlans();

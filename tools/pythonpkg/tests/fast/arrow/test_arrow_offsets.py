@@ -683,5 +683,6 @@ class TestArrowOffsets(object):
         record_batch = pa.RecordBatch.from_arrays([bool_array], schema=schema)
 
         temp_record = record_batch.slice(4, 1)
-        res = duckdb_cursor.sql("select bools from temp_record").fetchall()
+        temp_record_reader = pa.RecordBatchReader.from_batches(temp_record.schema, [temp_record])
+        res = duckdb_cursor.sql("select bools from temp_record_reader").fetchall()
         assert res == [(True,)]

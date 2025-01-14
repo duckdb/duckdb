@@ -21,8 +21,10 @@ namespace duckdb {
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {
 public:
+	DUCKDB_API explicit FunctionBinder(Binder &binder);
 	DUCKDB_API explicit FunctionBinder(ClientContext &context);
 
+	optional_ptr<Binder> binder;
 	ClientContext &context;
 
 public:
@@ -69,6 +71,7 @@ public:
 
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
 	                                           const vector<unique_ptr<Expression>> &groups);
+	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
 
 private:
 	//! Cast a set of expressions to the arguments of this function

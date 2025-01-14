@@ -219,14 +219,15 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 		bool set = false;
 		ExpressionType comparison_type = ExpressionType::COMPARE_EQUAL;
 		ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
-			if (expr.expression_class == ExpressionClass::BOUND_COMPARISON) {
-				comparison_type = expr.type;
+			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+				comparison_type = expr.GetExpressionType();
 				set = true;
 				return;
 			}
 		});
 		if (!set) {
-			new_denom *= filter.has_tdom_hll ? (double)filter.tdom_hll : (double)filter.tdom_no_hll;
+			new_denom *=
+			    filter.has_tdom_hll ? static_cast<double>(filter.tdom_hll) : static_cast<double>(filter.tdom_no_hll);
 			// no comparison is taking place, so the denominator is just the product of the left and right
 			return new_denom;
 		}
@@ -344,8 +345,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			    &set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations);
 			subgraph_to_merge_into->numerator_relations =
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
-			subgraph_to_delete->relations = nullptr;
 			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
+			subgraph_to_delete->relations = nullptr;
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
 			subgraphs.erase(remove_start, subgraphs.end());

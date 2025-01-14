@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/rle/select_rle_unselective.benchmark
+# description: RLE selective filter
+# group: [rle]
+
+name Select RLE Columns (33% selectivity)
+group rle
+storage persistent
+
+load
+CREATE TABLE rle_values(filter_val INTEGER USING COMPRESSION UNCOMPRESSED, rle_val INTEGER USING COMPRESSION RLE, rle_val_nulls INTEGER USING COMPRESSION RLE);
+INSERT INTO rle_values SELECT i % 3, i // 10 rle_val, case when i%9=0 then null else i // 10 end rle_val_null FROM range(100_000_000) t(i);
+
+run
+SELECT COUNT(*), SUM(rle_val), SUM(rle_val_nulls), COUNT(rle_val_nulls) FROM rle_values WHERE filter_val=1;
+
+result IIII
+33333333	166666646666667	166666646666667	33333333

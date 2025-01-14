@@ -16,11 +16,11 @@ InClauseSimplificationRule::InClauseSimplificationRule(ExpressionRewriter &rewri
 unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                          bool &changes_made, bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundOperatorExpression>();
-	if (expr.children[0]->expression_class != ExpressionClass::BOUND_CAST) {
+	if (expr.children[0]->GetExpressionClass() != ExpressionClass::BOUND_CAST) {
 		return nullptr;
 	}
 	auto &cast_expression = expr.children[0]->Cast<BoundCastExpression>();
-	if (cast_expression.child->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+	if (cast_expression.child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
 	//! The goal here is to remove the cast from the probe expression
@@ -34,7 +34,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 	vector<unique_ptr<BoundConstantExpression>> cast_list;
 	//! First check if we can cast all children
 	for (size_t i = 1; i < expr.children.size(); i++) {
-		if (expr.children[i]->expression_class != ExpressionClass::BOUND_CONSTANT) {
+		if (expr.children[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 			return nullptr;
 		}
 		D_ASSERT(expr.children[i]->IsFoldable());

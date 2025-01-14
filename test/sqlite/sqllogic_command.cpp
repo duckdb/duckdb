@@ -197,7 +197,7 @@ void Command::Execute(ExecuteContext &context) const {
 		return;
 	}
 	// perform the string replacement
-	context.sql_query = SQLLogicTestRunner::LoopReplacement(base_sql_query, context.running_loops);
+	context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
 	// execute the iterated statement
 	ExecuteInternal(context);
 }
@@ -512,7 +512,7 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 }
 
 void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
-	auto resolved_path = SQLLogicTestRunner::LoopReplacement(dbpath, context.running_loops);
+	auto resolved_path = runner.LoopReplacement(dbpath, context.running_loops);
 	if (!readonly) {
 		// delete the target database file, if it exists
 		DeleteDatabase(resolved_path);

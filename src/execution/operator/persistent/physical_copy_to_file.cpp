@@ -510,6 +510,12 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	}
 	if (per_thread_output) {
 		// already happened in combine
+		if (NumericCast<int64_t>(gstate.rows_copied.load()) == 0 && sink_state != nullptr) {
+			// no rows from source, write schema to file
+			auto global_lock = gstate.lock.GetExclusiveLock();
+			gstate.global_state = CreateFileState(context, *sink_state, *global_lock);
+			function.copy_to_finalize(context, *bind_data, *gstate.global_state);
+		}
 		return SinkFinalizeType::READY;
 	}
 	if (function.copy_to_finalize) {

@@ -168,6 +168,9 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
 		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name));
 	}
+	for (auto &dep : info.dependencies.Set()) {
+		table->dependencies.AddDependency(dep);
+	}
 
 	auto entry = AddEntryInternal(transaction, std::move(table), info.Base().on_conflict, info.dependencies);
 	if (!entry) {
@@ -364,6 +367,11 @@ void DuckSchemaEntry::OnDropEntry(CatalogTransaction transaction, CatalogEntry &
 optional_ptr<CatalogEntry> DuckSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
                                                      const string &name) {
 	return GetCatalogSet(type).GetEntry(transaction, name);
+}
+
+CatalogSet::EntryLookup DuckSchemaEntry::GetEntryDetailed(CatalogTransaction transaction, CatalogType type,
+                                                          const string &name) {
+	return GetCatalogSet(type).GetEntryDetailed(transaction, name);
 }
 
 SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,

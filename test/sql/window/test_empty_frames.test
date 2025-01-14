@@ -162,10 +162,6 @@ ORDER BY 1;
 2	NULL
 NULL	NULL
 
-# For some reason this loses the explicit statistics during verification
-statement ok
-PRAGMA disable_verification
-
 query II
 SELECT id, bitstring_agg(id, 1, 3) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING) 
 FROM t1

@@ -78,6 +78,7 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 		// adjust the highlighting based on the type
 		switch (token.type) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR:
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
@@ -269,6 +270,15 @@ void SQLLogicTestLogger::UnexpectedStatement(bool expect_ok, MaterializedQueryRe
 
 void SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result) {
 	PrintErrorHeader("Query failed, but error message did not match expected error message: " + expected_error);
+	PrintLineSep();
+	PrintSQL();
+	PrintHeader("Actual result:");
+	PrintLineSep();
+	result.Print();
+}
+
+void SQLLogicTestLogger::InternalException(MaterializedQueryResult &result) {
+	PrintErrorHeader("Query failed with internal exception!");
 	PrintLineSep();
 	PrintSQL();
 	PrintHeader("Actual result:");

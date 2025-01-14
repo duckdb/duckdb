@@ -184,10 +184,21 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                const string &constant) {
+                                                array_ptr<Value> constants) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	return CheckZonemap(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max,
-	                    StringStatsData::MAX_STRING_MINMAX_SIZE, comparison_type, constant);
+	for (auto &constant_value : constants) {
+		D_ASSERT(constant_value.type() == stats.GetType());
+		D_ASSERT(!constant_value.IsNull());
+		auto &constant = StringValue::Get(constant_value);
+		auto prune_result = CheckZonemap(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max,
+		                                 StringStatsData::MAX_STRING_MINMAX_SIZE, comparison_type, constant);
+		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+	}
+	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
 FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t min_len, const_data_ptr_t max_data,

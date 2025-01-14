@@ -69,6 +69,11 @@ public:
 	unique_ptr<ParsedExpression> offset_expr;
 	unique_ptr<ParsedExpression> default_expr;
 
+	//! The set of argument ordering clauses
+	//! These are distinct from the frame ordering clauses e.g., the "x" in
+	//! FIRST_VALUE(a ORDER BY x) OVER (PARTITION BY p ORDER BY s)
+	vector<OrderByNode> arg_orders;
+
 public:
 	bool IsWindow() const override {
 		return true;
@@ -108,6 +113,13 @@ public:
 			result += ", ";
 			result += entry.default_expr->ToString();
 		}
+		// ORDER BY arguments
+		if (!entry.arg_orders.empty()) {
+			result += " ORDER BY ";
+			result += StringUtil::Join(entry.arg_orders, entry.arg_orders.size(), ", ",
+			                           [](const ORDER_NODE &order) { return order.ToString(); });
+		}
+
 		// IGNORE NULLS
 		if (entry.ignore_nulls) {
 			result += " IGNORE NULLS";

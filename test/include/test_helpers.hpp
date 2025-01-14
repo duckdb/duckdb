@@ -47,7 +47,6 @@ void SetDebugInitialize(int value);
 void SetSingleThreaded();
 void AddRequire(string require);
 bool IsRequired(string require);
-string GetTestDirectory();
 string GetCSVPath();
 void WriteCSV(string path, const char *csv);
 void WriteBinary(string path, const uint8_t *data, uint64_t length);

@@ -63,6 +63,9 @@ public:
 	inline void SetCardinality(const DataChunk &other) {
 		SetCardinality(other.size());
 	}
+	inline idx_t GetCapacity() const {
+		return capacity;
+	}
 	inline void SetCapacity(idx_t capacity_p) {
 		this->capacity = capacity_p;
 	}
@@ -106,7 +109,7 @@ public:
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
 
-	//! Copies the data from this vector to another vector.
+	//! Copies the data from this chunk to another chunk.
 	DUCKDB_API void Copy(DataChunk &other, idx_t offset = 0) const;
 	DUCKDB_API void Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count,
 	                     const idx_t offset = 0) const;

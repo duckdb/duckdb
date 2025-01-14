@@ -1,0 +1,131 @@
+# name: test/sql/topn/top_n_materialization.test
+# description: Test Top N Optimization
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test AS SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i);
+
+statement ok
+SET explain_output='optimized_only'
+
+# Top N optimization
+# this gets turned into a row-id join
+query II
+explain SELECT * FROM test ORDER BY j DESC LIMIT 2;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query IIII
+SELECT * FROM test ORDER BY j DESC LIMIT 2;
+----
+9	10	11	-9
+8	9	10	-8
+
+query II
+explain SELECT * FROM test ORDER BY j, i LIMIT 2;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query IIII
+SELECT * FROM test ORDER BY j, i LIMIT 2;
+----
+0	1	2	0
+1	2	3	-1
+
+# this does not, we cannot remove any columns by turning it into a row-id join
+query II
+explain SELECT i FROM test ORDER BY i LIMIT 2;
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# we cannot do this with volatile expressions
+query II
+explain SELECT * FROM (SELECT i + random() AS i, j, k, l FROM test) ORDER BY i LIMIT 2;
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# top-n with expressions
+query IIII
+SELECT * FROM (SELECT -i i, -j j, -k k, -l l FROM test) ORDER BY -j DESC LIMIT 2
+----
+-9	-10	-11	9
+-8	-9	-10	8
+
+# multiple layers
+query IIII
+SELECT * FROM (SELECT 100 + i i, 1000 + j j, 10000 + k k, 100000 + l l FROM (SELECT -i i, -j j, -k k, -l l FROM test)) ORDER BY j DESC LIMIT 2
+----
+100	999	9998	100000
+99	998	9997	100001
+
+# limit + offset
+query II
+explain SELECT * FROM test LIMIT 2 OFFSET 2;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+query IIII
+SELECT * FROM test LIMIT 2 OFFSET 2;
+----
+2	3	4	-2
+3	4	5	-3
+
+# sample
+query II
+explain SELECT * FROM test USING SAMPLE 2 ROWS
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+# we can only use joins when we are sampling rows
+query II
+explain SELECT * FROM test USING SAMPLE 10%
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# order on expression
+query IIII
+SELECT * FROM test ORDER BY -j DESC LIMIT 2
+----
+0	1	2	0
+1	2	3	-1
+
+# projection in subquery
+query IIII
+SELECT * FROM (SELECT -i i, -j j, -k k, -l l FROM test) ORDER BY -j DESC LIMIT 2
+----
+-9	-10	-11	9
+-8	-9	-10	8
+
+# filter after top-n
+query IIII
+SELECT * FROM (
+	SELECT * FROM test ORDER BY j DESC LIMIT 2
+) WHERE i=8
+----
+8	9	10	-8
+
+query I
+SELECT l FROM (
+	SELECT * FROM test ORDER BY j DESC LIMIT 2
+) WHERE k=10
+----
+-8
+
+# now with varchar columns
+statement ok
+CREATE OR REPLACE TABLE test AS SELECT i, printf('%02d', i + 1) AS j, printf('%02d', i + 2) AS k, -i AS l FROM range(10) t(i);
+
+query IIII
+SELECT * FROM test ORDER BY j DESC LIMIT 2;
+----
+9	10	11	-9
+8	09	10	-8
+
+query IIII
+SELECT j, k, l, i FROM test WHERE i > 5 ORDER BY j DESC LIMIT 2;
+----
+10	11	-9	9
+09	10	-8	8

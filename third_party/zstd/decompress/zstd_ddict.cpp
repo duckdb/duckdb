@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020, Yann Collet, Facebook, Inc.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  * All rights reserved.
  *
  * This source code is licensed under both the BSD-style license (found in the
@@ -14,18 +14,19 @@
 /*-*******************************************************
 *  Dependencies
 *********************************************************/
-#include <string.h>      /* memcpy, memmove, memset */
+#include "zstd/common/allocations.h"  /* ZSTD_customMalloc, ZSTD_customFree */
+#include "zstd/common/zstd_deps.h"   /* ZSTD_memcpy, ZSTD_memmove, ZSTD_memset */
+#include "zstd/common/cpu.h"         /* bmi2 */
 #include "zstd/common/mem.h"         /* low level memory routines */
+#define FSE_STATIC_LINKING_ONLY
 #include "zstd/common/fse.h"
-#include "zstd/common/fse_static.h"
 #include "zstd/common/huf.h"
-#include "zstd/common/huf_static.h"
 #include "zstd/decompress/zstd_decompress_internal.h"
 #include "zstd/decompress/zstd_ddict.h"
 
-// #if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
-// #  include "../legacy/zstd_legacy.h"
-// #endif
+#if defined(ZSTD_LEGACY_SUPPORT) && (ZSTD_LEGACY_SUPPORT>=1)
+// #  include "zstd/legacy/zstd_legacy.h" // DuckDB: comment out otherwise amalgamation won't be happy
+#endif
 
 namespace duckdb_zstd {
 
@@ -126,14 +127,14 @@ static size_t ZSTD_initDDict_internal(ZSTD_DDict* ddict,
         ddict->dictContent = dict;
         if (!dict) dictSize = 0;
     } else {
-        void* const internalBuffer = ZSTD_malloc(dictSize, ddict->cMem);
+        void* const internalBuffer = ZSTD_customMalloc(dictSize, ddict->cMem);
         ddict->dictBuffer = internalBuffer;
         ddict->dictContent = internalBuffer;
         if (!internalBuffer) return ERROR(memory_allocation);
-        memcpy(internalBuffer, dict, dictSize);
+        ZSTD_memcpy(internalBuffer, dict, dictSize);
     }
     ddict->dictSize = dictSize;
-    ddict->entropy.hufTable[0] = (HUF_DTable)((HufLog)*0x1000001);  /* cover both little and big endian */
+    ddict->entropy.hufTable[0] = (HUF_DTable)((ZSTD_HUFFDTABLE_CAPACITY_LOG)*0x1000001);  /* cover both little and big endian */
 
     /* parse dictionary content */
     FORWARD_IF_ERROR( ZSTD_loadEntropy_intoDDict(ddict, dictContentType) , "");
@@ -146,9 +147,9 @@ ZSTD_DDict* ZSTD_createDDict_advanced(const void* dict, size_t dictSize,
                                       ZSTD_dictContentType_e dictContentType,
                                       ZSTD_customMem customMem)
 {
-    if (!customMem.customAlloc ^ !customMem.customFree) return NULL;
+    if ((!customMem.customAlloc) ^ (!customMem.customFree)) return NULL;
 
-    {   ZSTD_DDict* const ddict = (ZSTD_DDict*) ZSTD_malloc(sizeof(ZSTD_DDict), customMem);
+    {   ZSTD_DDict* const ddict = (ZSTD_DDict*) ZSTD_customMalloc(sizeof(ZSTD_DDict), customMem);
         if (ddict == NULL) return NULL;
         ddict->cMem = customMem;
         {   size_t const initResult = ZSTD_initDDict_internal(ddict,
@@ -197,7 +198,7 @@ const ZSTD_DDict* ZSTD_initStaticDDict(
     if ((size_t)sBuffer & 7) return NULL;   /* 8-aligned */
     if (sBufferSize < neededSpace) return NULL;
     if (dictLoadMethod == ZSTD_dlm_byCopy) {
-        memcpy(ddict+1, dict, dictSize);  /* local copy */
+        ZSTD_memcpy(ddict+1, dict, dictSize);  /* local copy */
         dict = ddict+1;
     }
     if (ZSTD_isError( ZSTD_initDDict_internal(ddict,
@@ -212,8 +213,8 @@ size_t ZSTD_freeDDict(ZSTD_DDict* ddict)
 {
     if (ddict==NULL) return 0;   /* support free on NULL */
     {   ZSTD_customMem const cMem = ddict->cMem;
-        ZSTD_free(ddict->dictBuffer, cMem);
-        ZSTD_free(ddict, cMem);
+        ZSTD_customFree(ddict->dictBuffer, cMem);
+        ZSTD_customFree(ddict, cMem);
         return 0;
     }
 }
@@ -239,7 +240,7 @@ size_t ZSTD_sizeof_DDict(const ZSTD_DDict* ddict)
 unsigned ZSTD_getDictID_fromDDict(const ZSTD_DDict* ddict)
 {
     if (ddict==NULL) return 0;
-    return ZSTD_getDictID_fromDict(ddict->dictContent, ddict->dictSize);
+    return ddict->dictID;
 }
 
-}
+} // namespace duckdb_zstd

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// src/include/duckdb/common/enums/order_preservation_type.hpp
+// duckdb/common/enums/order_preservation_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//

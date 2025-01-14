@@ -32,6 +32,9 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();
 	}
+	if (StringUtil::Lower(name) == SYSTEM_CATALOG) {
+		return system;
+	}
 	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
 }
 
@@ -134,17 +137,21 @@ void DatabaseManager::EraseDatabasePath(const string &path) {
 	}
 }
 
+vector<string> DatabaseManager::GetAttachedDatabasePaths() {
+	lock_guard<mutex> path_lock(db_paths_lock);
+	vector<string> paths;
+	for (auto &path : db_paths) {
+		paths.push_back(path);
+	}
+	return paths;
+}
+
 void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
                                       AttachOptions &options) {
 
 	// Test if the database is a DuckDB database file.
 	if (StringUtil::CIEquals(options.db_type, "DUCKDB")) {
 		options.db_type = "";
-
-		// The DuckDB format does not allow unrecognized options.
-		if (!options.unrecognized_option.empty()) {
-			throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
-		}
 		return;
 	}
 
@@ -165,12 +172,6 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 			ExtensionHelper::LoadExternalExtension(context, options.db_type);
 		}
 		return;
-	}
-
-	// The DuckDB file format does not allow unrecognized options, except for the block_size option,
-	// which is specific to DuckDB files.
-	if (!options.unrecognized_option.empty() && options.unrecognized_option != "block_size") {
-		throw BinderException("Unrecognized option for attach \"%s\"", options.unrecognized_option);
 	}
 }
 

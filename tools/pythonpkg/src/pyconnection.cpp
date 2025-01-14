@@ -59,6 +59,7 @@
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/statement/load_statement.hpp"
+#include "duckdb_python/expression/pyexpression.hpp"
 
 #include <random>
 
@@ -66,7 +67,7 @@
 
 namespace duckdb {
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;       // NOLINT: allow global
+DefaultConnectionHolder DuckDBPyConnection::default_connection;                        // NOLINT: allow global
 DBInstanceCache instance_cache;                                                        // NOLINT: allow global
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;              // NOLINT: allow global
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL; // NOLINT: allow global
@@ -210,7 +211,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("unregister", &DuckDBPyConnection::UnregisterPythonObject, "Unregister the view name", py::arg("view_name"));
 	m.def("table", &DuckDBPyConnection::Table, "Create a relation object for the named table", py::arg("table_name"));
 	m.def("view", &DuckDBPyConnection::View, "Create a relation object for the named view", py::arg("view_name"));
-	m.def("values", &DuckDBPyConnection::Values, "Create a relation object from the passed values", py::arg("values"));
+	m.def("values", &DuckDBPyConnection::Values, "Create a relation object from the passed values");
 	m.def("table_function", &DuckDBPyConnection::TableFunction,
 	      "Create a relation object from the named table function with given parameters", py::arg("name"),
 	      py::arg("parameters") = py::none());
@@ -511,17 +512,17 @@ py::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_par
 	return new_params;
 }
 
-case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(PreparedStatement &prep,
-                                                                       const py::object &params) {
+case_insensitive_map_t<BoundParameterData> TransformPreparedParameters(const py::object &params,
+                                                                       optional_ptr<PreparedStatement> prep = {}) {
 	case_insensitive_map_t<BoundParameterData> named_values;
 	if (py::is_list_like(params)) {
-		if (prep.named_param_map.size() != py::len(params)) {
+		if (prep && prep->named_param_map.size() != py::len(params)) {
 			if (py::len(params) == 0) {
 				throw InvalidInputException("Expected %d parameters, but none were supplied",
-				                            prep.named_param_map.size());
+				                            prep->named_param_map.size());
 			}
-			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep.named_param_map.size(),
-			                            py::len(params));
+			throw InvalidInputException("Prepared statement needs %d parameters, %d given",
+			                            prep->named_param_map.size(), py::len(params));
 		}
 		auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(params);
 		for (idx_t i = 0; i < unnamed_values.size(); i++) {
@@ -560,7 +561,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 	}
 
 	// Execute the prepared statement with the prepared parameters
-	auto named_values = TransformPreparedParameters(prep, params);
+	auto named_values = TransformPreparedParameters(params, prep);
 	unique_ptr<QueryResult> res;
 	{
 		D_ASSERT(py::gil_check());
@@ -571,6 +572,35 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 		if (pending_query->HasError()) {
 			pending_query->ThrowError();
 		}
+		res = CompletePendingQuery(*pending_query);
+
+		if (res->HasError()) {
+			res->ThrowError();
+		}
+	}
+	return res;
+}
+
+unique_ptr<QueryResult> DuckDBPyConnection::PrepareAndExecuteInternal(unique_ptr<SQLStatement> statement,
+                                                                      py::object params) {
+	if (params.is_none()) {
+		params = py::list();
+	}
+
+	auto named_values = TransformPreparedParameters(params);
+
+	unique_ptr<QueryResult> res;
+	{
+		D_ASSERT(py::gil_check());
+		py::gil_scoped_release release;
+		unique_lock<std::mutex> lock(py_connection_lock);
+
+		auto pending_query = con.GetConnection().PendingQuery(std::move(statement), named_values, true);
+
+		if (pending_query->HasError()) {
+			pending_query->ThrowError();
+		}
+
 		res = CompletePendingQuery(*pending_query);
 
 		if (res->HasError()) {
@@ -616,8 +646,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const py::object &que
 	// FIXME: SQLites implementation says to not accept an 'execute' call with multiple statements
 	ExecuteImmediately(std::move(statements));
 
-	auto prep = PrepareQuery(std::move(last_statement));
-	auto res = ExecuteInternal(*prep, std::move(params));
+	auto res = PrepareAndExecuteInternal(std::move(last_statement), std::move(params));
 
 	// Set the internal 'result' object
 	if (res) {
@@ -902,6 +931,7 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 	// List of strings to match against
 	const unordered_set<string> valid_parameters = {"header",
 	                                                "compression",
+	                                                "comment"
 	                                                "sep",
 	                                                "delimiter",
 	                                                "dtype",
@@ -950,6 +980,7 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_p, py::kwargs &kwargs) {
 	py::object header = py::none();
+	py::object auto_detect = py::none();
 	py::object compression = py::none();
 	py::object sep = py::none();
 	py::object delimiter = py::none();
@@ -985,9 +1016,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	py::object union_by_name = py::none();
 	py::object hive_types = py::none();
 	py::object hive_types_autocast = py::none();
+	py::object comment = py::none();
+
 	for (auto &arg : kwargs) {
 		const auto &arg_name = py::str(arg.first).cast<std::string>();
-
 		if (arg_name == "header") {
 			header = kwargs[arg_name.c_str()];
 		} else if (arg_name == "compression") {
@@ -996,6 +1028,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			sep = kwargs[arg_name.c_str()];
 		} else if (arg_name == "delimiter") {
 			delimiter = kwargs[arg_name.c_str()];
+		} else if (arg_name == "comment") {
+			comment = kwargs[arg_name.c_str()];
 		} else if (arg_name == "dtype") {
 			dtype = kwargs[arg_name.c_str()];
 		} else if (arg_name == "na_values") {
@@ -1016,6 +1050,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			timestamp_format = kwargs[arg_name.c_str()];
 		} else if (arg_name == "sample_size") {
 			sample_size = kwargs[arg_name.c_str()];
+		} else if (arg_name == "auto_detect") {
+			auto_detect = kwargs[arg_name.c_str()];
 		} else if (arg_name == "all_varchar") {
 			all_varchar = kwargs[arg_name.c_str()];
 		} else if (arg_name == "normalize_names") {
@@ -1197,6 +1233,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 		bind_parameters["quote"] = Value(py::str(quotechar));
 	}
 
+	if (!py::none().is(comment)) {
+		if (!py::isinstance<py::str>(comment)) {
+			throw InvalidInputException("read_csv only accepts 'comment' as a string");
+		}
+		bind_parameters["comment"] = Value(py::str(comment));
+	}
+
 	if (!py::none().is(escapechar)) {
 		if (!py::isinstance<py::str>(escapechar)) {
 			throw InvalidInputException("read_csv only accepts 'escapechar' as a string");
@@ -1219,6 +1262,23 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			throw InvalidInputException("read_csv only accepts 'date_format' as a string");
 		}
 		bind_parameters["dateformat"] = Value(py::str(date_format));
+	}
+
+	if (!py::none().is(auto_detect)) {
+		bool auto_detect_as_int = py::isinstance<py::int_>(auto_detect);
+		bool auto_detect_as_bool = py::isinstance<py::bool_>(auto_detect);
+		bool auto_detect_value;
+		if (auto_detect_as_bool) {
+			auto_detect_value = py::bool_(auto_detect);
+		} else if (auto_detect_as_int) {
+			if ((int)py::int_(auto_detect) != 0) {
+				throw InvalidInputException("read_csv only accepts 0 if 'auto_detect' is given as an integer");
+			}
+			auto_detect_value = true;
+		} else {
+			throw InvalidInputException("read_csv only accepts 'auto_detect' as an integer, or a boolean");
+		}
+		bind_parameters["auto_detect"] = Value::BOOLEAN(auto_detect_value);
 	}
 
 	if (!py::none().is(timestamp_format)) {
@@ -1467,8 +1527,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 
 	if (!relation) {
 		// Could not create a relation, resort to direct execution
-		auto prep = PrepareQuery(std::move(last_statement));
-		auto res = ExecuteInternal(*prep, std::move(params));
+		unique_ptr<QueryResult> res;
+
+		res = PrepareAndExecuteInternal(std::move(last_statement), std::move(params));
+
 		if (!res) {
 			return nullptr;
 		}
@@ -1502,16 +1564,74 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	}
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
+static vector<unique_ptr<ParsedExpression>> ValueListFromExpressions(const py::args &expressions) {
+	vector<unique_ptr<ParsedExpression>> result;
+	auto arg_count = expressions.size();
+	if (arg_count == 0) {
+		throw InvalidInputException("Please provide a non-empty tuple");
+	}
+
+	for (idx_t i = 0; i < arg_count; i++) {
+		py::handle arg = expressions[i];
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+			throw InvalidInputException("Please provide arguments of type Expression!");
+		}
+		auto expr = py_expr->GetExpression().Copy();
+		result.push_back(std::move(expr));
+	}
+	return result;
+}
+
+static vector<vector<unique_ptr<ParsedExpression>>> ValueListsFromTuples(const py::args &tuples) {
+	auto arg_count = tuples.size();
+	if (arg_count == 0) {
+		throw InvalidInputException("Please provide a non-empty tuple");
+	}
+
+	idx_t expected_length = 0;
+	vector<vector<unique_ptr<ParsedExpression>>> result;
+	for (idx_t i = 0; i < arg_count; i++) {
+		py::handle arg = tuples[i];
+		if (!py::isinstance<py::tuple>(arg)) {
+			string actual_type = py::str(arg.get_type());
+			throw InvalidInputException("Expected objects of type tuple, not %s", actual_type);
+		}
+		auto expressions = py::cast<py::args>(arg);
+		auto value_list = ValueListFromExpressions(expressions);
+		if (i && value_list.size() != expected_length) {
+			throw InvalidInputException("Mismatch between length of tuples in input, expected %d but found %d",
+			                            expected_length, value_list.size());
+		}
+		expected_length = value_list.size();
+		result.push_back(std::move(value_list));
+	}
+	return result;
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(const py::args &args) {
 	auto &connection = con.GetConnection();
-	if (params.is_none()) {
-		params = py::list();
+
+	auto arg_count = args.size();
+	if (arg_count == 0) {
+		throw InvalidInputException("Could not create a ValueRelation without any inputs");
 	}
-	if (!py::hasattr(params, "__len__")) {
-		throw InvalidInputException("Type of object passed to parameter 'values' must be iterable");
+
+	D_ASSERT(py::gil_check());
+	py::handle first_arg = args[0];
+	if (arg_count == 1 && py::isinstance<py::list>(first_arg)) {
+		vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(first_arg)};
+		return make_uniq<DuckDBPyRelation>(connection.Values(values));
+	} else {
+		vector<vector<unique_ptr<ParsedExpression>>> expressions;
+		if (py::isinstance<py::tuple>(first_arg)) {
+			expressions = ValueListsFromTuples(args);
+		} else {
+			auto values = ValueListFromExpressions(args);
+			expressions.push_back(std::move(values));
+		}
+		return make_uniq<DuckDBPyRelation>(connection.Values(std::move(expressions)));
 	}
-	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(params)};
-	return make_uniq<DuckDBPyRelation>(connection.Values(values));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
@@ -1765,6 +1885,20 @@ void DuckDBPyConnection::LoadExtension(const string &extension) {
 	ExtensionHelper::LoadExternalExtension(*connection.context, extension);
 }
 
+shared_ptr<DuckDBPyConnection> DefaultConnectionHolder::Get() {
+	lock_guard<mutex> guard(l);
+	if (!connection) {
+		py::dict config_dict;
+		connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
+	}
+	return connection;
+}
+
+void DefaultConnectionHolder::Set(shared_ptr<DuckDBPyConnection> conn) {
+	lock_guard<mutex> guard(l);
+	connection = conn;
+}
+
 void DuckDBPyConnection::Cursors::AddCursor(shared_ptr<DuckDBPyConnection> conn) {
 	lock_guard<mutex> l(lock);
 
@@ -1799,6 +1933,8 @@ void DuckDBPyConnection::Cursors::ClearCursors() {
 		// release it don't ask me why it can't just realize there is no GIL and move on
 		py::gil_scoped_acquire gil;
 		cursor->Close();
+		// Ensure destructor runs with gil if triggered.
+		cursor.reset();
 	}
 
 	cursors.clear();
@@ -1886,8 +2022,11 @@ py::dict DuckDBPyConnection::FetchTF() {
 }
 
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch) {
-	auto arrow = FetchArrow(rows_per_batch);
-	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
+	if (!con.HasResult()) {
+		throw InvalidInputException("No open result set");
+	}
+	auto &result = con.GetResult();
+	return result.ToPolars(rows_per_batch);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) {
@@ -2041,11 +2180,11 @@ case_insensitive_map_t<BoundParameterData> DuckDBPyConnection::TransformPythonPa
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::DefaultConnection() {
-	if (!default_connection) {
-		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
-	}
-	return default_connection;
+	return default_connection.Get();
+}
+
+void DuckDBPyConnection::SetDefaultConnection(shared_ptr<DuckDBPyConnection> connection) {
+	return default_connection.Set(std::move(connection));
 }
 
 PythonImportCache *DuckDBPyConnection::ImportCache() {
@@ -2090,7 +2229,7 @@ void DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 }
 
 void DuckDBPyConnection::Cleanup() {
-	default_connection.reset();
+	default_connection.Set(nullptr);
 	import_cache.reset();
 }
 

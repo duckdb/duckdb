@@ -26,6 +26,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/storage/compression/empty_validity.hpp"
+#include "duckdb/logging/logger.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -35,6 +37,10 @@ namespace duckdb {
 
 DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
+	encoding_functions = make_uniq<EncodingFunctionSet>();
+	encoding_functions->Initialize(*this);
+	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
+	arrow_extensions->Initialize(*this);
 	cast_functions = make_uniq<CastFunctionSet>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
 	index_types = make_uniq<IndexTypeSet>();
@@ -57,7 +63,7 @@ DBConfig::~DBConfig() {
 
 DatabaseInstance::DatabaseInstance() {
 	config.is_user_config = false;
-	create_api_v0 = nullptr;
+	create_api_v1 = nullptr;
 }
 
 DatabaseInstance::~DatabaseInstance() {
@@ -68,7 +74,12 @@ DatabaseInstance::~DatabaseInstance() {
 	object_cache.reset();
 	scheduler.reset();
 	db_manager.reset();
+
+	// stop the log manager, after this point Logger calls are unsafe.
+	log_manager.reset();
+
 	buffer_manager.reset();
+
 	// flush allocations and disable the background thread
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
@@ -260,8 +271,8 @@ void DatabaseInstance::LoadExtensionSettings() {
 	}
 }
 
-static duckdb_ext_api_v0 CreateAPIv0Wrapper() {
-	return CreateAPIv0();
+static duckdb_ext_api_v1 CreateAPIv1Wrapper() {
+	return CreateAPIv1();
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
@@ -273,7 +284,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	Configure(*config_ptr, database_path);
 
-	create_api_v0 = CreateAPIv0Wrapper;
+	create_api_v1 = CreateAPIv1Wrapper;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
 
@@ -294,6 +305,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	} else {
 		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
+
+	log_manager = make_shared_ptr<LogManager>(*this, LogConfig());
+	log_manager->Initialize();
+
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
@@ -417,6 +432,13 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>();
 	}
+	if (database_path && !config.options.enable_external_access) {
+		config.AddAllowedPath(database_path);
+		config.AddAllowedPath(database_path + string(".wal"));
+		if (!config.options.temporary_directory.empty()) {
+			config.AddAllowedDirectory(config.options.temporary_directory);
+		}
+	}
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	}
@@ -491,6 +513,7 @@ void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallIn
 	for (auto &callback : callbacks) {
 		callback->OnExtensionLoaded(*this, name);
 	}
+	Logger::Info("duckdb.Extensions.ExtensionLoaded", *this, name);
 }
 
 SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
@@ -511,9 +534,13 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
 }
 
-const duckdb_ext_api_v0 DatabaseInstance::GetExtensionAPIV0() {
-	D_ASSERT(create_api_v0);
-	return create_api_v0();
+const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
+	D_ASSERT(create_api_v1);
+	return create_api_v1();
+}
+
+LogManager &DatabaseInstance::GetLogManager() const {
+	return *log_manager;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {

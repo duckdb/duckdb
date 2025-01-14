@@ -184,7 +184,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 				labels.emplace_back(data[i]);
 			}
 
-			output.SetValue(col++, count, Value::LIST(labels));
+			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, labels));
 		} else {
 			output.SetValue(col++, count, Value());
 		}

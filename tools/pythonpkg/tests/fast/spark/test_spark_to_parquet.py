@@ -28,7 +28,7 @@ class TestSparkToParquet(object):
 
         csv_rel = spark.read.parquet(temp_file_name)
 
-        assert df.collect() == csv_rel.collect()
+        assert sorted(df.collect()) == sorted(csv_rel.collect())
 
     def test_compressed_to_parquet(self, df, spark, tmp_path):
         temp_file_name = os.path.join(tmp_path, "temp_file.parquet")
@@ -37,4 +37,4 @@ class TestSparkToParquet(object):
 
         csv_rel = spark.read.parquet(temp_file_name)
 
-        assert df.collect() == csv_rel.collect()
+        assert sorted(df.collect()) == sorted(csv_rel.collect())

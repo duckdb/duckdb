@@ -1,0 +1,31 @@
+# name: test/sql/types/struct/struct_projection_pushdown_index.test_slow
+# description: Test struct projection pushdown with an index
+# group: [struct]
+
+statement ok
+CREATE TABLE test_structs(id INT PRIMARY KEY, s STRUCT(a integer, b bool, c varchar, d int[]));
+
+statement ok
+INSERT INTO test_structs
+SELECT i, case when i%10=0 then null else {'a': i, b: i%2, c: 'thisisastring' || i::VARCHAR, 'd': [i, i + 2]} end
+FROM range(1000000) t(i);
+
+query II
+SELECT SUM(LENGTH(s.c)), COUNT(s.c) FROM test_structs
+----
+17000001	900000
+
+query I
+SELECT s.c FROM test_structs WHERE id=473564
+----
+thisisastring473564
+
+query I
+SELECT s.d FROM test_structs WHERE id=473564
+----
+[473564, 473566]
+
+query II
+SELECT SUM(LENGTH(s.c)), COUNT(s.c) FROM test_structs WHERE id > 47356
+----
+16242822	857379

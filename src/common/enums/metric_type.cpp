@@ -16,6 +16,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_EXPRESSION_REWRITER,
         MetricsType::OPTIMIZER_FILTER_PULLUP,
         MetricsType::OPTIMIZER_FILTER_PUSHDOWN,
+        MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP,
         MetricsType::OPTIMIZER_CTE_FILTER_PUSHER,
         MetricsType::OPTIMIZER_REGEX_RANGE,
         MetricsType::OPTIMIZER_IN_CLAUSE,
@@ -33,9 +34,12 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION,
         MetricsType::OPTIMIZER_DUPLICATE_GROUPS,
         MetricsType::OPTIMIZER_REORDER_FILTER,
+        MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN,
         MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN,
         MetricsType::OPTIMIZER_EXTENSION,
         MetricsType::OPTIMIZER_MATERIALIZED_CTE,
+        MetricsType::OPTIMIZER_SUM_REWRITER,
+        MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
     };
 }
 
@@ -60,6 +64,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_FILTER_PULLUP;
         case OptimizerType::FILTER_PUSHDOWN:
             return MetricsType::OPTIMIZER_FILTER_PUSHDOWN;
+        case OptimizerType::EMPTY_RESULT_PULLUP:
+            return MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP;
         case OptimizerType::CTE_FILTER_PUSHER:
             return MetricsType::OPTIMIZER_CTE_FILTER_PUSHER;
         case OptimizerType::REGEX_RANGE:
@@ -94,12 +100,18 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_DUPLICATE_GROUPS;
         case OptimizerType::REORDER_FILTER:
             return MetricsType::OPTIMIZER_REORDER_FILTER;
+        case OptimizerType::SAMPLING_PUSHDOWN:
+            return MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN;
         case OptimizerType::JOIN_FILTER_PUSHDOWN:
             return MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN;
         case OptimizerType::EXTENSION:
             return MetricsType::OPTIMIZER_EXTENSION;
         case OptimizerType::MATERIALIZED_CTE:
             return MetricsType::OPTIMIZER_MATERIALIZED_CTE;
+        case OptimizerType::SUM_REWRITER:
+            return MetricsType::OPTIMIZER_SUM_REWRITER;
+        case OptimizerType::LATE_MATERIALIZATION:
+            return MetricsType::OPTIMIZER_LATE_MATERIALIZATION;
        default:
             throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));
     };
@@ -113,6 +125,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::FILTER_PULLUP;
         case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
             return OptimizerType::FILTER_PUSHDOWN;
+        case MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP:
+            return OptimizerType::EMPTY_RESULT_PULLUP;
         case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:
             return OptimizerType::CTE_FILTER_PUSHER;
         case MetricsType::OPTIMIZER_REGEX_RANGE:
@@ -147,12 +161,18 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::DUPLICATE_GROUPS;
         case MetricsType::OPTIMIZER_REORDER_FILTER:
             return OptimizerType::REORDER_FILTER;
+        case MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN:
+            return OptimizerType::SAMPLING_PUSHDOWN;
         case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
             return OptimizerType::JOIN_FILTER_PUSHDOWN;
         case MetricsType::OPTIMIZER_EXTENSION:
             return OptimizerType::EXTENSION;
         case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
             return OptimizerType::MATERIALIZED_CTE;
+        case MetricsType::OPTIMIZER_SUM_REWRITER:
+            return OptimizerType::SUM_REWRITER;
+        case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
+            return OptimizerType::LATE_MATERIALIZATION;
     default:
             return OptimizerType::INVALID;
     };
@@ -163,6 +183,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_EXPRESSION_REWRITER:
         case MetricsType::OPTIMIZER_FILTER_PULLUP:
         case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
+        case MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP:
         case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:
         case MetricsType::OPTIMIZER_REGEX_RANGE:
         case MetricsType::OPTIMIZER_IN_CLAUSE:
@@ -180,9 +201,12 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
         case MetricsType::OPTIMIZER_DUPLICATE_GROUPS:
         case MetricsType::OPTIMIZER_REORDER_FILTER:
+        case MetricsType::OPTIMIZER_SAMPLING_PUSHDOWN:
         case MetricsType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
         case MetricsType::OPTIMIZER_EXTENSION:
         case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
+        case MetricsType::OPTIMIZER_SUM_REWRITER:
+        case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
             return true;
         default:
             return false;

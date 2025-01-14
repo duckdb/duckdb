@@ -145,6 +145,85 @@ TEST_CASE("Test join vector items", "[string_util]") {
 	}
 }
 
+TEST_CASE("Test SplitWithParentheses", "[string_util]") {
+	SECTION("Standard split") {
+		REQUIRE(StringUtil::SplitWithParentheses("") == duckdb::vector<string> {});
+		REQUIRE(StringUtil::SplitWithParentheses("x") == duckdb::vector<string> {"x"});
+		REQUIRE(StringUtil::SplitWithParentheses("hello") == duckdb::vector<string> {"hello"});
+		REQUIRE(StringUtil::SplitWithParentheses("hello,world") == duckdb::vector<string> {"hello", "world"});
+	}
+
+	SECTION("Single item with parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses("STRUCT(year BIGINT, month BIGINT, day BIGINT)") ==
+		        duckdb::vector<string> {"STRUCT(year BIGINT, month BIGINT, day BIGINT)"});
+		REQUIRE(StringUtil::SplitWithParentheses("(apple)") == duckdb::vector<string> {"(apple)"});
+		REQUIRE(StringUtil::SplitWithParentheses("(apple, pear)") == duckdb::vector<string> {"(apple, pear)"});
+		REQUIRE(StringUtil::SplitWithParentheses("(apple, pear) banana") ==
+		        duckdb::vector<string> {"(apple, pear) banana"});
+		REQUIRE(StringUtil::SplitWithParentheses("banana (apple, pear)") ==
+		        duckdb::vector<string> {"banana (apple, pear)"});
+		REQUIRE(StringUtil::SplitWithParentheses("banana (apple, pear) banana") ==
+		        duckdb::vector<string> {"banana (apple, pear) banana"});
+	}
+
+	SECTION("Multiple items with parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses("map::MAP(ANY,ANY),key::ANY") ==
+		        duckdb::vector<string> {"map::MAP(ANY,ANY)", "key::ANY"});
+		REQUIRE(StringUtil::SplitWithParentheses("extra,STRUCT(year BIGINT, month BIGINT, day BIGINT)") ==
+		        duckdb::vector<string> {"extra", "STRUCT(year BIGINT, month BIGINT, day BIGINT)"});
+		REQUIRE(StringUtil::SplitWithParentheses("extra,STRUCT(year BIGINT, month BIGINT, day BIGINT),extra") ==
+		        duckdb::vector<string> {"extra", "STRUCT(year BIGINT, month BIGINT, day BIGINT)", "extra"});
+		REQUIRE(StringUtil::SplitWithParentheses("aa(bb)cc,dd(ee)ff") ==
+		        duckdb::vector<string> {"aa(bb)cc", "dd(ee)ff"});
+		REQUIRE(StringUtil::SplitWithParentheses("aa(bb cc,dd),ee(f,,f)gg") ==
+		        duckdb::vector<string> {"aa(bb cc,dd)", "ee(f,,f)gg"});
+	}
+
+	SECTION("Leading and trailing separators") {
+		REQUIRE(StringUtil::SplitWithParentheses(",") == duckdb::vector<string> {""});
+		REQUIRE(StringUtil::SplitWithParentheses(",,") == duckdb::vector<string> {"", ""});
+		REQUIRE(StringUtil::SplitWithParentheses("aa,") == duckdb::vector<string> {"aa"});
+		REQUIRE(StringUtil::SplitWithParentheses(",aa") == duckdb::vector<string> {"", "aa"});
+		REQUIRE(StringUtil::SplitWithParentheses(",(aa,),") == duckdb::vector<string> {"", "(aa,)"});
+	}
+
+	SECTION("Leading and trailing spaces") {
+		REQUIRE(StringUtil::SplitWithParentheses(" ") == duckdb::vector<string> {" "});
+		REQUIRE(StringUtil::SplitWithParentheses("   ") == duckdb::vector<string> {"   "});
+		REQUIRE(StringUtil::SplitWithParentheses("   , ") == duckdb::vector<string> {"   ", " "});
+		REQUIRE(StringUtil::SplitWithParentheses("aa, bb") == duckdb::vector<string> {"aa", " bb"});
+		REQUIRE(StringUtil::SplitWithParentheses(" aa,(bb, cc) ") == duckdb::vector<string> {" aa", "(bb, cc) "});
+	}
+
+	SECTION("Nested parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses("STRUCT(aa BIGINT, bb STRUCT(cc BIGINT, dd BIGINT, BIGINT))") ==
+		        duckdb::vector<string> {"STRUCT(aa BIGINT, bb STRUCT(cc BIGINT, dd BIGINT, BIGINT))"});
+		REQUIRE(StringUtil::SplitWithParentheses("(((aa)))") == duckdb::vector<string> {"(((aa)))"});
+		REQUIRE(StringUtil::SplitWithParentheses("((aa, bb))") == duckdb::vector<string> {"((aa, bb))"});
+		REQUIRE(StringUtil::SplitWithParentheses("aa,(bb,(cc,dd)),ee") ==
+		        duckdb::vector<string> {"aa", "(bb,(cc,dd))", "ee"});
+	}
+
+	SECTION("other parentheses") {
+		REQUIRE(StringUtil::SplitWithParentheses(" aa,[bb, cc] )", ',', '[', ']') ==
+		        duckdb::vector<string> {" aa", "[bb, cc] )"});
+	}
+
+	SECTION("other separators") {
+		REQUIRE(StringUtil::SplitWithParentheses(" aa|(bb| cc),dd", '|') ==
+		        duckdb::vector<string> {" aa", "(bb| cc),dd"});
+	}
+
+	SECTION("incongruent parentheses") {
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("("));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses(")"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("aa(bb"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("aa)bb"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("(aa)bb)"));
+		REQUIRE_THROWS(StringUtil::SplitWithParentheses("(aa(bb)"));
+	}
+}
+
 TEST_CASE("Test split quoted strings", "[string_util]") {
 	SECTION("Empty string") {
 		REQUIRE(StringUtil::SplitWithQuote("") == duckdb::vector<string> {});

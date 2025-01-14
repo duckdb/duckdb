@@ -1317,3 +1317,5 @@ SELECT * FROM parquet_scan('data/parquet-testing/bug2557.parquet') limit 10
 [Lorem, ipsum, dolor, sit, amet, consectetur, adipiscing, elit]	[597, 719]	[1218.803740]
 
 
+statement ok
+from 'data/parquet-testing/bug14120-dict-nulls-only.parquet';

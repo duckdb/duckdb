@@ -49,10 +49,10 @@ unique_ptr<Expression> BindGetVariableExpression(FunctionBindExpressionInput &in
 	return make_uniq<BoundConstantExpression>(bind_data.value);
 }
 
-void GetVariableFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction GetVariableFun::GetFunction() {
 	ScalarFunction getvar("getvariable", {LogicalType::VARCHAR}, LogicalType::ANY, nullptr, GetVariableBind, nullptr);
 	getvar.bind_expression = BindGetVariableExpression;
-	set.AddFunction(getvar);
+	return getvar;
 }
 
 } // namespace duckdb

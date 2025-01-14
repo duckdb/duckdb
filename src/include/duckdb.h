@@ -85,7 +85,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_FLOAT = 10,
 	// double
 	DUCKDB_TYPE_DOUBLE = 11,
-	// duckdb_timestamp, in microseconds
+	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP = 12,
 	// duckdb_date
 	DUCKDB_TYPE_DATE = 13,
@@ -101,13 +101,13 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_VARCHAR = 17,
 	// duckdb_blob
 	DUCKDB_TYPE_BLOB = 18,
-	// decimal
+	// duckdb_decimal
 	DUCKDB_TYPE_DECIMAL = 19,
-	// duckdb_timestamp, in seconds
+	// duckdb_timestamp_s (seconds)
 	DUCKDB_TYPE_TIMESTAMP_S = 20,
-	// duckdb_timestamp, in milliseconds
+	// duckdb_timestamp_ms (milliseconds)
 	DUCKDB_TYPE_TIMESTAMP_MS = 21,
-	// duckdb_timestamp, in nanoseconds
+	// duckdb_timestamp_ns (nanoseconds)
 	DUCKDB_TYPE_TIMESTAMP_NS = 22,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ENUM = 23,
@@ -127,7 +127,7 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_BIT = 29,
 	// duckdb_time_tz
 	DUCKDB_TYPE_TIME_TZ = 30,
-	// duckdb_timestamp
+	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 	// ANY type
 	DUCKDB_TYPE_ANY = 34,
@@ -282,15 +282,32 @@ typedef struct {
 	int32_t offset;
 } duckdb_time_tz_struct;
 
-//! Timestamps are stored as microseconds since 1970-01-01
-//! Use the duckdb_from_timestamp/duckdb_to_timestamp function to extract individual information
+//! TIMESTAMP values are stored as microseconds since 1970-01-01.
+//! Use the duckdb_from_timestamp and duckdb_to_timestamp functions to extract individual information.
 typedef struct {
 	int64_t micros;
 } duckdb_timestamp;
+
+//! TIMESTAMP_S values are stored as seconds since 1970-01-01.
+typedef struct {
+	int64_t seconds;
+} duckdb_timestamp_s;
+
+//! TIMESTAMP_MS values are stored as milliseconds since 1970-01-01.
+typedef struct {
+	int64_t millis;
+} duckdb_timestamp_ms;
+
+//! TIMESTAMP_NS values are stored as nanoseconds since 1970-01-01.
+typedef struct {
+	int64_t nanos;
+} duckdb_timestamp_ns;
+
 typedef struct {
 	duckdb_date_struct date;
 	duckdb_time_struct time;
 } duckdb_timestamp_struct;
+
 typedef struct {
 	int32_t months;
 	int32_t days;
@@ -389,6 +406,25 @@ typedef struct {
 	idx_t size;
 } duckdb_blob;
 
+//! BITs are composed of a byte pointer and a size.
+//! BIT byte data has 0 to 7 bits of padding.
+//! The first byte contains the number of padding bits.
+//! This number of bits of the second byte are set to 1, starting from the MSB.
+//! You must free `data` with `duckdb_free`.
+typedef struct {
+	uint8_t *data;
+	idx_t size;
+} duckdb_bit;
+
+//! VARINTs are composed of a byte pointer, a size, and an is_negative bool.
+//! The absolute value of the number is stored in `data` in little endian format.
+//! You must free `data` with `duckdb_free`.
+typedef struct {
+	uint8_t *data;
+	idx_t size;
+	bool is_negative;
+} duckdb_varint;
+
 //! A query result consists of a pointer to its internal data.
 //! Must be freed with 'duckdb_destroy_result'.
 typedef struct {
@@ -405,7 +441,12 @@ typedef struct {
 	void *internal_data;
 } duckdb_result;
 
-//! A database object. Should be closed with `duckdb_close`.
+//! A database instance cache object. Must be destroyed with `duckdb_destroy_instance_cache`.
+typedef struct _duckdb_instance_cache {
+	void *internal_ptr;
+} * duckdb_instance_cache;
+
+//! A database object. Must be closed with `duckdb_close`.
 typedef struct _duckdb_database {
 	void *internal_ptr;
 } * duckdb_database;
@@ -626,13 +667,15 @@ typedef struct _duckdb_arrow_array {
 //===--------------------------------------------------------------------===//
 //! Passed to C API extension as parameter to the entrypoint
 struct duckdb_extension_access {
-	//! Indicate that an error has occured
+	//! Indicate that an error has occurred
 	void (*set_error)(duckdb_extension_info info, const char *error);
 	//! Fetch the database from duckdb to register extensions to
 	duckdb_database *(*get_database)(duckdb_extension_info info);
 	//! Fetch the API
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
+
+#ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
 
 //===--------------------------------------------------------------------===//
 // Functions
@@ -643,11 +686,43 @@ struct duckdb_extension_access {
 //===--------------------------------------------------------------------===//
 
 /*!
+Creates a new database instance cache.
+The instance cache is necessary if a client/program (re)opens multiple databases to the same file within the same
+process. Must be destroyed with 'duckdb_destroy_instance_cache'.
+
+* @return The database instance cache.
+*/
+DUCKDB_API duckdb_instance_cache duckdb_create_instance_cache();
+
+/*!
+Creates a new database instance in the instance cache, or retrieves an existing database instance.
+Must be closed with 'duckdb_close'.
+
+* @param instance_cache The instance cache in which to create the database, or from which to take the database.
+* @param path Path to the database file on disk. Both `nullptr` and `:memory:` open or retrieve an in-memory database.
+* @param out_database The resulting cached database.
+* @param config (Optional) configuration used to create the database.
+* @param out_error If set and the function returns `DuckDBError`, this contains the error message.
+Note that the error message must be freed using `duckdb_free`.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_get_or_create_from_cache(duckdb_instance_cache instance_cache, const char *path,
+                                                        duckdb_database *out_database, duckdb_config config,
+                                                        char **out_error);
+
+/*!
+Destroys an existing database instance cache and de-allocates its memory.
+
+* @param instance_cache The instance cache to destroy.
+*/
+DUCKDB_API void duckdb_destroy_instance_cache(duckdb_instance_cache *instance_cache);
+
+/*!
 Creates a new database or opens an existing database file stored at the given path.
 If no path is given a new in-memory database is created instead.
-The instantiated database should be closed with 'duckdb_close'.
+The database must be closed with 'duckdb_close'.
 
-* @param path Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
+* @param path Path to the database file on disk. Both `nullptr` and `:memory:` open an in-memory database.
 * @param out_database The result database object.
 * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
@@ -655,13 +730,13 @@ DUCKDB_API duckdb_state duckdb_open(const char *path, duckdb_database *out_datab
 
 /*!
 Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.
-The instantiated database should be closed with 'duckdb_close'.
+The database must be closed with 'duckdb_close'.
 
-* @param path Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
+* @param path Path to the database file on disk. Both `nullptr` and `:memory:` open an in-memory database.
 * @param out_database The result database object.
-* @param config (Optional) configuration used to start up the database system.
-* @param out_error If set and the function returns DuckDBError, this will contain the reason why the start-up failed.
-Note that the error must be freed using `duckdb_free`.
+* @param config (Optional) configuration used to start up the database.
+* @param out_error If set and the function returns `DuckDBError`, this contains the error message.
+Note that the error message must be freed using `duckdb_free`.
 * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_open_ext(const char *path, duckdb_database *out_database, duckdb_config config,
@@ -1323,10 +1398,34 @@ DUCKDB_API duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct ts);
 /*!
 Test a `duckdb_timestamp` to see if it is a finite value.
 
-* @param ts The timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
+* @param ts The duckdb_timestamp object, as obtained from a `DUCKDB_TYPE_TIMESTAMP` column.
 * @return True if the timestamp is finite, false if it is ±infinity.
 */
 DUCKDB_API bool duckdb_is_finite_timestamp(duckdb_timestamp ts);
+
+/*!
+Test a `duckdb_timestamp_s` to see if it is a finite value.
+
+* @param ts The duckdb_timestamp_s object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_S` column.
+* @return True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp_s(duckdb_timestamp_s ts);
+
+/*!
+Test a `duckdb_timestamp_ms` to see if it is a finite value.
+
+* @param ts The duckdb_timestamp_ms object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_MS` column.
+* @return True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp_ms(duckdb_timestamp_ms ts);
+
+/*!
+Test a `duckdb_timestamp_ns` to see if it is a finite value.
+
+* @param ts The duckdb_timestamp_ns object, as obtained from a `DUCKDB_TYPE_TIMESTAMP_NS` column.
+* @return True if the timestamp is finite, false if it is ±infinity.
+*/
+DUCKDB_API bool duckdb_is_finite_timestamp_ns(duckdb_timestamp_ns ts);
 
 //===--------------------------------------------------------------------===//
 // Hugeint Helpers
@@ -1470,6 +1569,19 @@ Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the stat
 * @return The parameter type
 */
 DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
+
+/*!
+Returns the logical type for the parameter at the given index.
+
+Returns `nullptr` if the parameter index is out of range or the statement was not successfully prepared.
+
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+* @param prepared_statement The prepared statement.
+* @param param_idx The parameter index.
+* @return The logical type of the parameter
+*/
+DUCKDB_API duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
 /*!
 Clear the params bind to the prepared statement.
@@ -1938,6 +2050,22 @@ Creates a value from a uhugeint
 DUCKDB_API duckdb_value duckdb_create_uhugeint(duckdb_uhugeint input);
 
 /*!
+Creates a VARINT value from a duckdb_varint
+
+* @param input The duckdb_varint value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_varint(duckdb_varint input);
+
+/*!
+Creates a DECIMAL value from a duckdb_decimal
+
+* @param input The duckdb_decimal value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_decimal(duckdb_decimal input);
+
+/*!
 Creates a value from a float
 
 * @param input The float value
@@ -1979,12 +2107,44 @@ Not to be confused with `duckdb_create_time_tz`, which creates a duckdb_time_tz_
 DUCKDB_API duckdb_value duckdb_create_time_tz_value(duckdb_time_tz value);
 
 /*!
-Creates a value from a timestamp
+Creates a TIMESTAMP value from a duckdb_timestamp
 
-* @param input The timestamp value
+* @param input The duckdb_timestamp value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_timestamp(duckdb_timestamp input);
+
+/*!
+Creates a TIMESTAMP_TZ value from a duckdb_timestamp
+
+* @param input The duckdb_timestamp value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_timestamp_tz(duckdb_timestamp input);
+
+/*!
+Creates a TIMESTAMP_S value from a duckdb_timestamp_s
+
+* @param input The duckdb_timestamp_s value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_timestamp_s(duckdb_timestamp_s input);
+
+/*!
+Creates a TIMESTAMP_MS value from a duckdb_timestamp_ms
+
+* @param input The duckdb_timestamp_ms value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_timestamp_ms(duckdb_timestamp_ms input);
+
+/*!
+Creates a TIMESTAMP_NS value from a duckdb_timestamp_ns
+
+* @param input The duckdb_timestamp_ns value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_timestamp_ns(duckdb_timestamp_ns input);
 
 /*!
 Creates a value from an interval
@@ -2002,6 +2162,22 @@ Creates a value from a blob
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_create_blob(const uint8_t *data, idx_t length);
+
+/*!
+Creates a BIT value from a duckdb_bit
+
+* @param input The duckdb_bit value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_bit(duckdb_bit input);
+
+/*!
+Creates a UUID value from a uhugeint
+
+* @param input The duckdb_uhugeint containing the UUID
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_uuid(duckdb_uhugeint input);
 
 /*!
 Returns the boolean value of the given value.
@@ -2092,6 +2268,23 @@ Returns the uhugeint value of the given value.
 DUCKDB_API duckdb_uhugeint duckdb_get_uhugeint(duckdb_value val);
 
 /*!
+Returns the duckdb_varint value of the given value.
+The `data` field must be destroyed with `duckdb_free`.
+
+* @param val A duckdb_value containing a VARINT
+* @return A duckdb_varint. The `data` field must be destroyed with `duckdb_free`.
+*/
+DUCKDB_API duckdb_varint duckdb_get_varint(duckdb_value val);
+
+/*!
+Returns the duckdb_decimal value of the given value.
+
+* @param val A duckdb_value containing a DECIMAL
+* @return A duckdb_decimal, or MinValue<decimal> if the value cannot be converted
+*/
+DUCKDB_API duckdb_decimal duckdb_get_decimal(duckdb_value val);
+
+/*!
 Returns the float value of the given value.
 
 * @param val A duckdb_value containing a float
@@ -2132,12 +2325,44 @@ Returns the time_tz value of the given value.
 DUCKDB_API duckdb_time_tz duckdb_get_time_tz(duckdb_value val);
 
 /*!
-Returns the timestamp value of the given value.
+Returns the TIMESTAMP value of the given value.
 
-* @param val A duckdb_value containing a timestamp
+* @param val A duckdb_value containing a TIMESTAMP
 * @return A duckdb_timestamp, or MinValue<timestamp> if the value cannot be converted
 */
 DUCKDB_API duckdb_timestamp duckdb_get_timestamp(duckdb_value val);
+
+/*!
+Returns the TIMESTAMP_TZ value of the given value.
+
+* @param val A duckdb_value containing a TIMESTAMP_TZ
+* @return A duckdb_timestamp, or MinValue<timestamp_tz> if the value cannot be converted
+*/
+DUCKDB_API duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val);
+
+/*!
+Returns the duckdb_timestamp_s value of the given value.
+
+* @param val A duckdb_value containing a TIMESTAMP_S
+* @return A duckdb_timestamp_s, or MinValue<timestamp_s> if the value cannot be converted
+*/
+DUCKDB_API duckdb_timestamp_s duckdb_get_timestamp_s(duckdb_value val);
+
+/*!
+Returns the duckdb_timestamp_ms value of the given value.
+
+* @param val A duckdb_value containing a TIMESTAMP_MS
+* @return A duckdb_timestamp_ms, or MinValue<timestamp_ms> if the value cannot be converted
+*/
+DUCKDB_API duckdb_timestamp_ms duckdb_get_timestamp_ms(duckdb_value val);
+
+/*!
+Returns the duckdb_timestamp_ns value of the given value.
+
+* @param val A duckdb_value containing a TIMESTAMP_NS
+* @return A duckdb_timestamp_ns, or MinValue<timestamp_ns> if the value cannot be converted
+*/
+DUCKDB_API duckdb_timestamp_ns duckdb_get_timestamp_ns(duckdb_value val);
 
 /*!
 Returns the interval value of the given value.
@@ -2163,6 +2388,23 @@ Returns the blob value of the given value.
 * @return A duckdb_blob
 */
 DUCKDB_API duckdb_blob duckdb_get_blob(duckdb_value val);
+
+/*!
+Returns the duckdb_bit value of the given value.
+The `data` field must be destroyed with `duckdb_free`.
+
+* @param val A duckdb_value containing a BIT
+* @return A duckdb_bit
+*/
+DUCKDB_API duckdb_bit duckdb_get_bit(duckdb_value val);
+
+/*!
+Returns a duckdb_uhugeint representing the UUID value of the given value.
+
+* @param val A duckdb_value containing a UUID
+* @return A duckdb_uhugeint representing the UUID value
+*/
+DUCKDB_API duckdb_uhugeint duckdb_get_uuid(duckdb_value val);
 
 /*!
 Obtains a string representation of the given value.
@@ -2229,6 +2471,64 @@ Returns the MAP value at index as a duckdb_value.
 * @return The value as a duckdb_value.
 */
 DUCKDB_API duckdb_value duckdb_get_map_value(duckdb_value value, idx_t index);
+
+/*!
+Returns whether the value's type is SQLNULL or not.
+
+* @param value The value to check.
+* @return True, if the value's type is SQLNULL, otherwise false.
+*/
+DUCKDB_API bool duckdb_is_null_value(duckdb_value value);
+
+/*!
+Creates a value of type SQLNULL.
+
+* @return The duckdb_value representing SQLNULL. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_null_value();
+
+/*!
+Returns the number of elements in a LIST value.
+
+* @param value The LIST value.
+* @return The number of elements in the list.
+*/
+DUCKDB_API idx_t duckdb_get_list_size(duckdb_value value);
+
+/*!
+Returns the LIST child at index as a duckdb_value.
+
+* @param value The LIST value.
+* @param index The index of the child.
+* @return The child as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_list_child(duckdb_value value, idx_t index);
+
+/*!
+Creates an enum value from a type and a value. Must be destroyed with `duckdb_destroy_value`.
+
+* @param type The type of the enum
+* @param value The value for the enum
+* @return The enum value, or nullptr.
+*/
+DUCKDB_API duckdb_value duckdb_create_enum_value(duckdb_logical_type type, uint64_t value);
+
+/*!
+Returns the enum value of the given value.
+
+* @param value A duckdb_value containing an enum
+* @return A uint64_t, or MinValue<uint64> if the value cannot be converted
+*/
+DUCKDB_API uint64_t duckdb_get_enum_value(duckdb_value value);
+
+/*!
+Returns the STRUCT child at index as a duckdb_value.
+
+* @param value The STRUCT value.
+* @param index The index of the child.
+* @return The child as a duckdb_value.
+*/
+DUCKDB_API duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Logical Type Interface
@@ -2636,7 +2936,7 @@ DUCKDB_API uint64_t *duckdb_vector_get_validity(duckdb_vector vector);
 Ensures the validity mask is writable by allocating it.
 
 After this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.
-This allows null values to be written to the vector, regardless of whether a validity mask was present before.
+This allows NULL values to be written to the vector, regardless of whether a validity mask was present before.
 
 * @param vector The vector to alter
 */
@@ -3483,18 +3783,20 @@ DUCKDB_API duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profilin
 // Appender
 //===--------------------------------------------------------------------===//
 
-// Appenders are the most efficient way of loading data into DuckDB from within the C interface, and are recommended for
-// fast data loading. The appender is much faster than using prepared statements or individual `INSERT INTO` statements.
+// Appenders are the most efficient way of loading data into DuckDB from within the C API.
+// They are recommended for fast data loading as they perform better than prepared statements or individual `INSERT
+// INTO` statements.
 
-// Appends are made in row-wise format. For every column, a `duckdb_append_[type]` call should be made, after which
-// the row should be finished by calling `duckdb_appender_end_row`. After all rows have been appended,
-// `duckdb_appender_destroy` should be used to finalize the appender and clean up the resulting memory.
+// Appends are possible in row-wise format, and by appending entire data chunks.
 
-// Instead of appending rows with `duckdb_appender_end_row`, it is also possible to fill and append
-// chunks-at-a-time.
+// Row-wise: for every column, a `duckdb_append_[type]` call should be made. After finishing all appends to a row, call
+// `duckdb_appender_end_row`.
 
-// Note that `duckdb_appender_destroy` should always be called on the resulting appender, even if the function returns
-// `DuckDBError`.
+// Chunk-wise: Consecutively call `duckdb_append_data_chunk` until all chunks have been appended.
+
+// After all data has been appended, call `duckdb_appender_close` to finalize the appender followed by
+// `duckdb_appender_destroy` to clean up the memory.
+
 /*!
 Creates an appender object.
 
@@ -3510,21 +3812,39 @@ DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, con
                                                duckdb_appender *out_appender);
 
 /*!
-Returns the number of columns in the table that belongs to the appender.
+Creates an appender object.
+
+Note that the object must be destroyed with `duckdb_appender_destroy`.
+
+* @param connection The connection context to create the appender in.
+* @param catalog The catalog of the table to append to, or `nullptr` for the default catalog.
+* @param schema The schema of the table to append to, or `nullptr` for the default schema.
+* @param table The table name to append to.
+* @param out_appender The resulting appender object.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_appender_create_ext(duckdb_connection connection, const char *catalog,
+                                                   const char *schema, const char *table,
+                                                   duckdb_appender *out_appender);
+
+/*!
+Returns the number of columns that belong to the appender.
+If there is no active column list, then this equals the table's physical columns.
 
 * @param appender The appender to get the column count from.
-* @return The number of columns in the table.
+* @return The number of columns in the data chunks.
 */
 DUCKDB_API idx_t duckdb_appender_column_count(duckdb_appender appender);
 
 /*!
-Returns the type of the column at the specified index.
+Returns the type of the column at the specified index. This is either a type in the active column list, or the same type
+as a column in the receiving table.
 
-Note: The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+Note: The resulting type must be destroyed with `duckdb_destroy_logical_type`.
 
 * @param appender The appender to get the column type from.
 * @param col_idx The index of the column to get the type of.
-* @return The duckdb_logical_type of the column.
+* @return The `duckdb_logical_type` of the column.
 */
 DUCKDB_API duckdb_logical_type duckdb_appender_column_type(duckdb_appender appender, idx_t col_idx);
 
@@ -3574,6 +3894,26 @@ before destroying the appender, if you need insights into the specific error.
 DUCKDB_API duckdb_state duckdb_appender_destroy(duckdb_appender *appender);
 
 /*!
+Appends a column to the active column list of the appender. Immediately flushes all previous data.
+
+The active column list specifies all columns that are expected when flushing the data. Any non-active columns are filled
+with their default values, or NULL.
+
+* @param appender The appender to add the column to.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_appender_add_column(duckdb_appender appender, const char *name);
+
+/*!
+Removes all columns from the active column list of the appender, resetting the appender to treat all columns as active.
+Immediately flushes all previous data.
+
+* @param appender The appender to clear the columns from.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_appender_clear_columns(duckdb_appender appender);
+
+/*!
 A nop function, provided for backwards compatibility reasons. Does nothing. Only `duckdb_appender_end_row` is required.
 */
 DUCKDB_API duckdb_state duckdb_appender_begin_row(duckdb_appender appender);
@@ -3590,6 +3930,20 @@ DUCKDB_API duckdb_state duckdb_appender_end_row(duckdb_appender appender);
 Append a DEFAULT value (NULL if DEFAULT not available for column) to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_default(duckdb_appender appender);
+
+/*!
+Append a DEFAULT value, at the specified row and column, (NULL if DEFAULT not available for column) to the chunk created
+from the specified appender. The default value of the column must be a constant value. Non-deterministic expressions
+like nextval('seq') or random() are not supported.
+
+* @param appender The appender to get the default value from.
+* @param chunk The data chunk to append the default value to.
+* @param col The chunk column index to append the default value to.
+* @param row The chunk row index to append the default value to.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_append_default_to_chunk(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
+                                                       idx_t row);
 
 /*!
 Append a bool value to the appender.
@@ -3697,15 +4051,17 @@ Append a NULL value to the appender (of any type).
 DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
 
 /*!
-Appends a pre-filled data chunk to the specified appender.
+Append a duckdb_value to the appender.
+*/
+DUCKDB_API duckdb_state duckdb_append_value(duckdb_appender appender, duckdb_value value);
 
-The types of the data chunk must exactly match the types of the table, no casting is performed.
-If the types do not match or the appender is in an invalid state, DuckDBError is returned.
-If the append is successful, DuckDBSuccess is returned.
+/*!
+Appends a pre-filled data chunk to the specified appender.
+ Attempts casting, if the data chunk types do not match the active appender types.
 
 * @param appender The appender to append to.
 * @param chunk The data chunk to append.
-* @return The return state.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_append_data_chunk(duckdb_appender appender, duckdb_data_chunk chunk);
 
@@ -3725,6 +4081,21 @@ resulting table_description, even if the function returns `DuckDBError`.
 */
 DUCKDB_API duckdb_state duckdb_table_description_create(duckdb_connection connection, const char *schema,
                                                         const char *table, duckdb_table_description *out);
+
+/*!
+Creates a table description object. Note that `duckdb_table_description_destroy` must be called on the resulting
+table_description, even if the function returns `DuckDBError`.
+
+* @param connection The connection context.
+* @param catalog The catalog (database) name of the table, or `nullptr` for the default catalog.
+* @param schema The schema of the table, or `nullptr` for the default schema.
+* @param table The table name.
+* @param out The resulting table description object.
+* @return `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_table_description_create_ext(duckdb_connection connection, const char *catalog,
+                                                            const char *schema, const char *table,
+                                                            duckdb_table_description *out);
 
 /*!
 Destroy the TableDescription object.
@@ -3752,6 +4123,16 @@ Check if the column at 'index' index of the table has a DEFAULT expression.
 * @return `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_column_has_default(duckdb_table_description table_description, idx_t index, bool *out);
+
+/*!
+Obtain the column name at 'index'.
+The out result must be destroyed with `duckdb_free`.
+
+* @param table_description The table_description to query.
+* @param index The index of the column to query.
+* @return The column name.
+*/
+DUCKDB_API char *duckdb_table_description_get_column_name(duckdb_table_description table_description, idx_t index);
 
 //===--------------------------------------------------------------------===//
 // Arrow Interface
@@ -4156,6 +4537,8 @@ Destroys the cast function object.
 * @param cast_function The cast function object.
 */
 DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
+
+#endif
 
 #ifdef __cplusplus
 }

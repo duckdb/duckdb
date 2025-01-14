@@ -85,6 +85,12 @@
         "name": "debug_use_openssl",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 106,
+        "name": "explicit_cardinality",
+        "type": "idx_t",
+        "default": "0"
       }
     ],
     "pointer_type": "none"

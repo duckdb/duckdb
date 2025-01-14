@@ -50,7 +50,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	return Pin(pointer);
 }
 
-MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
+MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
 
@@ -111,7 +111,7 @@ void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
 	AddBlock(std::move(block), true);
 }
 
-MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32_t offset) {
+MetaBlockPointer MetadataManager::GetDiskPointer(const MetadataPointer &pointer, uint32_t offset) {
 	idx_t block_pointer = idx_t(pointer.block_index);
 	block_pointer |= idx_t(pointer.index) << 56ULL;
 	return MetaBlockPointer(block_pointer, offset);
@@ -185,7 +185,7 @@ void MetadataManager::Flush() {
 		D_ASSERT(kv.first == block.block_id);
 		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
 			// temporary block - convert to persistent
-			block.block = block_manager.ConvertToPersistent(kv.first, std::move(block.block));
+			block.block = block_manager.ConvertToPersistent(kv.first, std::move(block.block), std::move(handle));
 		} else {
 			// already a persistent block - only need to write it
 			D_ASSERT(block.block->BlockId() == block.block_id);

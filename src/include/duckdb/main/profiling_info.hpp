@@ -60,8 +60,8 @@ public:
 
 public:
 	template <class METRIC_TYPE>
-	METRIC_TYPE GetMetricValue(const MetricsType setting) const {
-		auto val = metrics.at(setting);
+	METRIC_TYPE GetMetricValue(const MetricsType type) const {
+		auto val = metrics.at(type);
 		return val.GetValue<METRIC_TYPE>();
 	}
 

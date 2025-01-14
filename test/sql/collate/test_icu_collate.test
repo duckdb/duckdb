@@ -47,10 +47,12 @@ SELECT * FROM strings WHERE 'goethe' > s COLLATE NOCASE.de ORDER BY 1
 Gabel
 Göbel
 
-# but not with NOACCENT
-statement error
+# and with NOACCENT
+query I
 SELECT * FROM strings WHERE 'goethe' > s COLLATE NOACCENT.de ORDER BY 1
 ----
+Gabel
+Göbel
 
 # japanese collation
 statement ok
@@ -143,12 +145,8 @@ aAàÀáÁâÂãÃäÄåÅ
 bB
 zZ
 
-statement error
+statement ok
 SELECT 'Á' COLLATE "ICU_NOACCENT.NOACCENT"
-----
-Binder Error: Cannot combine collation types "icu_noaccent" and "noaccent"
 
-statement error
+statement ok
 SELECT 'Á' COLLATE "NOACCENT.ICU_NOACCENT"
-----
-Binder Error: Cannot combine collation types "noaccent" and "icu_noaccent"

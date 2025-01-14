@@ -21,7 +21,7 @@ PRAGMA memory_limit='2MB'
 query I
 select current_setting('max_temp_directory_size')
 ----
-0 bytes
+90% of available disk space
 
 # Set the max size explicitly
 statement ok
@@ -39,7 +39,7 @@ reset max_temp_directory_size;
 query I
 select current_setting('max_temp_directory_size')
 ----
-0 bytes
+90% of available disk space
 
 # --- Set by default to the available disk space when temp_directory exists ---
 
@@ -50,7 +50,7 @@ set temp_directory = '__TEST_DIR__';
 query I
 select current_setting('max_temp_directory_size')
 ----
-0 bytes
+90% of available disk space
 
 # --- Set explicitly by the user ---
 
@@ -104,7 +104,7 @@ set temp_directory = '__TEST_DIR__/does_not_exist'
 query I
 select current_setting('max_temp_directory_size')
 ----
-0 bytes
+90% of available disk space
 
 statement ok
 CREATE TABLE t2 AS SELECT * FROM range(1000000);

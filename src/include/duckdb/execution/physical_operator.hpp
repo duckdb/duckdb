@@ -15,11 +15,13 @@
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/execution/progress_data.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/execution/partition_info.hpp"
 
 namespace duckdb {
 class Event;
@@ -113,8 +115,9 @@ public:
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
 
-	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                            LocalSourceState &lstate) const;
+	virtual OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+	                                               GlobalSourceState &gstate, LocalSourceState &lstate,
+	                                               const OperatorPartitionInfo &partition_info) const;
 
 	virtual bool IsSource() const {
 		return false;
@@ -124,8 +127,11 @@ public:
 		return false;
 	}
 
-	virtual bool SupportsBatchIndex() const {
-		return false;
+	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
+		if (partition_info.AnyRequired()) {
+			return false;
+		}
+		return true;
 	}
 
 	//! The type of order emitted by the operator (as a source)
@@ -134,10 +140,11 @@ public:
 	}
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
-	virtual double GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+	virtual ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
-	virtual double GetSinkProgress(ClientContext &context, GlobalSinkState &gstate, double source_progress) const {
+	virtual ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+	                                     const ProgressData source_progress) const {
 		return source_progress;
 	}
 
@@ -157,7 +164,7 @@ public:
 	virtual void PrepareFinalize(ClientContext &context, GlobalSinkState &sink_state) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
-	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished
+	//! If Finalize returns SinkResultType::Finished, the sink is marked as finished
 	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  OperatorSinkFinalizeInput &input) const;
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
@@ -181,8 +188,8 @@ public:
 		return false;
 	}
 
-	virtual bool RequiresBatchIndex() const {
-		return false;
+	virtual OperatorPartitionInfo RequiredPartitionInfo() const {
+		return OperatorPartitionInfo::NoPartitionInfo();
 	}
 
 	//! Whether or not the sink operator depends on the order of the input chunks
@@ -241,8 +248,12 @@ public:
 	bool caching_supported;
 
 public:
+	//! This Execute will prevent small chunks from entering the pipeline, buffering them until a bigger chunk is
+	//! created.
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const final;
+	//! FinalExecute is used here to send out the remainder of the chunk (< STANDARD_VECTOR_SIZE) that we still had
+	//! cached.
 	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
 	                                        OperatorState &state) const final;
 

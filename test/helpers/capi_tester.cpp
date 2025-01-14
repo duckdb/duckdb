@@ -89,6 +89,24 @@ duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row) {
 }
 
 template <>
+duckdb_timestamp_s CAPIResult::Fetch(idx_t col, idx_t row) {
+	auto data = (duckdb_timestamp_s *)duckdb_column_data(&result, col);
+	return data[row];
+}
+
+template <>
+duckdb_timestamp_ms CAPIResult::Fetch(idx_t col, idx_t row) {
+	auto data = (duckdb_timestamp_ms *)duckdb_column_data(&result, col);
+	return data[row];
+}
+
+template <>
+duckdb_timestamp_ns CAPIResult::Fetch(idx_t col, idx_t row) {
+	auto data = (duckdb_timestamp_ns *)duckdb_column_data(&result, col);
+	return data[row];
+}
+
+template <>
 duckdb_interval CAPIResult::Fetch(idx_t col, idx_t row) {
 	return duckdb_value_interval(&result, col, row);
 }

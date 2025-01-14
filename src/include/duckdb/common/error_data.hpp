@@ -47,6 +47,7 @@ public:
 		return extra_info;
 	}
 
+	DUCKDB_API void FinalizeError();
 	DUCKDB_API void AddErrorLocation(const string &query);
 	DUCKDB_API void ConvertErrorToJSON();
 

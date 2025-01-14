@@ -1,0 +1,19 @@
+# name: benchmark/large/other/or_filter_pushdown.benchmark
+# description: Test or filter pushdown
+# group: [other]
+
+name Or filter pushdown Large
+group large
+subgroup or_filter_pushdown
+
+cache or_filter_pushdown_benchmark_big.db
+
+load
+create table t1 as select range id from range(10000000);
+
+run
+select * from t1 where id in (5, 9999995);
+
+result I
+5
+9999995

@@ -94,6 +94,10 @@ public:
 		return total_segment_count;
 	}
 
+	inline idx_t GetMaxSegmentsPerBuffer() const {
+		return available_segments_per_buffer;
+	}
+
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;
 	//! Merge another FixedSizeAllocator into this allocator. Both must have the same segment size

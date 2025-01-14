@@ -64,7 +64,7 @@ void duckdb_brotli::BrotliWipeOutMemoryManager(MemoryManager* m) {
 
 #else  /* BROTLI_ENCODER_EXIT_ON_OOM */
 
-static void SortPointers(void** items, const size_t n) {
+void SortPointers(void** items, const size_t n) {
   /* Shell sort. */
   /* TODO(eustas): fine-tune for "many slots" case */
   static const size_t gaps[] = {23, 10, 4, 1};
@@ -135,7 +135,7 @@ static void CollectGarbagePointers(MemoryManager* m) {
   }
 }
 
-void* BrotliAllocate(MemoryManager* m, size_t n) {
+void* duckdb_brotli::BrotliAllocate(MemoryManager* m, size_t n) {
   void* result = m->alloc_func(m->opaque, n);
   if (!result) {
     m->is_oom = BROTLI_TRUE;
@@ -146,14 +146,14 @@ void* BrotliAllocate(MemoryManager* m, size_t n) {
   return result;
 }
 
-void BrotliFree(MemoryManager* m, void* p) {
+void duckdb_brotli::BrotliFree(MemoryManager* m, void* p) {
   if (!p) return;
   m->free_func(m->opaque, p);
   if (m->new_freed == MAX_NEW_FREED) CollectGarbagePointers(m);
   m->pointers[NEW_FREED_OFFSET + (m->new_freed++)] = p;
 }
 
-void BrotliWipeOutMemoryManager(MemoryManager* m) {
+void duckdb_brotli::BrotliWipeOutMemoryManager(MemoryManager* m) {
   size_t i;
   CollectGarbagePointers(m);
   /* Now all unfreed pointers are in perm-allocated list. */

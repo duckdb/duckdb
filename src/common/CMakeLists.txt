@@ -52,10 +52,12 @@ add_library_unity(
   multi_file_list.cpp
   multi_file_reader.cpp
   error_data.cpp
+  opener_file_system.cpp
   printer.cpp
   radix_partitioning.cpp
   re2_regex.cpp
   random_engine.cpp
+  stacktrace.cpp
   string_util.cpp
   enum_util.cpp
   symbols.cpp

@@ -31,7 +31,6 @@ public:
 	                optional_ptr<ConflictInfo> conflict_info = nullptr);
 
 public:
-	void SetIndexCount(idx_t count);
 	// These methods return a boolean indicating whether we should throw or not
 	bool AddMiss(idx_t chunk_index);
 	bool AddHit(idx_t chunk_index, row_t row_id);
@@ -39,12 +38,24 @@ public:
 	VerifyExistenceType LookupType() const;
 	// This should be called before using the conflicts selection vector
 	void Finalize();
-	idx_t ConflictCount() const;
-	const ManagedSelection &Conflicts() const;
+
 	Vector &RowIds();
 	const ConflictInfo &GetConflictInfo() const;
 	void FinishLookup();
 	void SetMode(ConflictManagerMode mode);
+
+	//! Returns a reference to all conflicts in this conflict manager.
+	const ManagedSelection &Conflicts() const;
+	//! Returns the number of conflicts in this conflict manager.
+	idx_t ConflictCount() const;
+	//! Adds an index and its respective delete_index to the conflict manager's matches.
+	void AddIndex(BoundIndex &index, optional_ptr<BoundIndex> delete_index);
+	//! Returns true, if the index is in this conflict manager.
+	bool MatchedIndex(BoundIndex &index);
+	//! Returns a reference to the matched indexes.
+	const vector<reference<BoundIndex>> &MatchedIndexes() const;
+	//! Returns a reference to the matched delete indexes.
+	const vector<optional_ptr<BoundIndex>> &MatchedDeleteIndexes() const;
 
 private:
 	bool IsConflict(LookupResultType type);
@@ -62,7 +73,6 @@ private:
 	VerifyExistenceType lookup_type;
 	idx_t input_size;
 	optional_ptr<ConflictInfo> conflict_info;
-	idx_t index_count;
 	bool finalized = false;
 	ManagedSelection conflicts;
 	unique_ptr<Vector> row_ids;
@@ -75,6 +85,13 @@ private:
 	// Whether we have already found the one conflict target we're interested in
 	bool single_index_finished = false;
 	ConflictManagerMode mode;
+
+	//! Indexes matching the conflict target.
+	vector<reference<BoundIndex>> matched_indexes;
+	//! Delete indexes matching the conflict target.
+	vector<optional_ptr<BoundIndex>> matched_delete_indexes;
+	//! All matched indexes by their name, which is their unique identifier.
+	case_insensitive_set_t matched_index_names;
 };
 
 } // namespace duckdb

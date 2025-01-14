@@ -54,7 +54,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		value.name = option->name;
 		value.value = option->get_setting(context).ToString();
 		value.description = option->description;
-		value.input_type = EnumUtil::ToString(option->parameter_type);
+		value.input_type = option->parameter_type;
 		value.scope = EnumUtil::ToString(scope);
 
 		result->settings.push_back(std::move(value));

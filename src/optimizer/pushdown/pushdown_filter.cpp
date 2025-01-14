@@ -9,7 +9,7 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_FILTER);
 	auto &filter = op->Cast<LogicalFilter>();
-	if (!filter.projection_map.empty()) {
+	if (filter.HasProjectionMap()) {
 		return FinishPushdown(std::move(op));
 	}
 	// filter: gather the filters and remove the filter from the set of operations

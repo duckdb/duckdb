@@ -171,6 +171,27 @@ select jaro_winkler_similarity('PENNSYLVANIA', 'PENNCISYLVNIA')
 ----
 0.8980186480186481
 
+# test score cutoff
+query T
+select jaro_winkler_similarity('CRATE', 'TRACE', 0.6)
+----
+0.733333
+
+query T
+select jaro_winkler_similarity('CRATE', 'TRACE', 0.8)
+----
+0.0
+
+query T
+select jaro_winkler_similarity('000000000000000000000000000000000000000000000000000000000000000', '00000000000000000000000000000000000000000000000000000000000000000', 0.9)
+----
+0.9938
+
+query T
+select jaro_winkler_similarity('000000000000000000000000000000000000000000000000000000000000000', '00000000000000000000000000000000000000000000000000000000000000000', 0.995)
+----
+0.0
+
 # test with table just in case
 statement ok
 create table test as select '0000' || range::varchar s from range(10000);

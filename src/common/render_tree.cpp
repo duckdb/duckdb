@@ -41,29 +41,13 @@ public:
 
 template <>
 bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
-	switch (op.type) {
-	case PhysicalOperatorType::LEFT_DELIM_JOIN:
-	case PhysicalOperatorType::RIGHT_DELIM_JOIN:
-	case PhysicalOperatorType::POSITIONAL_SCAN:
-		return true;
-	default:
-		return !op.children.empty();
-	}
+	return !op.GetChildren().empty();
 }
 template <>
 void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
                                    const std::function<void(const PhysicalOperator &child)> &callback) {
-	for (auto &child : op.children) {
-		callback(*child);
-	}
-	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
-		auto &delim = op.Cast<PhysicalDelimJoin>();
-		callback(*delim.join);
-	} else if ((op.type == PhysicalOperatorType::POSITIONAL_SCAN)) {
-		auto &pscan = op.Cast<PhysicalPositionalScan>();
-		for (auto &table : pscan.child_tables) {
-			callback(*table);
-		}
+	for (auto &child : op.GetChildren()) {
+		callback(child);
 	}
 }
 

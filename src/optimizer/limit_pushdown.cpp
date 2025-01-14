@@ -30,6 +30,7 @@ unique_ptr<LogicalOperator> LimitPushdown::Optimize(unique_ptr<LogicalOperator> 
 	if (CanOptimize(*op)) {
 		auto projection = std::move(op->children[0]);
 		op->children[0] = std::move(projection->children[0]);
+		projection->SetEstimatedCardinality(op->estimated_cardinality);
 		projection->children[0] = std::move(op);
 		swap(projection, op);
 	}

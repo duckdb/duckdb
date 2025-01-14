@@ -20,7 +20,7 @@ using ValidityBytes = RowLayout::ValidityBytes;
 
 template <class T>
 static void TemplatedScatter(UnifiedVectorFormat &col, Vector &rows, const SelectionVector &sel, const idx_t count,
-                             const idx_t col_offset, const idx_t col_no) {
+                             const idx_t col_offset, const idx_t col_no, const idx_t col_count) {
 	auto data = UnifiedVectorFormat::GetData<T>(col);
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
@@ -34,7 +34,7 @@ static void TemplatedScatter(UnifiedVectorFormat &col, Vector &rows, const Selec
 			T store_value = isnull ? NullValue<T>() : data[col_idx];
 			Store<T>(store_value, row + col_offset);
 			if (isnull) {
-				ValidityBytes col_mask(ptrs[idx]);
+				ValidityBytes col_mask(ptrs[idx], col_count);
 				col_mask.SetInvalidUnsafe(col_no);
 			}
 		}
@@ -64,7 +64,7 @@ static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_
 
 static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr_t str_locations[],
                                 const SelectionVector &sel, const idx_t count, const idx_t col_offset,
-                                const idx_t col_no) {
+                                const idx_t col_no, const idx_t col_count) {
 	auto string_data = UnifiedVectorFormat::GetData<string_t>(col);
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
@@ -75,7 +75,7 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 		auto col_idx = col.sel->get_index(idx);
 		auto row = ptrs[idx];
 		if (!col.validity.RowIsValid(col_idx)) {
-			ValidityBytes col_mask(row);
+			ValidityBytes col_mask(row, col_count);
 			col_mask.SetInvalidUnsafe(col_no);
 			Store<string_t>(null, row + col_offset);
 		} else if (string_data[col_idx].IsInlined()) {
@@ -118,11 +118,12 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 	}
 
 	// Set the validity mask for each row before inserting data
+	idx_t column_count = layout.ColumnCount();
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 	for (idx_t i = 0; i < count; ++i) {
 		auto row_idx = sel.get_index(i);
 		auto row = ptrs[row_idx];
-		ValidityBytes(row).SetAllValid(layout.ColumnCount());
+		ValidityBytes(row, column_count).SetAllValid(layout.ColumnCount());
 	}
 
 	const auto vcount = columns.size();
@@ -180,46 +181,46 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 		switch (types[col_no].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			TemplatedScatter<int8_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<int8_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::INT16:
-			TemplatedScatter<int16_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<int16_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::INT32:
-			TemplatedScatter<int32_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<int32_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::INT64:
-			TemplatedScatter<int64_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<int64_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::UINT8:
-			TemplatedScatter<uint8_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<uint8_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::UINT16:
-			TemplatedScatter<uint16_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<uint16_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::UINT32:
-			TemplatedScatter<uint32_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<uint32_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::UINT64:
-			TemplatedScatter<uint64_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<uint64_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::INT128:
-			TemplatedScatter<hugeint_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<hugeint_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::UINT128:
-			TemplatedScatter<uhugeint_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<uhugeint_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::FLOAT:
-			TemplatedScatter<float>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<float>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::DOUBLE:
-			TemplatedScatter<double>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<double>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::INTERVAL:
-			TemplatedScatter<interval_t>(col, rows, sel, count, col_offset, col_no);
+			TemplatedScatter<interval_t>(col, rows, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::VARCHAR:
-			ScatterStringVector(col, rows, data_locations, sel, count, col_offset, col_no);
+			ScatterStringVector(col, rows, data_locations, sel, count, col_offset, col_no, column_count);
 			break;
 		case PhysicalType::LIST:
 		case PhysicalType::STRUCT:

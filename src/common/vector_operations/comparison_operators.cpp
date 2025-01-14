@@ -167,6 +167,9 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 		auto &result_validity = ConstantVector::Validity(result);
 		SelectionVector true_sel(1);
 		auto match_count = ComparisonSelector::Select<OP>(left, right, nullptr, 1, &true_sel, nullptr, result_validity);
+		// since we are dealing with nested types where the values are not NULL, the result is always valid (i.e true or
+		// false)
+		result_validity.SetAllValid(1);
 		auto result_data = ConstantVector::GetData<bool>(result);
 		result_data[0] = match_count > 0;
 		return;
@@ -220,7 +223,8 @@ private:
 public:
 	template <class OP>
 	static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		D_ASSERT(left.GetType() == right.GetType() && result.GetType() == LogicalType::BOOLEAN);
+		D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType() &&
+		         result.GetType() == LogicalType::BOOLEAN);
 		// the inplace loops take the result as the last parameter
 		switch (left.GetType().InternalType()) {
 		case PhysicalType::BOOL:

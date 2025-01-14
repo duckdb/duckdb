@@ -137,7 +137,7 @@ public:
 
 	DUCKDB_API static bool UncaughtException();
 
-	DUCKDB_API static string GetStackTrace(int max_depth = 120);
+	DUCKDB_API static string GetStackTrace(idx_t max_depth = 120);
 	static string FormatStackTrace(const string &message = "") {
 		return (message + "\n" + GetStackTrace());
 	}

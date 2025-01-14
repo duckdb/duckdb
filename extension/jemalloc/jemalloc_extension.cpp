@@ -3,6 +3,9 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "jemalloc/jemalloc.h"
+#include "malloc_ncpus.h"
+
+#include <thread>
 
 namespace duckdb {
 
@@ -99,7 +102,9 @@ void JemallocExtension::FlushAll() {
 }
 
 void JemallocExtension::SetBackgroundThreads(bool enable) {
+#ifndef __APPLE__
 	SetJemallocCTL("background_thread", enable);
+#endif
 }
 
 std::string JemallocExtension::Version() const {
@@ -113,6 +118,14 @@ std::string JemallocExtension::Version() const {
 } // namespace duckdb
 
 extern "C" {
+
+unsigned duckdb_malloc_ncpus() {
+#ifdef DUCKDB_NO_THREADS
+	return 1
+#else
+	return duckdb::NumericCast<unsigned>(std::thread::hardware_concurrency());
+#endif
+}
 
 DUCKDB_EXTENSION_API void jemalloc_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);

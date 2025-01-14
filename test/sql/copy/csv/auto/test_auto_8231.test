@@ -11,7 +11,7 @@ create view locations_header_trailing_comma as SELECT * from read_csv_auto('data
 query IIIII
 SELECT * from locations_header_trailing_comma
 ----
-1	name	0	0	NULL
+1	name	0	0	value
 
 query IIIIII
 describe locations_header_trailing_comma;

@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+struct BindingAlias;
 
 //! Represents a reference to a column from either the FROM clause or from an
 //! alias
@@ -22,6 +23,8 @@ public:
 public:
 	//! Specify both the column and table name
 	ColumnRefExpression(string column_name, string table_name);
+	//! Specify both the column and table alias
+	ColumnRefExpression(string column_name, const BindingAlias &alias);
 	//! Only specify the column name, the table name will be derived later
 	explicit ColumnRefExpression(string column_name);
 	//! Specify a set of names

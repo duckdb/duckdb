@@ -143,6 +143,7 @@ public:
 	inline void SetGateStatus(const GateStatus status) {
 		switch (status) {
 		case GateStatus::GATE_SET:
+			D_ASSERT(GetType() != NType::LEAF_INLINED);
 			SetMetadata(GetMetadata() | AND_GATE);
 			break;
 		case GateStatus::GATE_NOT_SET:

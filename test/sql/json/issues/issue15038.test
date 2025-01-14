@@ -1,0 +1,71 @@
+# name: test/sql/json/issues/issue15038.test
+# description: Test issue 15038 - TO_JSON results in weird number translation
+# group: [issues]
+
+require json
+
+# we support full precision in JSON - yyjson supports RAW values
+query I
+SELECT to_json(1::HUGEINT << 100)
+----
+1267650600228229401496703205376
+
+query I
+SELECT (1::HUGEINT << 100)::JSON
+----
+1267650600228229401496703205376
+
+query I
+SELECT to_json(1::UHUGEINT << 100)
+----
+1267650600228229401496703205376
+
+query I
+SELECT (1::UHUGEINT << 100)::JSON
+----
+1267650600228229401496703205376
+
+query I
+SELECT to_json((1::UHUGEINT << 100)::DECIMAL(38,0))
+----
+1267650600228229401496703205376
+
+query I
+SELECT (1::UHUGEINT << 100)::DECIMAL(38,0)::JSON
+----
+1267650600228229401496703205376
+
+query I
+SELECT to_json((1::HUGEINT << 100)::VARINT)
+----
+1267650600228229401496703205376
+
+query I
+SELECT (1::HUGEINT << 100)::VARINT::JSON
+----
+1267650600228229401496703205376
+
+# original issue (#15038)
+query I rowsort
+WITH t1 AS (
+    SELECT 9007199254740993 AS id
+    UNION ALL
+    SELECT 1.2 AS id
+)
+SELECT to_json(id) AS json_objects
+FROM t1 AS t;
+----
+1.2
+9007199254740993.0
+
+query I rowsort
+WITH t1 AS (
+    SELECT 9007199254740993 AS id
+    UNION ALL
+    SELECT 1.2 AS id
+)
+SELECT id::JSON AS json_objects
+FROM t1 AS t;
+----
+1.2
+9007199254740993.0

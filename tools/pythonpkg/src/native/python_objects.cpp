@@ -9,7 +9,7 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/varint.hpp"
-#include "duckdb/core_functions/to_interval.hpp"
+#include "duckdb/function/to_interval.hpp"
 
 #include "datetime.h" // Python datetime initialize #1
 
@@ -295,7 +295,7 @@ Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
 		// Need to subtract the UTC offset, so we invert the interval
 		utc_offset = Interval::Invert(utc_offset);
 		timestamp = Interval::Add(timestamp, utc_offset);
-		return Value::TIMESTAMPTZ(timestamp);
+		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp));
 	}
 	switch (target_type.id()) {
 	case LogicalTypeId::UNKNOWN:

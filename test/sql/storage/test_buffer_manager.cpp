@@ -14,6 +14,8 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	auto config = GetTestConfig();
 	config->options.default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	config->options.maximum_threads = 1;
+	// ZSTD can store this in a smaller way, force uncompressed so the 5mb max test correctly fails
+	config->options.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 
 	uint64_t string_length = 64;
 	uint64_t desired_size = 10000000; // desired size is 10MB
@@ -28,8 +30,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, j BIGINT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('" + big_string + "', 1)"));
 		while (string_length < desired_size) {
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, " + to_string(iteration) +
-			                          " FROM test"));
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT repeat(a, 10), " + to_string(iteration) + " FROM test"));
 			REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE j=" + to_string(iteration - 1)));
 			iteration++;
 			string_length *= 10;

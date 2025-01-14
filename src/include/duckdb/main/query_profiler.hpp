@@ -43,6 +43,7 @@ struct OperatorInformation {
 	idx_t elements_returned;
 	idx_t result_set_size;
 	string name;
+	InsertionOrderPreservingMap<string> extra_info;
 
 	void AddTime(double n_time) {
 		time += n_time;
@@ -88,8 +89,8 @@ private:
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
-	//! A mapping of physical operators to recorded timings
-	reference_map_t<const PhysicalOperator, OperatorInformation> timings;
+	//! A mapping of physical operators to profiled operator information.
+	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
 };
 
 struct QueryInfo {
@@ -113,6 +114,7 @@ private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
 	                                     const idx_t depth = 0);
 	void Render(const ProfilingNode &node, std::ostream &str) const;
+	string RenderDisabledMessage(ProfilerPrintFormat format) const;
 
 public:
 	DUCKDB_API bool IsEnabled() const;
@@ -145,6 +147,7 @@ public:
 	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
 	//! the return value is formatted based on the current print format (see GetPrintFormat()).
 	DUCKDB_API string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;
+	DUCKDB_API string ToString(ProfilerPrintFormat format) const;
 
 	static InsertionOrderPreservingMap<string> JSONSanitize(const InsertionOrderPreservingMap<string> &input);
 	static string JSONSanitize(const string &text);
@@ -168,8 +171,8 @@ private:
 
 	//! Whether or not the query profiler is running
 	bool running;
-	//! The lock used for flushing information from a thread into the global query profiler
-	mutex flush_lock;
+	//! The lock used for accessing the global query profiler or flushing information to it from a thread
+	mutable std::mutex lock;
 
 	//! Whether or not the query requires profiling
 	bool query_requires_profiling;
@@ -207,6 +210,7 @@ private:
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
+	ExplainFormat GetExplainFormat(ProfilerPrintFormat format) const;
 };
 
 } // namespace duckdb

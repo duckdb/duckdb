@@ -175,7 +175,7 @@
 
 //     // Node Stack.
 //     //   Normally has one entry, which is the entire parse tree for the rules.
-//     //   If errors occured, there may be additional subtrees left on the stack.
+//     //   If errors occurred, there may be additional subtrees left on the stack.
 //     while (fNodeStackPtr > 0) {
 //         delete fNodeStack[fNodeStackPtr];
 //         fNodeStackPtr--;

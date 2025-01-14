@@ -4,6 +4,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/stacktrace.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/parser/tableref.hpp"
@@ -98,16 +99,32 @@ void ErrorData::ConvertErrorToJSON() {
 		// empty or already JSON
 		return;
 	}
-	raw_message = StringUtil::ToJSONMap(type, raw_message, extra_info);
+	raw_message = StringUtil::ExceptionToJSONMap(type, raw_message, extra_info);
 	final_message = raw_message;
 }
 
-void ErrorData::AddErrorLocation(const string &query) {
-	auto entry = extra_info.find("position");
-	if (entry == extra_info.end()) {
-		return;
+void ErrorData::FinalizeError() {
+	auto entry = extra_info.find("stack_trace_pointers");
+	if (entry != extra_info.end()) {
+		auto stack_trace = StackTrace::ResolveStacktraceSymbols(entry->second);
+		extra_info["stack_trace"] = std::move(stack_trace);
+		extra_info.erase("stack_trace_pointers");
 	}
-	raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second));
+}
+
+void ErrorData::AddErrorLocation(const string &query) {
+	if (!query.empty()) {
+		auto entry = extra_info.find("position");
+		if (entry != extra_info.end()) {
+			raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second));
+		}
+	}
+	{
+		auto entry = extra_info.find("stack_trace");
+		if (entry != extra_info.end()) {
+			raw_message += "\n\nStack Trace:\n" + entry->second;
+		}
+	}
 	final_message = ConstructFinalMessage();
 }
 
@@ -120,7 +137,7 @@ void ErrorData::AddQueryLocation(QueryErrorContext error_context) {
 }
 
 void ErrorData::AddQueryLocation(const ParsedExpression &ref) {
-	AddQueryLocation(ref.query_location);
+	AddQueryLocation(ref.GetQueryLocation());
 }
 
 void ErrorData::AddQueryLocation(const TableRef &ref) {

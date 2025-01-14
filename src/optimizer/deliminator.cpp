@@ -206,8 +206,8 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
 		auto &delim_side = delim_idx == 0 ? *cond.left : *cond.right;
 		auto &other_side = delim_idx == 0 ? *cond.right : *cond.left;
-		if (delim_side.type != ExpressionType::BOUND_COLUMN_REF ||
-		    other_side.type != ExpressionType::BOUND_COLUMN_REF) {
+		if (delim_side.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+		    other_side.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return false;
 		}
 		auto &delim_colref = delim_side.Cast<BoundColumnRefExpression>();
@@ -257,7 +257,8 @@ bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings, const vector
 			}
 		}
 
-		if (current_idx == expressions.size() || expressions[current_idx]->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (current_idx == expressions.size() ||
+		    expressions[current_idx]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return false; // Didn't find / can't deal with non-colref
 		}
 
@@ -293,7 +294,7 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	// We only support colref's
 	vector<ColumnBinding> traced_bindings;
 	for (const auto &cond : delim_conditions) {
-		if (cond.right->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (cond.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return false;
 		}
 		auto &colref = cond.right->Cast<BoundColumnRefExpression>();
@@ -367,7 +368,7 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 		if (!IsEqualityJoinCondition(cond)) {
 			return;
 		}
-		if (cond.right->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (cond.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return;
 		}
 		auto &colref = cond.right->Cast<BoundColumnRefExpression>();

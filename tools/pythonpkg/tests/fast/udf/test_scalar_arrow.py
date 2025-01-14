@@ -72,7 +72,7 @@ class TestPyArrowUDF(object):
         # The return type of the function is set to BIGINT, but it takes a VARCHAR
         con.create_function('pyarrow_string_to_num', takes_string, [VARCHAR], BIGINT, type='arrow')
 
-        # Succesful conversion
+        # Successful conversion
         res = con.sql("""select pyarrow_string_to_num('5')""").fetchall()
         assert res == [(5,)]
 
@@ -209,3 +209,14 @@ class TestPyArrowUDF(object):
         res = con.sql('select return_five(NULL) from range(10)').fetchall()
         # Because we didn't specify 'special' null handling, these are all NULL
         assert res == [(None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,)]
+
+    def test_struct_with_non_inlined_string(self, duckdb_cursor):
+        def func(data):
+            return pa.array([{'x': 1, 'y': 'this is not an inlined string'}] * data.length())
+
+        duckdb_cursor.create_function(
+            name="func", function=func, return_type="STRUCT(x integer, y varchar)", type="arrow", side_effects=False
+        )
+
+        res = duckdb_cursor.sql("select func(1).y").fetchone()
+        assert res == ('this is not an inlined string',)

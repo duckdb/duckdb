@@ -7,7 +7,7 @@ namespace duckdb {
 namespace pyarrow {
 
 py::object ToArrowTable(const vector<LogicalType> &types, const vector<string> &names, const py::list &batches,
-                        const ClientProperties &options);
+                        ClientProperties &options);
 
 } // namespace pyarrow
 

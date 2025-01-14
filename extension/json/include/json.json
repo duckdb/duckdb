@@ -158,7 +158,7 @@
         "id": 116,
         "name": "map_inference_threshold",
         "type": "idx_t",
-        "default": 25
+        "default": 200
       }
     ],
     "constructor": ["$ClientContext", "files", "date_format", "timestamp_format"]

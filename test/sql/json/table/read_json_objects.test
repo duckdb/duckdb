@@ -2,13 +2,6 @@
 # description: Read ndjson files
 # group: [table]
 
-require no_extension_autoloading
-
-# this was the previous implementation, doesn't work without JSON extension (no JSON type in catalog)
-statement error
-SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)
-----
-
 require json
 
 # we cannot check the error output for the specific byte, because on Windows the \n are replaced with \r\n

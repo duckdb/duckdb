@@ -41,6 +41,7 @@ enum class CatalogSetPathType { SET_SCHEMA, SET_SCHEMAS };
 class CatalogSearchPath {
 public:
 	DUCKDB_API explicit CatalogSearchPath(ClientContext &client_p);
+	DUCKDB_API CatalogSearchPath(ClientContext &client_p, vector<CatalogSearchEntry> entries);
 	CatalogSearchPath(const CatalogSearchPath &other) = delete;
 
 	DUCKDB_API void Set(CatalogSearchEntry new_value, CatalogSetPathType set_type);
@@ -61,8 +62,8 @@ public:
 	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const string &catalog_name, const string &schema_name);
 
 private:
-	void SetPaths(vector<CatalogSearchEntry> new_paths);
-
+	//! Set paths without checking if they exist
+	void SetPathsInternal(vector<CatalogSearchEntry> new_paths);
 	string GetSetName(CatalogSetPathType set_type);
 
 private:

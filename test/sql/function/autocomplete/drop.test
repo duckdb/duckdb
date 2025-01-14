@@ -1,0 +1,30 @@
+# name: test/sql/function/autocomplete/drop.test
+# description: Test sql_auto_complete
+# group: [autocomplete]
+
+require autocomplete
+
+query II
+FROM sql_auto_complete('DRO') LIMIT 1;
+----
+DROP 	0
+
+query II
+FROM sql_auto_complete('DROP TA') LIMIT 1;
+----
+TABLE 	5
+
+query II
+FROM sql_auto_complete('DROP VI') LIMIT 1;
+----
+VIEW 	5
+
+query II
+FROM sql_auto_complete('DROP TABLE IF EX') LIMIT 1;
+----
+EXISTS 	14
+
+query II
+FROM sql_auto_complete('DROP TABLE tbl CAS') LIMIT 1;
+----
+CASCADE 	15

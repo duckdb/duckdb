@@ -1,0 +1,32 @@
+# name: test/sql/index/art/constraints/test_art_tx_same_row_id.test
+# description: Test deletes that touch the same row ID repeatedly.
+# group: [constraints]
+
+# FIXME: We need to fix the internal issue #3702
+mode skip
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl_list (id INT PRIMARY KEY, payload VARCHAR[]);
+
+statement ok
+INSERT INTO tbl_list SELECT range, [range || ' payload'] FROM range(10);
+
+query II
+DELETE FROM tbl_list USING range(100) t(i) RETURNING id, payload;
+----
+0	[0 payload]
+1	[1 payload]
+2	[2 payload]
+3	[3 payload]
+4	[4 payload]
+5	[5 payload]
+6	[6 payload]
+7	[7 payload]
+8	[8 payload]
+9	[9 payload]

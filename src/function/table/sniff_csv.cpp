@@ -21,6 +21,8 @@ struct CSVSniffFunctionData : public TableFunctionData {
 	vector<LogicalType> return_types_csv;
 	// Column Names of CSV (If given by the user)
 	vector<string> names_csv;
+	// If we want to force the match of the sniffer types
+	bool force_match = true;
 };
 
 struct CSVSniffGlobalState : public GlobalTableFunctionState {
@@ -36,20 +38,31 @@ static unique_ptr<GlobalTableFunctionState> CSVSniffInitGlobal(ClientContext &co
 static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<CSVSniffFunctionData>();
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("sniff_csv is disabled through configuration");
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("sniff_csv cannot take NULL as a file path parameter");
 	}
 	result->path = input.inputs[0].ToString();
 	auto it = input.named_parameters.find("auto_detect");
 	if (it != input.named_parameters.end()) {
+		if (it->second.IsNull()) {
+			throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", it->first);
+		}
 		if (!it->second.GetValue<bool>()) {
 			throw InvalidInputException("sniff_csv function does not accept auto_detect variable set to false");
 		}
 		// otherwise remove it
 		input.named_parameters.erase("auto_detect");
 	}
+
+	// If we want to force the match of the sniffer
+	it = input.named_parameters.find("force_match");
+	if (it != input.named_parameters.end()) {
+		result->force_match = it->second.GetValue<bool>();
+		input.named_parameters.erase("force_match");
+	}
 	result->options.FromNamedParameters(input.named_parameters, context);
+	result->options.Verify();
+
 	// We want to return the whole CSV Configuration
 	// 1. Delimiter
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -104,6 +117,13 @@ string FormatOptions(char opt) {
 	return result;
 }
 
+string FormatOptions(string opt) {
+	if (opt.size() == 1) {
+		return FormatOptions(opt[0]);
+	}
+	return opt;
+}
+
 static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &global_state = data_p.global_state->Cast<CSVSniffGlobalState>();
 	// Are we done?
@@ -131,7 +151,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		sniffer_options.sql_type_list = data.return_types_csv;
 	}
 	CSVSniffer sniffer(sniffer_options, buffer_manager, CSVStateMachineCache::Get(context));
-	auto sniffer_result = sniffer.SniffCSV(true);
+	auto sniffer_result = sniffer.SniffCSV(data.force_match);
 	string str_opt;
 	string separator = ", ";
 	// Set output
@@ -155,7 +175,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	// 6. Skip Rows
 	output.SetValue(5, 0, Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));
 	// 7. Has Header
-	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue()).ToString();
+	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue());
 	output.SetValue(6, 0, has_header);
 	// 8. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	vector<Value> values;
@@ -293,6 +313,7 @@ void CSVSnifferFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction csv_sniffer("sniff_csv", {LogicalType::VARCHAR}, CSVSniffFunction, CSVSniffBind, CSVSniffInitGlobal);
 	// Accept same options as the actual csv reader
 	ReadCSVTableFunction::ReadCSVAddNamedParameters(csv_sniffer);
+	csv_sniffer.named_parameters["force_match"] = LogicalType::BOOLEAN;
 	set.AddFunction(csv_sniffer);
 }
 } // namespace duckdb

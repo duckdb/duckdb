@@ -332,9 +332,9 @@ class QueryResult:
                 hash_compare_error = values[0] != hash_value
 
             if hash_compare_error:
-                expected_result = self.result_label_map.get(query_label)
-                logger.wrong_result_hash(expected_result, self)
-                self.fail_query(query)
+                expected_result = runner.result_label_map.get(query_label)
+                # logger.wrong_result_hash(expected_result, self)
+                context.fail(query)
 
             assert not hash_compare_error
 
@@ -456,6 +456,19 @@ def matches_regex(input: str, actual_str: str) -> bool:
     re_pattern = re.compile(regex_str, re_options)
     regex_matches = bool(re_pattern.fullmatch(actual_str))
     return regex_matches == should_match
+
+
+def has_external_access(conn):
+    # this is required for the python tester to work, as we make use of replacement scans
+    try:
+        res = conn.sql("select current_setting('enable_external_access')").fetchone()[0]
+        return res
+    except duckdb.TransactionException:
+        return True
+    except duckdb.BinderException:
+        return True
+    except duckdb.InvalidInputException:
+        return True
 
 
 def compare_values(result: QueryResult, actual_str, expected_str, current_column):
@@ -707,7 +720,7 @@ class SQLLogicContext:
         # Apply a replacement for every registered keyword
         if '__BUILD_DIRECTORY__' in input:
             self.skiptest("Test contains __BUILD_DIRECTORY__ which isnt supported")
-        for key, value in self.keywords.items():
+        for key, value in self.keywords.items().__reversed__():
             input = input.replace(key, value)
         return input
 
@@ -815,6 +828,8 @@ class SQLLogicContext:
     def execute_query(self, query: Query):
         assert isinstance(query, Query)
         conn = self.get_connection(query.connection_name)
+        if not has_external_access(conn):
+            self.skiptest("enable_external_access is explicitly disabled by the test")
         sql_query = '\n'.join(query.lines)
         sql_query = self.replace_keywords(sql_query)
 
@@ -978,6 +993,9 @@ class SQLLogicContext:
     def execute_statement(self, statement: Statement):
         assert isinstance(statement, Statement)
         conn = self.get_connection(statement.connection_name)
+        if not has_external_access(conn):
+            self.skiptest("enable_external_access is explicitly disabled by the test")
+
         sql_query = '\n'.join(statement.lines)
         sql_query = self.replace_keywords(sql_query)
 

@@ -224,6 +224,16 @@ SELECT CASE
 ----
 1
 
+# test with a DECIMAL column
+statement ok
+CREATE TABLE repro (i DECIMAL(15,2));
+
+statement ok
+SELECT approx_quantile(i, 0.5) FROM repro;
+
+statement ok
+SELECT approx_quantile(i, [0.5]) FROM repro;
+
 # Test reservoir quantile
 statement ok
 PRAGMA disable_verification;

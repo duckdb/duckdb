@@ -28,4 +28,27 @@ InsertionOrderPreservingMap<string> LogicalComparisonJoin::ParamsToString() cons
 	return result;
 }
 
+bool LogicalComparisonJoin::HasEquality(idx_t &range_count) const {
+	for (size_t c = 0; c < conditions.size(); ++c) {
+		auto &cond = conditions[c];
+		switch (cond.comparison) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return true;
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			++range_count;
+			break;
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			break;
+		default:
+			throw NotImplementedException("Unimplemented comparison join");
+		}
+	}
+	return false;
+}
+
 } // namespace duckdb

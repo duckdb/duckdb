@@ -65,6 +65,8 @@ static py::list PyTokenize(const string &query) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT:
 			tuple[1] = PY_SQL_TOKEN_COMMENT;
 			break;
+		default:
+			break;
 		}
 		result.append(tuple);
 	}
@@ -544,14 +546,13 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("connection") = py::none());
 	m.def(
 	    "values",
-	    [](py::object params = py::none(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
+	    [](const py::args &params, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
 		    return conn->Values(params);
 	    },
-	    "Create a relation object from the passed values", py::arg("values"), py::kw_only(),
-	    py::arg("connection") = py::none());
+	    "Create a relation object from the passed values", py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "table_function",
 	    [](const string &fname, py::object params = py::list(), shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -1078,7 +1079,11 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
 	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
-	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();
+	m.def("default_connection", &DuckDBPyConnection::DefaultConnection,
+	      "Retrieve the connection currently registered as the default to be used by the module");
+	m.def("set_default_connection", &DuckDBPyConnection::SetDefaultConnection,
+	      "Register the provided connection as the default to be used by the module",
+	      py::arg("connection").none(false));
 	m.attr("apilevel") = "2.0";
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
