@@ -645,9 +645,14 @@ class TestReadCSV(object):
 
         con = duckdb.connect()
         con.execute("CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')")
+
         rel = con.read_csv(str(file1), dtype = ['mood'])
         assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
+
         rel = con.read_csv(str(file1), dtype = {'feelings':'mood'})
+        assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
+
+        rel = con.read_csv(str(file1), columns = {'feelings':'mood'})
         assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
 
     def test_union_by_name(self, tmp_path):
