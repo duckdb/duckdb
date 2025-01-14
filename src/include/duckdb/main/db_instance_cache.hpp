@@ -18,6 +18,7 @@ namespace duckdb {
 class DBInstanceCache;
 
 struct DatabaseCacheEntry {
+	DatabaseCacheEntry();
 	explicit DatabaseCacheEntry(const shared_ptr<DuckDB> &database);
 	~DatabaseCacheEntry();
 
