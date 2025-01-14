@@ -1153,14 +1153,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
 			bind_parameters["dtypes"] = std::move(dtype_struct);
 		} else if (py::is_list_like(dtype)) {
-			// connection.BeginTransaction();
 			vector<Value> list_values;
 			py::list dtype_list = dtype;
 			for (auto &child : dtype_list) {
-				shared_ptr<DuckDBPyType> sql_type  = make_shared_ptr<DuckDBPyType>(TransformStringToLogicalType(py::str(child), *connection.context));
+				shared_ptr<DuckDBPyType> sql_type;
+				if (!py::try_cast(child, sql_type)) {
+					connection.context->RunFunctionInTransaction([&]() {
+						sql_type = make_shared_ptr<DuckDBPyType>(TransformStringToLogicalType(py::str(child), *connection.context));
+					});
+				}
 				list_values.push_back(sql_type->ToString());
 			}
-			// connection.Commit();
 			bind_parameters["dtypes"] = Value::LIST(LogicalType::VARCHAR, std::move(list_values));
 		} else {
 			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary or a list of strings");

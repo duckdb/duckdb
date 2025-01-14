@@ -641,11 +641,13 @@ class TestReadCSV(object):
 
     def test_read_enum(self, tmp_path):
         file1 = tmp_path / "file1.csv"
-        file1.write_text('happy\nsad\nangry\nhappy\n')
+        file1.write_text('feelings\nhappy\nsad\nangry\nhappy\n')
 
         con = duckdb.connect()
         con.execute("CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')")
-        rel = con.read_csv(str(file1), dtype = ['mood'], header = False)
+        rel = con.read_csv(str(file1), dtype = ['mood'])
+        assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
+        rel = con.read_csv(str(file1), dtype = {'feelings':'mood'})
         assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
 
     def test_union_by_name(self, tmp_path):
@@ -663,9 +665,4 @@ class TestReadCSV(object):
         assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]
 
 
-# con = duckdb.connect()
-# con.execute("CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')")
-# rel = con.read_csv(str('/Users/holanda/Documents/Projects/duckdb/data/csv/enum_type.csv'), dtype = ['mood'])
-# print(rel.fetchall())
-# assert rel.fetchall() == [('sad',), ('happy',), ('angry',)]
 
