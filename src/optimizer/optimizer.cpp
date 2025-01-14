@@ -32,6 +32,7 @@
 #include "duckdb/optimizer/sum_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
+#include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -225,6 +226,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::TOP_N, [&]() {
 		TopN topn;
 		plan = topn.Optimize(std::move(plan));
+	});
+
+	// try to use late materialization
+	RunOptimizer(OptimizerType::LATE_MATERIALIZATION, [&]() {
+		LateMaterialization late_materialization(*this);
+		plan = late_materialization.Optimize(std::move(plan));
 	});
 
 	// perform statistics propagation

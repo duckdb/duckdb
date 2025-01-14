@@ -99,7 +99,6 @@ class SQLLogicParser:
             "<integral>": ["tinyint", "smallint", "integer", "bigint", "hugeint"],
             "<signed>": ["tinyint", "smallint", "integer", "bigint", "hugeint"],
             "<unsigned>": ["utinyint", "usmallint", "uinteger", "ubigint", "uhugeint"],
-            "<unsigned>": ["utinyint", "usmallint", "uinteger", "ubigint", "uhugeint"],
             "<all_types_columns>": [
                 "bool",
                 "tinyint",
