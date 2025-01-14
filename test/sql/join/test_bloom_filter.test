@@ -1,0 +1,93 @@
+# name: test/sql/join/test_bloom_filter.test
+# description: Test pruning probe side with Bloom-filters
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma verify_external
+
+# Disable OR-filter pushing to probe side
+statement ok
+PRAGMA dynamic_or_filter_threshold = 0
+
+
+statement ok
+CREATE TABLE t_build (a INTEGER, b INTEGER);
+
+statement ok
+CREATE TABLE t_probe (b INTEGER, c INTEGER);
+
+
+###
+# Query with distinct keys on build side and duplicate keys on probe side.
+
+statement ok
+INSERT INTO t_build VALUES (11, 1), (12, 2), (13, 3)
+
+statement ok
+INSERT INTO t_probe VALUES (1, 10), (1, 20), (2, 30), (2, 40), (4, 50), (4, 60), (5, 70)
+
+query III
+SELECT a, b.b, c FROM t_probe p JOIN t_build b ON b.b = p.b ORDER BY ALL;
+----
+11	1	10
+11	1	20
+12	2	30
+12	2	40
+
+statement ok
+TRUNCATE t_build;
+
+statement ok
+TRUNCATE t_probe;
+
+
+###
+# Query with duplicate keys on the build side and unique keys on probe side.
+
+statement ok
+INSERT INTO t_build VALUES (11, 1), (12, 1), (13, 2)
+
+statement ok
+INSERT INTO t_probe VALUES (1, 10), (2, 20), (3, 30), (4, 40), (5, 50)
+
+query III
+SELECT a, b.b, c FROM t_probe p JOIN t_build b ON b.b = p.b ORDER BY ALL;
+----
+11	1	10
+12	1	10
+13	2	20
+
+statement ok
+TRUNCATE t_build;
+
+statement ok
+TRUNCATE t_probe;
+
+
+###
+# Query with duplicate keys on the build side and duplicate keys on probe side.
+
+statement ok
+INSERT INTO t_build VALUES (11, 1), (12, 1), (13, 2)
+
+statement ok
+INSERT INTO t_probe VALUES (1, 10), (1, 20), (2, 30), (2, 40), (3, 50)
+
+query III
+SELECT a, b.b, c FROM t_probe p JOIN t_build b ON b.b = p.b ORDER BY ALL;
+----
+11	1	10
+11	1	20
+12	1	10
+12	1	20
+13	2	30
+13	2	40
+
+statement ok
+TRUNCATE t_build;
+
+statement ok
+TRUNCATE t_probe;
