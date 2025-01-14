@@ -59,6 +59,7 @@ inline void BloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                 auto hash = hashes[hash_idx];
+                std::cout << "Hash: " << hash << std::endl;
                 auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
                 Bit::SetBit(bloom_filter, bloom_idx, true);
             }
@@ -130,6 +131,7 @@ inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, const Selec
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                 auto hash = hashes[hash_idx];
+                std::cout << "Hash: " << hash << std::endl;
                 auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
                 if (Bit::GetBit(bloom_filter, bloom_idx)) {
                     // Bit is set in Bloom-filter. We keep the entry for now.
@@ -152,6 +154,7 @@ size_t BloomFilter::Probe(DataChunk &keys, const SelectionVector *&current_sel, 
 
     for (idx_t i = 0; i < num_hash_functions; i++) {
         sel_out_count = ProbeInternal(i, *precomputed_hashes, current_sel, sel_out_count, sel);
+        std::cout << "Probing " << count << " rows against the bloom-filter; round " << i << " of " << num_hash_functions << " removed " << (count - sel_out_count) << " rows" << std::endl;
         if (sel_out_count == 0) {
             std::cout << "Pruned all rows with bloom-filter" << std::endl;
             return 0;

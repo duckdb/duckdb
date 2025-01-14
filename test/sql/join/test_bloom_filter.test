@@ -102,7 +102,7 @@ TRUNCATE t_probe;
 
 
 ###
-# Failing test case.
+# Failing test #1. Ok.
 
 statement ok
 INSERT INTO t_build VALUES (11, 1), (12, 1), (13, 2), (14, 3)

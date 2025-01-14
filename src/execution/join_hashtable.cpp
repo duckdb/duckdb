@@ -724,9 +724,11 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 		}
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
-		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
 		const SelectionVector sel;  // Default selection vector because we read from a continuous data sink.
 		bloom_filter->BuildWithPrecomputedHashes(hashes, sel, count);
+
+		// InsertHashes also truncates the hashes with a bit mask, so we want to do this AFTER the bloom filter.
+		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
 	} while (iterator.Next());
 }
 
