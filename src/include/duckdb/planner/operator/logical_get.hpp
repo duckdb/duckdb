@@ -80,7 +80,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	LogicalType GetRowIdType() const {
+	const LogicalType &GetRowIdType() const {
 		return rowid_type;
 	}
 
