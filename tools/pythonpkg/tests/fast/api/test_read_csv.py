@@ -670,4 +670,8 @@ class TestReadCSV(object):
         assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]
 
 
+# con = duckdb.connect()
+# con.execute("CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')")
 
+# rel = con.read_csv('/Users/holanda/Documents/Projects/duckdb/data/csv/enum_type.csv', columns = {'feelings':'mood'})
+# assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
