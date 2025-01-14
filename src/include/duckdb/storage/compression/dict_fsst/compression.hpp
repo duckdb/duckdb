@@ -69,7 +69,10 @@ public:
 
 	// Buffers and map for current segment
 	string_map_t<uint32_t> current_string_map;
-	vector<uint32_t> index_buffer;
+	vector<uint32_t> dictionary_string_lengths;
+	uint32_t max_length = 0;
+	bitpacking_width_t string_length_bitwidth = NumericLimits<bitpacking_width_t>::Maximum();
+
 	vector<uint32_t> selection_buffer;
 
 	bitpacking_width_t current_width = 0;

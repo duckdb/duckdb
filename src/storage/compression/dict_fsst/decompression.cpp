@@ -9,11 +9,11 @@ CompressedStringScanState::~CompressedStringScanState() {
 	delete reinterpret_cast<duckdb_fsst_decoder_t *>(decoder);
 }
 
-uint16_t CompressedStringScanState::GetStringLength(sel_t index) {
-	return UnsafeNumericCast<uint16_t>(index_buffer_ptr[index]);
+uint32_t CompressedStringScanState::GetStringLength(sel_t index) {
+	return UnsafeNumericCast<uint32_t>(string_lengths_ptr[index]);
 }
 
-string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t dict_offset, uint16_t string_len) {
+string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t dict_offset, uint32_t string_len) {
 	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(block_size));
 	if (dict_offset == 0) {
 		return string_t(nullptr, 0);
@@ -37,15 +37,15 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 
 	// Load header values
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
-	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
-	index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
+	auto string_lengths_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->string_lengths_offset));
+	dict_count = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_count));
 	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
-	if (segment.GetBlockOffset() + index_buffer_offset + sizeof(uint32_t) * index_buffer_count >
+	if (segment.GetBlockOffset() + string_lengths_offset + sizeof(uint32_t) * dict_count >
 	    segment.GetBlockManager().GetBlockSize()) {
 		throw IOException(
 		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
 	}
-	index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
+	string_lengths_ptr = reinterpret_cast<uint32_t *>(baseptr + string_lengths_offset);
 	base_data = data_ptr_cast(baseptr + DictFSSTCompression::DICTIONARY_HEADER_SIZE);
 
 	block_size = segment.GetBlockManager().GetBlockSize();
@@ -68,15 +68,15 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		return;
 	}
 
-	dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
-	dictionary_size = index_buffer_count;
+	dictionary = make_buffer<Vector>(segment.type, dict_count);
+	dictionary_size = dict_count;
 	auto dict_child_data = FlatVector::GetData<string_t>(*(dictionary));
 	auto &validity = FlatVector::Validity(*dictionary);
-	D_ASSERT(index_buffer_count >= 1);
+	D_ASSERT(dict_count >= 1);
 	validity.SetInvalid(0);
 
 	int32_t offset = 0;
-	for (uint32_t i = 0; i < index_buffer_count; i++) {
+	for (uint32_t i = 0; i < dict_count; i++) {
 		auto str_len = GetStringLength(i);
 		offset += str_len;
 		dict_child_data[i] = FetchStringFromDict(*dictionary, offset, str_len);
@@ -127,11 +127,11 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 		int32_t offset = 0;
 		for (idx_t i = 0; i < string_number; i++) {
-			offset += index_buffer_ptr[i];
+			offset += string_lengths_ptr[i];
 		}
-		offset += index_buffer_ptr[string_number];
+		offset += string_lengths_ptr[string_number];
 
-		auto str_len = index_buffer_ptr[string_number];
+		auto str_len = string_lengths_ptr[string_number];
 		result_data[result_offset] = FetchStringFromDict(result, offset, str_len);
 	}
 }

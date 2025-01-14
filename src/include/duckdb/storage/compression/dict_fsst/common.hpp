@@ -12,8 +12,8 @@ namespace dict_fsst {
 typedef struct {
 	uint32_t dict_size;
 	uint32_t dict_end;
-	uint32_t index_buffer_offset;
-	uint32_t index_buffer_count;
+	uint32_t string_lengths_offset;
+	uint32_t dict_count;
 	uint32_t bitpacking_width;
 	bool fsst_encoded;
 } dict_fsst_compression_header_t;

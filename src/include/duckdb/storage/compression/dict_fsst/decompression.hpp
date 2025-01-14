@@ -26,8 +26,8 @@ public:
 	                            idx_t scan_count);
 
 private:
-	string_t FetchStringFromDict(Vector &result, int32_t dict_offset, uint16_t string_len);
-	uint16_t GetStringLength(sel_t index);
+	string_t FetchStringFromDict(Vector &result, int32_t dict_offset, uint32_t string_len);
+	uint32_t GetStringLength(sel_t index);
 
 public:
 	BufferHandle owned_handle;
@@ -42,8 +42,8 @@ public:
 	data_ptr_t baseptr;
 	//! Start of the data (pointing to the start of the selection buffer)
 	data_ptr_t base_data;
-	uint32_t *index_buffer_ptr;
-	uint32_t index_buffer_count;
+	uint32_t *string_lengths_ptr;
+	uint32_t dict_count;
 
 	buffer_ptr<Vector> dictionary;
 	idx_t dictionary_size;
