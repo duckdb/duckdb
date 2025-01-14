@@ -23,7 +23,7 @@
 
 namespace duckdb {
 
-void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
+void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs != column_references.end()) {
 		for (auto &colref_p : colrefs->second.bindings) {
@@ -279,6 +279,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// Now set the projection cols by matching the "selection vector" that excludes filter columns
 				// with the "selection vector" that includes filter columns
 				idx_t col_idx = 0;
+				get.projection_ids.clear();
 				for (auto proj_sel_idx : proj_sel) {
 					for (; col_idx < col_sel.size(); col_idx++) {
 						if (proj_sel_idx == col_sel[col_idx]) {
@@ -347,8 +348,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 }
 
-bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
-                                                       vector<idx_t> &indexes) {
+bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
+                                                    vector<idx_t> &indexes) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
@@ -382,7 +383,7 @@ bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optiona
 	return true;
 }
 
-bool RemoveUnusedColumns::HandleStructExtract(Expression &expr) {
+bool BaseColumnPruner::HandleStructExtract(Expression &expr) {
 	optional_ptr<BoundColumnRefExpression> colref;
 	vector<idx_t> indexes;
 	if (!HandleStructExtractRecursive(expr, colref, indexes)) {
@@ -428,7 +429,7 @@ void MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &
 	current_child_columns.push_back(std::move(new_child_column));
 }
 
-void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column) {
+void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column) {
 	auto entry = column_references.find(col.binding);
 	if (entry == column_references.end()) {
 		// column not referenced yet - add a binding to it entirely
@@ -445,7 +446,7 @@ void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col, ColumnIndex 
 	}
 }
 
-void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col) {
+void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {
 	auto entry = column_references.find(col.binding);
 	if (entry == column_references.end()) {
 		// column not referenced yet - add a binding to it entirely
@@ -458,7 +459,7 @@ void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col) {
 	}
 }
 
-void RemoveUnusedColumns::VisitExpression(unique_ptr<Expression> *expression) {
+void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = **expression;
 	if (HandleStructExtract(expr)) {
 		// already handled
@@ -468,15 +469,15 @@ void RemoveUnusedColumns::VisitExpression(unique_ptr<Expression> *expression) {
 	LogicalOperatorVisitor::VisitExpression(expression);
 }
 
-unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundColumnRefExpression &expr,
-                                                         unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundColumnRefExpression &expr,
+                                                      unique_ptr<Expression> *expr_ptr) {
 	// add a reference to the entire column
 	AddBinding(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundReferenceExpression &expr,
-                                                         unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundReferenceExpression &expr,
+                                                      unique_ptr<Expression> *expr_ptr) {
 	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
 	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }
