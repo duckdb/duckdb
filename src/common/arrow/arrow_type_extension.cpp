@@ -1,5 +1,3 @@
-#include <utility>
-
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/main/config.hpp"
