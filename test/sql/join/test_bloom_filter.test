@@ -102,6 +102,58 @@ TRUNCATE t_probe;
 
 
 ###
+# Filter on the build side.
+
+statement ok
+INSERT INTO t_build VALUES (11, 1), (12, 1), (13, 2)
+
+statement ok
+INSERT INTO t_probe VALUES (1, 10), (1, 20), (2, 30), (2, 40), (3, 50)
+
+query III
+SELECT a, b.b, c FROM t_probe p JOIN t_build b ON b.b = p.b WHERE b.a >= 12 ORDER BY ALL;
+----
+12	1	10
+12	1	20
+13	2	30
+13	2	40
+
+statement ok
+TRUNCATE t_build;
+
+statement ok
+TRUNCATE t_probe;
+
+
+
+
+###
+# Filter on the probe side.
+
+statement ok
+INSERT INTO t_build VALUES (11, 1), (12, 1), (13, 2)
+
+statement ok
+INSERT INTO t_probe VALUES (1, 10), (1, 20), (2, 30), (2, 40), (3, 50)
+
+query III
+SELECT a, b.b, c FROM t_probe p JOIN t_build b ON b.b = p.b WHERE p.c > 10 ORDER BY ALL;
+----
+11	1	20
+12	1	20
+13	2	30
+13	2	40
+
+statement ok
+TRUNCATE t_build;
+
+statement ok
+TRUNCATE t_probe;
+
+
+
+
+###
 # Failing test #1. Ok.
 
 statement ok
