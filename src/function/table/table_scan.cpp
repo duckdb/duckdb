@@ -380,6 +380,49 @@ void ExtractExpressionsFromValues(vector<Value> &values, BoundColumnRefExpressio
 	}
 }
 
+void ExtractInFilterValues(ConjunctionAndFilter &filter, vector<Value> &values) {
+	if (filter.child_filters.empty()) {
+		return;
+	}
+
+	// Extract the IN filter and the comparisons.
+	optional_ptr<InFilter> in_filter;
+	vector<reference<ConstantFilter>> comparisons;
+	for (idx_t i = 0; i < filter.child_filters.size(); i++) {
+		if (filter.child_filters[i]->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+			auto &comparison = filter.child_filters[i]->Cast<ConstantFilter>();
+			comparisons.push_back(comparison);
+			continue;
+		}
+		if (filter.child_filters[i]->filter_type == TableFilterType::OPTIONAL_FILTER) {
+			in_filter = InFilter::ExtractFromOptional(*filter.child_filters[i]);
+			if (!in_filter) {
+				return;
+			}
+			continue;
+		}
+		return;
+	}
+	if (!in_filter) {
+		return;
+	}
+
+	// Extract all qualifying values.
+	for (idx_t val_idx = 0; val_idx < in_filter->values.size(); val_idx++) {
+		auto &in_value = in_filter->values[val_idx];
+		bool qualifies = true;
+		for (idx_t comp_idx = 0; comp_idx < comparisons.size(); comp_idx++) {
+			if (!comparisons[comp_idx].get().Compare(in_value)) {
+				qualifies = false;
+				break;
+			}
+		}
+		if (qualifies) {
+			values.push_back(in_value);
+		}
+	}
+}
+
 unique_ptr<vector<unique_ptr<Expression>>> ExtractFilters(const ColumnDefinition &col, unique_ptr<TableFilter> &filter,
                                                           idx_t storage_idx) {
 	ColumnBinding binding(0, storage_idx);
@@ -398,7 +441,7 @@ unique_ptr<vector<unique_ptr<Expression>>> ExtractFilters(const ColumnDefinition
 	case TableFilterType::CONJUNCTION_AND: {
 		vector<Value> values;
 		auto &conjunction_and_filter = filter->Cast<ConjunctionAndFilter>();
-		conjunction_and_filter.ExtractInFilterValues(values);
+		ExtractInFilterValues(conjunction_and_filter, values);
 		ExtractExpressionsFromValues(values, *bound_ref, expressions);
 		break;
 	}
