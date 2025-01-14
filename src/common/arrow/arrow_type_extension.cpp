@@ -177,7 +177,7 @@ void ArrowTypeExtension::PopulateArrowSchema(DuckDBArrowSchemaHolder &root_holde
 }
 
 void DBConfig::RegisterArrowExtension(const ArrowTypeExtension &extension) const {
-	lock_guard<mutex> l(encoding_functions->lock);
+	lock_guard<mutex> l(arrow_extensions->lock);
 	auto extension_info = extension.GetInfo();
 	if (arrow_extensions->type_extensions.find(extension_info) != arrow_extensions->type_extensions.end()) {
 		throw NotImplementedException("Arrow Extension with configuration %s is already registered",
@@ -193,27 +193,37 @@ void DBConfig::RegisterArrowExtension(const ArrowTypeExtension &extension) const
 	arrow_extensions->type_to_info[type_info].push_back(extension_info);
 }
 
-ArrowTypeExtension DBConfig::GetArrowExtension(ArrowExtensionMetadata info) const {
-	if (arrow_extensions->type_extensions.find(info) == arrow_extensions->type_extensions.end()) {
+ArrowTypeExtension GetArrowExtensionInternal(
+    unordered_map<ArrowExtensionMetadata, ArrowTypeExtension, HashArrowTypeExtension> &type_extensions,
+    ArrowExtensionMetadata info) {
+	if (type_extensions.find(info) == type_extensions.end()) {
 		info.SetArrowFormat("");
-		if (arrow_extensions->type_extensions.find(info) == arrow_extensions->type_extensions.end()) {
+		if (type_extensions.find(info) == type_extensions.end()) {
 			throw NotImplementedException("Arrow Extension with configuration:\n%s not yet registered",
 			                              info.ToString());
 		}
 	}
-	return arrow_extensions->type_extensions[info];
+	return type_extensions[info];
+}
+ArrowTypeExtension DBConfig::GetArrowExtension(ArrowExtensionMetadata info) const {
+	lock_guard<mutex> l(arrow_extensions->lock);
+	return GetArrowExtensionInternal(arrow_extensions->type_extensions, info);
 }
 
 ArrowTypeExtension DBConfig::GetArrowExtension(const LogicalType &type) const {
+	lock_guard<mutex> l(arrow_extensions->lock);
 	TypeInfo type_info(type);
 	if (!arrow_extensions->type_to_info[type_info].empty()) {
-		return GetArrowExtension(arrow_extensions->type_to_info[type_info].front());
+		return GetArrowExtensionInternal(arrow_extensions->type_extensions,
+		                                 arrow_extensions->type_to_info[type_info].front());
 	}
 	type_info.type = LogicalTypeId::ANY;
-	return GetArrowExtension(arrow_extensions->type_to_info[type_info].front());
+	return GetArrowExtensionInternal(arrow_extensions->type_extensions,
+	                                 arrow_extensions->type_to_info[type_info].front());
 }
 
 bool DBConfig::HasArrowExtension(const LogicalType &type) const {
+	lock_guard<mutex> l(arrow_extensions->lock);
 	TypeInfo type_info(type);
 	if (!arrow_extensions->type_to_info[type_info].empty()) {
 		return true;
