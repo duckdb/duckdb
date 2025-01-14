@@ -646,14 +646,23 @@ class TestReadCSV(object):
         con = duckdb.connect()
         con.execute("CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')")
 
-        rel = con.read_csv(str(file1), dtype = ['mood'])
+        rel = con.read_csv(str(file1), dtype=['mood'])
         assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
 
-        rel = con.read_csv(str(file1), dtype = {'feelings':'mood'})
+        rel = con.read_csv(str(file1), dtype={'feelings': 'mood'})
         assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
 
-        rel = con.read_csv(str(file1), columns = {'feelings':'mood'})
+        rel = con.read_csv(str(file1), columns={'feelings': 'mood'})
         assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
+
+        with pytest.raises(duckdb.CatalogException, match="Type with name mood_2 does not exist!"):
+            rel = con.read_csv(str(file1), columns={'feelings': 'mood_2'})
+
+        with pytest.raises(duckdb.CatalogException, match="Type with name mood_2 does not exist!"):
+            rel = con.read_csv(str(file1), dtype={'feelings': 'mood_2'})
+
+        with pytest.raises(duckdb.CatalogException, match="Type with name mood_2 does not exist!"):
+            rel = con.read_csv(str(file1), dtype=['mood_2'])
 
     def test_union_by_name(self, tmp_path):
         file1 = tmp_path / "file1.csv"
@@ -668,10 +677,3 @@ class TestReadCSV(object):
         rel = con.read_csv(file_path, union_by_name=True)
         assert rel.columns == ['one', 'two', 'three', 'four', 'five']
         assert rel.fetchall() == [(1, 2, 3, 4, None), (None, 2, 3, 4, 5)]
-
-
-# con = duckdb.connect()
-# con.execute("CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')")
-
-# rel = con.read_csv('/Users/holanda/Documents/Projects/duckdb/data/csv/enum_type.csv', columns = {'feelings':'mood'})
-# assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]

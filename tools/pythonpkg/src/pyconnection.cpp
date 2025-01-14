@@ -1147,7 +1147,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 				shared_ptr<DuckDBPyType> sql_type;
 				if (!py::try_cast(kv.second, sql_type)) {
 					connection.context->RunFunctionInTransaction([&]() {
-						sql_type = make_shared_ptr<DuckDBPyType>(TransformStringToLogicalType(py::str(kv.second), *connection.context));
+						sql_type = make_shared_ptr<DuckDBPyType>(
+						    TransformStringToLogicalType(py::str(kv.second), *connection.context));
 					});
 				}
 				struct_fields.emplace_back(py::str(kv.first), Value(sql_type->ToString()));
@@ -1161,7 +1162,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 				shared_ptr<DuckDBPyType> sql_type;
 				if (!py::try_cast(child, sql_type)) {
 					connection.context->RunFunctionInTransaction([&]() {
-						sql_type = make_shared_ptr<DuckDBPyType>(TransformStringToLogicalType(py::str(child), *connection.context));
+						sql_type = make_shared_ptr<DuckDBPyType>(
+						    TransformStringToLogicalType(py::str(child), *connection.context));
 					});
 				}
 				list_values.push_back(sql_type->ToString());
