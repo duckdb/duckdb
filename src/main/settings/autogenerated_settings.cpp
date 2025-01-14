@@ -771,6 +771,23 @@ Value IntegerDivisionSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Late Materialization Max Rows
+//===----------------------------------------------------------------------===//
+void LateMaterializationMaxRowsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.late_materialization_max_rows = input.GetValue<idx_t>();
+}
+
+void LateMaterializationMaxRowsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).late_materialization_max_rows = ClientConfig().late_materialization_max_rows;
+}
+
+Value LateMaterializationMaxRowsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::UBIGINT(config.late_materialization_max_rows);
+}
+
+//===----------------------------------------------------------------------===//
 // Lock Configuration
 //===----------------------------------------------------------------------===//
 void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

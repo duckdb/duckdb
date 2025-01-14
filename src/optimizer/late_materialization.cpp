@@ -15,6 +15,7 @@
 namespace duckdb {
 
 LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {
+	max_row_count = ClientConfig::GetConfig(optimizer.context).late_materialization_max_rows;
 }
 
 idx_t LateMaterialization::GetOrInsertRowId(LogicalGet &get) {

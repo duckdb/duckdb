@@ -783,6 +783,17 @@ struct IntegerDivisionSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LateMaterializationMaxRowsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "late_materialization_max_rows";
+	static constexpr const char *Description =
+	    "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct LockConfigurationSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "lock_configuration";

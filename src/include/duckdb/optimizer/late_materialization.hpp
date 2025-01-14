@@ -39,7 +39,7 @@ private:
 private:
 	Optimizer &optimizer;
 	//! The max row count for which we will consider late materialization
-	idx_t max_row_count = 50;
+	idx_t max_row_count;
 };
 
 } // namespace duckdb
