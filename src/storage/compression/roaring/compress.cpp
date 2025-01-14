@@ -100,7 +100,7 @@ void ContainerCompressionState::Append(bool null, uint16_t amount) {
 	appended_count += amount;
 }
 
-void ContainerCompressionState::OverrideArray(data_ptr_t destination, bool nulls, idx_t count) {
+void ContainerCompressionState::OverrideArray(data_ptr_t &destination, bool nulls, idx_t count) {
 	if (nulls) {
 		append_function = AppendToArray<true>;
 	} else {
@@ -110,30 +110,31 @@ void ContainerCompressionState::OverrideArray(data_ptr_t destination, bool nulls
 	if (count >= COMPRESSED_ARRAY_THRESHOLD) {
 		memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 		array_counts[nulls] = reinterpret_cast<uint8_t *>(destination);
-		destination += sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
-		compressed_arrays[nulls] = reinterpret_cast<uint8_t *>(destination);
+		auto data_start = destination + sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
+		compressed_arrays[nulls] = reinterpret_cast<uint8_t *>(data_start);
 	} else {
 		destination = AlignValue<sizeof(uint16_t)>(destination);
 		arrays[nulls] = reinterpret_cast<uint16_t *>(destination);
 	}
 }
 
-void ContainerCompressionState::OverrideRun(data_ptr_t destination, idx_t count) {
+void ContainerCompressionState::OverrideRun(data_ptr_t &destination, idx_t count) {
 	append_function = AppendRun;
 
 	if (count >= COMPRESSED_RUN_THRESHOLD) {
 		memset(destination, 0, sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT);
 		run_counts = reinterpret_cast<uint8_t *>(destination);
-		destination += sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
-		compressed_runs = reinterpret_cast<uint8_t *>(destination);
+		auto data_start = destination + sizeof(uint8_t) * COMPRESSED_SEGMENT_COUNT;
+		compressed_runs = reinterpret_cast<uint8_t *>(data_start);
 	} else {
 		destination = AlignValue<sizeof(RunContainerRLEPair)>(destination);
 		runs = reinterpret_cast<RunContainerRLEPair *>(destination);
 	}
 }
 
-void ContainerCompressionState::OverrideUncompressed(data_ptr_t destination) {
+void ContainerCompressionState::OverrideUncompressed(data_ptr_t &destination) {
 	append_function = AppendBitset;
+	destination = AlignValue<sizeof(idx_t)>(destination);
 	uncompressed = reinterpret_cast<validity_t *>(destination);
 }
 
@@ -219,7 +220,7 @@ bool RoaringCompressState::CanStore(idx_t container_size, const ContainerMetadat
 	idx_t required_space = 0;
 	if (metadata.IsUncompressed()) {
 		// Account for the alignment we might need for this container
-		required_space += (AlignValue<sizeof(data_ptr_t)>(data_ptr) - data_ptr);
+		required_space += (AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr))) - reinterpret_cast<idx_t>(data_ptr);
 	}
 	required_space += metadata.GetDataSizeInBytes(container_size);
 
@@ -263,7 +264,7 @@ void RoaringCompressState::InitializeContainer() {
 
 	// Override the pointer to write directly into the block
 	if (metadata.IsUncompressed()) {
-		data_ptr = AlignValue<sizeof(idx_t)>(data_ptr);
+		data_ptr = reinterpret_cast<data_ptr_t>(AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr)));
 		FastMemset(data_ptr, ~0, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
 		container_state.OverrideUncompressed(data_ptr);
 	} else if (metadata.IsRun()) {
