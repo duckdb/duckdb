@@ -87,17 +87,7 @@ TabCompletion Linenoise::TabComplete() const {
 	buf[pos] = '\0';
 	completionCallback(buf, &lc);
 	buf[pos] = prev_char;
-	if (lc.len == 0) {
-		// no completions found - return
-		return result;
-	}
-	result.completions.reserve(lc.len + 1);
-	// add the original text as the first completion
-	Completion original;
-	original.completion = buf;
-	original.cursor_pos = pos;
-	result.completions.emplace_back(std::move(original));
-	// then add the remaining completions
+	result.completions.reserve(lc.len);
 	for (idx_t i = 0; i < lc.len; i++) {
 		Completion c;
 		c.completion = lc.cvec[i];
@@ -125,7 +115,7 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 	} else {
 		bool stop = false;
 		bool accept_completion = false;
-		idx_t i = 1;
+		idx_t i = 0;
 
 		while (!stop) {
 			/* Show completion or original buffer */
@@ -151,10 +141,7 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 			Linenoise::Log("\nComplete Character %d\n", (int)c);
 			switch (c) {
 			case TAB: /* tab */
-				i = (i + 1) % (completions.size() + 1);
-				if (i == completions.size()) {
-					Terminal::Beep();
-				}
+				i = (i + 1) % completions.size();
 				break;
 			case ESC: { /* escape */
 				auto escape = Terminal::ReadEscapeSequence(ifd);
@@ -162,16 +149,17 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
 					if (i == 0) {
-						Terminal::Beep();
+						// pressing shift-tab at the first completion cancels completion
+						RefreshLine();
+						current_sequence = escape;
+						stop = true;
 					} else {
 						i--;
 					}
 					break;
 				case EscapeSequence::ESCAPE:
 					/* Re-show original buffer */
-					if (i < completions.size()) {
-						RefreshLine();
-					}
+					RefreshLine();
 					current_sequence = escape;
 					stop = true;
 					break;
