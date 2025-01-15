@@ -1258,9 +1258,10 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 	});
 }
 
-// Try to unescape glob patterns to a literal path.
-// Returns true if the path can be unescaped to a literal path, and the literal path is returned in result.
-// Returns false if the path cannot be unescaped to a literal path.
+// Attempts to unescape glob patterns to a literal path.
+// Returns true if the path can be unescaped, with the resulting literal path stored in 'result'.
+// Returns false if the path cannot be unescaped.
+// If the path contains no glob patterns, it is returned as-is.
 //
 // Examples:
 // 	"abc" -> true, "abc"
@@ -1272,11 +1273,11 @@ static bool TryUnescapeGlob(const string &path, string &result) {
 	result.reserve(path.size());
 	for (idx_t i = 0; i < path.size(); ) {
 		if (path[i] == '[' && i + 2 < path.size() && path[i + 2] == ']') {
-			// replace [c] -> c
+			// Replace [c] -> c
 			result += path[i + 1];
 			i += 3;
 		} else if (path[i] == '*' || path[i] == '?' || path[i] == '[') {
-			// can not be unescaped due to special characters
+			// Cannot unescape due to special characters
 			return false;
 		} else {
 			result += path[i];
