@@ -209,14 +209,10 @@ public:
 	string_t FinalizeBuffer(data_ptr_t buffer, idx_t alloc_len, idx_t str_len) {
 		auto &allocator = heap.GetAllocator();
 		D_ASSERT(str_len <= alloc_len);
-		if (str_len <= string_t::INLINE_LENGTH) {
-			// inlined - shrink head by the entire alloc amount and return inlined string
-			allocator.ShrinkHead(alloc_len);
-			return string_t(const_char_ptr_cast(buffer), str_len);
-		}
-		// non-inlined, shrink by the amount over-allocated and construct the string
-		allocator.ShrinkHead(alloc_len - str_len);
-		return string_t(const_char_ptr_cast(buffer), str_len);
+		bool is_not_inlined = str_len > string_t::INLINE_LENGTH;
+		idx_t shrink_count = alloc_len - (str_len * is_not_inlined);
+		allocator.ShrinkHead(shrink_count);
+		return string_t(const_char_ptr_cast(buffer), UnsafeNumericCast<uint32_t>(str_len));
 	}
 
 	void AddHeapReference(buffer_ptr<VectorBuffer> heap) {
