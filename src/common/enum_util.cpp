@@ -141,7 +141,6 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
-#include "duckdb/storage/compression/dict_fsst/common.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
@@ -1168,26 +1167,6 @@ const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value) {
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value) {
 	return static_cast<DestroyBufferUpon>(StringUtil::StringToEnum(GetDestroyBufferUponValues(), 3, "DestroyBufferUpon", value));
-}
-
-const StringUtil::EnumStringLiteral *GetDictFSSTModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(DictFSSTMode::DICTIONARY), "DICTIONARY" },
-		{ static_cast<uint32_t>(DictFSSTMode::DICT_FSST), "DICT_FSST" },
-		{ static_cast<uint32_t>(DictFSSTMode::FSST_ONLY), "FSST_ONLY" },
-		{ static_cast<uint32_t>(DictFSSTMode::COUNT), "COUNT" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<DictFSSTMode>(DictFSSTMode value) {
-	return StringUtil::EnumToString(GetDictFSSTModeValues(), 4, "DictFSSTMode", static_cast<uint32_t>(value));
-}
-
-template<>
-DictFSSTMode EnumUtil::FromString<DictFSSTMode>(const char *value) {
-	return static_cast<DictFSSTMode>(StringUtil::StringToEnum(GetDictFSSTModeValues(), 4, "DictFSSTMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDistinctTypeValues() {

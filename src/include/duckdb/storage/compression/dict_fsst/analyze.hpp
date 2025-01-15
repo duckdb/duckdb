@@ -43,6 +43,8 @@ public:
 	uint32_t max_length = 0;
 
 	idx_t total_space = 0;
+	unsafe_unique_array<unsigned char> compression_buffer;
+	idx_t compression_buffer_size = 0;
 };
 
 struct DictFSSTCompressionAnalyzeState : public AnalyzeState {

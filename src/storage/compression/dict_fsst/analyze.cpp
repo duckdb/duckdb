@@ -91,14 +91,24 @@ bool DictFSSTAnalyzeState::EncodeDictionary() {
 	auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 
 	size_t output_buffer_size = 7 + 2 * current_dict_size; // size as specified in fsst.h
-	auto compressed_ptrs = vector<unsigned char *>(string_count, nullptr);
-	auto compressed_sizes = vector<size_t>(string_count, 0);
-	auto compressed_buffer = make_unsafe_uniq_array_uninitialized<unsigned char>(output_buffer_size);
+	idx_t required_size = output_buffer_size;
+	required_size = AlignValue<idx_t, sizeof(unsigned char *)>(required_size);
+	required_size += sizeof(unsigned char *) * string_count;
+	D_ASSERT(ValueIsAligned<idx_t>(required_size));
+	required_size += sizeof(size_t) * string_count;
+
+	if (!compression_buffer || required_size > compression_buffer_size) {
+		compression_buffer = make_unsafe_uniq_array_uninitialized<unsigned char>(required_size);
+		compression_buffer_size = required_size;
+	}
+	auto compressed_ptrs = AlignPointer<sizeof(unsigned char *)>(compression_buffer.get() + output_buffer_size);
+	auto compressed_sizes = compressed_ptrs + (sizeof(unsigned char *) * string_count);
 
 	// Compress the dictionary
 	auto res =
 	    duckdb_fsst_compress(fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
-	                         output_buffer_size, compressed_buffer.get(), &compressed_sizes[0], &compressed_ptrs[0]);
+	                         output_buffer_size, compression_buffer.get(), reinterpret_cast<size_t *>(compressed_sizes),
+	                         reinterpret_cast<unsigned char **>(compressed_ptrs));
 	if (res != string_count) {
 		throw FatalException("FSST compression failed to compress all dictionary strings");
 	}
