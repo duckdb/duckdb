@@ -58,6 +58,9 @@ void DictFSSTAnalyzeState::AddLookup(uint32_t) {
 }
 
 void DictFSSTAnalyzeState::AddNull() {
+	//! With FSST_ONLY we can't store validity, so we can only use this mode when no validity is required (all are
+	//! non-null).
+	all_unique = false;
 	current_tuple_count++;
 }
 

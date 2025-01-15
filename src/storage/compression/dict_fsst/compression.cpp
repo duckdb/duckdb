@@ -128,6 +128,9 @@ void DictFSSTCompressionCompressState::AddNewString(const StringData &string_dat
 
 void DictFSSTCompressionCompressState::AddNull() {
 	selection_buffer.push_back(0);
+	//! With FSST_ONLY we can't store validity, so we can only use this mode when no validity is required (all are
+	//! non-null).
+	all_unique = false;
 	current_segment->count++;
 }
 

@@ -44,8 +44,9 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
 	string_lengths_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->string_lengths_width)));
 	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
+	auto string_lengths_size = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
 
-	if (segment.GetBlockOffset() + string_lengths_offset + sizeof(uint32_t) * dict_count >
+	if (segment.GetBlockOffset() + string_lengths_offset + string_lengths_size + header_ptr->dict_size >
 	    segment.GetBlockManager().GetBlockSize()) {
 		throw IOException(
 		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
