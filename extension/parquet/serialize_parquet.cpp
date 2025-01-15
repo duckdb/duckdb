@@ -40,6 +40,7 @@ void ParquetColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(101, "name", name);
 	serializer.WriteProperty<LogicalType>(103, "type", type);
 	serializer.WriteProperty<Value>(104, "default_value", default_value);
+	serializer.WritePropertyWithDefault<Value>(105, "identifier", identifier, Value());
 }
 
 ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deserializer) {
@@ -48,6 +49,7 @@ ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<string>(101, "name", result.name);
 	deserializer.ReadProperty<LogicalType>(103, "type", result.type);
 	deserializer.ReadProperty<Value>(104, "default_value", result.default_value);
+	deserializer.ReadPropertyWithExplicitDefault<Value>(105, "identifier", result.identifier, Value());
 	return result;
 }
 

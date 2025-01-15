@@ -105,7 +105,7 @@ public:
 
 	//! The batch index of the next Sink.
 	//! Also determines the offset of the next chunk. I.e., offset = next_batch_index * STANDARD_VECTOR_SIZE.
-	idx_t next_batch_index;
+	atomic<idx_t> next_batch_index;
 	//! The total scanned row IDs.
 	unsafe_vector<row_t> row_ids;
 	//! The column IDs of the to-be-scanned columns.

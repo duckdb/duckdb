@@ -3,6 +3,8 @@ import subprocess
 import time
 import threading
 import tempfile
+import os
+import shutil
 
 import argparse
 
@@ -197,6 +199,14 @@ STDERR
 --------------------"""
         )
         print(stderr)
+
+    # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
+    # causing us to run out of space on subsequent tests in GH Actions (not much disk space there)
+    duckdb_unittest_tempdir = os.path.join(
+        os.path.dirname(unittest_program), '..', '..', '..', 'duckdb_unittest_tempdir'
+    )
+    if os.path.exists(duckdb_unittest_tempdir) and os.listdir(duckdb_unittest_tempdir):
+        shutil.rmtree(duckdb_unittest_tempdir)
     fail()
 
 

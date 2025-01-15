@@ -125,9 +125,9 @@ class TestType(object):
         type = duckdb.list_type(list[str])
         assert str(type.child) == "VARCHAR[]"
 
-        mapping = {'VARCHAR': str, 'BIGINT': int, 'BLOB': bytes, 'BLOB': bytearray, 'BOOLEAN': bool, 'DOUBLE': float}
-        for expected, type in mapping.items():
-            res = duckdb.list_type(type)
+        mapping = {str: 'VARCHAR', int: 'BIGINT', bytes: 'BLOB', bytearray: 'BLOB', bool: 'BOOLEAN', float: 'DOUBLE'}
+        for duckdb_type, expected in mapping.items():
+            res = duckdb.list_type(duckdb_type)
             assert str(res.child) == expected
 
         res = duckdb.list_type({'a': str, 'b': int})

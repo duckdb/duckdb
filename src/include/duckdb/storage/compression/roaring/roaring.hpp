@@ -273,9 +273,9 @@ public:
 
 public:
 	void Append(bool null, uint16_t amount = 1);
-	void OverrideArray(data_ptr_t destination, bool nulls, idx_t count);
-	void OverrideRun(data_ptr_t destination, idx_t count);
-	void OverrideUncompressed(data_ptr_t destination);
+	void OverrideArray(data_ptr_t &destination, bool nulls, idx_t count);
+	void OverrideRun(data_ptr_t &destination, idx_t count);
+	void OverrideUncompressed(data_ptr_t &destination);
 	void Finalize();
 	ContainerMetadata GetResult();
 	void Reset();
